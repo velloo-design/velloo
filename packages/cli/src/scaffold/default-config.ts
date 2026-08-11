@@ -1,4 +1,5 @@
 import type { Config } from "@velloo/schema";
+import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { TOOL_VERSION } from "../version.ts";
 
 export function buildDefaultConfig(): Config {
@@ -7,8 +8,7 @@ export function buildDefaultConfig(): Config {
     toolVersion: TOOL_VERSION,
     componentSource: {
       framework: "shadcn-react",
-      // Sprint 2 lands the real shadcn snapshot; the lock-file shape is what matters here.
-      snapshotVersion: "0.0.0-stub",
+      snapshotVersion,
     },
     viewportPresets: [
       { name: "Mobile", w: 390, h: 844 },

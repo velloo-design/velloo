@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.design"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.design", "!**/tailwind-entry.css"]
   },
   "formatter": {
     "enabled": true,
@@ -40,6 +40,11 @@
     "formatter": {
       "indentWidth": 2,
       "trailingCommas": "none"
+    }
+  },
+  "css": {
+    "formatter": {
+      "enabled": true
     }
   }
 }

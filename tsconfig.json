@@ -1,4 +1,9 @@
 {
   "files": [],
-  "references": [{ "path": "./packages/schema" }, { "path": "./packages/cli" }]
+  "references": [
+    { "path": "./packages/schema" },
+    { "path": "./packages/shadcn-snapshot" },
+    { "path": "./packages/renderer" },
+    { "path": "./packages/cli" }
+  ]
 }

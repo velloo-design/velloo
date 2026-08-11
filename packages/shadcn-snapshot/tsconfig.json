@@ -2,17 +2,14 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist",
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "types": ["bun"]
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun", "react", "react-dom"]
   },
-  "include": ["src/**/*"],
-  "references": [
-    { "path": "../schema" },
-    { "path": "../shadcn-snapshot" },
-    { "path": "../renderer" }
-  ]
+  "include": ["src/**/*", "build.ts", "package.json"]
 }
