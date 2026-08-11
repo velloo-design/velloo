@@ -11,29 +11,36 @@ export class UnknownComponentError extends Error {
 
 /**
  * Walk the design Node tree and produce a React element tree, resolving
- * each `$ref` against the bundled snapshot registry.
+ * each `$ref` against the bundled snapshot registry. Each rendered element
+ * carries `data-node-path="i.j.k"` so the canvas iframe runtime can map
+ * a clicked DOM element back to its position in the design tree.
  */
-export function buildTree(node: Node, key?: string | number): ReactElement {
+export function buildTree(node: Node, path: number[] = []): ReactElement {
   if (!isKnownComponent(node.$ref)) throw new UnknownComponentError(node.$ref);
 
   const Component = registry[node.$ref];
   if (!Component) throw new UnknownComponentError(node.$ref);
 
   const { children: childrenProp, ...restProps } = (node.props ?? {}) as Record<string, unknown>;
+  const dataNodePath = path.join(".");
 
   let children: ReactNode;
   if (Array.isArray(node.children) && node.children.length > 0) {
-    children = node.children.map((child, i) => buildTree(child, i));
+    children = node.children.map((child, i) => buildTree(child, [...path, i]));
   } else if (childrenProp !== undefined) {
     children = childrenProp as ReactNode;
   }
 
-  return createElement(Component, { ...restProps, key }, children);
+  return createElement(
+    Component,
+    { ...restProps, "data-node-path": dataNodePath, key: dataNodePath || "root" },
+    children,
+  );
 }
 
 /**
- * Wrap a tree in a single-child Fragment so consumers can render it directly.
+ * Wrap the tree root in a Fragment so consumers can render it directly.
  */
 export function buildRoot(node: Node): ReactElement {
-  return createElement(Fragment, null, buildTree(node, "root"));
+  return createElement(Fragment, null, buildTree(node, []));
 }

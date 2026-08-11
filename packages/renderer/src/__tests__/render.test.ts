@@ -70,6 +70,31 @@ describe("renderVariant", () => {
     const variant = variantWith({ $ref: "Definitely-Not-A-Component", props: {} });
     await expect(renderVariant(variant, sampleTheme)).rejects.toBeInstanceOf(UnknownComponentError);
   });
+
+  test("annotates every rendered element with data-node-path", async () => {
+    const variant = variantWith({
+      $ref: "Card",
+      children: [
+        { $ref: "Heading", props: { level: 1, children: "A" } },
+        { $ref: "Text", props: { children: "B" } },
+        { $ref: "Button", props: { children: "C" } },
+      ],
+    });
+    const { bodyHtml } = await renderVariant(variant, sampleTheme);
+    // Root path is "" (empty); children get 0, 1, 2.
+    expect(bodyHtml).toContain('data-node-path=""');
+    expect(bodyHtml).toContain('data-node-path="0"');
+    expect(bodyHtml).toContain('data-node-path="1"');
+    expect(bodyHtml).toContain('data-node-path="2"');
+  });
+
+  test("includes the iframe runtime script in the document", async () => {
+    const variant = variantWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderVariant(variant, sampleTheme);
+    expect(html).toContain("__velloo_init");
+    expect(html).toContain("__velloo-selected");
+    expect(html).toContain("data-node-path");
+  });
 });
 
 describe("themeToCss", () => {

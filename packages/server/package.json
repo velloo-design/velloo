@@ -1,21 +1,17 @@
 {
-  "name": "@velloo/cli",
+  "name": "@velloo/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Velloo CLI",
-  "bin": {
-    "velloo": "./src/cli.ts"
-  },
+  "description": "Velloo HTTP backend (canvas + future MCP)",
   "exports": {
-    ".": "./src/cli.ts"
+    ".": "./src/index.ts"
   },
   "dependencies": {
+    "@velloo/canvas": "workspace:*",
     "@velloo/renderer": "workspace:*",
     "@velloo/schema": "workspace:*",
-    "@velloo/server": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*",
-    "citty": "0.2.2",
-    "zod": "4.4.3"
+    "hono": "4.12.18"
   }
 }

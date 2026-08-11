@@ -13,7 +13,6 @@
   "references": [
     { "path": "../schema" },
     { "path": "../shadcn-snapshot" },
-    { "path": "../renderer" },
-    { "path": "../server" }
+    { "path": "../renderer" }
   ]
 }

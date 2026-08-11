@@ -4,6 +4,8 @@
     { "path": "./packages/schema" },
     { "path": "./packages/shadcn-snapshot" },
     { "path": "./packages/renderer" },
+    { "path": "./packages/canvas" },
+    { "path": "./packages/server" },
     { "path": "./packages/cli" }
   ]
 }

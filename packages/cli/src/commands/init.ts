@@ -73,6 +73,6 @@ export default defineCommand({
     console.log("  theme/default.json     — token tree (colors, type, spacing, radius)");
     console.log("  pages/onboarding.json  — sample page with mobile + desktop variants");
     console.log("");
-    console.log("Next: `velloo run <folder>` (available once Sprint 3 lands).");
+    console.log(`Next: velloo run ${args.folder}`);
   },
 });
