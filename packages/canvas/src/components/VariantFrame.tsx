@@ -69,6 +69,16 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
     else ch.send({ type: "clearHover" });
   }, [hover]);
 
+  // Push the forced node state (Inspector "Preview state" dropdown) into the
+  // iframe. Only applies when the selection lives in this variant.
+  const nodeState = useCanvas((s) => s.nodeState);
+  useEffect(() => {
+    const ch = channelRef.current;
+    if (!ch) return;
+    const path = selection?.path ?? null;
+    ch.send({ type: "applyVelloState", path, state: nodeState });
+  }, [nodeState, selection]);
+
   // Cache-bust the iframe src on page-version bumps so the iframe reloads
   // with fresh HTML after server-side mutations.
   const src = `${renderUrl(pageId, variantId)}?v=${pageVersion}`;
@@ -89,7 +99,7 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
           ref={iframeRef}
           title={`${pageId} / ${variantName}`}
           src={src}
-          className="w-full h-full block"
+          className="w-full h-full block velloo-frame-iframe"
           sandbox="allow-same-origin allow-scripts"
         />
       </div>

@@ -68,4 +68,25 @@ describe("snapshot artifacts", () => {
     expect(variant?.control).toBe("enum");
     expect(variant?.enumValues).toEqual(["default", "muted", "small", "lead"]);
   });
+
+  test("extracts cva variant/size props from VariantProps<typeof X>", async () => {
+    const manifest = await loadManifest();
+
+    const button = manifest.find((c) => c.id === "Button");
+    const buttonVariant = button?.props.find((p) => p.name === "variant");
+    expect(buttonVariant?.control).toBe("enum");
+    expect(buttonVariant?.enumValues).toContain("default");
+    expect(buttonVariant?.enumValues).toContain("destructive");
+
+    const buttonSize = button?.props.find((p) => p.name === "size");
+    expect(buttonSize?.control).toBe("enum");
+    expect(buttonSize?.enumValues).toContain("sm");
+    expect(buttonSize?.enumValues).toContain("lg");
+    expect(buttonSize?.defaultValue).toBe("default");
+
+    const badgeVariant = manifest
+      .find((c) => c.id === "Badge")
+      ?.props.find((p) => p.name === "variant");
+    expect(badgeVariant?.enumValues).toContain("outline");
+  });
 });

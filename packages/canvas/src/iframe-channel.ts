@@ -11,7 +11,12 @@ export type ParentMessage =
   | { type: "applyHighlight"; path: string }
   | { type: "clearHighlight" }
   | { type: "applyHover"; path: string }
-  | { type: "clearHover" };
+  | { type: "clearHover" }
+  | {
+      type: "applyVelloState";
+      path: string | null;
+      state: "default" | "hover" | "focus" | "active" | "disabled";
+    };
 
 export interface ChannelHandlers {
   onSelect?(path: string | null): void;

@@ -72,6 +72,8 @@ export function Inspector({ pageId }: Props) {
         </div>
       </header>
 
+      <StatePreview key={selectionKey} />
+
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         {descriptor && descriptor.props.length > 0 ? (
           <section className="flex flex-col gap-3">
@@ -79,7 +81,7 @@ export function Inspector({ pageId }: Props) {
               Props
             </div>
             {descriptor.props
-              .filter((p) => p.name !== "className")
+              .filter((p) => p.name !== "className" && p.name !== "asChild")
               .map((p) => (
                 <PropField
                   key={`${selectionKey}:${p.name}`}
@@ -104,6 +106,47 @@ export function Inspector({ pageId }: Props) {
           debounceMs={DEBOUNCE_MS}
         />
       </div>
+    </div>
+  );
+}
+
+const STATES = ["default", "hover", "focus", "active", "disabled"] as const;
+
+/**
+ * "Preview state" picker. Mounted fresh per selection (via `key`) so the
+ * dropdown resets to "default" whenever the user clicks a different node.
+ */
+function StatePreview() {
+  const nodeState = useCanvas((s) => s.nodeState);
+  const setNodeState = useCanvas((s) => s.setNodeState);
+
+  useEffect(() => {
+    // On mount (new selection), reset to default. The cleanup also resets so
+    // we don't carry a forced state across selections.
+    setNodeState("default");
+    return () => setNodeState("default");
+  }, [setNodeState]);
+
+  return (
+    <div className="px-4 py-2 border-b border-[var(--color-border)] flex items-center gap-2">
+      <label
+        htmlFor="node-state"
+        className="text-xs text-[var(--color-fg-muted)] uppercase tracking-wider"
+      >
+        State
+      </label>
+      <select
+        id="node-state"
+        value={nodeState}
+        onChange={(e) => setNodeState(e.target.value as typeof nodeState)}
+        className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
+      >
+        {STATES.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

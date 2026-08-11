@@ -41,6 +41,16 @@ export const IFRAME_RUNTIME = String.raw`
     if (el) el.classList.add(cls);
   }
 
+  function applyVelloState(path, state) {
+    // Clear any prior force-state attributes.
+    document
+      .querySelectorAll('[data-velloo-state]')
+      .forEach((el) => el.removeAttribute('data-velloo-state'));
+    if (!state || state === 'default' || path === null || path === undefined) return;
+    const el = document.querySelector('[data-node-path="' + path.replace(/"/g, '\\"') + '"]');
+    if (el) el.setAttribute('data-velloo-state', state);
+  }
+
   function handleParentMessage(ev) {
     const msg = ev.data;
     if (!msg || typeof msg !== 'object') return;
@@ -48,6 +58,7 @@ export const IFRAME_RUNTIME = String.raw`
     else if (msg.type === 'clearHighlight') clearClass(SELECT_CLASS);
     else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS);
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
+    else if (msg.type === 'applyVelloState') applyVelloState(msg.path, msg.state);
   }
 
   function send(msg) {

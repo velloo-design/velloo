@@ -12,6 +12,8 @@ import {
 import { pathFromString } from "./path.ts";
 
 export type RightTab = "node" | "theme";
+export type CursorMode = "select" | "hand";
+export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 
 export interface Selection {
   variantId: string;
@@ -32,6 +34,14 @@ export interface CanvasState {
   hover: Selection | null;
   wsConnected: boolean;
   rightTab: RightTab;
+  /** Independent canvas zoom (1.0 = 100%). */
+  canvasZoom: number;
+  /** Cursor mode: select clicks nodes; hand pans the canvas. */
+  cursorMode: CursorMode;
+  /** Pan offset (x, y) applied to the canvas in hand mode. */
+  pan: { x: number; y: number };
+  /** Forced state for the selected node. */
+  nodeState: NodeState;
 
   loadDesign(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
@@ -44,6 +54,10 @@ export interface CanvasState {
   setHover(h: Selection | null): void;
   setWsConnected(b: boolean): void;
   setRightTab(t: RightTab): void;
+  setCanvasZoom(z: number): void;
+  setCursorMode(m: CursorMode): void;
+  setPan(p: { x: number; y: number }): void;
+  setNodeState(s: NodeState): void;
 }
 
 /** Walk the current page tree and return the node at the given selection. */
@@ -73,6 +87,10 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   hover: null,
   wsConnected: false,
   rightTab: "node",
+  canvasZoom: 0.75,
+  cursorMode: "select",
+  pan: { x: 0, y: 0 },
+  nodeState: "default",
 
   async loadDesign() {
     const design = await fetchDesign();
@@ -138,5 +156,24 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setRightTab(rightTab) {
     set({ rightTab });
+  },
+
+  setCanvasZoom(canvasZoom) {
+    // Clamp to a sane range.
+    set({ canvasZoom: Math.max(0.1, Math.min(4, canvasZoom)) });
+  },
+
+  setCursorMode(cursorMode) {
+    // Switching modes resets selection lookups by clearing hover; selection
+    // itself stays (so the user can come back to it).
+    set({ cursorMode, hover: null });
+  },
+
+  setPan(pan) {
+    set({ pan });
+  },
+
+  setNodeState(nodeState) {
+    set({ nodeState });
   },
 }));

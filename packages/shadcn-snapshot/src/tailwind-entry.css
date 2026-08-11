@@ -3,6 +3,18 @@
 @source "./components/**/*.tsx";
 
 /*
+ * Force-hoverable / focusable / active variants. The Velloo canvas writes
+ * data-velloo-state on the selected node so the user can preview a state
+ * without actually hovering. Each redefined variant fires on EITHER the
+ * native pseudo-class OR the data attribute.
+ */
+@custom-variant hover (&:hover, &[data-velloo-state*="hover"]);
+@custom-variant focus (&:focus, &[data-velloo-state*="focus"]);
+@custom-variant focus-visible (&:focus-visible, &[data-velloo-state*="focus"]);
+@custom-variant active (&:active, &[data-velloo-state*="active"]);
+@custom-variant disabled (&:disabled, &[data-velloo-state*="disabled"]);
+
+/*
  * Safelist of utility classes designs are likely to use as className props.
  * Tailwind v4 only emits CSS for classes it sees at build time; design JSON
  * is not visible to the build, so we force-generate a broad palette here.

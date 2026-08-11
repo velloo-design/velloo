@@ -28,6 +28,10 @@ export function buildDocument(opts: DocumentOptions): string {
     includeRuntime = true,
   } = opts;
   const runtime = includeRuntime ? `<script>${IFRAME_RUNTIME}</script>` : "";
+  // Defeat password managers and form-fillers (LastPass / 1Password / Bitwarden
+  // / native browser autofill) so design Input components stay clean.
+  const antiAutofill =
+    'data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" autocomplete="off"';
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -37,7 +41,7 @@ export function buildDocument(opts: DocumentOptions): string {
     <style>${snapshotCss}</style>
     <style>${themeCss}</style>
   </head>
-  <body>${bodyHtml}${runtime}</body>
+  <body ${antiAutofill}>${bodyHtml}${runtime}</body>
 </html>`;
 }
 

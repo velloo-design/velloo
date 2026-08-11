@@ -12,7 +12,15 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Project, type PropertySignature, SyntaxKind } from "ts-morph";
+import {
+  type InterfaceDeclaration,
+  Node,
+  type ObjectLiteralExpression,
+  Project,
+  type PropertySignature,
+  type SourceFile,
+  SyntaxKind,
+} from "ts-morph";
 import type { ComponentDescriptor, ControlType, Manifest, PropDescriptor } from "./src/manifest.ts";
 import { registry } from "./src/registry.ts";
 
@@ -50,16 +58,11 @@ function categorize(filePath: string): {
 
 const COLOR_NAME = /^(color|background|fg|bg|theme|fill|stroke|tint|accent)/i;
 
-/**
- * Infer the inspector control type from a TS type string. Heuristic; keep it
- * conservative — wrong inferences produce ugly inputs, not data corruption.
- */
 function inferControl(
   name: string,
   rawType: string,
 ): { control: ControlType; enumValues?: (string | number)[] } {
   const type = rawType.replace(/\s+/g, " ").trim();
-  // Strip the trailing | undefined (and leading "undefined |").
   const stripped = type
     .split("|")
     .map((s) => s.trim())
@@ -69,13 +72,11 @@ function inferControl(
   if (stripped === "boolean") return { control: "boolean" };
   if (stripped === "number") return { control: "number" };
 
-  // Numeric literal union: "1 | 2 | 3".
   const numLit = stripped.split("|").map((s) => s.trim());
   if (numLit.length > 1 && numLit.every((s) => /^-?\d+(\.\d+)?$/.test(s))) {
     return { control: "enum", enumValues: numLit.map(Number) };
   }
 
-  // String literal union: '"a" | "b" | "c"'.
   if (
     numLit.length > 1 &&
     numLit.every(
@@ -90,7 +91,6 @@ function inferControl(
     return { control: "string" };
   }
 
-  // Fallback: treat anything else as a string field (e.g. union with ReactNode).
   return { control: "string" };
 }
 
@@ -105,6 +105,92 @@ function describeProp(prop: PropertySignature): PropDescriptor {
     control: inferred.control,
     ...(inferred.enumValues ? { enumValues: inferred.enumValues } : {}),
   };
+}
+
+/**
+ * Walk the interface's `extends` clauses for `VariantProps<typeof X>` and
+ * return X. Returns the const name we should look up in the same file.
+ */
+function findVariantPropsConstName(propsInterface: InterfaceDeclaration): string | null {
+  for (const extendsClause of propsInterface.getExtends()) {
+    const text = extendsClause.getText().replace(/\s+/g, "");
+    const match = text.match(/^VariantProps<typeof(\w+)>$/);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Given a const initialized to `cva("...", { variants: {...}, defaultVariants: {...} })`,
+ * extract one PropDescriptor per variant key. Each descriptor's enumValues are
+ * the variant's keys (e.g. variant: { default: "...", destructive: "..." } →
+ * enum ["default", "destructive"]).
+ */
+function extractCvaVariantProps(sourceFile: SourceFile, constName: string): PropDescriptor[] {
+  const variableDecl = sourceFile.getVariableDeclaration(constName);
+  if (!variableDecl) return [];
+  const init = variableDecl.getInitializer();
+  if (!init || !Node.isCallExpression(init)) return [];
+
+  // cva(base, { variants: {...}, defaultVariants: {...} })
+  const args = init.getArguments();
+  const config = args[1];
+  if (!config || !Node.isObjectLiteralExpression(config)) return [];
+
+  const variantsProp = config.getProperty("variants");
+  if (!variantsProp || !Node.isPropertyAssignment(variantsProp)) return [];
+  const variantsInit = variantsProp.getInitializer();
+  if (!variantsInit || !Node.isObjectLiteralExpression(variantsInit)) return [];
+
+  // Collect default values from defaultVariants if present.
+  const defaults: Record<string, string> = {};
+  const defaultsProp = config.getProperty("defaultVariants");
+  if (defaultsProp && Node.isPropertyAssignment(defaultsProp)) {
+    const dInit = defaultsProp.getInitializer();
+    if (dInit && Node.isObjectLiteralExpression(dInit)) {
+      for (const dp of dInit.getProperties()) {
+        if (!Node.isPropertyAssignment(dp)) continue;
+        const name = dp.getName();
+        const value = dp.getInitializer();
+        if (value && Node.isStringLiteral(value)) defaults[name] = value.getLiteralText();
+      }
+    }
+  }
+
+  const props: PropDescriptor[] = [];
+  for (const prop of variantsInit.getProperties()) {
+    if (!Node.isPropertyAssignment(prop)) continue;
+    const name = prop.getName();
+    const valuesObj = prop.getInitializer();
+    if (!valuesObj || !Node.isObjectLiteralExpression(valuesObj)) continue;
+    const enumValues = collectKeys(valuesObj);
+    if (enumValues.length === 0) continue;
+    const typeStr = enumValues.map((v) => `"${v}"`).join(" | ");
+    props.push({
+      name,
+      type: `${typeStr} | undefined`,
+      optional: true,
+      control: "enum",
+      enumValues,
+      ...(defaults[name] ? { defaultValue: defaults[name] } : {}),
+    });
+  }
+
+  return props;
+}
+
+function collectKeys(obj: ObjectLiteralExpression): string[] {
+  const out: string[] = [];
+  for (const prop of obj.getProperties()) {
+    if (Node.isPropertyAssignment(prop)) {
+      const name = prop.getName();
+      // Strip surrounding quotes if present (shouldn't typically happen for cva keys).
+      out.push(name.replace(/^['"]|['"]$/g, ""));
+    } else if (Node.isShorthandPropertyAssignment(prop)) {
+      out.push(prop.getName());
+    }
+  }
+  return out;
 }
 
 async function buildManifest(): Promise<void> {
@@ -129,8 +215,19 @@ async function buildManifest(): Promise<void> {
     const { source, category } = categorize(srcFile.getFilePath());
     const propsInterface = srcFile.getInterface(`${id}Props`);
     let props: PropDescriptor[] = [];
+
     if (propsInterface) {
       props = propsInterface.getProperties().map(describeProp);
+      // Augment with variant props derived from `extends VariantProps<typeof X>`.
+      const cvaConstName = findVariantPropsConstName(propsInterface);
+      if (cvaConstName) {
+        const cvaProps = extractCvaVariantProps(srcFile, cvaConstName);
+        // Skip cva props whose names collide with explicit interface props.
+        const explicitNames = new Set(props.map((p) => p.name));
+        for (const cp of cvaProps) {
+          if (!explicitNames.has(cp.name)) props.push(cp);
+        }
+      }
     } else {
       const propsAlias = srcFile.getTypeAlias(`${id}Props`);
       if (propsAlias) {

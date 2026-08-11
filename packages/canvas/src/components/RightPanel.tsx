@@ -13,12 +13,17 @@ export function RightPanel({ pageId }: Props) {
   const selection = useCanvas((s) => s.selection);
   const theme = useCanvas((s) => s.theme);
   const presets = useCanvas((s) => s.presets);
+  const cursorMode = useCanvas((s) => s.cursorMode);
 
   // When the user selects a node, switch to the Node tab. When they clear
   // selection, fall back to whichever tab was active or default to Theme.
   useEffect(() => {
     if (selection) setRightTab("node");
   }, [selection, setRightTab]);
+
+  // In hand mode, the Node tab is intentionally empty — there's no selection
+  // workflow active. Theme tab remains useful so we keep it accessible.
+  const handMode = cursorMode === "hand";
 
   return (
     <aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col overflow-hidden">
@@ -31,7 +36,9 @@ export function RightPanel({ pageId }: Props) {
         </TabButton>
       </div>
       {rightTab === "node" ? (
-        pageId ? (
+        handMode ? (
+          <EmptyMessage>Hand tool active. Drag to pan; press V or Esc to return to select.</EmptyMessage>
+        ) : pageId ? (
           <Inspector pageId={pageId} />
         ) : (
           <EmptyMessage>No page selected.</EmptyMessage>

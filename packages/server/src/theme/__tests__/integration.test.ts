@@ -72,11 +72,11 @@ afterEach(async () => {
 });
 
 describe("applyPreset", () => {
-  test("switches to slate and persists", async () => {
-    const t = await applyPreset(ctx, "slate");
-    expect(t.name).toBe("slate");
+  test("switches to violet and persists", async () => {
+    const t = await applyPreset(ctx, "violet");
+    expect(t.name).toBe("violet");
     const onDisk = await diskTheme();
-    expect(onDisk.name).toBe("slate");
+    expect(onDisk.name).toBe("violet");
     expect(events.at(-1)).toEqual({ type: "theme-changed" });
   });
 

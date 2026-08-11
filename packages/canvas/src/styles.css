@@ -22,6 +22,11 @@ body,
   margin: 0;
 }
 
+/* Hand-mode: iframes don't intercept mousedown so the grid can pan. */
+.velloo-hand .velloo-frame-iframe {
+  pointer-events: none;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-fg);

@@ -45,7 +45,7 @@ function ensureContrast(
   const fgOk = parseOklch(fg);
   const bgOk = parseOklch(bg);
   // Decide direction by comparing lightness.
-  const goingDark = fgOk.l > bgOk.l ? false : true;
+  const goingDark = fgOk.l <= bgOk.l;
 
   let current = fgOk;
   for (let step = 0; step < 20; step++) {
