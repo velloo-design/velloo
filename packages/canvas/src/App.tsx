@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useApplyAppTheme } from "./app-theme.ts";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
@@ -38,6 +39,7 @@ export function App() {
   }, [loadDesign, selectPage, setSelection]);
 
   useUrlState();
+  useApplyAppTheme();
 
   // Global keyboard shortcuts: ⌘+/-/0 zoom, V/H cursor mode (when not in an input).
   useEffect(() => {

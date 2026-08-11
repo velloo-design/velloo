@@ -19,6 +19,11 @@ import {
   type UpdatePropsResult,
   updateProps as updatePropsImpl,
 } from "./update-props.ts";
+import {
+  type UpdateVariantArgs,
+  type UpdateVariantResult,
+  updateVariant as updateVariantImpl,
+} from "./update-variant.ts";
 
 /** Wrap each write mutation with the per-page mutex. */
 export function addNode(ctx: MutationContext, args: AddNodeArgs): Promise<AddNodeResult> {
@@ -45,6 +50,12 @@ export function applyClasses(
 ): Promise<UpdatePropsResult> {
   return withPageLock(args.pageId, () => applyClassesImpl(ctx, args));
 }
+export function updateVariant(
+  ctx: MutationContext,
+  args: UpdateVariantArgs,
+): Promise<UpdateVariantResult> {
+  return withPageLock(args.pageId, () => updateVariantImpl(ctx, args));
+}
 
 /** inspect is read-only; no mutex needed. */
 export function inspect(ctx: MutationContext, args: InspectArgs): Promise<InspectResult> {
@@ -67,4 +78,6 @@ export type {
   RemoveNodeResult,
   UpdatePropsArgs,
   UpdatePropsResult,
+  UpdateVariantArgs,
+  UpdateVariantResult,
 };

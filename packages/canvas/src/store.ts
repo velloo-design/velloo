@@ -14,6 +14,15 @@ import { pathFromString } from "./path.ts";
 export type RightTab = "node" | "theme";
 export type CursorMode = "select" | "hand";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
+export type AppTheme = "light" | "dark" | "system";
+
+const APP_THEME_KEY = "velloo:appTheme";
+
+function readAppTheme(): AppTheme {
+  if (typeof localStorage === "undefined") return "system";
+  const raw = localStorage.getItem(APP_THEME_KEY);
+  return raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
+}
 
 export interface Selection {
   variantId: string;
@@ -42,6 +51,10 @@ export interface CanvasState {
   pan: { x: number; y: number };
   /** Forced state for the selected node. */
   nodeState: NodeState;
+  /** Canvas chrome theme: explicit light/dark, or follow the OS. */
+  appTheme: AppTheme;
+  /** When true, prop/class/children edits replay across every variant. */
+  syncEdits: boolean;
 
   loadDesign(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
@@ -58,6 +71,8 @@ export interface CanvasState {
   setCursorMode(m: CursorMode): void;
   setPan(p: { x: number; y: number }): void;
   setNodeState(s: NodeState): void;
+  setAppTheme(t: AppTheme): void;
+  setSyncEdits(b: boolean): void;
 }
 
 /** Walk the current page tree and return the node at the given selection. */
@@ -91,6 +106,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   cursorMode: "select",
   pan: { x: 0, y: 0 },
   nodeState: "default",
+  appTheme: readAppTheme(),
+  syncEdits: true,
 
   async loadDesign() {
     const design = await fetchDesign();
@@ -164,9 +181,13 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   setCursorMode(cursorMode) {
-    // Switching modes resets selection lookups by clearing hover; selection
-    // itself stays (so the user can come back to it).
-    set({ cursorMode, hover: null });
+    // Entering hand mode clears selection + hover — there's no selection
+    // workflow active while panning. Leaving hand mode just clears hover.
+    if (cursorMode === "hand") {
+      set({ cursorMode, hover: null, selection: null, nodeState: "default" });
+    } else {
+      set({ cursorMode, hover: null });
+    }
   },
 
   setPan(pan) {
@@ -175,5 +196,14 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setNodeState(nodeState) {
     set({ nodeState });
+  },
+
+  setAppTheme(appTheme) {
+    set({ appTheme });
+    if (typeof localStorage !== "undefined") localStorage.setItem(APP_THEME_KEY, appTheme);
+  },
+
+  setSyncEdits(syncEdits) {
+    set({ syncEdits });
   },
 }));

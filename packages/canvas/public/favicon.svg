@@ -1,0 +1,7 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="32" height="32" rx="7" fill="oklch(0.205 0 0)" />
+  <path d="M6 6 L13 23 L16 23 L9 6 Z" fill="oklch(0.99 0 0)" />
+  <path d="M26 6 L19 23 L16 23 L23 6 Z" fill="oklch(0.99 0 0)" />
+  <path d="M22 7 L23.6 9.4 L26 11 L23.6 12.6 L22 15 L20.4 12.6 L18 11 L20.4 9.4 Z"
+        fill="oklch(0.7 0.2 250)" />
+</svg>

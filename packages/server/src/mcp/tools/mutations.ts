@@ -9,6 +9,7 @@ import {
   moveNode,
   removeNode,
   updateProps,
+  updateVariant,
 } from "../../mutations/index.ts";
 
 function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
@@ -131,6 +132,32 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => {
       try {
         return jsonResult(await addVariant(ctx, args));
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "update_variant",
+    {
+      description:
+        "Update a variant's metadata (name / viewport / canvas position). Sparse: pass only the fields you want to change. Pass position: null to clear and return to auto-flow layout.",
+      inputSchema: {
+        pageId: z.string(),
+        variantId: z.string(),
+        patch: z.object({
+          name: z.string().optional(),
+          viewport: z
+            .object({ w: z.number().int().positive(), h: z.number().int().positive() })
+            .optional(),
+          position: z.union([z.object({ x: z.number(), y: z.number() }), z.null()]).optional(),
+        }),
+      },
+    },
+    async (args) => {
+      try {
+        return jsonResult(await updateVariant(ctx, args));
       } catch (err) {
         return errorResult(err);
       }

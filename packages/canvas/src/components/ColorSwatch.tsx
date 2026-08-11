@@ -128,7 +128,6 @@ function Popover({
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: popover container needs to swallow mousedown so the outside-click handler doesn't dismiss it when clicking inside.
     <div
       role="dialog"
       className="absolute z-10 top-9 left-0 w-72 p-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg flex flex-col gap-2"

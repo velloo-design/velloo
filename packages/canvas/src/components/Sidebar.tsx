@@ -15,6 +15,7 @@ interface Props {
 export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion, themeName }: Props) {
   const selectPage = useCanvas((s) => s.selectPage);
   const selection = useCanvas((s) => s.selection);
+  const cursorMode = useCanvas((s) => s.cursorMode);
 
   // Which variant's tree is shown. Follows the user's selection; falls back to
   // the first variant when there's no selection yet.
@@ -107,7 +108,13 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion, th
             </select>
           ) : null}
         </div>
-        <div className="flex-1 overflow-auto py-1">
+        <div
+          className={
+            "flex-1 overflow-auto py-1 " +
+            (cursorMode === "hand" ? "opacity-40 pointer-events-none select-none" : "")
+          }
+          aria-disabled={cursorMode === "hand"}
+        >
           {activeVariant ? (
             <Tree variant={activeVariant} />
           ) : (

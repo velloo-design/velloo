@@ -1,16 +1,19 @@
-import { useEffect, useRef } from "react";
-import { renderUrl } from "../api.ts";
+import { useEffect, useRef, useState } from "react";
+import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
+import { ViewportEditor } from "./ViewportEditor.tsx";
 
 interface Props {
   pageId: string;
   variantId: string;
   variantName: string;
   viewport: { w: number; h: number };
+  /** True when any variant on the page has an explicit position. */
+  positioned: boolean;
 }
 
-export function VariantFrame({ pageId, variantId, variantName, viewport }: Props) {
+export function VariantFrame({ pageId, variantId, variantName, viewport, positioned }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
   const setSelection = useCanvas((s) => s.setSelection);
@@ -37,9 +40,6 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
       });
       channel.attach();
       channelRef.current = channel;
-
-      // Re-apply current highlight after the iframe reloads (the channel
-      // buffers until handshake completes, so this is safe pre-ready).
       const sel = useCanvas.getState().selection;
       if (sel?.variantId === variantId) {
         channel.send({ type: "applyHighlight", path: sel.path });
@@ -54,7 +54,6 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
     };
   }, [variantId, setSelection, setHover]);
 
-  // Push current selection / hover into the iframe whenever they change.
   useEffect(() => {
     const ch = channelRef.current;
     if (!ch) return;
@@ -69,8 +68,6 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
     else ch.send({ type: "clearHover" });
   }, [hover]);
 
-  // Push the forced node state (Inspector "Preview state" dropdown) into the
-  // iframe. Only applies when the selection lives in this variant.
   const nodeState = useCanvas((s) => s.nodeState);
   useEffect(() => {
     const ch = channelRef.current;
@@ -79,17 +76,47 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
     ch.send({ type: "applyVelloState", path, state: nodeState });
   }, [nodeState, selection]);
 
-  // Cache-bust the iframe src on page-version bumps so the iframe reloads
-  // with fresh HTML after server-side mutations.
   const src = `${renderUrl(pageId, variantId)}?v=${pageVersion}`;
 
+  const [editingSize, setEditingSize] = useState(false);
+
+  const commitViewport = (next: { w: number; h: number }) => {
+    setEditingSize(false);
+    if (next.w === viewport.w && next.h === viewport.h) return;
+    void mutate
+      .updateVariant({ pageId, variantId, patch: { viewport: next } })
+      .catch(() => undefined);
+  };
+
   return (
-    <div className="flex flex-col gap-2 shrink-0">
-      <div className="flex items-baseline gap-2 px-1 text-xs text-[var(--color-fg-muted)]">
+    <div className="flex flex-col gap-2 shrink-0" style={{ width: viewport.w }}>
+      {/* Header — grabbable handle when positioned mode is on. The
+       * `velloo-variant-header` class is used by VariantGrid's drag handler
+       * to start a drag on mousedown anywhere in the header. */}
+      <div
+        className={
+          "flex items-baseline gap-2 px-1 text-xs text-[var(--color-fg-muted)] velloo-variant-header" +
+          (positioned ? " cursor-grab active:cursor-grabbing" : "")
+        }
+        data-variant-id={variantId}
+      >
         <span className="font-medium text-[var(--color-fg)]">{variantName}</span>
-        <span>
-          {viewport.w} × {viewport.h}
-        </span>
+        {editingSize ? (
+          <ViewportEditor
+            initial={viewport}
+            onCommit={commitViewport}
+            onCancel={() => setEditingSize(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingSize(true)}
+            className="cursor-text hover:text-[var(--color-fg)] tabular-nums"
+            title="Click to edit viewport"
+          >
+            {viewport.w} × {viewport.h}
+          </button>
+        )}
       </div>
       <div
         className="bg-white border border-[var(--color-border)] rounded-md shadow-sm overflow-hidden"

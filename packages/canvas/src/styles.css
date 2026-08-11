@@ -15,6 +15,18 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 
+/* Explicit dark mode for the chrome. */
+html[data-app-theme="dark"] {
+  --color-bg: oklch(0.165 0 0);
+  --color-surface: oklch(0.22 0 0);
+  --color-border: oklch(0.32 0 0);
+  --color-fg: oklch(0.96 0 0);
+  --color-fg-muted: oklch(0.65 0 0);
+  --color-accent: oklch(0.62 0.2 250);
+  --color-accent-fg: oklch(0.99 0 0);
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {
@@ -22,9 +34,15 @@ body,
   margin: 0;
 }
 
-/* Hand-mode: iframes don't intercept mousedown so the grid can pan. */
+/* Hand-mode visuals: iframes don't intercept mousedown so the grid can pan,
+ * the cursor reflects the active tool, and no text gets selected mid-drag. */
 .velloo-hand .velloo-frame-iframe {
   pointer-events: none;
+}
+.velloo-hand,
+.velloo-hand * {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 body {

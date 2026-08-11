@@ -111,6 +111,17 @@ export const theme = {
 };
 
 export const mutate = {
+  updateVariant(args: {
+    pageId: string;
+    variantId: string;
+    patch: {
+      name?: string;
+      viewport?: { w: number; h: number };
+      position?: { x: number; y: number } | null;
+    };
+  }) {
+    return postMutate<{ variant: unknown }>("update_variant", args);
+  },
   updateProps(args: {
     pageId: string;
     variantId: string;

@@ -1,5 +1,5 @@
 import type { Colors, Theme } from "@velloo/schema";
-import { converter, formatCss, parse, wcagContrast } from "culori";
+import { converter, parse, wcagContrast } from "culori";
 import { ThemeError } from "./errors.ts";
 
 const toOklch = converter("oklch");
@@ -10,6 +10,21 @@ interface Oklch {
   c: number;
   h?: number;
   alpha?: number;
+}
+
+function r(n: number | undefined, p = 3): number {
+  if (n === undefined || Number.isNaN(n)) return 0;
+  const k = 10 ** p;
+  return Math.round(n * k) / k;
+}
+
+/** OKLCH string with components rounded to 3 decimals so theme JSON stays readable. */
+function formatOklch(o: Oklch): string {
+  const l = r(o.l);
+  const c = r(o.c);
+  const h = r(o.h);
+  const a = o.alpha !== undefined && o.alpha < 1 ? ` / ${r(o.alpha)}` : "";
+  return `oklch(${l} ${c} ${h}${a})`;
 }
 
 function parseOklch(input: string): Oklch {
@@ -26,11 +41,11 @@ function parseOklch(input: string): Oklch {
 }
 
 function withL(seed: Oklch, l: number): string {
-  return formatCss({ ...seed, l });
+  return formatOklch({ ...seed, l });
 }
 
 function lowChroma(seed: Oklch, l: number, factor = 0.05): string {
-  return formatCss({ ...seed, l, c: seed.c * factor });
+  return formatOklch({ ...seed, l, c: seed.c * factor });
 }
 
 /** Nudge `fg` toward white or black until contrast(fg, bg) ≥ minRatio. */
@@ -53,7 +68,7 @@ function ensureContrast(
       ...current,
       l: goingDark ? Math.max(0, current.l - 0.05) : Math.min(1, current.l + 0.05),
     };
-    const next = formatCss(current);
+    const next = formatOklch(current);
     if (wcagContrast(next, bg) >= minRatio) {
       return { color: next, adjusted: true };
     }

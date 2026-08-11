@@ -1,11 +1,9 @@
+import { Hand, Minus, Moon, MousePointer2, Plus, Sun } from "lucide-react";
 import { theme as themeApi } from "../api.ts";
-import { type CursorMode, useCanvas } from "../store.ts";
+import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
+import { Logo } from "./Logo.tsx";
 
-/**
- * Map of preset → its dark counterpart. The light/dark toggle round-trips
- * between these. If the active theme isn't a known light preset, the toggle
- * sends the user to default-dark (and back to default-light).
- */
+/** Light-preset → dark-preset counterpart for the design theme. */
 const DARK_OF: Record<string, string> = {
   "default-light": "default-dark",
   "default-dark": "default-light",
@@ -20,12 +18,14 @@ export function TopBar() {
   const cursorMode = useCanvas((s) => s.cursorMode);
   const setCursorMode = useCanvas((s) => s.setCursorMode);
   const setPan = useCanvas((s) => s.setPan);
+  const appTheme = useCanvas((s) => s.appTheme);
+  const setAppTheme = useCanvas((s) => s.setAppTheme);
 
   const currentPage = design?.pages.find((p) => p.id === currentPageId);
-  const isDark = theme?.name === "default-dark";
+  const isDesignDark = theme?.name === "default-dark";
 
-  const toggleDark = () => {
-    const next = DARK_OF[theme?.name ?? ""] ?? (isDark ? "default-light" : "default-dark");
+  const toggleDesignDark = () => {
+    const next = DARK_OF[theme?.name ?? ""] ?? (isDesignDark ? "default-light" : "default-dark");
     void themeApi.applyPreset(next).catch(() => undefined);
   };
 
@@ -35,8 +35,9 @@ export function TopBar() {
   };
 
   return (
-    <header className="h-10 shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex items-center gap-3 px-4 text-sm">
+    <header className="h-11 shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex items-center gap-3 px-4 text-sm">
       <div className="flex items-center gap-2 min-w-0">
+        <Logo size={22} />
         <span className="font-semibold tracking-tight">Velloo</span>
         {currentPage ? (
           <>
@@ -49,8 +50,16 @@ export function TopBar() {
       <div className="ml-auto flex items-center gap-1.5">
         <SegmentedButton
           options={[
-            { value: "select", label: "↗", title: "Select tool (V)" },
-            { value: "hand", label: "✋", title: "Hand tool (H)" },
+            {
+              value: "select",
+              icon: <MousePointer2 size={14} strokeWidth={2} />,
+              title: "Select tool (V)",
+            },
+            {
+              value: "hand",
+              icon: <Hand size={14} strokeWidth={2} />,
+              title: "Hand tool (H)",
+            },
           ]}
           value={cursorMode}
           onChange={(v) => setCursorMode(v as CursorMode)}
@@ -58,7 +67,7 @@ export function TopBar() {
 
         <div className="flex items-center gap-1 ml-2">
           <SmallButton title="Zoom out" onClick={() => setCanvasZoom(canvasZoom - 0.1)}>
-            −
+            <Minus size={14} strokeWidth={2} />
           </SmallButton>
           <button
             type="button"
@@ -69,7 +78,7 @@ export function TopBar() {
             {Math.round(canvasZoom * 100)}%
           </button>
           <SmallButton title="Zoom in" onClick={() => setCanvasZoom(canvasZoom + 0.1)}>
-            ＋
+            <Plus size={14} strokeWidth={2} />
           </SmallButton>
         </div>
 
@@ -77,14 +86,32 @@ export function TopBar() {
 
         <button
           type="button"
-          onClick={toggleDark}
-          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs hover:bg-[var(--color-surface)]"
-          title={isDark ? "Switch to light" : "Switch to dark"}
+          onClick={toggleDesignDark}
+          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs hover:bg-[var(--color-surface)] flex items-center gap-1"
+          title={isDesignDark ? "Design: switch to light preset" : "Design: switch to dark preset"}
         >
-          {isDark ? "☀︎ Light" : "🌙 Dark"}
+          {isDesignDark ? <Sun size={13} /> : <Moon size={13} />}
+          <span>Design</span>
         </button>
+
+        <AppThemePicker value={appTheme} onChange={setAppTheme} />
       </div>
     </header>
+  );
+}
+
+function AppThemePicker({ value, onChange }: { value: AppTheme; onChange: (t: AppTheme) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as AppTheme)}
+      title="App theme (Velloo UI). Independent of the design's theme."
+      className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs hover:bg-[var(--color-surface)]"
+    >
+      <option value="light">App: Light</option>
+      <option value="dark">App: Dark</option>
+      <option value="system">App: System</option>
+    </select>
   );
 }
 
@@ -114,7 +141,7 @@ function SegmentedButton<T extends string>({
   value,
   onChange,
 }: {
-  options: { value: T; label: string; title: string }[];
+  options: { value: T; icon: React.ReactNode; title: string }[];
   value: T;
   onChange: (v: T) => void;
 }) {
@@ -129,13 +156,13 @@ function SegmentedButton<T extends string>({
             title={opt.title}
             onClick={() => onChange(opt.value)}
             className={
-              "h-7 w-8 text-xs grid place-items-center transition-colors " +
+              "h-7 w-8 grid place-items-center transition-colors " +
               (active
                 ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
                 : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]")
             }
           >
-            {opt.label}
+            {opt.icon}
           </button>
         );
       })}

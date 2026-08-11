@@ -37,7 +37,9 @@ export function RightPanel({ pageId }: Props) {
       </div>
       {rightTab === "node" ? (
         handMode ? (
-          <EmptyMessage>Hand tool active. Drag to pan; press V or Esc to return to select.</EmptyMessage>
+          <EmptyMessage>
+            Hand tool active. Drag to pan; press V or Esc to return to select.
+          </EmptyMessage>
         ) : pageId ? (
           <Inspector pageId={pageId} />
         ) : (
