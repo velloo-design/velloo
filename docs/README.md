@@ -35,7 +35,7 @@ The premise: solo developers and small teams can't justify a designer or Figma s
 - [ ] USPTO trademark filing (intent-to-use) in Classes 9 + 42 (~$350/class)
 - [ ] Trademark clearance search by counsel before filing (~£300–500)
 - [ ] UK Ltd registered as `Velloo Software Ltd` (avoids the struck-off-pending `Velloo Ltd` 16201713; rename to clean form if/when that entity is removed)
-- [ ] License decision (MIT vs BSL vs fair-source) before line one of code
+- [x] License: V0 ships **proprietary, all rights reserved**. Open-core / MIT / BSL / fair-source decisions deferred to before public launch.
 
 ## Status
 
