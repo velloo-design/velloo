@@ -12,5 +12,5 @@
     "types": ["bun", "react", "react-dom", "vite/client"]
   },
   "include": ["src/**/*", "vite.config.ts"],
-  "references": [{ "path": "../schema" }]
+  "references": [{ "path": "../schema" }, { "path": "../shadcn-snapshot" }]
 }

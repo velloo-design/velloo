@@ -1,4 +1,5 @@
 import type { Page } from "@velloo/schema";
+import type { Manifest } from "@velloo/shadcn-snapshot";
 
 export interface DesignSummary {
   snapshotVersion: string;
@@ -30,6 +31,61 @@ export async function fetchPage(id: string): Promise<Page> {
   return (await res.json()) as Page;
 }
 
+export async function fetchComponents(): Promise<Manifest> {
+  const res = await fetch("/api/components");
+  if (!res.ok) throw new Error(`fetchComponents: ${res.status}`);
+  return (await res.json()) as Manifest;
+}
+
 export function renderUrl(pageId: string, variantId: string): string {
   return `/api/render/${encodeURIComponent(pageId)}/${encodeURIComponent(variantId)}`;
 }
+
+export interface MutateError {
+  code: string;
+  message: string;
+  path?: number[];
+  ref?: string;
+  suggestions?: string[];
+}
+
+async function postMutate<T>(op: string, args: unknown): Promise<T> {
+  const res = await fetch(`/api/mutate/${op}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: MutateError };
+    const err = new Error(body.error?.message ?? `mutate/${op}: ${res.status}`);
+    (err as Error & { code?: string; payload?: MutateError }).payload = body.error;
+    throw err;
+  }
+  return (await res.json()) as T;
+}
+
+export const mutate = {
+  updateProps(args: {
+    pageId: string;
+    variantId: string;
+    path: number[];
+    propPatch: Record<string, unknown>;
+  }) {
+    return postMutate<{ path: number[] }>("update_props", args);
+  },
+  applyClasses(args: { pageId: string; variantId: string; path: number[]; classes: string }) {
+    return postMutate<{ path: number[] }>("apply_classes", args);
+  },
+  addNode(args: {
+    pageId: string;
+    variantId: string;
+    parentPath: number[];
+    componentRef: string;
+    props?: Record<string, unknown>;
+  }) {
+    return postMutate<{ path: number[] }>("add_node", args);
+  },
+  removeNode(args: { pageId: string; variantId: string; path: number[] }) {
+    return postMutate<{ removedRef: string }>("remove_node", args);
+  },
+};

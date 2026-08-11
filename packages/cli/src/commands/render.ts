@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { renderVariant, screenshot } from "@velloo/renderer";
 import { PageSchema, ThemeSchema } from "@velloo/schema";
+import { writeText } from "@velloo/server";
 import { defineCommand } from "citty";
-import { writeText } from "../fs.ts";
 
 export default defineCommand({
   meta: {

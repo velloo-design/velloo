@@ -51,4 +51,21 @@ describe("snapshot artifacts", () => {
     expect(heading?.source).toBe("velloo");
     expect(heading?.category).toBe("typography");
   });
+
+  test("infers control type for known props", async () => {
+    const manifest = await loadManifest();
+
+    const asChild = manifest
+      .find((c) => c.id === "Button")
+      ?.props.find((p) => p.name === "asChild");
+    expect(asChild?.control).toBe("boolean");
+
+    const level = manifest.find((c) => c.id === "Heading")?.props.find((p) => p.name === "level");
+    expect(level?.control).toBe("enum");
+    expect(level?.enumValues).toEqual([1, 2, 3, 4, 5, 6]);
+
+    const variant = manifest.find((c) => c.id === "Text")?.props.find((p) => p.name === "variant");
+    expect(variant?.control).toBe("enum");
+    expect(variant?.enumValues).toEqual(["default", "muted", "small", "lead"]);
+  });
 });

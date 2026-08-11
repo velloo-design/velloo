@@ -13,7 +13,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Project, type PropertySignature, SyntaxKind } from "ts-morph";
-import type { ComponentDescriptor, Manifest, PropDescriptor } from "./src/manifest.ts";
+import type { ComponentDescriptor, ControlType, Manifest, PropDescriptor } from "./src/manifest.ts";
 import { registry } from "./src/registry.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,11 +48,62 @@ function categorize(filePath: string): {
   return { source: "shadcn", category: "ui" };
 }
 
+const COLOR_NAME = /^(color|background|fg|bg|theme|fill|stroke|tint|accent)/i;
+
+/**
+ * Infer the inspector control type from a TS type string. Heuristic; keep it
+ * conservative — wrong inferences produce ugly inputs, not data corruption.
+ */
+function inferControl(
+  name: string,
+  rawType: string,
+): { control: ControlType; enumValues?: (string | number)[] } {
+  const type = rawType.replace(/\s+/g, " ").trim();
+  // Strip the trailing | undefined (and leading "undefined |").
+  const stripped = type
+    .split("|")
+    .map((s) => s.trim())
+    .filter((s) => s !== "undefined" && s !== "null")
+    .join(" | ");
+
+  if (stripped === "boolean") return { control: "boolean" };
+  if (stripped === "number") return { control: "number" };
+
+  // Numeric literal union: "1 | 2 | 3".
+  const numLit = stripped.split("|").map((s) => s.trim());
+  if (numLit.length > 1 && numLit.every((s) => /^-?\d+(\.\d+)?$/.test(s))) {
+    return { control: "enum", enumValues: numLit.map(Number) };
+  }
+
+  // String literal union: '"a" | "b" | "c"'.
+  if (
+    numLit.length > 1 &&
+    numLit.every(
+      (s) => (s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")),
+    )
+  ) {
+    return { control: "enum", enumValues: numLit.map((s) => s.slice(1, -1)) };
+  }
+
+  if (stripped === "string") {
+    if (COLOR_NAME.test(name)) return { control: "color" };
+    return { control: "string" };
+  }
+
+  // Fallback: treat anything else as a string field (e.g. union with ReactNode).
+  return { control: "string" };
+}
+
 function describeProp(prop: PropertySignature): PropDescriptor {
+  const name = prop.getName();
+  const type = prop.getType().getText(prop).replace(/\s+/g, " ");
+  const inferred = inferControl(name, type);
   return {
-    name: prop.getName(),
-    type: prop.getType().getText(prop).replace(/\s+/g, " "),
+    name,
+    type,
     optional: prop.hasQuestionToken(),
+    control: inferred.control,
+    ...(inferred.enumValues ? { enumValues: inferred.enumValues } : {}),
   };
 }
 
@@ -66,7 +117,6 @@ async function buildManifest(): Promise<void> {
   const components: ComponentDescriptor[] = [];
 
   for (const id of Object.keys(registry).sort()) {
-    // Locate the source file declaring this id.
     const srcFile = project.getSourceFiles().find((f) => {
       const text = f.getFullText();
       return text.includes(`export const ${id}`) || text.includes(`export function ${id}`);
@@ -80,10 +130,8 @@ async function buildManifest(): Promise<void> {
     const propsInterface = srcFile.getInterface(`${id}Props`);
     let props: PropDescriptor[] = [];
     if (propsInterface) {
-      // Direct props on the interface (skip inherited HTMLAttributes / VariantProps for brevity).
       props = propsInterface.getProperties().map(describeProp);
     } else {
-      // Heuristic: scan VariableDeclarations for a typed prop alias.
       const propsAlias = srcFile.getTypeAlias(`${id}Props`);
       if (propsAlias) {
         const literal = propsAlias.getDescendantsOfKind(SyntaxKind.TypeLiteral)[0];

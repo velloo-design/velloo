@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { EmptyState } from "./components/EmptyState.tsx";
+import { Inspector } from "./components/Inspector.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { VariantGrid } from "./components/VariantGrid.tsx";
@@ -50,6 +51,7 @@ export function App() {
       <Sidebar
         pages={design.pages}
         currentPageId={currentPageId}
+        currentPage={currentPage}
         snapshotVersion={design.snapshotVersion}
         themeName={design.theme.name}
       />
@@ -64,6 +66,7 @@ export function App() {
         )}
         <StatusBar />
       </main>
+      {currentPageId ? <Inspector pageId={currentPageId} /> : null}
     </div>
   );
 }

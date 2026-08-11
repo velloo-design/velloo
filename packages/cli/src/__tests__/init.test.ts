@@ -45,12 +45,15 @@ describe("velloo init", () => {
 
     const config = await readJson(join(target, ".design/config.json"));
     const theme = await readJson(join(target, "theme/default.json"));
-    const page = await readJson(join(target, "pages/onboarding.json"));
+    const welcome = await readJson(join(target, "pages/welcome.json"));
+    const settings = await readJson(join(target, "pages/settings.json"));
 
     expect(ConfigSchema.parse(config)).toBeDefined();
     expect(ThemeSchema.parse(theme)).toBeDefined();
-    const parsedPage = PageSchema.parse(page);
-    expect(parsedPage.variants.map((v) => v.id)).toEqual(["mobile", "desktop"]);
+    const parsedWelcome = PageSchema.parse(welcome);
+    expect(parsedWelcome.variants.map((v) => v.id)).toEqual(["mobile", "desktop"]);
+    const parsedSettings = PageSchema.parse(settings);
+    expect(parsedSettings.name).toBe("Settings");
   });
 
   test("refuses a non-empty target without --force", async () => {
@@ -67,5 +70,10 @@ describe("velloo init", () => {
 
     const config = await readJson(join(tmp, ".design/config.json"));
     expect(ConfigSchema.parse(config)).toBeDefined();
+    // Both pages should be on disk.
+    const welcome = await readJson(join(tmp, "pages/welcome.json"));
+    const settings = await readJson(join(tmp, "pages/settings.json"));
+    expect(PageSchema.parse(welcome)).toBeDefined();
+    expect(PageSchema.parse(settings)).toBeDefined();
   });
 });

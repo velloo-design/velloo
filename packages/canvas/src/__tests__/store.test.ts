@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Page } from "@velloo/schema";
 import type { DesignSummary } from "../api.ts";
-import { useCanvas } from "../store.ts";
+import { selectedNode, useCanvas } from "../store.ts";
 
 const designSummary: DesignSummary = {
   snapshotVersion: "test",
@@ -34,6 +34,7 @@ beforeEach(() => {
     design: null,
     currentPageId: null,
     currentPage: null,
+    components: null,
     selection: null,
     hover: null,
     wsConnected: false,
@@ -42,6 +43,7 @@ beforeEach(() => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.endsWith("/api/design")) return Response.json(designSummary);
     if (url.includes("/api/page/")) return Response.json(page);
+    if (url.endsWith("/api/components")) return Response.json([]);
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
 });
@@ -72,5 +74,26 @@ describe("canvas store", () => {
     useCanvas.getState().setSelection({ variantId: "mobile", path: "0" });
     await useCanvas.getState().selectPage("onboarding");
     expect(useCanvas.getState().selection).toBeNull();
+  });
+
+  test("selectedNode walks the page tree by selection.path", () => {
+    const tree: Page = {
+      name: "x",
+      variants: [
+        {
+          id: "mobile",
+          name: "Mobile",
+          viewport: { w: 1, h: 1 },
+          tree: {
+            $ref: "Card",
+            children: [{ $ref: "Heading" }, { $ref: "Card", children: [{ $ref: "Button" }] }],
+          },
+        },
+      ],
+    };
+    expect(selectedNode(tree, { variantId: "mobile", path: "" })?.$ref).toBe("Card");
+    expect(selectedNode(tree, { variantId: "mobile", path: "0" })?.$ref).toBe("Heading");
+    expect(selectedNode(tree, { variantId: "mobile", path: "1.0" })?.$ref).toBe("Button");
+    expect(selectedNode(tree, { variantId: "mobile", path: "5" })).toBeNull();
   });
 });

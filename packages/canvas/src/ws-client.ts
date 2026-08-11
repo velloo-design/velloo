@@ -25,13 +25,15 @@ export function connectWs(): () => void {
       } catch {
         return;
       }
-      const { currentPageId, refreshCurrentPage, loadDesign } = useCanvas.getState();
+      const { currentPageId, refreshCurrentPage, refreshDesignSummary } = useCanvas.getState();
       if (payload.type === "page-changed") {
         if (payload.pageId === currentPageId) {
+          // Same page edited: refresh content without clearing the user's selection.
           void refreshCurrentPage();
+        } else {
+          // Different page: just refresh the sidebar summary; don't touch currentPage/selection.
+          void refreshDesignSummary();
         }
-        // Other pages: refresh the design summary so the sidebar stays in sync.
-        void loadDesign();
       } else if (payload.type === "theme-changed") {
         void refreshCurrentPage();
       }

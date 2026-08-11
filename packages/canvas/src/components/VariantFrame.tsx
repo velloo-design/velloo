@@ -15,6 +15,7 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
   const channelRef = useRef<IframeChannel | null>(null);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
+  const pageVersion = useCanvas((s) => s.pageVersion);
   const selection = useCanvas((s) => (s.selection?.variantId === variantId ? s.selection : null));
   const hover = useCanvas((s) => (s.hover?.variantId === variantId ? s.hover : null));
 
@@ -36,6 +37,13 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
       });
       channel.attach();
       channelRef.current = channel;
+
+      // Re-apply current highlight after the iframe reloads (the channel
+      // buffers until handshake completes, so this is safe pre-ready).
+      const sel = useCanvas.getState().selection;
+      if (sel?.variantId === variantId) {
+        channel.send({ type: "applyHighlight", path: sel.path });
+      }
     };
 
     iframe.addEventListener("load", handleLoad);
@@ -61,6 +69,10 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
     else ch.send({ type: "clearHover" });
   }, [hover]);
 
+  // Cache-bust the iframe src on page-version bumps so the iframe reloads
+  // with fresh HTML after server-side mutations.
+  const src = `${renderUrl(pageId, variantId)}?v=${pageVersion}`;
+
   return (
     <div className="flex flex-col gap-2 shrink-0">
       <div className="flex items-baseline gap-2 px-1 text-xs text-[var(--color-fg-muted)]">
@@ -76,7 +88,7 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
         <iframe
           ref={iframeRef}
           title={`${pageId} / ${variantName}`}
-          src={renderUrl(pageId, variantId)}
+          src={src}
           className="w-full h-full block"
           sandbox="allow-same-origin allow-scripts"
         />

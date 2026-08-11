@@ -5,17 +5,23 @@ import type { ServerWebSocket } from "bun";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
 import { type DesignFolder, loadDesignFolder, reloadPage, reloadTheme } from "./design-folder.ts";
-import { type Watcher, watchDesignFolder } from "./watcher.ts";
+import { createMcpServer } from "./mcp/server.ts";
+import type { MutationContext } from "./mutations/index.ts";
+import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
 
 export interface ServerOptions {
   folder: string;
   port?: number;
   host?: string;
+  /** MCP server port. Default 7301. */
+  mcpPort?: number;
 }
 
 export interface ServerHandle {
   url: string;
+  mcpUrl: string;
   port: number;
+  mcpPort: number;
   close(): Promise<void>;
 }
 
@@ -59,7 +65,9 @@ async function serveSpaFallback(): Promise<Response> {
 export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const folder: DesignFolder = await loadDesignFolder(opts.folder);
   const broadcaster = new Broadcaster();
-  const app = createApp(() => folder);
+  const broadcast = (e: WatchEvent) => broadcaster.broadcast(e);
+  const ctx: MutationContext = { folder, broadcast };
+  const app = createApp(() => ctx);
 
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {
@@ -105,23 +113,33 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         broadcaster.unregister(ws);
       },
       message() {
-        // Sprint 3 is read-only; client-to-server messages are ignored.
+        // Client-to-server WS messages are ignored; the channel is one-way.
       },
     },
   });
 
   const port = server.port ?? opts.port ?? 7300;
 
+  // MCP server on a separate port (defaults to 7301).
+  const mcp = await createMcpServer(ctx, {
+    port: opts.mcpPort ?? 7301,
+    host: opts.host ?? "127.0.0.1",
+  });
+
   return {
     url: `http://${server.hostname}:${port}`,
+    mcpUrl: mcp.url,
     port,
+    mcpPort: mcp.port,
     async close() {
       watcher?.close();
+      await mcp.close();
       server.stop(true);
     },
   };
 }
 
-// Re-export key types for downstream consumers.
+// Re-export key types and helpers for downstream consumers.
 export type { DesignFolder } from "./design-folder.ts";
+export { writeJsonAtomic, writeText } from "./fs.ts";
 export type { WatchEvent } from "./watcher.ts";

@@ -1,20 +1,28 @@
 import { Hono } from "hono";
 import type { DesignFolder } from "./design-folder.ts";
+import type { MutationContext } from "./mutations/index.ts";
+import { createComponentsRouter } from "./routes/api-components.ts";
 import { createDesignRouter } from "./routes/api-design.ts";
+import { createInspectRouter } from "./routes/api-inspect.ts";
+import { createMutateRouter } from "./routes/api-mutate.ts";
 import { createPageRouter } from "./routes/api-page.ts";
 import { createRenderRouter } from "./routes/api-render.ts";
 
 /**
- * Build the read-only Hono app. WS upgrade and static SPA serving are
- * attached at server bind time (in index.ts) since they need the Bun runtime.
+ * Build the Hono app. WS upgrade and static SPA serving are attached at
+ * server bind time (in index.ts) since they need the Bun runtime.
  */
-export function createApp(folder: () => DesignFolder): Hono {
+export function createApp(ctxFor: () => MutationContext): Hono {
   const app = new Hono();
+  const folder: () => DesignFolder = () => ctxFor().folder;
 
   app.get("/api/health", (c) => c.json({ ok: true }));
   app.route("/api/design", createDesignRouter(folder));
   app.route("/api/page", createPageRouter(folder));
   app.route("/api/render", createRenderRouter(folder));
+  app.route("/api/components", createComponentsRouter());
+  app.route("/api/mutate", createMutateRouter(ctxFor));
+  app.route("/api/inspect", createInspectRouter(ctxFor));
 
   return app;
 }

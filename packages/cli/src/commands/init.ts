@@ -1,11 +1,11 @@
 import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { ConfigSchema, PageSchema, ThemeSchema } from "@velloo/schema";
+import { writeJsonAtomic, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
-import { writeJsonAtomic, writeText } from "../fs.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { buildDefaultTheme } from "../scaffold/default-theme.ts";
-import { buildSamplePage } from "../scaffold/sample-page.ts";
+import { buildSamplePage, buildSettingsPage } from "../scaffold/sample-page.ts";
 
 async function isEmptyOrMissing(path: string): Promise<boolean> {
   try {
@@ -47,23 +47,27 @@ export default defineCommand({
 
     const config = buildDefaultConfig();
     const theme = buildDefaultTheme();
-    const page = buildSamplePage();
+    const welcome = buildSamplePage();
+    const settings = buildSettingsPage();
 
     // Validate before writing — defense in depth.
     ConfigSchema.parse(config);
     ThemeSchema.parse(theme);
-    PageSchema.parse(page);
+    PageSchema.parse(welcome);
+    PageSchema.parse(settings);
 
     const configPath = `${folder}/.design/config.json`;
     const themePath = `${folder}/theme/default.json`;
-    const pagePath = `${folder}/pages/onboarding.json`;
+    const welcomePath = `${folder}/pages/welcome.json`;
+    const settingsPath = `${folder}/pages/settings.json`;
     const cacheKeep = `${folder}/.design/cache/.gitkeep`;
     const assetsKeep = `${folder}/assets/.gitkeep`;
 
     await Promise.all([
       writeJsonAtomic(configPath, config),
       writeJsonAtomic(themePath, theme),
-      writeJsonAtomic(pagePath, page),
+      writeJsonAtomic(welcomePath, welcome),
+      writeJsonAtomic(settingsPath, settings),
       writeText(cacheKeep, ""),
       writeText(assetsKeep, ""),
     ]);
@@ -71,7 +75,8 @@ export default defineCommand({
     console.log(`velloo: scaffolded design folder at ${folder}`);
     console.log("  .design/config.json    — locked tool + shadcn snapshot");
     console.log("  theme/default.json     — token tree (colors, type, spacing, radius)");
-    console.log("  pages/onboarding.json  — sample page with mobile + desktop variants");
+    console.log("  pages/welcome.json     — Velloo onboarding (mobile + desktop)");
+    console.log("  pages/settings.json    — profile / account / notifications");
     console.log("");
     console.log(`Next: velloo run ${args.folder}`);
   },
