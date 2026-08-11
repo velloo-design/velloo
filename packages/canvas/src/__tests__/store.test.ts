@@ -44,6 +44,19 @@ beforeEach(() => {
     if (url.endsWith("/api/design")) return Response.json(designSummary);
     if (url.includes("/api/page/")) return Response.json(page);
     if (url.endsWith("/api/components")) return Response.json([]);
+    if (url.endsWith("/api/theme"))
+      return Response.json({
+        name: "default",
+        colors: {
+          background: "oklch(1 0 0)",
+          foreground: "oklch(0 0 0)",
+          primary: { DEFAULT: "oklch(0.2 0 0)", foreground: "oklch(1 0 0)" },
+        },
+        typography: {},
+        spacing: {},
+        radius: {},
+      });
+    if (url.endsWith("/api/theme/presets")) return Response.json({ presets: [] });
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { EmptyState } from "./components/EmptyState.tsx";
-import { Inspector } from "./components/Inspector.tsx";
+import { RightPanel } from "./components/RightPanel.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { VariantGrid } from "./components/VariantGrid.tsx";
@@ -66,7 +66,7 @@ export function App() {
         )}
         <StatusBar />
       </main>
-      {currentPageId ? <Inspector pageId={currentPageId} /> : null}
+      <RightPanel pageId={currentPageId} />
     </div>
   );
 }

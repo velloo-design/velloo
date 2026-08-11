@@ -106,8 +106,12 @@ describe("themeToCss", () => {
     expect(css.trim().endsWith("}")).toBe(true);
   });
 
-  test("ignores unknown color tokens", () => {
-    const t: Theme = { ...sampleTheme, colors: { ...sampleTheme.colors, fuchsia: "oklch(...)" } };
+  test("ignores unknown color tokens (extra fields stripped at the boundary)", () => {
+    // Cast through Theme since unknown fields aren't part of the typed shape any more.
+    const t = {
+      ...sampleTheme,
+      colors: { ...sampleTheme.colors, fuchsia: "oklch(0.5 0.2 320)" },
+    } as unknown as Theme;
     const css = themeToCss(t);
     expect(css).not.toContain("fuchsia");
   });

@@ -1,10 +1,9 @@
 import type { Theme } from "@velloo/schema";
 
 /**
- * Map our theme color tokens onto the shadcn CSS-variable convention so the
- * pre-compiled snapshot stylesheet picks up the design's colors. Other token
- * groups (typography, spacing, radius) round-trip through the snapshot
- * defaults until the theme editor lands in Sprint 5.
+ * Map theme tokens onto the shadcn CSS-variable convention so the
+ * pre-compiled snapshot stylesheet picks up the design's colors, typography,
+ * and radius at render time.
  */
 const COLOR_TOKEN_MAP: Record<string, string | string[]> = {
   background: "--color-background",
@@ -51,6 +50,22 @@ export function themeToCss(theme: Theme): string {
     } else {
       emit(target, value, lines);
     }
+  }
+
+  // Typography: font family.
+  const typography = (theme.typography ?? {}) as Record<string, unknown>;
+  const fontFamily = typography.fontFamily as Record<string, unknown> | undefined;
+  if (fontFamily) {
+    emit("--font-sans", fontFamily.sans, lines);
+    emit("--font-mono", fontFamily.mono, lines);
+  }
+
+  // Radius: a single --radius pulled from radius.md (or radius.lg as fallback).
+  const radius = (theme.radius ?? {}) as Record<string, unknown>;
+  const radiusValue = radius.md ?? radius.lg ?? radius.sm;
+  if (radiusValue !== undefined) {
+    const formatted = typeof radiusValue === "number" ? `${radiusValue}px` : String(radiusValue);
+    lines.push(`  --radius: ${formatted};`);
   }
 
   lines.push("}");

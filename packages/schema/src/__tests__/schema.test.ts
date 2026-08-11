@@ -89,17 +89,32 @@ describe("ConfigSchema", () => {
 });
 
 describe("ThemeSchema", () => {
-  test("accepts a nested token tree", () => {
+  test("accepts a typed color theme", () => {
     const theme = {
       name: "default",
       colors: {
-        primary: { 500: "oklch(0.6 0.2 250)" },
         background: "oklch(1 0 0)",
+        foreground: "oklch(0.145 0 0)",
+        primary: { DEFAULT: "oklch(0.205 0 0)", foreground: "oklch(0.985 0 0)" },
+        secondary: { DEFAULT: "oklch(0.97 0 0)" },
+        muted: "oklch(0.97 0 0)",
+        border: "oklch(0.922 0 0)",
       },
       typography: { fontFamily: { sans: "Inter, sans-serif" }, fontSize: { base: 16 } },
       spacing: { 1: 4, 2: 8 },
       radius: { md: 8 },
     };
     expect(ThemeSchema.safeParse(theme).success).toBe(true);
+  });
+
+  test("rejects a theme without primary", () => {
+    const theme = {
+      name: "default",
+      colors: { background: "oklch(1 0 0)", foreground: "oklch(0 0 0)" },
+      typography: {},
+      spacing: {},
+      radius: {},
+    };
+    expect(ThemeSchema.safeParse(theme).success).toBe(false);
   });
 });

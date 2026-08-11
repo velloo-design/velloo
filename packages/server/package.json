@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Velloo HTTP backend (canvas + future MCP)",
+  "description": "Velloo HTTP backend (canvas + MCP)",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -13,7 +13,12 @@
     "@velloo/renderer": "workspace:*",
     "@velloo/schema": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*",
+    "culori": "4.0.2",
     "hono": "4.12.18",
+    "node-vibrant": "4.0.4",
     "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/culori": "4.0.1"
   }
 }

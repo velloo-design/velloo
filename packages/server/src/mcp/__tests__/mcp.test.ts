@@ -15,7 +15,11 @@ const sampleConfig = {
 };
 const sampleTheme = {
   name: "default",
-  colors: { background: "oklch(1 0 0)", foreground: "oklch(0 0 0)" },
+  colors: {
+    background: "oklch(1 0 0)",
+    foreground: "oklch(0 0 0)",
+    primary: { DEFAULT: "oklch(0.205 0 0)", foreground: "oklch(0.985 0 0)" },
+  },
   typography: {},
   spacing: {},
   radius: {},
@@ -213,6 +217,38 @@ describe("MCP server", () => {
     const payload = JSON.parse(text) as { code: string; suggestions?: string[] };
     expect(payload.code).toBe("UNKNOWN_COMPONENT");
     expect(payload.suggestions).toContain("Button");
+  });
+
+  test("apply_preset switches the theme and persists", async () => {
+    const r = await callTool(mcp.url, sessionId, "apply_preset", { presetName: "rose" });
+    expect(r.isError).toBeFalsy();
+    expect(folder.theme.name).toBe("rose");
+  });
+
+  test("derive_palette_from_color produces a violet theme", async () => {
+    const r = await callTool(mcp.url, sessionId, "derive_palette_from_color", {
+      seedColor: "#7c3aed",
+    });
+    const data = JSON.parse(r.content?.[0]?.text ?? "{}") as {
+      theme: { colors: { primary: { DEFAULT: string } } };
+    };
+    expect(data.theme.colors.primary.DEFAULT).toContain("oklch");
+  });
+
+  test("match_vibe (heuristic) maps known vibes to seeds", async () => {
+    const r = await callTool(mcp.url, sessionId, "match_vibe", { description: "playful" });
+    const data = JSON.parse(r.content?.[0]?.text ?? "{}") as {
+      matched: { keywords: string[]; source: string };
+    };
+    expect(data.matched.keywords).toContain("playful");
+    expect(data.matched.source).toBe("heuristic");
+  });
+
+  test("apply_preset rejects an unknown name", async () => {
+    const r = await callTool(mcp.url, sessionId, "apply_preset", { presetName: "neonpunk" });
+    expect(r.isError).toBe(true);
+    const payload = JSON.parse(r.content?.[0]?.text ?? "{}") as { code: string };
+    expect(payload.code).toBe("UNKNOWN_PRESET");
   });
 
   test("multiple tool calls reuse the same session", async () => {

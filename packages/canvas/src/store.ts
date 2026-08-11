@@ -1,8 +1,17 @@
-import type { Node, Page } from "@velloo/schema";
+import type { Node, Page, Theme } from "@velloo/schema";
 import type { Manifest } from "@velloo/shadcn-snapshot";
 import { create } from "zustand";
-import { type DesignSummary, fetchComponents, fetchDesign, fetchPage } from "./api.ts";
+import {
+  type DesignSummary,
+  fetchComponents,
+  fetchDesign,
+  fetchPage,
+  fetchPresets,
+  fetchTheme,
+} from "./api.ts";
 import { pathFromString } from "./path.ts";
+
+export type RightTab = "node" | "theme";
 
 export interface Selection {
   variantId: string;
@@ -16,18 +25,25 @@ export interface CanvasState {
   /** Bumped whenever currentPage content changes. Used to cache-bust iframe src. */
   pageVersion: number;
   components: Manifest | null;
+  theme: Theme | null;
+  themeVersion: number;
+  presets: string[];
   selection: Selection | null;
   hover: Selection | null;
   wsConnected: boolean;
+  rightTab: RightTab;
 
   loadDesign(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
   loadComponents(): Promise<void>;
+  loadTheme(): Promise<void>;
+  refreshTheme(): Promise<void>;
   selectPage(pageId: string): Promise<void>;
   refreshCurrentPage(): Promise<void>;
   setSelection(s: Selection | null): void;
   setHover(h: Selection | null): void;
   setWsConnected(b: boolean): void;
+  setRightTab(t: RightTab): void;
 }
 
 /** Walk the current page tree and return the node at the given selection. */
@@ -50,15 +66,20 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   currentPage: null,
   pageVersion: 0,
   components: null,
+  theme: null,
+  themeVersion: 0,
+  presets: [],
   selection: null,
   hover: null,
   wsConnected: false,
+  rightTab: "node",
 
   async loadDesign() {
     const design = await fetchDesign();
     set({ design });
     const next = get().currentPageId ?? design.pages[0]?.id ?? null;
     if (next) await get().selectPage(next);
+    await get().loadTheme();
   },
 
   async refreshDesignSummary() {
@@ -69,6 +90,16 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   async loadComponents() {
     if (get().components) return;
     set({ components: await fetchComponents() });
+  },
+
+  async loadTheme() {
+    const [theme, { presets }] = await Promise.all([fetchTheme(), fetchPresets()]);
+    set({ theme, presets, themeVersion: get().themeVersion + 1 });
+  },
+
+  async refreshTheme() {
+    const theme = await fetchTheme();
+    set({ theme, themeVersion: get().themeVersion + 1 });
   },
 
   async selectPage(pageId: string) {
@@ -103,5 +134,9 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setWsConnected(wsConnected) {
     set({ wsConnected });
+  },
+
+  setRightTab(rightTab) {
+    set({ rightTab });
   },
 }));

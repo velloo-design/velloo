@@ -1,4 +1,4 @@
-import type { Page } from "@velloo/schema";
+import type { Page, Theme } from "@velloo/schema";
 import type { Manifest } from "@velloo/shadcn-snapshot";
 
 export interface DesignSummary {
@@ -63,6 +63,52 @@ async function postMutate<T>(op: string, args: unknown): Promise<T> {
   }
   return (await res.json()) as T;
 }
+
+export async function fetchTheme(): Promise<Theme> {
+  const res = await fetch("/api/theme");
+  if (!res.ok) throw new Error(`fetchTheme: ${res.status}`);
+  return (await res.json()) as Theme;
+}
+
+export async function fetchPresets(): Promise<{ presets: string[] }> {
+  const res = await fetch("/api/theme/presets");
+  if (!res.ok) throw new Error(`fetchPresets: ${res.status}`);
+  return (await res.json()) as { presets: string[] };
+}
+
+async function postTheme<T>(op: string, args: unknown): Promise<T> {
+  const res = await fetch(`/api/theme/${op}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message: string } };
+    throw new Error(body.error?.message ?? `theme/${op}: ${res.status}`);
+  }
+  return (await res.json()) as T;
+}
+
+export const theme = {
+  setToken(path: string, value: string | number) {
+    return postTheme<{ theme: Theme }>("set_token", { path, value });
+  },
+  applyPreset(presetName: string) {
+    return postTheme<{ theme: Theme }>("apply_preset", { presetName });
+  },
+  deriveFromColor(seedColor: string, name?: string) {
+    return postTheme<{ theme: Theme; adjustments: unknown[] }>("derive_palette_from_color", {
+      seedColor,
+      name,
+    });
+  },
+  matchVibe(description: string, useAi = false) {
+    return postTheme<{ theme: Theme; matched: { description: string; source: string } }>(
+      "match_vibe",
+      { description, useAi },
+    );
+  },
+};
 
 export const mutate = {
   updateProps(args: {

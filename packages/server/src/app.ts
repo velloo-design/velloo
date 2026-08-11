@@ -7,6 +7,7 @@ import { createInspectRouter } from "./routes/api-inspect.ts";
 import { createMutateRouter } from "./routes/api-mutate.ts";
 import { createPageRouter } from "./routes/api-page.ts";
 import { createRenderRouter } from "./routes/api-render.ts";
+import { createThemeRouter } from "./routes/api-theme.ts";
 
 /**
  * Build the Hono app. WS upgrade and static SPA serving are attached at
@@ -23,6 +24,7 @@ export function createApp(ctxFor: () => MutationContext): Hono {
   app.route("/api/components", createComponentsRouter());
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/inspect", createInspectRouter(ctxFor));
+  app.route("/api/theme", createThemeRouter(ctxFor));
 
   return app;
 }

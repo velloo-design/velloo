@@ -31,27 +31,17 @@ export function Inspector({ pageId }: Props) {
 
   if (!selection) {
     return (
-      <aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col">
-        <header className="px-4 py-3 border-b border-[var(--color-border)]">
-          <span className="font-semibold text-sm">Inspector</span>
-        </header>
-        <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
-          Click a node in the canvas to edit its props.
-        </div>
-      </aside>
+      <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
+        Click a node in the canvas to edit its props.
+      </div>
     );
   }
 
   if (!node) {
     return (
-      <aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col">
-        <header className="px-4 py-3 border-b border-[var(--color-border)]">
-          <span className="font-semibold text-sm">Inspector</span>
-        </header>
-        <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
-          Selected node is no longer in the tree.
-        </div>
-      </aside>
+      <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
+        Selected node is no longer in the tree.
+      </div>
     );
   }
 
@@ -67,14 +57,14 @@ export function Inspector({ pageId }: Props) {
     }, DEBOUNCE_MS);
   };
 
-  // Selection identity is what should trigger PropField remounts. Re-mounts
-  // reseed local draft state, but only when the user picks a different node.
+  // Selection identity drives PropField remounts so local draft state stays
+  // fresh per selected node.
   const selectionKey = `${selection.variantId}:${selection.path}`;
   const initialClasses =
     typeof node.props?.className === "string" ? (node.props.className as string) : "";
 
   return (
-    <aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden">
       <header className="px-4 py-3 border-b border-[var(--color-border)]">
         <div className="font-semibold text-sm">{node.$ref}</div>
         <div className="text-xs text-[var(--color-fg-muted)] mt-0.5">
@@ -114,6 +104,6 @@ export function Inspector({ pageId }: Props) {
           debounceMs={DEBOUNCE_MS}
         />
       </div>
-    </aside>
+    </div>
   );
 }

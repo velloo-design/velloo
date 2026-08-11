@@ -11,6 +11,7 @@ import type { MutationContext } from "../mutations/index.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
+import { registerThemeTools } from "./tools/theme.ts";
 
 export interface McpServerOptions {
   port: number;
@@ -39,6 +40,7 @@ function buildMcpServer(ctx: MutationContext): McpServer {
   registerDiscoveryTools(mcp, ctx);
   registerMutationTools(mcp, ctx);
   registerInspectTool(mcp, ctx);
+  registerThemeTools(mcp, ctx);
   return mcp;
 }
 
