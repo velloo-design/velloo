@@ -28,6 +28,19 @@ type DragState =
     };
 
 const VARIANT_GAP = 48;
+/** Bounding box variants must stay within. Matches the inner padded scroll area. */
+const CANVAS_MIN = 0;
+const CANVAS_MAX = 5000;
+
+function clampPosition(
+  pos: { x: number; y: number },
+  size: { w: number; h: number },
+): { x: number; y: number } {
+  return {
+    x: Math.max(CANVAS_MIN, Math.min(CANVAS_MAX - size.w, pos.x)),
+    y: Math.max(CANVAS_MIN, Math.min(CANVAS_MAX - size.h, pos.y)),
+  };
+}
 
 function isPositioned(page: Page): boolean {
   return page.variants.some((v) => v.position !== undefined);
@@ -166,12 +179,19 @@ export function VariantGrid({ pageId, page }: Props) {
         el.scrollTop = d.scrollTop - (e.clientY - d.startY);
         return;
       }
+      const dragged = page.variants.find((x) => x.id === d.variantId);
+      if (!dragged) return;
       const z = useCanvas.getState().canvasZoom || 1;
-      const dx = (e.clientX - d.startX) / z;
-      const dy = (e.clientY - d.startY) / z;
-      d.preview = { x: Math.round(d.basePos.x + dx), y: Math.round(d.basePos.y + dy) };
-      // Apply an optimistic visual transform on the frame; the WS broadcast
-      // brings canonical state back on commit and clears the transform.
+      const rawDx = (e.clientX - d.startX) / z;
+      const rawDy = (e.clientY - d.startY) / z;
+      const rawPos = { x: Math.round(d.basePos.x + rawDx), y: Math.round(d.basePos.y + rawDy) };
+      // Resolve collision + clamp live so the visible frame matches the
+      // resolved drop slot at all times.
+      const collision = resolveCollision(page, dragged, rawPos);
+      const clamped = clampPosition(collision, dragged.viewport);
+      d.preview = clamped;
+      const dx = clamped.x - d.basePos.x;
+      const dy = clamped.y - d.basePos.y;
       d.el.style.transform = `translate(${dx}px, ${dy}px)`;
     };
 
@@ -183,11 +203,9 @@ export function VariantGrid({ pageId, page }: Props) {
       if (d?.kind !== "variant" || !d.preview) return;
       d.el.style.transform = "";
 
-      const dragged = page.variants.find((x) => x.id === d.variantId);
-      if (!dragged) return;
-
-      // Collision resolution: drop into the nearest non-overlapping slot.
-      const resolved = resolveCollision(page, dragged, d.preview);
+      // d.preview already carries the resolved + clamped position (computed
+      // live in onMove), so the commit uses it directly.
+      const resolved = d.preview;
 
       // First drag promotes the page to positioned mode. Capture every
       // other variant's *current* visual flow position so they don't snap
@@ -319,7 +337,6 @@ export function VariantGrid({ pageId, page }: Props) {
                       variantId={v.id}
                       variantName={v.name}
                       viewport={v.viewport}
-                      positioned
                     />
                   </div>
                 );
@@ -333,7 +350,6 @@ export function VariantGrid({ pageId, page }: Props) {
                     variantId={v.id}
                     variantName={v.name}
                     viewport={v.viewport}
-                    positioned={false}
                   />
                 ))}
               </div>

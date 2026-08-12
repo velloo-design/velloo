@@ -10,6 +10,7 @@ export function createDesignRouter(folder: () => DesignFolder): Hono {
     return c.json({
       snapshotVersion,
       theme: { name: f.theme.name },
+      defaultPage: f.config.defaultPage ?? null,
       pages: [...f.pages.entries()].map(([id, page]) => ({
         id,
         name: page.name,

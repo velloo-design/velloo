@@ -15,5 +15,6 @@ export function buildDefaultConfig(): Config {
       { name: "Tablet", w: 768, h: 1024 },
       { name: "Desktop", w: 1440, h: 900 },
     ],
+    defaultPage: "welcome",
   };
 }

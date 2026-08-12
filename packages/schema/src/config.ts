@@ -27,6 +27,8 @@ export const ConfigSchema = z.object({
   toolVersion: z.string().min(1),
   componentSource: ComponentSourceSchema,
   viewportPresets: z.array(ViewportPresetSchema).min(1),
+  /** Page id the canvas should focus on first load. Falls back to the first page. */
+  defaultPage: z.string().min(1).optional(),
   codegen: CodegenConfigSchema.optional(),
 });
 

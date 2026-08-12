@@ -6,6 +6,7 @@ import { selectedNode, useCanvas } from "../store.ts";
 const designSummary: DesignSummary = {
   snapshotVersion: "test",
   theme: { name: "default" },
+  defaultPage: null,
   pages: [
     {
       id: "onboarding",
@@ -57,6 +58,7 @@ beforeEach(() => {
         radius: {},
       });
     if (url.endsWith("/api/theme/presets")) return Response.json({ presets: [] });
+    if (url.endsWith("/api/undo")) return Response.json({ undo: 0, redo: 0 });
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
 });

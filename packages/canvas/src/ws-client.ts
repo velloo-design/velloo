@@ -25,8 +25,14 @@ export function connectWs(): () => void {
       } catch {
         return;
       }
-      const { currentPageId, refreshCurrentPage, refreshDesignSummary, refreshTheme } =
-        useCanvas.getState();
+      const {
+        currentPageId,
+        refreshCurrentPage,
+        refreshDesignSummary,
+        refreshHistory,
+        refreshTheme,
+      } = useCanvas.getState();
+      void refreshHistory();
       if (payload.type === "page-changed") {
         if (payload.pageId === currentPageId) {
           // Same page edited: refresh content without clearing the user's selection.

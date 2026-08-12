@@ -13,6 +13,10 @@ export default defineCommand({
       type: "string",
       description: "Port for the canvas server (default 7300)",
     },
+    "mcp-port": {
+      type: "string",
+      description: "Port for the MCP server (default 7301)",
+    },
     host: {
       type: "string",
       description: "Bind hostname (default 127.0.0.1)",
@@ -25,10 +29,16 @@ export default defineCommand({
       console.error(`velloo run: invalid --port ${JSON.stringify(args.port)}`);
       process.exit(1);
     }
+    const mcpPort = args["mcp-port"] ? Number(args["mcp-port"]) : 7301;
+    if (!Number.isFinite(mcpPort) || mcpPort <= 0) {
+      console.error(`velloo run: invalid --mcp-port ${JSON.stringify(args["mcp-port"])}`);
+      process.exit(1);
+    }
 
     const handle = await createServer({
       folder,
       port,
+      mcpPort,
       host: args.host ?? "127.0.0.1",
     });
     console.log(`velloo: canvas at ${handle.url}`);

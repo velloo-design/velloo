@@ -5,9 +5,11 @@ import {
   type DesignSummary,
   fetchComponents,
   fetchDesign,
+  fetchHistory,
   fetchPage,
   fetchPresets,
   fetchTheme,
+  type HistoryDepths,
 } from "./api.ts";
 import { pathFromString } from "./path.ts";
 
@@ -55,8 +57,11 @@ export interface CanvasState {
   appTheme: AppTheme;
   /** When true, prop/class/children edits replay across every variant. */
   syncEdits: boolean;
+  /** Server-reported undo/redo stack depths. Drives the TopBar buttons. */
+  history: HistoryDepths;
 
   loadDesign(): Promise<void>;
+  refreshHistory(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
   loadComponents(): Promise<void>;
   loadTheme(): Promise<void>;
@@ -108,13 +113,28 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   nodeState: "default",
   appTheme: readAppTheme(),
   syncEdits: true,
+  history: { undo: 0, redo: 0 },
+
+  async refreshHistory() {
+    try {
+      const history = await fetchHistory();
+      set({ history });
+    } catch {
+      /* ignore */
+    }
+  },
 
   async loadDesign() {
     const design = await fetchDesign();
     set({ design });
-    const next = get().currentPageId ?? design.pages[0]?.id ?? null;
+    const prefersDefault =
+      design.defaultPage && design.pages.some((p) => p.id === design.defaultPage)
+        ? design.defaultPage
+        : null;
+    const next = get().currentPageId ?? prefersDefault ?? design.pages[0]?.id ?? null;
     if (next) await get().selectPage(next);
     await get().loadTheme();
+    await get().refreshHistory();
   },
 
   async refreshDesignSummary() {

@@ -4,6 +4,8 @@ import type { Manifest } from "@velloo/shadcn-snapshot";
 export interface DesignSummary {
   snapshotVersion: string;
   theme: { name: string };
+  /** Page id the canvas should focus first; null when the config didn't set one. */
+  defaultPage: string | null;
   pages: PageMeta[];
 }
 
@@ -89,16 +91,31 @@ async function postTheme<T>(op: string, args: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function undo(): Promise<{
-  reverted: { kind: "page"; pageId: string } | { kind: "theme" } | null;
-  depth: number;
-}> {
+export interface HistoryDepths {
+  undo: number;
+  redo: number;
+}
+export type RevertedEntry = { kind: "page"; pageId: string } | { kind: "theme" };
+export interface HistoryResponse extends HistoryDepths {
+  reverted: RevertedEntry | null;
+}
+
+export async function fetchHistory(): Promise<HistoryDepths> {
+  const res = await fetch("/api/undo");
+  if (!res.ok) throw new Error(`fetchHistory: ${res.status}`);
+  return (await res.json()) as HistoryDepths;
+}
+
+export async function undo(): Promise<HistoryResponse> {
   const res = await fetch("/api/undo", { method: "POST" });
   if (!res.ok) throw new Error(`undo: ${res.status}`);
-  return (await res.json()) as {
-    reverted: { kind: "page"; pageId: string } | { kind: "theme" } | null;
-    depth: number;
-  };
+  return (await res.json()) as HistoryResponse;
+}
+
+export async function redo(): Promise<HistoryResponse> {
+  const res = await fetch("/api/undo/redo", { method: "POST" });
+  if (!res.ok) throw new Error(`redo: ${res.status}`);
+  return (await res.json()) as HistoryResponse;
 }
 
 export const theme = {

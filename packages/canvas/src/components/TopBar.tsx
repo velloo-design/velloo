@@ -1,5 +1,5 @@
-import { Hand, Minus, Moon, MousePointer2, Plus, Sun } from "lucide-react";
-import { theme as themeApi } from "../api.ts";
+import { Hand, Minus, Moon, MousePointer2, Plus, Redo2, Sun, Undo2 } from "lucide-react";
+import { redo as redoApi, theme as themeApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
 import { Logo } from "./Logo.tsx";
 
@@ -18,6 +18,8 @@ export function TopBar() {
   const cursorMode = useCanvas((s) => s.cursorMode);
   const setCursorMode = useCanvas((s) => s.setCursorMode);
   const setPan = useCanvas((s) => s.setPan);
+  const history = useCanvas((s) => s.history);
+  const refreshHistory = useCanvas((s) => s.refreshHistory);
   const appTheme = useCanvas((s) => s.appTheme);
   const setAppTheme = useCanvas((s) => s.setAppTheme);
 
@@ -32,6 +34,17 @@ export function TopBar() {
   const onZoomReset = () => {
     setCanvasZoom(1);
     setPan({ x: 0, y: 0 });
+  };
+
+  const onUndo = () => {
+    void undoApi()
+      .catch(() => undefined)
+      .finally(() => refreshHistory());
+  };
+  const onRedo = () => {
+    void redoApi()
+      .catch(() => undefined)
+      .finally(() => refreshHistory());
   };
 
   return (
@@ -66,6 +79,25 @@ export function TopBar() {
         />
 
         <div className="flex items-center gap-1 ml-2">
+          <SmallButton
+            title={`Undo (⌘Z)${history.undo > 0 ? ` — ${history.undo} step${history.undo === 1 ? "" : "s"}` : ""}`}
+            onClick={onUndo}
+            disabled={history.undo === 0}
+          >
+            <Undo2 size={14} strokeWidth={2} />
+          </SmallButton>
+          <SmallButton
+            title={`Redo (⌘⇧Z)${history.redo > 0 ? ` — ${history.redo} step${history.redo === 1 ? "" : "s"}` : ""}`}
+            onClick={onRedo}
+            disabled={history.redo === 0}
+          >
+            <Redo2 size={14} strokeWidth={2} />
+          </SmallButton>
+        </div>
+
+        <div className="h-5 w-px bg-[var(--color-border)]" />
+
+        <div className="flex items-center gap-1">
           <SmallButton title="Zoom out" onClick={() => setCanvasZoom(canvasZoom - 0.1)}>
             <Minus size={14} strokeWidth={2} />
           </SmallButton>
@@ -119,17 +151,20 @@ function SmallButton({
   onClick,
   title,
   children,
+  disabled,
 }: {
   onClick: () => void;
   title: string;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
-      className="h-7 w-7 grid place-items-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs hover:bg-[var(--color-surface)]"
+      disabled={disabled}
+      className="h-7 w-7 grid place-items-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs hover:bg-[var(--color-surface)] disabled:opacity-40 disabled:pointer-events-none"
     >
       {children}
     </button>

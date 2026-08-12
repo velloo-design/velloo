@@ -41,12 +41,17 @@ export function ViewportEditor({ initial, onCommit, onCancel }: Props) {
     }
   };
 
-  // Only commit on blur when focus actually leaves the editor — switching
-  // between width and height (via tab or click) keeps the editor open.
-  const onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const next = e.relatedTarget as Node | null;
-    if (next && rootRef.current?.contains(next)) return;
-    commit();
+  // Only commit on blur when focus actually leaves the editor. relatedTarget
+  // is null on some focus paths (Safari, certain mouse flows), so we defer a
+  // frame and then check document.activeElement — by then focus has settled
+  // on the next element. Width ↔ height swaps keep the editor open.
+  const onBlur = () => {
+    requestAnimationFrame(() => {
+      const root = rootRef.current;
+      if (!root) return;
+      if (root.contains(document.activeElement)) return;
+      commit();
+    });
   };
 
   // Stop propagation on each input's mousedown so the parent variant drag

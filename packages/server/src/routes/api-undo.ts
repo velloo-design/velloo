@@ -3,14 +3,22 @@ import type { Page, Theme } from "@velloo/schema";
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
-import { historyDepth, popHistory } from "../history.ts";
+import {
+  type HistoryEntry,
+  historyDepths,
+  popRedo,
+  popUndo,
+  pushRedo,
+  pushUndoSilent,
+} from "../history.ts";
 import { withPageLock } from "../mutations/context.ts";
 import type { WatchEvent } from "../watcher.ts";
 
 /**
- * Single-level revert. POPs the most recent persistPage/persistTheme snapshot
- * and re-writes it to disk + cache. We bypass persistPage on purpose — undo
- * itself should not push another history entry in V0.
+ * Single-level revert / replay. POPs from the undo (or redo) stack, snapshots
+ * the *current* state to the opposite stack, and re-writes the popped entry
+ * to disk + cache. We bypass persistPage on purpose — undo/redo flips
+ * between the two stacks and must not clear redo by going through persist.
  */
 export function createUndoRouter(
   folderFor: () => DesignFolder,
@@ -18,29 +26,57 @@ export function createUndoRouter(
 ): Hono {
   const r = new Hono();
 
-  r.get("/", (c) => c.json({ depth: historyDepth() }));
+  r.get("/", (c) => c.json(historyDepths()));
 
   r.post("/", async (c) => {
-    const entry = popHistory();
-    if (!entry) {
-      return c.json({ reverted: null, depth: 0 });
-    }
-    const folder = folderFor();
+    const entry = popUndo();
+    if (!entry) return c.json({ reverted: null, ...historyDepths() });
+    return c.json({
+      reverted: await applyRevert(entry, folderFor(), broadcast, "redo"),
+      ...historyDepths(),
+    });
+  });
 
-    if (entry.kind === "page") {
-      await withPageLock(entry.pageId, async () => {
-        await writePage(folder, entry.pageId, entry.page);
-      });
-      broadcast({ type: "page-changed", pageId: entry.pageId });
-      return c.json({ reverted: { kind: "page", pageId: entry.pageId }, depth: historyDepth() });
-    }
-
-    await writeTheme(folder, entry.theme);
-    broadcast({ type: "theme-changed" });
-    return c.json({ reverted: { kind: "theme" }, depth: historyDepth() });
+  r.post("/redo", async (c) => {
+    const entry = popRedo();
+    if (!entry) return c.json({ reverted: null, ...historyDepths() });
+    return c.json({
+      reverted: await applyRevert(entry, folderFor(), broadcast, "undo"),
+      ...historyDepths(),
+    });
   });
 
   return r;
+}
+
+async function applyRevert(
+  entry: HistoryEntry,
+  folder: DesignFolder,
+  broadcast: (e: WatchEvent) => void,
+  pushOpposite: "redo" | "undo",
+): Promise<{ kind: "page"; pageId: string } | { kind: "theme" }> {
+  if (entry.kind === "page") {
+    // Snapshot what we're about to overwrite so the inverse stack can put it back.
+    const current = folder.pages.get(entry.pageId);
+    if (current) {
+      const back: HistoryEntry = { kind: "page", pageId: entry.pageId, page: current };
+      if (pushOpposite === "redo") pushRedo(back);
+      else pushUndoSilent(back);
+    }
+    await withPageLock(entry.pageId, async () => {
+      await writePage(folder, entry.pageId, entry.page);
+    });
+    broadcast({ type: "page-changed", pageId: entry.pageId });
+    return { kind: "page", pageId: entry.pageId };
+  }
+
+  const current = folder.theme;
+  const back: HistoryEntry = { kind: "theme", theme: current };
+  if (pushOpposite === "redo") pushRedo(back);
+  else pushUndoSilent(back);
+  await writeTheme(folder, entry.theme);
+  broadcast({ type: "theme-changed" });
+  return { kind: "theme" };
 }
 
 async function writePage(folder: DesignFolder, pageId: string, page: Page): Promise<void> {

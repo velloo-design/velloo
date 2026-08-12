@@ -9,11 +9,9 @@ interface Props {
   variantId: string;
   variantName: string;
   viewport: { w: number; h: number };
-  /** True when any variant on the page has an explicit position. */
-  positioned: boolean;
 }
 
-export function VariantFrame({ pageId, variantId, variantName, viewport, positioned }: Props) {
+export function VariantFrame({ pageId, variantId, variantName, viewport }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
   const setSelection = useCanvas((s) => s.setSelection);
@@ -94,10 +92,7 @@ export function VariantFrame({ pageId, variantId, variantName, viewport, positio
        * `velloo-variant-header` class is used by VariantGrid's drag handler
        * to start a drag on mousedown anywhere in the header. */}
       <div
-        className={
-          "flex items-baseline gap-2 px-1 text-xs text-[var(--color-fg-muted)] velloo-variant-header" +
-          (positioned ? " cursor-grab active:cursor-grabbing" : "")
-        }
+        className="flex items-baseline gap-2 px-1 text-xs text-[var(--color-fg-muted)] velloo-variant-header cursor-grab active:cursor-grabbing"
         data-variant-id={variantId}
       >
         <span className="font-medium text-[var(--color-fg)]">{variantName}</span>
