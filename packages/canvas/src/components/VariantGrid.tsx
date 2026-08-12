@@ -133,14 +133,13 @@ export function VariantGrid({ pageId, page }: Props) {
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      const header = target.closest(".velloo-variant-header") as HTMLElement | null;
-      const overInteractive = target.closest("input,textarea,button");
+      // Drag only initiates from the explicit handle icon — other header
+      // affordances (size text, kebab menu) keep their own click behavior.
+      const handle = target.closest(".velloo-variant-handle") as HTMLElement | null;
 
-      // Variant drag: only in select mode and only on the header background
-      // (not on the inline button/inputs the header contains).
-      if (header && !overInteractive && cursorMode !== "hand") {
+      if (handle && cursorMode !== "hand") {
         e.preventDefault();
-        const variantId = header.getAttribute("data-variant-id");
+        const variantId = handle.getAttribute("data-variant-id");
         const v = page.variants.find((x) => x.id === variantId);
         if (!variantId || !v) return;
         const frameEl = findFrameEl(variantId);
@@ -207,26 +206,24 @@ export function VariantGrid({ pageId, page }: Props) {
       // live in onMove), so the commit uses it directly.
       const resolved = d.preview;
 
-      // First drag promotes the page to positioned mode. Capture every
-      // other variant's *current* visual flow position so they don't snap
-      // to (0, 0) when we leave flow mode. Issue these as a batch alongside
-      // the dragged variant's commit.
+      // Backfill positions for every variant that doesn't yet have one (not
+      // just on the first drag — new variants added later need this too).
+      // Their auto-flow slot is captured so they don't drift when the page
+      // re-renders in positioned mode.
       const promotionPatches: Promise<unknown>[] = [];
-      if (!isPositioned(page)) {
-        for (const other of page.variants) {
-          if (other.id === d.variantId) continue;
-          if (other.position !== undefined) continue;
-          const auto = defaultPositionFor(page, other.id);
-          promotionPatches.push(
-            mutate
-              .updateVariant({
-                pageId,
-                variantId: other.id,
-                patch: { position: auto },
-              })
-              .catch(() => undefined),
-          );
-        }
+      for (const other of page.variants) {
+        if (other.id === d.variantId) continue;
+        if (other.position !== undefined) continue;
+        const auto = defaultPositionFor(page, other.id);
+        promotionPatches.push(
+          mutate
+            .updateVariant({
+              pageId,
+              variantId: other.id,
+              patch: { position: auto },
+            })
+            .catch(() => undefined),
+        );
       }
 
       promotionPatches.push(

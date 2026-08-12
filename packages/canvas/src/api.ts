@@ -174,4 +174,13 @@ export const mutate = {
   removeNode(args: { pageId: string; variantId: string; path: number[] }) {
     return postMutate<{ removedRef: string }>("remove_node", args);
   },
+  removeVariant(args: { pageId: string; variantId: string }) {
+    return postMutate<{ removedVariantId: string }>("remove_variant", args);
+  },
+  addPage(args: { name: string; id?: string; viewport?: { w: number; h: number } }) {
+    return postMutate<{ pageId: string; page: Page }>("add_page", args);
+  },
+  removePage(args: { pageId: string }) {
+    return postMutate<{ removedPageId: string }>("remove_page", args);
+  },
 };

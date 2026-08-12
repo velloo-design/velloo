@@ -1,12 +1,15 @@
 import { Hono } from "hono";
 import {
   addNode,
+  addPage,
   addVariant,
   applyClasses,
   type MutationContext,
   MutationError,
   moveNode,
   removeNode,
+  removePage,
+  removeVariant,
   updateProps,
   updateVariant,
 } from "../mutations/index.ts";
@@ -136,6 +139,49 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
         viewport: args.viewport,
         name: args.name,
         id: args.id,
+      });
+      return c.json(result);
+    } catch (err) {
+      if (err instanceof MutationError) return c.json({ error: err.payload }, 400);
+      throw err;
+    }
+  });
+
+  r.post("/add_page", async (c) => {
+    const args = (await c.req.json()) as AnyArgs;
+    if (!args.name) return c.json(bad("name required"), 400);
+    try {
+      const result = await addPage(ctxFor(), {
+        name: args.name,
+        id: args.id,
+        viewport: args.viewport,
+      });
+      return c.json(result);
+    } catch (err) {
+      if (err instanceof MutationError) return c.json({ error: err.payload }, 400);
+      throw err;
+    }
+  });
+
+  r.post("/remove_page", async (c) => {
+    const args = (await c.req.json()) as AnyArgs;
+    if (!args.pageId) return c.json(bad("pageId required"), 400);
+    try {
+      const result = await removePage(ctxFor(), { pageId: args.pageId });
+      return c.json(result);
+    } catch (err) {
+      if (err instanceof MutationError) return c.json({ error: err.payload }, 400);
+      throw err;
+    }
+  });
+
+  r.post("/remove_variant", async (c) => {
+    const args = (await c.req.json()) as AnyArgs;
+    if (!args.pageId || !args.variantId) return c.json(bad("pageId, variantId required"), 400);
+    try {
+      const result = await removeVariant(ctxFor(), {
+        pageId: args.pageId,
+        variantId: args.variantId,
       });
       return c.json(result);
     } catch (err) {

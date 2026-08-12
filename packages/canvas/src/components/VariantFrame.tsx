@@ -1,3 +1,4 @@
+import { GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
@@ -77,6 +78,7 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
   const src = `${renderUrl(pageId, variantId)}?v=${pageVersion}`;
 
   const [editingSize, setEditingSize] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const commitViewport = (next: { w: number; h: number }) => {
     setEditingSize(false);
@@ -86,16 +88,29 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
       .catch(() => undefined);
   };
 
+  const onDelete = () => {
+    setMenuOpen(false);
+    if (!confirm(`Delete variant "${variantName}"?`)) return;
+    void mutate.removeVariant({ pageId, variantId }).catch(() => undefined);
+  };
+
   return (
-    <div className="flex flex-col gap-2 shrink-0" style={{ width: viewport.w }}>
-      {/* Header — grabbable handle when positioned mode is on. The
-       * `velloo-variant-header` class is used by VariantGrid's drag handler
-       * to start a drag on mousedown anywhere in the header. */}
+    <div className="flex flex-col gap-2 shrink-0 group/frame" style={{ width: viewport.w }}>
+      {/* Header — drag handle on the left, delete menu on the right. The
+       * `.velloo-variant-handle` class is the *only* element VariantGrid's
+       * drag handler accepts; the rest of the header is for inspection. */}
       <div
-        className="flex items-baseline gap-2 px-1 text-xs text-[var(--color-fg-muted)] velloo-variant-header cursor-grab active:cursor-grabbing"
+        className="flex items-center gap-2 px-1 text-xs text-[var(--color-fg-muted)] velloo-variant-header"
         data-variant-id={variantId}
       >
-        <span className="font-medium text-[var(--color-fg)]">{variantName}</span>
+        <span
+          className="velloo-variant-handle inline-flex items-center justify-center text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] cursor-grab active:cursor-grabbing -ml-1"
+          title="Drag to reposition"
+          data-variant-id={variantId}
+        >
+          <GripVertical size={14} strokeWidth={2} />
+        </span>
+        <span className="font-medium text-[var(--color-fg)] truncate">{variantName}</span>
         {editingSize ? (
           <ViewportEditor
             initial={viewport}
@@ -112,6 +127,40 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
             {viewport.w} × {viewport.h}
           </button>
         )}
+        <div className="ml-auto relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            title="Variant menu"
+            className={
+              "h-5 w-5 grid place-items-center rounded text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg)] " +
+              (menuOpen ? "opacity-100" : "opacity-0 group-hover/frame:opacity-100")
+            }
+          >
+            <MoreHorizontal size={14} strokeWidth={2} />
+          </button>
+          {menuOpen ? (
+            <>
+              {/* Click-outside backdrop */}
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div className="absolute right-0 top-6 z-50 w-36 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-md py-1 text-sm">
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[var(--color-destructive,red)] hover:bg-[var(--color-bg)]"
+                >
+                  <Trash2 size={13} strokeWidth={2} />
+                  Delete variant
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
       <div
         className="bg-white border border-[var(--color-border)] rounded-md shadow-sm overflow-hidden"

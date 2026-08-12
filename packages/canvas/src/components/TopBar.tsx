@@ -98,18 +98,18 @@ export function TopBar() {
         <div className="h-5 w-px bg-[var(--color-border)]" />
 
         <div className="flex items-center gap-1">
-          <SmallButton title="Zoom out" onClick={() => setCanvasZoom(canvasZoom - 0.1)}>
+          <SmallButton title="Zoom out (−)" onClick={() => setCanvasZoom(canvasZoom - 0.1)}>
             <Minus size={14} strokeWidth={2} />
           </SmallButton>
           <button
             type="button"
             onClick={onZoomReset}
             className="px-2 py-1 text-xs tabular-nums text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] min-w-[3rem] text-center"
-            title="Reset zoom (⌘0)"
+            title="Reset zoom (0)"
           >
             {Math.round(canvasZoom * 100)}%
           </button>
-          <SmallButton title="Zoom in" onClick={() => setCanvasZoom(canvasZoom + 0.1)}>
+          <SmallButton title="Zoom in (+)" onClick={() => setCanvasZoom(canvasZoom + 0.1)}>
             <Plus size={14} strokeWidth={2} />
           </SmallButton>
         </div>

@@ -42,7 +42,10 @@ export function App() {
   useUrlState();
   useApplyAppTheme();
 
-  // Global keyboard shortcuts: ⌘+/-/0 zoom, V/H cursor mode (when not in an input).
+  // Global keyboard shortcuts. Canvas zoom uses the un-cmd-prefixed `=` / `-`
+  // / `0` keys so the browser's own ⌘=/⌘-/⌘0 still work — getting stuck in
+  // browser zoom with no way out is worse than not having a Cmd-prefixed
+  // shortcut. V/H toggle cursor mode. ⌘Z / ⌘⇧Z drive undo/redo.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -60,13 +63,13 @@ export function App() {
         if (inEditable) return;
         e.preventDefault();
         void redoApi().catch(() => undefined);
-      } else if (cmd && (e.key === "=" || e.key === "+")) {
+      } else if (!cmd && !inEditable && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
         state.setCanvasZoom(state.canvasZoom + 0.1);
-      } else if (cmd && e.key === "-") {
+      } else if (!cmd && !inEditable && e.key === "-") {
         e.preventDefault();
         state.setCanvasZoom(state.canvasZoom - 0.1);
-      } else if (cmd && e.key === "0") {
+      } else if (!cmd && !inEditable && e.key === "0") {
         e.preventDefault();
         state.setCanvasZoom(1);
         state.setPan({ x: 0, y: 0 });

@@ -1,4 +1,5 @@
 import { type AddNodeArgs, type AddNodeResult, addNode as addNodeImpl } from "./add-node.ts";
+import { type AddPageArgs, type AddPageResult, addPage as addPageImpl } from "./add-page.ts";
 import {
   type AddVariantArgs,
   type AddVariantResult,
@@ -14,6 +15,16 @@ import {
   type RemoveNodeResult,
   removeNode as removeNodeImpl,
 } from "./remove-node.ts";
+import {
+  type RemovePageArgs,
+  type RemovePageResult,
+  removePage as removePageImpl,
+} from "./remove-page.ts";
+import {
+  type RemoveVariantArgs,
+  type RemoveVariantResult,
+  removeVariant as removeVariantImpl,
+} from "./remove-variant.ts";
 import {
   type UpdatePropsArgs,
   type UpdatePropsResult,
@@ -44,6 +55,18 @@ export function removeNode(ctx: MutationContext, args: RemoveNodeArgs): Promise<
 export function addVariant(ctx: MutationContext, args: AddVariantArgs): Promise<AddVariantResult> {
   return withPageLock(args.pageId, () => addVariantImpl(ctx, args));
 }
+export function removeVariant(
+  ctx: MutationContext,
+  args: RemoveVariantArgs,
+): Promise<RemoveVariantResult> {
+  return withPageLock(args.pageId, () => removeVariantImpl(ctx, args));
+}
+export function addPage(ctx: MutationContext, args: AddPageArgs): Promise<AddPageResult> {
+  return addPageImpl(ctx, args);
+}
+export function removePage(ctx: MutationContext, args: RemovePageArgs): Promise<RemovePageResult> {
+  return withPageLock(args.pageId, () => removePageImpl(ctx, args));
+}
 export function applyClasses(
   ctx: MutationContext,
   args: ApplyClassesArgs,
@@ -66,6 +89,8 @@ export { MutationError, type MutationErrorCode, type MutationErrorPayload } from
 export type {
   AddNodeArgs,
   AddNodeResult,
+  AddPageArgs,
+  AddPageResult,
   AddVariantArgs,
   AddVariantResult,
   ApplyClassesArgs,
@@ -76,6 +101,10 @@ export type {
   MutationContext,
   RemoveNodeArgs,
   RemoveNodeResult,
+  RemovePageArgs,
+  RemovePageResult,
+  RemoveVariantArgs,
+  RemoveVariantResult,
   UpdatePropsArgs,
   UpdatePropsResult,
   UpdateVariantArgs,
