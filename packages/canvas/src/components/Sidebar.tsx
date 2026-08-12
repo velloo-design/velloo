@@ -9,10 +9,9 @@ interface Props {
   currentPageId: string | null;
   currentPage: Page | null;
   snapshotVersion: string;
-  themeName: string;
 }
 
-export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion, themeName }: Props) {
+export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: Props) {
   const selectPage = useCanvas((s) => s.selectPage);
   const selection = useCanvas((s) => s.selection);
   const cursorMode = useCanvas((s) => s.cursorMode);
@@ -41,13 +40,8 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion, th
 
   return (
     <aside className="flex h-full w-80 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
-        <span className="font-semibold tracking-tight">Velloo</span>
-        <span className="text-xs text-[var(--color-fg-muted)]">{themeName}</span>
-      </header>
-
       <section className="border-b border-[var(--color-border)] py-2">
-        <div className="px-4 py-1 text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
+        <div className="px-4 py-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
           Pages
         </div>
         {pages.length === 0 ? (

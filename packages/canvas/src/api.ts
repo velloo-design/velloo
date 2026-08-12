@@ -89,6 +89,18 @@ async function postTheme<T>(op: string, args: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
+export async function undo(): Promise<{
+  reverted: { kind: "page"; pageId: string } | { kind: "theme" } | null;
+  depth: number;
+}> {
+  const res = await fetch("/api/undo", { method: "POST" });
+  if (!res.ok) throw new Error(`undo: ${res.status}`);
+  return (await res.json()) as {
+    reverted: { kind: "page"; pageId: string } | { kind: "theme" } | null;
+    depth: number;
+  };
+}
+
 export const theme = {
   setToken(path: string, value: string | number) {
     return postTheme<{ theme: Theme }>("set_token", { path, value });

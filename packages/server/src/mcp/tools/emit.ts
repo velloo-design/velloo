@@ -43,7 +43,7 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
           variantId: args.variantId,
           outputPath: out,
           apply: args.apply ?? false,
-          componentsAlias: args.componentsAlias,
+          componentsAlias: args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias,
         });
         return jsonResult({
           wouldWriteTo: out,

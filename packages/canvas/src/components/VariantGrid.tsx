@@ -1,4 +1,4 @@
-import type { Page } from "@velloo/schema";
+import type { Page, Variant } from "@velloo/schema";
 import { useEffect, useRef } from "react";
 import { mutate } from "../api.ts";
 import { useCanvas } from "../store.ts";
@@ -27,6 +27,8 @@ type DragState =
       el: HTMLElement;
     };
 
+const VARIANT_GAP = 48;
+
 function isPositioned(page: Page): boolean {
   return page.variants.some((v) => v.position !== undefined);
 }
@@ -36,9 +38,52 @@ function defaultPositionFor(page: Page, variantId: string): { x: number; y: numb
   let x = 0;
   for (const v of page.variants) {
     if (v.id === variantId) return { x, y: 0 };
-    x += v.viewport.w + 48;
+    x += v.viewport.w + VARIANT_GAP;
   }
   return { x: 0, y: 0 };
+}
+
+/** Effective position used for rendering (explicit or auto-flow). */
+function effectivePosition(page: Page, v: Variant): { x: number; y: number } {
+  return v.position ?? defaultPositionFor(page, v.id);
+}
+
+/**
+ * Push `dragged` horizontally until it no longer overlaps any other variant
+ * on the page. Snaps to whichever side of the obstacle is closer to the
+ * drop point. Y is preserved.
+ */
+function resolveCollision(
+  page: Page,
+  dragged: Variant,
+  drop: { x: number; y: number },
+): { x: number; y: number } {
+  const w = dragged.viewport.w;
+  const h = dragged.viewport.h;
+  // Iterate until stable — each pass may surface a new collision.
+  let { x, y } = drop;
+  for (let pass = 0; pass < page.variants.length + 1; pass++) {
+    let collided = false;
+    for (const other of page.variants) {
+      if (other.id === dragged.id) continue;
+      const op = effectivePosition(page, other);
+      const ow = other.viewport.w;
+      const oh = other.viewport.h;
+      const overlapX = x < op.x + ow && x + w > op.x;
+      const overlapY = y < op.y + oh && y + h > op.y;
+      if (!overlapX || !overlapY) continue;
+      collided = true;
+      // Snap to the side that's closer to the drop point.
+      const leftCandidate = op.x - w - VARIANT_GAP;
+      const rightCandidate = op.x + ow + VARIANT_GAP;
+      const distLeft = Math.abs(x - leftCandidate);
+      const distRight = Math.abs(x - rightCandidate);
+      x = distLeft < distRight ? leftCandidate : rightCandidate;
+      break;
+    }
+    if (!collided) break;
+  }
+  return { x, y };
 }
 
 function cssEscape(s: string): string {
@@ -57,6 +102,7 @@ export function VariantGrid({ pageId, page }: Props) {
 
   const outerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const lastZoomRef = useRef(canvasZoom);
 
   const positioned = isPositioned(page);
 
@@ -91,7 +137,7 @@ export function VariantGrid({ pageId, page }: Props) {
           startX: e.clientX,
           startY: e.clientY,
           variantId,
-          basePos: v.position ?? defaultPositionFor(page, variantId),
+          basePos: effectivePosition(page, v),
           preview: null,
           el: frameEl,
         };
@@ -134,16 +180,47 @@ export function VariantGrid({ pageId, page }: Props) {
       dragRef.current = null;
       document.body.style.cursor = "";
       el.style.cursor = cursorMode === "hand" ? "grab" : "";
-      if (d?.kind === "variant" && d.preview) {
-        d.el.style.transform = "";
-        void mutate
+      if (d?.kind !== "variant" || !d.preview) return;
+      d.el.style.transform = "";
+
+      const dragged = page.variants.find((x) => x.id === d.variantId);
+      if (!dragged) return;
+
+      // Collision resolution: drop into the nearest non-overlapping slot.
+      const resolved = resolveCollision(page, dragged, d.preview);
+
+      // First drag promotes the page to positioned mode. Capture every
+      // other variant's *current* visual flow position so they don't snap
+      // to (0, 0) when we leave flow mode. Issue these as a batch alongside
+      // the dragged variant's commit.
+      const promotionPatches: Promise<unknown>[] = [];
+      if (!isPositioned(page)) {
+        for (const other of page.variants) {
+          if (other.id === d.variantId) continue;
+          if (other.position !== undefined) continue;
+          const auto = defaultPositionFor(page, other.id);
+          promotionPatches.push(
+            mutate
+              .updateVariant({
+                pageId,
+                variantId: other.id,
+                patch: { position: auto },
+              })
+              .catch(() => undefined),
+          );
+        }
+      }
+
+      promotionPatches.push(
+        mutate
           .updateVariant({
             pageId,
             variantId: d.variantId,
-            patch: { position: d.preview },
+            patch: { position: resolved },
           })
-          .catch(() => undefined);
-      }
+          .catch(() => undefined),
+      );
+      void Promise.all(promotionPatches);
     };
 
     el.style.cursor = cursorMode === "hand" ? "grab" : "";
@@ -158,7 +235,9 @@ export function VariantGrid({ pageId, page }: Props) {
     };
   }, [cursorMode, page, pageId]);
 
-  // ⌘ + scroll → zoom.
+  // ⌘ + scroll → zoom anchored on cursor. We commit the scroll adjustment
+  // here and pre-stamp lastZoomRef so the center-anchoring effect below
+  // doesn't fight us.
   useEffect(() => {
     const el = outerRef.current;
     if (!el) return undefined;
@@ -166,7 +245,17 @@ export function VariantGrid({ pageId, page }: Props) {
       if (!(e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
       const delta = -e.deltaY * 0.002;
-      setCanvasZoom(useCanvas.getState().canvasZoom + delta);
+      const before = useCanvas.getState().canvasZoom;
+      const next = Math.max(0.1, Math.min(4, before + delta));
+      if (next === before) return;
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const ratio = next / before;
+      el.scrollLeft = (el.scrollLeft + cx) * ratio - cx;
+      el.scrollTop = (el.scrollTop + cy) * ratio - cy;
+      lastZoomRef.current = next;
+      setCanvasZoom(next);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -182,6 +271,25 @@ export function VariantGrid({ pageId, page }: Props) {
     el.scrollTop = 3000 * z - 24;
   }, [pageId]);
 
+  // Anchor scroll on the visible viewport center for any zoom change that
+  // didn't already anchor itself (TopBar +/-, ⌘0 reset). Wheel zoom
+  // pre-stamps lastZoomRef so this effect is a no-op for that path.
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) {
+      lastZoomRef.current = canvasZoom;
+      return;
+    }
+    const prev = lastZoomRef.current;
+    if (prev === canvasZoom) return;
+    const cx = el.clientWidth / 2;
+    const cy = el.clientHeight / 2;
+    const ratio = canvasZoom / prev;
+    el.scrollLeft = (el.scrollLeft + cx) * ratio - cx;
+    el.scrollTop = (el.scrollTop + cy) * ratio - cy;
+    lastZoomRef.current = canvasZoom;
+  }, [canvasZoom]);
+
   const wrapperClass =
     "flex-1 overflow-auto bg-[var(--color-bg)] relative" +
     (cursorMode === "hand" ? " velloo-hand" : "");
@@ -192,40 +300,45 @@ export function VariantGrid({ pageId, page }: Props) {
         className="origin-top-left will-change-transform inline-block"
         style={{ transform: `scale(${canvasZoom})`, transformOrigin: "top left" }}
       >
-        <div className="relative" style={{ padding: "3000px", minWidth: 6000, minHeight: 6000 }}>
-          {positioned ? (
-            page.variants.map((v) => {
-              const pos = v.position ?? defaultPositionFor(page, v.id);
-              return (
-                <div
-                  key={`${pageId}/${v.id}`}
-                  className="absolute"
-                  style={{ left: pos.x, top: pos.y }}
-                >
+        {/* Outer box reserves the huge scrollable area; the inner .relative is
+            the absolute-positioning context so positioned variants render at
+            (0,0) inside the same coordinate frame the flow layout uses. */}
+        <div style={{ padding: "3000px", minWidth: 6000, minHeight: 6000 }}>
+          <div className="relative">
+            {positioned ? (
+              page.variants.map((v) => {
+                const pos = effectivePosition(page, v);
+                return (
+                  <div
+                    key={`${pageId}/${v.id}`}
+                    className="absolute"
+                    style={{ left: pos.x, top: pos.y }}
+                  >
+                    <VariantFrame
+                      pageId={pageId}
+                      variantId={v.id}
+                      variantName={v.name}
+                      viewport={v.viewport}
+                      positioned
+                    />
+                  </div>
+                );
+              })
+            ) : (
+              <div className="flex items-start gap-12">
+                {page.variants.map((v) => (
                   <VariantFrame
+                    key={`${pageId}/${v.id}`}
                     pageId={pageId}
                     variantId={v.id}
                     variantName={v.name}
                     viewport={v.viewport}
-                    positioned
+                    positioned={false}
                   />
-                </div>
-              );
-            })
-          ) : (
-            <div className="flex items-start gap-12">
-              {page.variants.map((v) => (
-                <VariantFrame
-                  key={`${pageId}/${v.id}`}
-                  pageId={pageId}
-                  variantId={v.id}
-                  variantName={v.name}
-                  viewport={v.viewport}
-                  positioned={false}
-                />
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

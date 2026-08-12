@@ -35,7 +35,7 @@ export function createEmitRouter(folderFor: () => DesignFolder): Hono {
         variantId: args.variantId,
         outputPath: out,
         apply: args.apply ?? false,
-        componentsAlias: args.componentsAlias,
+        componentsAlias: args.componentsAlias ?? folder.config.codegen?.componentsAlias,
       });
       return c.json({
         wouldWriteTo: out,

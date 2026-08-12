@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
@@ -51,7 +52,13 @@ export function App() {
       const cmd = e.metaKey || e.ctrlKey;
       const state = useCanvas.getState();
 
-      if (cmd && (e.key === "=" || e.key === "+")) {
+      if (cmd && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
+        // ⌘Z — revert the most recent persistPage/persistTheme. Suppress in
+        // text inputs so it falls through to native field undo.
+        if (inEditable) return;
+        e.preventDefault();
+        void undoApi().catch(() => undefined);
+      } else if (cmd && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
         state.setCanvasZoom(state.canvasZoom + 0.1);
       } else if (cmd && e.key === "-") {
@@ -91,7 +98,6 @@ export function App() {
           currentPageId={currentPageId}
           currentPage={currentPage}
           snapshotVersion={design.snapshotVersion}
-          themeName={design.theme.name}
         />
         <main className="flex-1 flex flex-col min-w-0">
           {currentPage && currentPageId ? (

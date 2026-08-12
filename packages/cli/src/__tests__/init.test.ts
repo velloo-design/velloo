@@ -51,7 +51,7 @@ describe("velloo init", () => {
     expect(ConfigSchema.parse(config)).toBeDefined();
     expect(ThemeSchema.parse(theme)).toBeDefined();
     const parsedWelcome = PageSchema.parse(welcome);
-    expect(parsedWelcome.variants.map((v) => v.id)).toEqual(["mobile", "desktop"]);
+    expect(parsedWelcome.variants.map((v) => v.id)).toEqual(["mobile", "desktop", "tablet"]);
     const parsedSettings = PageSchema.parse(settings);
     expect(parsedSettings.name).toBe("Settings");
   });
