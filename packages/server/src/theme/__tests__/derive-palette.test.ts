@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { wcagContrast } from "culori";
 import { derivePalette } from "../derive-palette.ts";
-import { ThemeError } from "../errors.ts";
 
 const base: Theme = {
   name: "test",
@@ -18,7 +18,7 @@ const base: Theme = {
 
 describe("derivePalette", () => {
   test("returns a complete colors object from a hex seed", () => {
-    const r = derivePalette("#7c3aed", base);
+    const r = unwrap(derivePalette("#7c3aed", base));
     expect(r.theme.colors.primary).toBeDefined();
     expect(r.theme.colors.secondary).toBeDefined();
     expect(r.theme.colors.muted).toBeDefined();
@@ -28,7 +28,7 @@ describe("derivePalette", () => {
   });
 
   test("primary/foreground pair meets WCAG-AA contrast", () => {
-    const r = derivePalette("#7c3aed", base);
+    const r = unwrap(derivePalette("#7c3aed", base));
     const primary = r.theme.colors.primary;
     if (typeof primary === "object") {
       expect(primary.foreground).toBeDefined();
@@ -37,14 +37,16 @@ describe("derivePalette", () => {
     }
   });
 
-  test("throws on unparseable seed", () => {
-    expect(() => derivePalette("not a color", base)).toThrow(ThemeError);
+  test("returns InvalidColor err on unparseable seed", () => {
+    const r = derivePalette("not a color", base);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("InvalidColor");
   });
 
   test("preserves theme name unless overridden", () => {
-    const r1 = derivePalette("#7c3aed", base);
+    const r1 = unwrap(derivePalette("#7c3aed", base));
     expect(r1.theme.name).toBe("test");
-    const r2 = derivePalette("#7c3aed", base, "violet");
+    const r2 = unwrap(derivePalette("#7c3aed", base, "violet"));
     expect(r2.theme.name).toBe("violet");
   });
 });

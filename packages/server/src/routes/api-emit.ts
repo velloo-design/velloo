@@ -1,67 +1,95 @@
 import { resolve } from "node:path";
-import { emitCode, emitTheme, UnknownComponentError, VariantNotFoundError } from "@velloo/codegen";
-import { Hono } from "hono";
+import { type CodegenError, emitCode, emitTheme } from "@velloo/codegen";
+import { type Context, Hono } from "hono";
+import { z } from "zod";
 import type { DesignFolder } from "../design-folder.ts";
+import { pageNotFound } from "../mutations/errors.ts";
+import { mutationToHttp } from "./mutation-http.ts";
 
-function badRequest(reason: string) {
-  return { error: { code: "BAD_REQUEST", message: reason } };
+const EmitCodeBody = z.object({
+  pageId: z.string().min(1),
+  variantId: z.string().min(1),
+  outputPath: z.string().min(1),
+  apply: z.boolean().optional(),
+  componentsAlias: z.string().min(1).optional(),
+});
+
+const EmitThemeBody = z.object({
+  outputDir: z.string().min(1),
+  apply: z.boolean().optional(),
+  cssOnly: z.boolean().optional(),
+});
+
+/** Map a CodegenError variant to its HTTP response (exhaustive + never guard). */
+function codegenToHttp(c: Context, error: CodegenError): Response {
+  switch (error.kind) {
+    case "VariantNotFound":
+      return c.json({ error }, 404);
+    case "UnknownComponent":
+      return c.json({ error }, 422);
+    default: {
+      const _exhaustive: never = error;
+      void _exhaustive;
+      return c.json({ error: { kind: "Unknown" } }, 500);
+    }
+  }
 }
 
 export function createEmitRouter(folderFor: () => DesignFolder): Hono {
   const r = new Hono();
 
   r.post("/code", async (c) => {
-    const args = (await c.req.json()) as {
-      pageId?: string;
-      variantId?: string;
-      outputPath?: string;
-      apply?: boolean;
-      componentsAlias?: string;
-    };
-    if (!args.pageId || !args.variantId || !args.outputPath) {
-      return c.json(badRequest("pageId, variantId, and outputPath are required"), 400);
-    }
-    const folder = folderFor();
-    const page = folder.pages.get(args.pageId);
-    if (!page) {
+    const body = await c.req.json().catch(() => undefined);
+    const parsed = EmitCodeBody.safeParse(body);
+    if (!parsed.success) {
       return c.json(
-        { error: { code: "NOT_FOUND", message: `Unknown pageId: ${args.pageId}` } },
-        404,
+        {
+          error: {
+            kind: "BadRequest",
+            message: "Request body failed validation.",
+            issues: parsed.error.issues,
+          },
+        },
+        400,
       );
     }
+    const args = parsed.data;
+    const folder = folderFor();
+    const page = folder.pages.get(args.pageId);
+    if (!page) return mutationToHttp(c, pageNotFound(args.pageId));
     const out = resolve(folder.root, args.outputPath);
-    try {
-      const result = await emitCode(page, {
-        variantId: args.variantId,
-        outputPath: out,
-        apply: args.apply ?? false,
-        componentsAlias: args.componentsAlias ?? folder.config.codegen?.componentsAlias,
-      });
-      return c.json({
-        wouldWriteTo: out,
-        applied: result.applied,
-        diff: result.diff,
-        errors: result.errors,
-        code: result.code,
-      });
-    } catch (err) {
-      if (err instanceof VariantNotFoundError) {
-        return c.json({ error: { code: "NOT_FOUND", message: err.message } }, 404);
-      }
-      if (err instanceof UnknownComponentError) {
-        return c.json({ error: { code: "BAD_REQUEST", message: err.message } }, 400);
-      }
-      throw err;
-    }
+    const result = await emitCode(page, {
+      variantId: args.variantId,
+      outputPath: out,
+      apply: args.apply ?? false,
+      componentsAlias: args.componentsAlias ?? folder.config.codegen?.componentsAlias,
+    });
+    if (!result.ok) return codegenToHttp(c, result.error);
+    return c.json({
+      wouldWriteTo: out,
+      applied: result.value.applied,
+      diff: result.value.diff,
+      errors: result.value.errors,
+      code: result.value.code,
+    });
   });
 
   r.post("/theme", async (c) => {
-    const args = (await c.req.json()) as {
-      outputDir?: string;
-      apply?: boolean;
-      cssOnly?: boolean;
-    };
-    if (!args.outputDir) return c.json(badRequest("outputDir is required"), 400);
+    const body = await c.req.json().catch(() => undefined);
+    const parsed = EmitThemeBody.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            kind: "BadRequest",
+            message: "Request body failed validation.",
+            issues: parsed.error.issues,
+          },
+        },
+        400,
+      );
+    }
+    const args = parsed.data;
     const folder = folderFor();
     const out = resolve(folder.root, args.outputDir);
     const result = await emitTheme(folder.theme, {

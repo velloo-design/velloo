@@ -11,6 +11,7 @@
   },
   "include": ["src/**/*"],
   "references": [
+    { "path": "../result" },
     { "path": "../schema" },
     { "path": "../shadcn-snapshot" },
     { "path": "../renderer" }

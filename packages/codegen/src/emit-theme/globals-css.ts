@@ -1,11 +1,11 @@
-import type { ColorPair, Theme } from "@velloo/schema";
+import type { ColorPair, Colors, Theme } from "@velloo/schema";
 
 /**
  * Map theme color slots to shadcn's --color-* CSS variable convention.
  * Mirrors @velloo/renderer's `theme-to-css.ts` so what the canvas shows is
  * exactly what the user gets after export.
  */
-const COLOR_SLOTS: Array<{ key: keyof Theme["colors"]; pair: boolean }> = [
+const COLOR_SLOTS: Array<{ key: keyof Colors; pair: boolean }> = [
   { key: "background", pair: false },
   { key: "foreground", pair: false },
   { key: "primary", pair: true },
@@ -20,15 +20,28 @@ const COLOR_SLOTS: Array<{ key: keyof Theme["colors"]; pair: boolean }> = [
   { key: "ring", pair: false },
 ];
 
-function defaultOf(value: ColorPair | string | undefined): string | undefined {
+function defaultOf(value: ColorPair | undefined): string | undefined {
   if (typeof value === "string") return value;
-  if (value && typeof value === "object") return value.DEFAULT;
+  if (value) return value.DEFAULT;
   return undefined;
 }
 
-function fgOf(value: ColorPair | string | undefined): string | undefined {
+function fgOf(value: ColorPair | undefined): string | undefined {
   if (value && typeof value === "object") return value.foreground;
   return undefined;
+}
+
+function appendColorBlock(colors: Partial<Colors>, lines: string[]): void {
+  for (const { key, pair } of COLOR_SLOTS) {
+    const value = colors[key];
+    if (value === undefined) continue;
+    const def = defaultOf(value);
+    if (def !== undefined) lines.push(`  --color-${key}: ${def};`);
+    if (pair) {
+      const fg = fgOf(value);
+      if (fg !== undefined) lines.push(`  --color-${key}-foreground: ${fg};`);
+    }
+  }
 }
 
 export interface GlobalsCssOptions {
@@ -47,16 +60,14 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
   lines.push(`@theme {`);
 
   // Radius.
-  const radius = (theme.radius ?? {}) as Record<string, unknown>;
-  const radiusBase = radius.md ?? radius.lg ?? radius.sm;
+  const radiusBase = theme.radius.md ?? theme.radius.lg ?? theme.radius.sm;
   if (radiusBase !== undefined) {
-    const v = typeof radiusBase === "number" ? `${radiusBase}px` : String(radiusBase);
+    const v = typeof radiusBase === "number" ? `${radiusBase}px` : radiusBase;
     lines.push(`  --radius: ${v};`);
   }
 
   // Typography: fonts.
-  const typography = (theme.typography ?? {}) as Record<string, unknown>;
-  const fonts = typography.fontFamily as Record<string, unknown> | undefined;
+  const fonts = theme.typography.fontFamily;
   if (fonts?.sans !== undefined) {
     lines.push(`  --font-sans: ${fonts.sans};`);
     if (opts.fontLoadingNote !== false) {
@@ -67,18 +78,7 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
     lines.push(`  --font-mono: ${fonts.mono};`);
   }
 
-  // Colors.
-  const colors = theme.colors as Record<string, ColorPair | string | undefined>;
-  for (const { key, pair } of COLOR_SLOTS) {
-    const value = colors[key];
-    if (value === undefined) continue;
-    const def = defaultOf(value);
-    if (def !== undefined) lines.push(`  --color-${key}: ${def};`);
-    if (pair) {
-      const fg = fgOf(value);
-      if (fg !== undefined) lines.push(`  --color-${key}-foreground: ${fg};`);
-    }
-  }
+  appendColorBlock(theme.colors, lines);
 
   lines.push(`}`);
   lines.push("");
@@ -88,22 +88,11 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
   // can hook it up to any framework's dark-mode toggle (Tailwind v4 darkVariant
   // defaults to `prefers-color-scheme`; most apps swap to a class-based variant
   // via `@custom-variant dark (&:is(.dark *))` in their globals.css).
-  const dark = (theme as Theme).colorsDark;
-  if (dark) {
+  if (theme.colorsDark) {
     lines.push(`@custom-variant dark (&:is(.dark *));`);
     lines.push("");
     lines.push(`.dark {`);
-    const darkRec = dark as Record<string, ColorPair | string | undefined>;
-    for (const { key, pair } of COLOR_SLOTS) {
-      const value = darkRec[key];
-      if (value === undefined) continue;
-      const def = defaultOf(value);
-      if (def !== undefined) lines.push(`  --color-${key}: ${def};`);
-      if (pair) {
-        const fg = fgOf(value);
-        if (fg !== undefined) lines.push(`  --color-${key}-foreground: ${fg};`);
-      }
-    }
+    appendColorBlock(theme.colorsDark, lines);
     lines.push(`}`);
     lines.push("");
   }

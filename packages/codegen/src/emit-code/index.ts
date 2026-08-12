@@ -1,7 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Page, Variant } from "@velloo/schema";
 import { diffFile, type FileDiff } from "../diff.ts";
+import { type CodegenError, variantNotFound } from "../errors.ts";
 import { type FormatError, formatTsx } from "../format.ts";
 import { ImportSet } from "./imports.ts";
 import { emitTree } from "./tree-to-jsx.ts";
@@ -24,52 +26,58 @@ export interface EmitCodeResult {
   diff: FileDiff;
   /** True if `apply: true` and the write succeeded. */
   applied: boolean;
-  /** Format / lint / parse errors. Non-empty means the code did NOT get written. */
+  /** Format / lint / parse warnings. Non-empty means the code did NOT get written. */
   errors: FormatError[];
-}
-
-export class VariantNotFoundError extends Error {
-  constructor(public readonly variantId: string) {
-    super(`Variant not found: ${JSON.stringify(variantId)}`);
-    this.name = "VariantNotFoundError";
-  }
 }
 
 const DEFAULT_ALIAS = "@/components/ui";
 
-export async function emitCode(page: Page, options: EmitCodeOptions): Promise<EmitCodeResult> {
+export async function emitCode(
+  page: Page,
+  options: EmitCodeOptions,
+): Promise<Result<EmitCodeResult, CodegenError>> {
   const variant = page.variants.find((v) => v.id === options.variantId);
-  if (!variant) throw new VariantNotFoundError(options.variantId);
+  if (!variant) return err(variantNotFound(options.variantId));
 
   const componentsAlias = options.componentsAlias ?? DEFAULT_ALIAS;
-  const raw = renderFile(page, variant, componentsAlias);
-  const { output, errors } = await formatTsx(options.outputPath, raw);
-  const diff = await diffFile(options.outputPath, output);
+  return DoAsync<EmitCodeResult, CodegenError>(async function* () {
+    const raw = yield* $(renderFile(page, variant, componentsAlias));
+    const { output, errors } = await formatTsx(options.outputPath, raw);
+    const diff = await diffFile(options.outputPath, output);
 
-  let applied = false;
-  if (options.apply && errors.length === 0 && !diff.identical) {
-    await mkdir(dirname(options.outputPath), { recursive: true });
-    await writeFile(options.outputPath, output, "utf8");
-    applied = true;
-  }
+    let applied = false;
+    if (options.apply && errors.length === 0 && !diff.identical) {
+      await mkdir(dirname(options.outputPath), { recursive: true });
+      await writeFile(options.outputPath, output, "utf8");
+      applied = true;
+    }
 
-  return { code: output, diff, applied, errors };
+    return { code: output, diff, applied, errors };
+  });
 }
 
-function renderFile(page: Page, variant: Variant, componentsAlias: string): string {
+function renderFile(
+  page: Page,
+  variant: Variant,
+  componentsAlias: string,
+): Result<string, CodegenError> {
   const imports = new ImportSet();
   const ctx = { imports, componentsAlias, indent: (d: number) => "  ".repeat(d) };
-  const body = emitTree(variant.tree, ctx);
+  const bodyR = emitTree(variant.tree, ctx);
+  if (!bodyR.ok) return bodyR;
 
   const componentName = `${pascal(page.name)}${pascal(variant.name)}`;
   const importBlock = imports.isEmpty() ? "" : `${imports.toCode(componentsAlias)}\n\n`;
 
-  return `${importBlock}export default function ${componentName}() {
+  return {
+    ok: true,
+    value: `${importBlock}export default function ${componentName}() {
   return (
-${indent(body, 2)}
+${indent(bodyR.value, 2)}
   );
 }
-`;
+`,
+  };
 }
 
 function pascal(input: string): string {

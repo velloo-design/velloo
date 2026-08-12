@@ -13,7 +13,9 @@ export type MutationError =
   | { kind: "LastPage"; pageId: string }
   | { kind: "LastVariant"; pageId: string }
   | { kind: "VariantIdConflict"; pageId: string; id: string }
-  | { kind: "PageIdExhausted"; base: string };
+  | { kind: "PageIdExhausted"; base: string }
+  /** Request body failed zod validation. `issues` carries zod's ZodIssue[]. */
+  | { kind: "BadRequest"; message: string; issues?: unknown };
 
 // Constructor helpers — keep mutation bodies readable.
 export const pageNotFound = (pageId: string): MutationError => ({
@@ -52,6 +54,11 @@ export const variantIdConflict = (pageId: string, id: string): MutationError => 
 export const pageIdExhausted = (base: string): MutationError => ({
   kind: "PageIdExhausted",
   base,
+});
+export const badRequest = (message: string, issues?: unknown): MutationError => ({
+  kind: "BadRequest",
+  message,
+  ...(issues !== undefined ? { issues } : {}),
 });
 
 /**

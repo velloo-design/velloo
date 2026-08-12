@@ -1,9 +1,10 @@
+import { err, ok, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { parse } from "culori";
 import type { DesignFolder } from "../design-folder.ts";
 import { persistTheme } from "../mutations/persist.ts";
 import { derivePalette } from "./derive-palette.ts";
-import { ThemeError } from "./errors.ts";
+import { invalidThemePath, type ThemeError } from "./errors.ts";
 import { scoreVibe, VIBE_TABLE, type VibeEntry } from "./vibe-table.ts";
 
 export interface MatchVibeOpts {
@@ -72,12 +73,9 @@ export async function matchVibe(
   folder: DesignFolder,
   description: string,
   opts: MatchVibeOpts = {},
-): Promise<MatchVibeResult> {
+): Promise<Result<MatchVibeResult, ThemeError>> {
   if (!description.trim()) {
-    throw new ThemeError({
-      code: "INVALID_PATH",
-      message: "match_vibe: description is required",
-    });
+    return err(invalidThemePath("match_vibe: description is required"));
   }
 
   let chosen: { seed: string; description: string; keywords: string[]; source: "heuristic" | "ai" };
@@ -100,10 +98,11 @@ export async function matchVibe(
     chosen = { ...vibeEntryToChoice(heuristic.entry), source: "heuristic" };
   }
 
-  const derived = derivePalette(chosen.seed, folder.theme, folder.theme.name);
-  const persisted = await persistTheme(folder, derived.theme);
+  const derivedR = derivePalette(chosen.seed, folder.theme, folder.theme.name);
+  if (!derivedR.ok) return derivedR;
+  const persisted = await persistTheme(folder, derivedR.value.theme);
 
-  return {
+  return ok({
     matched: {
       keywords: chosen.keywords,
       seed: chosen.seed,
@@ -111,8 +110,8 @@ export async function matchVibe(
       source: chosen.source,
     },
     theme: persisted,
-    adjustments: derived.adjustments,
-  };
+    adjustments: derivedR.value.adjustments,
+  });
 }
 
 function vibeEntryToChoice(entry: VibeEntry): {

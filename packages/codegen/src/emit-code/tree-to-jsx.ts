@@ -1,5 +1,7 @@
+import { err, ok, type Result } from "@velloo/result";
 import type { Node } from "@velloo/schema";
 import { LOWERED_CONSUMED_PROPS, REGISTRY } from "../component-registry.ts";
+import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
 import type { ImportSet } from "./imports.ts";
 import { serializeProp, serializeTextChild } from "./props.ts";
@@ -11,21 +13,14 @@ export interface EmitContext {
   indent(depth: number): string;
 }
 
-export class UnknownComponentError extends Error {
-  constructor(public readonly ref: string) {
-    super(`Unknown component in codegen: ${JSON.stringify(ref)}`);
-    this.name = "UnknownComponentError";
-  }
-}
-
 /** Render a node tree (root) as a single JSX string. */
-export function emitTree(root: Node, ctx: EmitContext): string {
+export function emitTree(root: Node, ctx: EmitContext): Result<string, CodegenError> {
   return renderNode(root, ctx, 0);
 }
 
-function renderNode(node: Node, ctx: EmitContext, depth: number): string {
+function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string, CodegenError> {
   const entry = REGISTRY[node.$ref];
-  if (!entry) throw new UnknownComponentError(node.$ref);
+  if (!entry) return err(unknownComponent(node.$ref));
 
   const props = { ...(node.props ?? {}) };
   const childrenProp = props.children;
@@ -79,25 +74,30 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): string {
   const hasOtherChild = childrenProp !== undefined && !hasStringChild;
 
   if (!hasNodeChildren && !hasStringChild && !hasOtherChild) {
-    return `${pad}<${openTag}${attrs} />`;
+    return ok(`${pad}<${openTag}${attrs} />`);
   }
 
   if (hasNodeChildren) {
-    const inner = (node.children ?? [])
-      .map((child) => renderNode(child, ctx, depth + 1))
-      .join("\n");
-    return `${pad}<${openTag}${attrs}>\n${inner}\n${pad}</${closeTag}>`;
+    const parts: string[] = [];
+    for (const child of node.children ?? []) {
+      const childR = renderNode(child, ctx, depth + 1);
+      if (!childR.ok) return childR;
+      parts.push(childR.value);
+    }
+    return ok(`${pad}<${openTag}${attrs}>\n${parts.join("\n")}\n${pad}</${closeTag}>`);
   }
 
   if (hasStringChild) {
     const text = serializeTextChild(childrenProp as string);
     // If the text is short enough, keep it inline; otherwise put it on its own line.
     if (text.length < 60 && !text.includes("\n")) {
-      return `${pad}<${openTag}${attrs}>${text}</${closeTag}>`;
+      return ok(`${pad}<${openTag}${attrs}>${text}</${closeTag}>`);
     }
-    return `${pad}<${openTag}${attrs}>\n${childPad}${text}\n${pad}</${closeTag}>`;
+    return ok(`${pad}<${openTag}${attrs}>\n${childPad}${text}\n${pad}</${closeTag}>`);
   }
 
   // Non-string children prop (number, boolean, object). JSON-encode inside braces.
-  return `${pad}<${openTag}${attrs}>\n${childPad}{${JSON.stringify(childrenProp)}}\n${pad}</${closeTag}>`;
+  return ok(
+    `${pad}<${openTag}${attrs}>\n${childPad}{${JSON.stringify(childrenProp)}}\n${pad}</${closeTag}>`,
+  );
 }

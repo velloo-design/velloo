@@ -1,17 +1,20 @@
 import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { emitCode, emitTheme, UnknownComponentError, VariantNotFoundError } from "@velloo/codegen";
+import { type CodegenError, emitCode, emitTheme } from "@velloo/codegen";
 import { z } from "zod";
 import type { DesignFolder } from "../../design-folder.ts";
 
-function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
+type McpResult = {
+  content: { type: "text"; text: string }[];
+  isError?: true;
+};
+
+function jsonResult(value: unknown): McpResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
 }
-function errorResult(err: unknown): {
-  isError: true;
-  content: { type: "text"; text: string }[];
-} {
-  return { isError: true, content: [{ type: "text", text: String(err) }] };
+
+function codegenErrorResult(error: CodegenError | { kind: string }): McpResult {
+  return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
 }
 
 export interface EmitContext {
@@ -33,31 +36,23 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       },
     },
     async (args) => {
-      try {
-        const page = ctx.folder.pages.get(args.pageId);
-        if (!page) {
-          return errorResult(new Error(`Unknown pageId: ${JSON.stringify(args.pageId)}`));
-        }
-        const out = resolve(ctx.folder.root, args.outputPath);
-        const result = await emitCode(page, {
-          variantId: args.variantId,
-          outputPath: out,
-          apply: args.apply ?? false,
-          componentsAlias: args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias,
-        });
-        return jsonResult({
-          wouldWriteTo: out,
-          applied: result.applied,
-          diff: result.diff,
-          errors: result.errors,
-          code: result.code,
-        });
-      } catch (err) {
-        if (err instanceof VariantNotFoundError || err instanceof UnknownComponentError) {
-          return errorResult(err);
-        }
-        return errorResult(err);
-      }
+      const page = ctx.folder.pages.get(args.pageId);
+      if (!page) return codegenErrorResult({ kind: "PageNotFound", pageId: args.pageId } as never);
+      const out = resolve(ctx.folder.root, args.outputPath);
+      const result = await emitCode(page, {
+        variantId: args.variantId,
+        outputPath: out,
+        apply: args.apply ?? false,
+        componentsAlias: args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias,
+      });
+      if (!result.ok) return codegenErrorResult(result.error);
+      return jsonResult({
+        wouldWriteTo: out,
+        applied: result.value.applied,
+        diff: result.value.diff,
+        errors: result.value.errors,
+        code: result.value.code,
+      });
     },
   );
 
@@ -73,17 +68,13 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       },
     },
     async (args) => {
-      try {
-        const out = resolve(ctx.folder.root, args.outputDir);
-        const result = await emitTheme(ctx.folder.theme, {
-          outputDir: out,
-          apply: args.apply ?? false,
-          cssOnly: args.cssOnly,
-        });
-        return jsonResult({ files: result.files });
-      } catch (err) {
-        return errorResult(err);
-      }
+      const out = resolve(ctx.folder.root, args.outputDir);
+      const result = await emitTheme(ctx.folder.theme, {
+        outputDir: out,
+        apply: args.apply ?? false,
+        cssOnly: args.cssOnly,
+      });
+      return jsonResult({ files: result.files });
     },
   );
 }

@@ -247,8 +247,8 @@ describe("MCP server", () => {
   test("apply_preset rejects an unknown name", async () => {
     const r = await callTool(mcp.url, sessionId, "apply_preset", { presetName: "neonpunk" });
     expect(r.isError).toBe(true);
-    const payload = JSON.parse(r.content?.[0]?.text ?? "{}") as { code: string };
-    expect(payload.code).toBe("UNKNOWN_PRESET");
+    const error = JSON.parse(r.content?.[0]?.text ?? "{}") as { kind: string };
+    expect(error.kind).toBe("UnknownPreset");
   });
 
   test("multiple tool calls reuse the same session", async () => {

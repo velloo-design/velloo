@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { unwrap } from "@velloo/result";
 import type { Page } from "@velloo/schema";
 import { emitCode } from "../emit-code/index.ts";
 
@@ -48,11 +49,13 @@ function buildWelcomePage(): Page {
 describe("emitCode", () => {
   test("emits a syntactically valid, importable .tsx for the welcome variant", async () => {
     const out = join(tmpdir(), `velloo-emit-${Date.now()}.tsx`);
-    const result = await emitCode(buildWelcomePage(), {
-      variantId: "mobile",
-      outputPath: out,
-      apply: false,
-    });
+    const result = unwrap(
+      await emitCode(buildWelcomePage(), {
+        variantId: "mobile",
+        outputPath: out,
+        apply: false,
+      }),
+    );
 
     expect(result.errors).toEqual([]);
     expect(result.applied).toBe(false);
@@ -85,11 +88,13 @@ describe("emitCode", () => {
 
   test("returns a diff but does not write when apply is false", async () => {
     const out = join(tmpdir(), `velloo-emit-noapply-${Date.now()}.tsx`);
-    const result = await emitCode(buildWelcomePage(), {
-      variantId: "mobile",
-      outputPath: out,
-      apply: false,
-    });
+    const result = unwrap(
+      await emitCode(buildWelcomePage(), {
+        variantId: "mobile",
+        outputPath: out,
+        apply: false,
+      }),
+    );
     expect(result.applied).toBe(false);
     expect(result.diff.exists).toBe(false);
     expect(typeof result.diff.diff).toBe("string");
@@ -98,25 +103,27 @@ describe("emitCode", () => {
 
   test("writes the file when apply is true", async () => {
     const out = join(tmpdir(), `velloo-emit-apply-${Date.now()}.tsx`);
-    const result = await emitCode(buildWelcomePage(), {
-      variantId: "mobile",
-      outputPath: out,
-      apply: true,
-    });
+    const result = unwrap(
+      await emitCode(buildWelcomePage(), {
+        variantId: "mobile",
+        outputPath: out,
+        apply: true,
+      }),
+    );
     expect(result.errors).toEqual([]);
     expect(result.applied).toBe(true);
     const onDisk = await Bun.file(out).text();
     expect(onDisk).toBe(result.code);
   }, 30_000);
 
-  test("throws VariantNotFoundError for an unknown variant id", async () => {
-    await expect(
-      emitCode(buildWelcomePage(), {
-        variantId: "tablet",
-        outputPath: join(tmpdir(), "x.tsx"),
-        apply: false,
-      }),
-    ).rejects.toThrow(/Variant not found/);
+  test("returns VariantNotFound err for an unknown variant id", async () => {
+    const r = await emitCode(buildWelcomePage(), {
+      variantId: "tablet",
+      outputPath: join(tmpdir(), "x.tsx"),
+      apply: false,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("VariantNotFound");
   });
 
   test("lowers Icon to a lucide-react JSX element with a bare import", async () => {
@@ -136,11 +143,13 @@ describe("emitCode", () => {
       ],
     };
     const out = join(tmpdir(), `velloo-emit-icon-${Date.now()}.tsx`);
-    const result = await emitCode(page, {
-      variantId: "mobile",
-      outputPath: out,
-      apply: false,
-    });
+    const result = unwrap(
+      await emitCode(page, {
+        variantId: "mobile",
+        outputPath: out,
+        apply: false,
+      }),
+    );
     expect(result.errors).toEqual([]);
     expect(result.code).toContain('import { Heart } from "lucide-react"');
     // The icon renders as <Heart />, not <Icon /> — name prop consumed.

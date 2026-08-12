@@ -1,9 +1,10 @@
 import { isAbsolute, resolve } from "node:path";
+import { $, DoAsync, err, type Result, tryCatchAsync } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { persistTheme } from "../mutations/persist.ts";
 import { derivePalette } from "./derive-palette.ts";
-import { ThemeError } from "./errors.ts";
+import { imageLoadFailed, type ThemeError } from "./errors.ts";
 
 export interface MatchImageResult {
   extracted: Array<{ role: string; hex: string }>;
@@ -29,40 +30,40 @@ function resolveImagePath(folder: DesignFolder, p: string): string {
 export async function matchImage(
   folder: DesignFolder,
   imagePath: string,
-): Promise<MatchImageResult> {
-  // Lazy-load so the test suite (and headless renders) don't pull node-vibrant in.
-  const { Vibrant } = await import("node-vibrant/node");
-  const resolved = resolveImagePath(folder, imagePath);
+): Promise<Result<MatchImageResult, ThemeError>> {
+  return DoAsync<MatchImageResult, ThemeError>(async function* () {
+    // Lazy-load so the test suite (and headless renders) don't pull node-vibrant in.
+    const { Vibrant } = await import("node-vibrant/node");
+    const resolved = resolveImagePath(folder, imagePath);
 
-  let palette: VibrantPalette;
-  try {
-    palette = (await Vibrant.from(resolved).getPalette()) as VibrantPalette;
-  } catch (err) {
-    throw new ThemeError({
-      code: "IMAGE_LOAD_FAILED",
-      message: `match_image: could not read ${imagePath}: ${(err as Error).message}`,
-      hint: "Provide a path under assets/ or an absolute path. PNG/JPG supported.",
-    });
-  }
+    const paletteR = await tryCatchAsync(
+      () => Vibrant.from(resolved).getPalette() as Promise<VibrantPalette>,
+      (e) =>
+        imageLoadFailed(
+          `match_image: could not read ${imagePath}: ${(e as Error).message}`,
+          "Provide a path under assets/ or an absolute path. PNG/JPG supported.",
+        ),
+    );
+    const palette = yield* $(paletteR);
 
-  const vibrant = palette.Vibrant?.hex ?? palette.DarkVibrant?.hex ?? palette.LightVibrant?.hex;
-  if (!vibrant) {
-    throw new ThemeError({
-      code: "IMAGE_LOAD_FAILED",
-      message: "match_image: could not extract any colors from the image",
-    });
-  }
+    const vibrant = palette.Vibrant?.hex ?? palette.DarkVibrant?.hex ?? palette.LightVibrant?.hex;
+    if (!vibrant) {
+      return yield* $(
+        err(imageLoadFailed("match_image: could not extract any colors from the image")),
+      );
+    }
 
-  const derived = derivePalette(vibrant, folder.theme);
-  const persisted = await persistTheme(folder, derived.theme);
+    const derived = yield* $(derivePalette(vibrant, folder.theme));
+    const persisted = await persistTheme(folder, derived.theme);
 
-  const extracted: MatchImageResult["extracted"] = [];
-  if (palette.Vibrant?.hex) extracted.push({ role: "primary-seed", hex: palette.Vibrant.hex });
-  if (palette.DarkMuted?.hex)
-    extracted.push({ role: "candidate-foreground", hex: palette.DarkMuted.hex });
-  if (palette.LightMuted?.hex)
-    extracted.push({ role: "candidate-background", hex: palette.LightMuted.hex });
-  if (palette.Muted?.hex) extracted.push({ role: "muted", hex: palette.Muted.hex });
+    const extracted: MatchImageResult["extracted"] = [];
+    if (palette.Vibrant?.hex) extracted.push({ role: "primary-seed", hex: palette.Vibrant.hex });
+    if (palette.DarkMuted?.hex)
+      extracted.push({ role: "candidate-foreground", hex: palette.DarkMuted.hex });
+    if (palette.LightMuted?.hex)
+      extracted.push({ role: "candidate-background", hex: palette.LightMuted.hex });
+    if (palette.Muted?.hex) extracted.push({ role: "muted", hex: palette.Muted.hex });
 
-  return { extracted, theme: persisted, adjustments: derived.adjustments };
+    return { extracted, theme: persisted, adjustments: derived.adjustments };
+  });
 }

@@ -1,6 +1,7 @@
+import { err, ok, type Result } from "@velloo/result";
 import type { Colors, Theme } from "@velloo/schema";
 import { converter, parse, wcagContrast } from "culori";
-import { ThemeError } from "./errors.ts";
+import { invalidColor, type ThemeError } from "./errors.ts";
 
 const toOklch = converter("oklch");
 
@@ -27,15 +28,24 @@ function formatOklch(o: Oklch): string {
   return `oklch(${l} ${c} ${h}${a})`;
 }
 
-function parseOklch(input: string): Oklch {
+function parseOklch(input: string): Result<Oklch, ThemeError> {
   const parsed = parse(input);
   if (!parsed) {
-    throw new ThemeError({
-      code: "INVALID_COLOR",
-      message: `Could not parse color: ${JSON.stringify(input)}`,
-      hint: "Accepts #rrggbb, named colors, rgb(), hsl(), oklch(), etc.",
-    });
+    return err(
+      invalidColor(
+        `Could not parse color: ${JSON.stringify(input)}`,
+        "Accepts #rrggbb, named colors, rgb(), hsl(), oklch(), etc.",
+      ),
+    );
   }
+  const o = toOklch(parsed);
+  return ok({ mode: "oklch", l: o.l ?? 0.5, c: o.c ?? 0, h: o.h, alpha: o.alpha });
+}
+
+/** Internal: assume parsed; safe to use after the seed already validated. */
+function parseOklchOrZero(input: string): Oklch {
+  const parsed = parse(input);
+  if (!parsed) return { mode: "oklch", l: 0.5, c: 0 };
   const o = toOklch(parsed);
   return { mode: "oklch", l: o.l ?? 0.5, c: o.c ?? 0, h: o.h, alpha: o.alpha };
 }
@@ -57,8 +67,8 @@ function ensureContrast(
   const initial = wcagContrast(fg, bg);
   if (initial >= minRatio) return { color: fg, adjusted: false };
 
-  const fgOk = parseOklch(fg);
-  const bgOk = parseOklch(bg);
+  const fgOk = parseOklchOrZero(fg);
+  const bgOk = parseOklchOrZero(bg);
   // Decide direction by comparing lightness.
   const goingDark = fgOk.l <= bgOk.l;
 
@@ -89,8 +99,14 @@ export interface DeriveResult {
  * Foreground colors are checked against their pair's background and nudged
  * toward black/white if WCAG-AA (4.5) contrast would fail.
  */
-export function derivePalette(seedColor: string, current: Theme, name?: string): DeriveResult {
-  const seed = parseOklch(seedColor);
+export function derivePalette(
+  seedColor: string,
+  current: Theme,
+  name?: string,
+): Result<DeriveResult, ThemeError> {
+  const seedR = parseOklch(seedColor);
+  if (!seedR.ok) return seedR;
+  const seed = seedR.value;
   const adjustments: DeriveResult["adjustments"] = [];
 
   const background = "oklch(1 0 0)";
@@ -137,8 +153,8 @@ export function derivePalette(seedColor: string, current: Theme, name?: string):
     ring: lowChroma(seed, 0.708, 0.5),
   };
 
-  return {
+  return ok({
     theme: { ...current, name: name ?? current.name, colors },
     adjustments,
-  };
+  });
 }

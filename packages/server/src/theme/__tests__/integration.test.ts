@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
@@ -73,34 +74,38 @@ afterEach(async () => {
 
 describe("applyPreset", () => {
   test("switches to violet and persists", async () => {
-    const t = await applyPreset(ctx, "violet");
+    const t = unwrap(await applyPreset(ctx, "violet"));
     expect(t.name).toBe("violet");
     const onDisk = await diskTheme();
     expect(onDisk.name).toBe("violet");
     expect(events.at(-1)).toEqual({ type: "theme-changed" });
   });
 
-  test("throws on unknown preset", async () => {
-    await expect(applyPreset(ctx, "neonpunk")).rejects.toThrow();
+  test("returns UnknownPreset err on unknown preset", async () => {
+    const r = await applyPreset(ctx, "neonpunk");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("UnknownPreset");
   });
 });
 
 describe("setToken", () => {
   test("updates a leaf and persists", async () => {
-    await setToken(ctx, "colors.background", "oklch(0.99 0 0)");
+    unwrap(await setToken(ctx, "colors.background", "oklch(0.99 0 0)"));
     const onDisk = await diskTheme();
     expect(onDisk.colors.background).toBe("oklch(0.99 0 0)");
     expect(events.at(-1)).toEqual({ type: "theme-changed" });
   });
 
   test("rejects a path that produces an invalid theme", async () => {
-    await expect(setToken(ctx, "colors.primary.DEFAULT", "")).rejects.toThrow();
+    const r = await setToken(ctx, "colors.primary.DEFAULT", "");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("InvalidThemePath");
   });
 });
 
 describe("derivePaletteFromColor", () => {
   test("violet seed produces a violet theme; primary becomes a violet OKLCH", async () => {
-    const r = await derivePaletteFromColor(ctx, "#7c3aed");
+    const r = unwrap(await derivePaletteFromColor(ctx, "#7c3aed"));
     const primary = r.theme.colors.primary;
     expect(typeof primary).toBe("object");
     if (typeof primary === "object") {
@@ -113,7 +118,7 @@ describe("derivePaletteFromColor", () => {
 
 describe("matchVibe", () => {
   test("playful → warm seed, persisted", async () => {
-    const r = await matchVibe(ctx, "playful and joyful");
+    const r = unwrap(await matchVibe(ctx, "playful and joyful"));
     expect(r.matched.source).toBe("heuristic");
     expect(r.matched.keywords).toContain("playful");
     const onDisk = await diskTheme();
@@ -121,7 +126,7 @@ describe("matchVibe", () => {
   });
 
   test("garbage description falls back gracefully", async () => {
-    const r = await matchVibe(ctx, "blorflexicon");
+    const r = unwrap(await matchVibe(ctx, "blorflexicon"));
     expect(r.matched.source).toBe("heuristic");
     // Theme was still updated to something.
     expect(r.theme.colors.primary).toBeDefined();

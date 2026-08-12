@@ -17,6 +17,7 @@ export function mutationToHttp(c: Context, error: MutationError): Response {
     case "InvalidMove":
     case "VariantIdConflict":
     case "PageIdExhausted":
+    case "BadRequest":
       return c.json({ error }, 400);
     case "LastPage":
     case "LastVariant":

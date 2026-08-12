@@ -1,5 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Result } from "@velloo/result";
 import { z } from "zod";
+import type { ThemeError } from "../../theme/errors.ts";
 import {
   applyPreset,
   derivePaletteFromColor,
@@ -8,21 +10,23 @@ import {
   PRESET_NAMES,
   setToken,
   type ThemeContext,
-  ThemeError,
 } from "../../theme/index.ts";
 
-function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
+type McpResult = {
+  content: { type: "text"; text: string }[];
+  isError?: true;
+};
+
+function jsonResult(value: unknown): McpResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
 }
 
-function errorResult(err: unknown): {
-  isError: true;
-  content: { type: "text"; text: string }[];
-} {
-  if (err instanceof ThemeError) {
-    return { isError: true, content: [{ type: "text", text: JSON.stringify(err.payload) }] };
-  }
-  return { isError: true, content: [{ type: "text", text: String(err) }] };
+function themeErrorResult(error: ThemeError): McpResult {
+  return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
+}
+
+function toMcp<T>(result: Result<T, ThemeError>): McpResult {
+  return result.ok ? jsonResult(result.value) : themeErrorResult(result.error);
 }
 
 export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
@@ -37,12 +41,8 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       },
     },
     async (args) => {
-      try {
-        const theme = await setToken(ctx, args.path, args.value);
-        return jsonResult({ theme });
-      } catch (err) {
-        return errorResult(err);
-      }
+      const r = await setToken(ctx, args.path, args.value);
+      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
     },
   );
 
@@ -53,12 +53,8 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       inputSchema: { presetName: z.string() },
     },
     async (args) => {
-      try {
-        const theme = await applyPreset(ctx, args.presetName);
-        return jsonResult({ theme });
-      } catch (err) {
-        return errorResult(err);
-      }
+      const r = await applyPreset(ctx, args.presetName);
+      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
     },
   );
 
@@ -72,14 +68,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         name: z.string().optional(),
       },
     },
-    async (args) => {
-      try {
-        const result = await derivePaletteFromColor(ctx, args.seedColor, args.name);
-        return jsonResult(result);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await derivePaletteFromColor(ctx, args.seedColor, args.name)),
   );
 
   mcp.registerTool(
@@ -92,14 +81,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         useAi: z.boolean().optional(),
       },
     },
-    async (args) => {
-      try {
-        const result = await matchVibe(ctx, args.description, { useAi: args.useAi });
-        return jsonResult(result);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await matchVibe(ctx, args.description, { useAi: args.useAi })),
   );
 
   mcp.registerTool(
@@ -109,13 +91,6 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         "Extract a palette from an image (Vibrant + Muted + Dark/Light variants) and apply a derived theme. imagePath is relative to the design folder's assets/ (or absolute).",
       inputSchema: { imagePath: z.string() },
     },
-    async (args) => {
-      try {
-        const result = await matchImage(ctx, args.imagePath);
-        return jsonResult(result);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await matchImage(ctx, args.imagePath)),
   );
 }

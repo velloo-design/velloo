@@ -2,13 +2,7 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import {
-  colorizeDiff,
-  type EmitCodeResult,
-  emitCode,
-  UnknownComponentError,
-  VariantNotFoundError,
-} from "@velloo/codegen";
+import { colorizeDiff, type EmitCodeResult, emitCode } from "@velloo/codegen";
 import { type Page, PageSchema, type Variant } from "@velloo/schema";
 import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
@@ -177,18 +171,17 @@ async function runEmit(
   componentsAlias: string | undefined,
   apply: boolean,
 ): Promise<EmitCodeResult | null> {
-  try {
-    return await emitCode(page, {
-      variantId: variant.id,
-      outputPath: outPath,
-      componentsAlias,
-      apply,
-    });
-  } catch (err) {
-    if (err instanceof VariantNotFoundError || err instanceof UnknownComponentError) {
-      console.error(`velloo emit: ${err.message}`);
-      return null;
-    }
-    throw err;
+  const result = await emitCode(page, {
+    variantId: variant.id,
+    outputPath: outPath,
+    componentsAlias,
+    apply,
+  });
+  if (result.ok) return result.value;
+  if (result.error.kind === "VariantNotFound") {
+    console.error(`velloo emit: variant not found: ${JSON.stringify(result.error.variantId)}`);
+  } else if (result.error.kind === "UnknownComponent") {
+    console.error(`velloo emit: unknown component: ${JSON.stringify(result.error.ref)}`);
   }
+  return null;
 }

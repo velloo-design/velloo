@@ -1,11 +1,11 @@
-import type { Theme } from "@velloo/schema";
+import type { Colors, Theme } from "@velloo/schema";
 
 /**
  * Map theme tokens onto the shadcn CSS-variable convention so the
  * pre-compiled snapshot stylesheet picks up the design's colors, typography,
  * and radius at render time.
  */
-const COLOR_TOKEN_MAP: Record<string, string | string[]> = {
+const COLOR_TOKEN_MAP: Record<string, string | [string, string]> = {
   background: "--color-background",
   foreground: "--color-foreground",
   border: "--color-border",
@@ -21,27 +21,26 @@ const COLOR_TOKEN_MAP: Record<string, string | string[]> = {
   popover: ["--color-popover", "--color-popover-foreground"],
 };
 
-function emit(varName: string, value: unknown, lines: string[]): void {
+function emit(varName: string, value: string | number | undefined, lines: string[]): void {
   if (typeof value === "string" || typeof value === "number") {
     lines.push(`  ${varName}: ${value};`);
   }
 }
 
-function emitColorBlock(colors: Record<string, unknown>, lines: string[]): void {
+function emitColorBlock(colors: Partial<Colors>, lines: string[]): void {
   for (const [token, target] of Object.entries(COLOR_TOKEN_MAP)) {
-    const value = colors[token];
+    const value = colors[token as keyof Colors];
     if (value === undefined) continue;
     if (Array.isArray(target)) {
-      if (typeof value === "object" && value !== null) {
-        const obj = value as Record<string, unknown>;
-        const [defaultVar, foregroundVar] = target;
-        if (defaultVar) emit(defaultVar, obj.DEFAULT, lines);
-        if (foregroundVar) emit(foregroundVar, obj.foreground, lines);
+      const [defaultVar, foregroundVar] = target;
+      if (typeof value === "object") {
+        emit(defaultVar, value.DEFAULT, lines);
+        emit(foregroundVar, value.foreground, lines);
       } else {
-        const [defaultVar] = target;
-        if (defaultVar) emit(defaultVar, value, lines);
+        // Scalar value for a pair token — apply to DEFAULT only.
+        emit(defaultVar, value, lines);
       }
-    } else {
+    } else if (typeof value === "string") {
       emit(target, value, lines);
     }
   }
@@ -49,21 +48,18 @@ function emitColorBlock(colors: Record<string, unknown>, lines: string[]): void 
 
 export function themeToCss(theme: Theme): string {
   const lines: string[] = [":root {"];
-  emitColorBlock(theme.colors as Record<string, unknown>, lines);
+  emitColorBlock(theme.colors, lines);
 
-  // Typography: font family.
-  const typography = (theme.typography ?? {}) as Record<string, unknown>;
-  const fontFamily = typography.fontFamily as Record<string, unknown> | undefined;
+  const fontFamily = theme.typography.fontFamily;
   if (fontFamily) {
     emit("--font-sans", fontFamily.sans, lines);
     emit("--font-mono", fontFamily.mono, lines);
   }
 
-  // Radius: a single --radius pulled from radius.md (or radius.lg as fallback).
-  const radius = (theme.radius ?? {}) as Record<string, unknown>;
-  const radiusValue = radius.md ?? radius.lg ?? radius.sm;
+  // Radius: a single --radius pulled from radius.md (or radius.lg / .sm as fallback).
+  const radiusValue = theme.radius.md ?? theme.radius.lg ?? theme.radius.sm;
   if (radiusValue !== undefined) {
-    const formatted = typeof radiusValue === "number" ? `${radiusValue}px` : String(radiusValue);
+    const formatted = typeof radiusValue === "number" ? `${radiusValue}px` : radiusValue;
     lines.push(`  --radius: ${formatted};`);
   }
 
@@ -71,11 +67,10 @@ export function themeToCss(theme: Theme): string {
 
   // Dark-mode overrides — gated on a `.dark` ancestor so the canvas can flip
   // a single class to preview both modes without re-rendering.
-  const dark = theme.colorsDark;
-  if (dark) {
+  if (theme.colorsDark) {
     lines.push("");
     lines.push(".dark {");
-    emitColorBlock(dark as Record<string, unknown>, lines);
+    emitColorBlock(theme.colorsDark, lines);
     lines.push("}");
   }
 

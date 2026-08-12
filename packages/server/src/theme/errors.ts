@@ -1,22 +1,45 @@
-export type ThemeErrorCode =
-  | "INVALID_COLOR"
-  | "INVALID_PATH"
-  | "UNKNOWN_PRESET"
-  | "CONTRAST_FAIL"
-  | "IMAGE_LOAD_FAILED"
-  | "LLM_UNAVAILABLE";
+/**
+ * Theme failure modes. Same pattern as MutationError — `kind`-keyed
+ * discriminated union, paired with Result. Routes/MCP tools `switch
+ * (error.kind)` and the `never` exhaustiveness guard breaks the build on
+ * a missing case.
+ */
+export type ThemeError =
+  | { kind: "InvalidColor"; reason: string; hint?: string }
+  | { kind: "InvalidThemePath"; reason: string; hint?: string }
+  | { kind: "UnknownPreset"; presetName: string; hint?: string }
+  | { kind: "ImageLoadFailed"; reason: string; hint?: string }
+  | { kind: "LlmUnavailable"; reason: string; hint?: string }
+  | { kind: "BadRequest"; message: string; issues?: unknown };
 
-export interface ThemeErrorPayload {
-  code: ThemeErrorCode;
-  message: string;
-  hint?: string;
-}
-
-export class ThemeError extends Error {
-  readonly payload: ThemeErrorPayload;
-  constructor(payload: ThemeErrorPayload) {
-    super(payload.message);
-    this.name = "ThemeError";
-    this.payload = payload;
-  }
-}
+// Constructor helpers.
+export const invalidColor = (reason: string, hint?: string): ThemeError => ({
+  kind: "InvalidColor",
+  reason,
+  ...(hint !== undefined ? { hint } : {}),
+});
+export const invalidThemePath = (reason: string, hint?: string): ThemeError => ({
+  kind: "InvalidThemePath",
+  reason,
+  ...(hint !== undefined ? { hint } : {}),
+});
+export const unknownPreset = (presetName: string, hint?: string): ThemeError => ({
+  kind: "UnknownPreset",
+  presetName,
+  ...(hint !== undefined ? { hint } : {}),
+});
+export const imageLoadFailed = (reason: string, hint?: string): ThemeError => ({
+  kind: "ImageLoadFailed",
+  reason,
+  ...(hint !== undefined ? { hint } : {}),
+});
+export const llmUnavailable = (reason: string, hint?: string): ThemeError => ({
+  kind: "LlmUnavailable",
+  reason,
+  ...(hint !== undefined ? { hint } : {}),
+});
+export const themeBadRequest = (message: string, issues?: unknown): ThemeError => ({
+  kind: "BadRequest",
+  message,
+  ...(issues !== undefined ? { issues } : {}),
+});

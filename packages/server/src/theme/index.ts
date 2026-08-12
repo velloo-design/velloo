@@ -1,9 +1,11 @@
+import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { persistTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
+import type { ThemeError } from "./errors.ts";
 import { type MatchImageResult, matchImage as matchImageImpl } from "./match-image.ts";
 import {
   type MatchVibeOpts,
@@ -35,19 +37,22 @@ export async function setToken(
   ctx: ThemeContext,
   path: string,
   value: string | number,
-): Promise<Theme> {
+): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(async () => {
-    const t = await setTokenImpl(ctx.folder, path, value);
-    broadcastThemeChanged(ctx);
-    return t;
+    const r = await setTokenImpl(ctx.folder, path, value);
+    if (r.ok) broadcastThemeChanged(ctx);
+    return r;
   });
 }
 
-export async function applyPreset(ctx: ThemeContext, presetName: string): Promise<Theme> {
+export async function applyPreset(
+  ctx: ThemeContext,
+  presetName: string,
+): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(async () => {
-    const t = await applyPresetImpl(ctx.folder, presetName);
-    broadcastThemeChanged(ctx);
-    return t;
+    const r = await applyPresetImpl(ctx.folder, presetName);
+    if (r.ok) broadcastThemeChanged(ctx);
+    return r;
   });
 }
 
@@ -55,38 +60,42 @@ export async function derivePaletteFromColor(
   ctx: ThemeContext,
   seedColor: string,
   name?: string,
-): Promise<DeriveResult> {
-  return withThemeLock(async () => {
-    const result = derivePalette(seedColor, ctx.folder.theme, name);
-    const persisted = await persistTheme(ctx.folder, result.theme);
-    broadcastThemeChanged(ctx);
-    return { ...result, theme: persisted };
-  });
+): Promise<Result<DeriveResult, ThemeError>> {
+  return withThemeLock(() =>
+    DoAsync<DeriveResult, ThemeError>(async function* () {
+      const result = yield* $(derivePalette(seedColor, ctx.folder.theme, name));
+      const persisted = await persistTheme(ctx.folder, result.theme);
+      broadcastThemeChanged(ctx);
+      return { ...result, theme: persisted };
+    }),
+  );
 }
 
 export async function matchVibe(
   ctx: ThemeContext,
   description: string,
   opts: MatchVibeOpts = {},
-): Promise<MatchVibeResult> {
+): Promise<Result<MatchVibeResult, ThemeError>> {
   return withThemeLock(async () => {
-    const result = await matchVibeImpl(ctx.folder, description, opts);
-    broadcastThemeChanged(ctx);
-    return result;
+    const r = await matchVibeImpl(ctx.folder, description, opts);
+    if (r.ok) broadcastThemeChanged(ctx);
+    return r;
   });
 }
 
-export async function matchImage(ctx: ThemeContext, imagePath: string): Promise<MatchImageResult> {
+export async function matchImage(
+  ctx: ThemeContext,
+  imagePath: string,
+): Promise<Result<MatchImageResult, ThemeError>> {
   return withThemeLock(async () => {
-    const result = await matchImageImpl(ctx.folder, imagePath);
-    broadcastThemeChanged(ctx);
-    return result;
+    const r = await matchImageImpl(ctx.folder, imagePath);
+    if (r.ok) broadcastThemeChanged(ctx);
+    return r;
   });
 }
 
 export type { DeriveResult } from "./derive-palette.ts";
-export type { ThemeErrorCode, ThemeErrorPayload } from "./errors.ts";
-export { ThemeError } from "./errors.ts";
+export type { ThemeError } from "./errors.ts";
 export type { MatchImageResult } from "./match-image.ts";
 export type { MatchVibeOpts, MatchVibeResult } from "./match-vibe.ts";
 export { PRESET_NAMES, PRESETS };

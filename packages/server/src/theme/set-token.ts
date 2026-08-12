@@ -1,7 +1,8 @@
+import { err, ok, type Result, tryCatchAsync } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { persistTheme } from "../mutations/persist.ts";
-import { ThemeError } from "./errors.ts";
+import { invalidThemePath, type ThemeError } from "./errors.ts";
 
 /**
  * Apply a single token at a dot-path. Creates intermediate objects as needed.
@@ -12,13 +13,11 @@ export async function setToken(
   folder: DesignFolder,
   path: string,
   value: string | number,
-): Promise<Theme> {
-  if (!path) {
-    throw new ThemeError({ code: "INVALID_PATH", message: "path is required" });
-  }
+): Promise<Result<Theme, ThemeError>> {
+  if (!path) return err(invalidThemePath("path is required"));
   const segments = path.split(".");
   if (segments.some((s) => s === "")) {
-    throw new ThemeError({ code: "INVALID_PATH", message: `bad path: ${JSON.stringify(path)}` });
+    return err(invalidThemePath(`bad path: ${JSON.stringify(path)}`));
   }
 
   // Deep-clone the current theme so we don't mutate the cached object.
@@ -34,14 +33,14 @@ export async function setToken(
   }
   cursor[segments[segments.length - 1] as string] = value;
 
-  try {
-    return await persistTheme(folder, next as unknown as Theme);
-  } catch (err) {
-    throw new ThemeError({
-      code: "INVALID_PATH",
-      message: `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme: ${
-        (err as Error).message
-      }`,
-    });
-  }
+  const persisted = await tryCatchAsync(
+    () => persistTheme(folder, next as unknown as Theme),
+    (e) =>
+      invalidThemePath(
+        `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme: ${
+          (e as Error).message
+        }`,
+      ),
+  );
+  return persisted.ok ? ok(persisted.value) : persisted;
 }
