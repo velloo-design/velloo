@@ -1,0 +1,22 @@
+{
+  "name": "@velloo/codegen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Velloo codegen — design JSON → idiomatic shadcn JSX + Tailwind v4 globals.css",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@velloo/renderer": "workspace:*",
+    "@velloo/schema": "workspace:*",
+    "@velloo/shadcn-snapshot": "workspace:*",
+    "diff": "9.0.0",
+    "tailwind-merge": "3.5.0",
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@types/diff": "8.0.0"
+  }
+}

@@ -29,7 +29,9 @@ function welcomeTree(form: "mobile" | "desktop"): Node {
     children: [
       {
         $ref: "Card",
-        props: { className: "flex flex-row items-center gap-2 border-0 shadow-none p-0" },
+        props: {
+          className: "flex flex-row items-center gap-2 ring-0 shadow-none bg-transparent p-0",
+        },
         children: [
           { $ref: "Heading", props: { level: 1, children: "Velloo" } },
           {
@@ -49,7 +51,7 @@ function welcomeTree(form: "mobile" | "desktop"): Node {
       { $ref: "Separator", props: {} },
       {
         $ref: "Card",
-        props: { className: "flex flex-col gap-2 border-0 shadow-none p-0" },
+        props: { className: "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0" },
         children: [
           { $ref: "Label", props: { htmlFor: "email", children: "Email" } },
           {
@@ -96,7 +98,7 @@ export function buildSettingsPage(): Page {
           children: [
             {
               $ref: "Card",
-              props: { className: "flex flex-col gap-1 border-0 shadow-none p-0" },
+              props: { className: "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0" },
               children: [
                 { $ref: "Heading", props: { level: 1, children: "Settings" } },
                 {
@@ -118,7 +120,7 @@ export function buildSettingsPage(): Page {
             settingsSection("Notifications", "Pick what reaches your inbox.", []),
             {
               $ref: "Card",
-              props: { className: "flex flex-row gap-3 border-0 shadow-none p-0" },
+              props: { className: "flex flex-row gap-3 ring-0 shadow-none bg-transparent p-0" },
               children: [
                 { $ref: "Button", props: { variant: "default", children: "Save changes" } },
                 { $ref: "Button", props: { variant: "ghost", children: "Cancel" } },
@@ -138,7 +140,7 @@ function settingsSection(
 ): Node {
   const headerCard: Node = {
     $ref: "Card",
-    props: { className: "flex flex-col gap-1 border-0 shadow-none p-0" },
+    props: { className: "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0" },
     children: [
       { $ref: "Heading", props: { level: 3, children: title } },
       { $ref: "Text", props: { variant: "muted", children: description } },
@@ -146,7 +148,7 @@ function settingsSection(
   };
   const fieldNodes: Node[] = fields.map((f) => ({
     $ref: "Card",
-    props: { className: "flex flex-col gap-2 border-0 shadow-none p-0" },
+    props: { className: "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0" },
     children: [
       { $ref: "Label", props: { htmlFor: f.name.toLowerCase(), children: f.name } },
       {

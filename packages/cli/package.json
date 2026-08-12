@@ -11,6 +11,7 @@
     ".": "./src/cli.ts"
   },
   "dependencies": {
+    "@velloo/codegen": "workspace:*",
     "@velloo/renderer": "workspace:*",
     "@velloo/schema": "workspace:*",
     "@velloo/server": "workspace:*",

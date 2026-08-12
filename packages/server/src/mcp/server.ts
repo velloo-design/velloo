@@ -9,6 +9,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { MutationContext } from "../mutations/index.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
+import { registerEmitTools } from "./tools/emit.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerThemeTools } from "./tools/theme.ts";
@@ -41,6 +42,7 @@ function buildMcpServer(ctx: MutationContext): McpServer {
   registerMutationTools(mcp, ctx);
   registerInspectTool(mcp, ctx);
   registerThemeTools(mcp, ctx);
+  registerEmitTools(mcp, ctx);
   return mcp;
 }
 

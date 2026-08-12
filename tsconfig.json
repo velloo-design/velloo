@@ -5,6 +5,7 @@
     { "path": "./packages/shadcn-snapshot" },
     { "path": "./packages/renderer" },
     { "path": "./packages/canvas" },
+    { "path": "./packages/codegen" },
     { "path": "./packages/server" },
     { "path": "./packages/cli" }
   ]

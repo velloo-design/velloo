@@ -3,6 +3,7 @@ import type { DesignFolder } from "./design-folder.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { createComponentsRouter } from "./routes/api-components.ts";
 import { createDesignRouter } from "./routes/api-design.ts";
+import { createEmitRouter } from "./routes/api-emit.ts";
 import { createInspectRouter } from "./routes/api-inspect.ts";
 import { createMutateRouter } from "./routes/api-mutate.ts";
 import { createPageRouter } from "./routes/api-page.ts";
@@ -25,6 +26,7 @@ export function createApp(ctxFor: () => MutationContext): Hono {
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/inspect", createInspectRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
+  app.route("/api/emit", createEmitRouter(folder));
 
   return app;
 }

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Pinned shadcn snapshot — vendored components, Tailwind v4 CSS, prop manifest",
-  "snapshotVersion": "2025.05.0",
+  "snapshotVersion": "2026.05.0",
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./dist/styles.css",
@@ -14,11 +14,9 @@
     "build": "bun run build.ts"
   },
   "dependencies": {
-    "@radix-ui/react-label": "2.1.8",
-    "@radix-ui/react-separator": "1.1.8",
-    "@radix-ui/react-slot": "1.2.4",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "radix-ui": "1.4.3",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tailwind-merge": "3.5.0"

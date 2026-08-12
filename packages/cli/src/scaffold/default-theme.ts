@@ -26,7 +26,16 @@ export function buildDefaultTheme(): Theme {
         DEFAULT: "oklch(0.577 0.245 27.325)",
         foreground: "oklch(0.985 0 0)",
       },
+      card: {
+        DEFAULT: "oklch(1 0 0)",
+        foreground: "oklch(0.145 0 0)",
+      },
+      popover: {
+        DEFAULT: "oklch(1 0 0)",
+        foreground: "oklch(0.145 0 0)",
+      },
       border: "oklch(0.922 0 0)",
+      input: "oklch(0.922 0 0)",
       ring: "oklch(0.708 0 0)",
     },
     typography: {
