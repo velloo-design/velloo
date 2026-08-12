@@ -45,6 +45,19 @@ body,
   -webkit-user-select: none;
 }
 
+/* Mid-drag: kill iframe pointer events so a cursor that crosses a variant
+ * doesn't swallow our window-level mouseup. Also force the grabbing cursor
+ * regardless of which child is hovered. */
+.velloo-dragging .velloo-frame-iframe {
+  pointer-events: none;
+}
+.velloo-dragging,
+.velloo-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-fg);

@@ -27,23 +27,17 @@ function emit(varName: string, value: unknown, lines: string[]): void {
   }
 }
 
-export function themeToCss(theme: Theme): string {
-  const lines: string[] = [":root {"];
-  const colors = theme.colors as Record<string, unknown>;
-
+function emitColorBlock(colors: Record<string, unknown>, lines: string[]): void {
   for (const [token, target] of Object.entries(COLOR_TOKEN_MAP)) {
     const value = colors[token];
     if (value === undefined) continue;
-
     if (Array.isArray(target)) {
-      // Pair token: expect { DEFAULT, foreground } object.
       if (typeof value === "object" && value !== null) {
         const obj = value as Record<string, unknown>;
         const [defaultVar, foregroundVar] = target;
         if (defaultVar) emit(defaultVar, obj.DEFAULT, lines);
         if (foregroundVar) emit(foregroundVar, obj.foreground, lines);
       } else {
-        // Scalar value supplied for a pair token — apply to DEFAULT only.
         const [defaultVar] = target;
         if (defaultVar) emit(defaultVar, value, lines);
       }
@@ -51,6 +45,11 @@ export function themeToCss(theme: Theme): string {
       emit(target, value, lines);
     }
   }
+}
+
+export function themeToCss(theme: Theme): string {
+  const lines: string[] = [":root {"];
+  emitColorBlock(theme.colors as Record<string, unknown>, lines);
 
   // Typography: font family.
   const typography = (theme.typography ?? {}) as Record<string, unknown>;
@@ -69,5 +68,16 @@ export function themeToCss(theme: Theme): string {
   }
 
   lines.push("}");
+
+  // Dark-mode overrides — gated on a `.dark` ancestor so the canvas can flip
+  // a single class to preview both modes without re-rendering.
+  const dark = theme.colorsDark;
+  if (dark) {
+    lines.push("");
+    lines.push(".dark {");
+    emitColorBlock(dark as Record<string, unknown>, lines);
+    lines.push("}");
+  }
+
   return lines.join("\n");
 }

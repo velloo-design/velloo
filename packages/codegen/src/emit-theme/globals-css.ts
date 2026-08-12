@@ -82,6 +82,32 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
 
   lines.push(`}`);
   lines.push("");
+
+  // Dark-mode overrides. shadcn convention: a `.dark` class on <html> or <body>
+  // re-points the --color-* tokens. We emit one block keyed off `.dark` so users
+  // can hook it up to any framework's dark-mode toggle (Tailwind v4 darkVariant
+  // defaults to `prefers-color-scheme`; most apps swap to a class-based variant
+  // via `@custom-variant dark (&:is(.dark *))` in their globals.css).
+  const dark = (theme as Theme).colorsDark;
+  if (dark) {
+    lines.push(`@custom-variant dark (&:is(.dark *));`);
+    lines.push("");
+    lines.push(`.dark {`);
+    const darkRec = dark as Record<string, ColorPair | string | undefined>;
+    for (const { key, pair } of COLOR_SLOTS) {
+      const value = darkRec[key];
+      if (value === undefined) continue;
+      const def = defaultOf(value);
+      if (def !== undefined) lines.push(`  --color-${key}: ${def};`);
+      if (pair) {
+        const fg = fgOf(value);
+        if (fg !== undefined) lines.push(`  --color-${key}-foreground: ${fg};`);
+      }
+    }
+    lines.push(`}`);
+    lines.push("");
+  }
+
   lines.push(`@layer base {`);
   lines.push(`  * {`);
   lines.push(`    border-color: var(--color-border);`);

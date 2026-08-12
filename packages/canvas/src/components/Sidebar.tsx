@@ -3,6 +3,7 @@ import { MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { mutate, type PageMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { Tree } from "./Tree.tsx";
 
@@ -48,8 +49,8 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: 
     try {
       const result = await mutate.addPage({ name });
       void selectPage(result.pageId);
-    } catch {
-      /* surface elsewhere if/when we add a toast layer */
+    } catch (err) {
+      toastError(err, "Could not create page");
     }
   };
 
@@ -61,7 +62,7 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: 
     if (!pendingDelete) return;
     const { id } = pendingDelete;
     setPendingDelete(null);
-    void mutate.removePage({ pageId: id }).catch(() => undefined);
+    void mutate.removePage({ pageId: id }).catch((e) => toastError(e, "Could not delete page"));
   };
 
   return (

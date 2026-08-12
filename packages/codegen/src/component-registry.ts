@@ -3,6 +3,10 @@
  *  - "shadcn": emit a JSX component import from the user's shadcn install.
  *  - "lowered": inline the snapshot's primitive as plain HTML so users don't
  *    need any extra files in their repo.
+ *  - "dynamic": emit a JSX element whose name is computed from the node's
+ *    props (e.g. Icon's `name` selects which lucide component to render).
+ *    The import comes from an external package (the user already depends on it
+ *    or will after `pnpm add`).
  */
 
 export type LoweredEntry = {
@@ -19,7 +23,19 @@ export type ShadcnEntry = {
   importFile: string;
 };
 
-export type RegistryEntry = LoweredEntry | ShadcnEntry;
+export type DynamicEntry = {
+  kind: "dynamic";
+  /** Bare-import specifier (e.g. "lucide-react"). */
+  importFrom: string;
+  /** Resolve the JSX component name + any default classes from node props. */
+  resolve(props: Record<string, unknown>): {
+    jsxName: string;
+    extraClasses: string;
+    fallbackName?: string;
+  };
+};
+
+export type RegistryEntry = LoweredEntry | ShadcnEntry | DynamicEntry;
 
 const HEADING_BY_LEVEL: Record<number, string> = {
   1: "text-4xl font-semibold tracking-tight",
@@ -76,10 +92,20 @@ export const REGISTRY: Record<string, RegistryEntry> = {
       return { tag: "p", extraClasses: classes };
     },
   },
+  Icon: {
+    kind: "dynamic",
+    importFrom: "lucide-react",
+    resolve(props) {
+      const raw = typeof props.name === "string" ? props.name : "";
+      const jsxName = /^[A-Z][A-Za-z0-9]*$/.test(raw) ? raw : "HelpCircle";
+      return { jsxName, extraClasses: "" };
+    },
+  },
 };
 
 /** Props that the snapshot's lowered primitives consume — strip from output. */
 export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Heading: new Set(["level"]),
   Text: new Set(["variant"]),
+  Icon: new Set(["name"]),
 };

@@ -1,13 +1,8 @@
 import { Hand, Minus, Moon, MousePointer2, Plus, Redo2, Sun, Undo2 } from "lucide-react";
-import { redo as redoApi, theme as themeApi, undo as undoApi } from "../api.ts";
+import { redo as redoApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 import { Logo } from "./Logo.tsx";
-
-/** Light-preset → dark-preset counterpart for the design theme. */
-const DARK_OF: Record<string, string> = {
-  "default-light": "default-dark",
-  "default-dark": "default-light",
-};
 
 export function TopBar() {
   const design = useCanvas((s) => s.design);
@@ -22,13 +17,22 @@ export function TopBar() {
   const refreshHistory = useCanvas((s) => s.refreshHistory);
   const appTheme = useCanvas((s) => s.appTheme);
   const setAppTheme = useCanvas((s) => s.setAppTheme);
+  const designMode = useCanvas((s) => s.designMode);
+  const setDesignMode = useCanvas((s) => s.setDesignMode);
 
   const currentPage = design?.pages.find((p) => p.id === currentPageId);
-  const isDesignDark = theme?.name === "default-dark";
+  const isDesignDark = designMode === "dark";
+  const hasDarkPalette = Boolean(theme?.colorsDark);
 
   const toggleDesignDark = () => {
-    const next = DARK_OF[theme?.name ?? ""] ?? (isDesignDark ? "default-light" : "default-dark");
-    void themeApi.applyPreset(next).catch(() => undefined);
+    if (!hasDarkPalette) {
+      toastError(
+        "This theme has no dark palette. Add `colorsDark` in theme/default.json.",
+        "Theme has no dark palette",
+      );
+      return;
+    }
+    setDesignMode(isDesignDark ? "light" : "dark");
   };
 
   const onZoomReset = () => {
@@ -38,12 +42,12 @@ export function TopBar() {
 
   const onUndo = () => {
     void undoApi()
-      .catch(() => undefined)
+      .catch((e) => toastError(e, "Undo failed"))
       .finally(() => refreshHistory());
   };
   const onRedo = () => {
     void redoApi()
-      .catch(() => undefined)
+      .catch((e) => toastError(e, "Redo failed"))
       .finally(() => refreshHistory());
   };
 

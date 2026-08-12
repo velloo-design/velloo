@@ -12,6 +12,7 @@ import {
   removeVariant,
   updateProps,
   updateVariant,
+  updateVariants,
 } from "../mutations/index.ts";
 import { coercePath } from "../path.ts";
 
@@ -38,6 +39,14 @@ interface AnyArgs {
     viewport?: { w: number; h: number };
     position?: { x: number; y: number } | null;
   };
+  patches?: Array<{
+    variantId: string;
+    patch: {
+      name?: string;
+      viewport?: { w: number; h: number };
+      position?: { x: number; y: number } | null;
+    };
+  }>;
 }
 
 function bad(reason: string) {
@@ -199,6 +208,23 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
         pageId: args.pageId,
         variantId: args.variantId,
         patch: args.patch,
+      });
+      return c.json(result);
+    } catch (err) {
+      if (err instanceof MutationError) return c.json({ error: err.payload }, 400);
+      throw err;
+    }
+  });
+
+  r.post("/update_variants", async (c) => {
+    const args = (await c.req.json()) as AnyArgs;
+    if (!args.pageId || !Array.isArray(args.patches)) {
+      return c.json(bad("pageId, patches required"), 400);
+    }
+    try {
+      const result = await updateVariants(ctxFor(), {
+        pageId: args.pageId,
+        patches: args.patches,
       });
       return c.json(result);
     } catch (err) {

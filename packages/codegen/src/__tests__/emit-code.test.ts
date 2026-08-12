@@ -118,4 +118,34 @@ describe("emitCode", () => {
       }),
     ).rejects.toThrow(/Variant not found/);
   });
+
+  test("lowers Icon to a lucide-react JSX element with a bare import", async () => {
+    const page: Page = {
+      name: "WithIcon",
+      variants: [
+        {
+          id: "mobile",
+          name: "Mobile",
+          viewport: { w: 390, h: 200 },
+          tree: {
+            $ref: "Card",
+            props: { className: "p-4" },
+            children: [{ $ref: "Icon", props: { name: "Heart" } }],
+          },
+        },
+      ],
+    };
+    const out = join(tmpdir(), `velloo-emit-icon-${Date.now()}.tsx`);
+    const result = await emitCode(page, {
+      variantId: "mobile",
+      outputPath: out,
+      apply: false,
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.code).toContain('import { Heart } from "lucide-react"');
+    // The icon renders as <Heart />, not <Icon /> — name prop consumed.
+    expect(result.code).toMatch(/<Heart\s*\/>/);
+    expect(result.code).not.toMatch(/<Icon /);
+    expect(result.code).not.toContain('name="Heart"');
+  }, 30_000);
 });

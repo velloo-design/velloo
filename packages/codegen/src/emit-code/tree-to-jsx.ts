@@ -45,6 +45,14 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): string {
     if (consumed) for (const k of consumed) delete props[k];
     openTag = tag;
     closeTag = tag;
+  } else if (entry.kind === "dynamic") {
+    const { jsxName, extraClasses } = entry.resolve(props);
+    ctx.imports.addBare(entry.importFrom, jsxName);
+    mergedClassName = mergeClasses(extraClasses, classNameProp);
+    const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
+    if (consumed) for (const k of consumed) delete props[k];
+    openTag = jsxName;
+    closeTag = jsxName;
   } else {
     ctx.imports.add(entry.importFile, entry.jsxName);
     mergedClassName = mergeClasses(classNameProp);

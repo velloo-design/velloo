@@ -11,6 +11,8 @@ export interface DocumentOptions {
   title?: string;
   /** When true, omit the iframe runtime script. Defaults to true. */
   includeRuntime?: boolean;
+  /** Mount the dark-mode class on <html>. */
+  dark?: boolean;
 }
 
 /**
@@ -26,14 +28,16 @@ export function buildDocument(opts: DocumentOptions): string {
     themeCss,
     title = "Velloo design",
     includeRuntime = true,
+    dark,
   } = opts;
   const runtime = includeRuntime ? `<script>${IFRAME_RUNTIME}</script>` : "";
   // Defeat password managers and form-fillers (LastPass / 1Password / Bitwarden
   // / native browser autofill) so design Input components stay clean.
   const antiAutofill =
     'data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" autocomplete="off"';
+  const htmlClass = dark ? ' class="dark"' : "";
   return `<!doctype html>
-<html lang="en">
+<html lang="en"${htmlClass}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=${viewport.w}, initial-scale=1" />

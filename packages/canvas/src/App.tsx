@@ -5,9 +5,11 @@ import { EmptyState } from "./components/EmptyState.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
+import { Toaster } from "./components/Toaster.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { VariantGrid } from "./components/VariantGrid.tsx";
 import { useCanvas } from "./store.ts";
+import { toastError } from "./toast.ts";
 import { readUrlState, useUrlState } from "./url-state.ts";
 import { connectWs } from "./ws-client.ts";
 
@@ -58,11 +60,11 @@ export function App() {
       if (cmd && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
         if (inEditable) return;
         e.preventDefault();
-        void undoApi().catch(() => undefined);
+        void undoApi().catch((e) => toastError(e, "Undo failed"));
       } else if (cmd && (e.key === "z" || e.key === "Z") && e.shiftKey) {
         if (inEditable) return;
         e.preventDefault();
-        void redoApi().catch(() => undefined);
+        void redoApi().catch((e) => toastError(e, "Redo failed"));
       } else if (!cmd && !inEditable && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
         state.setCanvasZoom(state.canvasZoom + 0.1);
@@ -117,6 +119,7 @@ export function App() {
         </main>
         <RightPanel pageId={currentPageId} />
       </div>
+      <Toaster />
     </div>
   );
 }

@@ -45,6 +45,10 @@ export type Colors = z.infer<typeof ColorsSchema>;
 export const ThemeSchema = z.object({
   name: z.string().min(1),
   colors: ColorsSchema,
+  /** Dark-mode overrides — only the color slots that differ from `colors`.
+   *  When present, emit_theme writes a `.dark { ... }` block and the canvas
+   *  can preview both modes. Tokens missing here fall back to `colors`. */
+  colorsDark: ColorsSchema.partial().optional(),
   typography: TokenGroupSchema,
   spacing: TokenGroupSchema,
   radius: TokenGroupSchema,

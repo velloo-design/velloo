@@ -1,4 +1,4 @@
-export type ControlType = "boolean" | "number" | "string" | "color" | "enum";
+export type ControlType = "boolean" | "number" | "string" | "color" | "enum" | "icon";
 
 export interface PropDescriptor {
   name: string;

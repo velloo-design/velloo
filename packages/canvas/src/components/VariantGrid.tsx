@@ -157,6 +157,11 @@ export function VariantGrid({ pageId, page }: Props) {
           el: frameEl,
         };
         document.body.style.cursor = "grabbing";
+        // Iframes naturally capture mouse events, which would swallow our
+        // window-level mousemove / mouseup if the cursor crosses one during
+        // the drag. The `velloo-dragging` class disables their pointer events
+        // until the drop lands — see CSS below.
+        el.classList.add("velloo-dragging");
         return;
       }
 
@@ -202,43 +207,33 @@ export function VariantGrid({ pageId, page }: Props) {
       dragRef.current = null;
       document.body.style.cursor = "";
       el.style.cursor = cursorMode === "hand" ? "grab" : "";
+      // Drop disabled `pointer-events: none` on iframes — see onDown.
+      el.classList.remove("velloo-dragging");
       if (d?.kind !== "variant" || !d.preview) return;
-      d.el.style.transform = "";
-
-      // d.preview already carries the resolved + clamped position (computed
-      // live in onMove), so the commit uses it directly.
+      // Keep the transform applied until React re-renders with the new
+      // canonical position. Clearing it eagerly causes a one-frame snap-back.
       const resolved = d.preview;
 
-      // Backfill positions for every variant that doesn't yet have one (not
-      // just on the first drag — new variants added later need this too).
-      // Their auto-flow slot is captured so they don't drift when the page
-      // re-renders in positioned mode.
-      const promotionPatches: Promise<unknown>[] = [];
+      // Single bulk write: dragged variant + auto-flow positions for every
+      // sibling still without one. One mutation → one history entry → one
+      // broadcast → one iframe reload, no flicker. ⌘Z reverts the whole drag.
+      const patches = [{ variantId: d.variantId, patch: { position: resolved } as const }];
       for (const other of page.variants) {
         if (other.id === d.variantId) continue;
         if (other.position !== undefined) continue;
-        const auto = defaultPositionFor(page, other.id);
-        promotionPatches.push(
-          mutate
-            .updateVariant({
-              pageId,
-              variantId: other.id,
-              patch: { position: auto },
-            })
-            .catch(() => undefined),
-        );
+        patches.push({
+          variantId: other.id,
+          patch: { position: defaultPositionFor(page, other.id) } as const,
+        });
       }
-
-      promotionPatches.push(
-        mutate
-          .updateVariant({
-            pageId,
-            variantId: d.variantId,
-            patch: { position: resolved },
-          })
-          .catch(() => undefined),
-      );
-      void Promise.all(promotionPatches);
+      void mutate
+        .updateVariants({ pageId, patches })
+        .catch(() => undefined)
+        .finally(() => {
+          // Server's broadcast bumps pageVersion → React re-renders with the
+          // new canonical position. Clear the optimistic transform now.
+          d.el.style.transform = "";
+        });
     };
 
     el.style.cursor = cursorMode === "hand" ? "grab" : "";

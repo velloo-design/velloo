@@ -45,15 +45,46 @@ async function buildCss(): Promise<void> {
   console.log(`✓ wrote ${out}`);
 }
 
-function categorize(filePath: string): {
+function categorize(
+  filePath: string,
+  id: string,
+): {
   source: "shadcn" | "velloo";
   category: "ui" | "typography";
 } {
   const rel = filePath.startsWith(componentsDir)
     ? filePath.slice(componentsDir.length).replace(/^\/+/, "")
     : filePath;
-  if (rel.startsWith("velloo/")) return { source: "velloo", category: "typography" };
+  if (rel.startsWith("velloo/")) {
+    const category = id === "Icon" ? "ui" : "typography";
+    return { source: "velloo", category };
+  }
   return { source: "shadcn", category: "ui" };
+}
+
+/**
+ * Pull the list of lucide icon names. We exec a tiny script under bun so
+ * we get the same `lucide-react` install the snapshot will ship with —
+ * no need to maintain a parallel list. Filters to PascalCase function
+ * exports that aren't internal helpers.
+ */
+async function loadLucideIconNames(): Promise<string[]> {
+  const proc = Bun.spawn(
+    [
+      "bun",
+      "-e",
+      "import * as L from 'lucide-react';" +
+        " const skip = new Set(['LucideProvider', 'createLucideIcon', 'LucideIcon', 'Icon']);" +
+        " const names = Object.keys(L).filter(k => /^[A-Z][A-Za-z0-9]*$/.test(k) && !k.endsWith('Icon') && !skip.has(k) && L[k]).sort();" +
+        " console.log(JSON.stringify(names));",
+    ],
+    { stdout: "pipe", stderr: "pipe", cwd: here },
+  );
+  const stdout = await new Response(proc.stdout).text();
+  const exit = await proc.exited;
+  if (exit !== 0) throw new Error("failed to enumerate lucide icons");
+  const last = stdout.trim().split("\n").pop() ?? "[]";
+  return JSON.parse(last) as string[];
 }
 
 const COLOR_NAME = /^(color|background|fg|bg|theme|fill|stroke|tint|accent)/i;
@@ -200,6 +231,7 @@ async function buildManifest(): Promise<void> {
   });
   project.addSourceFilesAtPaths(`${componentsDir}/**/*.tsx`);
 
+  const lucideNames = await loadLucideIconNames();
   const components: ComponentDescriptor[] = [];
 
   for (const id of Object.keys(registry).sort()) {
@@ -212,7 +244,7 @@ async function buildManifest(): Promise<void> {
       continue;
     }
 
-    const { source, category } = categorize(srcFile.getFilePath());
+    const { source, category } = categorize(srcFile.getFilePath(), id);
     const propsInterface = srcFile.getInterface(`${id}Props`);
     let props: PropDescriptor[] = [];
 
@@ -234,6 +266,18 @@ async function buildManifest(): Promise<void> {
         const literal = propsAlias.getDescendantsOfKind(SyntaxKind.TypeLiteral)[0];
         if (literal) {
           props = literal.getProperties().map(describeProp);
+        }
+      }
+    }
+
+    // Icon.name is a free-form string at the type level, but we want the
+    // inspector to surface a typeahead picker over the live lucide set.
+    if (id === "Icon") {
+      for (const p of props) {
+        if (p.name === "name") {
+          p.control = "icon";
+          p.enumValues = lucideNames;
+          if (!p.defaultValue) p.defaultValue = "Heart";
         }
       }
     }

@@ -1,5 +1,6 @@
 import type { PropDescriptor } from "@velloo/shadcn-snapshot";
 import { useState } from "react";
+import { IconPicker } from "./IconPicker.tsx";
 
 interface Props {
   descriptor: PropDescriptor;
@@ -44,6 +45,20 @@ export function PropField({ descriptor, initialValue, onChange }: Props) {
           />
           <span className="text-xs text-[var(--color-fg-muted)]">{String(Boolean(draft))}</span>
         </div>
+      </div>
+    );
+  }
+
+  if (descriptor.control === "icon" && descriptor.enumValues) {
+    const current = typeof draft === "string" ? draft : "";
+    return (
+      <div className="flex flex-col gap-1">
+        {label}
+        <IconPicker
+          value={current}
+          options={descriptor.enumValues as string[]}
+          onChange={(name) => commit(name)}
+        />
       </div>
     );
   }

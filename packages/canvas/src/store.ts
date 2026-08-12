@@ -17,6 +17,7 @@ export type RightTab = "node" | "theme";
 export type CursorMode = "select" | "hand";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";
+export type DesignMode = "light" | "dark";
 
 const APP_THEME_KEY = "velloo:appTheme";
 
@@ -59,6 +60,8 @@ export interface CanvasState {
   syncEdits: boolean;
   /** Server-reported undo/redo stack depths. Drives the TopBar buttons. */
   history: HistoryDepths;
+  /** Preview mode passed to the renderer — flips a `.dark` class. */
+  designMode: DesignMode;
 
   loadDesign(): Promise<void>;
   refreshHistory(): Promise<void>;
@@ -78,6 +81,7 @@ export interface CanvasState {
   setNodeState(s: NodeState): void;
   setAppTheme(t: AppTheme): void;
   setSyncEdits(b: boolean): void;
+  setDesignMode(m: DesignMode): void;
 }
 
 /** Walk the current page tree and return the node at the given selection. */
@@ -114,6 +118,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   appTheme: readAppTheme(),
   syncEdits: true,
   history: { undo: 0, redo: 0 },
+  designMode: "light",
 
   async refreshHistory() {
     try {
@@ -225,5 +230,9 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setSyncEdits(syncEdits) {
     set({ syncEdits });
+  },
+
+  setDesignMode(designMode) {
+    set({ designMode });
   },
 }));

@@ -11,11 +11,20 @@ export interface RenderResult {
   themeCss: string;
 }
 
+export interface RenderOptions {
+  /** Render with the dark color block active. */
+  dark?: boolean;
+}
+
 /**
  * Render a single variant against a theme to a self-contained HTML document.
  * Pure function modulo the snapshot CSS file read on first call.
  */
-export async function renderVariant(variant: Variant, theme: Theme): Promise<RenderResult> {
+export async function renderVariant(
+  variant: Variant,
+  theme: Theme,
+  options: RenderOptions = {},
+): Promise<RenderResult> {
   // Defense-in-depth: validate inputs at the public boundary.
   VariantSchema.parse(variant);
   ThemeSchema.parse(theme);
@@ -31,6 +40,7 @@ export async function renderVariant(variant: Variant, theme: Theme): Promise<Ren
     snapshotCss,
     themeCss,
     title: variant.name,
+    dark: options.dark,
   });
 
   return { html, bodyHtml, themeCss };

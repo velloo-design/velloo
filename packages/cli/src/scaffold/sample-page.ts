@@ -436,6 +436,39 @@ function typographyBlock(): Node {
   };
 }
 
+function iconBadge(name: string, label: string, className: string): Node {
+  return {
+    $ref: "Card",
+    props: {
+      className: `flex flex-row items-center gap-2 p-3 rounded-md ${className}`,
+    },
+    children: [
+      { $ref: "Icon", props: { name, size: 18 } },
+      { $ref: "Text", props: { variant: "small", children: label } },
+    ],
+  };
+}
+
+function iconShowcase(): Node {
+  return {
+    $ref: "Card",
+    props: {
+      className:
+        "grid grid-cols-4 gap-3 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+    },
+    children: [
+      iconBadge("Sparkles", "Sparkles", "bg-accent text-accent-foreground"),
+      iconBadge("Heart", "Heart", "bg-destructive/10 text-destructive"),
+      iconBadge("Rocket", "Rocket", "bg-primary text-primary-foreground"),
+      iconBadge("ChevronRight", "Chevron", "bg-secondary text-secondary-foreground"),
+      iconBadge("BellRing", "Notify", "bg-accent text-accent-foreground"),
+      iconBadge("Settings", "Settings", "bg-secondary text-secondary-foreground"),
+      iconBadge("Github", "Repo", "bg-foreground text-background"),
+      iconBadge("Code", "Code", "bg-destructive/10 text-destructive"),
+    ],
+  };
+}
+
 function cardLibrary(): Node {
   return {
     $ref: "Card",
@@ -562,6 +595,11 @@ export function buildComponentsPage(): Page {
               typographyBlock(),
             ]),
             sectionCard("Cards", "Compose Cards to tint, emphasize, or warn.", [cardLibrary()]),
+            sectionCard(
+              "Icons",
+              "Pick from the full lucide-react set. Codegen lowers Icon to a direct lucide import.",
+              [iconShowcase()],
+            ),
             sectionCard("Separator", "A horizontal rule themed against the border token.", [
               { $ref: "Separator", props: {} },
             ]),

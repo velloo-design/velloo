@@ -151,6 +151,19 @@ export const mutate = {
   }) {
     return postMutate<{ variant: unknown }>("update_variant", args);
   },
+  updateVariants(args: {
+    pageId: string;
+    patches: Array<{
+      variantId: string;
+      patch: {
+        name?: string;
+        viewport?: { w: number; h: number };
+        position?: { x: number; y: number } | null;
+      };
+    }>;
+  }) {
+    return postMutate<{ variants: unknown[] }>("update_variants", args);
+  },
   updateProps(args: {
     pageId: string;
     variantId: string;

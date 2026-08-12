@@ -14,7 +14,8 @@ export function createRenderRouter(folder: () => DesignFolder): Hono {
     if (!variant) return c.json({ error: "variant not found" }, 404);
 
     try {
-      const { html } = await renderVariant(variant, f.theme);
+      const dark = c.req.query("mode") === "dark";
+      const { html } = await renderVariant(variant, f.theme, { dark });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
     } catch (err) {
       if (err instanceof UnknownComponentError) {

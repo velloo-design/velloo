@@ -80,4 +80,29 @@ describe("emitTheme", () => {
     const cssOnDisk = await Bun.file(first.path).text();
     expect(cssOnDisk).toBe(first.contents);
   }, 30_000);
+
+  test("emits a .dark block when colorsDark is set", async () => {
+    const theme: Theme = {
+      ...buildDefaultTheme(),
+      colorsDark: {
+        background: "oklch(0.145 0 0)",
+        foreground: "oklch(0.985 0 0)",
+        primary: { DEFAULT: "oklch(0.985 0 0)", foreground: "oklch(0.205 0 0)" },
+      },
+    };
+    const outDir = join(tmpdir(), `velloo-theme-dark-${Date.now()}`);
+    const result = await emitTheme(theme, { outputDir: outDir, apply: false });
+    const css = result.files[0]?.contents ?? "";
+    expect(css).toContain("@custom-variant dark");
+    expect(css).toContain(".dark {");
+    expect(css).toMatch(/\.dark \{[\s\S]*--color-background: oklch\(0\.145 0 0\)/);
+  }, 30_000);
+
+  test("omits .dark block when colorsDark is absent", async () => {
+    const theme = buildDefaultTheme();
+    const outDir = join(tmpdir(), `velloo-theme-nodark-${Date.now()}`);
+    const result = await emitTheme(theme, { outputDir: outDir, apply: false });
+    const css = result.files[0]?.contents ?? "";
+    expect(css).not.toContain(".dark {");
+  }, 30_000);
 });

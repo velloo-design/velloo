@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   open: boolean;
@@ -44,9 +45,12 @@ export function ConfirmDialog({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onConfirm, onCancel]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  // Portal to document.body so `position: fixed` is anchored to the viewport,
+  // not whatever transformed ancestor (e.g. the scaled canvas surface) the
+  // component happens to be rendered under.
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <button
         type="button"
@@ -89,6 +93,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

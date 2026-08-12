@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { ViewportEditor } from "./ViewportEditor.tsx";
 
@@ -76,7 +77,8 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
     ch.send({ type: "applyVelloState", path, state: nodeState });
   }, [nodeState, selection]);
 
-  const src = `${renderUrl(pageId, variantId)}?v=${pageVersion}`;
+  const designMode = useCanvas((s) => s.designMode);
+  const src = `${renderUrl(pageId, variantId)}?v=${pageVersion}&mode=${designMode}`;
 
   const [editingSize, setEditingSize] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -96,7 +98,9 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
   };
   const confirmDelete = () => {
     setConfirmingDelete(false);
-    void mutate.removeVariant({ pageId, variantId }).catch(() => undefined);
+    void mutate
+      .removeVariant({ pageId, variantId })
+      .catch((e) => toastError(e, "Could not delete variant"));
   };
 
   return (

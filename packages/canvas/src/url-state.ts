@@ -58,10 +58,14 @@ export function useUrlState(): void {
       lastPageRef.current = currentPageId;
       return;
     }
-    const firstRun = lastPageRef.current === undefined;
-    const pageChanged = !firstRun && lastPageRef.current !== currentPageId;
+    // pushState ONLY when transitioning between two valid page ids. Any other
+    // change — initial null→page setup, popstate restore, selection-only —
+    // replaces the current entry so the back stack reflects user intent, not
+    // boot timing.
+    const prev = lastPageRef.current;
+    const pushPage = Boolean(prev && currentPageId && prev !== currentPageId);
     lastPageRef.current = currentPageId;
-    writeUrl(currentPageId, selection, pageChanged);
+    writeUrl(currentPageId, selection, pushPage);
   }, [currentPageId, selection]);
 
   // Browser back/forward → store.

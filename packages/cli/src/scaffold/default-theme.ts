@@ -38,6 +38,41 @@ export function buildDefaultTheme(): Theme {
       input: "oklch(0.922 0 0)",
       ring: "oklch(0.708 0 0)",
     },
+    colorsDark: {
+      background: "oklch(0.145 0 0)",
+      foreground: "oklch(0.985 0 0)",
+      primary: {
+        DEFAULT: "oklch(0.985 0 0)",
+        foreground: "oklch(0.205 0 0)",
+      },
+      secondary: {
+        DEFAULT: "oklch(0.269 0 0)",
+        foreground: "oklch(0.985 0 0)",
+      },
+      muted: {
+        DEFAULT: "oklch(0.269 0 0)",
+        foreground: "oklch(0.708 0 0)",
+      },
+      accent: {
+        DEFAULT: "oklch(0.269 0 0)",
+        foreground: "oklch(0.985 0 0)",
+      },
+      destructive: {
+        DEFAULT: "oklch(0.704 0.191 22.216)",
+        foreground: "oklch(0.985 0 0)",
+      },
+      card: {
+        DEFAULT: "oklch(0.205 0 0)",
+        foreground: "oklch(0.985 0 0)",
+      },
+      popover: {
+        DEFAULT: "oklch(0.205 0 0)",
+        foreground: "oklch(0.985 0 0)",
+      },
+      border: "oklch(1 0 0 / 10%)",
+      input: "oklch(1 0 0 / 15%)",
+      ring: "oklch(0.556 0 0)",
+    },
     typography: {
       fontFamily: {
         sans: "Inter, ui-sans-serif, system-ui, sans-serif",
