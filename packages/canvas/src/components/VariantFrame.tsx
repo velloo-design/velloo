@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
+import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { ViewportEditor } from "./ViewportEditor.tsx";
 
 interface Props {
@@ -79,6 +80,7 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
 
   const [editingSize, setEditingSize] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const commitViewport = (next: { w: number; h: number }) => {
     setEditingSize(false);
@@ -90,7 +92,10 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
 
   const onDelete = () => {
     setMenuOpen(false);
-    if (!confirm(`Delete variant "${variantName}"?`)) return;
+    setConfirmingDelete(true);
+  };
+  const confirmDelete = () => {
+    setConfirmingDelete(false);
     void mutate.removeVariant({ pageId, variantId }).catch(() => undefined);
   };
 
@@ -115,6 +120,12 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
           <ViewportEditor
             initial={viewport}
             onCommit={commitViewport}
+            onChange={(next) => {
+              if (next.w === viewport.w && next.h === viewport.h) return;
+              void mutate
+                .updateVariant({ pageId, variantId, patch: { viewport: next } })
+                .catch(() => undefined);
+            }}
             onCancel={() => setEditingSize(false)}
           />
         ) : (
@@ -174,6 +185,15 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
           sandbox="allow-same-origin allow-scripts"
         />
       </div>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete variant"
+        body={`Delete the "${variantName}" variant? You can put it back with ⌘Z.`}
+        confirmLabel="Delete"
+        destructive
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

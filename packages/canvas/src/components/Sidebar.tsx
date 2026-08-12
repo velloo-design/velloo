@@ -3,6 +3,7 @@ import { MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { mutate, type PageMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
+import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { Tree } from "./Tree.tsx";
 
 interface Props {
@@ -21,6 +22,7 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: 
   // the first variant when there's no selection yet.
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     if (!currentPage) {
@@ -53,8 +55,13 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: 
 
   const onDeletePage = (pageId: string, pageName: string) => {
     setMenuOpenFor(null);
-    if (!window.confirm(`Delete page "${pageName}"? You can undo with ⌘Z.`)) return;
-    void mutate.removePage({ pageId }).catch(() => undefined);
+    setPendingDelete({ id: pageId, name: pageName });
+  };
+  const confirmDeletePage = () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
+    setPendingDelete(null);
+    void mutate.removePage({ pageId: id }).catch(() => undefined);
   };
 
   return (
@@ -185,6 +192,17 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: 
       <footer className="px-4 py-2 text-xs text-[var(--color-fg-muted)] border-t border-[var(--color-border)]">
         shadcn snapshot {snapshotVersion}
       </footer>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete page"
+        body={
+          pendingDelete ? `Delete page "${pendingDelete.name}"? You can put it back with ⌘Z.` : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDeletePage}
+      />
     </aside>
   );
 }

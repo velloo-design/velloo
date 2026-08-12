@@ -28,9 +28,12 @@ type DragState =
     };
 
 const VARIANT_GAP = 48;
-/** Bounding box variants must stay within. Matches the inner padded scroll area. */
-const CANVAS_MIN = 0;
-const CANVAS_MAX = 5000;
+/** Bounding box variants must stay within. The .relative positioning context
+ * sits at scroll coord (3000, 3000), inside a 6000×6000 padded surface — so
+ * a variant's top-left can run from -3000 (visible at the left edge of the
+ * scroll area) up to 3000 minus its own width (right edge of the surface). */
+const CANVAS_MIN = -3000;
+const CANVAS_MAX = 3000;
 
 function clampPosition(
   pos: { x: number; y: number },
@@ -250,30 +253,40 @@ export function VariantGrid({ pageId, page }: Props) {
     };
   }, [cursorMode, page, pageId]);
 
-  // ⌘ + scroll → zoom anchored on cursor. We commit the scroll adjustment
-  // here and pre-stamp lastZoomRef so the center-anchoring effect below
-  // doesn't fight us.
+  // Pinch zoom (trackpad) / ⌘+wheel always drive the canvas zoom, regardless
+  // of where the cursor is over our window — otherwise the browser would
+  // page-zoom whenever the cursor sits on a pane or an iframe. Anchor on the
+  // cursor when it's over the canvas, on the canvas center otherwise.
   useEffect(() => {
-    const el = outerRef.current;
-    if (!el) return undefined;
     const onWheel = (e: WheelEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
+      e.stopPropagation();
+      const el = outerRef.current;
+      if (!el) return;
       const delta = -e.deltaY * 0.002;
       const before = useCanvas.getState().canvasZoom;
       const next = Math.max(0.1, Math.min(4, before + delta));
       if (next === before) return;
       const rect = el.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
+      // Cursor inside the canvas? anchor on cursor; otherwise on its center.
+      const inside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      const cx = inside ? e.clientX - rect.left : rect.width / 2;
+      const cy = inside ? e.clientY - rect.top : rect.height / 2;
       const ratio = next / before;
       el.scrollLeft = (el.scrollLeft + cx) * ratio - cx;
       el.scrollTop = (el.scrollTop + cy) * ratio - cy;
       lastZoomRef.current = next;
       setCanvasZoom(next);
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    // Capture-phase + non-passive so we beat the browser to preventDefault
+    // even when the event fires over a child pane.
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => window.removeEventListener("wheel", onWheel, { capture: true });
   }, [setCanvasZoom]);
 
   // Center the scroll on the variants on page change.

@@ -1,8 +1,10 @@
 import type { Node, Page } from "@velloo/schema";
 
 /** Inner card with no chrome — used as a transparent layout group. */
-const group = "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0";
-const groupRow = "flex flex-row items-center gap-2 ring-0 shadow-none bg-transparent p-0";
+const group =
+  "flex flex-col gap-1 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0";
+const groupRow =
+  "flex flex-row items-center gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0";
 
 const BADGE_PALETTE = ["default", "secondary", "destructive", "outline"] as const;
 
@@ -21,7 +23,7 @@ function tutorialCard(
         $ref: "Card",
         props: {
           className:
-            "flex flex-row items-center justify-between gap-3 ring-0 shadow-none bg-transparent p-0",
+            "flex flex-row items-center justify-between gap-3 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
         },
         children: [
           {
@@ -101,8 +103,8 @@ function hero(layout: "stacked" | "row"): Node {
         props: {
           className:
             layout === "row"
-              ? "flex flex-row items-center gap-3 ring-0 shadow-none bg-transparent p-0"
-              : "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0",
+              ? "flex flex-row items-center gap-3 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0"
+              : "flex flex-col gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
         },
         children: [
           { $ref: "Button", props: { variant: "default", size: "lg", children: "Get started" } },
@@ -128,11 +130,14 @@ function tutorialList(): Node {
 function tutorialGrid(cols: 2 | 3): Node {
   const grid =
     cols === 3
-      ? "grid grid-cols-3 gap-4 ring-0 shadow-none bg-transparent p-0"
-      : "grid grid-cols-2 gap-4 ring-0 shadow-none bg-transparent p-0";
+      ? "grid grid-cols-3 gap-4 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0"
+      : "grid grid-cols-2 gap-4 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0";
   return {
     $ref: "Card",
-    props: { className: "flex flex-col gap-3 ring-0 shadow-none bg-transparent p-0" },
+    props: {
+      className:
+        "flex flex-col gap-3 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+    },
     children: [
       { $ref: "Heading", props: { level: 4, children: "Try these:" } },
       {
@@ -172,7 +177,10 @@ function signupCard(): Node {
       },
       {
         $ref: "Card",
-        props: { className: "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0" },
+        props: {
+          className:
+            "flex flex-col gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+        },
         children: [
           { $ref: "Label", props: { htmlFor: "email", children: "Email" } },
           {
@@ -222,7 +230,10 @@ export function buildSamplePage(): Page {
         viewport: { w: 390, h: 1500 },
         tree: {
           $ref: "Card",
-          props: { className: "flex flex-col gap-6 p-6 ring-0 shadow-none bg-transparent" },
+          props: {
+            className:
+              "flex flex-col gap-6 p-6 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
+          },
           children: [
             hero("stacked"),
             tutorialList(),
@@ -239,7 +250,7 @@ export function buildSamplePage(): Page {
           $ref: "Card",
           props: {
             className:
-              "max-w-6xl mx-auto my-12 flex flex-col gap-8 p-10 ring-0 shadow-none bg-transparent",
+              "max-w-6xl mx-auto my-12 flex flex-col gap-8 p-10 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
           },
           children: [hero("row"), tutorialGrid(3), { $ref: "Separator", props: {} }, signupCard()],
         },
@@ -252,7 +263,7 @@ export function buildSamplePage(): Page {
           $ref: "Card",
           props: {
             className:
-              "max-w-3xl mx-auto my-8 flex flex-col gap-6 p-8 ring-0 shadow-none bg-transparent",
+              "max-w-3xl mx-auto my-8 flex flex-col gap-6 p-8 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
           },
           children: [hero("row"), tutorialGrid(2), { $ref: "Separator", props: {} }, signupCard()],
         },
@@ -298,7 +309,10 @@ function sectionCard(title: string, description: string, body: Node[]): Node {
 function buttonVariantsRow(): Node {
   return {
     $ref: "Card",
-    props: { className: "flex flex-row flex-wrap gap-2 ring-0 shadow-none bg-transparent p-0" },
+    props: {
+      className:
+        "flex flex-row flex-wrap gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+    },
     children: BUTTON_VARIANTS.map((v) => ({
       $ref: "Button",
       props: { variant: v, children: v },
@@ -310,7 +324,8 @@ function buttonSizesRow(): Node {
   return {
     $ref: "Card",
     props: {
-      className: "flex flex-row flex-wrap items-center gap-2 ring-0 shadow-none bg-transparent p-0",
+      className:
+        "flex flex-row flex-wrap items-center gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
     },
     children: BUTTON_SIZES.map((s) => ({
       $ref: "Button",
@@ -322,7 +337,10 @@ function buttonSizesRow(): Node {
 function badgeRow(): Node {
   return {
     $ref: "Card",
-    props: { className: "flex flex-row flex-wrap gap-2 ring-0 shadow-none bg-transparent p-0" },
+    props: {
+      className:
+        "flex flex-row flex-wrap gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+    },
     children: [
       { $ref: "Badge", props: { variant: "default", children: "default" } },
       { $ref: "Badge", props: { variant: "secondary", children: "secondary" } },
@@ -337,11 +355,17 @@ function badgeRow(): Node {
 function inputsBlock(): Node {
   return {
     $ref: "Card",
-    props: { className: "grid grid-cols-2 gap-4 ring-0 shadow-none bg-transparent p-0" },
+    props: {
+      className:
+        "grid grid-cols-2 gap-4 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+    },
     children: [
       {
         $ref: "Card",
-        props: { className: "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0" },
+        props: {
+          className:
+            "flex flex-col gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+        },
         children: [
           { $ref: "Label", props: { htmlFor: "demo-name", children: "Name" } },
           {
@@ -352,7 +376,10 @@ function inputsBlock(): Node {
       },
       {
         $ref: "Card",
-        props: { className: "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0" },
+        props: {
+          className:
+            "flex flex-col gap-2 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+        },
         children: [
           { $ref: "Label", props: { htmlFor: "demo-email", children: "Email" } },
           {
@@ -368,7 +395,10 @@ function inputsBlock(): Node {
 function typographyBlock(): Node {
   return {
     $ref: "Card",
-    props: { className: "flex flex-col gap-3 ring-0 shadow-none bg-transparent p-0" },
+    props: {
+      className:
+        "flex flex-col gap-3 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+    },
     children: [
       { $ref: "Heading", props: { level: 1, children: "Heading level 1" } },
       { $ref: "Heading", props: { level: 2, children: "Heading level 2" } },
@@ -409,7 +439,10 @@ function typographyBlock(): Node {
 function cardLibrary(): Node {
   return {
     $ref: "Card",
-    props: { className: "grid grid-cols-2 gap-4 ring-0 shadow-none bg-transparent p-0" },
+    props: {
+      className:
+        "grid grid-cols-2 gap-4 ring-0 shadow-none bg-transparent rounded-none overflow-visible p-0",
+    },
     children: [
       {
         $ref: "Card",
@@ -491,7 +524,7 @@ export function buildComponentsPage(): Page {
           $ref: "Card",
           props: {
             className:
-              "max-w-5xl mx-auto my-12 flex flex-col gap-8 p-10 ring-0 shadow-none bg-transparent",
+              "max-w-5xl mx-auto my-12 flex flex-col gap-8 p-10 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
           },
           children: [
             {

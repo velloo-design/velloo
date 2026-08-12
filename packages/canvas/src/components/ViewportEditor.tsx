@@ -2,33 +2,77 @@ import { useEffect, useRef, useState } from "react";
 
 interface Props {
   initial: { w: number; h: number };
+  /** Fires on Enter / blur outside the editor — the "final" commit. */
   onCommit(next: { w: number; h: number }): void;
+  /**
+   * Fires (debounced) while the user types, so the variant resizes live.
+   * Callers should be cheap idempotent — this can fire many times per edit.
+   */
+  onChange?(next: { w: number; h: number }): void;
   onCancel(): void;
 }
+
+const LIVE_DEBOUNCE_MS = 150;
 
 /**
  * Tiny inline two-field editor for a viewport. Pops up where the
  * "390 × 844" label used to be. Enter commits, Esc cancels, blur outside
- * the editor commits — blur to the sibling input does not.
+ * the editor commits — blur to the sibling input does not. While typing,
+ * the variant resizes in near real-time via the debounced onChange hook.
  */
-export function ViewportEditor({ initial, onCommit, onCancel }: Props) {
+export function ViewportEditor({ initial, onCommit, onChange, onCancel }: Props) {
   const [w, setW] = useState(String(initial.w));
   const [h, setH] = useState(String(initial.h));
   const rootRef = useRef<HTMLSpanElement>(null);
   const wRef = useRef<HTMLInputElement>(null);
+  const liveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLive = useRef<{ w: number; h: number }>(initial);
 
   useEffect(() => {
     wRef.current?.select();
+    return () => {
+      if (liveTimer.current) clearTimeout(liveTimer.current);
+    };
   }, []);
 
-  const commit = () => {
-    const nextW = Number.parseInt(w, 10);
-    const nextH = Number.parseInt(h, 10);
-    if (Number.isFinite(nextW) && Number.isFinite(nextH) && nextW > 0 && nextH > 0) {
-      onCommit({ w: nextW, h: nextH });
-    } else {
-      onCancel();
+  const parsePair = (): { w: number; h: number } | null => {
+    const nw = Number.parseInt(w, 10);
+    const nh = Number.parseInt(h, 10);
+    if (!Number.isFinite(nw) || !Number.isFinite(nh)) return null;
+    if (nw <= 0 || nh <= 0) return null;
+    return { w: nw, h: nh };
+  };
+
+  const scheduleLive = (next: { w: number; h: number }) => {
+    if (!onChange) return;
+    if (next.w === lastLive.current.w && next.h === lastLive.current.h) return;
+    if (liveTimer.current) clearTimeout(liveTimer.current);
+    liveTimer.current = setTimeout(() => {
+      lastLive.current = next;
+      onChange(next);
+    }, LIVE_DEBOUNCE_MS);
+  };
+
+  const onChangeW = (value: string) => {
+    setW(value);
+    const next = Number.parseInt(value, 10);
+    if (Number.isFinite(next) && next > 0) {
+      scheduleLive({ w: next, h: lastLive.current.h });
     }
+  };
+  const onChangeH = (value: string) => {
+    setH(value);
+    const next = Number.parseInt(value, 10);
+    if (Number.isFinite(next) && next > 0) {
+      scheduleLive({ w: lastLive.current.w, h: next });
+    }
+  };
+
+  const commit = () => {
+    if (liveTimer.current) clearTimeout(liveTimer.current);
+    const parsed = parsePair();
+    if (parsed) onCommit(parsed);
+    else onCancel();
   };
 
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -65,7 +109,7 @@ export function ViewportEditor({ initial, onCommit, onCancel }: Props) {
         type="number"
         min={1}
         value={w}
-        onChange={(e) => setW(e.target.value)}
+        onChange={(e) => onChangeW(e.target.value)}
         onKeyDown={onKey}
         onBlur={onBlur}
         onMouseDown={stopDrag}
@@ -76,7 +120,7 @@ export function ViewportEditor({ initial, onCommit, onCancel }: Props) {
         type="number"
         min={1}
         value={h}
-        onChange={(e) => setH(e.target.value)}
+        onChange={(e) => onChangeH(e.target.value)}
         onKeyDown={onKey}
         onBlur={onBlur}
         onMouseDown={stopDrag}
