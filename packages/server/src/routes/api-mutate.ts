@@ -9,6 +9,7 @@ import {
   removeNode,
   removePage,
   removeVariant,
+  updatePage,
   updateProps,
   updateVariant,
   updateVariants,
@@ -22,6 +23,7 @@ import {
   RemoveNodeBody,
   RemovePageBody,
   RemoveVariantBody,
+  UpdatePageBody,
   UpdatePropsBody,
   UpdateVariantBody,
   UpdateVariantsBody,
@@ -71,6 +73,10 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/remove_page",
     route(RemovePageBody, (a, ctx) => removePage(ctx, a)),
+  );
+  r.post(
+    "/update_page",
+    route(UpdatePageBody, (a, ctx) => updatePage(ctx, a)),
   );
   r.post(
     "/apply_classes",

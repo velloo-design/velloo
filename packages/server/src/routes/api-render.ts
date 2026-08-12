@@ -1,8 +1,9 @@
 import { renderVariant, UnknownComponentError } from "@velloo/renderer";
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
+import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
-export function createRenderRouter(folder: () => DesignFolder): Hono {
+export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit): Hono {
   const r = new Hono();
 
   r.get("/:pageId/:variantId", async (c) => {
@@ -15,7 +16,8 @@ export function createRenderRouter(folder: () => DesignFolder): Hono {
 
     try {
       const dark = c.req.query("mode") === "dark";
-      const { html } = await renderVariant(variant, f.theme, { dark });
+      const snapshotCss = await jit.build();
+      const { html } = await renderVariant(variant, f.theme, { snapshotCss, dark });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
     } catch (err) {
       if (err instanceof UnknownComponentError) {

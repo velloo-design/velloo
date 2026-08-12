@@ -85,6 +85,13 @@ export const RemovePageBody = z.object({
   pageId: z.string().min(1),
 });
 
+export const UpdatePageBody = z.object({
+  pageId: z.string().min(1),
+  patch: z.object({
+    name: z.string().min(1).optional(),
+  }),
+});
+
 export const ApplyClassesBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),

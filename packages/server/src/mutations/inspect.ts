@@ -1,5 +1,5 @@
-import { renderVariant } from "@velloo/renderer";
-import { $, DoAsync, ok, type Result } from "@velloo/result";
+import { renderBody } from "@velloo/renderer";
+import { $, DoAsync, type Result } from "@velloo/result";
 import type { Variant } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
@@ -35,7 +35,7 @@ export async function inspect(
       viewport: variant.viewport,
       tree: node,
     };
-    const { bodyHtml } = await renderVariant(subVariant, ctx.folder.theme);
+    const bodyHtml = renderBody(subVariant);
 
     const className = (node.props?.className ?? "") as string;
     const classes =

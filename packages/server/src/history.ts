@@ -28,7 +28,7 @@ function keyOf(e: HistoryEntry): string {
 export function pushHistory(entry: HistoryEntry): void {
   const stamped: HistoryEntry = { ...entry, ts: Date.now() };
   const top = undoStack[undoStack.length - 1];
-  if (top && top.ts && stamped.ts && stamped.ts - top.ts < COALESCE_WINDOW_MS) {
+  if (top?.ts && stamped.ts && stamped.ts - top.ts < COALESCE_WINDOW_MS) {
     if (keyOf(top) === keyOf(stamped)) {
       // Coalesce: keep the older snapshot (which represents the state *before*
       // the editing session started). Just bump its ts so further writes in

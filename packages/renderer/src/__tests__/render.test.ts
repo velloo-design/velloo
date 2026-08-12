@@ -2,6 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { Theme, Variant } from "@velloo/schema";
 import { renderVariant, themeToCss, UnknownComponentError } from "../index.ts";
 
+// Synthetic CSS so the renderer test stays a pure function test — actual
+// Tailwind compilation is the server's TailwindJit concern.
+const SNAPSHOT_CSS = "/* preflight stub */ .test { color: red; }";
+const opts = { snapshotCss: SNAPSHOT_CSS };
+
 const sampleTheme: Theme = {
   name: "test",
   colors: {
@@ -29,7 +34,7 @@ describe("renderVariant", () => {
       $ref: "Button",
       props: { variant: "default", children: "Click me" },
     });
-    const { html, bodyHtml } = await renderVariant(variant, sampleTheme);
+    const { html, bodyHtml } = await renderVariant(variant, sampleTheme, opts);
     expect(bodyHtml).toContain("Click me");
     expect(bodyHtml).toContain("<button");
     expect(html).toContain("<!doctype html>");
@@ -46,7 +51,7 @@ describe("renderVariant", () => {
         { $ref: "Button", props: { variant: "default", children: "Continue" } },
       ],
     });
-    const { bodyHtml } = await renderVariant(variant, sampleTheme);
+    const { bodyHtml } = await renderVariant(variant, sampleTheme, opts);
     expect(bodyHtml).toContain("Welcome");
     expect(bodyHtml).toContain("<h1");
     expect(bodyHtml).toContain("Get started by setting up your account.");
@@ -54,12 +59,12 @@ describe("renderVariant", () => {
     expect(bodyHtml).toContain("Continue");
   });
 
-  test("inlines the snapshot CSS and theme overrides", async () => {
+  test("inlines the supplied snapshot CSS and theme overrides", async () => {
     const variant = variantWith({ $ref: "Button", props: { children: "x" } });
-    const { html, themeCss } = await renderVariant(variant, sampleTheme);
+    const { html, themeCss } = await renderVariant(variant, sampleTheme, opts);
     expect(html).toContain("<style>");
-    // Tailwind preflight should be in the snapshot CSS.
-    expect(html).toMatch(/preflight|tailwindcss|--tw-/);
+    // Caller-supplied snapshot CSS is inlined verbatim.
+    expect(html).toContain(SNAPSHOT_CSS);
     // Theme override — primary token should land as a CSS variable.
     expect(themeCss).toContain("--color-primary: oklch(0.5 0.2 250);");
     expect(themeCss).toContain("--color-primary-foreground: oklch(0.985 0 0);");
@@ -68,7 +73,9 @@ describe("renderVariant", () => {
 
   test("throws UnknownComponentError on bad $ref", async () => {
     const variant = variantWith({ $ref: "Definitely-Not-A-Component", props: {} });
-    await expect(renderVariant(variant, sampleTheme)).rejects.toBeInstanceOf(UnknownComponentError);
+    await expect(renderVariant(variant, sampleTheme, opts)).rejects.toBeInstanceOf(
+      UnknownComponentError,
+    );
   });
 
   test("annotates every rendered element with data-node-path", async () => {
@@ -80,7 +87,7 @@ describe("renderVariant", () => {
         { $ref: "Button", props: { children: "C" } },
       ],
     });
-    const { bodyHtml } = await renderVariant(variant, sampleTheme);
+    const { bodyHtml } = await renderVariant(variant, sampleTheme, opts);
     // Root path is "" (empty); children get 0, 1, 2.
     expect(bodyHtml).toContain('data-node-path=""');
     expect(bodyHtml).toContain('data-node-path="0"');
@@ -90,7 +97,7 @@ describe("renderVariant", () => {
 
   test("includes the iframe runtime script in the document", async () => {
     const variant = variantWith({ $ref: "Button", props: { children: "x" } });
-    const { html } = await renderVariant(variant, sampleTheme);
+    const { html } = await renderVariant(variant, sampleTheme, opts);
     expect(html).toContain("__velloo_init");
     expect(html).toContain("__velloo-selected");
     expect(html).toContain("data-node-path");

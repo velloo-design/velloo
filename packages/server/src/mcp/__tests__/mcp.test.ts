@@ -259,6 +259,99 @@ describe("MCP server", () => {
     expect(data.pages).toHaveLength(1);
   });
 
+  test("agent manages a page lifecycle: add, rename, list, remove, undo", async () => {
+    // Create a new page.
+    const created = await callTool(mcp.url, sessionId, "add_page", {
+      name: "Pricing",
+    });
+    expect(created.isError).toBeFalsy();
+    const createdPayload = JSON.parse(created.content?.[0]?.text ?? "{}") as {
+      pageId: string;
+      page: { name: string };
+    };
+    expect(createdPayload.pageId).toBe("pricing");
+    expect(createdPayload.page.name).toBe("Pricing");
+
+    // Rename it.
+    const renamed = await callTool(mcp.url, sessionId, "update_page", {
+      pageId: "pricing",
+      patch: { name: "Plans & Pricing" },
+    });
+    expect(renamed.isError).toBeFalsy();
+    const renamedPayload = JSON.parse(renamed.content?.[0]?.text ?? "{}") as {
+      page: { name: string };
+    };
+    expect(renamedPayload.page.name).toBe("Plans & Pricing");
+
+    // list_pages picks up both the original onboarding + the new page.
+    const listed = await callTool(mcp.url, sessionId, "list_pages", {});
+    const ids = (
+      JSON.parse(listed.content?.[0]?.text ?? "{}") as {
+        pages: { id: string; name: string }[];
+      }
+    ).pages.map((p) => p.id);
+    expect(ids).toContain("pricing");
+    expect(ids).toContain("onboarding");
+
+    // Remove the new page.
+    const removed = await callTool(mcp.url, sessionId, "remove_page", {
+      pageId: "pricing",
+    });
+    expect(removed.isError).toBeFalsy();
+    const stillThere = (
+      JSON.parse(
+        (await callTool(mcp.url, sessionId, "list_pages", {})).content?.[0]?.text ?? "{}",
+      ) as {
+        pages: { id: string }[];
+      }
+    ).pages.map((p) => p.id);
+    expect(stillThere).not.toContain("pricing");
+  });
+
+  test("remove_page refuses the last page (LastPage err)", async () => {
+    // The fixture starts with one page; trying to remove it must fail.
+    const r = await callTool(mcp.url, sessionId, "remove_page", {
+      pageId: "onboarding",
+    });
+    expect(r.isError).toBe(true);
+    const error = JSON.parse(r.content?.[0]?.text ?? "{}") as { kind: string };
+    expect(error.kind).toBe("LastPage");
+  });
+
+  test("remove_variant refuses the last variant on a page (LastVariant err)", async () => {
+    const r = await callTool(mcp.url, sessionId, "remove_variant", {
+      pageId: "onboarding",
+      variantId: "mobile",
+    });
+    expect(r.isError).toBe(true);
+    const error = JSON.parse(r.content?.[0]?.text ?? "{}") as { kind: string };
+    expect(error.kind).toBe("LastVariant");
+  });
+
+  test("update_variants applies a bulk patch atomically", async () => {
+    // Add a desktop variant first so we have two to bulk-patch.
+    await callTool(mcp.url, sessionId, "add_variant", {
+      pageId: "onboarding",
+      fromVariantId: "mobile",
+      viewport: { w: 1440, h: 900 },
+      name: "Desktop",
+    });
+
+    const r = await callTool(mcp.url, sessionId, "update_variants", {
+      pageId: "onboarding",
+      patches: [
+        { variantId: "mobile", patch: { position: { x: 0, y: 0 } } },
+        { variantId: "desktop", patch: { position: { x: 500, y: 0 } } },
+      ],
+    });
+    expect(r.isError).toBeFalsy();
+    const payload = JSON.parse(r.content?.[0]?.text ?? "{}") as {
+      variants: { id: string; position?: { x: number; y: number } }[];
+    };
+    expect(payload.variants.find((v) => v.id === "mobile")?.position).toEqual({ x: 0, y: 0 });
+    expect(payload.variants.find((v) => v.id === "desktop")?.position).toEqual({ x: 500, y: 0 });
+  });
+
   test("POST without session and not initialize returns 400", async () => {
     const res = await fetch(mcp.url, {
       method: "POST",

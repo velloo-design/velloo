@@ -28,6 +28,11 @@ import {
   removeVariant as removeVariantImpl,
 } from "./remove-variant.ts";
 import {
+  type UpdatePageArgs,
+  type UpdatePageResult,
+  updatePage as updatePageImpl,
+} from "./update-page.ts";
+import {
   type UpdatePropsArgs,
   type UpdatePropsResult,
   updateProps as updatePropsImpl,
@@ -92,6 +97,12 @@ export function removePage(
 ): Promise<Result<RemovePageResult, MutationError>> {
   return withPageLock(args.pageId, () => removePageImpl(ctx, args));
 }
+export function updatePage(
+  ctx: MutationContext,
+  args: UpdatePageArgs,
+): Promise<Result<UpdatePageResult, MutationError>> {
+  return withPageLock(args.pageId, () => updatePageImpl(ctx, args));
+}
 export function applyClasses(
   ctx: MutationContext,
   args: ApplyClassesArgs,
@@ -139,6 +150,8 @@ export type {
   RemovePageResult,
   RemoveVariantArgs,
   RemoveVariantResult,
+  UpdatePageArgs,
+  UpdatePageResult,
   UpdatePropsArgs,
   UpdatePropsResult,
   UpdateVariantArgs,

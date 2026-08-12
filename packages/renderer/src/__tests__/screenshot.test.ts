@@ -37,7 +37,9 @@ describe.skipIf(!RUN)("screenshot (Playwright)", () => {
 
     const out = join(tmpdir(), `velloo-shot-${Date.now()}.png`);
     try {
-      const { html } = await renderVariant(variant, theme);
+      // Empty snapshotCss — Tailwind classes won't style anything, but the
+      // smoke test only checks that Playwright produced a non-trivial PNG.
+      const { html } = await renderVariant(variant, theme, { snapshotCss: "" });
       await screenshot({ html, viewport: variant.viewport, outPath: out });
       const s = await stat(out);
       expect(s.size).toBeGreaterThan(1000);

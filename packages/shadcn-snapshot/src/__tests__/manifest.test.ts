@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { isKnownComponent, loadCss, loadManifest, registry, snapshotVersion } from "../index.ts";
+import { readFile } from "node:fs/promises";
+import {
+  componentsDir,
+  entryCssPath,
+  isKnownComponent,
+  loadManifest,
+  registry,
+  snapshotVersion,
+} from "../index.ts";
 
 describe("registry", () => {
   test("has the 8 starter components plus Card subcomponents", () => {
@@ -30,10 +38,17 @@ describe("snapshot artifacts", () => {
     expect(snapshotVersion.length).toBeGreaterThan(0);
   });
 
-  test("loadCss returns a non-trivial Tailwind output", async () => {
-    const css = await loadCss();
-    expect(css.length).toBeGreaterThan(1000);
-    expect(css).toMatch(/--tw-|tailwindcss|preflight/);
+  test("entryCssPath points at a real Tailwind entry with the theme block", async () => {
+    const css = await readFile(entryCssPath, "utf8");
+    expect(css).toContain(`@import "tailwindcss"`);
+    expect(css).toContain("@theme");
+    expect(css).toContain("--color-primary");
+  });
+
+  test("componentsDir resolves to a directory containing snapshot sources", async () => {
+    const { readdir } = await import("node:fs/promises");
+    const files = await readdir(componentsDir);
+    expect(files.length).toBeGreaterThan(0);
   });
 
   test("loadManifest returns descriptors for every registry entry", async () => {

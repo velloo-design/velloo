@@ -1,4 +1,4 @@
-import { $, DoAsync, err, ok, type Result } from "@velloo/result";
+import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Variant, VariantPosition, Viewport } from "@velloo/schema";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";

@@ -7,6 +7,7 @@ import { Broadcaster } from "./broadcaster.ts";
 import { type DesignFolder, loadDesignFolder, reloadPage, reloadTheme } from "./design-folder.ts";
 import { createMcpServer } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
+import { TailwindJit } from "./styles/tailwind-jit.ts";
 import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
 
 export interface ServerOptions {
@@ -65,9 +66,18 @@ async function serveSpaFallback(): Promise<Response> {
 export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const folder: DesignFolder = await loadDesignFolder(opts.folder);
   const broadcaster = new Broadcaster();
-  const broadcast = (e: WatchEvent) => broadcaster.broadcast(e);
+  const jit = new TailwindJit(join(folder.root, "pages"));
+  // Any page edit may introduce a new className not in the cached output. Theme
+  // edits don't touch class lists, but we drop the cache anyway for symmetry —
+  // the Tailwind compile is cheap on a warm process.
+  const broadcast = (e: WatchEvent) => {
+    if (e.type === "page-changed" || e.type === "theme-changed") {
+      jit.invalidate();
+    }
+    broadcaster.broadcast(e);
+  };
   const ctx: MutationContext = { folder, broadcast };
-  const app = createApp(() => ctx);
+  const app = createApp(() => ctx, jit);
 
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {
@@ -77,7 +87,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       } else if (event.type === "theme-changed") {
         await reloadTheme(folder);
       }
-      broadcaster.broadcast(event);
+      broadcast(event);
     } catch (err) {
       console.error("velloo: failed to reload after change:", err);
     }
@@ -142,4 +152,5 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 // Re-export key types and helpers for downstream consumers.
 export type { DesignFolder } from "./design-folder.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+export { TailwindJit } from "./styles/tailwind-jit.ts";
 export type { WatchEvent } from "./watcher.ts";

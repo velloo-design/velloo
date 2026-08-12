@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, resolve } from "node:path";
+import { dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { renderVariant, screenshot } from "@velloo/renderer";
 import { PageSchema, ThemeSchema } from "@velloo/schema";
-import { writeText } from "@velloo/server";
+import { TailwindJit, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
 
 export default defineCommand({
@@ -52,7 +52,9 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const { html } = await renderVariant(variant, theme);
+    const jit = new TailwindJit(join(folder, "pages"));
+    const snapshotCss = await jit.build();
+    const { html } = await renderVariant(variant, theme, { snapshotCss });
     const ext = extname(outPath).toLowerCase();
 
     if (ext === ".html") {

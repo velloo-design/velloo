@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createApp } from "../app.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { TailwindJit } from "../styles/tailwind-jit.ts";
 
 const sampleConfig = {
   schemaVersion: 1,
@@ -40,6 +41,7 @@ const samplePage = {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
+let jit: TailwindJit;
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -55,6 +57,7 @@ beforeEach(async () => {
   await writeJson(join(tmp, "pages/onboarding.json"), samplePage);
   folder = await loadDesignFolder(tmp);
   ctx = { folder, broadcast: () => {} };
+  jit = new TailwindJit(join(tmp, "pages"));
 });
 
 afterEach(async () => {
@@ -63,14 +66,14 @@ afterEach(async () => {
 
 describe("api routes", () => {
   test("/api/health returns ok", async () => {
-    const app = createApp(() => ctx);
+    const app = createApp(() => ctx, jit);
     const res = await app.request("/api/health");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
 
   test("/api/design returns the folder summary", async () => {
-    const app = createApp(() => ctx);
+    const app = createApp(() => ctx, jit);
     const res = await app.request("/api/design");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -82,7 +85,7 @@ describe("api routes", () => {
   });
 
   test("/api/page/:id returns the full page", async () => {
-    const app = createApp(() => ctx);
+    const app = createApp(() => ctx, jit);
     const res = await app.request("/api/page/onboarding");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { name: string };
@@ -90,13 +93,13 @@ describe("api routes", () => {
   });
 
   test("/api/page/:id 404s on missing", async () => {
-    const app = createApp(() => ctx);
+    const app = createApp(() => ctx, jit);
     const res = await app.request("/api/page/does-not-exist");
     expect(res.status).toBe(404);
   });
 
   test("/api/render/:pageId/:variantId returns HTML", async () => {
-    const app = createApp(() => ctx);
+    const app = createApp(() => ctx, jit);
     const res = await app.request("/api/render/onboarding/mobile");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
@@ -107,13 +110,13 @@ describe("api routes", () => {
   });
 
   test("/api/render 404s on bad pageId", async () => {
-    const app = createApp(() => ctx);
+    const app = createApp(() => ctx, jit);
     const res = await app.request("/api/render/missing/mobile");
     expect(res.status).toBe(404);
   });
 
   test("/api/render 404s on bad variantId", async () => {
-    const app = createApp(() => ctx);
+    const app = createApp(() => ctx, jit);
     const res = await app.request("/api/render/onboarding/desktop");
     expect(res.status).toBe(404);
   });

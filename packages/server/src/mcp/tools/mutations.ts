@@ -3,14 +3,19 @@ import type { Result } from "@velloo/result";
 import { z } from "zod";
 import {
   addNode,
+  addPage,
   addVariant,
   applyClasses,
   type MutationContext,
   type MutationError,
   moveNode,
   removeNode,
+  removePage,
+  removeVariant,
+  updatePage,
   updateProps,
   updateVariant,
+  updateVariants,
 } from "../../mutations/index.ts";
 
 type McpResult = {
@@ -144,5 +149,92 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       },
     },
     async (args) => toMcp(await applyClasses(ctx, args)),
+  );
+
+  // --- Page lifecycle ----------------------------------------------------
+
+  mcp.registerTool(
+    "add_page",
+    {
+      description:
+        "Create a new empty page with a single mobile-sized variant. Page id is derived from the name (slugified); pass `id` to override. Returns { pageId, page }.",
+      inputSchema: {
+        name: z.string(),
+        id: z.string().optional(),
+        viewport: z
+          .object({ w: z.number().int().positive(), h: z.number().int().positive() })
+          .optional(),
+      },
+    },
+    async (args) => toMcp(await addPage(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_page",
+    {
+      description:
+        "Update page-level metadata. Today only the display name is patchable; the page id stays stable so existing references survive a rename.",
+      inputSchema: {
+        pageId: z.string(),
+        patch: z.object({ name: z.string().optional() }),
+      },
+    },
+    async (args) => toMcp(await updatePage(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "remove_page",
+    {
+      description:
+        "Delete a page from disk and the in-memory cache. Refuses to remove the last page (every design needs at least one). Undoable via /api/undo (canvas ⌘Z).",
+      inputSchema: { pageId: z.string() },
+    },
+    async (args) => toMcp(await removePage(ctx, args)),
+  );
+
+  // --- Variant lifecycle (the missing pair under add_variant / update_variant) -
+
+  mcp.registerTool(
+    "remove_variant",
+    {
+      description:
+        "Drop a variant from a page. Refuses to remove the last variant — a page must keep at least one renderable variant; delete the page instead.",
+      inputSchema: {
+        pageId: z.string(),
+        variantId: z.string(),
+      },
+    },
+    async (args) => toMcp(await removeVariant(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_variants",
+    {
+      description:
+        "Atomic bulk variant update — applies every patch in one persist + one broadcast + one history entry. Use this instead of N successive update_variant calls when laying out / repositioning multiple variants together so undo reverts the whole batch.",
+      inputSchema: {
+        pageId: z.string(),
+        patches: z
+          .array(
+            z.object({
+              variantId: z.string(),
+              patch: z.object({
+                name: z.string().optional(),
+                viewport: z
+                  .object({
+                    w: z.number().int().positive(),
+                    h: z.number().int().positive(),
+                  })
+                  .optional(),
+                position: z
+                  .union([z.object({ x: z.number(), y: z.number() }), z.null()])
+                  .optional(),
+              }),
+            }),
+          )
+          .min(1),
+      },
+    },
+    async (args) => toMcp(await updateVariants(ctx, args)),
   );
 }

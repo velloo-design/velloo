@@ -28,23 +28,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const distDir = join(here, "dist");
 const componentsDir = join(here, "src", "components");
 
-async function buildCss(): Promise<void> {
-  const entry = join(here, "src", "tailwind-entry.css");
-  const out = join(distDir, "styles.css");
-  await mkdir(distDir, { recursive: true });
-
-  const proc = Bun.spawn(["bun", "x", "@tailwindcss/cli", "-i", entry, "-o", out, "--minify"], {
-    stdout: "inherit",
-    stderr: "inherit",
-    cwd: here,
-  });
-  const code = await proc.exited;
-  if (code !== 0) {
-    throw new Error(`tailwindcss build failed (exit ${code})`);
-  }
-  console.log(`✓ wrote ${out}`);
-}
-
 function categorize(
   filePath: string,
   id: string,
@@ -291,5 +274,4 @@ async function buildManifest(): Promise<void> {
   console.log(`✓ wrote ${out} (${components.length} components)`);
 }
 
-await buildCss();
 await buildManifest();
