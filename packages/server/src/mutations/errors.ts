@@ -1,34 +1,58 @@
-export type MutationErrorCode =
-  | "INVALID_PATH"
-  | "UNKNOWN_COMPONENT"
-  | "INVALID_PROPS"
-  | "LOCKED_VERSION_MISMATCH"
-  | "RENDER_ERROR"
-  | "PAGE_NOT_FOUND"
-  | "VARIANT_NOT_FOUND";
+/**
+ * Mutation failure modes as a discriminated union (kind-keyed). Pair with
+ * Result<T, MutationError> across the layer; consumers `switch (error.kind)`
+ * with a `const _: never = error` exhaustiveness guard so a new variant
+ * breaks the build at every call site that doesn't handle it.
+ */
+export type MutationError =
+  | { kind: "PageNotFound"; pageId: string }
+  | { kind: "VariantNotFound"; pageId: string; variantId: string }
+  | { kind: "UnknownComponent"; ref: string; suggestions: string[] }
+  | { kind: "InvalidPath"; reason: string; path?: number[] }
+  | { kind: "InvalidMove"; reason: string }
+  | { kind: "LastPage"; pageId: string }
+  | { kind: "LastVariant"; pageId: string }
+  | { kind: "VariantIdConflict"; pageId: string; id: string }
+  | { kind: "PageIdExhausted"; base: string };
 
-export interface MutationErrorPayload {
-  code: MutationErrorCode;
-  message: string;
-  /** Path that triggered the error, when relevant. */
-  path?: number[];
-  /** Component ref that triggered the error. */
-  ref?: string;
-  /** Closest matches by Levenshtein for UNKNOWN_COMPONENT. */
-  suggestions?: string[];
-  /** Schema for INVALID_PROPS — currently the raw type strings from the manifest. */
-  schema?: Record<string, string>;
-}
-
-export class MutationError extends Error {
-  readonly payload: MutationErrorPayload;
-
-  constructor(payload: MutationErrorPayload) {
-    super(payload.message);
-    this.name = "MutationError";
-    this.payload = payload;
-  }
-}
+// Constructor helpers — keep mutation bodies readable.
+export const pageNotFound = (pageId: string): MutationError => ({
+  kind: "PageNotFound",
+  pageId,
+});
+export const variantNotFound = (pageId: string, variantId: string): MutationError => ({
+  kind: "VariantNotFound",
+  pageId,
+  variantId,
+});
+export const unknownComponent = (ref: string, suggestions: string[]): MutationError => ({
+  kind: "UnknownComponent",
+  ref,
+  suggestions,
+});
+export const invalidPath = (reason: string, path?: number[]): MutationError => ({
+  kind: "InvalidPath",
+  reason,
+  ...(path !== undefined ? { path } : {}),
+});
+export const invalidMove = (reason: string): MutationError => ({
+  kind: "InvalidMove",
+  reason,
+});
+export const lastPage = (pageId: string): MutationError => ({ kind: "LastPage", pageId });
+export const lastVariant = (pageId: string): MutationError => ({
+  kind: "LastVariant",
+  pageId,
+});
+export const variantIdConflict = (pageId: string, id: string): MutationError => ({
+  kind: "VariantIdConflict",
+  pageId,
+  id,
+});
+export const pageIdExhausted = (base: string): MutationError => ({
+  kind: "PageIdExhausted",
+  base,
+});
 
 /**
  * Levenshtein distance for ranking nearest component names. Tiny implementation;

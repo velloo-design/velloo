@@ -1,7 +1,8 @@
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
-import { MutationError } from "./errors.ts";
-import { getPageOrThrow } from "./lookup.ts";
+import { lastVariant, type MutationError, variantNotFound } from "./errors.ts";
+import { getPage } from "./lookup.ts";
 import { persistPage } from "./persist.ts";
 
 export interface RemoveVariantArgs {
@@ -20,27 +21,19 @@ export interface RemoveVariantResult {
 export async function removeVariant(
   ctx: MutationContext,
   args: RemoveVariantArgs,
-): Promise<RemoveVariantResult> {
-  const page = getPageOrThrow(ctx, args.pageId);
-  const idx = page.variants.findIndex((v) => v.id === args.variantId);
-  if (idx === -1) {
-    throw new MutationError({
-      code: "VARIANT_NOT_FOUND",
-      message: `Variant not found: ${JSON.stringify(args.variantId)}`,
-    });
-  }
-  if (page.variants.length <= 1) {
-    throw new MutationError({
-      code: "INVALID_PATH",
-      message: "A page must keep at least one variant. Delete the page instead.",
-    });
-  }
+): Promise<Result<RemoveVariantResult, MutationError>> {
+  return DoAsync<RemoveVariantResult, MutationError>(async function* () {
+    const page = yield* $(getPage(ctx, args.pageId));
+    const idx = page.variants.findIndex((v) => v.id === args.variantId);
+    if (idx === -1) return yield* $(err(variantNotFound(args.pageId, args.variantId)));
+    if (page.variants.length <= 1) return yield* $(err(lastVariant(args.pageId)));
 
-  const next = clonePage(page);
-  next.variants.splice(idx, 1);
+    const next = clonePage(page);
+    next.variants.splice(idx, 1);
 
-  await persistPage(ctx.folder, args.pageId, next);
-  ctx.broadcast({ type: "page-changed", pageId: args.pageId });
+    await persistPage(ctx.folder, args.pageId, next);
+    ctx.broadcast({ type: "page-changed", pageId: args.pageId });
 
-  return { removedVariantId: args.variantId };
+    return { removedVariantId: args.variantId };
+  });
 }

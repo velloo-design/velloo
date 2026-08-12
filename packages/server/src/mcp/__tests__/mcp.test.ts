@@ -214,9 +214,9 @@ describe("MCP server", () => {
     });
     expect(r.isError).toBe(true);
     const text = r.content?.[0]?.text ?? "";
-    const payload = JSON.parse(text) as { code: string; suggestions?: string[] };
-    expect(payload.code).toBe("UNKNOWN_COMPONENT");
-    expect(payload.suggestions).toContain("Button");
+    const error = JSON.parse(text) as { kind: string; suggestions?: string[] };
+    expect(error.kind).toBe("UnknownComponent");
+    expect(error.suggestions).toContain("Button");
   });
 
   test("apply_preset switches the theme and persists", async () => {

@@ -1,8 +1,9 @@
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import type { Variant, VariantPosition, Viewport } from "@velloo/schema";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
-import { MutationError } from "./errors.ts";
-import { getPageOrThrow } from "./lookup.ts";
+import { type MutationError, variantNotFound } from "./errors.ts";
+import { getPage } from "./lookup.ts";
 import { persistPage } from "./persist.ts";
 
 export interface UpdateVariantsArgs {
@@ -31,28 +32,25 @@ export interface UpdateVariantsResult {
 export async function updateVariants(
   ctx: MutationContext,
   args: UpdateVariantsArgs,
-): Promise<UpdateVariantsResult> {
-  const page = getPageOrThrow(ctx, args.pageId);
-  const next = clonePage(page);
+): Promise<Result<UpdateVariantsResult, MutationError>> {
+  return DoAsync<UpdateVariantsResult, MutationError>(async function* () {
+    const page = yield* $(getPage(ctx, args.pageId));
+    const next = clonePage(page);
 
-  for (const { variantId, patch } of args.patches) {
-    const idx = next.variants.findIndex((v) => v.id === variantId);
-    if (idx === -1) {
-      throw new MutationError({
-        code: "VARIANT_NOT_FOUND",
-        message: `Variant not found: ${JSON.stringify(variantId)}`,
-      });
+    for (const { variantId, patch } of args.patches) {
+      const idx = next.variants.findIndex((v) => v.id === variantId);
+      if (idx === -1) return yield* $(err(variantNotFound(args.pageId, variantId)));
+      const v = next.variants[idx] as Variant;
+      if (patch.name !== undefined) v.name = patch.name;
+      if (patch.viewport !== undefined) v.viewport = patch.viewport;
+      if (patch.position !== undefined) {
+        if (patch.position === null) delete v.position;
+        else v.position = patch.position;
+      }
     }
-    const v = next.variants[idx] as Variant;
-    if (patch.name !== undefined) v.name = patch.name;
-    if (patch.viewport !== undefined) v.viewport = patch.viewport;
-    if (patch.position !== undefined) {
-      if (patch.position === null) delete v.position;
-      else v.position = patch.position;
-    }
-  }
 
-  await persistPage(ctx.folder, args.pageId, next);
-  ctx.broadcast({ type: "page-changed", pageId: args.pageId });
-  return { variants: next.variants };
+    await persistPage(ctx.folder, args.pageId, next);
+    ctx.broadcast({ type: "page-changed", pageId: args.pageId });
+    return { variants: next.variants };
+  });
 }

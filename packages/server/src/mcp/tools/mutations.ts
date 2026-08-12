@@ -1,29 +1,34 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Result } from "@velloo/result";
 import { z } from "zod";
 import {
   addNode,
   addVariant,
   applyClasses,
   type MutationContext,
-  MutationError,
+  type MutationError,
   moveNode,
   removeNode,
   updateProps,
   updateVariant,
 } from "../../mutations/index.ts";
 
-function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
+type McpResult = {
+  content: { type: "text"; text: string }[];
+  isError?: true;
+};
+
+function jsonResult(value: unknown): McpResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
 }
 
-function errorResult(err: unknown): {
-  isError: true;
-  content: { type: "text"; text: string }[];
-} {
-  if (err instanceof MutationError) {
-    return { isError: true, content: [{ type: "text", text: JSON.stringify(err.payload) }] };
-  }
-  return { isError: true, content: [{ type: "text", text: String(err) }] };
+function mutationErrorResult(error: MutationError): McpResult {
+  return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
+}
+
+/** Convert a mutation Result to an MCP tool response. */
+function toMcp<T>(result: Result<T, MutationError>): McpResult {
+  return result.ok ? jsonResult(result.value) : mutationErrorResult(result.error);
 }
 
 const PathSchema = z
@@ -45,14 +50,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         index: z.number().int().nonnegative().optional(),
       },
     },
-    async (args) => {
-      try {
-        const r = await addNode(ctx, args as never);
-        return jsonResult(r);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await addNode(ctx, args as never)),
   );
 
   mcp.registerTool(
@@ -66,13 +64,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         propPatch: z.record(z.string(), z.unknown()),
       },
     },
-    async (args) => {
-      try {
-        return jsonResult(await updateProps(ctx, args));
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await updateProps(ctx, args)),
   );
 
   mcp.registerTool(
@@ -85,13 +77,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         path: PathSchema,
       },
     },
-    async (args) => {
-      try {
-        return jsonResult(await removeNode(ctx, args));
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await removeNode(ctx, args)),
   );
 
   mcp.registerTool(
@@ -107,13 +93,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         toIndex: z.number().int().nonnegative().optional(),
       },
     },
-    async (args) => {
-      try {
-        return jsonResult(await moveNode(ctx, args));
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await moveNode(ctx, args)),
   );
 
   mcp.registerTool(
@@ -129,13 +109,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         id: z.string().optional(),
       },
     },
-    async (args) => {
-      try {
-        return jsonResult(await addVariant(ctx, args));
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await addVariant(ctx, args)),
   );
 
   mcp.registerTool(
@@ -155,13 +129,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         }),
       },
     },
-    async (args) => {
-      try {
-        return jsonResult(await updateVariant(ctx, args));
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await updateVariant(ctx, args)),
   );
 
   mcp.registerTool(
@@ -175,12 +143,6 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         classes: z.string(),
       },
     },
-    async (args) => {
-      try {
-        return jsonResult(await applyClasses(ctx, args));
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
+    async (args) => toMcp(await applyClasses(ctx, args)),
   );
 }

@@ -1,0 +1,10 @@
+{
+  "name": "@velloo/result",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight Result<T, E> with typed discriminated-union errors and generator do-notation",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

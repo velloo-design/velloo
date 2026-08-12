@@ -12,6 +12,7 @@
     "@velloo/canvas": "workspace:*",
     "@velloo/codegen": "workspace:*",
     "@velloo/renderer": "workspace:*",
+    "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*",
     "culori": "4.0.2",

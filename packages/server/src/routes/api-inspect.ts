@@ -1,6 +1,7 @@
 import { Hono } from "hono";
-import { inspect, type MutationContext, MutationError } from "../mutations/index.ts";
+import { inspect, type MutationContext } from "../mutations/index.ts";
 import { pathFromString } from "../path.ts";
+import { mutationToHttp } from "./mutation-http.ts";
 
 export function createInspectRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
@@ -10,17 +11,12 @@ export function createInspectRouter(ctxFor: () => MutationContext): Hono {
     const pageId = c.req.param("pageId");
     const variantId = c.req.param("variantId");
     const rawPath = c.req.param("path") ?? "";
-    try {
-      const result = await inspect(ctxFor(), {
-        pageId,
-        variantId,
-        path: pathFromString(rawPath),
-      });
-      return c.json(result);
-    } catch (err) {
-      if (err instanceof MutationError) return c.json({ error: err.payload }, 400);
-      throw err;
-    }
+    const result = await inspect(ctxFor(), {
+      pageId,
+      variantId,
+      path: pathFromString(rawPath),
+    });
+    return result.ok ? c.json(result.value) : mutationToHttp(c, result.error);
   });
 
   return r;

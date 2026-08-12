@@ -1,4 +1,6 @@
+import type { Result } from "@velloo/result";
 import type { MutationContext } from "./context.ts";
+import type { MutationError } from "./errors.ts";
 import { type UpdatePropsResult, updateProps } from "./update-props.ts";
 
 export interface ApplyClassesArgs {
@@ -12,7 +14,7 @@ export interface ApplyClassesArgs {
 export async function applyClasses(
   ctx: MutationContext,
   args: ApplyClassesArgs,
-): Promise<UpdatePropsResult> {
+): Promise<Result<UpdatePropsResult, MutationError>> {
   const className = args.classes.trim();
   return updateProps(ctx, {
     pageId: args.pageId,

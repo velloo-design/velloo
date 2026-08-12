@@ -9,12 +9,5 @@
     "emitDeclarationOnly": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*"],
-  "references": [
-    { "path": "../result" },
-    { "path": "../schema" },
-    { "path": "../shadcn-snapshot" },
-    { "path": "../renderer" },
-    { "path": "../codegen" }
-  ]
+  "include": ["src/**/*"]
 }

@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { inspect, type MutationContext, MutationError } from "../../mutations/index.ts";
+import { inspect, type MutationContext } from "../../mutations/index.ts";
 
 const PathSchema = z.array(z.number().int().nonnegative());
 
@@ -17,18 +17,14 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
       },
     },
     async (args) => {
-      try {
-        const r = await inspect(ctx, args);
-        return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }] };
-      } catch (err) {
-        if (err instanceof MutationError) {
-          return {
-            isError: true,
-            content: [{ type: "text", text: JSON.stringify(err.payload) }],
-          };
-        }
-        return { isError: true, content: [{ type: "text", text: String(err) }] };
+      const result = await inspect(ctx, args);
+      if (result.ok) {
+        return { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] };
       }
+      return {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify(result.error) }],
+      };
     },
   );
 }

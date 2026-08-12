@@ -79,6 +79,10 @@
         "playwright": "1.59.1",
       },
     },
+    "packages/result": {
+      "name": "@velloo/result",
+      "version": "0.1.0",
+    },
     "packages/schema": {
       "name": "@velloo/schema",
       "version": "0.1.0",
@@ -94,6 +98,7 @@
         "@velloo/canvas": "workspace:*",
         "@velloo/codegen": "workspace:*",
         "@velloo/renderer": "workspace:*",
+        "@velloo/result": "workspace:*",
         "@velloo/schema": "workspace:*",
         "@velloo/shadcn-snapshot": "workspace:*",
         "culori": "4.0.2",
@@ -434,6 +439,8 @@
     "@velloo/codegen": ["@velloo/codegen@workspace:packages/codegen"],
 
     "@velloo/renderer": ["@velloo/renderer@workspace:packages/renderer"],
+
+    "@velloo/result": ["@velloo/result@workspace:packages/result"],
 
     "@velloo/schema": ["@velloo/schema@workspace:packages/schema"],
 

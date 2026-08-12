@@ -1,6 +1,7 @@
+import { err, ok, type Result } from "@velloo/result";
 import type { Page } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
-import { MutationError } from "./errors.ts";
+import { type MutationError, pageIdExhausted } from "./errors.ts";
 import { persistPage } from "./persist.ts";
 
 export interface AddPageArgs {
@@ -28,19 +29,17 @@ function slugify(s: string): string {
 }
 
 /** Create a new page with a single bare Card variant. */
-export async function addPage(ctx: MutationContext, args: AddPageArgs): Promise<AddPageResult> {
+export async function addPage(
+  ctx: MutationContext,
+  args: AddPageArgs,
+): Promise<Result<AddPageResult, MutationError>> {
   const baseId = args.id ?? slugify(args.name);
   // Pick a unique id by appending -2, -3, ... if needed.
   let pageId = baseId;
   let attempt = 2;
   while (ctx.folder.pages.has(pageId)) {
     pageId = `${baseId}-${attempt++}`;
-    if (attempt > 100) {
-      throw new MutationError({
-        code: "INVALID_PATH",
-        message: "Could not find a unique page id",
-      });
-    }
+    if (attempt > 100) return err(pageIdExhausted(baseId));
   }
 
   const viewport = args.viewport ?? { w: 390, h: 844 };
@@ -58,5 +57,5 @@ export async function addPage(ctx: MutationContext, args: AddPageArgs): Promise<
 
   await persistPage(ctx.folder, pageId, page);
   ctx.broadcast({ type: "page-changed", pageId });
-  return { pageId, page };
+  return ok({ pageId, page });
 }

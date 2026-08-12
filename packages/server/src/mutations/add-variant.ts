@@ -1,8 +1,9 @@
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import type { Variant } from "@velloo/schema";
 import { clonePage, cloneVariant } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
-import { MutationError } from "./errors.ts";
-import { getPageOrThrow } from "./lookup.ts";
+import { type MutationError, variantIdConflict, variantNotFound } from "./errors.ts";
+import { getPage } from "./lookup.ts";
 import { persistPage } from "./persist.ts";
 
 export interface AddVariantArgs {
@@ -30,42 +31,36 @@ function slugify(s: string): string {
 export async function addVariant(
   ctx: MutationContext,
   args: AddVariantArgs,
-): Promise<AddVariantResult> {
-  const page = getPageOrThrow(ctx, args.pageId);
-  const next = clonePage(page);
+): Promise<Result<AddVariantResult, MutationError>> {
+  return DoAsync<AddVariantResult, MutationError>(async function* () {
+    const page = yield* $(getPage(ctx, args.pageId));
+    const next = clonePage(page);
 
-  const id = args.id ?? (slugify(args.name) || `variant-${next.variants.length + 1}`);
-  if (next.variants.some((v) => v.id === id)) {
-    throw new MutationError({
-      code: "INVALID_PATH",
-      message: `Variant id already exists: ${JSON.stringify(id)}`,
-    });
-  }
-
-  let tree: Variant["tree"];
-  if (args.fromVariantId) {
-    const src = next.variants.find((v) => v.id === args.fromVariantId);
-    if (!src) {
-      throw new MutationError({
-        code: "VARIANT_NOT_FOUND",
-        message: `fromVariantId not found: ${JSON.stringify(args.fromVariantId)}`,
-      });
+    const id = args.id ?? (slugify(args.name) || `variant-${next.variants.length + 1}`);
+    if (next.variants.some((v) => v.id === id)) {
+      return yield* $(err(variantIdConflict(args.pageId, id)));
     }
-    tree = cloneVariant(src).tree;
-  } else {
-    tree = { $ref: "Card", props: { className: "p-6" } };
-  }
 
-  const variant: Variant = {
-    id,
-    name: args.name,
-    viewport: args.viewport,
-    tree,
-  };
-  next.variants.push(variant);
+    let tree: Variant["tree"];
+    if (args.fromVariantId) {
+      const src = next.variants.find((v) => v.id === args.fromVariantId);
+      if (!src) return yield* $(err(variantNotFound(args.pageId, args.fromVariantId)));
+      tree = cloneVariant(src).tree;
+    } else {
+      tree = { $ref: "Card", props: { className: "p-6" } };
+    }
 
-  await persistPage(ctx.folder, args.pageId, next);
-  ctx.broadcast({ type: "page-changed", pageId: args.pageId });
+    const variant: Variant = {
+      id,
+      name: args.name,
+      viewport: args.viewport,
+      tree,
+    };
+    next.variants.push(variant);
 
-  return { variant };
+    await persistPage(ctx.folder, args.pageId, next);
+    ctx.broadcast({ type: "page-changed", pageId: args.pageId });
+
+    return { variant };
+  });
 }

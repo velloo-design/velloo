@@ -2,15 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Result } from "@velloo/result";
 import type { Page } from "@velloo/schema";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
+import type { WatchEvent } from "../../watcher.ts";
 import {
   addNode,
   addVariant,
   applyClasses,
   inspect,
   type MutationContext,
-  MutationError,
+  type MutationError,
   moveNode,
   removeNode,
   updateProps,
@@ -56,9 +58,6 @@ const samplePage: Page = {
 
 let tmp: string;
 let folder: DesignFolder;
-
-import type { WatchEvent } from "../../watcher.ts";
-
 let broadcasts: WatchEvent[];
 let ctx: MutationContext;
 
@@ -69,6 +68,24 @@ async function writeJson(path: string, value: unknown) {
 async function readPage(): Promise<Page> {
   const raw = await readFile(join(tmp, "pages/onboarding.json"), "utf8");
   return JSON.parse(raw) as Page;
+}
+
+/** Unwrap an ok-Result or fail the test. */
+function expectOk<T>(r: Result<T, MutationError>): T {
+  if (!r.ok) throw new Error(`expected ok, got: ${JSON.stringify(r.error)}`);
+  return r.value;
+}
+
+/** Assert the result is an err with a specific kind, return the narrowed error. */
+function expectErr<K extends MutationError["kind"]>(
+  r: Result<unknown, MutationError>,
+  kind: K,
+): Extract<MutationError, { kind: K }> {
+  if (r.ok) throw new Error(`expected err of kind ${kind}, got ok`);
+  if (r.error.kind !== kind) {
+    throw new Error(`expected err.kind=${kind}, got ${r.error.kind}: ${JSON.stringify(r.error)}`);
+  }
+  return r.error as Extract<MutationError, { kind: K }>;
 }
 
 beforeEach(async () => {
@@ -95,13 +112,15 @@ afterEach(async () => {
 
 describe("addNode", () => {
   test("appends a child to the root", async () => {
-    const r = await addNode(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      parentPath: [],
-      componentRef: "Button",
-      props: { children: "Click" },
-    });
+    const r = expectOk(
+      await addNode(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        parentPath: [],
+        componentRef: "Button",
+        props: { children: "Click" },
+      }),
+    );
     expect(r.path).toEqual([2]);
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.children).toHaveLength(3);
@@ -110,55 +129,55 @@ describe("addNode", () => {
   });
 
   test("inserts at index", async () => {
-    const r = await addNode(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      parentPath: [],
-      componentRef: "Badge",
-      index: 1,
-    });
+    const r = expectOk(
+      await addNode(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        parentPath: [],
+        componentRef: "Badge",
+        index: 1,
+      }),
+    );
     expect(r.path).toEqual([1]);
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.children?.[1]?.$ref).toBe("Badge");
   });
 
   test("rejects unknown component with suggestions", async () => {
-    let err: MutationError | null = null;
-    try {
+    const error = expectErr(
       await addNode(ctx, {
         pageId: "onboarding",
         variantId: "mobile",
         parentPath: [],
         componentRef: "Buttn", // typo
-      });
-    } catch (e) {
-      err = e as MutationError;
-    }
-    expect(err).toBeInstanceOf(MutationError);
-    expect(err?.payload.code).toBe("UNKNOWN_COMPONENT");
-    expect(err?.payload.suggestions).toContain("Button");
+      }),
+      "UnknownComponent",
+    );
+    expect(error.suggestions).toContain("Button");
   });
 
   test("rejects out-of-range parentPath", async () => {
-    await expect(
-      addNode(ctx, {
-        pageId: "onboarding",
-        variantId: "mobile",
-        parentPath: [99],
-        componentRef: "Button",
-      }),
-    ).rejects.toBeInstanceOf(MutationError);
+    const r = await addNode(ctx, {
+      pageId: "onboarding",
+      variantId: "mobile",
+      parentPath: [99],
+      componentRef: "Button",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("InvalidPath");
   });
 });
 
 describe("updateProps", () => {
   test("merges props and persists", async () => {
-    const r = await updateProps(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      path: [0],
-      propPatch: { level: 2, children: "Hi" },
-    });
+    const r = expectOk(
+      await updateProps(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [0],
+        propPatch: { level: 2, children: "Hi" },
+      }),
+    );
     expect(r.path).toEqual([0]);
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.children?.[0]?.props).toEqual({
@@ -168,12 +187,14 @@ describe("updateProps", () => {
   });
 
   test("null in patch removes the key", async () => {
-    await updateProps(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      path: [0],
-      propPatch: { children: null },
-    });
+    expectOk(
+      await updateProps(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [0],
+        propPatch: { children: null },
+      }),
+    );
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.children?.[0]?.props).toEqual({ level: 1 });
   });
@@ -181,11 +202,13 @@ describe("updateProps", () => {
 
 describe("removeNode", () => {
   test("removes a leaf and persists", async () => {
-    const r = await removeNode(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      path: [0],
-    });
+    const r = expectOk(
+      await removeNode(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [0],
+      }),
+    );
     expect(r.removedRef).toBe("Heading");
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.children).toHaveLength(1);
@@ -193,21 +216,24 @@ describe("removeNode", () => {
   });
 
   test("refuses to remove the root", async () => {
-    await expect(
-      removeNode(ctx, { pageId: "onboarding", variantId: "mobile", path: [] }),
-    ).rejects.toBeInstanceOf(MutationError);
+    expectErr(
+      await removeNode(ctx, { pageId: "onboarding", variantId: "mobile", path: [] }),
+      "InvalidPath",
+    );
   });
 });
 
 describe("moveNode", () => {
   test("reorders within the same parent", async () => {
-    const r = await moveNode(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      fromPath: [0],
-      toParent: [],
-      toIndex: 2,
-    });
+    const r = expectOk(
+      await moveNode(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        fromPath: [0],
+        toParent: [],
+        toIndex: 2,
+      }),
+    );
     expect(r.newPath).toEqual([1]); // splice-and-reinsert lands at end (index = length-1 after removal)
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.children?.[0]?.$ref).toBe("Text");
@@ -215,25 +241,28 @@ describe("moveNode", () => {
   });
 
   test("refuses to move into self", async () => {
-    await expect(
-      moveNode(ctx, {
+    expectErr(
+      await moveNode(ctx, {
         pageId: "onboarding",
         variantId: "mobile",
         fromPath: [],
         toParent: [],
       }),
-    ).rejects.toBeInstanceOf(MutationError);
+      "InvalidMove",
+    );
   });
 });
 
 describe("addVariant", () => {
   test("clones from existing variant", async () => {
-    const r = await addVariant(ctx, {
-      pageId: "onboarding",
-      fromVariantId: "mobile",
-      viewport: { w: 1440, h: 900 },
-      name: "Desktop",
-    });
+    const r = expectOk(
+      await addVariant(ctx, {
+        pageId: "onboarding",
+        fromVariantId: "mobile",
+        viewport: { w: 1440, h: 900 },
+        name: "Desktop",
+      }),
+    );
     expect(r.variant.id).toBe("desktop");
     const onDisk = await readPage();
     expect(onDisk.variants).toHaveLength(2);
@@ -241,11 +270,13 @@ describe("addVariant", () => {
   });
 
   test("starts from a bare Card when no source", async () => {
-    const r = await addVariant(ctx, {
-      pageId: "onboarding",
-      viewport: { w: 768, h: 1024 },
-      name: "Tablet",
-    });
+    const r = expectOk(
+      await addVariant(ctx, {
+        pageId: "onboarding",
+        viewport: { w: 768, h: 1024 },
+        name: "Tablet",
+      }),
+    );
     expect(r.variant.id).toBe("tablet");
     expect(r.variant.tree.$ref).toBe("Card");
     expect(r.variant.tree.children ?? []).toHaveLength(0);
@@ -254,23 +285,27 @@ describe("addVariant", () => {
 
 describe("applyClasses", () => {
   test("replaces className on a node", async () => {
-    await applyClasses(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      path: [],
-      classes: "p-12 max-w-xl mx-auto",
-    });
+    expectOk(
+      await applyClasses(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [],
+        classes: "p-12 max-w-xl mx-auto",
+      }),
+    );
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.props).toEqual({ className: "p-12 max-w-xl mx-auto" });
   });
 
   test("empty string clears className", async () => {
-    await applyClasses(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      path: [],
-      classes: "",
-    });
+    expectOk(
+      await applyClasses(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [],
+        classes: "",
+      }),
+    );
     const onDisk = await readPage();
     expect(onDisk.variants[0]?.tree.props).toBeUndefined();
   });
@@ -278,11 +313,13 @@ describe("applyClasses", () => {
 
 describe("inspect", () => {
   test("returns ref + resolvedProps + classes + bodyHtml for a node", async () => {
-    const r = await inspect(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      path: [0],
-    });
+    const r = expectOk(
+      await inspect(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [0],
+      }),
+    );
     expect(r.ref).toBe("Heading");
     expect(r.resolvedProps).toEqual({ level: 1, children: "Welcome" });
     expect(r.bodyHtml).toContain("Welcome");
@@ -290,11 +327,13 @@ describe("inspect", () => {
   });
 
   test("inspects the root", async () => {
-    const r = await inspect(ctx, {
-      pageId: "onboarding",
-      variantId: "mobile",
-      path: [],
-    });
+    const r = expectOk(
+      await inspect(ctx, {
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [],
+      }),
+    );
     expect(r.ref).toBe("Card");
     expect(r.classes).toEqual(["p-6"]);
   });
