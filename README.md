@@ -6,13 +6,16 @@ See [`docs/`](./docs) for the full design.
 
 ## Status
 
-Pre-V0. Sprints 1–2 landed (schema + CLI scaffolding, headless shadcn renderer).
+Working substrate; building toward continuous usefulness sprint over sprint (see docs/roadmap.md for the live plan). No "V0 launch" milestone.
 
 ## Repo layout
 
 - `packages/schema` — Zod schemas + TS types for the design folder format
-- `packages/shadcn-snapshot` — pinned shadcn components + Tailwind v4 CSS + prop manifest
+- `packages/shadcn-snapshot` — current bundled shadcn reference; being replaced by the Library Registry (init pulls components into the design folder; see roadmap Sprint A)
 - `packages/renderer` — design JSON → HTML (and PNG via Playwright)
+- `packages/codegen` — page + theme emitters
+- `packages/server` — HTTP + MCP + mutations + theme + watcher
+- `packages/canvas` — Vite/React canvas UI
 - `packages/cli` — `velloo` CLI (citty)
 
 ## Local dev

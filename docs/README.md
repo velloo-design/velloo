@@ -1,20 +1,20 @@
 # Velloo
 
-Working spec for **Velloo** — a code-shaped design tool for shadcn devs, with an agent-native MCP server.
+Working spec for **Velloo** — a git-native canvas for solo devs and small teams who want AI to prototype UI without becoming designers. Designs live in your repo as JSON. Your AI agent reads them through a token-efficient MCP surface and writes the real code into your app — using your stack, your conventions, your handlers.
 
-The premise: solo developers and small teams can't justify a designer or Figma seats, but the alternatives are worse — code-first generators (v0/Bolt) hallucinate components and ignore your design system; design tools (Figma/Paper) produce artifacts disconnected from your codebase; Storybook is per-component and not a place to compose pages. Velloo is the missing tool.
+The premise: solo developers and small teams can't justify a designer or Figma seats, but the alternatives are worse — code-first generators (v0/Bolt) hallucinate components and ignore your design system; design tools (Figma/Paper) produce artifacts disconnected from your codebase; Storybook is per-component and not a place to compose pages. Velloo is the missing tool — shadcn-first, open source.
 
 ## Documents
 
-- [product.md](./product.md) — Problem, audience, mental model, pitch, anti-positioning
-- [architecture.md](./architecture.md) — Folder format, runtime, codegen, distribution
+- [product.md](./product.md) — Problem, audience, mental model, pitch, anti-positioning, pricing
+- [architecture.md](./architecture.md) — Folder format, runtime, Library Registry, codegen, distribution, cloud sketch
 - [mcp.md](./mcp.md) — MCP tool surface for agents
-- [v0.md](./v0.md) — V0 scope, sprint plan, timeline, risks, launch artifact
-- [decisions.md](./decisions.md) — Pivot log and design rationale
+- roadmap.md — Roadmap philosophy, next ~8 weeks of sprints, longer-term feature lines
+- decisions.md — Pivot log and design rationale
 
 ## One-line pitch
 
-> **Velloo** — the design tool for shadcn devs. Live local. Real shadcn components. AI-native MCP. Designs commit to your repo as JSON; theme exports as Tailwind config; pages export as shadcn JSX. No Figma seats, no translation tax, no hallucinated components.
+> **Velloo** — a git-native canvas for solo devs and small teams who want AI to prototype UI without becoming designers. Designs live in your repo as JSON. Your agent reads them through a fast MCP surface and writes the real code into your app — using your stack, your conventions, your handlers. shadcn-first, open source. No Figma seats, no design-file lock-in, no paste-ready JSX you have to babysit.
 
 ## Brand handles (claim before launch)
 
@@ -35,8 +35,9 @@ The premise: solo developers and small teams can't justify a designer or Figma s
 - [ ] USPTO trademark filing (intent-to-use) in Classes 9 + 42 (~$350/class)
 - [ ] Trademark clearance search by counsel before filing (~£300–500)
 - [ ] UK Ltd registered as `Velloo Software Ltd` (avoids the struck-off-pending `Velloo Ltd` 16201713; rename to clean form if/when that entity is removed)
-- [x] License: V0 ships **proprietary, all rights reserved**. Open-core / MIT / BSL / fair-source decisions deferred to before public launch.
+- [ ] License: ships **BSL 1.1** with a 4-year change date to Apache 2.0 from the first public release ( Cloud-server code stays proprietary.
+- [ ] CONTRIBUTING.md, code of conduct, issue templates, and community docs before the first public link is shared.
 
 ## Status
 
-Pre-V0. Specification only.
+Specification + working substrate. Working through the sprints in roadmap.md. No "V0 launch" milestone — usefulness compounds sprint over sprint (

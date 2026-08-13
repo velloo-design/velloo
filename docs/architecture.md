@@ -11,8 +11,12 @@ my-product/
 ├── apps/web/                  # the user's real app, untouched
 └── product-design/            # the design "file" (a folder)
     ├── .design/
-    │   ├── config.json        # tool version, locked shadcn version, viewport presets, codegen options
+    │   ├── config.json        # tool version, library declaration, viewport presets, codegen options
+    │   ├── manifest.json      # generated: prop schemas + design-mode behavior per component
     │   └── cache/             # gitignored: screenshots, build artifacts
+    ├── components/            # the chosen library's components, pulled at init
+    │   ├── ui/                # e.g. shadcn primitives: button.tsx, card.tsx, …
+    │   └── velloo/            # Velloo helpers: Heading, Text, Icon, Placeholder
     ├── theme/
     │   └── default.json       # unified tokens (colors, type, spacing, radius)
     ├── snippets/              # reusable subtrees with typed params
@@ -71,7 +75,7 @@ Inside snippet bodies, anywhere a value appears (prop values, children, etc.), t
 - `{ "$param": "name" }` — replaced with the matching arg value
 - `{ "$if": "name", "then": <value>, "else": <value> }` — picks a branch based on truthiness of `args.name`. Lets a snippet expose `featured: boolean`-style params that toggle class strings without leaking the whole `className` to every caller
 
-Props are JSON literals. No fixtures in V0 — props inline.
+Props are JSON literals. No fixtures — props inline (
 
 ```json
 // snippets/feature-card.json
@@ -106,9 +110,11 @@ Snippet instances reference their library entry by id:
 {
   "schemaVersion": 1,
   "toolVersion": "0.1.0",
-  "componentSource": {
-    "framework": "shadcn-react",
-    "snapshotVersion": "2.3.4"
+  "library": {
+    "id": "shadcn-react",
+    "version": "2.3.4",
+    "source": "registry:shadcn",
+    "componentsPath": "components"
   },
   "viewportPresets": [
     { "name": "Mobile", "w": 390, "h": 844 },
@@ -118,6 +124,8 @@ Snippet instances reference their library entry by id:
 }
 ```
 
+The `library` field declares which UI library this design folder uses, the on-disk version, and where its components live within the folder. There is only one model: the design folder has its own copy of the library, and the user's app installs the same library independently. The bridge between design and app is agent-mediated, not a build step. See *Component sourcing* below.
+
 ## Runtime architecture
 
 ```
@@ -125,7 +133,7 @@ Snippet instances reference their library entry by id:
 │  Global tool (single binary, Bun SEA, ~30MB)        │
 │  ┌──────────────────────────────────────────────┐   │
 │  │ Pre-built canvas (static React app)          │   │
-│  │ Pinned shadcn snapshots (multiple versions)  │   │
+│  │ Library Registry + cached library copies     │   │
 │  │ Tiny HTTP server (canvas + MCP)              │   │
 │  │ JSON read/write, codegen, theme export       │   │
 │  └──────────────────────────────────────────────┘   │
@@ -134,7 +142,11 @@ Snippet instances reference their library entry by id:
                  ▼
 ┌─────────────────────────────────────────────────────┐
 │  Design folder (anywhere on disk)                   │
-│  Pure JSON; locked tool + shadcn versions           │
+│  ┌──────────────────────────────────────────────┐   │
+│  │ Pages, snippets, theme, annotations (JSON)   │   │
+│  │ Library components (real .tsx files on disk) │   │
+│  │ Generated manifest                           │   │
+│  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -145,20 +157,42 @@ Two ports started by `velloo run`:
 
 Both interfaces drive the same tool surface — agent edits and human edits are operationally identical. No "agent mode" vs "user mode" code paths.
 
-## Component sourcing (V0)
+## Component sourcing
 
-V0 ships with **bundled shadcn-react only**, locked per design folder.
+Components are **not bundled** into the Velloo binary. They live on disk inside the design folder, pulled fresh from a known-good registry at `velloo init`. The user owns the files: they can read, modify, evolve, and commit them.
 
-- Pinned snapshot of shadcn at a known version (V0 commits to **Tailwind v4 only**).
-- Prop schemas extracted via `ts-morph` at build time, embedded in the binary.
-- ~25–30 most-used shadcn components for V0, plus a small `velloo/` set (typography, Icon over lucide-react).
-- **Tailwind is JIT-compiled at server runtime** against the snapshot components + the live pages folder. Any utility Tailwind supports — including ones we never thought to safelist — renders.
+The mechanism is a **Library Registry** — Velloo's list of supported UI libraries. Each library entry declares where to fetch components, how to map theme tokens, what import path to emit for the user's app, and a contract the components must satisfy (canvas-safe: no `'use server'`, no required runtime providers, theme via CSS variables only).
 
-Stateful components (Sidebar, Toaster, Form-with-submit) get explicit "design-mode behavior" declarations: most placeable with stub providers; a few documented as not-renderable. Per-component flags live in the bundled shadcn snapshot manifest.
+```bash
+velloo init ./design --library shadcn        # pulls latest shadcn-react components
+velloo init ./design --library shadcn@2.3.4  # pin a specific version
+```
 
-`velloo upgrade` bumps the shadcn snapshot, shows a diff, prompts the user.
+The pulled components land at `design/<componentsPath>/`. Manifests (prop schemas + design-mode behavior declarations) are generated via `ts-morph` at init time and refreshed on `velloo upgrade`.
 
-Plugin architecture and a "framework picker" UI are designed-in for V1+ (Mantine, MUI, etc.) but **not shipped at V0**.
+**Tailwind is JIT-compiled at server runtime** against the on-disk components + pages folder. Any utility Tailwind supports renders, including arbitrary-value classes.
+
+### Single component-folder model
+
+The design folder owns its copy of the library. The user's app installs the library independently. The two are connected by the user's AI agent, which reads designs through Velloo's MCP surface and writes the real app code in the user's conventions — not by a build step or a symlink.
+
+Earlier drafts defined three modes (`isolated`, `shared`, `linked`). Modes existed to manage the design ↔ code coupling problem that the agent now handles. They are cut — see `decisions.md` #21, #22.
+
+### Stateful components
+
+Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-mode behavior** declarations: most are placeable with stub providers; a few are documented as not-renderable in canvas. These declarations live in the per-folder generated manifest, not in the binary.
+
+### Custom and modified components
+
+Because components live on disk in the design folder, users can edit them directly — to explore visual variations, prototype new variants, or fix something the upstream library got wrong. These edits are design-time only; the agent sees them through MCP and decides how to apply them in the user's app on the next emit cycle.
+
+### Library upgrades
+
+`velloo upgrade ./design` pulls the latest library version, shows a per-file diff against the design folder's current copy, and lets the user accept or reject changes per file. The folder's `config.library.version` is bumped on success.
+
+### Framework expansion
+
+The Library Registry is retained as an internal abstraction so a second library entry can ship cleanly if signal demands it. It is **not** a public promise: Velloo is positioned as shadcn-first, and a second library only ships after it satisfies the canvas-safe contract. Mantine / MUI / Chakra all rely on providers in ways that may exclude them; that's known and acceptable. See `decisions.md` #2, #14, #22.
 
 ## Theme model
 
@@ -171,20 +205,22 @@ Unified tokens (single source) → adapters per framework.
 
 `velloo theme:export ./apps/web/` writes `tailwind.config.ts` and `globals.css` in **diff mode** — shows changes, user applies manually. Never auto-overwrites user files.
 
-## Codegen
+## Codegen (agent-consumed)
 
-`velloo emit ./design/pages/onboarding.json --to ./apps/web/app/onboarding/page.tsx`
+`emit_code` produces a structured JSX-shaped intermediate representation intended for the user's AI agent to read, not for the user to paste into their app. The agent reads the emit alongside the user's existing app code, conventions, and routing, and writes the real file in the user's style.
 
-Requirements for V0 codegen output:
+This is the load-bearing reframe. The earlier "indistinguishable from hand-written shadcn" quality bar moved off `emit_code` itself: agents do the last-mile translation across the variability of idiomatic shadcn (className ordering, `asChild`, RSC boundaries, Form integration, controlled vs uncontrolled, ref forwarding, the user's own wrappers).
 
-- Idiomatic shadcn JSX
-- Proper imports (`import { Button } from "@/components/ui/button"`)
-- Tailwind class consolidation (no duplicates, no string-concat soup, deterministic merge order on conflicts)
-- Prettier pass at the end
-- Output indistinguishable from hand-written shadcn code
-- Snippets emit as real React components under `components/snippets/<PascalName>.tsx` with typed props; instances become `<PascalName ... />` in pages
+What `emit_code` produces:
 
-**This is the moment of truth.** If output is mediocre, the whole pitch collapses. Budget review iterations on real outputs, not just unit tests.
+- JSX-shaped representation using the design folder's library identifiers (e.g. `<Button>`, `<Card>`) and Tailwind utility classes verbatim from the design
+- Snippets emit as named subtrees with typed parameters — the agent decides whether to materialize them as real components in the user's app
+- Tailwind class consolidation (no duplicates, deterministic merge order on conflicts) is still applied — it's a quality property of the IR, not a stylistic choice
+- No automatic import paths or prettier pass — the agent picks the right import path for the user's app and runs their existing prettier/eslint as part of writing the file
+
+Reference corpus (15–20 hand-curated `(design.json, ideal page.tsx)` pairs) is retained as a **quality measure on the agent loop**, not a snapshot test on emit output. Test setup: feed the design via MCP to a real agent, point it at a sample app, score the resulting file against the reference.
+
+Drift detection is cut for `emit_code` — there's no longer a "last emit" file in the user's app to drift from. It survives only as a guard for `emit_theme`, which still writes Tailwind config and globals directly.
 
 ## Distribution
 
@@ -200,11 +236,11 @@ npm install -g velloo                      # Node-based fallback
 Binary embeds:
 
 - Pre-built canvas (static React app)
-- Pinned shadcn snapshots (multiple versions, ~few MB each)
+- A cached copy of the latest first-party library entries (shadcn-react today; Mantine/MUI as they're added) so `velloo init` works offline
 - HTTP/MCP server
 - All Node-equivalent runtime (via Bun)
 
-Total size: **~25–40MB**. Same shape as `gh`, `bun`, `tailwindcss`.
+Total size: **~25–40MB**. Same shape as `gh`, `bun`, `tailwindcss`. The cached library copies are refreshed on the binary's auto-update check; `velloo init --fresh` always re-pulls from upstream.
 
 ## Why CLI-first (not desktop-first)
 
@@ -214,7 +250,7 @@ Total size: **~25–40MB**. Same shape as `gh`, `bun`, `tailwindcss`.
 - Engineering tax of Tauri + Mac codesigning + Windows Authenticode + auto-update is real and burns weeks before the product exists.
 - Desktop wraps the same engine in V1 (~2–4 weeks) — same code, deeper integration.
 
-## V1 desktop app (planned)
+## Desktop app (planned, post near-term sprints)
 
 - Tauri shell with file picker, recent projects list, system menu, system tray.
 - Webview points at the same canvas the CLI serves.
@@ -222,13 +258,28 @@ Total size: **~25–40MB**. Same shape as `gh`, `bun`, `tailwindcss`.
 - Shipped binaries on Mac/Windows; signed and notarized.
 - Same code as CLI; new packaging only.
 
+## Cloud (planned, narrow)
+
+Cloud is **additive** and narrow. The local CLI works without it forever. There is one paid cloud surface:
+
+- **Velloo Cloud (PR Preview)** — managed hosted version of the PR Preview GitHub Action. Runs Playwright renders on Velloo's infrastructure; posts before/after design screenshots on every PR; hosted viewer for richer interactivity than a static image. The self-hostable Action is the open-source foundation; the paid version sells the operational convenience.
+
+What's cut from earlier cloud framing (and why):
+
+- **Hosted MCP gateway** — weak willingness-to-pay. Solo devs run agents locally.
+- **Cloud-hosted designs** — splits source of truth, weakens "your files in your repo" pitch.
+- **Real-time multiplayer** — git is the collaboration model. PR Preview is the async-collab feature.
+- **Private library packs / SSO / SAML / audit log / SLA** — enterprise sales motion mismatched with the persona.
+
+Cloud build order: auth → billing → PR Preview render pipeline → hosted viewer. Each lands as a sprint when its prerequisites are met; see `roadmap.md`.
+
 ## Versioning and reproducibility
 
-The design folder's `.design/config.json` locks both:
+The design folder's `.design/config.json` records two things:
 
 - `toolVersion` — the binary version that created the folder
-- `componentSource.snapshotVersion` — the shadcn snapshot pinned at init
+- `library.version` — the library version pulled at init (or last upgrade)
 
-The global tool reads the lock on `run`. If the running binary is newer than the lock, it offers an upgrade path with a diff. If older, it fetches the locked snapshot from a manifest registry.
+The components themselves are on disk inside the folder, so **git is the lock for design content**. The folder, including its components, restores byte-identically from any commit. Velloo only needs to track its own tool version, not the components.
 
-This is the **"Cargo.lock for designs"** pattern — and it's what makes "global tool, portable folder" actually work in practice. Without it, designs become unreproducible six months later.
+The global tool reads the lock on `run`. If the running binary is newer than the lock, it offers an upgrade path with a diff. The library version field is informational — actual restoration is git's job.

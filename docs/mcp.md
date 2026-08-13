@@ -88,8 +88,8 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args |
 |---|---|
-| `emit_code` | `pageId, outputPath` — writes idiomatic shadcn JSX |
-| `emit_theme` | `outputPath` — writes `tailwind.config.ts` + `globals.css` (diff mode) |
+| `emit_code` | `pageId` — returns a structured JSX-shaped intermediate representation intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). **Not paste-ready output.** |
+| `emit_theme` | `outputPath` — writes `tailwind.config.ts` + `globals.css` (diff mode). Direct user-facing artifact; agent does not need to transform it. |
 
 ## Path addressing
 
@@ -140,7 +140,9 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 
 Server returns the standard MCP `initialize` response with concrete agent nudges in `instructions`. The text below is the working version; treat the exact wording as fluid.
 
-> You are working on a Velloo design folder. Components come from a pinned shadcn snapshot. Designs are static — click handlers, routing, and forms are no-op.
+> You are working on a Velloo design folder. Components live inside the folder (pulled from the chosen library at `velloo init`; user-owned and modifiable). Designs are static — click handlers, routing, and forms are no-op.
+>
+> **Velloo is the design source; you are the bridge to code.** When the user asks you to implement a design in their app, call `emit_code` to read the structured representation of the page, then write the real file into the user's app using their stack, conventions, routing, providers, and existing component wrappers. Do not paste `emit_code` output directly — it's intermediate representation, not finished JSX.
 >
 > **Before composing pages**, call `list_components` (use `mode: "summary"` first — the full schema is large) and `get_theme` to understand the available palette and active tokens.
 >
