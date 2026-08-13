@@ -19,9 +19,22 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
   const channelRef = useRef<IframeChannel | null>(null);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
+  const setNodeRects = useCanvas((s) => s.setNodeRects);
   const pageVersion = useCanvas((s) => s.pageVersion);
   const selection = useCanvas((s) => (s.selection?.variantId === variantId ? s.selection : null));
   const hover = useCanvas((s) => (s.hover?.variantId === variantId ? s.hover : null));
+  // Annotation target paths for THIS variant. AnnotationsLayer renders relative
+  // to these rects; we request them from the iframe on load and whenever the
+  // annotation set changes.
+  const annotationPaths = useCanvas((s) => {
+    const paths: string[] = [];
+    for (const a of s.annotations) {
+      if (a.target.variantId !== variantId) continue;
+      if (a.resolved === null) continue;
+      paths.push(a.resolved.join("."));
+    }
+    return paths.join("|");
+  });
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -38,6 +51,11 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
           if (path === null) setHover(null);
           else setHover({ variantId, path });
         },
+        onRects: (rects) => setNodeRects(variantId, rects),
+        onReady: () => {
+          const paths = annotationPaths ? annotationPaths.split("|") : [];
+          if (paths.length > 0) channel.send({ type: "requestRects", paths });
+        },
       });
       channel.attach();
       channelRef.current = channel;
@@ -53,7 +71,18 @@ export function VariantFrame({ pageId, variantId, variantName, viewport }: Props
       channelRef.current?.destroy();
       channelRef.current = null;
     };
-  }, [variantId, setSelection, setHover]);
+  }, [variantId, setSelection, setHover, setNodeRects, annotationPaths]);
+
+  // Re-request rects whenever the annotation set or rendered page version
+  // changes. The iframe reload (pageVersion bump) also triggers handleLoad
+  // above, but for cases where pageVersion is bumped without a full reload
+  // this keeps rects fresh.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pageVersion intentionally re-runs the request after DOM rebuilds even though the body doesn't read it
+  useEffect(() => {
+    const ch = channelRef.current;
+    if (!ch || !annotationPaths) return;
+    ch.send({ type: "requestRects", paths: annotationPaths.split("|") });
+  }, [annotationPaths, pageVersion]);
 
   useEffect(() => {
     const ch = channelRef.current;

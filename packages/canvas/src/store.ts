@@ -84,6 +84,13 @@ export interface CanvasState {
   // Sprint 11: annotations + canvas notes per page
   annotations: AnnotationEntry[];
   notes: CanvasNoteEntry[];
+  /**
+   * Per-variant node bounding rects, in iframe-document coordinates. Populated
+   * lazily by VariantFrame in response to annotation list changes. Used by
+   * AnnotationsLayer to anchor annotations near their target node (rather than
+   * at the variant's top-left) and to draw the connector to the node center.
+   */
+  nodeRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>;
   /** Top-bar toggle. When false the canvas hides both layers (data is kept). */
   annotationsVisible: boolean;
   /** Which annotation/note is currently being edited (id); null = none. */
@@ -120,6 +127,10 @@ export interface CanvasState {
   setAnnotationsVisible(b: boolean): void;
   setEditingMarkupId(id: string | null): void;
   setFocusedAnnotationId(id: string | null): void;
+  setNodeRects(
+    variantId: string,
+    rects: { path: string; x: number; y: number; w: number; h: number }[],
+  ): void;
 }
 
 /** Walk the current page tree and return the node at the given selection. */
@@ -161,6 +172,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   designMode: "light",
   annotations: [],
   notes: [],
+  nodeRects: {},
   annotationsVisible: true,
   editingMarkupId: null,
   focusedAnnotationId: null,
@@ -217,6 +229,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       hover: null,
       annotations: [],
       notes: [],
+      nodeRects: {},
       editingMarkupId: null,
     });
     await Promise.all([get().refreshAnnotations(), get().refreshNotes()]);
@@ -271,6 +284,14 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     set({ focusedAnnotationId });
   },
 
+  setNodeRects(variantId, rects) {
+    set((s) => {
+      const next: Record<string, { x: number; y: number; w: number; h: number }> = {};
+      for (const r of rects) next[r.path] = { x: r.x, y: r.y, w: r.w, h: r.h };
+      return { nodeRects: { ...s.nodeRects, [variantId]: next } };
+    });
+  },
+
   setSelection(selection) {
     set({ selection });
   },
@@ -293,9 +314,12 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   setCursorMode(cursorMode) {
-    // Entering hand mode clears selection + hover — there's no selection
-    // workflow active while panning. Leaving hand mode just clears hover.
-    if (cursorMode === "hand") {
+    // Hand mode has no selection workflow — clear it.
+    // Annotate mode arms the next node-click to anchor an annotation; if a
+    // selection were carried in from select mode, clicking that same node
+    // would be a no-op (selection state unchanged → watcher doesn't fire).
+    // Clearing on entry guarantees the next click is the trigger.
+    if (cursorMode === "hand" || cursorMode === "annotate") {
       set({ cursorMode, hover: null, selection: null, nodeState: "default" });
     } else {
       set({ cursorMode, hover: null });

@@ -51,6 +51,18 @@ export const IFRAME_RUNTIME = String.raw`
     if (el) el.setAttribute('data-velloo-state', state);
   }
 
+  function reportRects(paths) {
+    const rects = [];
+    for (let i = 0; i < paths.length; i++) {
+      const path = paths[i];
+      const el = document.querySelector('[data-node-path="' + String(path).replace(/"/g, '\\"') + '"]');
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      rects.push({ path: path, x: r.left, y: r.top, w: r.width, h: r.height });
+    }
+    send({ type: 'nodeRects', rects: rects });
+  }
+
   function handleParentMessage(ev) {
     const msg = ev.data;
     if (!msg || typeof msg !== 'object') return;
@@ -59,6 +71,7 @@ export const IFRAME_RUNTIME = String.raw`
     else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS);
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
     else if (msg.type === 'applyVelloState') applyVelloState(msg.path, msg.state);
+    else if (msg.type === 'requestRects') reportRects(msg.paths || []);
   }
 
   function send(msg) {

@@ -173,7 +173,7 @@ function NoteItem({ pageId, note }: { pageId: string; note: CanvasNoteEntry }) {
           style={{ height: "auto" }}
         />
       ) : (
-        <div className="text-[var(--color-fg)] cursor-text">
+        <div className="text-[var(--color-fg)]">
           <Markdown body={note.body || "*(empty note)*"} />
         </div>
       )}

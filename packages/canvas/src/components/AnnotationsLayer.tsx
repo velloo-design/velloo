@@ -12,6 +12,15 @@ interface Props {
 
 const ANNOTATION_WIDTH = 240;
 const ANNOTATION_GAP = 32;
+/**
+ * Vertical offset of the iframe inside a VariantFrame (header text + flex
+ * gap). VariantFrame's header is text-xs (~16px) plus a gap-2 (8px) before
+ * the iframe wrapper, so the iframe's top edge sits ~28px below the
+ * variant's recorded position. Approximate — annotation anchoring is
+ * forgiving by a few px.
+ */
+const IFRAME_OFFSET_Y = 28;
+const IFRAME_OFFSET_X = 0;
 
 /**
  * Renders node-anchored annotations inside the canvas free-layout coord
@@ -27,13 +36,36 @@ export function AnnotationsLayer({ pageId }: Props) {
   const page = useCanvas((s) => s.currentPage);
   const selection = useCanvas((s) => s.selection);
   const focusedId = useCanvas((s) => s.focusedAnnotationId);
+  const nodeRects = useCanvas((s) => s.nodeRects);
   if (!visible || annotations.length === 0 || !page) return null;
 
   const placements = annotations.map((a) => {
     const variant = page.variants.find((v) => v.id === a.target.variantId);
     const vp = variant?.position;
+    const resolvedKey = a.resolved !== null ? pathToString(a.resolved) : null;
+    const nodeRect = resolvedKey ? nodeRects[a.target.variantId]?.[resolvedKey] : undefined;
+    // Node center in canvas coords — variant origin + iframe inset + the
+    // node's rect inside the iframe document. Falls back to the variant's
+    // top-left when the iframe hasn't reported rects yet.
+    const nodeAnchor =
+      vp && nodeRect
+        ? {
+            x: vp.x + IFRAME_OFFSET_X + nodeRect.x,
+            y: vp.y + IFRAME_OFFSET_Y + nodeRect.y,
+            w: nodeRect.w,
+            h: nodeRect.h,
+          }
+        : null;
     const explicit = typeof a.position === "object" ? a.position : null;
-    const auto = vp ? { x: vp.x - ANNOTATION_WIDTH - ANNOTATION_GAP, y: vp.y } : { x: 0, y: 0 };
+    // Auto-position: pinned to the left of the variant, vertically aligned
+    // with the targeted node's center (so a long page's annotations don't
+    // all pile up at the top).
+    const auto = vp
+      ? {
+          x: vp.x - ANNOTATION_WIDTH - ANNOTATION_GAP,
+          y: nodeAnchor ? nodeAnchor.y + nodeAnchor.h / 2 - 12 : vp.y,
+        }
+      : { x: 0, y: 0 };
     const pos = explicit ?? auto;
     const targetSelected =
       selection != null &&
@@ -41,7 +73,7 @@ export function AnnotationsLayer({ pageId }: Props) {
       a.resolved != null &&
       selection.path === pathToString(a.resolved);
     const strong = focusedId === a.id || targetSelected;
-    return { annotation: a, pos, variantPos: vp ?? null, strong };
+    return { annotation: a, pos, variantPos: vp ?? null, nodeAnchor, strong };
   });
 
   return (
@@ -78,12 +110,16 @@ export function AnnotationsLayer({ pageId }: Props) {
             <path d="M 0 0 L 9 5 L 0 10 z" fill="var(--color-fg-muted)" opacity="0.5" />
           </marker>
         </defs>
-        {placements.map(({ annotation, pos, variantPos, strong }) => {
+        {placements.map(({ annotation, pos, variantPos, nodeAnchor, strong }) => {
           if (!variantPos) return null;
+          // Start at the annotation's right edge, vertically centered on
+          // its first line.
           const x1 = pos.x + ANNOTATION_WIDTH;
           const y1 = pos.y + 12;
-          const x2 = variantPos.x;
-          const y2 = variantPos.y + 28;
+          // End at the node's left-center if we have a rect, otherwise the
+          // variant's left edge as a coarse fallback.
+          const x2 = nodeAnchor ? nodeAnchor.x : variantPos.x;
+          const y2 = nodeAnchor ? nodeAnchor.y + nodeAnchor.h / 2 : variantPos.y + 28;
           return (
             <line
               key={`c-${annotation.id}`}
@@ -92,9 +128,9 @@ export function AnnotationsLayer({ pageId }: Props) {
               x2={x2}
               y2={y2}
               stroke={strong ? "var(--color-accent)" : "var(--color-fg-muted)"}
-              strokeOpacity={strong ? 0.9 : 0.35}
+              strokeOpacity={strong ? 0.9 : 0.5}
               strokeWidth={strong ? 1.5 : 1}
-              strokeDasharray={strong ? undefined : "3 3"}
+              strokeDasharray={strong ? undefined : "4 3"}
               markerEnd={strong ? "url(#annotation-arrow-strong)" : "url(#annotation-arrow-subtle)"}
             />
           );
@@ -283,7 +319,7 @@ function AnnotationItem({ pageId, annotation, pos, strong }: ItemProps) {
             style={{ height: "auto" }}
           />
         ) : (
-          <div className="text-[var(--color-fg)] cursor-text flex flex-col gap-1 pr-4">
+          <div className="text-[var(--color-fg)] flex flex-col gap-1 pr-4">
             <Markdown body={annotation.body || "*(empty annotation)*"} />
           </div>
         ))}

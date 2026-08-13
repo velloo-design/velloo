@@ -12,10 +12,53 @@ import {
   Sun,
   Undo2,
 } from "lucide-react";
+import { useState } from "react";
 import { redo as redoApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Logo } from "./Logo.tsx";
+
+/**
+ * Lightweight tooltip — appears on hover/focus with the action label and
+ * its hotkey. Native `title` is too slow for a toolbar where users sweep
+ * across icons; this gives an immediate visual readout.
+ */
+function Tooltip({
+  label,
+  hotkey,
+  children,
+}: {
+  label: string;
+  hotkey?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover-only wrapper around a real button; pointer events drive only the tooltip visibility
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+    >
+      {children}
+      {open ? (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-fg)] shadow-md"
+        >
+          {label}
+          {hotkey ? (
+            <kbd className="ml-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-px font-mono text-[10px] text-[var(--color-fg-muted)]">
+              {hotkey}
+            </kbd>
+          ) : null}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 export function TopBar() {
   const design = useCanvas((s) => s.design);
@@ -83,22 +126,26 @@ export function TopBar() {
             {
               value: "select",
               icon: <MousePointer2 size={14} strokeWidth={2} />,
-              title: "Select tool (V)",
+              label: "Select",
+              hotkey: "V",
             },
             {
               value: "hand",
               icon: <Hand size={14} strokeWidth={2} />,
-              title: "Hand tool (H) — hold Space for temporary",
+              label: "Pan canvas (hold Space)",
+              hotkey: "H",
             },
             {
               value: "note",
               icon: <StickyNote size={14} strokeWidth={2} />,
-              title: "Note tool (T) — drop free-positioned canvas notes",
+              label: "Drop a free note",
+              hotkey: "T",
             },
             {
               value: "annotate",
               icon: <MessageSquareText size={14} strokeWidth={2} />,
-              title: "Annotate (Y) — click a node to attach an annotation",
+              label: "Annotate a node",
+              hotkey: "Y",
             },
           ]}
           value={cursorMode}
@@ -109,14 +156,16 @@ export function TopBar() {
 
         <div className="flex items-center gap-1 ml-2">
           <SmallButton
-            title={`Undo (⌘Z)${history.undo > 0 ? ` — ${history.undo} step${history.undo === 1 ? "" : "s"}` : ""}`}
+            label={`Undo${history.undo > 0 ? ` — ${history.undo} step${history.undo === 1 ? "" : "s"}` : ""}`}
+            hotkey="⌘Z"
             onClick={onUndo}
             disabled={history.undo === 0}
           >
             <Undo2 size={14} strokeWidth={2} />
           </SmallButton>
           <SmallButton
-            title={`Redo (⌘⇧Z)${history.redo > 0 ? ` — ${history.redo} step${history.redo === 1 ? "" : "s"}` : ""}`}
+            label={`Redo${history.redo > 0 ? ` — ${history.redo} step${history.redo === 1 ? "" : "s"}` : ""}`}
+            hotkey="⌘⇧Z"
             onClick={onRedo}
             disabled={history.redo === 0}
           >
@@ -127,33 +176,37 @@ export function TopBar() {
         <div className="h-5 w-px bg-[var(--color-border)]" />
 
         <div className="flex items-center gap-1">
-          <SmallButton title="Zoom out (−)" onClick={() => setCanvasZoom(canvasZoom - 0.1)}>
+          <SmallButton label="Zoom out" hotkey="−" onClick={() => setCanvasZoom(canvasZoom - 0.1)}>
             <Minus size={14} strokeWidth={2} />
           </SmallButton>
-          <button
-            type="button"
-            onClick={onZoomReset}
-            className="px-2 py-1 text-xs tabular-nums text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] min-w-[3rem] text-center"
-            title="Reset zoom (0)"
-          >
-            {Math.round(canvasZoom * 100)}%
-          </button>
-          <SmallButton title="Zoom in (+)" onClick={() => setCanvasZoom(canvasZoom + 0.1)}>
+          <Tooltip label="Reset zoom" hotkey="0">
+            <button
+              type="button"
+              onClick={onZoomReset}
+              className="px-2 py-1 text-xs tabular-nums text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] min-w-[3rem] text-center"
+            >
+              {Math.round(canvasZoom * 100)}%
+            </button>
+          </Tooltip>
+          <SmallButton label="Zoom in" hotkey="+" onClick={() => setCanvasZoom(canvasZoom + 0.1)}>
             <Plus size={14} strokeWidth={2} />
           </SmallButton>
         </div>
 
         <div className="h-5 w-px bg-[var(--color-border)] mx-1" />
 
-        <button
-          type="button"
-          onClick={toggleDesignDark}
-          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs hover:bg-[var(--color-surface)] flex items-center gap-1"
-          title={isDesignDark ? "Design: switch to light preset" : "Design: switch to dark preset"}
+        <Tooltip
+          label={isDesignDark ? "Design: switch to light preset" : "Design: switch to dark preset"}
         >
-          {isDesignDark ? <Sun size={13} /> : <Moon size={13} />}
-          <span>Design</span>
-        </button>
+          <button
+            type="button"
+            onClick={toggleDesignDark}
+            className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs hover:bg-[var(--color-surface)] flex items-center gap-1"
+          >
+            {isDesignDark ? <Sun size={13} /> : <Moon size={13} />}
+            <span>Design</span>
+          </button>
+        </Tooltip>
 
         <AppThemePicker value={appTheme} onChange={setAppTheme} />
       </div>
@@ -178,25 +231,28 @@ function AppThemePicker({ value, onChange }: { value: AppTheme; onChange: (t: Ap
 
 function SmallButton({
   onClick,
-  title,
+  label,
+  hotkey,
   children,
   disabled,
 }: {
   onClick: () => void;
-  title: string;
+  label: string;
+  hotkey?: string;
   children: React.ReactNode;
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      className="h-7 w-7 grid place-items-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs hover:bg-[var(--color-surface)] disabled:opacity-40 disabled:pointer-events-none"
-    >
-      {children}
-    </button>
+    <Tooltip label={label} hotkey={hotkey}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className="h-7 w-7 grid place-items-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs hover:bg-[var(--color-surface)] disabled:opacity-40 disabled:pointer-events-none"
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -205,7 +261,7 @@ function SegmentedButton<T extends string>({
   value,
   onChange,
 }: {
-  options: { value: T; icon: React.ReactNode; title: string }[];
+  options: { value: T; icon: React.ReactNode; label: string; hotkey?: string }[];
   value: T;
   onChange: (v: T) => void;
 }) {
@@ -214,20 +270,20 @@ function SegmentedButton<T extends string>({
       {options.map((opt) => {
         const active = opt.value === value;
         return (
-          <button
-            key={opt.value}
-            type="button"
-            title={opt.title}
-            onClick={() => onChange(opt.value)}
-            className={
-              "h-7 w-8 grid place-items-center transition-colors " +
-              (active
-                ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]")
-            }
-          >
-            {opt.icon}
-          </button>
+          <Tooltip key={opt.value} label={opt.label} hotkey={opt.hotkey}>
+            <button
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className={
+                "h-7 w-8 grid place-items-center transition-colors " +
+                (active
+                  ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+                  : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]")
+              }
+            >
+              {opt.icon}
+            </button>
+          </Tooltip>
         );
       })}
     </div>
@@ -238,13 +294,14 @@ function AnnotationsToggle() {
   const visible = useCanvas((s) => s.annotationsVisible);
   const setVisible = useCanvas((s) => s.setAnnotationsVisible);
   return (
-    <button
-      type="button"
-      onClick={() => setVisible(!visible)}
-      title={visible ? "Hide annotations + notes" : "Show annotations + notes"}
-      className="h-7 px-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] flex items-center gap-1"
-    >
-      {visible ? <Eye size={13} strokeWidth={2} /> : <EyeOff size={13} strokeWidth={2} />}
-    </button>
+    <Tooltip label={visible ? "Hide annotations + notes" : "Show annotations + notes"}>
+      <button
+        type="button"
+        onClick={() => setVisible(!visible)}
+        className="h-7 px-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] flex items-center gap-1"
+      >
+        {visible ? <Eye size={13} strokeWidth={2} /> : <EyeOff size={13} strokeWidth={2} />}
+      </button>
+    </Tooltip>
   );
 }

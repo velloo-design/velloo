@@ -91,12 +91,15 @@ function MarkupClickInterceptor({ pageId }: { pageId: string }) {
     return null;
   }
 
+  // Interceptor is positioned at canvas coord (CANVAS_MIN, CANVAS_MIN), so
+  // `rect.left/top` is the screen position of that corner. Convert client
+  // coords back to canvas space by undoing zoom and adding the offset.
   const toCanvasCoords = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const zoom = useCanvas.getState().canvasZoom || 1;
     return {
-      x: (e.clientX - rect.left) / zoom,
-      y: (e.clientY - rect.top) / zoom,
+      x: (e.clientX - rect.left) / zoom + CANVAS_MIN,
+      y: (e.clientY - rect.top) / zoom + CANVAS_MIN,
     };
   };
 
@@ -127,10 +130,21 @@ function MarkupClickInterceptor({ pageId }: { pageId: string }) {
     }
   };
 
+  // `.relative` collapses to 0×0 (all in-flow children are absolute), so
+  // `inset-0` would render a zero-size overlay. Instead, span the full
+  // canvas coord range explicitly. The interceptor sits above variant frames
+  // (last in DOM order) and swallows pointer events so iframes don't get
+  // them in note mode.
   return (
     <div
-      className="absolute inset-0"
-      style={{ cursor: "crosshair" }}
+      className="absolute"
+      style={{
+        left: CANVAS_MIN,
+        top: CANVAS_MIN,
+        width: CANVAS_MAX - CANVAS_MIN,
+        height: CANVAS_MAX - CANVAS_MIN,
+        cursor: "crosshair",
+      }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
@@ -387,9 +401,15 @@ export function VariantGrid({ pageId, page }: Props) {
     lastZoomRef.current = canvasZoom;
   }, [canvasZoom]);
 
-  const wrapperClass =
-    "flex-1 overflow-auto bg-[var(--color-bg)] relative" +
-    (cursorMode === "hand" ? " velloo-hand" : "");
+  const cursorClass =
+    cursorMode === "hand"
+      ? " velloo-hand"
+      : cursorMode === "note"
+        ? " velloo-note"
+        : cursorMode === "annotate"
+          ? " velloo-annotate"
+          : "";
+  const wrapperClass = `flex-1 overflow-auto bg-[var(--color-bg)] relative${cursorClass}`;
 
   return (
     <div ref={outerRef} className={wrapperClass}>

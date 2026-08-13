@@ -117,22 +117,22 @@ export function App() {
   }, []);
 
   // Annotate mode: when the user clicks a node, anchor an annotation to it
-  // and pop back into select mode. Subscribes via store.subscribe so we
-  // catch every selection change while in annotate mode.
+  // and pop back into select mode. The store clears `selection` on entering
+  // annotate mode, so the next non-null selection here is always the
+  // intended trigger.
   useEffect(() => {
-    let lastSelection: { variantId: string; path: string } | null = null;
-    return useCanvas.subscribe((state, prev) => {
-      const sel = state.selection;
-      // Track to detect a transition into selection (skip the initial null→null
-      // and identical selections).
-      const changed = JSON.stringify(sel) !== JSON.stringify(lastSelection);
-      lastSelection = sel;
-      if (!changed) return;
+    return useCanvas.subscribe((state) => {
       if (state.cursorMode !== "annotate") return;
+      const sel = state.selection;
       if (!sel) return;
       const pageId = state.currentPageId;
       if (!pageId) return;
-      // Annotate the selected node. Path is dot-string; convert to array.
+      // Flip mode immediately so this subscription doesn't re-fire on the
+      // selection change made by setCursorMode("select") below.
+      state.setCursorMode("select");
+      // Restore the selection — clearing in setCursorMode would erase the
+      // highlight the user just made.
+      state.setSelection(sel);
       const locator = sel.path === "" ? [] : sel.path.split(".").map(Number);
       void (async () => {
         try {
@@ -144,12 +144,8 @@ export function App() {
           state.setEditingMarkupId(r.annotation.id);
         } catch (err) {
           toastError(err, "Could not add annotation");
-        } finally {
-          state.setCursorMode("select");
         }
       })();
-      // Avoid referencing prev to silence the unused-arg lint.
-      void prev;
     });
   }, []);
 

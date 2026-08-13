@@ -45,6 +45,30 @@ body,
   -webkit-user-select: none;
 }
 
+/* Note-mode visuals: crosshair cursor, no text selection, and iframes
+ * don't intercept clicks so a single canvas-level pointerdown drops a note
+ * anywhere over the workspace. */
+.velloo-note .velloo-frame-iframe {
+  pointer-events: none;
+}
+.velloo-note,
+.velloo-note * {
+  cursor: crosshair !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Annotate-mode visuals: `cell` cursor (table-cell reticle) — visually
+ * distinct from note mode's plain `crosshair`, conveys "pick a target"
+ * rather than "drop a point". Iframe pointer events stay live: the click
+ * needs to bubble up as a node selection. */
+.velloo-annotate,
+.velloo-annotate * {
+  cursor: cell !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* Mid-drag: kill iframe pointer events so a cursor that crosses a variant
  * doesn't swallow our window-level mouseup. Also force the grabbing cursor
  * regardless of which child is hovered. */
