@@ -105,10 +105,27 @@ function NoteItem({ pageId, note }: { pageId: string; note: CanvasNoteEntry }) {
     await commit({ width });
   };
 
+  const saveAndExit = async () => {
+    setEditingId(null);
+    if (draft !== note.body) await commit({ body: draft });
+  };
+
+  // Editing mode adds a subtle border + ring so the active note is visually
+  // distinct from rendered ones. Non-editing notes stay chrome-free — just
+  // text floating in canvas space.
+  const containerClass = [
+    "absolute select-none rounded-md",
+    isEditing
+      ? "ring-1 ring-[var(--color-accent)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: canvas-positioned note — interactive div is the right primitive
     <div
-      className="absolute select-none"
+      className={containerClass}
       style={{ left: note.x, top: note.y, width }}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so Del/Enter hotkeys work on the selected note
       tabIndex={0}
@@ -137,14 +154,14 @@ function NoteItem({ pageId, note }: { pageId: string; note: CanvasNoteEntry }) {
           className="w-full min-h-[2rem] bg-transparent text-sm leading-snug outline-none resize-none font-mono text-[var(--color-fg)]"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={async () => {
-            setEditingId(null);
-            if (draft !== note.body) await commit({ body: draft });
-          }}
+          onBlur={saveAndExit}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setDraft(note.body);
               setEditingId(null);
+            } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              void saveAndExit();
             }
           }}
           // Grow with content so notes never scroll.
@@ -156,7 +173,7 @@ function NoteItem({ pageId, note }: { pageId: string; note: CanvasNoteEntry }) {
           style={{ height: "auto" }}
         />
       ) : (
-        <div className="prose-velloo text-[var(--color-fg)] cursor-text">
+        <div className="text-[var(--color-fg)] cursor-text">
           <Markdown body={note.body || "*(empty note)*"} />
         </div>
       )}

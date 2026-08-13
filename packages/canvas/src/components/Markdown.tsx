@@ -33,30 +33,39 @@ interface Block {
   text: string;
 }
 
+/**
+ * Walk the body line by line. Heading lines become their own blocks
+ * (so `# title\npara` renders as h1 + p with no blank line required).
+ * Blank lines flush an accumulated paragraph; consecutive non-empty
+ * non-heading lines glue into one paragraph (with newlines preserved
+ * for `<br>` rendering downstream).
+ */
 function splitBlocks(body: string): Block[] {
   const out: Block[] = [];
-  // Split on blank lines (one or more empty lines).
-  const chunks = body.split(/\n\s*\n/);
-  for (const chunk of chunks) {
-    const trimmed = chunk.trim();
-    if (!trimmed) continue;
-    const h1 = /^# (.+)$/s.exec(trimmed);
-    if (h1) {
-      out.push({ kind: "h1", text: h1[1] ?? "" });
-      continue;
+  const lines = body.split("\n");
+  let para: string[] = [];
+  const flush = () => {
+    const text = para.join("\n").trim();
+    if (text) out.push({ kind: "p", text });
+    para = [];
+  };
+  for (const raw of lines) {
+    if (/^### /.test(raw)) {
+      flush();
+      out.push({ kind: "h3", text: raw.slice(4).trim() });
+    } else if (/^## /.test(raw)) {
+      flush();
+      out.push({ kind: "h2", text: raw.slice(3).trim() });
+    } else if (/^# /.test(raw)) {
+      flush();
+      out.push({ kind: "h1", text: raw.slice(2).trim() });
+    } else if (raw.trim() === "") {
+      flush();
+    } else {
+      para.push(raw);
     }
-    const h2 = /^## (.+)$/s.exec(trimmed);
-    if (h2) {
-      out.push({ kind: "h2", text: h2[1] ?? "" });
-      continue;
-    }
-    const h3 = /^### (.+)$/s.exec(trimmed);
-    if (h3) {
-      out.push({ kind: "h3", text: h3[1] ?? "" });
-      continue;
-    }
-    out.push({ kind: "p", text: trimmed });
   }
+  flush();
   return out;
 }
 
@@ -65,19 +74,19 @@ function renderBlock(block: Block, key: number): JSX.Element {
   switch (block.kind) {
     case "h1":
       return (
-        <h1 key={key} className="text-base font-semibold leading-snug">
+        <h1 key={key} className="text-lg font-bold tracking-tight leading-tight">
           {inline}
         </h1>
       );
     case "h2":
       return (
-        <h2 key={key} className="text-sm font-semibold leading-snug">
+        <h2 key={key} className="text-base font-semibold tracking-tight leading-snug">
           {inline}
         </h2>
       );
     case "h3":
       return (
-        <h3 key={key} className="text-xs font-semibold uppercase tracking-wider leading-snug">
+        <h3 key={key} className="text-sm font-semibold uppercase tracking-wider leading-snug">
           {inline}
         </h3>
       );

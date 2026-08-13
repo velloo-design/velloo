@@ -88,6 +88,13 @@ export interface CanvasState {
   annotationsVisible: boolean;
   /** Which annotation/note is currently being edited (id); null = none. */
   editingMarkupId: string | null;
+  /**
+   * Last-clicked annotation; drives the "strong connector" visual and lights
+   * the corresponding node selection too. Independent from `editingMarkupId`
+   * so the annotation can be focused (connector strong, node selected)
+   * without being in edit mode.
+   */
+  focusedAnnotationId: string | null;
 
   loadDesign(): Promise<void>;
   refreshHistory(): Promise<void>;
@@ -112,6 +119,7 @@ export interface CanvasState {
   refreshNotes(): Promise<void>;
   setAnnotationsVisible(b: boolean): void;
   setEditingMarkupId(id: string | null): void;
+  setFocusedAnnotationId(id: string | null): void;
 }
 
 /** Walk the current page tree and return the node at the given selection. */
@@ -155,6 +163,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   notes: [],
   annotationsVisible: true,
   editingMarkupId: null,
+  focusedAnnotationId: null,
 
   async refreshHistory() {
     try {
@@ -256,6 +265,10 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setEditingMarkupId(editingMarkupId) {
     set({ editingMarkupId });
+  },
+
+  setFocusedAnnotationId(focusedAnnotationId) {
+    set({ focusedAnnotationId });
   },
 
   setSelection(selection) {
