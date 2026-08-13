@@ -15,6 +15,12 @@ export interface EmitContext {
   snippetPascalById?: Map<string, string>;
   /** Set when emitting *inside* a snippet body: `$param` nodes become `{name}`. */
   snippetParamNames?: Set<string>;
+  /**
+   * Single-shot: when present, the next ComponentNode renderComponent call
+   * (the snippet body's root) splices `${holder.varName}` into its className.
+   * Cleared after first use so descendants don't re-merge it.
+   */
+  injectClassNameAtRoot?: { varName: string; used: boolean };
   /** 2-space indentation, baked once. */
   indent(depth: number): string;
 }
@@ -54,6 +60,12 @@ function renderSnippetInstance(
   const attrParts: string[] = [];
   for (const [name, value] of Object.entries(node.args ?? {})) {
     const serialized = serializeProp(name, value, ctx.snippetParamNames);
+    if (serialized !== null) attrParts.push(serialized);
+  }
+  // $extraClassName threads through as className on the React component — the
+  // snippet's emitted component merges it onto its root via cn().
+  if (node.$extraClassName && node.$extraClassName.trim() !== "") {
+    const serialized = serializeProp("className", node.$extraClassName, ctx.snippetParamNames);
     if (serialized !== null) attrParts.push(serialized);
   }
   const attrs = attrParts.length > 0 ? ` ${attrParts.join(" ")}` : "";
@@ -128,13 +140,30 @@ function renderComponent(
     closeTag = entry.jsxName;
   }
 
+  // Single-shot: at the root of a snippet body, splice the snippet's
+  // `className` prop variable into the rendered className so callers can
+  // override styling via instantiate_snippet({extraClassName: "..."}).
+  // Template-literal concat — no external `cn` import needed.
+  const injectVar =
+    ctx.injectClassNameAtRoot && !ctx.injectClassNameAtRoot.used
+      ? ctx.injectClassNameAtRoot.varName
+      : null;
+  if (ctx.injectClassNameAtRoot && !ctx.injectClassNameAtRoot.used) {
+    ctx.injectClassNameAtRoot.used = true;
+  }
+
   const attrParts: string[] = [];
   if (isClassNameExpr) {
     const cn = serializeProp("className", rawClassName, ctx.snippetParamNames);
     if (cn) attrParts.push(cn);
-  } else if (mergedClassName) {
-    const cn = serializeProp("className", mergedClassName, ctx.snippetParamNames);
-    if (cn) attrParts.push(cn);
+  } else if (mergedClassName || injectVar) {
+    if (injectVar) {
+      const base = mergedClassName ?? "";
+      attrParts.push(`className={\`${base}${base ? " " : ""}\${${injectVar} ?? ""}\`}`);
+    } else if (mergedClassName) {
+      const cn = serializeProp("className", mergedClassName, ctx.snippetParamNames);
+      if (cn) attrParts.push(cn);
+    }
   }
   for (const [name, value] of Object.entries(props)) {
     const serialized = serializeProp(name, value, ctx.snippetParamNames);

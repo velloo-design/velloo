@@ -352,7 +352,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "instantiate_snippet",
     {
       description:
-        "Add a `$snippet` instance to a variant tree under parentPath. parentPath accepts a path array OR an \"@id\" reference. Pass `id` to give the instance a stable anchor for update_snippet_args / update_props later. `args` supplies values for the snippet's params (defaults fill in missing optional ones). Snippet instances are opaque — you can't address paths inside them; edit via update_snippet_args or update_snippet.",
+        "Add a `$snippet` instance to a variant tree under parentPath. parentPath accepts a path array OR an \"@id\" reference. Pass `id` to give the instance a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root element (the snippet itself remains opaque — extraClassName is the escape hatch for per-instance tweaks without forking the snippet definition). `args` supplies values for the snippet's params (defaults fill in missing optional ones).",
       inputSchema: {
         pageId: z.string(),
         variantId: z.string(),
@@ -360,6 +360,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         snippetId: z.string(),
         id: NodeIdInputSchema.optional(),
         args: z.record(z.string(), z.unknown()).optional(),
+        extraClassName: z.string().optional(),
         index: z.number().int().nonnegative().optional(),
       },
     },
@@ -370,12 +371,13 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet_args",
     {
       description:
-        "Patch the `args` of a snippet instance without touching the snippet body. `null` in argPatch removes a key (reverts to the param default if declared).",
+        "Patch the `args` of a snippet instance without touching the snippet body. `null` in argPatch removes a key (reverts to the param default if declared). Pass `extraClassName` to replace the instance's per-instance className override; pass `null` to clear it.",
       inputSchema: {
         pageId: z.string(),
         variantId: z.string(),
         path: PathSchema,
-        argPatch: z.record(z.string(), z.unknown()),
+        argPatch: z.record(z.string(), z.unknown()).default({}),
+        extraClassName: z.string().nullable().optional(),
       },
     },
     async (args) => toMcp(await updateSnippetArgs(ctx, args)),

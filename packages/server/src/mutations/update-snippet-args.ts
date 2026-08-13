@@ -14,6 +14,12 @@ export interface UpdateSnippetArgsArgs {
   path: Locator;
   /** Shallow patch over the instance's `args` map. `null` removes a key. */
   argPatch: Record<string, unknown>;
+  /**
+   * Replace the instance's extraClassName. Pass `null` to clear, omit to
+   * leave unchanged. Used for one-off styling tweaks on otherwise opaque
+   * snippet instances (e.g. wider featured pricing tier).
+   */
+  extraClassName?: string | null;
 }
 
 export interface UpdateSnippetArgsResult {
@@ -54,6 +60,14 @@ export async function updateSnippetArgs(
     }
     if (Object.keys(merged).length === 0) delete node.args;
     else node.args = merged;
+
+    if (args.extraClassName !== undefined) {
+      if (args.extraClassName === null || args.extraClassName.trim() === "") {
+        delete node.$extraClassName;
+      } else {
+        node.$extraClassName = args.extraClassName.trim();
+      }
+    }
 
     yield* $(await commitPage(ctx.folder, args.pageId, next));
     ctx.broadcast({ type: "page-changed", pageId: args.pageId });

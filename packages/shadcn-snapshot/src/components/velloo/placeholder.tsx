@@ -24,6 +24,12 @@ export interface PlaceholderProps extends React.HTMLAttributes<HTMLDivElement> {
    * `kind: "image"`. Defaults to `"16/9"`.
    */
   aspect?: "1/1" | "4/3" | "3/4" | "16/9" | "21/9";
+  /**
+   * Size ladder for `kind: "avatar"`. Mirrors shadcn Avatar conventions:
+   * `sm` (size-8) / `md` (size-10, default) / `lg` (size-14) / `xl` (size-20).
+   * Ignored when `kind: "image"` — sizing there is driven by aspect + width.
+   */
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
 const ASPECT_CLASS: Record<NonNullable<PlaceholderProps["aspect"]>, string> = {
@@ -34,10 +40,18 @@ const ASPECT_CLASS: Record<NonNullable<PlaceholderProps["aspect"]>, string> = {
   "21/9": "aspect-[21/9]",
 };
 
+const AVATAR_SIZE_CLASS: Record<NonNullable<PlaceholderProps["size"]>, string> = {
+  sm: "size-8 text-xs",
+  md: "size-10 text-sm",
+  lg: "size-14 text-base",
+  xl: "size-20 text-lg",
+};
+
 export function Placeholder({
   kind = "image",
   label,
   aspect = "16/9",
+  size = "md",
   className,
   ...rest
 }: PlaceholderProps) {
@@ -48,7 +62,7 @@ export function Placeholder({
         aria-label={label ? `placeholder: ${label}` : "placeholder avatar"}
         className={cn(
           "inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground font-medium",
-          "size-10 text-sm",
+          AVATAR_SIZE_CLASS[size],
           className,
         )}
         {...rest}

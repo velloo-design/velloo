@@ -37,6 +37,13 @@ export type ComponentNode = {
 export type SnippetInstance = {
   $snippet: string;
   $id?: string;
+  /**
+   * Extra Tailwind classes merged into the snippet body's root element at
+   * render time. Lets one-off instances tweak styling (e.g. wider, accent
+   * border) without forking the snippet definition. Pass it via
+   * `instantiate_snippet({extraClassName})` or `update_snippet_args`.
+   */
+  $extraClassName?: string;
   args?: Record<string, unknown>;
 };
 
@@ -85,6 +92,7 @@ const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
 const SnippetInstanceSchema: z.ZodType<SnippetInstance> = z.object({
   $snippet: z.string().min(1),
   $id: NodeIdSchema.optional(),
+  $extraClassName: z.string().optional(),
   args: z.record(z.string(), z.unknown()).optional(),
 });
 

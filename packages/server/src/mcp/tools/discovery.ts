@@ -1,4 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  isComponentNode,
+  isParamRef,
+  isSnippetInstance,
+  type Node,
+  nodeId,
+  type Page,
+} from "@velloo/schema";
 import { type ComponentDescriptor, loadManifest, snapshotVersion } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -14,6 +22,56 @@ interface ComponentSummary {
   /** Comma-separated list of prop names for quick scan. */
   props: string[];
   designModeNotes?: string;
+}
+
+/** Truncate a className string for outline display. */
+function shortClass(cls: string, max = 40): string {
+  const trimmed = cls.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
+}
+
+interface OutlineNode {
+  ref?: string;
+  snippet?: string;
+  param?: string;
+  $id?: string;
+  classSnippet?: string;
+  children?: OutlineNode[];
+}
+
+function nodeToOutline(node: Node): OutlineNode {
+  if (isParamRef(node)) return { param: node.$param };
+  if (isSnippetInstance(node)) {
+    const out: OutlineNode = { snippet: node.$snippet };
+    const id = nodeId(node);
+    if (id) out.$id = id;
+    return out;
+  }
+  if (!isComponentNode(node)) return {};
+  const out: OutlineNode = { ref: node.$ref };
+  const id = nodeId(node);
+  if (id) out.$id = id;
+  const cls = typeof node.props?.className === "string" ? (node.props.className as string) : "";
+  if (cls) out.classSnippet = shortClass(cls);
+  if (node.children && node.children.length > 0) {
+    out.children = node.children.map(nodeToOutline);
+  }
+  return out;
+}
+
+function toOutline(page: Page): {
+  name: string;
+  variants: Array<{ id: string; name: string; viewport: unknown; tree: OutlineNode }>;
+} {
+  return {
+    name: page.name,
+    variants: page.variants.map((v) => ({
+      id: v.id,
+      name: v.name,
+      viewport: v.viewport,
+      tree: nodeToOutline(v.tree),
+    })),
+  };
 }
 
 function toSummary(c: ComponentDescriptor): ComponentSummary {
@@ -53,10 +111,14 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "get_page",
     {
-      description: "Return the full JSON for a single page (all variants, full tree).",
-      inputSchema: { pageId: z.string() },
+      description:
+        'Return the JSON for a single page. mode: "full" (default) returns every variant and the complete tree — useful when you\'re about to do many edits on a small page. mode: "outline" returns a stripped tree per node: {ref|snippet, $id?, classSnippet (≤40 chars), children}. Use outline for an overview of a large page before drilling in with inspect or @id locators.',
+      inputSchema: {
+        pageId: z.string(),
+        mode: z.enum(["full", "outline"]).optional(),
+      },
     },
-    async ({ pageId }) => {
+    async ({ pageId, mode }) => {
       const page = ctx.folder.pages.get(pageId);
       if (!page) {
         return {
@@ -64,6 +126,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           content: [{ type: "text", text: `Page not found: ${pageId}` }],
         };
       }
+      if (mode === "outline") return jsonResult(toOutline(page));
       return jsonResult(page);
     },
   );

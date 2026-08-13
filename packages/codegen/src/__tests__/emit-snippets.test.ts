@@ -38,7 +38,13 @@ describe("emitSnippet", () => {
     expect(code).toContain("title: string");
     expect(code).toContain("body: string");
     expect(code).toContain("icon: string");
-    expect(code).toContain("export function FeatureCard({ title, body, icon }: FeatureCardProps)");
+    // className is always exposed as an optional prop so callers can pass
+    // extraClassName when instantiating; the root JSX template-literals it in.
+    expect(code).toContain("className?: string");
+    expect(code).toContain(
+      "export function FeatureCard({ title, body, icon, className }: FeatureCardProps)",
+    );
+    expect(code).toMatch(/className=\{`p-6 flex flex-col gap-3 \$\{className \?\? ""\}`\}/);
   });
 
   test("$param in props.children becomes {paramName}", async () => {
@@ -47,7 +53,7 @@ describe("emitSnippet", () => {
     expect(result.code).toContain("{body}");
   });
 
-  test("a snippet with no params emits a zero-arg component", async () => {
+  test("a no-param snippet still accepts an optional className for per-instance overrides", async () => {
     const divider: Snippet = {
       id: "divider",
       name: "Divider",
@@ -55,8 +61,9 @@ describe("emitSnippet", () => {
       tree: { $ref: "Separator" },
     };
     const result = unwrap(await emitSnippet(divider, { outputPath: tmpOut() }));
-    expect(result.code).toContain("export function Divider()");
-    expect(result.code).not.toContain("DividerProps");
+    expect(result.code).toContain("export interface DividerProps");
+    expect(result.code).toContain("className?: string");
+    expect(result.code).toContain("export function Divider({ className }: DividerProps)");
   });
 });
 

@@ -131,6 +131,52 @@ describe("snippet resolution", () => {
     expect(loud.bodyHtml).not.toContain("quiet");
   });
 
+  test("$extraClassName appends to the resolved root's className", async () => {
+    const card: Snippet = {
+      id: "card",
+      name: "Card",
+      params: [],
+      tree: { $ref: "Card", props: { className: "p-6" } },
+    };
+    const snippets = new Map([[card.id, card]]);
+    const { bodyHtml } = await renderVariant(
+      variantWith({ $snippet: "card", $extraClassName: "ring-2 ring-emerald-500" }),
+      theme,
+      { ...opts, snippets },
+    );
+    // Both base class and override appear in the rendered className.
+    expect(bodyHtml).toContain("p-6");
+    expect(bodyHtml).toContain("ring-2");
+    expect(bodyHtml).toContain("ring-emerald-500");
+  });
+
+  test("$extraClassName forwards through a nested snippet root", async () => {
+    const inner: Snippet = {
+      id: "inner",
+      name: "Inner",
+      params: [],
+      tree: { $ref: "Card", props: { className: "p-2" } },
+    };
+    const outer: Snippet = {
+      id: "outer",
+      name: "Outer",
+      params: [],
+      // Outer's body root is a snippet instance — extraClassName should cascade.
+      tree: { $snippet: "inner" },
+    };
+    const snippets = new Map([
+      [inner.id, inner],
+      [outer.id, outer],
+    ]);
+    const { bodyHtml } = await renderVariant(
+      variantWith({ $snippet: "outer", $extraClassName: "border-2" }),
+      theme,
+      { ...opts, snippets },
+    );
+    expect(bodyHtml).toContain("p-2");
+    expect(bodyHtml).toContain("border-2");
+  });
+
   test("inner DOM in a resolved snippet inherits the instance's data-node-path", () => {
     const snippets = new Map([[featureCard.id, featureCard]]);
     // Wrap the snippet inside a Card so the instance lives at path [0].

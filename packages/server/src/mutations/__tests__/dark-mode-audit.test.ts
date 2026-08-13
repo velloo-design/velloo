@@ -201,4 +201,291 @@ describe("darkModeAudit", () => {
     // dark:bg-zinc-900 should keep its variant prefix in the suggestion.
     expect(root?.suggestions["dark:bg-zinc-900"]).toBe("dark:bg-muted");
   });
+
+  // ----- Round-3 false-positive regression: structural utilities are NOT color -----
+
+  test("doesn't flag structural border-side or border-width classes", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: { className: "border-b border-t border-2 border-0 border-dashed border-solid" },
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    // None of these touch color.
+    expect(result.value.totalColored).toBe(0);
+    expect(result.value.problems).toHaveLength(0);
+    expect(result.value.coverage).toBe(1);
+  });
+
+  test("doesn't flag structural ring/shadow/text-size utilities", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: {
+              className:
+                "ring-0 ring-2 ring-inset shadow-none shadow-sm shadow-md shadow-lg text-xs text-sm text-base text-lg text-5xl text-center text-left font-medium leading-tight tracking-tight",
+            },
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.value.totalColored).toBe(0);
+    expect(result.value.problems).toHaveLength(0);
+  });
+
+  test("does flag genuine color uses on the same prefixes", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: {
+              className:
+                "border-b border-zinc-300 ring-2 ring-blue-500 shadow-md shadow-zinc-500/20",
+            },
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    const root = result.value.problems[0];
+    // border-b, ring-2, shadow-md are structural — only the color forms get flagged.
+    expect(root?.raw).toEqual(["border-zinc-300", "ring-blue-500", "shadow-zinc-500/20"]);
+    expect(root?.suggestions["border-zinc-300"]).toBe("border-border");
+    expect(root?.suggestions["ring-blue-500"]).toBe("ring-ring");
+  });
+
+  test("treats transparent / current / inherit as non-flagging color literals", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: { className: "bg-transparent text-current border-transparent" },
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    // These ARE color-related but intentionally non-flipping — don't flag.
+    expect(result.value.problems).toHaveLength(0);
+  });
+
+  test("filters arbitrary values: bg-[#hex] is color (flagged), grid-cols-[80px_1fr] isn't even considered", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: {
+              className: "grid-cols-[80px_1fr] bg-[#fa00ff] text-[oklch(0.5_0.2_250)]",
+            },
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    const root = result.value.problems[0];
+    expect(root?.raw).toContain("bg-[#fa00ff]");
+    expect(root?.raw).toContain("text-[oklch(0.5_0.2_250)]");
+    expect(root?.raw).not.toContain("grid-cols-[80px_1fr]");
+  });
+
+  test("realistic page: ~98% semantic + a couple intentional ring/shadow utilities = coverage 1.0", async () => {
+    // Simulates a page where every color use is semantic, plus structural
+    // non-color utilities (ring-0, shadow-none, border-b, text-xl). The
+    // round-3 feedback got coverage 0.54 here — should now be 1.0.
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: { className: "bg-background text-foreground border-b ring-0 shadow-none p-6" },
+            children: [
+              {
+                $ref: "Heading",
+                props: { level: 1, className: "text-foreground text-5xl", children: "x" },
+              },
+              {
+                $ref: "Text",
+                props: { className: "text-muted-foreground text-sm", children: "y" },
+              },
+              {
+                $ref: "Card",
+                props: {
+                  className:
+                    "bg-card border-border shadow-md border-2 rounded-xl px-4 py-3 ring-2 ring-ring",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.value.coverage).toBe(1);
+    expect(result.value.problems).toHaveLength(0);
+  });
+
+  // ----- Round-5: data-accent intentional opt-out -----
+
+  test("data-accent exempts a node from the audit entirely", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: { className: "bg-card p-6" },
+            children: [
+              // Brand gradient — intentional non-flipping accent.
+              {
+                $ref: "Card",
+                props: {
+                  className: "bg-gradient-to-br from-violet-600 to-rose-500 p-8",
+                  "data-accent": "brand",
+                },
+              },
+              // Regular text — flips normally.
+              { $ref: "Text", props: { className: "text-foreground", children: "y" } },
+            ],
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    // The accent card is invisible to the audit; only root Card + Text count.
+    expect(result.value.totalColored).toBe(2);
+    expect(result.value.problems).toHaveLength(0);
+    expect(result.value.coverage).toBe(1);
+  });
+
+  test("data-accent: false / empty string / null are NOT opt-outs (must be truthy)", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: { className: "bg-zinc-900", "data-accent": false },
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.value.problems).toHaveLength(1);
+  });
+
+  test("auditSnippet runs the same audit against a snippet body", async () => {
+    // Set up a snippet on disk in addition to the page.
+    const { mkdir } = await import("node:fs/promises");
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: { $ref: "Card" },
+        },
+      ],
+    });
+    await mkdir(join(tmp, "snippets"), { recursive: true });
+    await writeFile(
+      join(tmp, "snippets/bad.json"),
+      JSON.stringify({
+        id: "bad",
+        name: "Bad",
+        params: [],
+        tree: {
+          $ref: "Card",
+          props: { className: "bg-zinc-900 text-white" },
+        },
+      }),
+      "utf8",
+    );
+    folder = await loadDesignFolder(tmp);
+    ctx = { folder, broadcast: () => {} };
+
+    const { auditSnippet } = await import("../index.ts");
+    const result = await auditSnippet(ctx, { snippetId: "bad" });
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.value.problems).toHaveLength(1);
+    expect(result.value.problems[0]?.raw).toEqual(["bg-zinc-900", "text-white"]);
+  });
+
+  test("data-accent on a wrapper does NOT cascade to children", async () => {
+    await loadWith({
+      name: "P",
+      variants: [
+        {
+          id: "v",
+          name: "V",
+          viewport: { w: 390, h: 844 },
+          tree: {
+            $ref: "Card",
+            props: {
+              className: "bg-gradient-to-br from-violet-600 to-rose-500",
+              "data-accent": "ok",
+            },
+            children: [
+              // Child text uses raw color — should still be flagged.
+              { $ref: "Text", props: { className: "text-zinc-200", children: "y" } },
+            ],
+          },
+        },
+      ],
+    });
+    const result = await darkModeAudit(ctx, { pageId: "p", variantId: "v" });
+    if (!result.ok) throw new Error("expected ok");
+    // Root is exempt; child is not.
+    expect(result.value.problems).toHaveLength(1);
+    expect(result.value.problems[0]?.ref).toBe("Text");
+  });
 });

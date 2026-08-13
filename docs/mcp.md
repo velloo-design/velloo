@@ -13,7 +13,7 @@ A typical design page is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_va
 | Tool | Args | Returns |
 |---|---|---|
 | `list_pages` | `include_tree?: boolean` | `[{ id, name, variants: [{ id, name, viewport, tree? }] }]`. Pass `include_tree: true` for a single-round-trip overview of the whole design |
-| `get_page` | `pageId` | full page JSON |
+| `get_page` | `pageId, mode?: "full" \| "outline"` | full page JSON, or a stripped `{ref/snippet, $id, classSnippet (≤40 chars), children}` tree when `mode: "outline"` for scanning long pages |
 | `get_variant` | `pageId, variantId` | single variant tree |
 | `list_components` | `filter?, mode?: "summary" \| "full"` | `[{ id, props, category, summary }]` — summary mode returns just `{ id, summary, category }` to avoid blowing the token cap on first call |
 | `list_snippets` | — | `[{ id, name, params }]` |
@@ -30,7 +30,8 @@ A typical design page is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_va
 | `move_node` | `pageId, variantId, fromPath, toParent, toIndex?` |
 | `remove_node` | `pageId, variantId, path` |
 | `inspect` | `pageId, variantId, path` — returns rendered DOM + computed styles |
-| `inspect_dark_diff` | `pageId, variantId` — audit color classes for dark-mode awareness. Returns coverage 0..1, per-node `raw[]` classes that won't theme-flip, and `suggestions{}` for obvious semantic-token replacements |
+| `inspect_dark_diff` | `pageId, variantId` — audit color classes for dark-mode awareness. Scores **only color-bearing classes**; structural utilities (`border-b`, `ring-0`, `shadow-none`, `text-xl`, `bg-transparent`, `text-current`) are exempt by design. Set `data-accent` (any truthy value) on a node's props to exempt it entirely — for intentional non-flipping accents (brand mark, hero gradient, dark-tuned pills). Returns coverage 0..1, per-node `raw[]` classes that won't theme-flip, and `suggestions{}` for obvious semantic-token replacements. Treat the score as a triage signal, not a gate |
+| `inspect_dark_diff_snippet` | `snippetId` — same audit scoped to a snippet body. Catches bad raw-color patterns at definition time, before stamping |
 | `apply_classes` | `pageId, variantId, path, classes` — Tailwind class edit on a node |
 | `apply_classes_bulk` | `pageId, variantId, patches: [{path, classes}]` — atomic bulk apply_classes; useful for sweeping a page through a styling change |
 | `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms |
@@ -61,7 +62,8 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `add_snippet` | `id?, name, params, tree` | `params` is `[{ name, type, default? }]`; `tree` may contain `$param` placeholder nodes |
 | `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, or `tree`; all pages referencing the snippet rebroadcast |
 | `remove_snippet` | `snippetId` | Refuses if any page instantiates it; returns the referencing pageIds so the agent can clean up first |
-| `instantiate_snippet` | `pageId, variantId, parentPath, snippetId, args, id?, index?` | Adds a `$snippet` node — opaque from outside, internal paths are not addressable. Pass `id` for a stable anchor on the instance |
+| `instantiate_snippet` | `pageId, variantId, parentPath, snippetId, args, id?, extraClassName?, index?` | Adds a `$snippet` node — opaque from outside. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root (lets a single instance get wider/accented without forking the snippet) |
+| `update_snippet_args` | `pageId, variantId, path, argPatch?, extraClassName?` | Patch an instance's `args` map (`null` removes a key); also patches the instance's `extraClassName` override (`null` clears) |
 | `update_snippet_args` | `pageId, variantId, path, argPatch` | Edit an instance's args without touching the snippet body |
 
 ### Theme operations
@@ -78,7 +80,8 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Returns |
 |---|---|---|
-| `screenshot` | `pageId, variantId, mode?: "light" \| "dark", fullPage?: boolean` | Base64 PNG via Playwright. Defaults `fullPage: true` so tall pages aren't clipped; pass `fullPage: false` to clip to the variant's viewport rectangle |
+| `screenshot` | `pageId, variantId, mode?: "light" \| "dark" \| "compare", fullPage?: boolean` | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image — fastest dark-mode adaptation check. Defaults `fullPage: true` so tall pages aren't clipped |
+| `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?` | Render a snippet in isolation (no host page) and return a PNG. Useful for iterating on snippet visuals before stamping |
 
 ### Codegen and export
 

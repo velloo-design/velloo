@@ -19,6 +19,8 @@ import {
 import type { MutationContext } from "./context.ts";
 import { withPageLock, withSnippetLock } from "./context.ts";
 import {
+  type AuditSnippetArgs,
+  auditSnippet as auditSnippetImpl,
   type DarkModeAuditArgs,
   type DarkModeAuditResult,
   darkModeAudit as darkModeAuditImpl,
@@ -233,6 +235,14 @@ export function darkModeAudit(
   return darkModeAuditImpl(ctx, args);
 }
 
+/** Read-only dark-mode audit, scoped to a single snippet body. */
+export function auditSnippet(
+  ctx: MutationContext,
+  args: AuditSnippetArgs,
+): Promise<Result<DarkModeAuditResult, MutationError>> {
+  return auditSnippetImpl(ctx, args);
+}
+
 export type { MutationError } from "./errors.ts";
 export type {
   AddNodeArgs,
@@ -245,6 +255,7 @@ export type {
   AddVariantResult,
   ApplyClassesArgs,
   ApplyClassesBulkArgs,
+  AuditSnippetArgs,
   DarkModeAuditArgs,
   DarkModeAuditResult,
   InspectArgs,

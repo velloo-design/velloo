@@ -16,6 +16,12 @@ export interface InstantiateSnippetArgs {
   /** Optional stable id for the new instance (addressable as `"@id"` later). */
   id?: string;
   args?: Record<string, unknown>;
+  /**
+   * Extra Tailwind classes appended to the snippet body's root element.
+   * Lets a one-off instance tweak styling (wider, accent border, etc.)
+   * without forking the snippet definition.
+   */
+  extraClassName?: string;
   index?: number;
 }
 
@@ -65,6 +71,9 @@ export async function instantiateSnippet(
     const node: SnippetInstance = {
       $snippet: snippet.id,
       ...(args.id !== undefined ? { $id: args.id } : {}),
+      ...(args.extraClassName && args.extraClassName.trim() !== ""
+        ? { $extraClassName: args.extraClassName.trim() }
+        : {}),
       ...(args.args && Object.keys(args.args).length > 0 ? { args: args.args } : {}),
     };
     parent.children.splice(idx, 0, node as Node);

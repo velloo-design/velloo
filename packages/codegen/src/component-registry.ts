@@ -46,13 +46,14 @@ export type DynamicEntry = {
 
 export type RegistryEntry = LoweredEntry | ShadcnEntry | DynamicEntry;
 
+// Keep in sync with packages/shadcn-snapshot/src/components/velloo/heading.tsx.
 const HEADING_BY_LEVEL: Record<number, string> = {
-  1: "text-4xl font-semibold tracking-tight",
-  2: "text-3xl font-semibold tracking-tight",
-  3: "text-2xl font-semibold tracking-tight",
-  4: "text-xl font-semibold tracking-tight",
-  5: "text-lg font-semibold tracking-tight",
-  6: "text-base font-semibold tracking-tight",
+  1: "text-5xl font-bold tracking-tight leading-tight",
+  2: "text-4xl font-bold tracking-tight leading-tight",
+  3: "text-3xl font-semibold tracking-tight",
+  4: "text-2xl font-semibold tracking-tight",
+  5: "text-xl font-semibold tracking-tight",
+  6: "text-lg font-semibold tracking-tight",
 };
 
 const TEXT_VARIANT_CLASSES: Record<string, string> = {
@@ -68,6 +69,14 @@ const PLACEHOLDER_ASPECT_CLASS: Record<string, string> = {
   "3/4": "aspect-[3/4]",
   "16/9": "aspect-video",
   "21/9": "aspect-[21/9]",
+};
+
+// Avatar size ladder — keep in sync with packages/shadcn-snapshot/.../placeholder.tsx.
+const PLACEHOLDER_AVATAR_SIZE_CLASS: Record<string, string> = {
+  sm: "size-8 text-xs",
+  md: "size-10 text-sm",
+  lg: "size-14 text-base",
+  xl: "size-20 text-lg",
 };
 
 const shadcn = (jsxName: string, importFile: string): ShadcnEntry => ({
@@ -124,10 +133,11 @@ export const REGISTRY: Record<string, RegistryEntry> = {
       const kind = String(props.kind ?? "image");
       const label = typeof props.label === "string" ? (props.label as string) : undefined;
       if (kind === "avatar") {
+        const size = String(props.size ?? "md");
+        const sizeClass = PLACEHOLDER_AVATAR_SIZE_CLASS[size] ?? PLACEHOLDER_AVATAR_SIZE_CLASS.md;
         return {
           tag: "div",
-          extraClasses:
-            "inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground font-medium size-10 text-sm",
+          extraClasses: `inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground font-medium ${sizeClass}`,
           extraProps: {
             role: "img",
             "aria-label": label ? `placeholder: ${label}` : "placeholder avatar",
@@ -155,5 +165,5 @@ export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Heading: new Set(["level"]),
   Text: new Set(["variant"]),
   Icon: new Set(["name"]),
-  Placeholder: new Set(["kind", "label", "aspect"]),
+  Placeholder: new Set(["kind", "label", "aspect", "size"]),
 };

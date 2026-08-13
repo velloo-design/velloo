@@ -172,26 +172,32 @@ function renderSnippetFile(
   const componentName = pascal(snippet.name || snippet.id);
   const paramNames = new Set(snippet.params.map((p) => p.name));
   const snippetPascalById = buildSnippetPascalMap(options.snippets);
+  // Inject `className` at the snippet body's root so the emitted component
+  // accepts an optional per-instance class override (mirrors $extraClassName
+  // in the design data).
+  const injectClassNameAtRoot = { varName: "className", used: false };
   const ctx = {
     imports,
     componentsAlias,
     snippetsAlias: options.snippetsAlias,
     snippetPascalById,
     snippetParamNames: paramNames,
+    injectClassNameAtRoot,
     indent: (d: number) => "  ".repeat(d),
   };
   const bodyR = emitTree(snippet.tree, ctx);
   if (!bodyR.ok) return bodyR;
 
-  const propsType = snippet.params.map((p) => `  ${p.name}: ${tsTypeFor(p.type)};`).join("\n");
-  const destructured =
-    snippet.params.length > 0 ? `{ ${snippet.params.map((p) => p.name).join(", ")} }` : "";
-  const propsAnnotation = snippet.params.length > 0 ? `: ${componentName}Props` : "";
+  // Always include `className?: string` so call sites can pass extraClassName
+  // without a per-snippet conditional on whether it has other params.
+  const propLines = snippet.params.map((p) => `  ${p.name}: ${tsTypeFor(p.type)};`);
+  propLines.push("  className?: string;");
+  const propsType = propLines.join("\n");
+  const destructuredNames = [...snippet.params.map((p) => p.name), "className"];
+  const destructured = `{ ${destructuredNames.join(", ")} }`;
+  const propsAnnotation = `: ${componentName}Props`;
   const importBlock = imports.isEmpty() ? "" : `${imports.toCode(componentsAlias)}\n\n`;
-  const interfaceBlock =
-    snippet.params.length > 0
-      ? `export interface ${componentName}Props {\n${propsType}\n}\n\n`
-      : "";
+  const interfaceBlock = `export interface ${componentName}Props {\n${propsType}\n}\n\n`;
 
   return {
     ok: true,

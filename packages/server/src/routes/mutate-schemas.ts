@@ -166,6 +166,7 @@ export const InstantiateSnippetBody = z.object({
   snippetId: z.string().min(1),
   id: NodeIdSchema.optional(),
   args: z.record(z.string(), z.unknown()).optional(),
+  extraClassName: z.string().optional(),
   index: z.number().int().nonnegative().optional(),
 });
 
@@ -173,7 +174,8 @@ export const UpdateSnippetArgsBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
   path: Locator,
-  argPatch: z.record(z.string(), z.unknown()),
+  argPatch: z.record(z.string(), z.unknown()).default({}),
+  extraClassName: z.string().nullable().optional(),
 });
 
 export const SetNodeIdBody = z.object({

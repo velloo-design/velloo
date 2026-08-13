@@ -103,7 +103,9 @@ function isTruthy(v: unknown): boolean {
 /**
  * Materialize a snippet instance: resolve args (declared params, defaults
  * for missing optional ones, error on missing required), then substitute
- * `$param` placeholders throughout the body.
+ * `$param` placeholders throughout the body. If the instance carries
+ * `$extraClassName`, append it onto the resolved root's className so
+ * one-off instances can layer styling without forking the snippet.
  */
 function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet): Node {
   const resolvedArgs: Record<string, unknown> = {};
@@ -117,7 +119,34 @@ function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet): Node {
       throw new SnippetParamError(snippet.id, param.name);
     }
   }
-  return substituteParams(snippet.tree, resolvedArgs, snippet.id) as Node;
+  const body = substituteParams(snippet.tree, resolvedArgs, snippet.id) as Node;
+  const extra = instance.$extraClassName?.trim();
+  if (!extra) return body;
+  return applyExtraClassName(body, extra);
+}
+
+/**
+ * Push an extra className onto a resolved snippet body's root node. If the
+ * root is itself a snippet instance (snippet of a snippet), forward the
+ * extra to that instance's `$extraClassName` — the nested resolution will
+ * cascade it down. Param refs and arg roots without a `props` shape can't
+ * carry a className; in that case we ignore (returning the body unchanged
+ * preserves the user's input rather than throwing).
+ */
+function applyExtraClassName(node: Node, extra: string): Node {
+  if (isParamRef(node)) return node;
+  if (isSnippetInstance(node)) {
+    const existing = node.$extraClassName ? `${node.$extraClassName} ${extra}` : extra;
+    return { ...node, $extraClassName: existing };
+  }
+  if (!isComponentNode(node)) return node;
+  const existingClass =
+    typeof node.props?.className === "string" ? (node.props.className as string) : "";
+  const merged = existingClass ? `${existingClass} ${extra}` : extra;
+  return {
+    ...node,
+    props: { ...(node.props ?? {}), className: merged },
+  };
 }
 
 /**

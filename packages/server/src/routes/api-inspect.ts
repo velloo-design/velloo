@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { darkModeAudit, inspect, type MutationContext } from "../mutations/index.ts";
+import { auditSnippet, darkModeAudit, inspect, type MutationContext } from "../mutations/index.ts";
 import { pathFromString } from "../path.ts";
 import { mutationToHttp } from "./mutation-http.ts";
 
@@ -11,6 +11,13 @@ export function createInspectRouter(ctxFor: () => MutationContext): Hono {
     const pageId = c.req.param("pageId");
     const variantId = c.req.param("variantId");
     const result = await darkModeAudit(ctxFor(), { pageId, variantId });
+    return result.ok ? c.json(result.value) : mutationToHttp(c, result.error);
+  });
+
+  // GET /api/inspect/dark-diff-snippet/:snippetId
+  r.get("/dark-diff-snippet/:snippetId", async (c) => {
+    const snippetId = c.req.param("snippetId");
+    const result = await auditSnippet(ctxFor(), { snippetId });
     return result.ok ? c.json(result.value) : mutationToHttp(c, result.error);
   });
 
