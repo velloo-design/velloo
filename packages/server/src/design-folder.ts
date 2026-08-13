@@ -1,6 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import {
+  type Annotation,
+  AnnotationSchema,
+  type CanvasNote,
+  CanvasNoteSchema,
   type Config,
   ConfigSchema,
   type Page,
@@ -17,6 +21,10 @@ export interface DesignFolder {
   theme: Theme;
   pages: Map<string, Page>;
   snippets: Map<string, Snippet>;
+  /** Per-page annotation arrays. Empty array for pages with no sidecar. */
+  annotations: Map<string, Annotation[]>;
+  /** Per-page free canvas notes. */
+  notes: Map<string, CanvasNote[]>;
 }
 
 /** Page id is the filename stem (e.g. "onboarding" for pages/onboarding.json). */
@@ -32,6 +40,15 @@ export function snippetIdFromFilename(filename: string): string {
 async function readJson<T>(path: string): Promise<T> {
   const raw = await readFile(path, "utf8");
   return JSON.parse(raw) as T;
+}
+
+async function readJsonOrNull<T>(path: string): Promise<T | null> {
+  try {
+    return await readJson<T>(path);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
 }
 
 async function loadDir<T>(
@@ -55,6 +72,35 @@ async function loadDir<T>(
   return out;
 }
 
+/**
+ * Load per-page sidecar files for annotations + canvas notes. Each sidecar
+ * is `pages/<pageId>.annotations.json` or `.notes.json` — an array of the
+ * matching shape, or absent (treated as empty).
+ */
+async function loadSidecars(
+  root: string,
+  pageIds: Iterable<string>,
+): Promise<{
+  annotations: Map<string, Annotation[]>;
+  notes: Map<string, CanvasNote[]>;
+}> {
+  const annotations = new Map<string, Annotation[]>();
+  const notes = new Map<string, CanvasNote[]>();
+  for (const pageId of pageIds) {
+    const annRaw = await readJsonOrNull<unknown>(join(root, "pages", `${pageId}.annotations.json`));
+    annotations.set(
+      pageId,
+      annRaw === null ? [] : (annRaw as unknown[]).map((r) => AnnotationSchema.parse(r)),
+    );
+    const notesRaw = await readJsonOrNull<unknown>(join(root, "pages", `${pageId}.notes.json`));
+    notes.set(
+      pageId,
+      notesRaw === null ? [] : (notesRaw as unknown[]).map((r) => CanvasNoteSchema.parse(r)),
+    );
+  }
+  return { annotations, notes };
+}
+
 export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   const root = resolve(folder);
   const configRaw = await readJson(join(root, ".design", "config.json"));
@@ -72,8 +118,9 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
     (raw) => SnippetSchema.parse(raw),
     snippetIdFromFilename,
   );
+  const { annotations, notes } = await loadSidecars(root, pages.keys());
 
-  return { root, config, theme, pages, snippets };
+  return { root, config, theme, pages, snippets, annotations, notes };
 }
 
 /** Reload one page from disk and update the cache in place. */
@@ -87,6 +134,10 @@ export async function reloadPage(folder: DesignFolder, pageId: string): Promise<
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       folder.pages.delete(pageId);
+      // A page removal cascades to its sidecars — the in-memory state
+      // shouldn't keep stale annotations attached to a vanished page.
+      folder.annotations.delete(pageId);
+      folder.notes.delete(pageId);
       return null;
     }
     throw err;
@@ -118,4 +169,25 @@ export async function reloadSnippet(
     }
     throw err;
   }
+}
+
+/** Reload a page's annotations sidecar. */
+export async function reloadAnnotations(
+  folder: DesignFolder,
+  pageId: string,
+): Promise<Annotation[]> {
+  const raw = await readJsonOrNull<unknown>(
+    join(folder.root, "pages", `${pageId}.annotations.json`),
+  );
+  const parsed = raw === null ? [] : (raw as unknown[]).map((r) => AnnotationSchema.parse(r));
+  folder.annotations.set(pageId, parsed);
+  return parsed;
+}
+
+/** Reload a page's notes sidecar. */
+export async function reloadNotes(folder: DesignFolder, pageId: string): Promise<CanvasNote[]> {
+  const raw = await readJsonOrNull<unknown>(join(folder.root, "pages", `${pageId}.notes.json`));
+  const parsed = raw === null ? [] : (raw as unknown[]).map((r) => CanvasNoteSchema.parse(r));
+  folder.notes.set(pageId, parsed);
+  return parsed;
 }

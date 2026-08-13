@@ -1,4 +1,12 @@
 export {
+  type Annotation,
+  AnnotationSchema,
+  type AnnotationTarget,
+  AnnotationTargetSchema,
+  type CanvasNote,
+  CanvasNoteSchema,
+} from "./annotation.ts";
+export {
   type ComponentSource,
   ComponentSourceSchema,
   type Config,

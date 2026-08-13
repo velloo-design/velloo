@@ -20,9 +20,13 @@ my-product/
     │   └── hero-banner.json
     ├── assets/                # imported images, SVGs
     └── pages/
-        ├── onboarding.json    # one design page = N variants
+        ├── onboarding.json              # one design page = N variants
+        ├── onboarding.annotations.json  # sidecar: node-anchored markdown
+        ├── onboarding.notes.json        # sidecar: free-positioned markdown
         └── settings.json
 ```
+
+**Sidecars** for annotations + canvas notes live alongside their page (`pages/<pageId>.annotations.json` and `pages/<pageId>.notes.json`). Empty arrays delete the sidecar on persist — the directory stays clean when a page has none. Codegen ignores both sidecar types; they're canvas-only data.
 
 ## JSON schema (sketch)
 

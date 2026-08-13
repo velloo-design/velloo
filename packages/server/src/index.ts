@@ -7,6 +7,8 @@ import { Broadcaster } from "./broadcaster.ts";
 import {
   type DesignFolder,
   loadDesignFolder,
+  reloadAnnotations,
+  reloadNotes,
   reloadPage,
   reloadSnippet,
   reloadTheme,
@@ -95,6 +97,10 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         await reloadTheme(folder);
       } else if (event.type === "snippet-changed") {
         await reloadSnippet(folder, event.snippetId);
+      } else if (event.type === "annotations-changed") {
+        await reloadAnnotations(folder, event.pageId);
+      } else if (event.type === "notes-changed") {
+        await reloadNotes(folder, event.pageId);
       }
       broadcast(event);
     } catch (err) {

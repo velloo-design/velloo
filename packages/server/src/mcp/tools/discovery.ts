@@ -10,6 +10,7 @@ import {
 import { type ComponentDescriptor, loadManifest, snapshotVersion } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
+import { resolveLocator } from "../../path.ts";
 
 function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
@@ -211,6 +212,30 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         };
       }
       return jsonResult(snippet);
+    },
+  );
+
+  mcp.registerTool(
+    "list_annotations",
+    {
+      description:
+        "List designer-authored annotations on a page. Each annotation is anchored to a specific node via a locator; `resolved` carries the resolved path (or null if the targeted node has since vanished — treat dangling annotations as low-priority). Read-only: agents can consume annotations as guidance but cannot create or edit them. The `body` field is markdown.",
+      inputSchema: { pageId: z.string() },
+    },
+    async ({ pageId }) => {
+      const page = ctx.folder.pages.get(pageId);
+      const annotations = ctx.folder.annotations.get(pageId) ?? [];
+      // Resolve locators against the current variant trees so agents know
+      // which annotations point at currently-existing nodes.
+      const list = annotations.map((a) => {
+        let resolved: number[] | null = null;
+        if (page) {
+          const variant = page.variants.find((v) => v.id === a.target.variantId);
+          if (variant) resolved = resolveLocator(variant.tree, a.target.locator);
+        }
+        return { ...a, resolved };
+      });
+      return jsonResult({ annotations: list });
     },
   );
 }

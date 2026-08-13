@@ -1,5 +1,6 @@
 import type { Page, Snippet, SnippetParam, Theme } from "@velloo/schema";
 import type { Manifest } from "@velloo/shadcn-snapshot";
+import type { AnnotationEntry, CanvasNoteEntry } from "./store.ts";
 
 export interface DesignSummary {
   snapshotVersion: string;
@@ -32,6 +33,20 @@ export async function fetchSnippet(id: string): Promise<Snippet> {
   const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`fetchSnippet(${id}): ${res.status}`);
   return (await res.json()) as Snippet;
+}
+
+export async function fetchAnnotations(pageId: string): Promise<AnnotationEntry[]> {
+  const res = await fetch(`/api/annotations/${encodeURIComponent(pageId)}`);
+  if (!res.ok) throw new Error(`fetchAnnotations(${pageId}): ${res.status}`);
+  const body = (await res.json()) as { annotations: AnnotationEntry[] };
+  return body.annotations;
+}
+
+export async function fetchNotes(pageId: string): Promise<CanvasNoteEntry[]> {
+  const res = await fetch(`/api/notes/${encodeURIComponent(pageId)}`);
+  if (!res.ok) throw new Error(`fetchNotes(${pageId}): ${res.status}`);
+  const body = (await res.json()) as { notes: CanvasNoteEntry[] };
+  return body.notes;
 }
 
 export async function fetchDesign(): Promise<DesignSummary> {
@@ -235,5 +250,62 @@ export const mutate = {
     index?: number;
   }) {
     return postMutate<{ path: number[] }>("instantiate_snippet", args);
+  },
+};
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const respBody = (await res.json().catch(() => ({}))) as { error?: MutateError };
+    const err = new Error(respBody.error?.message ?? `${path}: ${res.status}`);
+    (err as Error & { payload?: MutateError }).payload = respBody.error;
+    throw err;
+  }
+  return (await res.json()) as T;
+}
+
+export const annotations = {
+  add(args: {
+    pageId: string;
+    target: { variantId: string; locator: number[] | string };
+    body: string;
+    position?: { x: number; y: number } | "auto";
+    collapsed?: boolean;
+  }) {
+    return postJson<{ annotation: AnnotationEntry }>("/api/annotations/add", args);
+  },
+  update(args: {
+    pageId: string;
+    annotationId: string;
+    patch: {
+      body?: string;
+      position?: { x: number; y: number } | "auto";
+      collapsed?: boolean | null;
+    };
+  }) {
+    return postJson<{ annotation: AnnotationEntry }>("/api/annotations/update", args);
+  },
+  remove(args: { pageId: string; annotationId: string }) {
+    return postJson<{ removedId: string }>("/api/annotations/remove", args);
+  },
+};
+
+export const notes = {
+  add(args: { pageId: string; x: number; y: number; width?: number; body: string }) {
+    return postJson<{ note: CanvasNoteEntry }>("/api/notes/add", args);
+  },
+  update(args: {
+    pageId: string;
+    noteId: string;
+    patch: { x?: number; y?: number; width?: number; body?: string };
+  }) {
+    return postJson<{ note: CanvasNoteEntry }>("/api/notes/update", args);
+  },
+  remove(args: { pageId: string; noteId: string }) {
+    return postJson<{ removedId: string }>("/api/notes/remove", args);
   },
 };

@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import type { DesignFolder } from "./design-folder.ts";
 import type { MutationContext } from "./mutations/index.ts";
+import { createAnnotationsRouter } from "./routes/api-annotations.ts";
 import { createComponentsRouter } from "./routes/api-components.ts";
 import { createDesignRouter } from "./routes/api-design.ts";
 import { createEmitRouter } from "./routes/api-emit.ts";
 import { createInspectRouter } from "./routes/api-inspect.ts";
 import { createMutateRouter } from "./routes/api-mutate.ts";
+import { createNotesRouter } from "./routes/api-notes.ts";
 import { createPageRouter } from "./routes/api-page.ts";
 import { createRenderRouter } from "./routes/api-render.ts";
 import { createSnippetsRouter } from "./routes/api-snippets.ts";
@@ -31,6 +33,8 @@ export function createApp(ctxFor: () => MutationContext, jit: TailwindJit): Hono
   app.route("/api/inspect", createInspectRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
   app.route("/api/emit", createEmitRouter(folder));
+  app.route("/api/annotations", createAnnotationsRouter(ctxFor));
+  app.route("/api/notes", createNotesRouter(ctxFor));
   app.route(
     "/api/undo",
     createUndoRouter(folder, (e) => ctxFor().broadcast(e)),

@@ -1,4 +1,17 @@
-import { Hand, Minus, Moon, MousePointer2, Plus, Redo2, Sun, Undo2 } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Hand,
+  MessageSquareText,
+  Minus,
+  Moon,
+  MousePointer2,
+  Plus,
+  Redo2,
+  StickyNote,
+  Sun,
+  Undo2,
+} from "lucide-react";
 import { redo as redoApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -75,12 +88,24 @@ export function TopBar() {
             {
               value: "hand",
               icon: <Hand size={14} strokeWidth={2} />,
-              title: "Hand tool (H)",
+              title: "Hand tool (H) — hold Space for temporary",
+            },
+            {
+              value: "note",
+              icon: <StickyNote size={14} strokeWidth={2} />,
+              title: "Note tool (T) — drop free-positioned canvas notes",
+            },
+            {
+              value: "annotate",
+              icon: <MessageSquareText size={14} strokeWidth={2} />,
+              title: "Annotate (Y) — click a node to attach an annotation",
             },
           ]}
           value={cursorMode}
           onChange={(v) => setCursorMode(v as CursorMode)}
         />
+
+        <AnnotationsToggle />
 
         <div className="flex items-center gap-1 ml-2">
           <SmallButton
@@ -206,5 +231,20 @@ function SegmentedButton<T extends string>({
         );
       })}
     </div>
+  );
+}
+
+function AnnotationsToggle() {
+  const visible = useCanvas((s) => s.annotationsVisible);
+  const setVisible = useCanvas((s) => s.setAnnotationsVisible);
+  return (
+    <button
+      type="button"
+      onClick={() => setVisible(!visible)}
+      title={visible ? "Hide annotations + notes" : "Show annotations + notes"}
+      className="h-7 px-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] flex items-center gap-1"
+    >
+      {visible ? <Eye size={13} strokeWidth={2} /> : <EyeOff size={13} strokeWidth={2} />}
+    </button>
   );
 }

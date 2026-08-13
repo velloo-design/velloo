@@ -243,3 +243,70 @@ describe("ThemeSchema", () => {
     expect(ThemeSchema.safeParse(theme).success).toBe(false);
   });
 });
+
+describe("AnnotationSchema", () => {
+  test("accepts an annotation with @id locator and auto position", async () => {
+    const { AnnotationSchema } = await import("../annotation.ts");
+    const parsed = AnnotationSchema.safeParse({
+      id: "a1",
+      target: { variantId: "mobile", locator: "@hero-cta" },
+      body: "**Important** — make this land harder.",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.position).toBe("auto"); // default
+    }
+  });
+
+  test("accepts an annotation with path-array locator + explicit position", async () => {
+    const { AnnotationSchema } = await import("../annotation.ts");
+    const parsed = AnnotationSchema.safeParse({
+      id: "a2",
+      target: { variantId: "desktop", locator: [0, 2, 1] },
+      position: { x: -200, y: 40 },
+      body: "x",
+      collapsed: true,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  test("rejects malformed @id locators", async () => {
+    const { AnnotationSchema } = await import("../annotation.ts");
+    expect(
+      AnnotationSchema.safeParse({
+        id: "a3",
+        target: { variantId: "v", locator: "1-bad-leading-digit" },
+        body: "x",
+      }).success,
+    ).toBe(false);
+    expect(
+      AnnotationSchema.safeParse({
+        id: "a4",
+        target: { variantId: "v", locator: "@" },
+        body: "x",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("CanvasNoteSchema", () => {
+  test("accepts a note with required fields", async () => {
+    const { CanvasNoteSchema } = await import("../annotation.ts");
+    expect(
+      CanvasNoteSchema.safeParse({
+        id: "n1",
+        x: 100,
+        y: 200,
+        width: 240,
+        body: "# Intro\n\nFree text **here**.",
+      }).success,
+    ).toBe(true);
+  });
+
+  test("rejects a note with non-positive width", async () => {
+    const { CanvasNoteSchema } = await import("../annotation.ts");
+    expect(CanvasNoteSchema.safeParse({ id: "n2", x: 0, y: 0, width: 0, body: "" }).success).toBe(
+      false,
+    );
+  });
+});

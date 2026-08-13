@@ -27,7 +27,18 @@ export type MutationError =
   /** A locator `@id` didn't resolve to any node in the variant tree. */
   | { kind: "IdNotFound"; pageId: string; variantId: string; id: string }
   /** Two nodes in the same variant share an `$id`. Carries the conflicting id + paths. */
-  | { kind: "IdConflict"; pageId: string; variantId: string; id: string; paths: number[][] };
+  | { kind: "IdConflict"; pageId: string; variantId: string; id: string; paths: number[][] }
+  /** A node already has an annotation attached; only one annotation per node. */
+  | {
+      kind: "AnnotationConflict";
+      pageId: string;
+      variantId: string;
+      locator: number[] | string;
+      existingId: string;
+    }
+  /** Annotation / note id didn't resolve in the page's sidecar. */
+  | { kind: "AnnotationNotFound"; pageId: string; annotationId: string }
+  | { kind: "CanvasNoteNotFound"; pageId: string; noteId: string };
 
 // Constructor helpers — keep mutation bodies readable.
 export const pageNotFound = (pageId: string): MutationError => ({
@@ -117,6 +128,28 @@ export const idConflict = (
   variantId,
   id,
   paths,
+});
+export const annotationConflict = (
+  pageId: string,
+  variantId: string,
+  locator: number[] | string,
+  existingId: string,
+): MutationError => ({
+  kind: "AnnotationConflict",
+  pageId,
+  variantId,
+  locator,
+  existingId,
+});
+export const annotationNotFound = (pageId: string, annotationId: string): MutationError => ({
+  kind: "AnnotationNotFound",
+  pageId,
+  annotationId,
+});
+export const canvasNoteNotFound = (pageId: string, noteId: string): MutationError => ({
+  kind: "CanvasNoteNotFound",
+  pageId,
+  noteId,
 });
 
 /**

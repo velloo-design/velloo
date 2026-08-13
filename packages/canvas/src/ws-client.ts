@@ -3,7 +3,9 @@ import { useCanvas } from "./store.ts";
 type ServerEvent =
   | { type: "page-changed"; pageId: string }
   | { type: "theme-changed" }
-  | { type: "snippet-changed"; snippetId: string };
+  | { type: "snippet-changed"; snippetId: string }
+  | { type: "annotations-changed"; pageId: string }
+  | { type: "notes-changed"; pageId: string };
 
 export function connectWs(): () => void {
   let socket: WebSocket | null = null;
@@ -34,6 +36,8 @@ export function connectWs(): () => void {
         refreshDesignSummary,
         refreshHistory,
         refreshTheme,
+        refreshAnnotations,
+        refreshNotes,
       } = useCanvas.getState();
       void refreshHistory();
       if (payload.type === "page-changed") {
@@ -53,6 +57,10 @@ export function connectWs(): () => void {
         // current page render (so instances pick up body edits).
         void refreshDesignSummary();
         void refreshCurrentPage();
+      } else if (payload.type === "annotations-changed") {
+        if (payload.pageId === currentPageId) void refreshAnnotations();
+      } else if (payload.type === "notes-changed") {
+        if (payload.pageId === currentPageId) void refreshNotes();
       }
     };
 

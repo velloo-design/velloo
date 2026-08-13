@@ -4,7 +4,9 @@ import { join, relative, sep } from "node:path";
 export type WatchEvent =
   | { type: "page-changed"; pageId: string }
   | { type: "theme-changed" }
-  | { type: "snippet-changed"; snippetId: string };
+  | { type: "snippet-changed"; snippetId: string }
+  | { type: "annotations-changed"; pageId: string }
+  | { type: "notes-changed"; pageId: string };
 
 export interface Watcher {
   close(): void;
@@ -38,9 +40,22 @@ export function watchDesignFolder(
   function classify(filename: string | null): WatchEvent | null {
     if (!filename) return null;
     const parts = filename.split(sep);
-    if (parts[0] === "pages" && parts[1] && parts[1].endsWith(".json")) {
-      const pageId = parts[1].slice(0, -".json".length);
-      return { type: "page-changed", pageId };
+    if (parts[0] === "pages" && parts[1]) {
+      const file = parts[1];
+      // Sidecar files: <pageId>.annotations.json / .notes.json. Check these
+      // before the generic page-changed branch so they don't get mis-routed.
+      if (file.endsWith(".annotations.json")) {
+        const pageId = file.slice(0, -".annotations.json".length);
+        return { type: "annotations-changed", pageId };
+      }
+      if (file.endsWith(".notes.json")) {
+        const pageId = file.slice(0, -".notes.json".length);
+        return { type: "notes-changed", pageId };
+      }
+      if (file.endsWith(".json")) {
+        const pageId = file.slice(0, -".json".length);
+        return { type: "page-changed", pageId };
+      }
     }
     if (parts[0] === "theme" && parts[1] && parts[1].endsWith(".json")) {
       return { type: "theme-changed" };

@@ -11,11 +11,29 @@ import {
   type AddVariantResult,
   addVariant as addVariantImpl,
 } from "./add-variant.ts";
+import {
+  type AddAnnotationArgs,
+  type AnnotationResult,
+  addAnnotation as addAnnotationImpl,
+  type RemoveAnnotationArgs,
+  removeAnnotation as removeAnnotationImpl,
+  type UpdateAnnotationArgs,
+  updateAnnotation as updateAnnotationImpl,
+} from "./annotations.ts";
 import { type ApplyClassesArgs, applyClasses as applyClassesImpl } from "./apply-classes.ts";
 import {
   type ApplyClassesBulkArgs,
   applyClassesBulk as applyClassesBulkImpl,
 } from "./apply-classes-bulk.ts";
+import {
+  type AddNoteArgs,
+  addNote as addNoteImpl,
+  type NoteResult,
+  type RemoveNoteArgs,
+  removeNote as removeNoteImpl,
+  type UpdateNoteArgs,
+  updateNote as updateNoteImpl,
+} from "./canvas-notes.ts";
 import type { MutationContext } from "./context.ts";
 import { withPageLock, withSnippetLock } from "./context.ts";
 import {
@@ -173,6 +191,42 @@ export function setNodeId(
 ): Promise<Result<SetNodeIdResult, MutationError>> {
   return withPageLock(args.pageId, () => setNodeIdImpl(ctx, args));
 }
+export function addAnnotation(
+  ctx: MutationContext,
+  args: AddAnnotationArgs,
+): Promise<Result<AnnotationResult, MutationError>> {
+  return withPageLock(args.pageId, () => addAnnotationImpl(ctx, args));
+}
+export function updateAnnotation(
+  ctx: MutationContext,
+  args: UpdateAnnotationArgs,
+): Promise<Result<AnnotationResult, MutationError>> {
+  return withPageLock(args.pageId, () => updateAnnotationImpl(ctx, args));
+}
+export function removeAnnotation(
+  ctx: MutationContext,
+  args: RemoveAnnotationArgs,
+): Promise<Result<{ removedId: string }, MutationError>> {
+  return withPageLock(args.pageId, () => removeAnnotationImpl(ctx, args));
+}
+export function addNote(
+  ctx: MutationContext,
+  args: AddNoteArgs,
+): Promise<Result<NoteResult, MutationError>> {
+  return withPageLock(args.pageId, () => addNoteImpl(ctx, args));
+}
+export function updateNote(
+  ctx: MutationContext,
+  args: UpdateNoteArgs,
+): Promise<Result<NoteResult, MutationError>> {
+  return withPageLock(args.pageId, () => updateNoteImpl(ctx, args));
+}
+export function removeNote(
+  ctx: MutationContext,
+  args: RemoveNoteArgs,
+): Promise<Result<{ removedId: string }, MutationError>> {
+  return withPageLock(args.pageId, () => removeNoteImpl(ctx, args));
+}
 export function updateVariant(
   ctx: MutationContext,
   args: UpdateVariantArgs,
@@ -245,14 +299,17 @@ export function auditSnippet(
 
 export type { MutationError } from "./errors.ts";
 export type {
+  AddAnnotationArgs,
   AddNodeArgs,
   AddNodeResult,
+  AddNoteArgs,
   AddPageArgs,
   AddPageResult,
   AddSnippetArgs,
   AddSnippetResult,
   AddVariantArgs,
   AddVariantResult,
+  AnnotationResult,
   ApplyClassesArgs,
   ApplyClassesBulkArgs,
   AuditSnippetArgs,
@@ -265,8 +322,11 @@ export type {
   MoveNodeArgs,
   MoveNodeResult,
   MutationContext,
+  NoteResult,
+  RemoveAnnotationArgs,
   RemoveNodeArgs,
   RemoveNodeResult,
+  RemoveNoteArgs,
   RemovePageArgs,
   RemovePageResult,
   RemoveSnippetArgs,
@@ -275,6 +335,8 @@ export type {
   RemoveVariantResult,
   SetNodeIdArgs,
   SetNodeIdResult,
+  UpdateAnnotationArgs,
+  UpdateNoteArgs,
   UpdatePageArgs,
   UpdatePageResult,
   UpdatePropsArgs,

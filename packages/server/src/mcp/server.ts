@@ -61,6 +61,8 @@ const INSTRUCTIONS = [
   "Text content for `Heading`, `Text`, `Button`, `Badge`, `Label` goes in the `children` prop, not a `text` prop. `Heading.level` controls only the HTML tag + a baked size ladder (h1 = text-5xl bold, h6 = text-lg semibold); override with `className` if you want a different size. `Icon` takes any lucide-react name as its `name` prop (e.g. Sparkles, ArrowRight, Check). For placeholder imagery (avatars, hero shots) use the `Placeholder` component instead of faking with gradient divs.",
   "",
   '**Verification loop**: when a page feels done, run `screenshot mode: "compare"` — returns one PNG with light + dark rendered side-by-side, the fastest signal that the design actually adapts. Call `inspect_dark_diff` to score the page; coverage 1.0 + an empty problems list is the green light. `validate_classes` is free and fast — run it on any arbitrary-value classes (`shadow-[…]`, `grid-cols-[…]`, etc.) before relying on them. `inspect` returns SSR\'d HTML + resolved props for a specific node when you need to verify what landed.',
+  "",
+  '**Designer annotations**: `list_annotations(pageId)` returns markdown notes the designer attached to specific nodes on a page. Treat them as guidance for the current page — addressable feedback like "this CTA should land harder" or "tighten the copy." Each annotation carries a `resolved` path (null when the targeted node has been removed — low-priority, the designer\'s note is stale). Read-only: you can act on annotations but not create or edit them.',
 ].join("\n");
 
 function buildMcpServer(ctx: MutationContext, jit: TailwindJit): McpServer {

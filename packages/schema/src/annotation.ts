@@ -1,0 +1,67 @@
+import { z } from "zod";
+
+/**
+ * Sprint-11 annotation primitives. Two kinds, deliberately split:
+ *
+ *  - **CanvasNote**: free-positioned markdown in canvas coordinate space.
+ *    Pure designer scratchpad. Not exposed to the agent.
+ *
+ *  - **Annotation**: tied to a specific node via { variantId, locator }.
+ *    Canvas draws a dashed connector between the annotation pill and the
+ *    targeted node's bounding box. Exposed read-only to the agent so
+ *    designer commentary on a specific node flows into the agent's
+ *    context naturally.
+ *
+ * Both formats use markdown for `body` (a small subset: headers, bold,
+ * italic, line breaks, emoji as literal unicode). Stored verbatim;
+ * canvas renders, agent reads as-is.
+ */
+
+/**
+ * Locator value embedded in an annotation target. Mirrors the server's
+ * `Locator` union but the schema package can't depend on server code so
+ * the validation is repeated here.
+ */
+const AnnotationLocatorSchema = z.union([
+  z.array(z.number().int().nonnegative()),
+  z.string().regex(/^@[a-zA-Z][a-zA-Z0-9_-]*$/),
+]);
+
+export const AnnotationTargetSchema = z.object({
+  variantId: z.string().min(1),
+  /** Path array or `"@id"` string identifying the anchored node. */
+  locator: AnnotationLocatorSchema,
+});
+export type AnnotationTarget = z.infer<typeof AnnotationTargetSchema>;
+
+const PositionSchema = z.union([z.object({ x: z.number(), y: z.number() }), z.literal("auto")]);
+
+export const AnnotationSchema = z.object({
+  id: z.string().min(1),
+  target: AnnotationTargetSchema,
+  /**
+   * Canvas placement. `"auto"` lets the canvas position it to the left of
+   * the anchored node's bounding box; an explicit `{x, y}` is set when the
+   * user drags the annotation to override.
+   */
+  position: PositionSchema.default("auto"),
+  /** Markdown body. */
+  body: z.string(),
+  /** Persisted collapsed state. Optional — undefined means "use canvas default". */
+  collapsed: z.boolean().optional(),
+});
+export type Annotation = z.infer<typeof AnnotationSchema>;
+
+export const CanvasNoteSchema = z.object({
+  id: z.string().min(1),
+  x: z.number(),
+  y: z.number(),
+  /**
+   * User-resizable width. Height is always derived from content (notes
+   * never scroll; the box expands downward).
+   */
+  width: z.number().positive(),
+  /** Markdown body. */
+  body: z.string(),
+});
+export type CanvasNote = z.infer<typeof CanvasNoteSchema>;

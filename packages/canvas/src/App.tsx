@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { redo as redoApi, undo as undoApi } from "./api.ts";
+import { annotations as annotationsApi, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
@@ -21,6 +21,8 @@ export function App() {
   const selectPage = useCanvas((s) => s.selectPage);
   const setSelection = useCanvas((s) => s.setSelection);
   const initialized = useRef(false);
+  /** Cursor mode at the moment Space was held — restored on keyup. */
+  const spaceHeldRef = useRef<"select" | "hand" | "note" | "annotate" | null>(null);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -79,13 +81,76 @@ export function App() {
         state.setCursorMode("select");
       } else if (!cmd && !inEditable && (e.key === "h" || e.key === "H")) {
         state.setCursorMode("hand");
+      } else if (!cmd && !inEditable && (e.key === "t" || e.key === "T")) {
+        // T → note (free-positioned canvas markdown).
+        state.setCursorMode("note");
+      } else if (!cmd && !inEditable && (e.key === "y" || e.key === "Y")) {
+        // Y → annotate. Tool stays armed until a node is clicked
+        // (selection-watcher below catches the click and creates the
+        // annotation). Esc cancels.
+        state.setCursorMode("annotate");
+      } else if (e.key === " " && !inEditable && !spaceHeldRef.current) {
+        // Space (hold) → temporary hand tool, like Figma. Restored on keyup.
+        e.preventDefault();
+        spaceHeldRef.current = state.cursorMode;
+        state.setCursorMode("hand");
       } else if (e.key === "Escape") {
-        // Esc in any mode bails back to select.
+        // Esc in any mode bails back to select. Also exits any in-progress
+        // edit on a note/annotation (handled within the components).
         state.setCursorMode("select");
+        state.setEditingMarkupId(null);
+      }
+    };
+    const upHandler = (e: KeyboardEvent) => {
+      if (e.key === " " && spaceHeldRef.current) {
+        const prior = spaceHeldRef.current;
+        spaceHeldRef.current = null;
+        useCanvas.getState().setCursorMode(prior);
       }
     };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keyup", upHandler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("keyup", upHandler);
+    };
+  }, []);
+
+  // Annotate mode: when the user clicks a node, anchor an annotation to it
+  // and pop back into select mode. Subscribes via store.subscribe so we
+  // catch every selection change while in annotate mode.
+  useEffect(() => {
+    let lastSelection: { variantId: string; path: string } | null = null;
+    return useCanvas.subscribe((state, prev) => {
+      const sel = state.selection;
+      // Track to detect a transition into selection (skip the initial null→null
+      // and identical selections).
+      const changed = JSON.stringify(sel) !== JSON.stringify(lastSelection);
+      lastSelection = sel;
+      if (!changed) return;
+      if (state.cursorMode !== "annotate") return;
+      if (!sel) return;
+      const pageId = state.currentPageId;
+      if (!pageId) return;
+      // Annotate the selected node. Path is dot-string; convert to array.
+      const locator = sel.path === "" ? [] : sel.path.split(".").map(Number);
+      void (async () => {
+        try {
+          const r = await annotationsApi.add({
+            pageId,
+            target: { variantId: sel.variantId, locator },
+            body: "",
+          });
+          state.setEditingMarkupId(r.annotation.id);
+        } catch (err) {
+          toastError(err, "Could not add annotation");
+        } finally {
+          state.setCursorMode("select");
+        }
+      })();
+      // Avoid referencing prev to silence the unused-arg lint.
+      void prev;
+    });
   }, []);
 
   if (!design) {

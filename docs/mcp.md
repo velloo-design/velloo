@@ -19,6 +19,7 @@ A typical design page is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_va
 | `list_snippets` | — | `[{ id, name, params }]` |
 | `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
 | `get_theme` | — | full token tree |
+| `list_annotations` | `pageId` | Designer-authored markdown annotations on a page. Each carries a `target: { variantId, locator }` and a `resolved` path (null when the targeted node has been removed — treat as low-priority). Read-only: agents can act on annotations but not create or edit them |
 
 ### Tree mutations
 

@@ -185,3 +185,61 @@ export const SetNodeIdBody = z.object({
   /** New id, or null to clear. */
   id: NodeIdSchema.nullable(),
 });
+
+// --- Annotations + canvas notes ----------------------------------------
+
+const AnnotationPositionSchema = z.union([
+  z.object({ x: z.number(), y: z.number() }),
+  z.literal("auto"),
+]);
+
+export const AddAnnotationBody = z.object({
+  pageId: z.string().min(1),
+  target: z.object({
+    variantId: z.string().min(1),
+    locator: Locator,
+  }),
+  body: z.string(),
+  position: AnnotationPositionSchema.optional(),
+  collapsed: z.boolean().optional(),
+});
+
+export const UpdateAnnotationBody = z.object({
+  pageId: z.string().min(1),
+  annotationId: z.string().min(1),
+  patch: z.object({
+    body: z.string().optional(),
+    position: AnnotationPositionSchema.optional(),
+    /** null clears the persisted collapsed state. */
+    collapsed: z.boolean().nullable().optional(),
+  }),
+});
+
+export const RemoveAnnotationBody = z.object({
+  pageId: z.string().min(1),
+  annotationId: z.string().min(1),
+});
+
+export const AddNoteBody = z.object({
+  pageId: z.string().min(1),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive().optional(),
+  body: z.string(),
+});
+
+export const UpdateNoteBody = z.object({
+  pageId: z.string().min(1),
+  noteId: z.string().min(1),
+  patch: z.object({
+    x: z.number().optional(),
+    y: z.number().optional(),
+    width: z.number().positive().optional(),
+    body: z.string().optional(),
+  }),
+});
+
+export const RemoveNoteBody = z.object({
+  pageId: z.string().min(1),
+  noteId: z.string().min(1),
+});

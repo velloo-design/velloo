@@ -14,10 +14,28 @@ import {
 import { pathFromString } from "./path.ts";
 
 export type RightTab = "node" | "theme";
-export type CursorMode = "select" | "hand";
+export type CursorMode = "select" | "hand" | "note" | "annotate";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";
 export type DesignMode = "light" | "dark";
+
+export interface AnnotationEntry {
+  id: string;
+  target: { variantId: string; locator: number[] | string };
+  position: { x: number; y: number } | "auto";
+  body: string;
+  collapsed?: boolean;
+  /** Server-resolved path for the target, or null if dangling. */
+  resolved: number[] | null;
+}
+
+export interface CanvasNoteEntry {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  body: string;
+}
 
 const APP_THEME_KEY = "velloo:appTheme";
 
@@ -63,6 +81,14 @@ export interface CanvasState {
   /** Preview mode passed to the renderer — flips a `.dark` class. */
   designMode: DesignMode;
 
+  // Sprint 11: annotations + canvas notes per page
+  annotations: AnnotationEntry[];
+  notes: CanvasNoteEntry[];
+  /** Top-bar toggle. When false the canvas hides both layers (data is kept). */
+  annotationsVisible: boolean;
+  /** Which annotation/note is currently being edited (id); null = none. */
+  editingMarkupId: string | null;
+
   loadDesign(): Promise<void>;
   refreshHistory(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
@@ -82,6 +108,10 @@ export interface CanvasState {
   setAppTheme(t: AppTheme): void;
   setSyncEdits(b: boolean): void;
   setDesignMode(m: DesignMode): void;
+  refreshAnnotations(): Promise<void>;
+  refreshNotes(): Promise<void>;
+  setAnnotationsVisible(b: boolean): void;
+  setEditingMarkupId(id: string | null): void;
 }
 
 /** Walk the current page tree and return the node at the given selection. */
@@ -121,6 +151,10 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   syncEdits: true,
   history: { undo: 0, redo: 0 },
   designMode: "light",
+  annotations: [],
+  notes: [],
+  annotationsVisible: true,
+  editingMarkupId: null,
 
   async refreshHistory() {
     try {
@@ -172,7 +206,11 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       pageVersion: get().pageVersion + 1,
       selection: null,
       hover: null,
+      annotations: [],
+      notes: [],
+      editingMarkupId: null,
     });
+    await Promise.all([get().refreshAnnotations(), get().refreshNotes()]);
   },
 
   async refreshCurrentPage() {
@@ -181,9 +219,43 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     try {
       const page = await fetchPage(id);
       set({ currentPage: page, pageVersion: get().pageVersion + 1 });
+      // Annotations may have re-resolved (or now be dangling) — refetch.
+      await get().refreshAnnotations();
     } catch {
       await get().loadDesign();
     }
+  },
+
+  async refreshAnnotations() {
+    const id = get().currentPageId;
+    if (!id) return;
+    try {
+      const { fetchAnnotations } = await import("./api.ts");
+      const annotations = await fetchAnnotations(id);
+      set({ annotations });
+    } catch {
+      /* ignore */
+    }
+  },
+
+  async refreshNotes() {
+    const id = get().currentPageId;
+    if (!id) return;
+    try {
+      const { fetchNotes } = await import("./api.ts");
+      const notes = await fetchNotes(id);
+      set({ notes });
+    } catch {
+      /* ignore */
+    }
+  },
+
+  setAnnotationsVisible(annotationsVisible) {
+    set({ annotationsVisible });
+  },
+
+  setEditingMarkupId(editingMarkupId) {
+    set({ editingMarkupId });
   },
 
   setSelection(selection) {

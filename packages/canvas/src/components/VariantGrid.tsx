@@ -1,7 +1,9 @@
 import type { Page, Variant } from "@velloo/schema";
 import { useEffect, useRef } from "react";
-import { mutate } from "../api.ts";
+import { mutate, notes as notesApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
+import { AnnotationsLayer } from "./AnnotationsLayer.tsx";
+import { NotesLayer } from "./NotesLayer.tsx";
 import { VariantFrame } from "./VariantFrame.tsx";
 
 interface Props {
@@ -62,6 +64,78 @@ function defaultPositionFor(page: Page, variantId: string): { x: number; y: numb
 /** Effective position used for rendering (explicit or auto-flow). */
 function effectivePosition(page: Page, v: Variant): { x: number; y: number } {
   return v.position ?? defaultPositionFor(page, v.id);
+}
+
+/**
+ * Captures clicks on the canvas when in `note` or `annotate` cursor mode.
+ * Note mode: click drops a default note, click-drag draws a sized note.
+ * Annotate mode: arms the tool — the next iframe click bubbles a node
+ * selection, and the App's selection-watcher creates the annotation
+ * (lives in App.tsx since it's a global cursor-mode behavior).
+ *
+ * In other cursor modes this overlay is `pointer-events: none` so it
+ * doesn't capture clicks meant for variants.
+ */
+function MarkupClickInterceptor({ pageId }: { pageId: string }) {
+  const cursorMode = useCanvas((s) => s.cursorMode);
+  const refreshNotes = useCanvas((s) => s.refreshNotes);
+  const setCursorMode = useCanvas((s) => s.setCursorMode);
+  const setEditingMarkupId = useCanvas((s) => s.setEditingMarkupId);
+  const dragRef = useRef<{ sx: number; sy: number; sClientX: number; sClientY: number } | null>(
+    null,
+  );
+
+  if (cursorMode !== "note") {
+    // Annotate mode doesn't intercept canvas clicks — it intercepts node
+    // selection changes (handled in App.tsx via a watcher).
+    return null;
+  }
+
+  const toCanvasCoords = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const zoom = useCanvas.getState().canvasZoom || 1;
+    return {
+      x: (e.clientX - rect.left) / zoom,
+      y: (e.clientY - rect.top) / zoom,
+    };
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const c = toCanvasCoords(e);
+    dragRef.current = { sx: c.x, sy: c.y, sClientX: e.clientX, sClientY: e.clientY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onPointerUp = async (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    dragRef.current = null;
+    const c = toCanvasCoords(e);
+    const dragged = Math.abs(c.x - d.sx) > 8 || Math.abs(c.y - d.sy) > 8;
+    const x = dragged ? Math.min(d.sx, c.x) : d.sx;
+    const y = dragged ? Math.min(d.sy, c.y) : d.sy;
+    const width = dragged ? Math.abs(c.x - d.sx) : undefined;
+    try {
+      const r = await notesApi.add({ pageId, x, y, width, body: "" });
+      await refreshNotes();
+      setEditingMarkupId(r.note.id);
+    } finally {
+      // After dropping a note, return to select mode so the user can interact
+      // with the new note immediately.
+      setCursorMode("select");
+    }
+  };
+
+  return (
+    <div
+      className="absolute inset-0"
+      style={{ cursor: "crosshair" }}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    />
+  );
 }
 
 /**
@@ -359,6 +433,11 @@ export function VariantGrid({ pageId, page }: Props) {
                 ))}
               </div>
             )}
+            {/* Sprint-11 layers — sit inside the same .relative as the
+                variants so positions are in the same canvas coord space. */}
+            <NotesLayer pageId={pageId} />
+            <AnnotationsLayer pageId={pageId} />
+            <MarkupClickInterceptor pageId={pageId} />
           </div>
         </div>
       </div>

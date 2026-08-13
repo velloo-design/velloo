@@ -2,6 +2,10 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { $, DoAsync, type Result } from "@velloo/result";
 import {
+  type Annotation,
+  AnnotationSchema,
+  type CanvasNote,
+  CanvasNoteSchema,
   type Page,
   PageSchema,
   type Snippet,
@@ -76,4 +80,42 @@ export async function deletePersistedSnippet(
   if (prev) pushHistory({ kind: "snippet", snippetId, snippet: prev });
   await rm(join(folder.root, "snippets", `${snippetId}.json`), { force: true });
   folder.snippets.delete(snippetId);
+}
+
+/**
+ * Persist a page's annotations sidecar — validates each entry, writes the
+ * array, updates the in-memory cache. Removing the file when the array
+ * empties keeps the working directory clean.
+ */
+export async function persistAnnotations(
+  folder: DesignFolder,
+  pageId: string,
+  annotations: Annotation[],
+): Promise<Annotation[]> {
+  const validated = annotations.map((a) => AnnotationSchema.parse(a));
+  const path = join(folder.root, "pages", `${pageId}.annotations.json`);
+  if (validated.length === 0) {
+    await rm(path, { force: true });
+  } else {
+    await writeJsonAtomic(path, validated);
+  }
+  folder.annotations.set(pageId, validated);
+  return validated;
+}
+
+/** Same shape for canvas notes — empty array deletes the sidecar. */
+export async function persistCanvasNotes(
+  folder: DesignFolder,
+  pageId: string,
+  notes: CanvasNote[],
+): Promise<CanvasNote[]> {
+  const validated = notes.map((n) => CanvasNoteSchema.parse(n));
+  const path = join(folder.root, "pages", `${pageId}.notes.json`);
+  if (validated.length === 0) {
+    await rm(path, { force: true });
+  } else {
+    await writeJsonAtomic(path, validated);
+  }
+  folder.notes.set(pageId, validated);
+  return validated;
 }
