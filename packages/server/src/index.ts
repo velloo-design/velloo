@@ -171,5 +171,6 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 // Re-export key types and helpers for downstream consumers.
 export type { DesignFolder } from "./design-folder.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+export { buildAndWriteManifest, loadLucideNames } from "./manifest.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";
 export type { WatchEvent } from "./watcher.ts";

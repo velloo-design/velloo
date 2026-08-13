@@ -7,8 +7,14 @@ import {
   SnippetSchema,
   ThemeSchema,
 } from "@velloo/schema";
-import { writeJsonAtomic, writeText } from "@velloo/server";
+import {
+  buildAndWriteManifest,
+  loadLucideNames,
+  writeJsonAtomic,
+  writeText,
+} from "@velloo/server";
 import { defineCommand } from "citty";
+import { getLibrary, pullLibraryIntoFolder } from "../library-registry.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { buildDefaultTheme } from "../scaffold/default-theme.ts";
 import {
@@ -39,6 +45,17 @@ export default defineCommand({
       required: true,
       description: "Target folder for the new design (created if missing)",
     },
+    library: {
+      type: "string",
+      default: "shadcn-react",
+      description:
+        "Library to pull into the design folder. Only shadcn-react is supported today.",
+    },
+    "experimental-shared": {
+      type: "string",
+      description:
+        "Experimental: point the design folder at the user's app components instead of pulling a fresh copy. Pass the path to <app>/components (relative or absolute). Failure modes are surfaced verbosely; treat this as a power-user flag.",
+    },
     force: {
       type: "boolean",
       default: false,
@@ -56,7 +73,26 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const config = buildDefaultConfig();
+    let library;
+    try {
+      library = getLibrary(args.library);
+    } catch (err) {
+      console.error(`velloo init: ${(err as Error).message}`);
+      process.exit(1);
+    }
+
+    const experimentalShared = args["experimental-shared"];
+    const componentsPath = experimentalShared ?? "components";
+    const config = buildDefaultConfig({
+      library: {
+        id: library.id,
+        version: library.version,
+        source: experimentalShared ? `shared:${experimentalShared}` : "registry:shadcn",
+        componentsPath,
+        ...(experimentalShared ? { experimental: "shared" as const } : {}),
+      },
+    });
+
     const theme = buildDefaultTheme();
     const welcome = buildSampleScreen();
     const components = buildComponentsScreen();
@@ -73,7 +109,7 @@ export default defineCommand({
     const configPath = `${folder}/.design/config.json`;
     const themePath = `${folder}/theme/default.json`;
     const welcomePath = `${folder}/screens/welcome.json`;
-    const componentsPath = `${folder}/screens/components.json`;
+    const componentsScreenPath = `${folder}/screens/components.json`;
     const boardPath = `${folder}/board.json`;
     const cacheKeep = `${folder}/.design/cache/.gitkeep`;
     const assetsKeep = `${folder}/assets/.gitkeep`;
@@ -82,12 +118,26 @@ export default defineCommand({
       writeJsonAtomic(configPath, config),
       writeJsonAtomic(themePath, theme),
       writeJsonAtomic(welcomePath, welcome),
-      writeJsonAtomic(componentsPath, components),
+      writeJsonAtomic(componentsScreenPath, components),
       writeJsonAtomic(boardPath, board),
       writeText(cacheKeep, ""),
       writeText(assetsKeep, ""),
       ...snippets.map((s) => writeJsonAtomic(`${folder}/snippets/${s.id}.json`, s)),
     ]);
+
+    let libraryFiles = 0;
+    if (!experimentalShared) {
+      const r = await pullLibraryIntoFolder(library, folder, "components");
+      libraryFiles = r.filesCopied;
+    }
+
+    const componentsRoot = `${folder}/${componentsPath}`;
+    const lucideNames = await loadLucideNames();
+    const manifest = await buildAndWriteManifest({
+      componentsRoot,
+      outPath: `${folder}/.design/manifest.json`,
+      ...(lucideNames ? { lucideNames } : {}),
+    });
 
     console.log(`velloo: scaffolded design folder at ${folder}`);
     console.log("  .design/config.json     — tool + library declaration");
@@ -96,6 +146,16 @@ export default defineCommand({
     console.log("  screens/components.json — every primitive in the library");
     console.log("  board.json              — canvas layout (frames + groups)");
     console.log(`  snippets/               — ${snippets.length} starter reusable subtrees`);
+    if (experimentalShared) {
+      console.log(`  (experimental) library  — pointing at ${experimentalShared}`);
+    } else {
+      console.log(
+        `  components/             — ${libraryFiles} files from ${library.label}@${library.version}`,
+      );
+    }
+    console.log(
+      `  .design/manifest.json   — ${manifest.length} components extracted via ts-morph`,
+    );
     console.log("");
     console.log(`Next: velloo run ${args.folder}`);
   },

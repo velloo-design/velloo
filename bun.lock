@@ -106,8 +106,10 @@
         "@velloo/shadcn-snapshot": "workspace:*",
         "culori": "4.0.2",
         "hono": "4.12.18",
+        "lucide-react": "1.14.0",
         "node-vibrant": "4.0.4",
         "tailwindcss": "4.3.0",
+        "ts-morph": "28.0.0",
         "zod": "4.4.3",
       },
       "devDependencies": {

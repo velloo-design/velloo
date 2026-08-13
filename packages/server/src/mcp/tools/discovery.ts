@@ -7,7 +7,14 @@ import {
   nodeId,
   type Screen,
 } from "@velloo/schema";
-import { type ComponentDescriptor, loadManifest, snapshotVersion } from "@velloo/shadcn-snapshot";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  type ComponentDescriptor,
+  loadManifest as loadBundledManifest,
+  type Manifest,
+  snapshotVersion,
+} from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
@@ -60,6 +67,17 @@ function nodeToOutline(node: Node): OutlineNode {
 
 function toOutline(screen: Screen): { id: string; name: string; tree: OutlineNode } {
   return { id: screen.id, name: screen.name, tree: nodeToOutline(screen.tree) };
+}
+
+/** Read the design folder's on-disk manifest, falling back to the bundled one. */
+async function loadManifestForCtx(ctx: MutationContext): Promise<Manifest> {
+  const onDisk = join(ctx.folder.root, ".design", "manifest.json");
+  try {
+    const raw = await readFile(onDisk, "utf8");
+    return JSON.parse(raw) as Manifest;
+  } catch {
+    return loadBundledManifest();
+  }
 }
 
 function toSummary(c: ComponentDescriptor): ComponentSummary {
@@ -135,7 +153,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       },
     },
     async ({ filter, mode }) => {
-      const manifest = await loadManifest();
+      const manifest = await loadManifestForCtx(ctx);
       const filtered = filter
         ? manifest.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()))
         : manifest;

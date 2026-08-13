@@ -30,7 +30,7 @@ export function createApp(ctxFor: () => MutationContext, jit: TailwindJit): Hono
   app.route("/api/board", createBoardRouter(folder));
   app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/render", createRenderRouter(folder, jit));
-  app.route("/api/components", createComponentsRouter());
+  app.route("/api/components", createComponentsRouter(folder));
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/inspect", createInspectRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));

@@ -1,12 +1,17 @@
-import type { Config } from "@velloo/schema";
+import type { Config, Library } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { TOOL_VERSION } from "../version.ts";
 
-export function buildDefaultConfig(): Config {
+interface DefaultConfigOpts {
+  /** Library declaration. Defaults to shadcn-react registry source. */
+  library?: Library;
+}
+
+export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
   return {
     schemaVersion: 1,
     toolVersion: TOOL_VERSION,
-    library: {
+    library: opts.library ?? {
       id: "shadcn-react",
       version: snapshotVersion,
       source: "registry:shadcn",
