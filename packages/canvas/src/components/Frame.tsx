@@ -1,20 +1,29 @@
-import type { Frame as FrameT } from "@velloo/schema";
-import { useEffect, useRef } from "react";
-import { renderUrl } from "../api.ts";
+import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
+import { Link2, Monitor, Smartphone, Tablet, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 
 interface FrameProps {
   frame: FrameT;
+  presets: ViewportPreset[];
+  /** Number of frames on the board referencing the same screen as this one. */
+  sharedCount: number;
 }
 
 /**
- * A single placement on the Board: an iframe at the frame's chosen size,
- * rendering the referenced screen. Selecting a node inside any frame of a
- * given screen updates the global selection (and all other frames of that
- * screen highlight the same node, because they share the underlying tree).
+ * One placement on the Board: an iframe at the frame's chosen size, rendering
+ * the referenced screen. Selecting a node inside any frame of a given screen
+ * updates the global selection — and every other frame of that screen
+ * highlights the same node because they share the underlying tree.
+ *
+ * Edge handles resize the frame in real time; release commits via
+ * update_frame so the new size persists in board.json (and undo works).
+ * Viewport-preset chips along the bottom snap w/h to common device sizes.
  */
-export function Frame({ frame }: FrameProps) {
+export function Frame({ frame, presets, sharedCount }: FrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
   const screen = useCanvas((s) => s.screens[frame.screen]);
@@ -25,6 +34,12 @@ export function Frame({ frame }: FrameProps) {
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
+
+  // Local mid-drag size so the resize handle is buttery; commits on release.
+  const [draftSize, setDraftSize] = useState<{ w: number; h: number } | null>(null);
+
+  const w = draftSize?.w ?? frame.w;
+  const h = draftSize?.h ?? frame.h;
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -52,8 +67,6 @@ export function Frame({ frame }: FrameProps) {
     };
   }, [frame.screen, setSelection, setHover, setNodeRects]);
 
-  // Push highlight + hover state to the iframe whenever selection or hover
-  // targets a node inside this frame's screen.
   useEffect(() => {
     const channel = channelRef.current;
     if (!channel) return;
@@ -74,38 +87,158 @@ export function Frame({ frame }: FrameProps) {
     }
   }, [hover, frame.screen]);
 
-  if (!screen) {
-    return (
-      <div
-        style={{ width: frame.w, height: frame.h }}
-        className="border border-dashed border-[var(--color-fg-muted)]/30 rounded-md grid place-items-center text-xs text-[var(--color-fg-muted)]"
-      >
-        Loading {frame.screen}…
-      </div>
-    );
-  }
+  const startResize = (direction: "e" | "s" | "se") => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const startW = frame.w;
+    const startH = frame.h;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const zoom = useCanvas.getState().canvasZoom || 1;
 
-  // Cache-bust the iframe src whenever the screen tree mutates so we don't
-  // serve a stale render. Mode flips remount as well so the .dark class lands.
-  const src = `${renderUrl(frame.screen, frame.w, frame.h)}&mode=${designMode}&v=${screenVersion}`;
+    const onMove = (ev: PointerEvent) => {
+      const dx = (ev.clientX - startX) / zoom;
+      const dy = (ev.clientY - startY) / zoom;
+      const nextW = direction === "s" ? startW : Math.max(120, Math.round(startW + dx));
+      const nextH = direction === "e" ? startH : Math.max(120, Math.round(startH + dy));
+      setDraftSize({ w: nextW, h: nextH });
+    };
+    const onUp = (ev: PointerEvent) => {
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
+      const dx = (ev.clientX - startX) / zoom;
+      const dy = (ev.clientY - startY) / zoom;
+      const nextW = direction === "s" ? startW : Math.max(120, Math.round(startW + dx));
+      const nextH = direction === "e" ? startH : Math.max(120, Math.round(startH + dy));
+      setDraftSize(null);
+      if (nextW !== startW || nextH !== startH) {
+        void mutate
+          .updateFrame({ frameId: frame.id, patch: { w: nextW, h: nextH } })
+          .catch((err) => toastError(err, "Could not resize frame"));
+      }
+    };
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
+  };
+
+  const onPickPreset = (preset: ViewportPreset) => {
+    if (preset.w === frame.w && preset.h === frame.h) return;
+    void mutate
+      .updateFrame({ frameId: frame.id, patch: { w: preset.w, h: preset.h } })
+      .catch((err) => toastError(err, "Could not resize frame"));
+  };
+
+  const onRemove = () => {
+    void mutate
+      .removeFrame({ frameId: frame.id })
+      .catch((err) => toastError(err, "Could not remove frame"));
+  };
+
+  const presetIcon = (preset: ViewportPreset) => {
+    if (preset.name.toLowerCase().includes("mobile")) return <Smartphone size={11} />;
+    if (preset.name.toLowerCase().includes("tablet")) return <Tablet size={11} />;
+    return <Monitor size={11} />;
+  };
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 text-xs text-[var(--color-fg-muted)]">
-        <span className="font-medium">{frame.label ?? screen.name}</span>
-        <span className="opacity-50">
-          {frame.w}×{frame.h}
-        </span>
+    <div
+      className="absolute group"
+      style={{ left: frame.x, top: frame.y }}
+      data-frame-id={frame.id}
+      data-group-id={frame.group ?? ""}
+    >
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2 text-xs text-[var(--color-fg-muted)]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-medium truncate">
+              {frame.label ?? screen?.name ?? frame.screen}
+            </span>
+            <span className="opacity-50 tabular-nums">
+              {w}×{h}
+            </span>
+            {sharedCount > 1 ? (
+              <span
+                className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                title={`${sharedCount} frames share this screen — edits sync across all of them.`}
+              >
+                <Link2 size={10} />
+                {sharedCount}
+              </span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-[var(--color-surface)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+            title="Remove this frame (the underlying screen stays)"
+          >
+            <X size={11} />
+          </button>
+        </div>
+
+        {!screen ? (
+          <div
+            style={{ width: w, height: h }}
+            className="border border-dashed border-[var(--color-fg-muted)]/30 rounded-md grid place-items-center text-xs text-[var(--color-fg-muted)]"
+          >
+            Loading {frame.screen}…
+          </div>
+        ) : (
+          <div className="relative" style={{ width: w, height: h }}>
+            <iframe
+              ref={iframeRef}
+              title={`${screen.name} (${frame.id})`}
+              src={`${renderUrl(frame.screen, w, h)}&mode=${designMode}&v=${screenVersion}`}
+              width={w}
+              height={h}
+              className="border border-[var(--color-border)] rounded-md bg-white"
+              style={{ width: w, height: h }}
+            />
+            <div
+              onPointerDown={startResize("e")}
+              className="absolute top-0 right-0 h-full w-1.5 -mr-0.5 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-[var(--color-accent)] rounded-r-md"
+              role="presentation"
+            />
+            <div
+              onPointerDown={startResize("s")}
+              className="absolute bottom-0 left-0 w-full h-1.5 -mb-0.5 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-[var(--color-accent)] rounded-b-md"
+              role="presentation"
+            />
+            <div
+              onPointerDown={startResize("se")}
+              className="absolute bottom-0 right-0 h-3 w-3 -mb-0.5 -mr-0.5 cursor-nwse-resize opacity-0 group-hover:opacity-100 bg-[var(--color-accent)] rounded-br-md"
+              role="presentation"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {presets.map((preset) => {
+            const active = preset.w === frame.w && preset.h === frame.h;
+            return (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => onPickPreset(preset)}
+                title={`${preset.name}: ${preset.w}×${preset.h}`}
+                className={
+                  "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] " +
+                  (active
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                    : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]")
+                }
+              >
+                {presetIcon(preset)}
+                {preset.name}
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <iframe
-        ref={iframeRef}
-        title={`${screen.name} (${frame.id})`}
-        src={src}
-        width={frame.w}
-        height={frame.h}
-        className="border border-[var(--color-border)] rounded-md bg-white"
-        style={{ width: frame.w, height: frame.h }}
-      />
     </div>
   );
 }

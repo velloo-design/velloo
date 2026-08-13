@@ -1,13 +1,6 @@
-import { dirname, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  type CodegenError,
-  type EmitCodeResult,
-  emitCode,
-  emitSnippet,
-  emitTheme,
-  snippetIdsReferenced,
-} from "@velloo/codegen";
+import { type CodegenError, emitCode, emitSnippet, emitTheme } from "@velloo/codegen";
 import { z } from "zod";
 import type { DesignFolder } from "../../design-folder.ts";
 
@@ -28,26 +21,14 @@ export interface EmitContext {
   folder: DesignFolder;
 }
 
-function pascalCase(input: string): string {
-  return (
-    input
-      .split(/[^a-zA-Z0-9]+/)
-      .filter(Boolean)
-      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-      .join("") || "Snippet"
-  );
-}
-
 export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
   mcp.registerTool(
     "emit_code",
     {
       description:
-        "Generate JSX-shaped code for a screen, intended for the agent to read and translate into the user's app code. Default returns a unified diff; pass apply=true to write. outputPath is resolved relative to the design folder if not absolute.",
+        "Return agent-consumed IR for a screen: the JSX body (using library identifiers + verbatim Tailwind classes), the list of components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions.",
       inputSchema: {
         screenId: z.string(),
-        outputPath: z.string(),
-        apply: z.boolean().optional(),
         componentsAlias: z.string().optional(),
       },
     },
@@ -55,47 +36,13 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       const screen = ctx.folder.screens.get(args.screenId);
       if (!screen)
         return codegenErrorResult({ kind: "ScreenNotFound", screenId: args.screenId } as never);
-      const out = resolve(ctx.folder.root, args.outputPath);
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const result = await emitCode(screen, {
-        outputPath: out,
-        apply: args.apply ?? false,
-        componentsAlias,
+        ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
       });
       if (!result.ok) return codegenErrorResult(result.error);
-
-      const usedSnippets = snippetIdsReferenced(screen);
-      const snippetFiles: { snippetId: string; outputPath: string; result: EmitCodeResult }[] = [];
-      const baseDir = dirname(out);
-      for (const id of usedSnippets) {
-        const snippet = ctx.folder.snippets.get(id);
-        if (!snippet) continue;
-        const snippetOut = join(baseDir, "..", "snippets", `${pascalCase(snippet.name || id)}.tsx`);
-        const r = await emitSnippet(snippet, {
-          outputPath: resolve(snippetOut),
-          apply: args.apply ?? false,
-          componentsAlias,
-          snippets: ctx.folder.snippets,
-        });
-        if (!r.ok) return codegenErrorResult(r.error);
-        snippetFiles.push({ snippetId: id, outputPath: resolve(snippetOut), result: r.value });
-      }
-
-      return jsonResult({
-        wouldWriteTo: out,
-        applied: result.value.applied,
-        diff: result.value.diff,
-        errors: result.value.errors,
-        code: result.value.code,
-        snippets: snippetFiles.map((s) => ({
-          snippetId: s.snippetId,
-          outputPath: s.outputPath,
-          applied: s.result.applied,
-          diff: s.result.diff,
-          errors: s.result.errors,
-        })),
-      });
+      return jsonResult(result.value);
     },
   );
 
@@ -103,11 +50,9 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
     "emit_snippet",
     {
       description:
-        "Generate a React component for one snippet. Useful for emitting snippets no screen yet references. outputPath is resolved relative to the design folder.",
+        "Return agent-consumed IR for a single snippet: PascalCase component name, typed params, JSX body.",
       inputSchema: {
         snippetId: z.string(),
-        outputPath: z.string(),
-        apply: z.boolean().optional(),
         componentsAlias: z.string().optional(),
       },
     },
@@ -115,21 +60,13 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       const snippet = ctx.folder.snippets.get(args.snippetId);
       if (!snippet)
         return codegenErrorResult({ kind: "SnippetNotFound", snippetId: args.snippetId } as never);
-      const out = resolve(ctx.folder.root, args.outputPath);
+      const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const result = await emitSnippet(snippet, {
-        outputPath: out,
-        apply: args.apply ?? false,
-        componentsAlias: args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias,
+        ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
       });
       if (!result.ok) return codegenErrorResult(result.error);
-      return jsonResult({
-        wouldWriteTo: out,
-        applied: result.value.applied,
-        diff: result.value.diff,
-        errors: result.value.errors,
-        code: result.value.code,
-      });
+      return jsonResult(result.value);
     },
   );
 
@@ -137,7 +74,7 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
     "emit_theme",
     {
       description:
-        "Generate Tailwind v4 globals.css (and optional tailwind.config.ts) from the active theme. Defaults to dry-run.",
+        "Generate Tailwind v4 globals.css (and optional tailwind.config.ts) from the active theme. Defaults to dry-run; this one *is* a direct artifact (no agent translation needed).",
       inputSchema: {
         outputDir: z.string(),
         apply: z.boolean().optional(),

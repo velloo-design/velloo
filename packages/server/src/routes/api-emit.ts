@@ -8,8 +8,6 @@ import { mutationToHttp } from "./mutation-http.ts";
 
 const EmitCodeBody = z.object({
   screenId: z.string().min(1),
-  outputPath: z.string().min(1),
-  apply: z.boolean().optional(),
   componentsAlias: z.string().min(1).optional(),
 });
 
@@ -56,21 +54,13 @@ export function createEmitRouter(folderFor: () => DesignFolder): Hono {
     const folder = folderFor();
     const screen = folder.screens.get(args.screenId);
     if (!screen) return mutationToHttp(c, screenNotFound(args.screenId));
-    const out = resolve(folder.root, args.outputPath);
+    const componentsAlias = args.componentsAlias ?? folder.config.codegen?.componentsAlias;
     const result = await emitCode(screen, {
-      outputPath: out,
-      apply: args.apply ?? false,
-      componentsAlias: args.componentsAlias ?? folder.config.codegen?.componentsAlias,
+      ...(componentsAlias ? { componentsAlias } : {}),
       snippets: folder.snippets,
     });
     if (!result.ok) return codegenToHttp(c, result.error);
-    return c.json({
-      wouldWriteTo: out,
-      applied: result.value.applied,
-      diff: result.value.diff,
-      errors: result.value.errors,
-      code: result.value.code,
-    });
+    return c.json(result.value);
   });
 
   r.post("/theme", async (c) => {
