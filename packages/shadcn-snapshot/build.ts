@@ -39,7 +39,7 @@ function categorize(
     ? filePath.slice(componentsDir.length).replace(/^\/+/, "")
     : filePath;
   if (rel.startsWith("velloo/")) {
-    const category = id === "Icon" ? "ui" : "typography";
+    const category = id === "Icon" || id === "Placeholder" ? "ui" : "typography";
     return { source: "velloo", category };
   }
   return { source: "shadcn", category: "ui" };

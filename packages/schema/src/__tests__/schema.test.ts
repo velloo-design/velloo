@@ -4,7 +4,9 @@ import {
   isComponentNode,
   isParamRef,
   isSnippetInstance,
+  NodeIdSchema,
   NodeSchema,
+  nodeId,
   PageSchema,
   SnippetSchema,
   ThemeSchema,
@@ -75,6 +77,29 @@ describe("NodeSchema", () => {
       false,
       true,
     ]);
+  });
+
+  test("accepts optional $id on component + snippet nodes; rejects bad formats", () => {
+    expect(NodeSchema.safeParse({ $ref: "Card", $id: "hero-cta" }).success).toBe(true);
+    expect(NodeSchema.safeParse({ $snippet: "x", $id: "hero_2" }).success).toBe(true);
+    expect(NodeSchema.safeParse({ $ref: "Card", $id: "" }).success).toBe(false);
+    expect(NodeSchema.safeParse({ $ref: "Card", $id: "1-leading-digit" }).success).toBe(false);
+    expect(NodeSchema.safeParse({ $ref: "Card", $id: "has spaces" }).success).toBe(false);
+    expect(NodeSchema.safeParse({ $ref: "Card", $id: "with.dot" }).success).toBe(false);
+  });
+
+  test("nodeId reads $id off any node kind safely", () => {
+    expect(nodeId({ $ref: "Card", $id: "x" })).toBe("x");
+    expect(nodeId({ $ref: "Card" })).toBeUndefined();
+    expect(nodeId({ $snippet: "s", $id: "y" })).toBe("y");
+    expect(nodeId({ $param: "z" })).toBeUndefined();
+  });
+
+  test("NodeIdSchema validates standalone id strings", () => {
+    expect(NodeIdSchema.safeParse("ok-id").success).toBe(true);
+    expect(NodeIdSchema.safeParse("Also_OK").success).toBe(true);
+    expect(NodeIdSchema.safeParse("_starts-with-underscore").success).toBe(false);
+    expect(NodeIdSchema.safeParse("a".repeat(65)).success).toBe(false);
   });
 });
 

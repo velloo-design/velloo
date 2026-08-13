@@ -1,16 +1,17 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import { isSnippetInstance } from "@velloo/schema";
+import type { Locator } from "../path.ts";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
-import { getNode, getPage, getVariant } from "./lookup.ts";
-import { persistPage } from "./persist.ts";
+import { getNode, getPage, getVariant, resolve } from "./lookup.ts";
+import { commitPage } from "./persist.ts";
 
 export interface UpdateSnippetArgsArgs {
   pageId: string;
   variantId: string;
-  /** Path to a $snippet instance in the variant tree. */
-  path: number[];
+  /** Locator to a $snippet instance — path array or `"@id"` string. */
+  path: Locator;
   /** Shallow patch over the instance's `args` map. `null` removes a key. */
   argPatch: Record<string, unknown>;
 }
@@ -36,11 +37,12 @@ export async function updateSnippetArgs(
     const nextVariant = next.variants.find((v) => v.id === args.variantId);
     if (!nextVariant) throw new Error("invariant: variant lost on clone");
 
-    const node = yield* $(getNode(nextVariant.tree, args.path));
+    const resolved = yield* $(resolve(nextVariant.tree, args.path, args.pageId, args.variantId));
+    const node = yield* $(getNode(nextVariant.tree, resolved, args.pageId, args.variantId));
     if (!isSnippetInstance(node)) {
       return yield* $(
         err(
-          invalidPath(`Node at ${JSON.stringify(args.path)} is not a snippet instance.`, args.path),
+          invalidPath(`Node at ${JSON.stringify(resolved)} is not a snippet instance.`, resolved),
         ),
       );
     }
@@ -53,8 +55,8 @@ export async function updateSnippetArgs(
     if (Object.keys(merged).length === 0) delete node.args;
     else node.args = merged;
 
-    await persistPage(ctx.folder, args.pageId, next);
+    yield* $(await commitPage(ctx.folder, args.pageId, next));
     ctx.broadcast({ type: "page-changed", pageId: args.pageId });
-    return { path: args.path };
+    return { path: resolved };
   });
 }

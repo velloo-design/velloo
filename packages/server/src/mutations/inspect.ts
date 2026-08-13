@@ -1,6 +1,7 @@
 import { renderBody } from "@velloo/renderer";
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Variant } from "@velloo/schema";
+import type { Locator } from "../path.ts";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { getComponentNode, getPage, getVariant } from "./lookup.ts";
@@ -8,7 +9,8 @@ import { getComponentNode, getPage, getVariant } from "./lookup.ts";
 export interface InspectArgs {
   pageId: string;
   variantId: string;
-  path: number[];
+  /** Locator — path array or `"@id"` string. */
+  path: Locator;
 }
 
 export interface InspectResult {
@@ -26,7 +28,7 @@ export async function inspect(
   return DoAsync<InspectResult, MutationError>(async function* () {
     const page = yield* $(getPage(ctx, args.pageId));
     const variant = yield* $(getVariant(page, args.pageId, args.variantId));
-    const node = yield* $(getComponentNode(variant.tree, args.path));
+    const node = yield* $(getComponentNode(variant.tree, args.path, args.pageId, args.variantId));
 
     // Render only the subtree by faking a Variant with that node as root.
     const subVariant: Variant = {

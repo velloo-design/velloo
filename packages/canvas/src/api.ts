@@ -209,6 +209,15 @@ export const mutate = {
   removePage(args: { pageId: string }) {
     return postMutate<{ removedPageId: string }>("remove_page", args);
   },
+  setNodeId(args: {
+    pageId: string;
+    variantId: string;
+    path: number[] | string;
+    /** Pass null to clear. */
+    id: string | null;
+  }) {
+    return postMutate<{ path: number[]; id: string | null }>("set_node_id", args);
+  },
   updateSnippetArgs(args: {
     pageId: string;
     variantId: string;

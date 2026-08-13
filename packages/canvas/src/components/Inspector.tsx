@@ -1,10 +1,11 @@
-import { isComponentNode, isSnippetInstance } from "@velloo/schema";
+import { isComponentNode, isSnippetInstance, nodeId } from "@velloo/schema";
 import { useEffect, useMemo, useRef } from "react";
 import { mutate } from "../api.ts";
 import { pathFromString } from "../path.ts";
 import { selectedNode, useCanvas } from "../store.ts";
 import { ClassesField } from "./ClassesField.tsx";
 import { CopyField } from "./CopyField.tsx";
+import { IdField } from "./IdField.tsx";
 import { PropField } from "./PropField.tsx";
 import { SnippetInspector } from "./SnippetInspector.tsx";
 import { Toggle } from "./Toggle.tsx";
@@ -112,6 +113,14 @@ export function Inspector({ pageId }: Props) {
       <StatePreview key={selectionKey} />
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        <IdField
+          key={`${selectionKey}:id`}
+          initialValue={nodeId(node) ?? ""}
+          pageId={pageId}
+          variantId={selection.variantId}
+          path={selection.path}
+        />
+
         {showCopy ? (
           <CopyField
             key={`${selectionKey}:children`}

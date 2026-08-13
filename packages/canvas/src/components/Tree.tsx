@@ -3,6 +3,7 @@ import {
   isParamRef,
   isSnippetInstance,
   type Node,
+  nodeId,
   type Variant,
 } from "@velloo/schema";
 import { useMemo, useState } from "react";
@@ -119,6 +120,19 @@ function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: Row
           className="flex flex-1 min-w-0 items-center gap-1 text-left text-inherit"
         >
           <span className="font-medium">{nodeLabel(node)}</span>
+          {nodeId(node) ? (
+            <span
+              className={
+                "shrink-0 rounded px-1 py-0.5 text-[10px] font-mono leading-none border " +
+                (isSelected
+                  ? "border-[var(--color-accent-fg)]/40 text-[var(--color-accent-fg)]"
+                  : "border-[var(--color-border)] text-[var(--color-fg-muted)]")
+              }
+              title={`Stable anchor: @${nodeId(node)}`}
+            >
+              @{nodeId(node)}
+            </span>
+          ) : null}
           {description ? (
             <span
               className={

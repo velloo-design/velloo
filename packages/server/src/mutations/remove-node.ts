@@ -1,16 +1,17 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import { isComponentNode } from "@velloo/schema";
-import { parentOf, pathAt } from "../path.ts";
+import { type Locator, parentOf, pathAt } from "../path.ts";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
-import { getPage, getVariant } from "./lookup.ts";
-import { persistPage } from "./persist.ts";
+import { getPage, getVariant, resolve } from "./lookup.ts";
+import { commitPage } from "./persist.ts";
 
 export interface RemoveNodeArgs {
   pageId: string;
   variantId: string;
-  path: number[];
+  /** Locator — path array or `"@id"` string. */
+  path: Locator;
 }
 
 export interface RemoveNodeResult {
@@ -23,10 +24,6 @@ export async function removeNode(
 ): Promise<Result<RemoveNodeResult, MutationError>> {
   const { pageId, variantId, path } = args;
 
-  if (path.length === 0) {
-    return err(invalidPath("Cannot remove the variant root.", path));
-  }
-
   return DoAsync<RemoveNodeResult, MutationError>(async function* () {
     const page = yield* $(getPage(ctx, pageId));
     yield* $(getVariant(page, pageId, variantId));
@@ -35,20 +32,25 @@ export async function removeNode(
     const nextVariant = next.variants.find((v) => v.id === variantId);
     if (!nextVariant) throw new Error("invariant: variant lost on clone");
 
-    const parentInfo = parentOf(path);
-    if (!parentInfo) return yield* $(err(invalidPath("no parent", path)));
+    const resolved = yield* $(resolve(nextVariant.tree, path, pageId, variantId));
+    if (resolved.length === 0) {
+      return yield* $(err(invalidPath("Cannot remove the variant root.", resolved)));
+    }
+
+    const parentInfo = parentOf(resolved);
+    if (!parentInfo) return yield* $(err(invalidPath("no parent", resolved)));
     const parent = pathAt(nextVariant.tree, parentInfo.parent);
     if (!parent || !isComponentNode(parent) || !parent.children) {
-      return yield* $(err(invalidPath(`No node at path ${JSON.stringify(path)}`, path)));
+      return yield* $(err(invalidPath(`No node at path ${JSON.stringify(resolved)}`, resolved)));
     }
     if (parentInfo.index >= parent.children.length) {
-      return yield* $(err(invalidPath(`No node at path ${JSON.stringify(path)}`, path)));
+      return yield* $(err(invalidPath(`No node at path ${JSON.stringify(resolved)}`, resolved)));
     }
 
     const [removed] = parent.children.splice(parentInfo.index, 1);
     if (parent.children.length === 0) delete parent.children;
 
-    await persistPage(ctx.folder, pageId, next);
+    yield* $(await commitPage(ctx.folder, pageId, next));
     ctx.broadcast({ type: "page-changed", pageId });
 
     return { removedRef: describeRemoved(removed) };

@@ -23,7 +23,11 @@ export type MutationError =
   | { kind: "SnippetCycle"; snippetId: string; viaPath: string[] }
   /** remove_snippet refused: pages still instantiate it. */
   | { kind: "SnippetInUse"; snippetId: string; pageIds: string[] }
-  | { kind: "SnippetIdConflict"; snippetId: string };
+  | { kind: "SnippetIdConflict"; snippetId: string }
+  /** A locator `@id` didn't resolve to any node in the variant tree. */
+  | { kind: "IdNotFound"; pageId: string; variantId: string; id: string }
+  /** Two nodes in the same variant share an `$id`. Carries the conflicting id + paths. */
+  | { kind: "IdConflict"; pageId: string; variantId: string; id: string; paths: number[][] };
 
 // Constructor helpers — keep mutation bodies readable.
 export const pageNotFound = (pageId: string): MutationError => ({
@@ -95,6 +99,24 @@ export const snippetInUse = (snippetId: string, pageIds: string[]): MutationErro
 export const snippetIdConflict = (snippetId: string): MutationError => ({
   kind: "SnippetIdConflict",
   snippetId,
+});
+export const idNotFound = (pageId: string, variantId: string, id: string): MutationError => ({
+  kind: "IdNotFound",
+  pageId,
+  variantId,
+  id,
+});
+export const idConflict = (
+  pageId: string,
+  variantId: string,
+  id: string,
+  paths: number[][],
+): MutationError => ({
+  kind: "IdConflict",
+  pageId,
+  variantId,
+  id,
+  paths,
 });
 
 /**

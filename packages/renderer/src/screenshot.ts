@@ -7,6 +7,12 @@ export interface ScreenshotOptions {
   outPath?: string;
   /** Device scale factor for retina-style output. */
   deviceScaleFactor?: number;
+  /**
+   * Capture the full document height — not just the viewport. Defaults true so
+   * tall marketing pages aren't under-screenshotted by default. Pass `false` to
+   * clip to the viewport rectangle.
+   */
+  fullPage?: boolean;
 }
 
 /**
@@ -36,11 +42,12 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
     });
     const page = await context.newPage();
     await page.setContent(opts.html, { waitUntil: "domcontentloaded" });
+    const fullPage = opts.fullPage ?? true;
     if (opts.outPath) {
-      await page.screenshot({ path: opts.outPath, fullPage: false });
+      await page.screenshot({ path: opts.outPath, fullPage });
       return null;
     }
-    const buf = await page.screenshot({ fullPage: false });
+    const buf = await page.screenshot({ fullPage });
     return buf;
   } finally {
     await browser.close();

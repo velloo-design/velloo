@@ -12,7 +12,9 @@ export {
   isParamRef,
   isSnippetInstance,
   type Node,
+  NodeIdSchema,
   NodeSchema,
+  nodeId,
   type ParamRef,
   type SnippetInstance,
 } from "./node.ts";

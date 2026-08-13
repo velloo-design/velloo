@@ -1,4 +1,5 @@
 import type { Result } from "@velloo/result";
+import type { Locator } from "../path.ts";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { type UpdatePropsResult, updateProps } from "./update-props.ts";
@@ -6,7 +7,8 @@ import { type UpdatePropsResult, updateProps } from "./update-props.ts";
 export interface ApplyClassesArgs {
   pageId: string;
   variantId: string;
-  path: number[];
+  /** Locator — path array or `"@id"` string. */
+  path: Locator;
   /** Whitespace-separated Tailwind classes; replaces existing className. */
   classes: string;
 }

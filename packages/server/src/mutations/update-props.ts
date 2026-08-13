@@ -1,14 +1,16 @@
 import { $, DoAsync, type Result } from "@velloo/result";
+import type { Locator } from "../path.ts";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
-import { getComponentNode, getPage, getVariant } from "./lookup.ts";
-import { persistPage } from "./persist.ts";
+import { getComponentNode, getPage, getVariant, resolve } from "./lookup.ts";
+import { commitPage } from "./persist.ts";
 
 export interface UpdatePropsArgs {
   pageId: string;
   variantId: string;
-  path: number[];
+  /** Locator for the target node. Either a path or `"@id"`. */
+  path: Locator;
   /** Shallow patch. Keys with `null` values are removed. */
   propPatch: Record<string, unknown>;
 }
@@ -30,7 +32,8 @@ export async function updateProps(
     const nextVariant = next.variants.find((v) => v.id === variantId);
     if (!nextVariant) throw new Error("invariant: variant lost on clone");
 
-    const node = yield* $(getComponentNode(nextVariant.tree, path));
+    const resolved = yield* $(resolve(nextVariant.tree, path, pageId, variantId));
+    const node = yield* $(getComponentNode(nextVariant.tree, resolved, pageId, variantId));
 
     const merged: Record<string, unknown> = { ...(node.props ?? {}) };
     for (const [k, v] of Object.entries(propPatch)) {
@@ -40,8 +43,8 @@ export async function updateProps(
     if (Object.keys(merged).length === 0) delete node.props;
     else node.props = merged;
 
-    await persistPage(ctx.folder, pageId, next);
+    yield* $(await commitPage(ctx.folder, pageId, next));
     ctx.broadcast({ type: "page-changed", pageId });
-    return { path };
+    return { path: resolved };
   });
 }

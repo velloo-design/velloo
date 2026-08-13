@@ -56,9 +56,16 @@ my-product/
 
 A node is one of:
 
-- `{ $ref: ComponentId, props?, children? }` — a real shadcn / velloo component
-- `{ $snippet: SnippetId, args? }` — instance of a reusable subtree defined in `snippets/`
+- `{ $ref: ComponentId, $id?, props?, children? }` — a real shadcn / velloo component
+- `{ $snippet: SnippetId, $id?, args? }` — instance of a reusable subtree defined in `snippets/`
 - `{ $param: ParamName }` — placeholder only valid inside a snippet body; substituted at render time
+
+**Stable ids.** Component and snippet-instance nodes may carry an optional `$id` — a stable anchor that survives sibling insertions and deletions. Ids match `/^[a-zA-Z][a-zA-Z0-9_-]*$/` and are unique within a single variant tree (validated at persist time; conflicts surface as a typed `IdConflict` error). The same `$id` may repeat across variants of the same page so an anchor like `"hero-cta"` refers to the same semantic node in every variant. Agents address `$id`-bearing nodes via the locator form `"@id"` in any path-accepting tool (`update_props`, `apply_classes`, `move_node`, `remove_node`, `inspect`, `set_node_id`, etc.).
+
+Inside snippet bodies, anywhere a value appears (prop values, children, etc.), two control forms are recognized:
+
+- `{ "$param": "name" }` — replaced with the matching arg value
+- `{ "$if": "name", "then": <value>, "else": <value> }` — picks a branch based on truthiness of `args.name`. Lets a snippet expose `featured: boolean`-style params that toggle class strings without leaking the whole `className` to every caller
 
 Props are JSON literals. No fixtures in V0 — props inline.
 

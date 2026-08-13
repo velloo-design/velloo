@@ -1,5 +1,6 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import { $, DoAsync, type Result } from "@velloo/result";
 import {
   type Page,
   PageSchema,
@@ -11,6 +12,8 @@ import {
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { pushHistory } from "../history.ts";
+import type { MutationError } from "./errors.ts";
+import { validatePageIds } from "./validate-ids.ts";
 
 /** Schema-validate then write a page; update the in-memory cache. */
 export async function persistPage(folder: DesignFolder, pageId: string, page: Page): Promise<Page> {
@@ -20,6 +23,24 @@ export async function persistPage(folder: DesignFolder, pageId: string, page: Pa
   await writeJsonAtomic(join(folder.root, "pages", `${pageId}.json`), validated);
   folder.pages.set(pageId, validated);
   return validated;
+}
+
+/**
+ * The "right" way to land a page write in mutation code: validates per-variant
+ * `$id` uniqueness, then schema-validates + persists. Returns a Result so the
+ * id-conflict error flows through the standard MutationError channel rather
+ * than throwing. Schema-validation failures still throw (they're real bugs in
+ * mutation code, not recoverable agent errors).
+ */
+export function commitPage(
+  folder: DesignFolder,
+  pageId: string,
+  page: Page,
+): Promise<Result<Page, MutationError>> {
+  return DoAsync<Page, MutationError>(async function* () {
+    yield* $(validatePageIds(pageId, page));
+    return await persistPage(folder, pageId, page);
+  });
 }
 
 /** Schema-validate then write the theme; update the in-memory cache. */

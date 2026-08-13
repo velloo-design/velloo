@@ -31,10 +31,11 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "list_pages",
     {
-      description: "List every page in the design folder with its variants.",
-      inputSchema: {},
+      description:
+        "List every page in the design folder with its variants. Pass `include_tree: true` to also embed each variant's full tree — one round-trip instead of list_pages + N get_page calls. Default false to keep responses small.",
+      inputSchema: { include_tree: z.boolean().optional() },
     },
-    async () => {
+    async ({ include_tree }) => {
       const pages = [...ctx.folder.pages.entries()].map(([id, page]) => ({
         id,
         name: page.name,
@@ -42,6 +43,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           id: v.id,
           name: v.name,
           viewport: v.viewport,
+          ...(include_tree ? { tree: v.tree } : {}),
         })),
       }));
       return jsonResult({ snapshotVersion, pages });

@@ -4,7 +4,7 @@ import { LOWERED_CONSUMED_PROPS, REGISTRY } from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
 import type { ImportSet } from "./imports.ts";
-import { serializeProp, serializeTextChild } from "./props.ts";
+import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
 
 export interface EmitContext {
   imports: ImportSet;
@@ -82,20 +82,37 @@ function renderComponent(
   const props = { ...(node.props ?? {}) };
   const childrenProp = props.children;
   delete props.children;
-  const classNameProp = typeof props.className === "string" ? (props.className as string) : "";
+  // Special-case className: if it's a `$param` or `$if` inside a snippet body,
+  // bypass class-merging and pass through serializeProp so the expression
+  // survives codegen verbatim. Static string classNames keep the merge.
+  const rawClassName = props.className;
   delete props.className;
+  const isClassNameExpr =
+    !!ctx.snippetParamNames &&
+    typeof rawClassName === "object" &&
+    rawClassName !== null &&
+    (typeof (rawClassName as { $param?: unknown }).$param === "string" ||
+      typeof (rawClassName as { $if?: unknown }).$if === "string");
+  const classNameProp = typeof rawClassName === "string" ? rawClassName : "";
 
   let openTag: string;
   let closeTag: string;
   let mergedClassName: string;
+  let loweredFallbackChild: string | undefined;
 
   if (entry.kind === "lowered") {
-    const { tag, extraClasses } = entry.lower(props);
-    mergedClassName = mergeClasses(extraClasses, classNameProp);
+    const result = entry.lower(props);
+    mergedClassName = mergeClasses(result.extraClasses, classNameProp);
     const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
     if (consumed) for (const k of consumed) delete props[k];
-    openTag = tag;
-    closeTag = tag;
+    if (result.extraProps) {
+      for (const [k, v] of Object.entries(result.extraProps)) {
+        props[k] = v;
+      }
+    }
+    loweredFallbackChild = result.fallbackChild;
+    openTag = result.tag;
+    closeTag = result.tag;
   } else if (entry.kind === "dynamic") {
     const { jsxName, extraClasses } = entry.resolve(props);
     ctx.imports.addBare(entry.importFrom, jsxName);
@@ -112,7 +129,10 @@ function renderComponent(
   }
 
   const attrParts: string[] = [];
-  if (mergedClassName) {
+  if (isClassNameExpr) {
+    const cn = serializeProp("className", rawClassName, ctx.snippetParamNames);
+    if (cn) attrParts.push(cn);
+  } else if (mergedClassName) {
     const cn = serializeProp("className", mergedClassName, ctx.snippetParamNames);
     if (cn) attrParts.push(cn);
   }
@@ -125,15 +145,29 @@ function renderComponent(
   const childPad = ctx.indent(depth + 1);
   const attrs = attrParts.length > 0 ? ` ${attrParts.join(" ")}` : "";
 
-  const hasNodeChildren = Array.isArray(node.children) && node.children.length > 0;
-  const hasStringChild = typeof childrenProp === "string" && childrenProp.length > 0;
-  const isChildParamRef =
-    childrenProp !== null &&
-    typeof childrenProp === "object" &&
-    typeof (childrenProp as { $param?: unknown }).$param === "string";
-  const hasOtherChild = childrenProp !== undefined && !hasStringChild && !isChildParamRef;
+  // Fall back to the lowered entry's `fallbackChild` (e.g. Placeholder's label)
+  // when no caller-provided children exist.
+  const effectiveChild =
+    childrenProp === undefined &&
+    (!Array.isArray(node.children) || node.children.length === 0) &&
+    loweredFallbackChild !== undefined
+      ? loweredFallbackChild
+      : childrenProp;
 
-  if (!hasNodeChildren && !hasStringChild && !hasOtherChild && !isChildParamRef) {
+  const hasNodeChildren = Array.isArray(node.children) && node.children.length > 0;
+  const hasStringChild = typeof effectiveChild === "string" && effectiveChild.length > 0;
+  const isChildParamRef =
+    effectiveChild !== null &&
+    typeof effectiveChild === "object" &&
+    typeof (effectiveChild as { $param?: unknown }).$param === "string";
+  const isChildIf =
+    effectiveChild !== null &&
+    typeof effectiveChild === "object" &&
+    typeof (effectiveChild as { $if?: unknown }).$if === "string";
+  const hasOtherChild =
+    effectiveChild !== undefined && !hasStringChild && !isChildParamRef && !isChildIf;
+
+  if (!hasNodeChildren && !hasStringChild && !hasOtherChild && !isChildParamRef && !isChildIf) {
     return ok(`${pad}<${openTag}${attrs} />`);
   }
 
@@ -148,15 +182,31 @@ function renderComponent(
   }
 
   if (isChildParamRef) {
-    const name = (childrenProp as { $param: string }).$param;
+    const name = (effectiveChild as { $param: string }).$param;
     if (!ctx.snippetParamNames?.has(name)) {
       return err(unknownComponent(`$param:${name}`));
     }
     return ok(`${pad}<${openTag}${attrs}>{${name}}</${closeTag}>`);
   }
 
+  if (isChildIf) {
+    if (!ctx.snippetParamNames) {
+      return err(unknownComponent(`$if outside snippet body`));
+    }
+    const expr = serializeIfExpr(
+      effectiveChild as { $if: string; then?: unknown; else?: unknown },
+      ctx.snippetParamNames,
+    );
+    if (expr === null) {
+      return err(
+        unknownComponent(`$if:${(effectiveChild as { $if: string }).$if} (unknown param)`),
+      );
+    }
+    return ok(`${pad}<${openTag}${attrs}>{${expr}}</${closeTag}>`);
+  }
+
   if (hasStringChild) {
-    const text = serializeTextChild(childrenProp as string);
+    const text = serializeTextChild(effectiveChild as string);
     if (text.length < 60 && !text.includes("\n")) {
       return ok(`${pad}<${openTag}${attrs}>${text}</${closeTag}>`);
     }
@@ -164,6 +214,6 @@ function renderComponent(
   }
 
   return ok(
-    `${pad}<${openTag}${attrs}>\n${childPad}{${JSON.stringify(childrenProp)}}\n${pad}</${closeTag}>`,
+    `${pad}<${openTag}${attrs}>\n${childPad}{${JSON.stringify(effectiveChild)}}\n${pad}</${closeTag}>`,
   );
 }

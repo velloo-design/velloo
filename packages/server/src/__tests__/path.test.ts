@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import type { Node } from "@velloo/schema";
-import { coercePath, parentOf, pathAt, pathFromString, pathToString } from "../path.ts";
+import {
+  coercePath,
+  findById,
+  isIdLocator,
+  locate,
+  parentOf,
+  pathAt,
+  pathFromString,
+  pathToString,
+  resolveLocator,
+} from "../path.ts";
 
 const tree: Node = {
   $ref: "Card",
@@ -58,5 +68,86 @@ describe("path helpers", () => {
     expect(coercePath("0.2.1")).toEqual([0, 2, 1]);
     expect(coercePath("")).toEqual([]);
     expect(coercePath([])).toEqual([]);
+  });
+});
+
+describe("locator + findById", () => {
+  const treeWithIds: Node = {
+    $ref: "Card",
+    $id: "root-card",
+    children: [
+      { $ref: "Heading", $id: "title", props: { level: 1 } },
+      {
+        $ref: "Card",
+        $id: "body",
+        children: [
+          { $ref: "Text", $id: "intro", props: { children: "hi" } },
+          {
+            $snippet: "feature-card",
+            $id: "hero",
+            args: { title: "x" },
+          },
+        ],
+      },
+    ],
+  };
+
+  test("isIdLocator recognizes only @-prefixed strings of length > 1", () => {
+    expect(isIdLocator("@x")).toBe(true);
+    expect(isIdLocator("@hero-cta")).toBe(true);
+    expect(isIdLocator("@")).toBe(false);
+    expect(isIdLocator("hero-cta")).toBe(false);
+    expect(isIdLocator(["@"] as unknown)).toBe(false);
+    expect(isIdLocator([0])).toBe(false);
+  });
+
+  test("findById walks the tree and returns the first match's path", () => {
+    expect(findById(treeWithIds, "root-card")).toEqual([]);
+    expect(findById(treeWithIds, "title")).toEqual([0]);
+    expect(findById(treeWithIds, "intro")).toEqual([1, 0]);
+    expect(findById(treeWithIds, "hero")).toEqual([1, 1]);
+    expect(findById(treeWithIds, "nope")).toBeNull();
+  });
+
+  test("findById doesn't descend into snippet instances (their body is opaque)", () => {
+    // The snippet instance "hero" exists at [1, 1]. Its body (somewhere
+    // else, in design/snippets/) may contain nodes with $id "inside" —
+    // but those aren't reachable from this page's POV.
+    const t: Node = {
+      $ref: "Card",
+      children: [{ $snippet: "feature-card", $id: "hero", args: {} }],
+    };
+    // Simulating a deep descent: even if a snippet body had an "intro" id,
+    // findById on the *page* tree never sees it.
+    expect(findById(t, "hero")).toEqual([0]);
+    expect(findById(t, "anything-inside-the-snippet")).toBeNull();
+  });
+
+  test("resolveLocator handles path arrays and @id strings", () => {
+    expect(resolveLocator(treeWithIds, [])).toEqual([]);
+    expect(resolveLocator(treeWithIds, [1, 0])).toEqual([1, 0]);
+    expect(resolveLocator(treeWithIds, "@title")).toEqual([0]);
+    expect(resolveLocator(treeWithIds, "@hero")).toEqual([1, 1]);
+  });
+
+  test("resolveLocator returns null on out-of-range path", () => {
+    expect(resolveLocator(treeWithIds, [99])).toBeNull();
+    expect(resolveLocator(treeWithIds, [0, 0])).toBeNull(); // Heading has no children
+  });
+
+  test("resolveLocator returns null on unknown id", () => {
+    expect(resolveLocator(treeWithIds, "@missing")).toBeNull();
+  });
+
+  test("locate combines resolve + pathAt and returns both", () => {
+    const r = locate(treeWithIds, "@title");
+    expect(r?.path).toEqual([0]);
+    expect((r?.node as { $ref: string }).$ref).toBe("Heading");
+
+    const r2 = locate(treeWithIds, [1, 1]);
+    expect(r2?.path).toEqual([1, 1]);
+    expect((r2?.node as { $snippet: string }).$snippet).toBe("feature-card");
+
+    expect(locate(treeWithIds, "@nope")).toBeNull();
   });
 });

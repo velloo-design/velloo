@@ -15,6 +15,7 @@ import { Label } from "./components/ui/label.tsx";
 import { Separator } from "./components/ui/separator.tsx";
 import { Heading } from "./components/velloo/heading.tsx";
 import { Icon } from "./components/velloo/icon.tsx";
+import { Placeholder } from "./components/velloo/placeholder.tsx";
 import { Text } from "./components/velloo/text.tsx";
 
 // biome-ignore lint/suspicious/noExplicitAny: registry is heterogeneous by design
@@ -32,6 +33,7 @@ export const registry: Record<string, ComponentType<any>> = {
   Icon,
   Input,
   Label,
+  Placeholder,
   Separator,
   Text,
 };

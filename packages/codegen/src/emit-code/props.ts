@@ -23,6 +23,15 @@ export function serializeProp(
     }
   }
 
+  if (
+    paramNames &&
+    typeof value === "object" &&
+    typeof (value as { $if?: unknown }).$if === "string"
+  ) {
+    const expr = serializeIfExpr(value as IfExpr, paramNames);
+    if (expr !== null) return `${name}={${expr}}`;
+  }
+
   if (typeof value === "string") {
     return `${name}=${jsxStringLiteral(value)}`;
   }
@@ -36,6 +45,41 @@ export function serializeProp(
   }
 
   return `${name}={${JSON.stringify(value)}}`;
+}
+
+interface IfExpr {
+  $if: string;
+  then?: unknown;
+  else?: unknown;
+}
+
+/**
+ * Serialize a $if substitution to a JSX expression body (without surrounding
+ * braces). Returns null if the param name isn't known. Recurses on the
+ * branches so nested $param works.
+ */
+export function serializeIfExpr(value: IfExpr, paramNames: Set<string>): string | null {
+  if (!paramNames.has(value.$if)) return null;
+  const then = serializeIfLeaf(value.then, paramNames);
+  const els = serializeIfLeaf(value.else, paramNames);
+  return `${value.$if} ? ${then} : ${els}`;
+}
+
+function serializeIfLeaf(v: unknown, paramNames: Set<string>): string {
+  if (v === undefined || v === null) return "undefined";
+  if (typeof v === "string") return JSON.stringify(v);
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (typeof v === "object") {
+    if (typeof (v as { $param?: unknown }).$param === "string") {
+      const n = (v as { $param: string }).$param;
+      if (paramNames.has(n)) return n;
+    }
+    if (typeof (v as { $if?: unknown }).$if === "string") {
+      const inner = serializeIfExpr(v as IfExpr, paramNames);
+      if (inner !== null) return `(${inner})`;
+    }
+  }
+  return JSON.stringify(v);
 }
 
 /**

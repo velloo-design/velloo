@@ -8,9 +8,10 @@ import {
   type Variant,
 } from "@velloo/schema";
 import { isKnownComponent, registry } from "@velloo/shadcn-snapshot";
-import { pathAt } from "../path.ts";
+import { isIdLocator, type Locator, pathAt, resolveLocator } from "../path.ts";
 import type { MutationContext } from "./context.ts";
 import {
+  idNotFound,
   invalidPath,
   type MutationError,
   nearestRefs,
@@ -34,9 +35,42 @@ export function getVariant(
   return v ? ok(v) : err(variantNotFound(pageId, variantId));
 }
 
-export function getNode(root: Node, path: number[]): Result<Node, MutationError> {
-  const n = pathAt(root, path);
-  return n ? ok(n) : err(invalidPath(`No node at path ${JSON.stringify(path)}`, path));
+/**
+ * Resolve a locator → path against a variant root, returning a typed
+ * error for the right failure mode:
+ *  - `IdNotFound` when an `@id` locator doesn't match any node
+ *  - `InvalidPath` when a number[] locator is out of range
+ *
+ * Callers need to pass pageId/variantId so the IdNotFound error carries
+ * enough context for the agent to recover (which page/variant did the
+ * lookup fail in?).
+ */
+export function resolve(
+  root: Node,
+  locator: Locator,
+  pageId: string,
+  variantId: string,
+): Result<number[], MutationError> {
+  const path = resolveLocator(root, locator);
+  if (path !== null) return ok(path);
+  if (isIdLocator(locator)) return err(idNotFound(pageId, variantId, locator.slice(1)));
+  return err(invalidPath(`No node at path ${JSON.stringify(locator)}`, locator as number[]));
+}
+
+/**
+ * Get the node at a locator. Mutation-friendly: returns an err Result with
+ * the right kind for either an unknown @id or an out-of-range path.
+ */
+export function getNode(
+  root: Node,
+  locator: Locator,
+  pageId: string,
+  variantId: string,
+): Result<Node, MutationError> {
+  const r = resolve(root, locator, pageId, variantId);
+  if (!r.ok) return r;
+  const n = pathAt(root, r.value);
+  return n ? ok(n) : err(invalidPath(`No node at path ${JSON.stringify(r.value)}`, r.value));
 }
 
 /**
@@ -45,18 +79,25 @@ export function getNode(root: Node, path: number[]): Result<Node, MutationError>
  * apply_classes, etc.). Snippet instances and param refs return
  * InvalidPath with a hint about which alternative tool to use.
  */
-export function getComponentNode(root: Node, path: number[]): Result<ComponentNode, MutationError> {
-  const found = pathAt(root, path);
-  if (!found) return err(invalidPath(`No node at path ${JSON.stringify(path)}`, path));
-  if (!isComponentNode(found)) {
+export function getComponentNode(
+  root: Node,
+  locator: Locator,
+  pageId: string,
+  variantId: string,
+): Result<ComponentNode, MutationError> {
+  const r = getNode(root, locator, pageId, variantId);
+  if (!r.ok) return r;
+  if (!isComponentNode(r.value)) {
+    const r2 = resolve(root, locator, pageId, variantId);
+    const path = r2.ok ? r2.value : [];
     return err(
       invalidPath(
-        `Node at ${JSON.stringify(path)} is not a component (got ${describe(found)}). For snippet instances use update_snippet_args.`,
+        `Node at ${JSON.stringify(path)} is not a component (got ${describe(r.value)}). For snippet instances use update_snippet_args.`,
         path,
       ),
     );
   }
-  return ok(found);
+  return ok(r.value);
 }
 
 function describe(node: Node): string {

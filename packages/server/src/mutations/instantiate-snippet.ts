@@ -1,16 +1,20 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Node, Snippet, SnippetInstance } from "@velloo/schema";
+import type { Locator } from "../path.ts";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError, snippetParamMismatch } from "./errors.ts";
-import { getComponentNode, getPage, getSnippet, getVariant } from "./lookup.ts";
-import { persistPage } from "./persist.ts";
+import { getComponentNode, getPage, getSnippet, getVariant, resolve } from "./lookup.ts";
+import { commitPage } from "./persist.ts";
 
 export interface InstantiateSnippetArgs {
   pageId: string;
   variantId: string;
-  parentPath: number[];
+  /** Locator for the parent — path array or `"@id"` string. */
+  parentPath: Locator;
   snippetId: string;
+  /** Optional stable id for the new instance (addressable as `"@id"` later). */
+  id?: string;
   args?: Record<string, unknown>;
   index?: number;
 }
@@ -39,7 +43,12 @@ export async function instantiateSnippet(
     const nextVariant = next.variants.find((v) => v.id === args.variantId);
     if (!nextVariant) throw new Error("invariant: variant lost on clone");
 
-    const parent = yield* $(getComponentNode(nextVariant.tree, args.parentPath));
+    const resolvedParent = yield* $(
+      resolve(nextVariant.tree, args.parentPath, args.pageId, args.variantId),
+    );
+    const parent = yield* $(
+      getComponentNode(nextVariant.tree, resolvedParent, args.pageId, args.variantId),
+    );
     if (!parent.children) parent.children = [];
     const idx = args.index ?? parent.children.length;
     if (idx < 0 || idx > parent.children.length) {
@@ -47,7 +56,7 @@ export async function instantiateSnippet(
         err(
           invalidPath(
             `index ${idx} out of range for parent with ${parent.children.length} children`,
-            args.parentPath,
+            resolvedParent,
           ),
         ),
       );
@@ -55,13 +64,14 @@ export async function instantiateSnippet(
 
     const node: SnippetInstance = {
       $snippet: snippet.id,
+      ...(args.id !== undefined ? { $id: args.id } : {}),
       ...(args.args && Object.keys(args.args).length > 0 ? { args: args.args } : {}),
     };
     parent.children.splice(idx, 0, node as Node);
 
-    await persistPage(ctx.folder, args.pageId, next);
+    yield* $(await commitPage(ctx.folder, args.pageId, next));
     ctx.broadcast({ type: "page-changed", pageId: args.pageId });
-    return { path: [...args.parentPath, idx] };
+    return { path: [...resolvedParent, idx] };
   });
 }
 

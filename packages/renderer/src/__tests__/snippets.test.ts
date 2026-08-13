@@ -78,6 +78,59 @@ describe("snippet resolution", () => {
     );
   });
 
+  test("$if in className picks the right branch based on boolean param", async () => {
+    const card: Snippet = {
+      id: "tier",
+      name: "Pricing Tier",
+      params: [{ name: "featured", type: "boolean", default: false }],
+      tree: {
+        $ref: "Card",
+        props: {
+          className: {
+            $if: "featured",
+            then: "ring-2 ring-emerald-500/40",
+            else: "ring-1 ring-zinc-800",
+          },
+        },
+      },
+    };
+    const snippets = new Map([[card.id, card]]);
+    const featured = await renderVariant(
+      variantWith({ $snippet: "tier", args: { featured: true } }),
+      theme,
+      { ...opts, snippets },
+    );
+    expect(featured.bodyHtml).toContain("ring-2");
+    expect(featured.bodyHtml).toContain("ring-emerald-500/40");
+    const plain = await renderVariant(
+      variantWith({ $snippet: "tier", args: { featured: false } }),
+      theme,
+      { ...opts, snippets },
+    );
+    expect(plain.bodyHtml).toContain("ring-1");
+    expect(plain.bodyHtml).toContain("ring-zinc-800");
+  });
+
+  test("$if in props.children renders the selected branch", async () => {
+    const label: Snippet = {
+      id: "label",
+      name: "Label",
+      params: [{ name: "loud", type: "boolean", default: false }],
+      tree: {
+        $ref: "Text",
+        props: { children: { $if: "loud", then: "LOUD!", else: "quiet" } },
+      },
+    };
+    const snippets = new Map([[label.id, label]]);
+    const loud = await renderVariant(
+      variantWith({ $snippet: "label", args: { loud: true } }),
+      theme,
+      { ...opts, snippets },
+    );
+    expect(loud.bodyHtml).toContain("LOUD!");
+    expect(loud.bodyHtml).not.toContain("quiet");
+  });
+
   test("inner DOM in a resolved snippet inherits the instance's data-node-path", () => {
     const snippets = new Map([[featureCard.id, featureCard]]);
     // Wrap the snippet inside a Card so the instance lives at path [0].

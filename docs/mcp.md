@@ -12,7 +12,7 @@ A typical design page is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_va
 
 | Tool | Args | Returns |
 |---|---|---|
-| `list_pages` | — | `[{ id, name, variants: [{ id, name, viewport }] }]` |
+| `list_pages` | `include_tree?: boolean` | `[{ id, name, variants: [{ id, name, viewport, tree? }] }]`. Pass `include_tree: true` for a single-round-trip overview of the whole design |
 | `get_page` | `pageId` | full page JSON |
 | `get_variant` | `pageId, variantId` | single variant tree |
 | `list_components` | `filter?, mode?: "summary" \| "full"` | `[{ id, props, category, summary }]` — summary mode returns just `{ id, summary, category }` to avoid blowing the token cap on first call |
@@ -24,12 +24,15 @@ A typical design page is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_va
 
 | Tool | Args |
 |---|---|
-| `add_node` | `pageId, variantId, parentPath, componentRef, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call |
+| `add_node` | `pageId, variantId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
 | `update_props` | `pageId, variantId, path, propPatch` |
+| `update_props_bulk` | `pageId, variantId, patches: [{path, propPatch}]` — atomic bulk variant; single persist + broadcast + history entry |
 | `move_node` | `pageId, variantId, fromPath, toParent, toIndex?` |
 | `remove_node` | `pageId, variantId, path` |
 | `inspect` | `pageId, variantId, path` — returns rendered DOM + computed styles |
+| `inspect_dark_diff` | `pageId, variantId` — audit color classes for dark-mode awareness. Returns coverage 0..1, per-node `raw[]` classes that won't theme-flip, and `suggestions{}` for obvious semantic-token replacements |
 | `apply_classes` | `pageId, variantId, path, classes` — Tailwind class edit on a node |
+| `apply_classes_bulk` | `pageId, variantId, patches: [{path, classes}]` — atomic bulk apply_classes; useful for sweeping a page through a styling change |
 | `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms |
 
 ### Page lifecycle
@@ -58,7 +61,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `add_snippet` | `id?, name, params, tree` | `params` is `[{ name, type, default? }]`; `tree` may contain `$param` placeholder nodes |
 | `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, or `tree`; all pages referencing the snippet rebroadcast |
 | `remove_snippet` | `snippetId` | Refuses if any page instantiates it; returns the referencing pageIds so the agent can clean up first |
-| `instantiate_snippet` | `pageId, variantId, parentPath, snippetId, args, index?` | Adds a `$snippet` node — opaque from outside, internal paths are not addressable |
+| `instantiate_snippet` | `pageId, variantId, parentPath, snippetId, args, id?, index?` | Adds a `$snippet` node — opaque from outside, internal paths are not addressable. Pass `id` for a stable anchor on the instance |
 | `update_snippet_args` | `pageId, variantId, path, argPatch` | Edit an instance's args without touching the snippet body |
 
 ### Theme operations
@@ -75,7 +78,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Returns |
 |---|---|---|
-| `screenshot` | `pageId, variantId, mode?: "light" \| "dark"` | Base64 PNG via Playwright. Agents finally get to see what they built |
+| `screenshot` | `pageId, variantId, mode?: "light" \| "dark", fullPage?: boolean` | Base64 PNG via Playwright. Defaults `fullPage: true` so tall pages aren't clipped; pass `fullPage: false` to clip to the variant's viewport rectangle |
 
 ### Codegen and export
 
@@ -86,11 +89,24 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 ## Path addressing
 
-Nodes are addressed by integer path arrays from the variant root: `[0, 2, 1]` = first child, third grandchild, second great-grandchild. Cheaper to serialize than string selectors and unambiguous for the agent.
+Every path-accepting tool accepts a **locator** — either of:
 
-Edits return the new path of the affected node so the agent can chain operations without a re-read.
+- **Path array** — integer indices from the variant root. `[0, 2, 1]` = first child, third grandchild, second great-grandchild. Cheap to serialize and unambiguous, but brittle: a sibling insertion above shifts every later path.
+- **`@id` reference** — the string `"@hero-cta"` resolves to whichever node carries `$id: "hero-cta"`. Stable across sibling insertions and deletions.
 
-**Snippet instances are opaque.** A `$snippet` node has a path, but the structure rendered inside it is not addressable from the page. To edit the contents, edit the snippet body itself; every instance updates.
+Agents assign ids two ways: pass `id: "hero-cta"` when creating a node (`add_node`, `instantiate_snippet`) or call `set_node_id` later. Per-variant uniqueness is enforced at persist time; collisions surface as `IdConflict`. The same id may repeat across variants of the same page — that's intentional: `"@hero-cta"` in mobile + desktop is the same semantic anchor in different renders.
+
+Edits return the resolved path of the affected node so the agent can chain operations without a re-read.
+
+**Snippet instances are opaque.** A `$snippet` node has a path and may carry its own `$id`, but the structure rendered inside it is not addressable from the page. To edit the contents, edit the snippet body itself; every instance updates.
+
+### Locator-aware tools
+
+`add_node`, `update_props`, `apply_classes`, `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_args`, `apply_classes_bulk`, `update_props_bulk`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string.
+
+| Tool | Args | Notes |
+|---|---|---|
+| `set_node_id` | `pageId, variantId, path, id` | Assign / rename / clear (`id: null`) a node's stable anchor. Targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids |
 
 ## Error model
 
@@ -112,6 +128,9 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `SnippetParamMismatch` | `args` to `instantiate_snippet` don't match the declared `params` (missing required, unknown extras, type mismatch) |
 | `SnippetCycle` | Snippet body would reference itself (directly or transitively) |
 | `SnippetInUse` | `remove_snippet` refuses when pages still instantiate it; carries the referencing `pageIds[]` |
+| `SnippetIdConflict` | `add_snippet` id collides with an existing snippet |
+| `IdNotFound` | An `@id` locator didn't resolve to any node in the variant; carries `id` |
+| `IdConflict` | Two nodes in the same variant share an `$id`; carries `id` + `paths[]` |
 
 ## Initialize handshake
 

@@ -22,14 +22,15 @@ export function registerScreenshotTool(
     "screenshot",
     {
       description:
-        'Render a variant headless via Playwright and return the PNG as image content. Pass mode: "dark" to apply the dark color block. Requires playwright + chromium (the velloo binary ships them); if Playwright is missing this returns an error explaining how to install it.',
+        "Render a variant headless via Playwright and return the PNG as image content. Pass mode: \"dark\" to apply the dark color block. Defaults to fullPage: true so tall pages aren't clipped — pass fullPage: false to clip to the variant's viewport rectangle. Requires playwright + chromium (the velloo binary ships them); if Playwright is missing this returns an error explaining how to install it.",
       inputSchema: {
         pageId: z.string(),
         variantId: z.string(),
         mode: z.enum(["light", "dark"]).optional(),
+        fullPage: z.boolean().optional(),
       },
     },
-    async ({ pageId, variantId, mode }) => {
+    async ({ pageId, variantId, mode, fullPage }) => {
       const page = ctx.folder.pages.get(pageId);
       if (!page) return errorResult(`Page not found: ${pageId}`);
       const variant = page.variants.find((v) => v.id === variantId);
@@ -43,7 +44,11 @@ export function registerScreenshotTool(
           snippets: ctx.folder.snippets,
           dark: mode === "dark",
         });
-        buf = await screenshotBuffer({ html, viewport: variant.viewport });
+        buf = await screenshotBuffer({
+          html,
+          viewport: variant.viewport,
+          fullPage: fullPage ?? true,
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/.test(msg)) {

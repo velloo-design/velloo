@@ -11,6 +11,7 @@ export function mutationToHttp(c: Context, error: MutationError): Response {
     case "PageNotFound":
     case "VariantNotFound":
     case "SnippetNotFound":
+    case "IdNotFound":
       return c.json({ error }, 404);
     case "UnknownComponent":
     case "SnippetParamMismatch":
@@ -26,6 +27,7 @@ export function mutationToHttp(c: Context, error: MutationError): Response {
     case "LastPage":
     case "LastVariant":
     case "SnippetInUse":
+    case "IdConflict":
       return c.json({ error }, 409);
     default: {
       const _exhaustive: never = error;

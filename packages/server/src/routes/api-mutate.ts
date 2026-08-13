@@ -5,6 +5,7 @@ import {
   addSnippet,
   addVariant,
   applyClasses,
+  applyClassesBulk,
   instantiateSnippet,
   type MutationContext,
   moveNode,
@@ -12,8 +13,10 @@ import {
   removePage,
   removeSnippet,
   removeVariant,
+  setNodeId,
   updatePage,
   updateProps,
+  updatePropsBulk,
   updateSnippet,
   updateSnippetArgs,
   updateVariant,
@@ -25,14 +28,17 @@ import {
   AddSnippetBody,
   AddVariantBody,
   ApplyClassesBody,
+  ApplyClassesBulkBody,
   InstantiateSnippetBody,
   MoveNodeBody,
   RemoveNodeBody,
   RemovePageBody,
   RemoveSnippetBody,
   RemoveVariantBody,
+  SetNodeIdBody,
   UpdatePageBody,
   UpdatePropsBody,
+  UpdatePropsBulkBody,
   UpdateSnippetArgsBody,
   UpdateSnippetBody,
   UpdateVariantBody,
@@ -93,6 +99,14 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
     route(ApplyClassesBody, (a, ctx) => applyClasses(ctx, a)),
   );
   r.post(
+    "/apply_classes_bulk",
+    route(ApplyClassesBulkBody, (a, ctx) => applyClassesBulk(ctx, a)),
+  );
+  r.post(
+    "/update_props_bulk",
+    route(UpdatePropsBulkBody, (a, ctx) => updatePropsBulk(ctx, a)),
+  );
+  r.post(
     "/add_snippet",
     route(AddSnippetBody, (a, ctx) => addSnippet(ctx, a)),
   );
@@ -111,6 +125,10 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/update_snippet_args",
     route(UpdateSnippetArgsBody, (a, ctx) => updateSnippetArgs(ctx, a)),
+  );
+  r.post(
+    "/set_node_id",
+    route(SetNodeIdBody, (a, ctx) => setNodeId(ctx, a)),
   );
 
   return r;

@@ -58,9 +58,14 @@ export interface BuildTreeOptions {
 }
 
 /**
- * Recursively replace `{ $param: name }` tokens with the corresponding arg
- * value anywhere in a JSON-like structure. Walks props as well as children
- * — agents commonly inject string params into `props.children`.
+ * Recursively rewrite snippet body values:
+ *
+ * - `{ $param: "name" }` → `args.name` (the param's value, of any JSON type).
+ * - `{ $if: "name", then: <a>, else: <b> }` → `<a>` if `args.name` is truthy,
+ *   else `<b>`. Recurses into both branches first so nested $param/$if work.
+ *
+ * Walks props as well as children — agents commonly inject string params
+ * into `props.children` and toggle class strings with `$if`.
  */
 function substituteParams(
   value: unknown,
@@ -74,11 +79,25 @@ function substituteParams(
     if (!(name in args)) throw new SnippetParamError(snippetId, name);
     return args[name];
   }
+  if (typeof (value as { $if?: unknown }).$if === "string") {
+    const v = value as { $if: string; then?: unknown; else?: unknown };
+    if (!(v.$if in args)) throw new SnippetParamError(snippetId, v.$if);
+    const branch = isTruthy(args[v.$if]) ? v.then : v.else;
+    return substituteParams(branch, args, snippetId);
+  }
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) {
     out[k] = substituteParams(v, args, snippetId);
   }
   return out;
+}
+
+function isTruthy(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
+  if (typeof v === "string") return v !== "";
+  return true;
 }
 
 /**

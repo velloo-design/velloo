@@ -60,6 +60,63 @@ describe("emitSnippet", () => {
   });
 });
 
+describe("$if conditionals in snippet bodies", () => {
+  test("$if in className emits a ternary expression", async () => {
+    const tier: Snippet = {
+      id: "tier",
+      name: "Pricing Tier",
+      params: [{ name: "featured", type: "boolean", default: false }],
+      tree: {
+        $ref: "Card",
+        props: {
+          className: {
+            $if: "featured",
+            then: "ring-2 ring-emerald-500/40",
+            else: "ring-1 ring-zinc-800",
+          },
+        },
+      },
+    };
+    const result = unwrap(await emitSnippet(tier, { outputPath: tmpOut() }));
+    expect(result.code).toContain(
+      'className={featured ? "ring-2 ring-emerald-500/40" : "ring-1 ring-zinc-800"}',
+    );
+  });
+
+  test("$if in props.children emits a JSX expression", async () => {
+    const label: Snippet = {
+      id: "label",
+      name: "Label",
+      params: [{ name: "loud", type: "boolean", default: false }],
+      tree: {
+        $ref: "Text",
+        props: { children: { $if: "loud", then: "LOUD!", else: "quiet" } },
+      },
+    };
+    const result = unwrap(await emitSnippet(label, { outputPath: tmpOut() }));
+    expect(result.code).toMatch(/\{loud \? "LOUD!" : "quiet"\}/);
+  });
+
+  test("$if combined with $param in a branch emits the param reference", async () => {
+    const flex: Snippet = {
+      id: "flex",
+      name: "Flex",
+      params: [
+        { name: "showTitle", type: "boolean" },
+        { name: "title", type: "string" },
+      ],
+      tree: {
+        $ref: "Text",
+        props: {
+          children: { $if: "showTitle", then: { $param: "title" }, else: "" },
+        },
+      },
+    };
+    const result = unwrap(await emitSnippet(flex, { outputPath: tmpOut() }));
+    expect(result.code).toMatch(/\{showTitle \? title : ""\}/);
+  });
+});
+
 describe("emitCode with snippet references", () => {
   test("snippet instances in a page emit as <PascalName ... /> with the right import", async () => {
     const page: Page = {

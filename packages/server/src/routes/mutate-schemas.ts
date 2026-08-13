@@ -1,7 +1,20 @@
-import { NodeSchema, SnippetParamSchema } from "@velloo/schema";
+import { NodeIdSchema, NodeSchema, SnippetParamSchema } from "@velloo/schema";
 import { z } from "zod";
 
 const Path = z.array(z.number().int().nonnegative());
+
+/**
+ * A node locator: either a path array (e.g. `[1, 2, 0]`) or an `@id`
+ * reference (e.g. `"@hero-cta"`). The id form is resolved against the
+ * variant tree at mutation time and is stable across sibling
+ * insertions and deletions.
+ */
+const IdLocator = z.string().regex(/^@[a-zA-Z][a-zA-Z0-9_-]*$/, {
+  message: "id locator must match /^@[a-zA-Z][a-zA-Z0-9_-]*$/",
+});
+const Locator = z.union([Path, IdLocator]);
+/** Locator that defaults to root (`[]`) when the field is missing entirely. */
+const LocatorOrRoot = Locator.default([] as number[] | string);
 const Viewport = z.object({
   w: z.number().int().positive(),
   h: z.number().int().positive(),
@@ -16,8 +29,9 @@ const VariantPatch = z.object({
 export const AddNodeBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
-  parentPath: Path.default([]),
+  parentPath: LocatorOrRoot,
   componentRef: z.string().min(1),
+  id: NodeIdSchema.optional(),
   props: z.record(z.string(), z.unknown()).optional(),
   children: z.array(NodeSchema).optional(),
   index: z.number().int().nonnegative().optional(),
@@ -26,21 +40,21 @@ export const AddNodeBody = z.object({
 export const UpdatePropsBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
-  path: Path.default([]),
+  path: LocatorOrRoot,
   propPatch: z.record(z.string(), z.unknown()),
 });
 
 export const RemoveNodeBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
-  path: Path.default([]),
+  path: LocatorOrRoot,
 });
 
 export const MoveNodeBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
-  fromPath: Path,
-  toParent: Path,
+  fromPath: Locator,
+  toParent: Locator,
   toIndex: z.number().int().nonnegative().optional(),
 });
 
@@ -95,8 +109,34 @@ export const UpdatePageBody = z.object({
 export const ApplyClassesBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
-  path: Path.default([]),
+  path: LocatorOrRoot,
   classes: z.string(),
+});
+
+export const UpdatePropsBulkBody = z.object({
+  pageId: z.string().min(1),
+  variantId: z.string().min(1),
+  patches: z
+    .array(
+      z.object({
+        path: Locator,
+        propPatch: z.record(z.string(), z.unknown()),
+      }),
+    )
+    .min(1),
+});
+
+export const ApplyClassesBulkBody = z.object({
+  pageId: z.string().min(1),
+  variantId: z.string().min(1),
+  patches: z
+    .array(
+      z.object({
+        path: Locator,
+        classes: z.string(),
+      }),
+    )
+    .min(1),
 });
 
 export const AddSnippetBody = z.object({
@@ -122,8 +162,9 @@ export const RemoveSnippetBody = z.object({
 export const InstantiateSnippetBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
-  parentPath: Path.default([]),
+  parentPath: LocatorOrRoot,
   snippetId: z.string().min(1),
+  id: NodeIdSchema.optional(),
   args: z.record(z.string(), z.unknown()).optional(),
   index: z.number().int().nonnegative().optional(),
 });
@@ -131,6 +172,14 @@ export const InstantiateSnippetBody = z.object({
 export const UpdateSnippetArgsBody = z.object({
   pageId: z.string().min(1),
   variantId: z.string().min(1),
-  path: Path,
+  path: Locator,
   argPatch: z.record(z.string(), z.unknown()),
+});
+
+export const SetNodeIdBody = z.object({
+  pageId: z.string().min(1),
+  variantId: z.string().min(1),
+  path: Locator,
+  /** New id, or null to clear. */
+  id: NodeIdSchema.nullable(),
 });

@@ -37,21 +37,21 @@ interface Session {
 const INSTRUCTIONS = [
   "You are working on a Velloo design folder. Components come from a pinned shadcn snapshot. Designs are static — click handlers, routing, and forms are no-op.",
   "",
-  'Before composing pages, call `list_components` (use mode: "summary" first — the full schema is large) and `get_theme` to understand the available palette and active tokens.',
+  'Before composing pages, call `list_components` (use mode: "summary" first — the full schema is large) and `get_theme` to understand the available palette and active tokens. Also `list_snippets` — reuse existing snippets before defining new ones.',
   "",
-  "Prefer semantic theme tokens (bg-card, text-foreground, bg-primary, bg-muted, border-border) over raw Tailwind colors (bg-zinc-900, text-white) so designs auto-adapt to dark mode and theme changes.",
+  '**Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`, etc.) over raw Tailwind palette colors (`bg-zinc-900`, `text-white`, `text-emerald-400`). Semantic tokens auto-flip under `screenshot mode: "dark"` and survive theme changes; raw palette colors render identically in both modes. Use raw palette only for *intentional* accent colors that should NOT theme-flip. Run `inspect_dark_diff` to verify your page is actually dark-mode-aware.',
   "",
   "Use add_node's `children` parameter to add whole subtrees in one call — every child can itself be a full node (with props + children). One call beats N round-trips.",
   "",
-  "Prefer snippets for repeated structure (feature cards, list items, hero sections). Create the snippet once with add_snippet, then call instantiate_snippet per occurrence. Edits to the body propagate; arg lists keep instances different. Snippets emit as real React components on emit_code.",
+  'Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), you can pass a stable id reference like `"@hero-cta"` instead of a number array. Pass `id: "hero-cta"` to `add_node` / `instantiate_snippet` to assign one, or `set_node_id` to retroactively name an existing node. Ids survive sibling insertions and deletions — use them for anchors you\'ll reference more than once. Per-variant uniqueness is enforced; the same id can repeat across variants of the same page (intentional, e.g. "@hero-cta" on mobile + desktop is the same anchor).',
   "",
-  "New pages get one variant at the requested viewport. Use add_variant (or add_variant with fromVariantId to clone) for additional viewports.",
+  'Prefer snippets for repeated structure (feature cards, list items, hero sections). Create the snippet once with `add_snippet`, then call `instantiate_snippet` per occurrence. Snippets emit as real React components on `emit_code`. For per-instance style variation, declare a boolean param and use `{"$if": "paramName", "then": "...", "else": "..."}` anywhere a value appears — string `$param` substitution cannot interpolate *inside* a class name, only replace whole values.',
   "",
-  "Text content for Heading, Text, Button, Badge, Label goes in the `children` prop, not a `text` prop.",
+  "New pages get one variant at the requested viewport. Use `add_variant` (or `add_variant` with `fromVariantId` to clone) for additional viewports. Tall marketing pages need a tall viewport: `screenshot` defaults to `fullPage: true` but the rendered HTML is still bounded by the variant's `viewport.h` — extend it or split the page into variants.",
   "",
-  "Icon takes any lucide-react name as its `name` prop (e.g. Sparkles, ArrowRight, Check). The list is huge; pick by feel.",
+  "Text content for Heading, Text, Button, Badge, Label goes in the `children` prop, not a `text` prop. Icon takes any lucide-react name as its `name` prop (e.g. Sparkles, ArrowRight, Check). For placeholder imagery (avatars, hero shots) use the `Placeholder` component instead of faking with gradient divs.",
   "",
-  'screenshot is available — call it to verify layout when something feels off rather than guessing. validate_classes answers "do these Tailwind classes compile" if you\'re about to use an arbitrary-value form.',
+  "`screenshot` is available — call it to verify layout when something feels off rather than guessing. `validate_classes` is free and fast — run it on any arbitrary-value classes (`shadow-[…]`, `grid-cols-[…]`, etc.) before relying on them.",
 ].join("\n");
 
 function buildMcpServer(ctx: MutationContext, jit: TailwindJit): McpServer {

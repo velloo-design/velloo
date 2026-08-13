@@ -120,4 +120,99 @@ describe("api routes", () => {
     const res = await app.request("/api/render/onboarding/desktop");
     expect(res.status).toBe(404);
   });
+
+  test("/api/mutate/update_props accepts an @id locator", async () => {
+    const app = createApp(() => ctx, jit);
+    // Assign an id to the root Card first.
+    const setRes = await app.request("/api/mutate/set_node_id", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [],
+        id: "root-card",
+      }),
+    });
+    expect(setRes.status).toBe(200);
+    // Now address it via the locator.
+    const updateRes = await app.request("/api/mutate/update_props", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: "@root-card",
+        propPatch: { className: "p-6" },
+      }),
+    });
+    expect(updateRes.status).toBe(200);
+    const body = (await updateRes.json()) as { path: number[] };
+    expect(body.path).toEqual([]);
+  });
+
+  test("/api/mutate/update_props returns 404 IdNotFound for an unknown @id", async () => {
+    const app = createApp(() => ctx, jit);
+    const res = await app.request("/api/mutate/update_props", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: "@no-such-id",
+        propPatch: { className: "p-6" },
+      }),
+    });
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: { kind: string; id: string } };
+    expect(body.error.kind).toBe("IdNotFound");
+    expect(body.error.id).toBe("no-such-id");
+  });
+
+  test("/api/mutate/add_node rejects an id collision with 409", async () => {
+    const app = createApp(() => ctx, jit);
+    // Add a node with id "first".
+    const first = await app.request("/api/mutate/add_node", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pageId: "onboarding",
+        variantId: "mobile",
+        parentPath: [],
+        componentRef: "Badge",
+        id: "first",
+      }),
+    });
+    expect(first.status).toBe(200);
+    // Try to add another with the same id → IdConflict → 409.
+    const second = await app.request("/api/mutate/add_node", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pageId: "onboarding",
+        variantId: "mobile",
+        parentPath: [],
+        componentRef: "Badge",
+        id: "first",
+      }),
+    });
+    expect(second.status).toBe(409);
+    const body = (await second.json()) as { error: { kind: string } };
+    expect(body.error.kind).toBe("IdConflict");
+  });
+
+  test("/api/mutate/set_node_id rejects malformed ids at the route layer", async () => {
+    const app = createApp(() => ctx, jit);
+    const res = await app.request("/api/mutate/set_node_id", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pageId: "onboarding",
+        variantId: "mobile",
+        path: [],
+        id: "1-bad-leading-digit",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
 });

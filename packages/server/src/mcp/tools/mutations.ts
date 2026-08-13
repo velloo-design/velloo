@@ -8,6 +8,7 @@ import {
   addSnippet,
   addVariant,
   applyClasses,
+  applyClassesBulk,
   instantiateSnippet,
   type MutationContext,
   type MutationError,
@@ -16,8 +17,10 @@ import {
   removePage,
   removeSnippet,
   removeVariant,
+  setNodeId,
   updatePage,
   updateProps,
+  updatePropsBulk,
   updateSnippet,
   updateSnippetArgs,
   updateVariant,
@@ -42,20 +45,35 @@ function toMcp<T>(result: Result<T, MutationError>): McpResult {
   return result.ok ? jsonResult(result.value) : mutationErrorResult(result.error);
 }
 
+const IdLocator = z
+  .string()
+  .regex(/^@[a-zA-Z][a-zA-Z0-9_-]*$/)
+  .describe(`@id reference, e.g. "@hero-cta"`);
+/**
+ * Locator for a node — either a path array from the variant root
+ * (`[0, 2, 1]`) or a stable `@id` reference (`"@hero-cta"`). The id form
+ * survives sibling insertions and deletions.
+ */
 const PathSchema = z
-  .array(z.number().int().nonnegative())
-  .describe("Integer-array path from variant root, e.g. [0, 2, 1]");
+  .union([z.array(z.number().int().nonnegative()), IdLocator])
+  .describe('Path from variant root ([0, 2, 1]) or "@id" reference');
+const NodeIdInputSchema = z
+  .string()
+  .regex(/^[a-zA-Z][a-zA-Z0-9_-]*$/)
+  .describe("Stable id for the node (letters/digits/_/-, leading letter)");
 
 export function registerMutationTools(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
     "add_node",
     {
-      description: "Insert a new node into a variant tree at parentPath (optional index).",
+      description:
+        'Insert a new node into a variant tree under parentPath. parentPath accepts a path array OR an "@id" reference. Pass `id` to give the new node a stable anchor (addressable as "@<id>" in later calls — survives sibling insertions). children may carry full subtrees so a feature card lands in one call.',
       inputSchema: {
         pageId: z.string(),
         variantId: z.string(),
         parentPath: PathSchema,
         componentRef: z.string(),
+        id: NodeIdInputSchema.optional(),
         props: z.record(z.string(), z.unknown()).optional(),
         children: z.array(z.unknown()).optional(),
         index: z.number().int().nonnegative().optional(),
@@ -155,6 +173,48 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       },
     },
     async (args) => toMcp(await applyClasses(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "apply_classes_bulk",
+    {
+      description:
+        "Atomic bulk apply_classes — restyle many nodes in one call. Single persist + broadcast + history entry, so undo reverts the whole batch. Use this when sweeping a page through a styling change (e.g. converting raw palette to semantic tokens after running inspect_dark_diff).",
+      inputSchema: {
+        pageId: z.string(),
+        variantId: z.string(),
+        patches: z
+          .array(
+            z.object({
+              path: PathSchema,
+              classes: z.string(),
+            }),
+          )
+          .min(1),
+      },
+    },
+    async (args) => toMcp(await applyClassesBulk(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_props_bulk",
+    {
+      description:
+        "Atomic bulk update_props — patch props on many nodes in one call. Same one-persist / one-broadcast / one-history semantics as apply_classes_bulk. Use for mass prop tweaks that should undo together.",
+      inputSchema: {
+        pageId: z.string(),
+        variantId: z.string(),
+        patches: z
+          .array(
+            z.object({
+              path: PathSchema,
+              propPatch: z.record(z.string(), z.unknown()),
+            }),
+          )
+          .min(1),
+      },
+    },
+    async (args) => toMcp(await updatePropsBulk(ctx, args)),
   );
 
   // --- Page lifecycle ----------------------------------------------------
@@ -292,12 +352,13 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "instantiate_snippet",
     {
       description:
-        "Add a `$snippet` instance to a variant tree under parentPath. `args` supplies values for the snippet's params (defaults fill in missing optional ones). Snippet instances are opaque — you can't address paths inside them; edit via update_snippet_args or update_snippet.",
+        "Add a `$snippet` instance to a variant tree under parentPath. parentPath accepts a path array OR an \"@id\" reference. Pass `id` to give the instance a stable anchor for update_snippet_args / update_props later. `args` supplies values for the snippet's params (defaults fill in missing optional ones). Snippet instances are opaque — you can't address paths inside them; edit via update_snippet_args or update_snippet.",
       inputSchema: {
         pageId: z.string(),
         variantId: z.string(),
         parentPath: PathSchema,
         snippetId: z.string(),
+        id: NodeIdInputSchema.optional(),
         args: z.record(z.string(), z.unknown()).optional(),
         index: z.number().int().nonnegative().optional(),
       },
@@ -318,5 +379,20 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       },
     },
     async (args) => toMcp(await updateSnippetArgs(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "set_node_id",
+    {
+      description:
+        'Set or clear the `$id` anchor on a node — letters/digits/_/- with a leading letter. Once set, the node is addressable as "@<id>" in any path-accepting tool. Pass `id: null` to clear. Per-variant uniqueness is enforced; collisions return IdConflict. Use this to retroactively name nodes built without an id.',
+      inputSchema: {
+        pageId: z.string(),
+        variantId: z.string(),
+        path: PathSchema,
+        id: NodeIdInputSchema.nullable(),
+      },
+    },
+    async (args) => toMcp(await setNodeId(ctx, args)),
   );
 }

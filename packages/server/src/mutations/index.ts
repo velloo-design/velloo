@@ -12,8 +12,17 @@ import {
   addVariant as addVariantImpl,
 } from "./add-variant.ts";
 import { type ApplyClassesArgs, applyClasses as applyClassesImpl } from "./apply-classes.ts";
+import {
+  type ApplyClassesBulkArgs,
+  applyClassesBulk as applyClassesBulkImpl,
+} from "./apply-classes-bulk.ts";
 import type { MutationContext } from "./context.ts";
 import { withPageLock, withSnippetLock } from "./context.ts";
+import {
+  type DarkModeAuditArgs,
+  type DarkModeAuditResult,
+  darkModeAudit as darkModeAuditImpl,
+} from "./dark-mode-audit.ts";
 import type { MutationError } from "./errors.ts";
 import { type InspectArgs, type InspectResult, inspect as inspectImpl } from "./inspect.ts";
 import {
@@ -43,6 +52,11 @@ import {
   removeVariant as removeVariantImpl,
 } from "./remove-variant.ts";
 import {
+  type SetNodeIdArgs,
+  type SetNodeIdResult,
+  setNodeId as setNodeIdImpl,
+} from "./set-node-id.ts";
+import {
   type UpdatePageArgs,
   type UpdatePageResult,
   updatePage as updatePageImpl,
@@ -52,6 +66,11 @@ import {
   type UpdatePropsResult,
   updateProps as updatePropsImpl,
 } from "./update-props.ts";
+import {
+  type UpdatePropsBulkArgs,
+  type UpdatePropsBulkResult,
+  updatePropsBulk as updatePropsBulkImpl,
+} from "./update-props-bulk.ts";
 import {
   type UpdateSnippetArgs,
   type UpdateSnippetResult,
@@ -134,6 +153,24 @@ export function applyClasses(
 ): Promise<Result<UpdatePropsResult, MutationError>> {
   return withPageLock(args.pageId, () => applyClassesImpl(ctx, args));
 }
+export function applyClassesBulk(
+  ctx: MutationContext,
+  args: ApplyClassesBulkArgs,
+): Promise<Result<UpdatePropsBulkResult, MutationError>> {
+  return withPageLock(args.pageId, () => applyClassesBulkImpl(ctx, args));
+}
+export function updatePropsBulk(
+  ctx: MutationContext,
+  args: UpdatePropsBulkArgs,
+): Promise<Result<UpdatePropsBulkResult, MutationError>> {
+  return withPageLock(args.pageId, () => updatePropsBulkImpl(ctx, args));
+}
+export function setNodeId(
+  ctx: MutationContext,
+  args: SetNodeIdArgs,
+): Promise<Result<SetNodeIdResult, MutationError>> {
+  return withPageLock(args.pageId, () => setNodeIdImpl(ctx, args));
+}
 export function updateVariant(
   ctx: MutationContext,
   args: UpdateVariantArgs,
@@ -188,6 +225,14 @@ export function inspect(
   return inspectImpl(ctx, args);
 }
 
+/** Read-only dark-mode audit. */
+export function darkModeAudit(
+  ctx: MutationContext,
+  args: DarkModeAuditArgs,
+): Promise<Result<DarkModeAuditResult, MutationError>> {
+  return darkModeAuditImpl(ctx, args);
+}
+
 export type { MutationError } from "./errors.ts";
 export type {
   AddNodeArgs,
@@ -199,6 +244,9 @@ export type {
   AddVariantArgs,
   AddVariantResult,
   ApplyClassesArgs,
+  ApplyClassesBulkArgs,
+  DarkModeAuditArgs,
+  DarkModeAuditResult,
   InspectArgs,
   InspectResult,
   InstantiateSnippetArgs,
@@ -214,9 +262,13 @@ export type {
   RemoveSnippetResult,
   RemoveVariantArgs,
   RemoveVariantResult,
+  SetNodeIdArgs,
+  SetNodeIdResult,
   UpdatePageArgs,
   UpdatePageResult,
   UpdatePropsArgs,
+  UpdatePropsBulkArgs,
+  UpdatePropsBulkResult,
   UpdatePropsResult,
   UpdateSnippetArgs,
   UpdateSnippetArgsArgs,

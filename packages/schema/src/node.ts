@@ -14,6 +14,14 @@ import { z } from "zod";
  *   appear as a child node OR anywhere inside a `props` value via the
  *   normal JSON walk during substitution.
  *
+ * `ComponentNode` and `SnippetInstance` may carry an optional `$id` —
+ * a stable anchor that survives sibling insertions and deletions. Ids
+ * are unique within a single variant tree (validated at persist time);
+ * the same `$id` can repeat across variants of the same page so a
+ * "hero-cta" anchor refers to the same semantic node in every variant.
+ * Agents address `$id`-bearing nodes via the locator form `"@id"` in
+ * place of a path array.
+ *
  * Schema-level validation accepts all three at every Node position. Page
  * trees are expected to contain only `ComponentNode | SnippetInstance`;
  * `ParamRef`s in a page tree fail at substitution time rather than at
@@ -21,12 +29,14 @@ import { z } from "zod";
  */
 export type ComponentNode = {
   $ref: string;
+  $id?: string;
   props?: Record<string, unknown>;
   children?: Node[];
 };
 
 export type SnippetInstance = {
   $snippet: string;
+  $id?: string;
   args?: Record<string, unknown>;
 };
 
@@ -48,9 +58,25 @@ export function isParamRef(n: Node): n is ParamRef {
   return typeof (n as { $param?: unknown }).$param === "string";
 }
 
+/**
+ * Format constraint for `$id` values. Must start with a letter; the rest
+ * is letters / digits / dashes / underscores. Matches typical anchor
+ * naming (`hero-cta`, `feature_card_3`, `nav`). The leading-letter rule
+ * keeps ids from colliding with numeric path indices in the locator
+ * parser if we ever support compound locators.
+ */
+export const NodeIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-zA-Z][a-zA-Z0-9_-]*$/, {
+    message: "node id must match /^[a-zA-Z][a-zA-Z0-9_-]*$/",
+  });
+
 const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
   z.object({
     $ref: z.string().min(1),
+    $id: NodeIdSchema.optional(),
     props: z.record(z.string(), z.unknown()).optional(),
     children: z.array(NodeSchema).optional(),
   }),
@@ -58,6 +84,7 @@ const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
 
 const SnippetInstanceSchema: z.ZodType<SnippetInstance> = z.object({
   $snippet: z.string().min(1),
+  $id: NodeIdSchema.optional(),
   args: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -70,3 +97,12 @@ export const NodeSchema: z.ZodType<Node> = z.lazy(() =>
 );
 
 export { ComponentNodeSchema, ParamRefSchema, SnippetInstanceSchema };
+
+/**
+ * Read the `$id` of a node, if any. Convenience wrapper so callers don't
+ * have to narrow by node kind first.
+ */
+export function nodeId(n: Node): string | undefined {
+  if (isParamRef(n)) return undefined;
+  return (n as { $id?: string }).$id;
+}

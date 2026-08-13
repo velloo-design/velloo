@@ -11,8 +11,17 @@
 
 export type LoweredEntry = {
   kind: "lowered";
-  /** Decide the HTML tag and extra Tailwind classes given the node's props. */
-  lower(props: Record<string, unknown>): { tag: string; extraClasses: string };
+  /**
+   * Decide the HTML tag and extra Tailwind classes given the node's props.
+   * Optionally return extra props to splice in (e.g. role, aria-label) and a
+   * fallback text child used when the node has no children of its own.
+   */
+  lower(props: Record<string, unknown>): {
+    tag: string;
+    extraClasses: string;
+    extraProps?: Record<string, unknown>;
+    fallbackChild?: string;
+  };
 };
 
 export type ShadcnEntry = {
@@ -51,6 +60,14 @@ const TEXT_VARIANT_CLASSES: Record<string, string> = {
   muted: "text-sm text-muted-foreground",
   small: "text-sm font-medium leading-none",
   lead: "text-xl text-muted-foreground",
+};
+
+const PLACEHOLDER_ASPECT_CLASS: Record<string, string> = {
+  "1/1": "aspect-square",
+  "4/3": "aspect-[4/3]",
+  "3/4": "aspect-[3/4]",
+  "16/9": "aspect-video",
+  "21/9": "aspect-[21/9]",
 };
 
 const shadcn = (jsxName: string, importFile: string): ShadcnEntry => ({
@@ -101,6 +118,36 @@ export const REGISTRY: Record<string, RegistryEntry> = {
       return { jsxName, extraClasses: "" };
     },
   },
+  Placeholder: {
+    kind: "lowered",
+    lower(props) {
+      const kind = String(props.kind ?? "image");
+      const label = typeof props.label === "string" ? (props.label as string) : undefined;
+      if (kind === "avatar") {
+        return {
+          tag: "div",
+          extraClasses:
+            "inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground font-medium size-10 text-sm",
+          extraProps: {
+            role: "img",
+            "aria-label": label ? `placeholder: ${label}` : "placeholder avatar",
+          },
+          fallbackChild: label ? label.slice(0, 2).toUpperCase() : "",
+        };
+      }
+      const aspect = String(props.aspect ?? "16/9");
+      const aspectClass = PLACEHOLDER_ASPECT_CLASS[aspect] ?? PLACEHOLDER_ASPECT_CLASS["16/9"];
+      return {
+        tag: "div",
+        extraClasses: `flex w-full items-center justify-center bg-muted text-muted-foreground text-xs uppercase tracking-wider rounded-md border border-dashed border-border ${aspectClass}`,
+        extraProps: {
+          role: "img",
+          "aria-label": label ? `placeholder: ${label}` : "placeholder image",
+        },
+        fallbackChild: label ?? "image",
+      };
+    },
+  },
 };
 
 /** Props that the snapshot's lowered primitives consume — strip from output. */
@@ -108,4 +155,5 @@ export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Heading: new Set(["level"]),
   Text: new Set(["variant"]),
   Icon: new Set(["name"]),
+  Placeholder: new Set(["kind", "label", "aspect"]),
 };
