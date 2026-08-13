@@ -1,43 +1,41 @@
 # Velloo
 
-Working spec for **Velloo** — a git-native canvas for solo devs and small teams who want AI to prototype UI without becoming designers. Designs live in your repo as JSON. Your AI agent reads them through a token-efficient MCP surface and writes the real code into your app — using your stack, your conventions, your handlers.
+Working spec for **Velloo** — a local, code-shaped canvas for solo devs who want AI to be their design team. Designs live in a folder in your repo as JSON. Your AI agent reads them through a token-efficient MCP surface and writes the real code into your app, in your conventions.
 
-The premise: solo developers and small teams can't justify a designer or Figma seats, but the alternatives are worse — code-first generators (v0/Bolt) hallucinate components and ignore your design system; design tools (Figma/Paper) produce artifacts disconnected from your codebase; Storybook is per-component and not a place to compose pages. Velloo is the missing tool — shadcn-first, open source.
+The premise: a solo developer (and small teams without designers) can prototype and iterate on UI fastest by talking to an AI agent — *if* the agent has a fast, visual, code-shaped surface to work against. Existing tools fall on the wrong side of that:
+
+- **Figma / Penpot / Paper** produce vector-perfect designs that the agent then translates to code. That translation is lossy and takes iterations to converge.
+- **v0 / Bolt / Lovable** skip design and go straight to code, hallucinating components and ignoring whatever design system you have.
+- **Storybook** is per-component, not a place to compose pages or organize a customer flow.
+
+Velloo's bet: designs that are made of **real shadcn components from the start** collapse the gap. The agent edits the design, the design *is* shaped like the code, emit is structural, and the implementation step is short.
+
+## What Velloo is
+
+- A **local CLI** that serves a canvas at `localhost:7300` and an MCP server at `localhost:7301`.
+- A **canvas** that looks like Figma: an infinite board where you arrange the screens of your product (landing, pricing, signup, settings, onboarding) at different sizes so you can see the whole flow at once.
+- An **MCP surface** that exposes the design to your AI agent (Claude Code, Cursor, Codex) with one tool per structural operation — token-efficient by construction.
+- A **design folder** in your repo: pure JSON for screens, board layout, theme, snippets, annotations, plus a copy of the chosen UI library's components on disk.
 
 ## Documents
 
-- [product.md](./product.md) — Problem, audience, mental model, pitch, anti-positioning, pricing
-- [architecture.md](./architecture.md) — Folder format, runtime, Library Registry, codegen, distribution, cloud sketch
+- [product.md](./product.md) — Problem, audience, mental model, anti-positioning
+- [architecture.md](./architecture.md) — Folder format, runtime, component sourcing, codegen
 - [mcp.md](./mcp.md) — MCP tool surface for agents
-- roadmap.md — Roadmap philosophy, next ~8 weeks of sprints, longer-term feature lines
-- decisions.md — Pivot log and design rationale
+- [roadmap.md](./roadmap.md) — Roadmap philosophy and the next ~8 weeks of sprints
+- [decisions.md](./decisions.md) — Pivot log and design rationale
 
 ## One-line pitch
 
-> **Velloo** — a git-native canvas for solo devs and small teams who want AI to prototype UI without becoming designers. Designs live in your repo as JSON. Your agent reads them through a fast MCP surface and writes the real code into your app — using your stack, your conventions, your handlers. shadcn-first, open source. No Figma seats, no design-file lock-in, no paste-ready JSX you have to babysit.
+> **Velloo** — a local canvas for solo devs whose design team is an AI agent. Designs live in your repo as JSON, made of real shadcn components, and your agent reads them through MCP and writes the real code into your app.
 
-## Brand handles (claim before launch)
+## Stance
 
-| Surface | Identifier | Status |
-|---|---|---|
-| CLI / binary | `velloo` | — |
-| npm package | `velloo` | available |
-| npm scope | `@velloo` | verify on claim |
-| GitHub org | `velloo-app` or `getvelloo` (user `velloo` is camped, low activity) | — |
-| Domain (primary) | `velloo.dev` | available |
-| Domain (secondary) | `velloo.io` | available |
-| Domain (.com) | `velloo.com` | parked at HugeDomains; skip until traction |
-| Brew tap | `velloo/tap` | — |
-
-## Pre-launch legal checklist
-
-- [ ] UKIPO trademark filing in Classes 9 + 42 (~£170 + £50/extra class)
-- [ ] USPTO trademark filing (intent-to-use) in Classes 9 + 42 (~$350/class)
-- [ ] Trademark clearance search by counsel before filing (~£300–500)
-- [ ] UK Ltd registered as `Velloo Software Ltd` (avoids the struck-off-pending `Velloo Ltd` 16201713; rename to clean form if/when that entity is removed)
-- [ ] License: ships **BSL 1.1** with a 4-year change date to Apache 2.0 from the first public release ( Cloud-server code stays proprietary.
-- [ ] CONTRIBUTING.md, code of conduct, issue templates, and community docs before the first public link is shared.
+- **Local-first.** Every byte of design state — pages, theme, manifest, the library's components — lives on disk in the user's repo. No account, no server, no telemetry. The CLI works offline.
+- **Open source.** From the first public release. License TBD at release time; out of scope for now.
+- **Useful first.** No monetization, no cloud, no hosted surfaces are being designed for. Once Velloo is genuinely useful for a single solo developer (the author), the question of what's next becomes worth asking.
+- **shadcn-first.** Other libraries (Mantine, MUI, Chakra) are an internal abstraction for a possible later, not a public promise. React-only.
 
 ## Status
 
-Specification + working substrate. Working through the sprints in roadmap.md. No "V0 launch" milestone — usefulness compounds sprint over sprint (
+Specification + working substrate (CLI, canvas, MCP server, codegen, theme engine, ~22 MCP tools, file watcher, undo history, screenshot pipeline). Working through the sprints in [roadmap.md](./roadmap.md). No "V0 launch" milestone — the product gets more useful sprint over sprint.

@@ -7,7 +7,7 @@ import {
   type MutationContext,
 } from "../../mutations/index.ts";
 
-const PathSchema = z.array(z.number().int().nonnegative());
+const Locator = z.union([z.array(z.number().int().nonnegative()), z.string()]);
 
 export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
@@ -16,9 +16,8 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
       description:
         "Return SSR'd HTML, resolved className list, $ref, and resolved props for the node at path. Use this instead of guessing the rendered output.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
-        path: PathSchema,
+        screenId: z.string(),
+        path: Locator,
       },
     },
     async (args) => {
@@ -37,10 +36,9 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     "inspect_dark_diff",
     {
       description:
-        "Audit a variant for dark-mode awareness. Flags every color-bearing class that won't theme-flip (bg-zinc-*, text-emerald-*, bg-[#hex], white/black literals). Structural utilities (border-b, ring-0, shadow-none, text-xl, bg-transparent, text-current) are exempt by design. Set `data-accent` (any truthy value) on a node's props to exempt it entirely — use for intentional non-flipping accents (brand mark, hero gradient, status pills with explicit dark: variants). Returns coverage (0..1) + per-node problems with semantic-token suggestions. Treat the score as a triage signal, not a gate.",
+        "Audit a screen for dark-mode awareness. Flags every color-bearing class that won't theme-flip. Structural utilities (border-b, ring-0, shadow-none, text-xl, bg-transparent, text-current) are exempt by design. Set `data-accent` (any truthy value) on a node's props to exempt it entirely. Returns coverage (0..1) + per-node problems with semantic-token suggestions.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
       },
     },
     async (args) => {
@@ -59,7 +57,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     "inspect_dark_diff_snippet",
     {
       description:
-        "Run the dark-mode audit against a snippet body. Catches bad raw-color patterns at definition time rather than at N instantiation sites. Same scoring + data-accent opt-out as `inspect_dark_diff`; paths are relative to the snippet body's root. Run right after `add_snippet` or `update_snippet`.",
+        "Run the dark-mode audit against a snippet body. Catches bad raw-color patterns at definition time rather than at N instantiation sites.",
       inputSchema: {
         snippetId: z.string(),
       },

@@ -7,18 +7,17 @@ import {
   annotationConflict,
   annotationNotFound,
   type MutationError,
-  pageNotFound,
+  screenNotFound,
 } from "./errors.ts";
-import { getPage, getVariant, resolve as resolveVariantLocator } from "./lookup.ts";
+import { getScreen, resolve as resolveScreenLocator } from "./lookup.ts";
 import { persistAnnotations } from "./persist.ts";
 
-/** Short id for annotations; 8-hex-char prefix of a UUID is plenty unique for per-page counts. */
 function newAnnotationId(): string {
   return `ann_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
 }
 
 export interface AddAnnotationArgs {
-  pageId: string;
+  screenId: string;
   target: AnnotationTarget;
   body: string;
   position?: { x: number; y: number } | "auto";
@@ -29,12 +28,6 @@ export interface AnnotationResult {
   annotation: Annotation;
 }
 
-/**
- * Compare two locators by resolving them against the same variant tree.
- * `"@hero-cta"` and `[1, 2]` are the same target if they point at the same
- * node. Returns false if either fails to resolve (we'd surface that as a
- * different error to the caller, not as "they're equal").
- */
 function sameTarget(treeRoot: import("@velloo/schema").Node, a: Locator, b: Locator): boolean {
   const pa = resolveLocator(treeRoot, a);
   const pb = resolveLocator(treeRoot, b);
@@ -47,23 +40,14 @@ export async function addAnnotation(
   args: AddAnnotationArgs,
 ): Promise<Result<AnnotationResult, MutationError>> {
   return DoAsync<AnnotationResult, MutationError>(async function* () {
-    const page = yield* $(getPage(ctx, args.pageId));
-    const variant = yield* $(getVariant(page, args.pageId, args.target.variantId));
-    // Validate the locator now — better to surface IdNotFound at create time
-    // than save a dangling annotation immediately.
-    yield* $(
-      resolveVariantLocator(variant.tree, args.target.locator, args.pageId, args.target.variantId),
-    );
+    const screen = yield* $(getScreen(ctx, args.screenId));
+    yield* $(resolveScreenLocator(screen.tree, args.target.locator, args.screenId));
 
-    // One annotation per (variant, node). Walk existing annotations on
-    // this page; if any other annotation on the same variant resolves to
-    // the same node, refuse.
-    const existing = ctx.folder.annotations.get(args.pageId) ?? [];
+    const existing = ctx.folder.annotations.get(args.screenId) ?? [];
     for (const a of existing) {
-      if (a.target.variantId !== args.target.variantId) continue;
-      if (sameTarget(variant.tree, a.target.locator, args.target.locator)) {
+      if (sameTarget(screen.tree, a.target.locator, args.target.locator)) {
         return yield* $(
-          err(annotationConflict(args.pageId, args.target.variantId, args.target.locator, a.id)),
+          err(annotationConflict(args.screenId, args.target.locator, a.id)),
         );
       }
     }
@@ -76,14 +60,14 @@ export async function addAnnotation(
       ...(args.collapsed !== undefined ? { collapsed: args.collapsed } : {}),
     };
     const next = [...existing, annotation];
-    await persistAnnotations(ctx.folder, args.pageId, next);
-    ctx.broadcast({ type: "annotations-changed", pageId: args.pageId });
+    await persistAnnotations(ctx.folder, args.screenId, next);
+    ctx.broadcast({ type: "annotations-changed", screenId: args.screenId });
     return { annotation };
   });
 }
 
 export interface UpdateAnnotationArgs {
-  pageId: string;
+  screenId: string;
   annotationId: string;
   patch: {
     body?: string;
@@ -97,11 +81,11 @@ export async function updateAnnotation(
   args: UpdateAnnotationArgs,
 ): Promise<Result<AnnotationResult, MutationError>> {
   return DoAsync<AnnotationResult, MutationError>(async function* () {
-    const existing = ctx.folder.annotations.get(args.pageId);
-    if (!existing) return yield* $(err(pageNotFound(args.pageId)));
+    const existing = ctx.folder.annotations.get(args.screenId);
+    if (!existing) return yield* $(err(screenNotFound(args.screenId)));
     const idx = existing.findIndex((a) => a.id === args.annotationId);
     if (idx === -1) {
-      return yield* $(err(annotationNotFound(args.pageId, args.annotationId)));
+      return yield* $(err(annotationNotFound(args.screenId, args.annotationId)));
     }
     const prev = existing[idx] as Annotation;
     const next: Annotation = {
@@ -116,14 +100,14 @@ export async function updateAnnotation(
     }
     const updated = [...existing];
     updated[idx] = next;
-    await persistAnnotations(ctx.folder, args.pageId, updated);
-    ctx.broadcast({ type: "annotations-changed", pageId: args.pageId });
+    await persistAnnotations(ctx.folder, args.screenId, updated);
+    ctx.broadcast({ type: "annotations-changed", screenId: args.screenId });
     return { annotation: next };
   });
 }
 
 export interface RemoveAnnotationArgs {
-  pageId: string;
+  screenId: string;
   annotationId: string;
 }
 
@@ -132,14 +116,14 @@ export async function removeAnnotation(
   args: RemoveAnnotationArgs,
 ): Promise<Result<{ removedId: string }, MutationError>> {
   return DoAsync<{ removedId: string }, MutationError>(async function* () {
-    const existing = ctx.folder.annotations.get(args.pageId);
-    if (!existing) return yield* $(err(pageNotFound(args.pageId)));
+    const existing = ctx.folder.annotations.get(args.screenId);
+    if (!existing) return yield* $(err(screenNotFound(args.screenId)));
     if (!existing.some((a) => a.id === args.annotationId)) {
-      return yield* $(err(annotationNotFound(args.pageId, args.annotationId)));
+      return yield* $(err(annotationNotFound(args.screenId, args.annotationId)));
     }
     const next = existing.filter((a) => a.id !== args.annotationId);
-    await persistAnnotations(ctx.folder, args.pageId, next);
-    ctx.broadcast({ type: "annotations-changed", pageId: args.pageId });
+    await persistAnnotations(ctx.folder, args.screenId, next);
+    ctx.broadcast({ type: "annotations-changed", screenId: args.screenId });
     return { removedId: args.annotationId };
   });
 }

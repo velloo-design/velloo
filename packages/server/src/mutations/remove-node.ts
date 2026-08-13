@@ -1,16 +1,14 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import { isComponentNode } from "@velloo/schema";
 import { type Locator, parentOf, pathAt } from "../path.ts";
-import { clonePage } from "./clone.ts";
+import { cloneScreen } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
-import { getPage, getVariant, resolve } from "./lookup.ts";
-import { commitPage } from "./persist.ts";
+import { getScreen, resolve } from "./lookup.ts";
+import { commitScreen } from "./persist.ts";
 
 export interface RemoveNodeArgs {
-  pageId: string;
-  variantId: string;
-  /** Locator — path array or `"@id"` string. */
+  screenId: string;
   path: Locator;
 }
 
@@ -22,24 +20,19 @@ export async function removeNode(
   ctx: MutationContext,
   args: RemoveNodeArgs,
 ): Promise<Result<RemoveNodeResult, MutationError>> {
-  const { pageId, variantId, path } = args;
-
+  const { screenId, path } = args;
   return DoAsync<RemoveNodeResult, MutationError>(async function* () {
-    const page = yield* $(getPage(ctx, pageId));
-    yield* $(getVariant(page, pageId, variantId));
+    const screen = yield* $(getScreen(ctx, screenId));
+    const next = cloneScreen(screen);
 
-    const next = clonePage(page);
-    const nextVariant = next.variants.find((v) => v.id === variantId);
-    if (!nextVariant) throw new Error("invariant: variant lost on clone");
-
-    const resolved = yield* $(resolve(nextVariant.tree, path, pageId, variantId));
+    const resolved = yield* $(resolve(next.tree, path, screenId));
     if (resolved.length === 0) {
-      return yield* $(err(invalidPath("Cannot remove the variant root.", resolved)));
+      return yield* $(err(invalidPath("Cannot remove the screen root.", resolved)));
     }
 
     const parentInfo = parentOf(resolved);
     if (!parentInfo) return yield* $(err(invalidPath("no parent", resolved)));
-    const parent = pathAt(nextVariant.tree, parentInfo.parent);
+    const parent = pathAt(next.tree, parentInfo.parent);
     if (!parent || !isComponentNode(parent) || !parent.children) {
       return yield* $(err(invalidPath(`No node at path ${JSON.stringify(resolved)}`, resolved)));
     }
@@ -50,9 +43,8 @@ export async function removeNode(
     const [removed] = parent.children.splice(parentInfo.index, 1);
     if (parent.children.length === 0) delete parent.children;
 
-    yield* $(await commitPage(ctx.folder, pageId, next));
-    ctx.broadcast({ type: "page-changed", pageId });
-
+    yield* $(await commitScreen(ctx.folder, screenId, next));
+    ctx.broadcast({ type: "screen-changed", screenId });
     return { removedRef: describeRemoved(removed) };
   });
 }

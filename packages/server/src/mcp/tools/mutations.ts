@@ -3,28 +3,31 @@ import type { Result } from "@velloo/result";
 import { NodeSchema, SnippetParamSchema } from "@velloo/schema";
 import { z } from "zod";
 import {
+  addFrame,
+  addGroup,
   addNode,
-  addPage,
+  addScreen,
   addSnippet,
-  addVariant,
   applyClasses,
   applyClassesBulk,
   instantiateSnippet,
   type MutationContext,
   type MutationError,
   moveNode,
+  removeFrame,
+  removeGroup,
   removeNode,
-  removePage,
+  removeScreen,
   removeSnippet,
-  removeVariant,
   setNodeId,
-  updatePage,
+  updateFrame,
+  updateFrames,
+  updateGroup,
   updateProps,
   updatePropsBulk,
+  updateScreen,
   updateSnippet,
   updateSnippetArgs,
-  updateVariant,
-  updateVariants,
 } from "../../mutations/index.ts";
 
 type McpResult = {
@@ -40,7 +43,6 @@ function mutationErrorResult(error: MutationError): McpResult {
   return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
 }
 
-/** Convert a mutation Result to an MCP tool response. */
 function toMcp<T>(result: Result<T, MutationError>): McpResult {
   return result.ok ? jsonResult(result.value) : mutationErrorResult(result.error);
 }
@@ -49,28 +51,27 @@ const IdLocator = z
   .string()
   .regex(/^@[a-zA-Z][a-zA-Z0-9_-]*$/)
   .describe(`@id reference, e.g. "@hero-cta"`);
-/**
- * Locator for a node — either a path array from the variant root
- * (`[0, 2, 1]`) or a stable `@id` reference (`"@hero-cta"`). The id form
- * survives sibling insertions and deletions.
- */
 const PathSchema = z
   .union([z.array(z.number().int().nonnegative()), IdLocator])
-  .describe('Path from variant root ([0, 2, 1]) or "@id" reference');
+  .describe('Path from screen tree root ([0, 2, 1]) or "@id" reference');
 const NodeIdInputSchema = z
   .string()
   .regex(/^[a-zA-Z][a-zA-Z0-9_-]*$/)
   .describe("Stable id for the node (letters/digits/_/-, leading letter)");
+const ViewportSchema = z.object({
+  w: z.number().int().positive(),
+  h: z.number().int().positive(),
+});
 
 export function registerMutationTools(mcp: McpServer, ctx: MutationContext): void {
+  // ── Tree mutations ─────────────────────────────────────────────────────
   mcp.registerTool(
     "add_node",
     {
       description:
-        'Insert a new node into a variant tree under parentPath. parentPath accepts a path array OR an "@id" reference. Pass `id` to give the new node a stable anchor (addressable as "@<id>" in later calls — survives sibling insertions). children may carry full subtrees so a feature card lands in one call.',
+        'Insert a new node into a screen tree under parentPath. parentPath accepts a path array OR an "@id" reference. Pass `id` for a stable anchor. children may carry full subtrees so a feature card lands in one call.',
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         parentPath: PathSchema,
         componentRef: z.string(),
         id: NodeIdInputSchema.optional(),
@@ -87,8 +88,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     {
       description: "Shallow-merge a prop patch into the node at path. Use null to remove a key.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         path: PathSchema,
         propPatch: z.record(z.string(), z.unknown()),
       },
@@ -99,10 +99,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "remove_node",
     {
-      description: "Remove the node at path. Cannot remove the variant root.",
+      description: "Remove the node at path. Cannot remove the screen root.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         path: PathSchema,
       },
     },
@@ -115,8 +114,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       description:
         "Move a node from fromPath to a new parent. toIndex is the insertion index in the destination's children.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         fromPath: PathSchema,
         toParent: PathSchema,
         toIndex: z.number().int().nonnegative().optional(),
@@ -126,48 +124,11 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   );
 
   mcp.registerTool(
-    "add_variant",
-    {
-      description:
-        "Add a new variant to a page. If fromVariantId is set, the new variant clones that variant's tree.",
-      inputSchema: {
-        pageId: z.string(),
-        fromVariantId: z.string().optional(),
-        viewport: z.object({ w: z.number().int().positive(), h: z.number().int().positive() }),
-        name: z.string(),
-        id: z.string().optional(),
-      },
-    },
-    async (args) => toMcp(await addVariant(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "update_variant",
-    {
-      description:
-        "Update a variant's metadata (name / viewport / canvas position). Sparse: pass only the fields you want to change. Pass position: null to clear and return to auto-flow layout.",
-      inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
-        patch: z.object({
-          name: z.string().optional(),
-          viewport: z
-            .object({ w: z.number().int().positive(), h: z.number().int().positive() })
-            .optional(),
-          position: z.union([z.object({ x: z.number(), y: z.number() }), z.null()]).optional(),
-        }),
-      },
-    },
-    async (args) => toMcp(await updateVariant(ctx, args)),
-  );
-
-  mcp.registerTool(
     "apply_classes",
     {
       description: "Replace the className prop on a node with the given Tailwind class string.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         path: PathSchema,
         classes: z.string(),
       },
@@ -179,18 +140,10 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "apply_classes_bulk",
     {
       description:
-        "Atomic bulk apply_classes — restyle many nodes in one call. Single persist + broadcast + history entry, so undo reverts the whole batch. Use this when sweeping a page through a styling change (e.g. converting raw palette to semantic tokens after running inspect_dark_diff).",
+        "Atomic bulk apply_classes — restyle many nodes in one call. Single persist + broadcast + history entry.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
-        patches: z
-          .array(
-            z.object({
-              path: PathSchema,
-              classes: z.string(),
-            }),
-          )
-          .min(1),
+        screenId: z.string(),
+        patches: z.array(z.object({ path: PathSchema, classes: z.string() })).min(1),
       },
     },
     async (args) => toMcp(await applyClassesBulk(ctx, args)),
@@ -199,11 +152,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "update_props_bulk",
     {
-      description:
-        "Atomic bulk update_props — patch props on many nodes in one call. Same one-persist / one-broadcast / one-history semantics as apply_classes_bulk. Use for mass prop tweaks that should undo together.",
+      description: "Atomic bulk update_props — patch props on many nodes in one call.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         patches: z
           .array(
             z.object({
@@ -217,100 +168,178 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => toMcp(await updatePropsBulk(ctx, args)),
   );
 
-  // --- Page lifecycle ----------------------------------------------------
-
   mcp.registerTool(
-    "add_page",
+    "set_node_id",
     {
       description:
-        "Create a new empty page with a single mobile-sized variant. Page id is derived from the name (slugified); pass `id` to override. Returns { pageId, page }.",
+        'Set or clear the `$id` anchor on a node. Once set, the node is addressable as "@<id>" in any path-accepting tool. Pass `id: null` to clear. Per-screen uniqueness is enforced.',
+      inputSchema: {
+        screenId: z.string(),
+        path: PathSchema,
+        id: NodeIdInputSchema.nullable(),
+      },
+    },
+    async (args) => toMcp(await setNodeId(ctx, args)),
+  );
+
+  // ── Screen lifecycle ───────────────────────────────────────────────────
+  mcp.registerTool(
+    "add_screen",
+    {
+      description:
+        "Create a new screen. Does not place it on the board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one.",
       inputSchema: {
         name: z.string(),
         id: z.string().optional(),
-        viewport: z
-          .object({ w: z.number().int().positive(), h: z.number().int().positive() })
-          .optional(),
+        fromScreenId: z.string().optional(),
+        tree: NodeSchema.optional(),
       },
     },
-    async (args) => toMcp(await addPage(ctx, args)),
+    async (args) => toMcp(await addScreen(ctx, args)),
   );
 
   mcp.registerTool(
-    "update_page",
+    "update_screen",
     {
       description:
-        "Update page-level metadata. Today only the display name is patchable; the page id stays stable so existing references survive a rename.",
+        "Update screen metadata. Sparse patch — only `name` is patchable today. Screen id stays stable.",
       inputSchema: {
-        pageId: z.string(),
+        screenId: z.string(),
         patch: z.object({ name: z.string().optional() }),
       },
     },
-    async (args) => toMcp(await updatePage(ctx, args)),
+    async (args) => toMcp(await updateScreen(ctx, args)),
   );
 
   mcp.registerTool(
-    "remove_page",
+    "remove_screen",
     {
       description:
-        "Delete a page from disk and the in-memory cache. Refuses to remove the last page (every design needs at least one). Undoable via /api/undo (canvas ⌘Z).",
-      inputSchema: { pageId: z.string() },
+        "Delete a screen. Refuses if it's the last screen. If any frames reference the screen, they're returned in `removedFrameIds` (cascaded removal).",
+      inputSchema: { screenId: z.string() },
     },
-    async (args) => toMcp(await removePage(ctx, args)),
+    async (args) => toMcp(await removeScreen(ctx, args)),
   );
 
-  // --- Variant lifecycle (the missing pair under add_variant / update_variant) -
-
+  // ── Frame / board lifecycle ────────────────────────────────────────────
   mcp.registerTool(
-    "remove_variant",
+    "add_frame",
     {
       description:
-        "Drop a variant from a page. Refuses to remove the last variant — a page must keep at least one renderable variant; delete the page instead.",
+        "Place a screen on the board at a chosen size + position. x/y default to a free spot on the board.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        w: z.number().int().positive(),
+        h: z.number().int().positive(),
+        label: z.string().optional(),
+        group: z.string().optional(),
+        id: z.string().optional(),
       },
     },
-    async (args) => toMcp(await removeVariant(ctx, args)),
+    async (args) => toMcp(await addFrame(ctx, args)),
   );
 
   mcp.registerTool(
-    "update_variants",
+    "update_frame",
     {
       description:
-        "Atomic bulk variant update — applies every patch in one persist + one broadcast + one history entry. Use this instead of N successive update_variant calls when laying out / repositioning multiple variants together so undo reverts the whole batch.",
+        "Update a frame's position, size, label, or group. Pass `label: null` or `group: null` to clear.",
       inputSchema: {
-        pageId: z.string(),
+        frameId: z.string(),
+        patch: z.object({
+          x: z.number().optional(),
+          y: z.number().optional(),
+          w: z.number().int().positive().optional(),
+          h: z.number().int().positive().optional(),
+          label: z.string().nullable().optional(),
+          group: z.string().nullable().optional(),
+        }),
+      },
+    },
+    async (args) => toMcp(await updateFrame(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_frames",
+    {
+      description:
+        "Atomic bulk frame update — single persist + broadcast + history entry. Use when dragging multiple frames together.",
+      inputSchema: {
         patches: z
           .array(
             z.object({
-              variantId: z.string(),
+              frameId: z.string(),
               patch: z.object({
-                name: z.string().optional(),
-                viewport: z
-                  .object({
-                    w: z.number().int().positive(),
-                    h: z.number().int().positive(),
-                  })
-                  .optional(),
-                position: z
-                  .union([z.object({ x: z.number(), y: z.number() }), z.null()])
-                  .optional(),
+                x: z.number().optional(),
+                y: z.number().optional(),
+                w: z.number().int().positive().optional(),
+                h: z.number().int().positive().optional(),
+                label: z.string().nullable().optional(),
+                group: z.string().nullable().optional(),
               }),
             }),
           )
           .min(1),
       },
     },
-    async (args) => toMcp(await updateVariants(ctx, args)),
+    async (args) => toMcp(await updateFrames(ctx, args)),
   );
 
-  // --- Snippets -----------------------------------------------------------
+  mcp.registerTool(
+    "remove_frame",
+    {
+      description: "Remove a frame placement. The underlying screen is left intact.",
+      inputSchema: { frameId: z.string() },
+    },
+    async (args) => toMcp(await removeFrame(ctx, args)),
+  );
 
+  mcp.registerTool(
+    "add_group",
+    {
+      description: "Create a board group — a visual tag for related frames (e.g. 'marketing flow').",
+      inputSchema: {
+        name: z.string(),
+        color: z.string().optional(),
+        id: z.string().optional(),
+      },
+    },
+    async (args) => toMcp(await addGroup(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_group",
+    {
+      description: "Update a group's name or color. Pass `color: null` to clear.",
+      inputSchema: {
+        groupId: z.string(),
+        patch: z.object({
+          name: z.string().optional(),
+          color: z.string().nullable().optional(),
+        }),
+      },
+    },
+    async (args) => toMcp(await updateGroup(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "remove_group",
+    {
+      description:
+        "Remove a group. Frames in the group are not deleted — they're un-grouped. Returns the affected frame ids.",
+      inputSchema: { groupId: z.string() },
+    },
+    async (args) => toMcp(await removeGroup(ctx, args)),
+  );
+
+  // ── Snippets ────────────────────────────────────────────────────────────
   mcp.registerTool(
     "add_snippet",
     {
       description:
-        'Create a reusable subtree. `params` declares typed inputs (each `{ name, type: string|number|boolean|node, default? }`); placeholders inside the `tree` body are `{ "$param": "name" }` nodes that get substituted at render time. Returns { snippetId, snippet }.',
+        'Create a reusable subtree. `params` declares typed inputs; placeholders inside the body are `{ "$param": "name" }` nodes that get substituted at render time.',
       inputSchema: {
         name: z.string(),
         id: z.string().optional(),
@@ -325,7 +354,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet",
     {
       description:
-        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. The id stays stable so existing instances keep referencing it after a rename. Every page using the snippet is re-broadcast.",
+        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast.",
       inputSchema: {
         snippetId: z.string(),
         patch: z.object({
@@ -342,7 +371,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "remove_snippet",
     {
       description:
-        "Delete a snippet. Refuses with SnippetInUse if any page instantiates it; the error payload lists the referencing pageIds so the agent can clean up first.",
+        "Delete a snippet. Refuses with SnippetInUse if any screen instantiates it; the error payload lists the referencing screenIds.",
       inputSchema: { snippetId: z.string() },
     },
     async (args) => toMcp(await removeSnippet(ctx, args)),
@@ -352,10 +381,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "instantiate_snippet",
     {
       description:
-        "Add a `$snippet` instance to a variant tree under parentPath. parentPath accepts a path array OR an \"@id\" reference. Pass `id` to give the instance a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root element (the snippet itself remains opaque — extraClassName is the escape hatch for per-instance tweaks without forking the snippet definition). `args` supplies values for the snippet's params (defaults fill in missing optional ones).",
+        "Add a `$snippet` instance to a screen tree under parentPath. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         parentPath: PathSchema,
         snippetId: z.string(),
         id: NodeIdInputSchema.optional(),
@@ -371,10 +399,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet_args",
     {
       description:
-        "Patch the `args` of a snippet instance without touching the snippet body. `null` in argPatch removes a key (reverts to the param default if declared). Pass `extraClassName` to replace the instance's per-instance className override; pass `null` to clear it.",
+        "Patch the `args` of a snippet instance without touching the snippet body. `null` in argPatch removes a key. Pass `extraClassName` to replace the instance's per-instance className override; `null` clears it.",
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
         path: PathSchema,
         argPatch: z.record(z.string(), z.unknown()).default({}),
         extraClassName: z.string().nullable().optional(),
@@ -383,18 +410,6 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => toMcp(await updateSnippetArgs(ctx, args)),
   );
 
-  mcp.registerTool(
-    "set_node_id",
-    {
-      description:
-        'Set or clear the `$id` anchor on a node — letters/digits/_/- with a leading letter. Once set, the node is addressable as "@<id>" in any path-accepting tool. Pass `id: null` to clear. Per-variant uniqueness is enforced; collisions return IdConflict. Use this to retroactively name nodes built without an id.',
-      inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
-        path: PathSchema,
-        id: NodeIdInputSchema.nullable(),
-      },
-    },
-    async (args) => toMcp(await setNodeId(ctx, args)),
-  );
+  // Suppress unused warning for ViewportSchema imported but currently unused.
+  void ViewportSchema;
 }

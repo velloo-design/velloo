@@ -10,27 +10,22 @@ import { AddAnnotationBody, RemoveAnnotationBody, UpdateAnnotationBody } from ".
 import { makeRoute } from "./route.ts";
 
 /**
- * Canvas-facing CRUD for annotations. Annotations live in per-page sidecar
- * files (`pages/<id>.annotations.json`); the MCP surface only reads them.
+ * Canvas-facing CRUD for annotations. Annotations live in per-screen sidecar
+ * files (`screens/<id>.annotations.json`); the MCP surface only reads them.
  */
 export function createAnnotationsRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  // GET /api/annotations/:pageId — list annotations for a page with their
-  // resolved paths (null when the target can't be resolved on the current
-  // variant tree, i.e. the annotation is dangling).
-  r.get("/:pageId", (c) => {
+  // GET /api/annotations/:screenId — list annotations for a screen with their
+  // resolved paths (null when the target can't be resolved on the screen tree).
+  r.get("/:screenId", (c) => {
     const ctx = ctxFor();
-    const pageId = c.req.param("pageId");
-    const page = ctx.folder.pages.get(pageId);
-    const annotations = ctx.folder.annotations.get(pageId) ?? [];
+    const screenId = c.req.param("screenId");
+    const screen = ctx.folder.screens.get(screenId);
+    const annotations = ctx.folder.annotations.get(screenId) ?? [];
     const list = annotations.map((a) => {
-      let resolved: number[] | null = null;
-      if (page) {
-        const variant = page.variants.find((v) => v.id === a.target.variantId);
-        if (variant) resolved = resolveLocator(variant.tree, a.target.locator);
-      }
+      const resolved = screen ? resolveLocator(screen.tree, a.target.locator) : null;
       return { ...a, resolved };
     });
     return c.json({ annotations: list });

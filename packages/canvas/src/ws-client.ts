@@ -1,11 +1,12 @@
 import { useCanvas } from "./store.ts";
 
 type ServerEvent =
-  | { type: "page-changed"; pageId: string }
+  | { type: "screen-changed"; screenId: string }
+  | { type: "board-changed" }
   | { type: "theme-changed" }
   | { type: "snippet-changed"; snippetId: string }
-  | { type: "annotations-changed"; pageId: string }
-  | { type: "notes-changed"; pageId: string };
+  | { type: "annotations-changed"; screenId: string }
+  | { type: "notes-changed" };
 
 export function connectWs(): () => void {
   let socket: WebSocket | null = null;
@@ -31,36 +32,37 @@ export function connectWs(): () => void {
         return;
       }
       const {
-        currentPageId,
-        refreshCurrentPage,
+        currentScreenId,
+        refreshScreen,
+        refreshBoard,
         refreshDesignSummary,
         refreshHistory,
         refreshTheme,
         refreshAnnotations,
         refreshNotes,
+        screens,
       } = useCanvas.getState();
       void refreshHistory();
-      if (payload.type === "page-changed") {
-        if (payload.pageId === currentPageId) {
-          // Same page edited: refresh content without clearing the user's selection.
-          void refreshCurrentPage();
+      if (payload.type === "screen-changed") {
+        // Refresh if this screen is loaded — even if it's not the current one,
+        // any frame on the board rendering it needs to update.
+        if (payload.screenId in screens) {
+          void refreshScreen(payload.screenId);
         } else {
-          // Different page: just refresh the sidebar summary; don't touch currentPage/selection.
           void refreshDesignSummary();
         }
+      } else if (payload.type === "board-changed") {
+        void refreshBoard();
       } else if (payload.type === "theme-changed") {
         void refreshTheme();
-        void refreshCurrentPage();
       } else if (payload.type === "snippet-changed") {
-        // Snippets affect any page that instantiates them. Refresh both the
-        // sidebar summary (so the snippets list reflects add/remove) and the
-        // current page render (so instances pick up body edits).
         void refreshDesignSummary();
-        void refreshCurrentPage();
+        // Snippets may affect any loaded screen — refresh current at minimum.
+        if (currentScreenId) void refreshScreen(currentScreenId);
       } else if (payload.type === "annotations-changed") {
-        if (payload.pageId === currentPageId) void refreshAnnotations();
+        if (payload.screenId === currentScreenId) void refreshAnnotations();
       } else if (payload.type === "notes-changed") {
-        if (payload.pageId === currentPageId) void refreshNotes();
+        void refreshNotes();
       }
     };
 

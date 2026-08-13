@@ -3,9 +3,8 @@ import {
   type ComponentNode,
   isComponentNode,
   type Node,
-  type Page,
+  type Screen,
   type Snippet,
-  type Variant,
 } from "@velloo/schema";
 import { isKnownComponent, registry } from "@velloo/shadcn-snapshot";
 import { isIdLocator, type Locator, pathAt, resolveLocator } from "../path.ts";
@@ -15,80 +14,56 @@ import {
   invalidPath,
   type MutationError,
   nearestRefs,
-  pageNotFound,
+  screenNotFound,
   snippetNotFound,
   unknownComponent,
-  variantNotFound,
 } from "./errors.ts";
 
-export function getPage(ctx: MutationContext, pageId: string): Result<Page, MutationError> {
-  const page = ctx.folder.pages.get(pageId);
-  return page ? ok(page) : err(pageNotFound(pageId));
-}
-
-export function getVariant(
-  page: Page,
-  pageId: string,
-  variantId: string,
-): Result<Variant, MutationError> {
-  const v = page.variants.find((x) => x.id === variantId);
-  return v ? ok(v) : err(variantNotFound(pageId, variantId));
+export function getScreen(
+  ctx: MutationContext,
+  screenId: string,
+): Result<Screen, MutationError> {
+  const s = ctx.folder.screens.get(screenId);
+  return s ? ok(s) : err(screenNotFound(screenId));
 }
 
 /**
- * Resolve a locator → path against a variant root, returning a typed
+ * Resolve a locator → path against a screen tree, returning a typed
  * error for the right failure mode:
  *  - `IdNotFound` when an `@id` locator doesn't match any node
  *  - `InvalidPath` when a number[] locator is out of range
- *
- * Callers need to pass pageId/variantId so the IdNotFound error carries
- * enough context for the agent to recover (which page/variant did the
- * lookup fail in?).
  */
 export function resolve(
   root: Node,
   locator: Locator,
-  pageId: string,
-  variantId: string,
+  screenId: string,
 ): Result<number[], MutationError> {
   const path = resolveLocator(root, locator);
   if (path !== null) return ok(path);
-  if (isIdLocator(locator)) return err(idNotFound(pageId, variantId, locator.slice(1)));
+  if (isIdLocator(locator)) return err(idNotFound(screenId, locator.slice(1)));
   return err(invalidPath(`No node at path ${JSON.stringify(locator)}`, locator as number[]));
 }
 
-/**
- * Get the node at a locator. Mutation-friendly: returns an err Result with
- * the right kind for either an unknown @id or an out-of-range path.
- */
 export function getNode(
   root: Node,
   locator: Locator,
-  pageId: string,
-  variantId: string,
+  screenId: string,
 ): Result<Node, MutationError> {
-  const r = resolve(root, locator, pageId, variantId);
+  const r = resolve(root, locator, screenId);
   if (!r.ok) return r;
   const n = pathAt(root, r.value);
   return n ? ok(n) : err(invalidPath(`No node at path ${JSON.stringify(r.value)}`, r.value));
 }
 
-/**
- * Like getNode, but narrows to a `ComponentNode`. Used by mutations that
- * only make sense on a real component (add_node parent, update_props,
- * apply_classes, etc.). Snippet instances and param refs return
- * InvalidPath with a hint about which alternative tool to use.
- */
 export function getComponentNode(
   root: Node,
   locator: Locator,
-  pageId: string,
-  variantId: string,
+  screenId: string,
 ): Result<ComponentNode, MutationError> {
-  const r = getNode(root, locator, pageId, variantId);
+  const r = getNode(root, locator, screenId);
   if (!r.ok) return r;
   if (!isComponentNode(r.value)) {
-    const r2 = resolve(root, locator, pageId, variantId);
+    const r2 = resolve(root, locator, screenId);
     const path = r2.ok ? r2.value : [];
     return err(
       invalidPath(

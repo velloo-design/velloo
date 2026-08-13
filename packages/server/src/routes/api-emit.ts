@@ -3,12 +3,11 @@ import { type CodegenError, emitCode, emitTheme } from "@velloo/codegen";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import type { DesignFolder } from "../design-folder.ts";
-import { pageNotFound } from "../mutations/errors.ts";
+import { screenNotFound } from "../mutations/errors.ts";
 import { mutationToHttp } from "./mutation-http.ts";
 
 const EmitCodeBody = z.object({
-  pageId: z.string().min(1),
-  variantId: z.string().min(1),
+  screenId: z.string().min(1),
   outputPath: z.string().min(1),
   apply: z.boolean().optional(),
   componentsAlias: z.string().min(1).optional(),
@@ -20,10 +19,9 @@ const EmitThemeBody = z.object({
   cssOnly: z.boolean().optional(),
 });
 
-/** Map a CodegenError variant to its HTTP response (exhaustive + never guard). */
 function codegenToHttp(c: Context, error: CodegenError): Response {
   switch (error.kind) {
-    case "VariantNotFound":
+    case "ScreenNotFound":
     case "SnippetNotFound":
       return c.json({ error }, 404);
     case "UnknownComponent":
@@ -56,11 +54,10 @@ export function createEmitRouter(folderFor: () => DesignFolder): Hono {
     }
     const args = parsed.data;
     const folder = folderFor();
-    const page = folder.pages.get(args.pageId);
-    if (!page) return mutationToHttp(c, pageNotFound(args.pageId));
+    const screen = folder.screens.get(args.screenId);
+    if (!screen) return mutationToHttp(c, screenNotFound(args.screenId));
     const out = resolve(folder.root, args.outputPath);
-    const result = await emitCode(page, {
-      variantId: args.variantId,
+    const result = await emitCode(screen, {
       outputPath: out,
       apply: args.apply ?? false,
       componentsAlias: args.componentsAlias ?? folder.config.codegen?.componentsAlias,

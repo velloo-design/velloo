@@ -4,10 +4,12 @@ import { $, DoAsync, type Result } from "@velloo/result";
 import {
   type Annotation,
   AnnotationSchema,
+  type Board,
+  BoardSchema,
   type CanvasNote,
   CanvasNoteSchema,
-  type Page,
-  PageSchema,
+  type Screen,
+  ScreenSchema,
   type Snippet,
   SnippetSchema,
   type Theme,
@@ -17,41 +19,63 @@ import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { pushHistory } from "../history.ts";
 import type { MutationError } from "./errors.ts";
-import { validatePageIds } from "./validate-ids.ts";
+import { validateScreenIds } from "./validate-ids.ts";
 
-/** Schema-validate then write a page; update the in-memory cache. */
-export async function persistPage(folder: DesignFolder, pageId: string, page: Page): Promise<Page> {
-  const validated = PageSchema.parse(page);
-  const prev = folder.pages.get(pageId);
-  if (prev) pushHistory({ kind: "page", pageId, page: prev });
-  await writeJsonAtomic(join(folder.root, "pages", `${pageId}.json`), validated);
-  folder.pages.set(pageId, validated);
+/** Schema-validate then write a screen; update the in-memory cache. */
+export async function persistScreen(
+  folder: DesignFolder,
+  screenId: string,
+  screen: Screen,
+): Promise<Screen> {
+  const validated = ScreenSchema.parse(screen);
+  const prev = folder.screens.get(screenId) ?? null;
+  pushHistory({ kind: "screen", screenId, screen: prev });
+  await writeJsonAtomic(join(folder.root, "screens", `${screenId}.json`), validated);
+  folder.screens.set(screenId, validated);
   return validated;
 }
 
 /**
- * The "right" way to land a page write in mutation code: validates per-variant
- * `$id` uniqueness, then schema-validates + persists. Returns a Result so the
- * id-conflict error flows through the standard MutationError channel rather
- * than throwing. Schema-validation failures still throw (they're real bugs in
- * mutation code, not recoverable agent errors).
+ * The "right" way to land a screen write in mutation code: validates `$id`
+ * uniqueness, then schema-validates + persists.
  */
-export function commitPage(
+export function commitScreen(
   folder: DesignFolder,
-  pageId: string,
-  page: Page,
-): Promise<Result<Page, MutationError>> {
-  return DoAsync<Page, MutationError>(async function* () {
-    yield* $(validatePageIds(pageId, page));
-    return await persistPage(folder, pageId, page);
+  screenId: string,
+  screen: Screen,
+): Promise<Result<Screen, MutationError>> {
+  return DoAsync<Screen, MutationError>(async function* () {
+    yield* $(validateScreenIds(screenId, screen));
+    return await persistScreen(folder, screenId, screen);
   });
+}
+
+/** Delete a screen from disk + cache. Pushes history so the deletion is undoable. */
+export async function deletePersistedScreen(
+  folder: DesignFolder,
+  screenId: string,
+): Promise<void> {
+  const prev = folder.screens.get(screenId) ?? null;
+  pushHistory({ kind: "screen", screenId, screen: prev });
+  await rm(join(folder.root, "screens", `${screenId}.json`), { force: true });
+  await rm(join(folder.root, "screens", `${screenId}.annotations.json`), { force: true });
+  folder.screens.delete(screenId);
+  folder.annotations.delete(screenId);
+}
+
+/** Schema-validate then write the board; update the in-memory cache. */
+export async function persistBoard(folder: DesignFolder, board: Board): Promise<Board> {
+  const validated = BoardSchema.parse(board);
+  pushHistory({ kind: "board", board: folder.board });
+  await writeJsonAtomic(join(folder.root, "board.json"), validated);
+  folder.board = validated;
+  return validated;
 }
 
 /** Schema-validate then write the theme; update the in-memory cache. */
 export async function persistTheme(folder: DesignFolder, theme: Theme): Promise<Theme> {
   const validated = ThemeSchema.parse(theme);
-  const prev = folder.theme;
-  if (prev) pushHistory({ kind: "theme", theme: prev });
+  pushHistory({ kind: "theme", theme: folder.theme });
   await writeJsonAtomic(join(folder.root, "theme", "default.json"), validated);
   folder.theme = validated;
   return validated;
@@ -71,7 +95,7 @@ export async function persistSnippet(
   return validated;
 }
 
-/** Delete a snippet from disk + cache. Pushes history so the deletion is undoable. */
+/** Delete a snippet from disk + cache. */
 export async function deletePersistedSnippet(
   folder: DesignFolder,
   snippetId: string,
@@ -83,39 +107,37 @@ export async function deletePersistedSnippet(
 }
 
 /**
- * Persist a page's annotations sidecar — validates each entry, writes the
- * array, updates the in-memory cache. Removing the file when the array
+ * Persist a screen's annotations sidecar. Removing the file when the array
  * empties keeps the working directory clean.
  */
 export async function persistAnnotations(
   folder: DesignFolder,
-  pageId: string,
+  screenId: string,
   annotations: Annotation[],
 ): Promise<Annotation[]> {
   const validated = annotations.map((a) => AnnotationSchema.parse(a));
-  const path = join(folder.root, "pages", `${pageId}.annotations.json`);
+  const path = join(folder.root, "screens", `${screenId}.annotations.json`);
   if (validated.length === 0) {
     await rm(path, { force: true });
   } else {
     await writeJsonAtomic(path, validated);
   }
-  folder.annotations.set(pageId, validated);
+  folder.annotations.set(screenId, validated);
   return validated;
 }
 
-/** Same shape for canvas notes — empty array deletes the sidecar. */
+/** Persist board-level free notes — empty array deletes `board.notes.json`. */
 export async function persistCanvasNotes(
   folder: DesignFolder,
-  pageId: string,
   notes: CanvasNote[],
 ): Promise<CanvasNote[]> {
   const validated = notes.map((n) => CanvasNoteSchema.parse(n));
-  const path = join(folder.root, "pages", `${pageId}.notes.json`);
+  const path = join(folder.root, "board.notes.json");
   if (validated.length === 0) {
     await rm(path, { force: true });
   } else {
     await writeJsonAtomic(path, validated);
   }
-  folder.notes.set(pageId, validated);
+  folder.notes = validated;
   return validated;
 }

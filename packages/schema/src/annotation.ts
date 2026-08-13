@@ -1,15 +1,18 @@
 import { z } from "zod";
 
 /**
- * Sprint-11 annotation primitives. Two kinds, deliberately split:
+ * Two annotation primitives, deliberately split:
  *
- *  - **CanvasNote**: free-positioned markdown in canvas coordinate space.
- *    Pure designer scratchpad. Not exposed to the agent.
+ *  - **CanvasNote**: free-positioned markdown in board coordinate space.
+ *    Pure designer scratchpad. Lives in `board.notes.json` at the folder
+ *    root. Not exposed to the agent.
  *
- *  - **Annotation**: tied to a specific node via { variantId, locator }.
- *    Canvas draws a dashed connector between the annotation pill and the
- *    targeted node's bounding box. Exposed read-only to the agent so
- *    designer commentary on a specific node flows into the agent's
+ *  - **Annotation**: tied to a specific node in a Screen via `locator`.
+ *    The screen id is implied by the sidecar filename
+ *    (`screens/<screenId>.annotations.json`). Canvas draws a dashed
+ *    connector between the annotation pill and the targeted node's
+ *    bounding box across every Frame that shows that screen. Exposed
+ *    read-only to the agent so designer commentary flows into the agent's
  *    context naturally.
  *
  * Both formats use markdown for `body` (a small subset: headers, bold,
@@ -28,8 +31,7 @@ const AnnotationLocatorSchema = z.union([
 ]);
 
 export const AnnotationTargetSchema = z.object({
-  variantId: z.string().min(1),
-  /** Path array or `"@id"` string identifying the anchored node. */
+  /** Path array or `"@id"` string identifying the anchored node within a screen tree. */
   locator: AnnotationLocatorSchema,
 });
 export type AnnotationTarget = z.infer<typeof AnnotationTargetSchema>;

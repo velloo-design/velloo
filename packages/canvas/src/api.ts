@@ -1,26 +1,20 @@
-import type { Page, Snippet, SnippetParam, Theme } from "@velloo/schema";
+import type { Board, Screen, Snippet, SnippetParam, Theme } from "@velloo/schema";
 import type { Manifest } from "@velloo/shadcn-snapshot";
 import type { AnnotationEntry, CanvasNoteEntry } from "./store.ts";
 
 export interface DesignSummary {
   snapshotVersion: string;
   theme: { name: string };
-  /** Page id the canvas should focus first; null when the config didn't set one. */
-  defaultPage: string | null;
-  pages: PageMeta[];
+  /** Screen id the canvas should focus first; null when not set. */
+  defaultScreen: string | null;
+  screens: ScreenMeta[];
+  board: Board;
   snippets: SnippetMeta[];
 }
 
-export interface PageMeta {
+export interface ScreenMeta {
   id: string;
   name: string;
-  variants: VariantMeta[];
-}
-
-export interface VariantMeta {
-  id: string;
-  name: string;
-  viewport: { w: number; h: number };
 }
 
 export interface SnippetMeta {
@@ -35,16 +29,16 @@ export async function fetchSnippet(id: string): Promise<Snippet> {
   return (await res.json()) as Snippet;
 }
 
-export async function fetchAnnotations(pageId: string): Promise<AnnotationEntry[]> {
-  const res = await fetch(`/api/annotations/${encodeURIComponent(pageId)}`);
-  if (!res.ok) throw new Error(`fetchAnnotations(${pageId}): ${res.status}`);
+export async function fetchAnnotations(screenId: string): Promise<AnnotationEntry[]> {
+  const res = await fetch(`/api/annotations/${encodeURIComponent(screenId)}`);
+  if (!res.ok) throw new Error(`fetchAnnotations(${screenId}): ${res.status}`);
   const body = (await res.json()) as { annotations: AnnotationEntry[] };
   return body.annotations;
 }
 
-export async function fetchNotes(pageId: string): Promise<CanvasNoteEntry[]> {
-  const res = await fetch(`/api/notes/${encodeURIComponent(pageId)}`);
-  if (!res.ok) throw new Error(`fetchNotes(${pageId}): ${res.status}`);
+export async function fetchNotes(): Promise<CanvasNoteEntry[]> {
+  const res = await fetch("/api/notes");
+  if (!res.ok) throw new Error(`fetchNotes: ${res.status}`);
   const body = (await res.json()) as { notes: CanvasNoteEntry[] };
   return body.notes;
 }
@@ -55,10 +49,16 @@ export async function fetchDesign(): Promise<DesignSummary> {
   return (await res.json()) as DesignSummary;
 }
 
-export async function fetchPage(id: string): Promise<Page> {
-  const res = await fetch(`/api/page/${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error(`fetchPage(${id}): ${res.status}`);
-  return (await res.json()) as Page;
+export async function fetchScreen(id: string): Promise<Screen> {
+  const res = await fetch(`/api/screen/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`fetchScreen(${id}): ${res.status}`);
+  return (await res.json()) as Screen;
+}
+
+export async function fetchBoard(): Promise<Board> {
+  const res = await fetch("/api/board");
+  if (!res.ok) throw new Error(`fetchBoard: ${res.status}`);
+  return (await res.json()) as Board;
 }
 
 export async function fetchComponents(): Promise<Manifest> {
@@ -67,8 +67,8 @@ export async function fetchComponents(): Promise<Manifest> {
   return (await res.json()) as Manifest;
 }
 
-export function renderUrl(pageId: string, variantId: string): string {
-  return `/api/render/${encodeURIComponent(pageId)}/${encodeURIComponent(variantId)}`;
+export function renderUrl(screenId: string, w: number, h: number): string {
+  return `/api/render/${encodeURIComponent(screenId)}?w=${w}&h=${h}`;
 }
 
 export interface MutateError {
@@ -123,7 +123,11 @@ export interface HistoryDepths {
   undo: number;
   redo: number;
 }
-export type RevertedEntry = { kind: "page"; pageId: string } | { kind: "theme" };
+export type RevertedEntry =
+  | { kind: "screen"; screenId: string }
+  | { kind: "board" }
+  | { kind: "theme" }
+  | { kind: "snippet"; snippetId: string };
 export interface HistoryResponse extends HistoryDepths {
   reverted: RevertedEntry | null;
 }
@@ -168,65 +172,76 @@ export const theme = {
 };
 
 export const mutate = {
-  updateVariant(args: {
-    pageId: string;
-    variantId: string;
+  updateFrame(args: {
+    frameId: string;
     patch: {
-      name?: string;
-      viewport?: { w: number; h: number };
-      position?: { x: number; y: number } | null;
+      x?: number;
+      y?: number;
+      w?: number;
+      h?: number;
+      label?: string | null;
+      group?: string | null;
     };
   }) {
-    return postMutate<{ variant: unknown }>("update_variant", args);
+    return postMutate<{ frame: unknown }>("update_frame", args);
   },
-  updateVariants(args: {
-    pageId: string;
+  updateFrames(args: {
     patches: Array<{
-      variantId: string;
+      frameId: string;
       patch: {
-        name?: string;
-        viewport?: { w: number; h: number };
-        position?: { x: number; y: number } | null;
+        x?: number;
+        y?: number;
+        w?: number;
+        h?: number;
+        label?: string | null;
+        group?: string | null;
       };
     }>;
   }) {
-    return postMutate<{ variants: unknown[] }>("update_variants", args);
+    return postMutate<{ frames: unknown[] }>("update_frames", args);
   },
-  updateProps(args: {
-    pageId: string;
-    variantId: string;
-    path: number[];
-    propPatch: Record<string, unknown>;
+  addFrame(args: {
+    screenId: string;
+    x?: number;
+    y?: number;
+    w: number;
+    h: number;
+    label?: string;
+    group?: string;
   }) {
+    return postMutate<{ frame: unknown }>("add_frame", args);
+  },
+  removeFrame(args: { frameId: string }) {
+    return postMutate<{ removedFrameId: string }>("remove_frame", args);
+  },
+  updateProps(args: { screenId: string; path: number[]; propPatch: Record<string, unknown> }) {
     return postMutate<{ path: number[] }>("update_props", args);
   },
-  applyClasses(args: { pageId: string; variantId: string; path: number[]; classes: string }) {
+  applyClasses(args: { screenId: string; path: number[]; classes: string }) {
     return postMutate<{ path: number[] }>("apply_classes", args);
   },
   addNode(args: {
-    pageId: string;
-    variantId: string;
+    screenId: string;
     parentPath: number[];
     componentRef: string;
     props?: Record<string, unknown>;
   }) {
     return postMutate<{ path: number[] }>("add_node", args);
   },
-  removeNode(args: { pageId: string; variantId: string; path: number[] }) {
+  removeNode(args: { screenId: string; path: number[] }) {
     return postMutate<{ removedRef: string }>("remove_node", args);
   },
-  removeVariant(args: { pageId: string; variantId: string }) {
-    return postMutate<{ removedVariantId: string }>("remove_variant", args);
+  addScreen(args: { name: string; id?: string }) {
+    return postMutate<{ screenId: string; screen: Screen }>("add_screen", args);
   },
-  addPage(args: { name: string; id?: string; viewport?: { w: number; h: number } }) {
-    return postMutate<{ pageId: string; page: Page }>("add_page", args);
-  },
-  removePage(args: { pageId: string }) {
-    return postMutate<{ removedPageId: string }>("remove_page", args);
+  removeScreen(args: { screenId: string }) {
+    return postMutate<{ removedScreenId: string; removedFrameIds: string[] }>(
+      "remove_screen",
+      args,
+    );
   },
   setNodeId(args: {
-    pageId: string;
-    variantId: string;
+    screenId: string;
     path: number[] | string;
     /** Pass null to clear. */
     id: string | null;
@@ -234,16 +249,14 @@ export const mutate = {
     return postMutate<{ path: number[]; id: string | null }>("set_node_id", args);
   },
   updateSnippetArgs(args: {
-    pageId: string;
-    variantId: string;
+    screenId: string;
     path: number[];
     argPatch: Record<string, unknown>;
   }) {
     return postMutate<{ path: number[] }>("update_snippet_args", args);
   },
   instantiateSnippet(args: {
-    pageId: string;
-    variantId: string;
+    screenId: string;
     parentPath: number[];
     snippetId: string;
     args?: Record<string, unknown>;
@@ -270,8 +283,8 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 
 export const annotations = {
   add(args: {
-    pageId: string;
-    target: { variantId: string; locator: number[] | string };
+    screenId: string;
+    target: { locator: number[] | string };
     body: string;
     position?: { x: number; y: number } | "auto";
     collapsed?: boolean;
@@ -279,7 +292,7 @@ export const annotations = {
     return postJson<{ annotation: AnnotationEntry }>("/api/annotations/add", args);
   },
   update(args: {
-    pageId: string;
+    screenId: string;
     annotationId: string;
     patch: {
       body?: string;
@@ -289,23 +302,22 @@ export const annotations = {
   }) {
     return postJson<{ annotation: AnnotationEntry }>("/api/annotations/update", args);
   },
-  remove(args: { pageId: string; annotationId: string }) {
+  remove(args: { screenId: string; annotationId: string }) {
     return postJson<{ removedId: string }>("/api/annotations/remove", args);
   },
 };
 
 export const notes = {
-  add(args: { pageId: string; x: number; y: number; width?: number; body: string }) {
+  add(args: { x: number; y: number; width?: number; body: string }) {
     return postJson<{ note: CanvasNoteEntry }>("/api/notes/add", args);
   },
   update(args: {
-    pageId: string;
     noteId: string;
     patch: { x?: number; y?: number; width?: number; body?: string };
   }) {
     return postJson<{ note: CanvasNoteEntry }>("/api/notes/update", args);
   },
-  remove(args: { pageId: string; noteId: string }) {
+  remove(args: { noteId: string }) {
     return postJson<{ removedId: string }>("/api/notes/remove", args);
   },
 };

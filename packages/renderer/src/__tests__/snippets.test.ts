@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { Snippet, Theme, Variant } from "@velloo/schema";
+import type { Screen, Snippet, Theme, Viewport } from "@velloo/schema";
 import {
   renderBody,
-  renderVariant,
+  renderScreen,
   SnippetCycleError,
   SnippetParamError,
   UnknownSnippetError,
@@ -20,7 +20,8 @@ const theme: Theme = {
   radius: {},
 };
 
-const opts = { snapshotCss: "" };
+const viewport: Viewport = { w: 320, h: 240 };
+const opts = { snapshotCss: "", viewport };
 
 const featureCard: Snippet = {
   id: "feature-card",
@@ -38,30 +39,30 @@ const featureCard: Snippet = {
   },
 };
 
-function variantWith(tree: Variant["tree"]): Variant {
-  return { id: "v", name: "V", viewport: { w: 320, h: 240 }, tree };
+function screenWith(tree: Screen["tree"]): Screen {
+  return { id: "s", name: "S", tree };
 }
 
 describe("snippet resolution", () => {
   test("instance with required + default param renders both", async () => {
     const snippets = new Map([[featureCard.id, featureCard]]);
-    const variant = variantWith({ $snippet: "feature-card", args: { title: "Fast" } });
-    const { bodyHtml } = await renderVariant(variant, theme, { ...opts, snippets });
+    const screen = screenWith({ $snippet: "feature-card", args: { title: "Fast" } });
+    const { bodyHtml } = await renderScreen(screen, theme, { ...opts, snippets });
     expect(bodyHtml).toContain("Fast");
     expect(bodyHtml).toContain("Default body.");
   });
 
   test("missing required param throws SnippetParamError", async () => {
     const snippets = new Map([[featureCard.id, featureCard]]);
-    const variant = variantWith({ $snippet: "feature-card", args: {} });
-    await expect(renderVariant(variant, theme, { ...opts, snippets })).rejects.toBeInstanceOf(
+    const screen = screenWith({ $snippet: "feature-card", args: {} });
+    await expect(renderScreen(screen, theme, { ...opts, snippets })).rejects.toBeInstanceOf(
       SnippetParamError,
     );
   });
 
   test("unknown snippet throws UnknownSnippetError", async () => {
-    const variant = variantWith({ $snippet: "no-such-snippet" });
-    await expect(renderVariant(variant, theme, opts)).rejects.toBeInstanceOf(UnknownSnippetError);
+    const screen = screenWith({ $snippet: "no-such-snippet" });
+    await expect(renderScreen(screen, theme, opts)).rejects.toBeInstanceOf(UnknownSnippetError);
   });
 
   test("snippet body referencing itself triggers SnippetCycleError", async () => {
@@ -72,8 +73,8 @@ describe("snippet resolution", () => {
       tree: { $ref: "Card", children: [{ $snippet: "recur" }] },
     };
     const snippets = new Map([[recursive.id, recursive]]);
-    const variant = variantWith({ $snippet: "recur" });
-    await expect(renderVariant(variant, theme, { ...opts, snippets })).rejects.toBeInstanceOf(
+    const screen = screenWith({ $snippet: "recur" });
+    await expect(renderScreen(screen, theme, { ...opts, snippets })).rejects.toBeInstanceOf(
       SnippetCycleError,
     );
   });
@@ -95,15 +96,15 @@ describe("snippet resolution", () => {
       },
     };
     const snippets = new Map([[card.id, card]]);
-    const featured = await renderVariant(
-      variantWith({ $snippet: "tier", args: { featured: true } }),
+    const featured = await renderScreen(
+      screenWith({ $snippet: "tier", args: { featured: true } }),
       theme,
       { ...opts, snippets },
     );
     expect(featured.bodyHtml).toContain("ring-2");
     expect(featured.bodyHtml).toContain("ring-emerald-500/40");
-    const plain = await renderVariant(
-      variantWith({ $snippet: "tier", args: { featured: false } }),
+    const plain = await renderScreen(
+      screenWith({ $snippet: "tier", args: { featured: false } }),
       theme,
       { ...opts, snippets },
     );
@@ -122,8 +123,8 @@ describe("snippet resolution", () => {
       },
     };
     const snippets = new Map([[label.id, label]]);
-    const loud = await renderVariant(
-      variantWith({ $snippet: "label", args: { loud: true } }),
+    const loud = await renderScreen(
+      screenWith({ $snippet: "label", args: { loud: true } }),
       theme,
       { ...opts, snippets },
     );
@@ -139,12 +140,11 @@ describe("snippet resolution", () => {
       tree: { $ref: "Card", props: { className: "p-6" } },
     };
     const snippets = new Map([[card.id, card]]);
-    const { bodyHtml } = await renderVariant(
-      variantWith({ $snippet: "card", $extraClassName: "ring-2 ring-emerald-500" }),
+    const { bodyHtml } = await renderScreen(
+      screenWith({ $snippet: "card", $extraClassName: "ring-2 ring-emerald-500" }),
       theme,
       { ...opts, snippets },
     );
-    // Both base class and override appear in the rendered className.
     expect(bodyHtml).toContain("p-6");
     expect(bodyHtml).toContain("ring-2");
     expect(bodyHtml).toContain("ring-emerald-500");
@@ -161,15 +161,14 @@ describe("snippet resolution", () => {
       id: "outer",
       name: "Outer",
       params: [],
-      // Outer's body root is a snippet instance — extraClassName should cascade.
       tree: { $snippet: "inner" },
     };
     const snippets = new Map([
       [inner.id, inner],
       [outer.id, outer],
     ]);
-    const { bodyHtml } = await renderVariant(
-      variantWith({ $snippet: "outer", $extraClassName: "border-2" }),
+    const { bodyHtml } = await renderScreen(
+      screenWith({ $snippet: "outer", $extraClassName: "border-2" }),
       theme,
       { ...opts, snippets },
     );
@@ -179,14 +178,11 @@ describe("snippet resolution", () => {
 
   test("inner DOM in a resolved snippet inherits the instance's data-node-path", () => {
     const snippets = new Map([[featureCard.id, featureCard]]);
-    // Wrap the snippet inside a Card so the instance lives at path [0].
-    const variant = variantWith({
+    const screen = screenWith({
       $ref: "Card",
       children: [{ $snippet: "feature-card", args: { title: "X" } }],
     });
-    const html = renderBody(variant, snippets);
-    // The snippet instance is at path 0; every node inside the snippet body
-    // should also carry data-node-path="0" since the snippet is opaque.
+    const html = renderBody(screen, snippets);
     const matches = html.match(/data-node-path="0"/g);
     expect(matches?.length ?? 0).toBeGreaterThanOrEqual(2);
   });

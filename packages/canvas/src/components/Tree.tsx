@@ -4,22 +4,16 @@ import {
   isSnippetInstance,
   type Node,
   nodeId,
-  type Variant,
+  type Screen,
 } from "@velloo/schema";
 import { useMemo, useState } from "react";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 
 interface Props {
-  variant: Variant;
+  screen: Screen;
 }
 
-/**
- * Short label for a node row. Falls back to the first useful hint we can
- * extract: a string `children` prop, a `placeholder`, a `label`, or a
- * className snippet — none of which is the source of truth, but all of which
- * help a human map a row to a thing on screen.
- */
 function describeNode(node: Node): string | null {
   if (isSnippetInstance(node)) {
     const argEntries = Object.entries(node.args ?? {});
@@ -62,21 +56,21 @@ function nodeChildren(node: Node): Node[] | undefined {
 interface RowProps {
   node: Node;
   path: number[];
-  variantId: string;
+  screenId: string;
   depth: number;
   expandedSet: Set<string>;
   setExpanded: (path: string, expanded: boolean) => void;
 }
 
-function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: RowProps) {
+function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowProps) {
   const pathStr = pathToString(path);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
   const selection = useCanvas((s) => s.selection);
   const hover = useCanvas((s) => s.hover);
 
-  const isSelected = selection?.variantId === variantId && selection.path === pathStr;
-  const isHovered = hover?.variantId === variantId && hover.path === pathStr;
+  const isSelected = selection?.screenId === screenId && selection.path === pathStr;
+  const isHovered = hover?.screenId === screenId && hover.path === pathStr;
   const childList = nodeChildren(node);
   const hasChildren = (childList?.length ?? 0) > 0;
   const isOpen = hasChildren ? expandedSet.has(pathStr) : false;
@@ -105,8 +99,8 @@ function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: Row
         </button>
         <button
           type="button"
-          onClick={() => setSelection({ variantId, path: pathStr })}
-          onMouseEnter={() => setHover({ variantId, path: pathStr })}
+          onClick={() => setSelection({ screenId, path: pathStr })}
+          onMouseEnter={() => setHover({ screenId, path: pathStr })}
           onMouseLeave={() => setHover(null)}
           onKeyDown={(e) => {
             if (e.key === "ArrowRight" && hasChildren && !isOpen) {
@@ -154,7 +148,7 @@ function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: Row
                 key={childPath}
                 node={child}
                 path={[...path, i]}
-                variantId={variantId}
+                screenId={screenId}
                 depth={depth + 1}
                 expandedSet={expandedSet}
                 setExpanded={setExpanded}
@@ -167,7 +161,6 @@ function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: Row
   );
 }
 
-/** Collect every ancestor path of `target` so we can auto-expand to it. */
 function ancestorsOf(target: number[]): Set<string> {
   const out = new Set<string>();
   for (let i = 0; i < target.length; i++) {
@@ -176,7 +169,6 @@ function ancestorsOf(target: number[]): Set<string> {
   return out;
 }
 
-/** Collect every node path in the tree (used to default-expand everything). */
 function allPaths(node: Node, path: number[] = [], out: Set<string> = new Set()): Set<string> {
   out.add(pathToString(path));
   const children = nodeChildren(node);
@@ -189,13 +181,10 @@ function allPaths(node: Node, path: number[] = [], out: Set<string> = new Set())
   return out;
 }
 
-export function Tree({ variant }: Props) {
+export function Tree({ screen }: Props) {
   const selection = useCanvas((s) => s.selection);
 
-  // Default: every node expanded so the structure is visible at a glance.
-  // User can collapse; selection auto-expands ancestors on top of whatever
-  // the user's current expansion state is.
-  const [expandedSet, setExpandedState] = useState<Set<string>>(() => allPaths(variant.tree));
+  const [expandedSet, setExpandedState] = useState<Set<string>>(() => allPaths(screen.tree));
 
   const setExpanded = (pathStr: string, expanded: boolean) => {
     setExpandedState((prev) => {
@@ -206,21 +195,20 @@ export function Tree({ variant }: Props) {
     });
   };
 
-  // Auto-expand ancestors when selection lands on this variant.
   const effectiveExpanded = useMemo(() => {
-    if (selection?.variantId !== variant.id) return expandedSet;
+    if (selection?.screenId !== screen.id) return expandedSet;
     const auto = ancestorsOf(pathFromString(selection.path));
     const merged = new Set(expandedSet);
     for (const a of auto) merged.add(a);
     return merged;
-  }, [expandedSet, selection, variant.id]);
+  }, [expandedSet, selection, screen.id]);
 
   return (
     <div className="flex flex-col py-1">
       <TreeRow
-        node={variant.tree}
+        node={screen.tree}
         path={[]}
-        variantId={variant.id}
+        screenId={screen.id}
         depth={0}
         expandedSet={effectiveExpanded}
         setExpanded={setExpanded}

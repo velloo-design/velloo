@@ -7,12 +7,13 @@ export interface MutationContext {
 }
 
 /**
- * Per-page write chain. Mutations on the same page id serialize; different
- * pages run in parallel. Avoids interleaved schema-validate / write / cache
- * when canvas + MCP hit the same page concurrently.
+ * Per-screen write chain. Mutations on the same screen id serialize; different
+ * screens run in parallel. Avoids interleaved schema-validate / write / cache
+ * when canvas + MCP hit the same screen concurrently.
  */
-const pageChains = new Map<string, Promise<unknown>>();
+const screenChains = new Map<string, Promise<unknown>>();
 const snippetChains = new Map<string, Promise<unknown>>();
+let boardChain: Promise<unknown> = Promise.resolve();
 
 function chained<T>(
   chains: Map<string, Promise<unknown>>,
@@ -28,11 +29,17 @@ function chained<T>(
   return next;
 }
 
-export function withPageLock<T>(pageId: string, fn: () => Promise<T>): Promise<T> {
-  return chained(pageChains, pageId, fn);
+export function withScreenLock<T>(screenId: string, fn: () => Promise<T>): Promise<T> {
+  return chained(screenChains, screenId, fn);
 }
 
-/** Per-snippet write chain. Mirrors withPageLock semantics. */
 export function withSnippetLock<T>(snippetId: string, fn: () => Promise<T>): Promise<T> {
   return chained(snippetChains, snippetId, fn);
+}
+
+/** Serializes all board writes — frame add/move/remove/resize, group ops. */
+export function withBoardLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = boardChain.then(fn, fn);
+  boardChain = next.catch(() => undefined);
+  return next;
 }

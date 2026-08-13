@@ -62,7 +62,7 @@ function Tooltip({
 
 export function TopBar() {
   const design = useCanvas((s) => s.design);
-  const currentPageId = useCanvas((s) => s.currentPageId);
+  const currentScreenId = useCanvas((s) => s.currentScreenId);
   const theme = useCanvas((s) => s.theme);
   const canvasZoom = useCanvas((s) => s.canvasZoom);
   const setCanvasZoom = useCanvas((s) => s.setCanvasZoom);
@@ -76,7 +76,7 @@ export function TopBar() {
   const designMode = useCanvas((s) => s.designMode);
   const setDesignMode = useCanvas((s) => s.setDesignMode);
 
-  const currentPage = design?.pages.find((p) => p.id === currentPageId);
+  const currentScreen = design?.screens.find((s) => s.id === currentScreenId);
   const isDesignDark = designMode === "dark";
   const hasDarkPalette = Boolean(theme?.colorsDark);
 
@@ -112,10 +112,10 @@ export function TopBar() {
       <div className="flex items-center gap-2 min-w-0">
         <Logo size={22} />
         <span className="font-semibold tracking-tight">Velloo</span>
-        {currentPage ? (
+        {currentScreen ? (
           <>
             <span className="text-[var(--color-fg-muted)]">/</span>
-            <span className="text-[var(--color-fg)] truncate">{currentPage.name}</span>
+            <span className="text-[var(--color-fg)] truncate">{currentScreen.name}</span>
           </>
         ) : null}
       </div>

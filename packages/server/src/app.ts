@@ -2,14 +2,15 @@ import { Hono } from "hono";
 import type { DesignFolder } from "./design-folder.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { createAnnotationsRouter } from "./routes/api-annotations.ts";
+import { createBoardRouter } from "./routes/api-board.ts";
 import { createComponentsRouter } from "./routes/api-components.ts";
 import { createDesignRouter } from "./routes/api-design.ts";
 import { createEmitRouter } from "./routes/api-emit.ts";
 import { createInspectRouter } from "./routes/api-inspect.ts";
 import { createMutateRouter } from "./routes/api-mutate.ts";
 import { createNotesRouter } from "./routes/api-notes.ts";
-import { createPageRouter } from "./routes/api-page.ts";
 import { createRenderRouter } from "./routes/api-render.ts";
+import { createScreenRouter } from "./routes/api-screen.ts";
 import { createSnippetsRouter } from "./routes/api-snippets.ts";
 import { createThemeRouter } from "./routes/api-theme.ts";
 import { createUndoRouter } from "./routes/api-undo.ts";
@@ -25,7 +26,8 @@ export function createApp(ctxFor: () => MutationContext, jit: TailwindJit): Hono
 
   app.get("/api/health", (c) => c.json({ ok: true }));
   app.route("/api/design", createDesignRouter(folder));
-  app.route("/api/page", createPageRouter(folder));
+  app.route("/api/screen", createScreenRouter(folder));
+  app.route("/api/board", createBoardRouter(folder));
   app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/render", createRenderRouter(folder, jit));
   app.route("/api/components", createComponentsRouter());

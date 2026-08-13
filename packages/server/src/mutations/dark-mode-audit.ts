@@ -2,11 +2,10 @@ import { $, DoAsync, type Result } from "@velloo/result";
 import { isComponentNode, isSnippetInstance, type Node } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
-import { getPage, getSnippet, getVariant } from "./lookup.ts";
+import { getScreen, getSnippet } from "./lookup.ts";
 
 export interface DarkModeAuditArgs {
-  pageId: string;
-  variantId: string;
+  screenId: string;
 }
 
 export interface DarkModeAuditNode {
@@ -397,19 +396,17 @@ function auditTree(root: Node): DarkModeAuditResult {
 }
 
 /**
- * Walk a variant tree and report nodes whose className uses raw palette
- * colors that won't theme-flip. Snippet instances are checked at the
- * instance level (their resolved body is opaque from this audit's POV —
- * audit the snippet body separately with `auditSnippet`).
+ * Walk a screen tree and report nodes whose className uses raw palette
+ * colors that won't theme-flip. Snippet instances are opaque — audit the
+ * snippet body separately with `auditSnippet`.
  */
 export async function darkModeAudit(
   ctx: MutationContext,
   args: DarkModeAuditArgs,
 ): Promise<Result<DarkModeAuditResult, MutationError>> {
   return DoAsync<DarkModeAuditResult, MutationError>(async function* () {
-    const page = yield* $(getPage(ctx, args.pageId));
-    const variant = yield* $(getVariant(page, args.pageId, args.variantId));
-    return auditTree(variant.tree);
+    const screen = yield* $(getScreen(ctx, args.screenId));
+    return auditTree(screen.tree);
   });
 }
 

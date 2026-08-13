@@ -4,10 +4,10 @@ import { Inspector } from "./Inspector.tsx";
 import { ThemePanel } from "./ThemePanel.tsx";
 
 interface Props {
-  pageId: string | null;
+  screenId: string | null;
 }
 
-export function RightPanel({ pageId }: Props) {
+export function RightPanel({ screenId }: Props) {
   const rightTab = useCanvas((s) => s.rightTab);
   const setRightTab = useCanvas((s) => s.setRightTab);
   const selection = useCanvas((s) => s.selection);
@@ -15,14 +15,10 @@ export function RightPanel({ pageId }: Props) {
   const presets = useCanvas((s) => s.presets);
   const cursorMode = useCanvas((s) => s.cursorMode);
 
-  // When the user selects a node, switch to the Node tab. When they clear
-  // selection, fall back to whichever tab was active or default to Theme.
   useEffect(() => {
     if (selection) setRightTab("node");
   }, [selection, setRightTab]);
 
-  // In hand mode, the Node tab is intentionally empty — there's no selection
-  // workflow active. Theme tab remains useful so we keep it accessible.
   const handMode = cursorMode === "hand";
 
   return (
@@ -40,10 +36,10 @@ export function RightPanel({ pageId }: Props) {
           <EmptyMessage>
             Hand tool active. Drag to pan; press V or Esc to return to select.
           </EmptyMessage>
-        ) : pageId ? (
-          <Inspector pageId={pageId} />
+        ) : screenId ? (
+          <Inspector />
         ) : (
-          <EmptyMessage>No page selected.</EmptyMessage>
+          <EmptyMessage>No screen selected.</EmptyMessage>
         )
       ) : theme ? (
         <ThemePanel theme={theme} presets={presets} />

@@ -1,11 +1,21 @@
 import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { ConfigSchema, PageSchema, SnippetSchema, ThemeSchema } from "@velloo/schema";
+import {
+  BoardSchema,
+  ConfigSchema,
+  ScreenSchema,
+  SnippetSchema,
+  ThemeSchema,
+} from "@velloo/schema";
 import { writeJsonAtomic, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { buildDefaultTheme } from "../scaffold/default-theme.ts";
-import { buildComponentsPage, buildSamplePage } from "../scaffold/sample-page.ts";
+import {
+  buildComponentsScreen,
+  buildSampleBoard,
+  buildSampleScreen,
+} from "../scaffold/sample-page.ts";
 import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
 
 async function isEmptyOrMissing(path: string): Promise<boolean> {
@@ -48,21 +58,23 @@ export default defineCommand({
 
     const config = buildDefaultConfig();
     const theme = buildDefaultTheme();
-    const welcome = buildSamplePage();
-    const components = buildComponentsPage();
+    const welcome = buildSampleScreen();
+    const components = buildComponentsScreen();
+    const board = buildSampleBoard();
     const snippets = buildSampleSnippets();
 
-    // Validate before writing — defense in depth.
     ConfigSchema.parse(config);
     ThemeSchema.parse(theme);
-    PageSchema.parse(welcome);
-    PageSchema.parse(components);
+    ScreenSchema.parse(welcome);
+    ScreenSchema.parse(components);
+    BoardSchema.parse(board);
     for (const snippet of snippets) SnippetSchema.parse(snippet);
 
     const configPath = `${folder}/.design/config.json`;
     const themePath = `${folder}/theme/default.json`;
-    const welcomePath = `${folder}/pages/welcome.json`;
-    const componentsPath = `${folder}/pages/components.json`;
+    const welcomePath = `${folder}/screens/welcome.json`;
+    const componentsPath = `${folder}/screens/components.json`;
+    const boardPath = `${folder}/board.json`;
     const cacheKeep = `${folder}/.design/cache/.gitkeep`;
     const assetsKeep = `${folder}/assets/.gitkeep`;
 
@@ -71,18 +83,18 @@ export default defineCommand({
       writeJsonAtomic(themePath, theme),
       writeJsonAtomic(welcomePath, welcome),
       writeJsonAtomic(componentsPath, components),
+      writeJsonAtomic(boardPath, board),
       writeText(cacheKeep, ""),
       writeText(assetsKeep, ""),
       ...snippets.map((s) => writeJsonAtomic(`${folder}/snippets/${s.id}.json`, s)),
     ]);
 
     console.log(`velloo: scaffolded design folder at ${folder}`);
-    console.log("  .design/config.json     — locked tool + shadcn snapshot");
+    console.log("  .design/config.json     — tool + library declaration");
     console.log("  theme/default.json      — token tree (colors, type, spacing, radius)");
-    console.log(
-      "  pages/welcome.json      — tutorial-flavored welcome (mobile + tablet + desktop)",
-    );
-    console.log("  pages/components.json   — every primitive in the snapshot");
+    console.log("  screens/welcome.json    — responsive welcome screen");
+    console.log("  screens/components.json — every primitive in the library");
+    console.log("  board.json              — canvas layout (frames + groups)");
     console.log(`  snippets/               — ${snippets.length} starter reusable subtrees`);
     console.log("");
     console.log(`Next: velloo run ${args.folder}`);

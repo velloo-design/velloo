@@ -16,15 +16,13 @@ import { z } from "zod";
  *
  * `ComponentNode` and `SnippetInstance` may carry an optional `$id` —
  * a stable anchor that survives sibling insertions and deletions. Ids
- * are unique within a single variant tree (validated at persist time);
- * the same `$id` can repeat across variants of the same page so a
- * "hero-cta" anchor refers to the same semantic node in every variant.
+ * are unique within a single screen tree (validated at persist time).
  * Agents address `$id`-bearing nodes via the locator form `"@id"` in
  * place of a path array.
  *
- * Schema-level validation accepts all three at every Node position. Page
+ * Schema-level validation accepts all three at every Node position. Screen
  * trees are expected to contain only `ComponentNode | SnippetInstance`;
- * `ParamRef`s in a page tree fail at substitution time rather than at
+ * `ParamRef`s in a screen tree fail at substitution time rather than at
  * parse time so the schema stays simple.
  */
 export type ComponentNode = {

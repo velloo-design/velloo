@@ -4,7 +4,7 @@
 
 Designed for token efficiency: every tool is scoped, typed, and operates on small JSON. Compared to Penpot's `execute_code` (raw JS over the entire Plugin API) or Paper's `write_html` (HTML literals), each operation here is a single structural mutation with predictable cost.
 
-A typical design page is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_variant`, plan multiple ops, and apply them in a tight loop with low token spend per turn.
+A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`, plan multiple ops, and apply them in a tight loop with low token spend per turn.
 
 ## Tool surface
 
@@ -12,60 +12,67 @@ A typical design page is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_va
 
 | Tool | Args | Returns |
 |---|---|---|
-| `list_pages` | `include_tree?: boolean` | `[{ id, name, variants: [{ id, name, viewport, tree? }] }]`. Pass `include_tree: true` for a single-round-trip overview of the whole design |
-| `get_page` | `pageId, mode?: "full" \| "outline"` | full page JSON, or a stripped `{ref/snippet, $id, classSnippet (≤40 chars), children}` tree when `mode: "outline"` for scanning long pages |
-| `get_variant` | `pageId, variantId` | single variant tree |
+| `list_screens` | `include_tree?: boolean` | `[{ id, name, tree? }]`. Pass `include_tree: true` for a single-round-trip overview of every screen |
+| `get_screen` | `screenId, mode?: "full" \| "outline"` | full screen JSON, or a stripped `{ref/snippet, $id, classSnippet (≤40 chars), children}` tree when `mode: "outline"` for scanning long screens |
+| `get_board` | — | `{ frames: [...], groups: [...] }` — frame placement on the canvas |
 | `list_components` | `filter?, mode?: "summary" \| "full"` | `[{ id, props, category, summary }]` — summary mode returns just `{ id, summary, category }` to avoid blowing the token cap on first call |
 | `list_snippets` | — | `[{ id, name, params }]` |
 | `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
 | `get_theme` | — | full token tree |
-| `list_annotations` | `pageId` | Designer-authored markdown annotations on a page. Each carries a `target: { variantId, locator }` and a `resolved` path (null when the targeted node has been removed — treat as low-priority). Read-only: agents can act on annotations but not create or edit them |
+| `list_annotations` | `screenId` | Designer-authored markdown annotations on a screen. Each carries a `target: { locator }` and a `resolved` path (null when the targeted node has been removed — treat as low-priority). Read-only: agents can act on annotations but not create or edit them |
+| `list_notes` | — | Board-level free-positioned markdown notes (designer-authored, read-only) |
 
 ### Tree mutations
 
+A screen has one tree. Path-accepting tools target nodes within that screen's tree.
+
 | Tool | Args |
 |---|---|
-| `add_node` | `pageId, variantId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
-| `update_props` | `pageId, variantId, path, propPatch` |
-| `update_props_bulk` | `pageId, variantId, patches: [{path, propPatch}]` — atomic bulk variant; single persist + broadcast + history entry |
-| `move_node` | `pageId, variantId, fromPath, toParent, toIndex?` |
-| `remove_node` | `pageId, variantId, path` |
-| `inspect` | `pageId, variantId, path` — returns rendered DOM + computed styles |
-| `inspect_dark_diff` | `pageId, variantId` — audit color classes for dark-mode awareness. Scores **only color-bearing classes**; structural utilities (`border-b`, `ring-0`, `shadow-none`, `text-xl`, `bg-transparent`, `text-current`) are exempt by design. Set `data-accent` (any truthy value) on a node's props to exempt it entirely — for intentional non-flipping accents (brand mark, hero gradient, dark-tuned pills). Returns coverage 0..1, per-node `raw[]` classes that won't theme-flip, and `suggestions{}` for obvious semantic-token replacements. Treat the score as a triage signal, not a gate |
+| `add_node` | `screenId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
+| `update_props` | `screenId, path, propPatch` |
+| `update_props_bulk` | `screenId, patches: [{path, propPatch}]` — atomic bulk variant; single persist + broadcast + history entry |
+| `move_node` | `screenId, fromPath, toParent, toIndex?` |
+| `remove_node` | `screenId, path` |
+| `inspect` | `screenId, path` — returns rendered DOM + computed styles |
+| `inspect_dark_diff` | `screenId` — audit color classes for dark-mode awareness. Scores **only color-bearing classes**; structural utilities (`border-b`, `ring-0`, `shadow-none`, `text-xl`, `bg-transparent`, `text-current`) are exempt by design. Set `data-accent` (any truthy value) on a node's props to exempt it entirely. Returns coverage 0..1, per-node `raw[]` classes that won't theme-flip, and `suggestions{}` for obvious semantic-token replacements. Treat the score as a triage signal, not a gate |
 | `inspect_dark_diff_snippet` | `snippetId` — same audit scoped to a snippet body. Catches bad raw-color patterns at definition time, before stamping |
-| `apply_classes` | `pageId, variantId, path, classes` — Tailwind class edit on a node |
-| `apply_classes_bulk` | `pageId, variantId, patches: [{path, classes}]` — atomic bulk apply_classes; useful for sweeping a page through a styling change |
+| `apply_classes` | `screenId, path, classes` — Tailwind class edit on a node |
+| `apply_classes_bulk` | `screenId, patches: [{path, classes}]` — atomic bulk apply_classes; useful for sweeping a screen through a styling change |
 | `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms |
 
-### Page lifecycle
+### Screen lifecycle
 
 | Tool | Args | Notes |
 |---|---|---|
-| `add_page` | `name, id?, viewport?` | Creates a page with a single variant in the supplied viewport (defaults to mobile) |
-| `update_page` | `pageId, patch` | Sparse patch — only `name` is patchable today; page id stays stable |
-| `remove_page` | `pageId` | Refuses to remove the last page; undoable via `/api/undo` (canvas ⌘Z) |
+| `add_screen` | `name, id?, fromScreenId?, tree?` | Creates a screen. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one explicitly. Empty by default. Does *not* place the screen on the board — that's a separate, intentional step |
+| `update_screen` | `screenId, patch` | Sparse patch — currently only `name` is patchable; screen id stays stable |
+| `remove_screen` | `screenId` | Refuses to remove the last screen; also refuses if any frame on the board references it (returns the `frameIds[]` so the agent can remove them first); undoable via `/api/undo` (canvas ⌘Z) |
 
-### Variant lifecycle
+### Board / frame lifecycle
+
+Frames are placements of screens on the canvas. Multiple frames of the same screen always render the same tree at different sizes — that's the sync model.
 
 | Tool | Args | Notes |
 |---|---|---|
-| `add_variant` | `pageId, fromVariantId?, viewport, name, id?` | Optionally clones an existing variant's tree |
-| `update_variant` | `pageId, variantId, patch` | Sparse: `name`, `viewport`, or `position` (pass `position: null` to return to auto-layout) |
-| `update_variants` | `pageId, patches: [{ variantId, patch }]` | Atomic bulk variant update — single persist, single broadcast, single undo entry. Use this when laying out multiple variants together |
-| `remove_variant` | `pageId, variantId` | Refuses to remove the last variant on a page |
+| `add_frame` | `screenId, x, y, w, h, label?, group?, id?` | Drop a frame for a screen at a given size + position. Position defaults to a free spot on the board if `x`/`y` omitted |
+| `update_frame` | `frameId, patch` | Sparse: `x`, `y`, `w`, `h`, `label`, `group` (pass `null` to clear group) |
+| `update_frames` | `patches: [{ frameId, patch }]` | Atomic bulk update — single persist, single broadcast, single undo entry. Use when laying out many frames together |
+| `remove_frame` | `frameId` | Removes the frame placement; the underlying screen is untouched |
+| `add_group` | `name, color?, id?` | Create a board group (visual tag for related frames — "marketing flow", "settings flow") |
+| `update_group` | `groupId, patch` | Sparse: `name`, `color` |
+| `remove_group` | `groupId` | Frames in the group are not deleted — they're un-grouped |
 
 ### Snippets
 
-Snippets are named reusable subtrees with typed parameters. A snippet lives in `design/snippets/<id>.json`; pages reference it with a `$snippet` node and pass `args` for each declared param. Inside the snippet body, `$param` placeholder nodes substitute their argument value at render time.
+Snippets are named reusable subtrees with typed parameters. A snippet lives in `design/snippets/<id>.json`; screens reference it with a `$snippet` node and pass `args` for each declared param. Inside the snippet body, `$param` placeholder nodes substitute their argument value at render time.
 
 | Tool | Args | Notes |
 |---|---|---|
 | `add_snippet` | `id?, name, params, tree` | `params` is `[{ name, type, default? }]`; `tree` may contain `$param` placeholder nodes |
-| `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, or `tree`; all pages referencing the snippet rebroadcast |
-| `remove_snippet` | `snippetId` | Refuses if any page instantiates it; returns the referencing pageIds so the agent can clean up first |
-| `instantiate_snippet` | `pageId, variantId, parentPath, snippetId, args, id?, extraClassName?, index?` | Adds a `$snippet` node — opaque from outside. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root (lets a single instance get wider/accented without forking the snippet) |
-| `update_snippet_args` | `pageId, variantId, path, argPatch?, extraClassName?` | Patch an instance's `args` map (`null` removes a key); also patches the instance's `extraClassName` override (`null` clears) |
-| `update_snippet_args` | `pageId, variantId, path, argPatch` | Edit an instance's args without touching the snippet body |
+| `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, or `tree`; all screens referencing the snippet rebroadcast |
+| `remove_snippet` | `snippetId` | Refuses if any screen instantiates it; returns the referencing screenIds so the agent can clean up first |
+| `instantiate_snippet` | `screenId, parentPath, snippetId, args, id?, extraClassName?, index?` | Adds a `$snippet` node — opaque from outside. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root |
+| `update_snippet_args` | `screenId, path, argPatch?, extraClassName?` | Patch an instance's `args` map (`null` removes a key); also patches the instance's `extraClassName` override (`null` clears) |
 
 ### Theme operations
 
@@ -81,28 +88,28 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Returns |
 |---|---|---|
-| `screenshot` | `pageId, variantId, mode?: "light" \| "dark" \| "compare", fullPage?: boolean` | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image — fastest dark-mode adaptation check. Defaults `fullPage: true` so tall pages aren't clipped |
-| `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?` | Render a snippet in isolation (no host page) and return a PNG. Useful for iterating on snippet visuals before stamping |
+| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean` | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
+| `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?` | Render a snippet in isolation (no host screen) and return a PNG. Useful for iterating on snippet visuals before stamping |
 
 ### Codegen and export
 
 | Tool | Args |
 |---|---|
-| `emit_code` | `pageId` — returns a structured JSX-shaped intermediate representation intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). **Not paste-ready output.** |
+| `emit_code` | `screenId` — returns a structured JSX-shaped intermediate representation intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). **Not paste-ready output.** |
 | `emit_theme` | `outputPath` — writes `tailwind.config.ts` + `globals.css` (diff mode). Direct user-facing artifact; agent does not need to transform it. |
 
 ## Path addressing
 
 Every path-accepting tool accepts a **locator** — either of:
 
-- **Path array** — integer indices from the variant root. `[0, 2, 1]` = first child, third grandchild, second great-grandchild. Cheap to serialize and unambiguous, but brittle: a sibling insertion above shifts every later path.
+- **Path array** — integer indices from the screen tree root. `[0, 2, 1]` = first child, third grandchild, second great-grandchild. Cheap to serialize and unambiguous, but brittle: a sibling insertion above shifts every later path.
 - **`@id` reference** — the string `"@hero-cta"` resolves to whichever node carries `$id: "hero-cta"`. Stable across sibling insertions and deletions.
 
-Agents assign ids two ways: pass `id: "hero-cta"` when creating a node (`add_node`, `instantiate_snippet`) or call `set_node_id` later. Per-variant uniqueness is enforced at persist time; collisions surface as `IdConflict`. The same id may repeat across variants of the same page — that's intentional: `"@hero-cta"` in mobile + desktop is the same semantic anchor in different renders.
+Agents assign ids two ways: pass `id: "hero-cta"` when creating a node (`add_node`, `instantiate_snippet`) or call `set_node_id` later. Per-screen uniqueness is enforced at persist time; collisions surface as `IdConflict`.
 
 Edits return the resolved path of the affected node so the agent can chain operations without a re-read.
 
-**Snippet instances are opaque.** A `$snippet` node has a path and may carry its own `$id`, but the structure rendered inside it is not addressable from the page. To edit the contents, edit the snippet body itself; every instance updates.
+**Snippet instances are opaque.** A `$snippet` node has a path and may carry its own `$id`, but the structure rendered inside it is not addressable from the screen. To edit the contents, edit the snippet body itself; every instance updates.
 
 ### Locator-aware tools
 
@@ -110,7 +117,7 @@ Edits return the resolved path of the affected node so the agent can chain opera
 
 | Tool | Args | Notes |
 |---|---|---|
-| `set_node_id` | `pageId, variantId, path, id` | Assign / rename / clear (`id: null`) a node's stable anchor. Targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids |
+| `set_node_id` | `screenId, path, id` | Assign / rename / clear (`id: null`) a node's stable anchor. Targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids |
 
 ## Error model
 
@@ -118,41 +125,45 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 
 | `kind` | Meaning |
 |---|---|
-| `PageNotFound` | The named page doesn't exist |
-| `VariantNotFound` | The named variant doesn't exist on the page |
+| `ScreenNotFound` | The named screen doesn't exist |
+| `FrameNotFound` | The named frame doesn't exist on the board |
 | `UnknownComponent` | `componentRef` not in the active palette; carries `suggestions[]` by Levenshtein distance |
-| `InvalidPath` | Path doesn't resolve in the variant tree |
+| `InvalidPath` | Path doesn't resolve in the screen tree |
 | `InvalidMove` | `move_node` would create a cycle or move into self |
-| `LastPage` | `remove_page` refuses when only one page is left |
-| `LastVariant` | `remove_variant` refuses when only one variant is left on a page |
-| `VariantIdConflict` | `add_variant` id collides with an existing variant |
-| `PageIdExhausted` | Couldn't derive a unique page id from the supplied name |
+| `LastScreen` | `remove_screen` refuses when only one screen is left |
+| `ScreenInUse` | `remove_screen` refuses when frames on the board reference it; carries `frameIds[]` |
+| `ScreenIdConflict` | `add_screen` id collides with an existing screen |
+| `ScreenIdExhausted` | Couldn't derive a unique screen id from the supplied name |
 | `BadRequest` | Zod validation failed at the route boundary; carries the issue list |
 | `SnippetNotFound` | The named snippet doesn't exist |
 | `SnippetParamMismatch` | `args` to `instantiate_snippet` don't match the declared `params` (missing required, unknown extras, type mismatch) |
 | `SnippetCycle` | Snippet body would reference itself (directly or transitively) |
-| `SnippetInUse` | `remove_snippet` refuses when pages still instantiate it; carries the referencing `pageIds[]` |
+| `SnippetInUse` | `remove_snippet` refuses when screens still instantiate it; carries the referencing `screenIds[]` |
 | `SnippetIdConflict` | `add_snippet` id collides with an existing snippet |
-| `IdNotFound` | An `@id` locator didn't resolve to any node in the variant; carries `id` |
-| `IdConflict` | Two nodes in the same variant share an `$id`; carries `id` + `paths[]` |
+| `IdNotFound` | An `@id` locator didn't resolve to any node in the screen; carries `id` |
+| `IdConflict` | Two nodes in the same screen share an `$id`; carries `id` + `paths[]` |
 
 ## Initialize handshake
 
-Server returns the standard MCP `initialize` response with concrete agent nudges in `instructions`. The text below is the working version; treat the exact wording as fluid.
+Server returns the standard MCP `initialize` response with concrete agent nudges in `instructions`. Working text:
 
-> You are working on a Velloo design folder. Components live inside the folder (pulled from the chosen library at `velloo init`; user-owned and modifiable). Designs are static — click handlers, routing, and forms are no-op.
+> You are working on a Velloo design folder. Components live inside the folder (pulled from the chosen library at `velloo init`; user-owned). Designs are static — click handlers, routing, and forms are no-op.
 >
-> **Velloo is the design source; you are the bridge to code.** When the user asks you to implement a design in their app, call `emit_code` to read the structured representation of the page, then write the real file into the user's app using their stack, conventions, routing, providers, and existing component wrappers. Do not paste `emit_code` output directly — it's intermediate representation, not finished JSX.
+> **Mental model:** a **screen** is a responsive React tree (one JSON file). A **frame** is a placement of a screen on the canvas at a chosen size — multiple frames can show the same screen at different sizes and edits always sync because there's one underlying tree. A **board** is the canvas; it holds frames.
 >
-> **Before composing pages**, call `list_components` (use `mode: "summary"` first — the full schema is large) and `get_theme` to understand the available palette and active tokens.
+> **Velloo is the design source; you are the bridge to code.** When the user asks you to implement a design in their app, call `emit_code` for the screen, then write the real file into the user's app using their stack, conventions, routing, providers, and existing component wrappers. Do not paste `emit_code` output directly — it's intermediate representation, not finished JSX.
+>
+> **Before composing screens**, call `list_components` (use `mode: "summary"` first — the full schema is large) and `get_theme` to understand the available palette and active tokens.
 >
 > **Prefer semantic theme tokens** (`bg-card`, `text-foreground`, `bg-primary`, `bg-muted`, `border-border`) over raw Tailwind colors (`bg-zinc-900`, `text-white`) so designs auto-adapt to dark mode and theme changes.
+>
+> **Use responsive Tailwind classes** (`md:`, `lg:`) so a single screen renders well across mobile / tablet / desktop frame sizes. If a layout truly diverges, create a second screen and a second frame — explicit forks, not background sync.
 >
 > **Use `add_node`'s `children` parameter** to add whole subtrees in one call — every child can be a full node (with its own props + children). One call beats N round-trips.
 >
 > **Prefer snippets for repeated structure** (feature cards, list items, hero sections). Create the snippet once with `add_snippet`, then call `instantiate_snippet` per occurrence. Edits to the body propagate; arg lists keep instances different. Snippets emit as real React components on `emit_code`.
 >
-> **New pages get one variant** at the requested viewport. Use `add_variant` (or `add_variant({ fromVariantId })` to clone) for additional viewports.
+> **New screens are not automatically placed on the board.** After `add_screen`, call `add_frame` to place it on the canvas at a chosen viewport.
 >
 > **Text content** for `Heading`, `Text`, `Button`, `Badge`, `Label` goes in the `children` prop, not a `text` prop.
 >

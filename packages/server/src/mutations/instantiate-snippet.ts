@@ -1,39 +1,26 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Node, Snippet, SnippetInstance } from "@velloo/schema";
 import type { Locator } from "../path.ts";
-import { clonePage } from "./clone.ts";
+import { cloneScreen } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError, snippetParamMismatch } from "./errors.ts";
-import { getComponentNode, getPage, getSnippet, getVariant, resolve } from "./lookup.ts";
-import { commitPage } from "./persist.ts";
+import { getComponentNode, getScreen, getSnippet, resolve } from "./lookup.ts";
+import { commitScreen } from "./persist.ts";
 
 export interface InstantiateSnippetArgs {
-  pageId: string;
-  variantId: string;
-  /** Locator for the parent — path array or `"@id"` string. */
+  screenId: string;
   parentPath: Locator;
   snippetId: string;
-  /** Optional stable id for the new instance (addressable as `"@id"` later). */
   id?: string;
   args?: Record<string, unknown>;
-  /**
-   * Extra Tailwind classes appended to the snippet body's root element.
-   * Lets a one-off instance tweak styling (wider, accent border, etc.)
-   * without forking the snippet definition.
-   */
   extraClassName?: string;
   index?: number;
 }
 
 export interface InstantiateSnippetResult {
-  /** Path of the newly inserted snippet instance. */
   path: number[];
 }
 
-/**
- * Insert a `$snippet` node into a variant tree. Validates args against the
- * snippet's declared params (missing required → SnippetParamMismatch).
- */
 export async function instantiateSnippet(
   ctx: MutationContext,
   args: InstantiateSnippetArgs,
@@ -42,19 +29,11 @@ export async function instantiateSnippet(
     const snippet = yield* $(getSnippet(ctx, args.snippetId));
     yield* $(validateArgs(snippet, args.args ?? {}));
 
-    const page = yield* $(getPage(ctx, args.pageId));
-    yield* $(getVariant(page, args.pageId, args.variantId));
+    const screen = yield* $(getScreen(ctx, args.screenId));
+    const next = cloneScreen(screen);
 
-    const next = clonePage(page);
-    const nextVariant = next.variants.find((v) => v.id === args.variantId);
-    if (!nextVariant) throw new Error("invariant: variant lost on clone");
-
-    const resolvedParent = yield* $(
-      resolve(nextVariant.tree, args.parentPath, args.pageId, args.variantId),
-    );
-    const parent = yield* $(
-      getComponentNode(nextVariant.tree, resolvedParent, args.pageId, args.variantId),
-    );
+    const resolvedParent = yield* $(resolve(next.tree, args.parentPath, args.screenId));
+    const parent = yield* $(getComponentNode(next.tree, resolvedParent, args.screenId));
     if (!parent.children) parent.children = [];
     const idx = args.index ?? parent.children.length;
     if (idx < 0 || idx > parent.children.length) {
@@ -78,18 +57,12 @@ export async function instantiateSnippet(
     };
     parent.children.splice(idx, 0, node as Node);
 
-    yield* $(await commitPage(ctx.folder, args.pageId, next));
-    ctx.broadcast({ type: "page-changed", pageId: args.pageId });
+    yield* $(await commitScreen(ctx.folder, args.screenId, next));
+    ctx.broadcast({ type: "screen-changed", screenId: args.screenId });
     return { path: [...resolvedParent, idx] };
   });
 }
 
-/**
- * Verify every required (no-default) param has a corresponding arg. Loose on
- * types — the agent might legitimately pass a Node into a string slot
- * via a $param indirection downstream. Strict type checking on the leaf
- * values is the snippet body's responsibility at render time.
- */
 function validateArgs(
   snippet: Snippet,
   passed: Record<string, unknown>,

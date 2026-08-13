@@ -1,100 +1,83 @@
-import type { Page } from "@velloo/schema";
 import { MoreHorizontal, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { mutate, type PageMeta, type SnippetMeta } from "../api.ts";
+import { useState } from "react";
+import { mutate, type ScreenMeta, type SnippetMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { Tree } from "./Tree.tsx";
 
 interface Props {
-  pages: PageMeta[];
+  screens: ScreenMeta[];
   snippets: SnippetMeta[];
-  currentPageId: string | null;
-  currentPage: Page | null;
+  currentScreenId: string | null;
   snapshotVersion: string;
 }
 
-export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotVersion }: Props) {
-  const selectPage = useCanvas((s) => s.selectPage);
+export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }: Props) {
+  const selectScreen = useCanvas((s) => s.selectScreen);
   const selection = useCanvas((s) => s.selection);
   const cursorMode = useCanvas((s) => s.cursorMode);
+  const currentScreen = useCanvas((s) =>
+    currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
+  );
 
-  // Which variant's tree is shown. Follows the user's selection; falls back to
-  // the first variant when there's no selection yet.
-  const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
-  useEffect(() => {
-    if (!currentPage) {
-      setActiveVariantId(null);
-      return;
-    }
-    if (selection?.variantId) {
-      setActiveVariantId(selection.variantId);
-      return;
-    }
-    setActiveVariantId((prev) =>
-      prev && currentPage.variants.some((v) => v.id === prev)
-        ? prev
-        : (currentPage.variants[0]?.id ?? null),
-    );
-  }, [currentPage, selection]);
-
-  const activeVariant = currentPage?.variants.find((v) => v.id === activeVariantId) ?? null;
-
-  const onCreatePage = async () => {
-    const name = window.prompt("Page name", "New page");
+  const onCreateScreen = async () => {
+    const name = window.prompt("Screen name", "New screen");
     if (!name) return;
     try {
-      const result = await mutate.addPage({ name });
-      void selectPage(result.pageId);
+      const result = await mutate.addScreen({ name });
+      void selectScreen(result.screenId);
     } catch (err) {
-      toastError(err, "Could not create page");
+      toastError(err, "Could not create screen");
     }
   };
 
-  const onDeletePage = (pageId: string, pageName: string) => {
+  const onDeleteScreen = (screenId: string, screenName: string) => {
     setMenuOpenFor(null);
-    setPendingDelete({ id: pageId, name: pageName });
+    setPendingDelete({ id: screenId, name: screenName });
   };
-  const confirmDeletePage = () => {
+
+  const confirmDeleteScreen = () => {
     if (!pendingDelete) return;
     const { id } = pendingDelete;
     setPendingDelete(null);
-    void mutate.removePage({ pageId: id }).catch((e) => toastError(e, "Could not delete page"));
+    void mutate
+      .removeScreen({ screenId: id })
+      .catch((e) => toastError(e, "Could not delete screen"));
   };
 
   return (
     <aside className="flex h-full w-80 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
       <section className="border-b border-[var(--color-border)] py-2">
         <div className="px-4 py-2 flex items-center justify-between gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
-          <span>Pages</span>
+          <span>Screens</span>
           <button
             type="button"
-            onClick={onCreatePage}
-            title="New page"
+            onClick={onCreateScreen}
+            title="New screen"
             className="h-5 w-5 grid place-items-center rounded hover:bg-[var(--color-bg)] hover:text-[var(--color-fg)]"
           >
             <Plus size={13} strokeWidth={2} />
           </button>
         </div>
-        {pages.length === 0 ? (
+        {screens.length === 0 ? (
           <div className="px-4 py-2 text-sm text-[var(--color-fg-muted)]">
-            No pages yet. Use <Plus size={11} className="inline -mt-0.5" /> above to create one.
+            No screens yet. Use <Plus size={11} className="inline -mt-0.5" /> above to create one.
           </div>
         ) : (
           <ul className="flex flex-col px-2 gap-0.5 mt-1">
-            {pages.map((p) => {
-              const active = p.id === currentPageId;
-              const menuOpen = menuOpenFor === p.id;
+            {screens.map((s) => {
+              const active = s.id === currentScreenId;
+              const menuOpen = menuOpenFor === s.id;
               return (
-                <li key={p.id} className="relative group/page">
+                <li key={s.id} className="relative group/screen">
                   <button
                     type="button"
                     onClick={() => {
-                      void selectPage(p.id);
+                      void selectScreen(s.id);
                     }}
                     className={
                       "w-full text-left px-2 py-1.5 pr-8 rounded text-sm transition-colors " +
@@ -103,28 +86,18 @@ export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotV
                         : "hover:bg-[var(--color-bg)] text-[var(--color-fg)]")
                     }
                   >
-                    <div className="font-medium truncate">{p.name}</div>
-                    <div
-                      className={
-                        "text-xs " +
-                        (active
-                          ? "text-[var(--color-accent-fg)] opacity-80"
-                          : "text-[var(--color-fg-muted)]")
-                      }
-                    >
-                      {p.variants.length} variant{p.variants.length === 1 ? "" : "s"}
-                    </div>
+                    <div className="font-medium truncate">{s.name}</div>
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
-                      setMenuOpenFor(menuOpen ? null : p.id);
+                      setMenuOpenFor(menuOpen ? null : s.id);
                     }}
-                    title="Page menu"
+                    title="Screen menu"
                     className={
                       "absolute right-2 top-2 h-5 w-5 grid place-items-center rounded text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface)] " +
-                      (menuOpen ? "opacity-100" : "opacity-0 group-hover/page:opacity-100")
+                      (menuOpen ? "opacity-100" : "opacity-0 group-hover/screen:opacity-100")
                     }
                   >
                     <MoreHorizontal size={13} strokeWidth={2} />
@@ -140,12 +113,12 @@ export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotV
                       <div className="absolute right-2 top-9 z-50 w-36 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-md py-1 text-sm">
                         <button
                           type="button"
-                          disabled={pages.length <= 1}
-                          onClick={() => onDeletePage(p.id, p.name)}
+                          disabled={screens.length <= 1}
+                          onClick={() => onDeleteScreen(s.id, s.name)}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[var(--color-destructive,red)] hover:bg-[var(--color-bg)] disabled:opacity-40 disabled:pointer-events-none"
                         >
                           <Trash2 size={13} strokeWidth={2} />
-                          Delete page
+                          Delete screen
                         </button>
                       </div>
                     </>
@@ -160,19 +133,6 @@ export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotV
       <section className="flex-1 flex flex-col min-h-0">
         <div className="px-4 py-2 flex items-center justify-between gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)] border-b border-[var(--color-border)]">
           <span>Tree</span>
-          {currentPage && currentPage.variants.length > 1 ? (
-            <select
-              value={activeVariantId ?? ""}
-              onChange={(e) => setActiveVariantId(e.target.value || null)}
-              className="text-[10px] uppercase tracking-wider rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5"
-            >
-              {currentPage.variants.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
         </div>
         <div
           className={
@@ -181,11 +141,11 @@ export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotV
           }
           aria-disabled={cursorMode === "hand"}
         >
-          {activeVariant ? (
-            <Tree variant={activeVariant} />
+          {currentScreen ? (
+            <Tree screen={currentScreen} />
           ) : (
             <div className="px-4 py-2 text-xs text-[var(--color-fg-muted)]">
-              Pick a page to see its tree.
+              Pick a screen to see its tree.
             </div>
           )}
         </div>
@@ -200,11 +160,10 @@ export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotV
           <ul className="flex flex-col px-2 gap-0.5">
             {snippets.map((s) => {
               const instantiate = async () => {
-                if (!currentPage || !currentPageId || !activeVariantId) return;
+                if (!currentScreenId) return;
                 try {
                   await mutate.instantiateSnippet({
-                    pageId: currentPageId,
-                    variantId: activeVariantId,
+                    screenId: currentScreenId,
                     parentPath: selection?.path
                       ? selection.path.split(".").filter(Boolean).map(Number)
                       : [],
@@ -219,7 +178,7 @@ export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotV
                   <button
                     type="button"
                     onClick={instantiate}
-                    disabled={!currentPage}
+                    disabled={!currentScreenId}
                     className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-[var(--color-bg)] text-[var(--color-fg)] disabled:opacity-40 disabled:pointer-events-none"
                     title={`Click to instantiate. ${s.params.length} param${s.params.length === 1 ? "" : "s"}.`}
                   >
@@ -240,14 +199,16 @@ export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotV
       </footer>
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete page"
+        title="Delete screen"
         body={
-          pendingDelete ? `Delete page "${pendingDelete.name}"? You can put it back with ⌘Z.` : ""
+          pendingDelete
+            ? `Delete screen "${pendingDelete.name}"? You can put it back with ⌘Z.`
+            : ""
         }
         confirmLabel="Delete"
         destructive
         onCancel={() => setPendingDelete(null)}
-        onConfirm={confirmDeletePage}
+        onConfirm={confirmDeleteScreen}
       />
     </aside>
   );

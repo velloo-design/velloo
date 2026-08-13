@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { renderVariant, screenshotBuffer, screenshotCompareBuffer } from "@velloo/renderer";
-import type { Variant } from "@velloo/schema";
+import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo/renderer";
+import type { Screen, Viewport } from "@velloo/schema";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
@@ -15,7 +15,15 @@ function errorResult(text: string): McpResult {
 }
 
 function playwrightMissingMessage(msg: string): string {
-  return `screenshot: Playwright is not installed in this environment. Run \`bunx playwright install chromium\` (or install the velloo binary which ships it). Underlying error: ${msg}`;
+  return `screenshot: Playwright is not installed. Run \`bunx playwright install chromium\`. Underlying error: ${msg}`;
+}
+
+function defaultViewport(folder: { config: { viewportPresets: Array<{ name: string; w: number; h: number }> } }): Viewport {
+  // Prefer Desktop, fall back to first preset.
+  const presets = folder.config.viewportPresets;
+  const desktop = presets.find((p) => p.name.toLowerCase().includes("desktop"));
+  const pick = desktop ?? presets[0] ?? { w: 1440, h: 900 };
+  return { w: pick.w, h: pick.h };
 }
 
 export function registerScreenshotTool(
@@ -27,31 +35,35 @@ export function registerScreenshotTool(
     "screenshot",
     {
       description:
-        'Render a variant headless via Playwright and return the PNG as image content. mode: "light" (default), "dark", or "compare" — compare returns one image with light + dark rendered side-by-side, the fastest way to confirm a page actually adapts. Defaults to fullPage: true so tall pages aren\'t clipped — pass fullPage: false to clip to the variant\'s viewport rectangle (ignored when mode: "compare"). Requires playwright + chromium (the velloo binary ships them).',
+        'Render a screen headless via Playwright and return the PNG as image content. mode: "light" (default), "dark", or "compare". w/h default to the desktop viewport preset; the screen renders responsively at that size. Defaults fullPage: true.',
       inputSchema: {
-        pageId: z.string(),
-        variantId: z.string(),
+        screenId: z.string(),
+        w: z.number().int().positive().optional(),
+        h: z.number().int().positive().optional(),
         mode: z.enum(["light", "dark", "compare"]).optional(),
         fullPage: z.boolean().optional(),
       },
     },
-    async ({ pageId, variantId, mode, fullPage }) => {
-      const page = ctx.folder.pages.get(pageId);
-      if (!page) return errorResult(`Page not found: ${pageId}`);
-      const variant = page.variants.find((v) => v.id === variantId);
-      if (!variant) return errorResult(`Variant not found: ${pageId}/${variantId}`);
+    async ({ screenId, w, h, mode, fullPage }) => {
+      const screen = ctx.folder.screens.get(screenId);
+      if (!screen) return errorResult(`Screen not found: ${screenId}`);
+
+      const defaults = defaultViewport(ctx.folder);
+      const viewport: Viewport = { w: w ?? defaults.w, h: h ?? defaults.h };
 
       let buf: Buffer;
       try {
         const snapshotCss = await jit.build();
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
-            renderVariant(variant, ctx.folder.theme, {
+            renderScreen(screen, ctx.folder.theme, {
+              viewport,
               snapshotCss,
               snippets: ctx.folder.snippets,
               dark: false,
             }),
-            renderVariant(variant, ctx.folder.theme, {
+            renderScreen(screen, ctx.folder.theme, {
+              viewport,
               snapshotCss,
               snippets: ctx.folder.snippets,
               dark: true,
@@ -60,17 +72,18 @@ export function registerScreenshotTool(
           buf = await screenshotCompareBuffer({
             leftHtml: light.html,
             rightHtml: dark.html,
-            viewport: variant.viewport,
+            viewport,
           });
         } else {
-          const { html } = await renderVariant(variant, ctx.folder.theme, {
+          const { html } = await renderScreen(screen, ctx.folder.theme, {
+            viewport,
             snapshotCss,
             snippets: ctx.folder.snippets,
             dark: mode === "dark",
           });
           buf = await screenshotBuffer({
             html,
-            viewport: variant.viewport,
+            viewport,
             fullPage: fullPage ?? true,
           });
         }
@@ -91,7 +104,7 @@ export function registerScreenshotTool(
     "render_snippet",
     {
       description:
-        'Render a snippet in isolation and return a screenshot. Useful for iterating on a snippet\'s styling before stamping it into pages. Supplies the snippet as the variant root, applies the given `args` + optional `extraClassName`, and screenshots. mode: "light" | "dark" | "compare" mirrors `screenshot`. viewport defaults to 480×640.',
+        'Render a snippet in isolation and return a screenshot. Useful for iterating on a snippet\'s styling before stamping it. viewport defaults to 480×640.',
       inputSchema: {
         snippetId: z.string(),
         args: z.record(z.string(), z.unknown()).optional(),
@@ -109,13 +122,10 @@ export function registerScreenshotTool(
       const snippet = ctx.folder.snippets.get(snippetId);
       if (!snippet) return errorResult(`Snippet not found: ${snippetId}`);
 
-      // Synthesize a variant whose root is a $snippet instance. The renderer
-      // resolves params + extraClassName the same way it would on a page.
-      const vp = viewport ?? { w: 480, h: 640 };
-      const variant: Variant = {
+      const vp: Viewport = viewport ?? { w: 480, h: 640 };
+      const screen: Screen = {
         id: `${snippet.id}__preview`,
         name: `${snippet.name} preview`,
-        viewport: vp,
         tree: {
           $snippet: snippet.id,
           ...(args && Object.keys(args).length > 0 ? { args } : {}),
@@ -130,12 +140,14 @@ export function registerScreenshotTool(
         const snapshotCss = await jit.build();
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
-            renderVariant(variant, ctx.folder.theme, {
+            renderScreen(screen, ctx.folder.theme, {
+              viewport: vp,
               snapshotCss,
               snippets: ctx.folder.snippets,
               dark: false,
             }),
-            renderVariant(variant, ctx.folder.theme, {
+            renderScreen(screen, ctx.folder.theme, {
+              viewport: vp,
               snapshotCss,
               snippets: ctx.folder.snippets,
               dark: true,
@@ -147,7 +159,8 @@ export function registerScreenshotTool(
             viewport: vp,
           });
         } else {
-          const { html } = await renderVariant(variant, ctx.folder.theme, {
+          const { html } = await renderScreen(screen, ctx.folder.theme, {
+            viewport: vp,
             snapshotCss,
             snippets: ctx.folder.snippets,
             dark: mode === "dark",

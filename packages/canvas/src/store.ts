@@ -1,4 +1,4 @@
-import type { Node, Page, Theme } from "@velloo/schema";
+import type { Board, Node, Screen, Theme } from "@velloo/schema";
 import type { Manifest } from "@velloo/shadcn-snapshot";
 import { create } from "zustand";
 import {
@@ -6,8 +6,8 @@ import {
   fetchComponents,
   fetchDesign,
   fetchHistory,
-  fetchPage,
   fetchPresets,
+  fetchScreen,
   fetchTheme,
   type HistoryDepths,
 } from "./api.ts";
@@ -21,11 +21,10 @@ export type DesignMode = "light" | "dark";
 
 export interface AnnotationEntry {
   id: string;
-  target: { variantId: string; locator: number[] | string };
+  target: { locator: number[] | string };
   position: { x: number; y: number } | "auto";
   body: string;
   collapsed?: boolean;
-  /** Server-resolved path for the target, or null if dangling. */
   resolved: number[] | null;
 }
 
@@ -46,16 +45,16 @@ function readAppTheme(): AppTheme {
 }
 
 export interface Selection {
-  variantId: string;
+  screenId: string;
   path: string;
 }
 
 export interface CanvasState {
   design: DesignSummary | null;
-  currentPageId: string | null;
-  currentPage: Page | null;
-  /** Bumped whenever currentPage content changes. Used to cache-bust iframe src. */
-  pageVersion: number;
+  screens: Record<string, Screen>;
+  board: Board | null;
+  currentScreenId: string | null;
+  screenVersion: number;
   components: Manifest | null;
   theme: Theme | null;
   themeVersion: number;
@@ -64,43 +63,18 @@ export interface CanvasState {
   hover: Selection | null;
   wsConnected: boolean;
   rightTab: RightTab;
-  /** Independent canvas zoom (1.0 = 100%). */
   canvasZoom: number;
-  /** Cursor mode: select clicks nodes; hand pans the canvas. */
   cursorMode: CursorMode;
-  /** Pan offset (x, y) applied to the canvas in hand mode. */
   pan: { x: number; y: number };
-  /** Forced state for the selected node. */
   nodeState: NodeState;
-  /** Canvas chrome theme: explicit light/dark, or follow the OS. */
   appTheme: AppTheme;
-  /** When true, prop/class/children edits replay across every variant. */
-  syncEdits: boolean;
-  /** Server-reported undo/redo stack depths. Drives the TopBar buttons. */
   history: HistoryDepths;
-  /** Preview mode passed to the renderer — flips a `.dark` class. */
   designMode: DesignMode;
-
-  // Sprint 11: annotations + canvas notes per page
   annotations: AnnotationEntry[];
   notes: CanvasNoteEntry[];
-  /**
-   * Per-variant node bounding rects, in iframe-document coordinates. Populated
-   * lazily by VariantFrame in response to annotation list changes. Used by
-   * AnnotationsLayer to anchor annotations near their target node (rather than
-   * at the variant's top-left) and to draw the connector to the node center.
-   */
   nodeRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>;
-  /** Top-bar toggle. When false the canvas hides both layers (data is kept). */
   annotationsVisible: boolean;
-  /** Which annotation/note is currently being edited (id); null = none. */
   editingMarkupId: string | null;
-  /**
-   * Last-clicked annotation; drives the "strong connector" visual and lights
-   * the corresponding node selection too. Independent from `editingMarkupId`
-   * so the annotation can be focused (connector strong, node selected)
-   * without being in edit mode.
-   */
   focusedAnnotationId: string | null;
 
   loadDesign(): Promise<void>;
@@ -109,8 +83,11 @@ export interface CanvasState {
   loadComponents(): Promise<void>;
   loadTheme(): Promise<void>;
   refreshTheme(): Promise<void>;
-  selectPage(pageId: string): Promise<void>;
-  refreshCurrentPage(): Promise<void>;
+  selectScreen(screenId: string): Promise<void>;
+  loadScreen(screenId: string): Promise<Screen | null>;
+  refreshCurrentScreen(): Promise<void>;
+  refreshScreen(screenId: string): Promise<void>;
+  refreshBoard(): Promise<void>;
   setSelection(s: Selection | null): void;
   setHover(h: Selection | null): void;
   setWsConnected(b: boolean): void;
@@ -120,7 +97,6 @@ export interface CanvasState {
   setPan(p: { x: number; y: number }): void;
   setNodeState(s: NodeState): void;
   setAppTheme(t: AppTheme): void;
-  setSyncEdits(b: boolean): void;
   setDesignMode(m: DesignMode): void;
   refreshAnnotations(): Promise<void>;
   refreshNotes(): Promise<void>;
@@ -128,18 +104,20 @@ export interface CanvasState {
   setEditingMarkupId(id: string | null): void;
   setFocusedAnnotationId(id: string | null): void;
   setNodeRects(
-    variantId: string,
+    screenId: string,
     rects: { path: string; x: number; y: number; w: number; h: number }[],
   ): void;
 }
 
-/** Walk the current page tree and return the node at the given selection. */
-export function selectedNode(page: Page | null, sel: Selection | null): Node | null {
-  if (!page || !sel) return null;
-  const variant = page.variants.find((v) => v.id === sel.variantId);
-  if (!variant) return null;
+export function selectedNode(
+  screens: Record<string, Screen>,
+  sel: Selection | null,
+): Node | null {
+  if (!sel) return null;
+  const screen = screens[sel.screenId];
+  if (!screen) return null;
   const path = pathFromString(sel.path);
-  let node: Node | undefined = variant.tree;
+  let node: Node | undefined = screen.tree;
   for (const idx of path) {
     if (!node || !("$ref" in node)) return null;
     const children: Node[] | undefined = node.children;
@@ -151,9 +129,10 @@ export function selectedNode(page: Page | null, sel: Selection | null): Node | n
 
 export const useCanvas = create<CanvasState>((set, get) => ({
   design: null,
-  currentPageId: null,
-  currentPage: null,
-  pageVersion: 0,
+  screens: {},
+  board: null,
+  currentScreenId: null,
+  screenVersion: 0,
   components: null,
   theme: null,
   themeVersion: 0,
@@ -167,7 +146,6 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   pan: { x: 0, y: 0 },
   nodeState: "default",
   appTheme: readAppTheme(),
-  syncEdits: true,
   history: { undo: 0, redo: 0 },
   designMode: "light",
   annotations: [],
@@ -188,20 +166,24 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   async loadDesign() {
     const design = await fetchDesign();
-    set({ design });
+    set({ design, board: design.board });
+    const ids = new Set<string>();
+    for (const f of design.board.frames) ids.add(f.screen);
+    for (const id of ids) await get().loadScreen(id);
     const prefersDefault =
-      design.defaultPage && design.pages.some((p) => p.id === design.defaultPage)
-        ? design.defaultPage
+      design.defaultScreen && design.screens.some((s) => s.id === design.defaultScreen)
+        ? design.defaultScreen
         : null;
-    const next = get().currentPageId ?? prefersDefault ?? design.pages[0]?.id ?? null;
-    if (next) await get().selectPage(next);
+    const next = get().currentScreenId ?? prefersDefault ?? design.screens[0]?.id ?? null;
+    if (next) await get().selectScreen(next);
     await get().loadTheme();
     await get().refreshHistory();
+    await get().refreshNotes();
   },
 
   async refreshDesignSummary() {
     const design = await fetchDesign();
-    set({ design });
+    set({ design, board: design.board });
   },
 
   async loadComponents() {
@@ -219,37 +201,67 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     set({ theme, themeVersion: get().themeVersion + 1 });
   },
 
-  async selectPage(pageId: string) {
-    const page = await fetchPage(pageId);
+  async loadScreen(screenId: string): Promise<Screen | null> {
+    try {
+      const screen = await fetchScreen(screenId);
+      set((s) => ({
+        screens: { ...s.screens, [screenId]: screen },
+        screenVersion: s.screenVersion + 1,
+      }));
+      return screen;
+    } catch {
+      return null;
+    }
+  },
+
+  async refreshBoard() {
+    const { fetchBoard } = await import("./api.ts");
+    try {
+      const board = await fetchBoard();
+      set({ board });
+    } catch {
+      /* ignore */
+    }
+  },
+
+  async selectScreen(screenId: string) {
+    let screen = get().screens[screenId];
+    if (!screen) {
+      const loaded = await get().loadScreen(screenId);
+      if (!loaded) return;
+      screen = loaded;
+    }
     set({
-      currentPageId: pageId,
-      currentPage: page,
-      pageVersion: get().pageVersion + 1,
+      currentScreenId: screenId,
       selection: null,
       hover: null,
       annotations: [],
-      notes: [],
-      nodeRects: {},
       editingMarkupId: null,
     });
-    await Promise.all([get().refreshAnnotations(), get().refreshNotes()]);
+    await get().refreshAnnotations();
   },
 
-  async refreshCurrentPage() {
-    const id = get().currentPageId;
+  async refreshCurrentScreen() {
+    const id = get().currentScreenId;
     if (!id) return;
+    await get().refreshScreen(id);
+  },
+
+  async refreshScreen(screenId: string) {
     try {
-      const page = await fetchPage(id);
-      set({ currentPage: page, pageVersion: get().pageVersion + 1 });
-      // Annotations may have re-resolved (or now be dangling) — refetch.
-      await get().refreshAnnotations();
+      const screen = await fetchScreen(screenId);
+      set((s) => ({
+        screens: { ...s.screens, [screenId]: screen },
+        screenVersion: s.screenVersion + 1,
+      }));
+      if (screenId === get().currentScreenId) await get().refreshAnnotations();
     } catch {
       await get().loadDesign();
     }
   },
 
   async refreshAnnotations() {
-    const id = get().currentPageId;
+    const id = get().currentScreenId;
     if (!id) return;
     try {
       const { fetchAnnotations } = await import("./api.ts");
@@ -261,11 +273,9 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   async refreshNotes() {
-    const id = get().currentPageId;
-    if (!id) return;
     try {
       const { fetchNotes } = await import("./api.ts");
-      const notes = await fetchNotes(id);
+      const notes = await fetchNotes();
       set({ notes });
     } catch {
       /* ignore */
@@ -284,11 +294,11 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     set({ focusedAnnotationId });
   },
 
-  setNodeRects(variantId, rects) {
+  setNodeRects(screenId, rects) {
     set((s) => {
       const next: Record<string, { x: number; y: number; w: number; h: number }> = {};
       for (const r of rects) next[r.path] = { x: r.x, y: r.y, w: r.w, h: r.h };
-      return { nodeRects: { ...s.nodeRects, [variantId]: next } };
+      return { nodeRects: { ...s.nodeRects, [screenId]: next } };
     });
   },
 
@@ -309,16 +319,10 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   setCanvasZoom(canvasZoom) {
-    // Clamp to a sane range.
     set({ canvasZoom: Math.max(0.1, Math.min(4, canvasZoom)) });
   },
 
   setCursorMode(cursorMode) {
-    // Hand mode has no selection workflow — clear it.
-    // Annotate mode arms the next node-click to anchor an annotation; if a
-    // selection were carried in from select mode, clicking that same node
-    // would be a no-op (selection state unchanged → watcher doesn't fire).
-    // Clearing on entry guarantees the next click is the trigger.
     if (cursorMode === "hand" || cursorMode === "annotate") {
       set({ cursorMode, hover: null, selection: null, nodeState: "default" });
     } else {
@@ -337,10 +341,6 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   setAppTheme(appTheme) {
     set({ appTheme });
     if (typeof localStorage !== "undefined") localStorage.setItem(APP_THEME_KEY, appTheme);
-  },
-
-  setSyncEdits(syncEdits) {
-    set({ syncEdits });
   },
 
   setDesignMode(designMode) {

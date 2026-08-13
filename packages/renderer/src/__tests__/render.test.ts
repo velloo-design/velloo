@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { Theme, Variant } from "@velloo/schema";
-import { renderVariant, themeToCss, UnknownComponentError } from "../index.ts";
+import type { Screen, Theme, Viewport } from "@velloo/schema";
+import { renderScreen, themeToCss, UnknownComponentError } from "../index.ts";
 
 // Synthetic CSS so the renderer test stays a pure function test — actual
 // Tailwind compilation is the server's TailwindJit concern.
 const SNAPSHOT_CSS = "/* preflight stub */ .test { color: red; }";
-const opts = { snapshotCss: SNAPSHOT_CSS };
+const viewport: Viewport = { w: 800, h: 600 };
+const opts = { snapshotCss: SNAPSHOT_CSS, viewport };
 
 const sampleTheme: Theme = {
   name: "test",
@@ -19,30 +20,29 @@ const sampleTheme: Theme = {
   radius: { md: 8 },
 };
 
-function variantWith(tree: Variant["tree"]): Variant {
+function screenWith(tree: Screen["tree"]): Screen {
   return {
     id: "test",
     name: "Test",
-    viewport: { w: 800, h: 600 },
     tree,
   };
 }
 
-describe("renderVariant", () => {
+describe("renderScreen", () => {
   test("renders a single Button to HTML containing its text", async () => {
-    const variant = variantWith({
+    const screen = screenWith({
       $ref: "Button",
       props: { variant: "default", children: "Click me" },
     });
-    const { html, bodyHtml } = await renderVariant(variant, sampleTheme, opts);
+    const { html, bodyHtml } = await renderScreen(screen, sampleTheme, opts);
     expect(bodyHtml).toContain("Click me");
     expect(bodyHtml).toContain("<button");
     expect(html).toContain("<!doctype html>");
     expect(html).toContain('<meta name="viewport" content="width=800');
   });
 
-  test("renders a Card with nested Heading + Text + Button (sample-page mobile)", async () => {
-    const variant = variantWith({
+  test("renders a Card with nested Heading + Text + Button", async () => {
+    const screen = screenWith({
       $ref: "Card",
       props: { className: "p-6 flex flex-col gap-4" },
       children: [
@@ -51,7 +51,7 @@ describe("renderVariant", () => {
         { $ref: "Button", props: { variant: "default", children: "Continue" } },
       ],
     });
-    const { bodyHtml } = await renderVariant(variant, sampleTheme, opts);
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
     expect(bodyHtml).toContain("Welcome");
     expect(bodyHtml).toContain("<h1");
     expect(bodyHtml).toContain("Get started by setting up your account.");
@@ -60,26 +60,24 @@ describe("renderVariant", () => {
   });
 
   test("inlines the supplied snapshot CSS and theme overrides", async () => {
-    const variant = variantWith({ $ref: "Button", props: { children: "x" } });
-    const { html, themeCss } = await renderVariant(variant, sampleTheme, opts);
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html, themeCss } = await renderScreen(screen, sampleTheme, opts);
     expect(html).toContain("<style>");
-    // Caller-supplied snapshot CSS is inlined verbatim.
     expect(html).toContain(SNAPSHOT_CSS);
-    // Theme override — primary token should land as a CSS variable.
     expect(themeCss).toContain("--color-primary: oklch(0.5 0.2 250);");
     expect(themeCss).toContain("--color-primary-foreground: oklch(0.985 0 0);");
     expect(html).toContain(themeCss);
   });
 
   test("throws UnknownComponentError on bad $ref", async () => {
-    const variant = variantWith({ $ref: "Definitely-Not-A-Component", props: {} });
-    await expect(renderVariant(variant, sampleTheme, opts)).rejects.toBeInstanceOf(
+    const screen = screenWith({ $ref: "Definitely-Not-A-Component", props: {} });
+    await expect(renderScreen(screen, sampleTheme, opts)).rejects.toBeInstanceOf(
       UnknownComponentError,
     );
   });
 
   test("annotates every rendered element with data-node-path", async () => {
-    const variant = variantWith({
+    const screen = screenWith({
       $ref: "Card",
       children: [
         { $ref: "Heading", props: { level: 1, children: "A" } },
@@ -87,8 +85,7 @@ describe("renderVariant", () => {
         { $ref: "Button", props: { children: "C" } },
       ],
     });
-    const { bodyHtml } = await renderVariant(variant, sampleTheme, opts);
-    // Root path is "" (empty); children get 0, 1, 2.
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
     expect(bodyHtml).toContain('data-node-path=""');
     expect(bodyHtml).toContain('data-node-path="0"');
     expect(bodyHtml).toContain('data-node-path="1"');
@@ -96,8 +93,8 @@ describe("renderVariant", () => {
   });
 
   test("includes the iframe runtime script in the document", async () => {
-    const variant = variantWith({ $ref: "Button", props: { children: "x" } });
-    const { html } = await renderVariant(variant, sampleTheme, opts);
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, sampleTheme, opts);
     expect(html).toContain("__velloo_init");
     expect(html).toContain("__velloo-selected");
     expect(html).toContain("data-node-path");
@@ -114,7 +111,6 @@ describe("themeToCss", () => {
   });
 
   test("ignores unknown color tokens (extra fields stripped at the boundary)", () => {
-    // Cast through Theme since unknown fields aren't part of the typed shape any more.
     const t = {
       ...sampleTheme,
       colors: { ...sampleTheme.colors, fuchsia: "oklch(0.5 0.2 320)" },

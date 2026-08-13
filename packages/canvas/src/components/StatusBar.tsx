@@ -13,7 +13,7 @@ export function StatusBar() {
       </div>
       <div>
         {selection
-          ? `${selection.variantId} · ${selection.path === "" ? "(root)" : selection.path}`
+          ? `${selection.screenId} · ${selection.path === "" ? "(root)" : selection.path}`
           : "no selection"}
       </div>
     </div>

@@ -7,7 +7,6 @@ import { type Selection, useCanvas } from "../store.ts";
 const DEBOUNCE_MS = 200;
 
 interface Props {
-  pageId: string;
   selection: Selection;
   node: SnippetInstance;
 }
@@ -18,7 +17,7 @@ interface Props {
  * snippet body itself happens elsewhere — the file system or a future
  * "open snippet" canvas mode.
  */
-export function SnippetInspector({ pageId, selection, node }: Props) {
+export function SnippetInspector({ selection, node }: Props) {
   const design = useCanvas((s) => s.design);
   const snippetMeta: SnippetMeta | undefined = design?.snippets.find((s) => s.id === node.$snippet);
 
@@ -45,8 +44,7 @@ export function SnippetInspector({ pageId, selection, node }: Props) {
     debounceTimer.current = setTimeout(() => {
       void mutate
         .updateSnippetArgs({
-          pageId,
-          variantId: selection.variantId,
+          screenId: selection.screenId,
           path: pathFromString(selection.path),
           argPatch: { [name]: value === undefined ? null : value },
         })
@@ -59,7 +57,7 @@ export function SnippetInspector({ pageId, selection, node }: Props) {
       <header className="px-4 py-3 border-b border-[var(--color-border)]">
         <div className="font-semibold text-sm truncate">@{node.$snippet}</div>
         <div className="text-xs text-[var(--color-fg-muted)] mt-0.5">
-          {selection.variantId} · {selection.path === "" ? "(root)" : selection.path} · snippet
+          {selection.screenId} · {selection.path === "" ? "(root)" : selection.path} · snippet
           instance
         </div>
       </header>
@@ -78,7 +76,7 @@ export function SnippetInspector({ pageId, selection, node }: Props) {
             </div>
             {params.map((p) => (
               <ArgField
-                key={`${selection.variantId}:${selection.path}:${p.name}`}
+                key={`${selection.screenId}:${selection.path}:${p.name}`}
                 param={p}
                 initialValue={node.args?.[p.name]}
                 onChange={(v) => commitArg(p.name, v)}

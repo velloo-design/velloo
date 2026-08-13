@@ -5,7 +5,7 @@ import {
   isSnippetInstance,
   type Node,
   nodeId,
-  type Page,
+  type Screen,
 } from "@velloo/schema";
 import { type ComponentDescriptor, loadManifest, snapshotVersion } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
@@ -20,12 +20,10 @@ interface ComponentSummary {
   id: string;
   category: ComponentDescriptor["category"];
   source: ComponentDescriptor["source"];
-  /** Comma-separated list of prop names for quick scan. */
   props: string[];
   designModeNotes?: string;
 }
 
-/** Truncate a className string for outline display. */
 function shortClass(cls: string, max = 40): string {
   const trimmed = cls.trim();
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
@@ -60,19 +58,8 @@ function nodeToOutline(node: Node): OutlineNode {
   return out;
 }
 
-function toOutline(page: Page): {
-  name: string;
-  variants: Array<{ id: string; name: string; viewport: unknown; tree: OutlineNode }>;
-} {
-  return {
-    name: page.name,
-    variants: page.variants.map((v) => ({
-      id: v.id,
-      name: v.name,
-      viewport: v.viewport,
-      tree: nodeToOutline(v.tree),
-    })),
-  };
+function toOutline(screen: Screen): { id: string; name: string; tree: OutlineNode } {
+  return { id: screen.id, name: screen.name, tree: nodeToOutline(screen.tree) };
 }
 
 function toSummary(c: ComponentDescriptor): ComponentSummary {
@@ -88,74 +75,60 @@ function toSummary(c: ComponentDescriptor): ComponentSummary {
 
 export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
-    "list_pages",
+    "list_screens",
     {
       description:
-        "List every page in the design folder with its variants. Pass `include_tree: true` to also embed each variant's full tree — one round-trip instead of list_pages + N get_page calls. Default false to keep responses small.",
+        "List every screen in the design folder. Pass `include_tree: true` to embed each screen's full tree — one round-trip instead of list_screens + N get_screen calls. Default false to keep responses small.",
       inputSchema: { include_tree: z.boolean().optional() },
     },
     async ({ include_tree }) => {
-      const pages = [...ctx.folder.pages.entries()].map(([id, page]) => ({
+      const screens = [...ctx.folder.screens.entries()].map(([id, screen]) => ({
         id,
-        name: page.name,
-        variants: page.variants.map((v) => ({
-          id: v.id,
-          name: v.name,
-          viewport: v.viewport,
-          ...(include_tree ? { tree: v.tree } : {}),
-        })),
+        name: screen.name,
+        ...(include_tree ? { tree: screen.tree } : {}),
       }));
-      return jsonResult({ snapshotVersion, pages });
+      return jsonResult({ snapshotVersion, screens });
     },
   );
 
   mcp.registerTool(
-    "get_page",
+    "get_screen",
     {
       description:
-        'Return the JSON for a single page. mode: "full" (default) returns every variant and the complete tree — useful when you\'re about to do many edits on a small page. mode: "outline" returns a stripped tree per node: {ref|snippet, $id?, classSnippet (≤40 chars), children}. Use outline for an overview of a large page before drilling in with inspect or @id locators.',
+        'Return the JSON for a single screen. mode: "full" (default) returns the complete tree. mode: "outline" returns a stripped tree per node: {ref|snippet, $id?, classSnippet (≤40 chars), children}. Use outline for an overview of a large screen before drilling in with inspect or @id locators.',
       inputSchema: {
-        pageId: z.string(),
+        screenId: z.string(),
         mode: z.enum(["full", "outline"]).optional(),
       },
     },
-    async ({ pageId, mode }) => {
-      const page = ctx.folder.pages.get(pageId);
-      if (!page) {
+    async ({ screenId, mode }) => {
+      const screen = ctx.folder.screens.get(screenId);
+      if (!screen) {
         return {
           isError: true,
-          content: [{ type: "text", text: `Page not found: ${pageId}` }],
+          content: [{ type: "text", text: `Screen not found: ${screenId}` }],
         };
       }
-      if (mode === "outline") return jsonResult(toOutline(page));
-      return jsonResult(page);
+      if (mode === "outline") return jsonResult(toOutline(screen));
+      return jsonResult(screen);
     },
   );
 
   mcp.registerTool(
-    "get_variant",
+    "get_board",
     {
-      description: "Return a single variant's tree.",
-      inputSchema: { pageId: z.string(), variantId: z.string() },
+      description:
+        "Return the board layout: frames (placements of screens at chosen sizes) and groups.",
+      inputSchema: {},
     },
-    async ({ pageId, variantId }) => {
-      const page = ctx.folder.pages.get(pageId);
-      const variant = page?.variants.find((v) => v.id === variantId);
-      if (!variant) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `Variant not found: ${pageId}/${variantId}` }],
-        };
-      }
-      return jsonResult(variant);
-    },
+    async () => jsonResult(ctx.folder.board),
   );
 
   mcp.registerTool(
     "list_components",
     {
       description:
-        'List the bundled shadcn-snapshot components. Default `mode: "summary"` returns only id/category/source/prop-names — call with `mode: "full"` once you\'ve narrowed to the component(s) you need. `filter` substring-matches ids (case-insensitive).',
+        'List the available components. Default `mode: "summary"` returns only id/category/source/prop-names — call with `mode: "full"` once you\'ve narrowed to the component(s) you need. `filter` substring-matches ids (case-insensitive).',
       inputSchema: {
         filter: z.string().optional(),
         mode: z.enum(["summary", "full"]).optional(),
@@ -219,23 +192,27 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_annotations",
     {
       description:
-        "List designer-authored annotations on a page. Each annotation is anchored to a specific node via a locator; `resolved` carries the resolved path (or null if the targeted node has since vanished — treat dangling annotations as low-priority). Read-only: agents can consume annotations as guidance but cannot create or edit them. The `body` field is markdown.",
-      inputSchema: { pageId: z.string() },
+        "List designer-authored annotations on a screen. Each annotation is anchored to a specific node via a locator; `resolved` carries the resolved path (or null if the targeted node has since vanished — treat dangling annotations as low-priority). Read-only: agents can consume annotations as guidance but cannot create or edit them. The `body` field is markdown.",
+      inputSchema: { screenId: z.string() },
     },
-    async ({ pageId }) => {
-      const page = ctx.folder.pages.get(pageId);
-      const annotations = ctx.folder.annotations.get(pageId) ?? [];
-      // Resolve locators against the current variant trees so agents know
-      // which annotations point at currently-existing nodes.
+    async ({ screenId }) => {
+      const screen = ctx.folder.screens.get(screenId);
+      const annotations = ctx.folder.annotations.get(screenId) ?? [];
       const list = annotations.map((a) => {
-        let resolved: number[] | null = null;
-        if (page) {
-          const variant = page.variants.find((v) => v.id === a.target.variantId);
-          if (variant) resolved = resolveLocator(variant.tree, a.target.locator);
-        }
+        const resolved = screen ? resolveLocator(screen.tree, a.target.locator) : null;
         return { ...a, resolved };
       });
       return jsonResult({ annotations: list });
     },
+  );
+
+  mcp.registerTool(
+    "list_notes",
+    {
+      description:
+        "List board-level free-positioned markdown notes. Designer scratchpad — read-only from the agent's POV.",
+      inputSchema: {},
+    },
+    async () => jsonResult({ notes: ctx.folder.notes }),
   );
 }

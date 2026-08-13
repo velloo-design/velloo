@@ -1,4 +1,4 @@
-import type { Node, Page } from "@velloo/schema";
+import type { Board, Frame, Node, Screen } from "@velloo/schema";
 
 /** Inner card with no chrome — used as a transparent layout group. */
 const group =
@@ -216,59 +216,26 @@ function signupCard(): Node {
 }
 
 /**
- * A welcome / onboarding page styled like a Velloo tutorial. Each variant
- * walks a new user through the canvas affordances by reading the content on
- * the page. Three variants demonstrate responsive layout from one design.
+ * Welcome screen — one responsive tree. Layout switches at md (tablet) and lg
+ * (desktop) so a single screen renders well at every frame size on the board.
  */
-export function buildSamplePage(): Page {
+export function buildSampleScreen(): Screen {
   return {
+    id: "welcome",
     name: "Welcome",
-    variants: [
-      {
-        id: "mobile",
-        name: "Mobile",
-        viewport: { w: 390, h: 1500 },
-        tree: {
-          $ref: "Card",
-          props: {
-            className:
-              "flex flex-col gap-6 p-6 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
-          },
-          children: [
-            hero("stacked"),
-            tutorialList(),
-            { $ref: "Separator", props: {} },
-            signupCard(),
-          ],
-        },
+    tree: {
+      $ref: "Card",
+      props: {
+        className:
+          "flex flex-col gap-6 p-6 md:max-w-3xl md:mx-auto md:my-8 md:gap-6 md:p-8 lg:max-w-6xl lg:my-12 lg:gap-8 lg:p-10 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
       },
-      {
-        id: "desktop",
-        name: "Desktop",
-        viewport: { w: 1440, h: 1100 },
-        tree: {
-          $ref: "Card",
-          props: {
-            className:
-              "max-w-6xl mx-auto my-12 flex flex-col gap-8 p-10 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
-          },
-          children: [hero("row"), tutorialGrid(3), { $ref: "Separator", props: {} }, signupCard()],
-        },
-      },
-      {
-        id: "tablet",
-        name: "Tablet",
-        viewport: { w: 820, h: 1180 },
-        tree: {
-          $ref: "Card",
-          props: {
-            className:
-              "max-w-3xl mx-auto my-8 flex flex-col gap-6 p-8 ring-0 shadow-none bg-transparent rounded-none overflow-visible",
-          },
-          children: [hero("row"), tutorialGrid(2), { $ref: "Separator", props: {} }, signupCard()],
-        },
-      },
-    ],
+      children: [
+        hero("row"),
+        tutorialGrid(3),
+        { $ref: "Separator", props: {} },
+        signupCard(),
+      ],
+    },
   };
 }
 
@@ -544,16 +511,12 @@ function cardLibrary(): Node {
   };
 }
 
-/** A page that puts every primitive on screen — useful as a visual reference. */
-export function buildComponentsPage(): Page {
+/** A screen that puts every primitive on the canvas — useful as a visual reference. */
+export function buildComponentsScreen(): Screen {
   return {
+    id: "components",
     name: "Components",
-    variants: [
-      {
-        id: "desktop",
-        name: "Desktop",
-        viewport: { w: 1440, h: 1800 },
-        tree: {
+    tree: {
           $ref: "Card",
           props: {
             className:
@@ -605,7 +568,44 @@ export function buildComponentsPage(): Page {
             ]),
           ],
         },
-      },
-    ],
+  };
+}
+
+/** Default board layout: welcome + components side-by-side at desktop size. */
+export function buildSampleBoard(): Board {
+  const frames: Frame[] = [
+    {
+      id: "welcome-desktop",
+      screen: "welcome",
+      x: 0,
+      y: 0,
+      w: 1440,
+      h: 1100,
+      label: "Desktop",
+      group: "tutorial",
+    },
+    {
+      id: "welcome-mobile",
+      screen: "welcome",
+      x: 1520,
+      y: 0,
+      w: 390,
+      h: 1500,
+      label: "Mobile",
+      group: "tutorial",
+    },
+    {
+      id: "components-desktop",
+      screen: "components",
+      x: 0,
+      y: 1200,
+      w: 1440,
+      h: 1800,
+      label: "Components",
+    },
+  ];
+  return {
+    frames,
+    groups: [{ id: "tutorial", name: "Tutorial", color: "#7C3AED" }],
   };
 }

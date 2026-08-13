@@ -5,20 +5,14 @@ import { toastError } from "../toast.ts";
 
 interface Props {
   initialValue: string;
-  pageId: string;
-  variantId: string;
+  screenId: string;
   /** Dot-string path of the selected node. */
   path: string;
 }
 
 const ID_RE = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
-/**
- * Inspector field for editing a node's stable `$id` anchor. Commits on blur
- * (Enter to commit early). Empty value clears the id. Format errors stay
- * local — we only POST set_node_id once the draft passes the regex.
- */
-export function IdField({ initialValue, pageId, variantId, path }: Props) {
+export function IdField({ initialValue, screenId, path }: Props) {
   const [draft, setDraft] = useState(initialValue);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +26,7 @@ export function IdField({ initialValue, pageId, variantId, path }: Props) {
     setError(null);
     void mutate
       .setNodeId({
-        pageId,
-        variantId,
+        screenId,
         path: pathFromString(path),
         id: trimmed === "" ? null : trimmed,
       })

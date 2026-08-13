@@ -2,8 +2,7 @@ import { randomUUID } from "node:crypto";
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { CanvasNote } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
-import { canvasNoteNotFound, type MutationError, pageNotFound } from "./errors.ts";
-import { getPage } from "./lookup.ts";
+import { canvasNoteNotFound, type MutationError } from "./errors.ts";
 import { persistCanvasNotes } from "./persist.ts";
 
 function newNoteId(): string {
@@ -13,10 +12,8 @@ function newNoteId(): string {
 const DEFAULT_NOTE_WIDTH = 240;
 
 export interface AddNoteArgs {
-  pageId: string;
   x: number;
   y: number;
-  /** Defaults to 240 (small comfortable size for ~1-2 lines of markdown). */
   width?: number;
   body: string;
 }
@@ -30,7 +27,6 @@ export async function addNote(
   args: AddNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
   return DoAsync<NoteResult, MutationError>(async function* () {
-    yield* $(getPage(ctx, args.pageId));
     const note: CanvasNote = {
       id: newNoteId(),
       x: args.x,
@@ -38,15 +34,13 @@ export async function addNote(
       width: args.width ?? DEFAULT_NOTE_WIDTH,
       body: args.body,
     };
-    const existing = ctx.folder.notes.get(args.pageId) ?? [];
-    await persistCanvasNotes(ctx.folder, args.pageId, [...existing, note]);
-    ctx.broadcast({ type: "notes-changed", pageId: args.pageId });
+    await persistCanvasNotes(ctx.folder, [...ctx.folder.notes, note]);
+    ctx.broadcast({ type: "notes-changed" });
     return { note };
   });
 }
 
 export interface UpdateNoteArgs {
-  pageId: string;
   noteId: string;
   patch: {
     x?: number;
@@ -61,11 +55,9 @@ export async function updateNote(
   args: UpdateNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
   return DoAsync<NoteResult, MutationError>(async function* () {
-    const existing = ctx.folder.notes.get(args.pageId);
-    if (!existing) return yield* $(err(pageNotFound(args.pageId)));
-    const idx = existing.findIndex((n) => n.id === args.noteId);
-    if (idx === -1) return yield* $(err(canvasNoteNotFound(args.pageId, args.noteId)));
-    const prev = existing[idx] as CanvasNote;
+    const idx = ctx.folder.notes.findIndex((n) => n.id === args.noteId);
+    if (idx === -1) return yield* $(err(canvasNoteNotFound(args.noteId)));
+    const prev = ctx.folder.notes[idx] as CanvasNote;
     const next: CanvasNote = {
       ...prev,
       ...(args.patch.x !== undefined ? { x: args.patch.x } : {}),
@@ -73,16 +65,15 @@ export async function updateNote(
       ...(args.patch.width !== undefined ? { width: args.patch.width } : {}),
       ...(args.patch.body !== undefined ? { body: args.patch.body } : {}),
     };
-    const updated = [...existing];
+    const updated = [...ctx.folder.notes];
     updated[idx] = next;
-    await persistCanvasNotes(ctx.folder, args.pageId, updated);
-    ctx.broadcast({ type: "notes-changed", pageId: args.pageId });
+    await persistCanvasNotes(ctx.folder, updated);
+    ctx.broadcast({ type: "notes-changed" });
     return { note: next };
   });
 }
 
 export interface RemoveNoteArgs {
-  pageId: string;
   noteId: string;
 }
 
@@ -91,14 +82,12 @@ export async function removeNote(
   args: RemoveNoteArgs,
 ): Promise<Result<{ removedId: string }, MutationError>> {
   return DoAsync<{ removedId: string }, MutationError>(async function* () {
-    const existing = ctx.folder.notes.get(args.pageId);
-    if (!existing) return yield* $(err(pageNotFound(args.pageId)));
-    if (!existing.some((n) => n.id === args.noteId)) {
-      return yield* $(err(canvasNoteNotFound(args.pageId, args.noteId)));
+    if (!ctx.folder.notes.some((n) => n.id === args.noteId)) {
+      return yield* $(err(canvasNoteNotFound(args.noteId)));
     }
-    const next = existing.filter((n) => n.id !== args.noteId);
-    await persistCanvasNotes(ctx.folder, args.pageId, next);
-    ctx.broadcast({ type: "notes-changed", pageId: args.pageId });
+    const next = ctx.folder.notes.filter((n) => n.id !== args.noteId);
+    await persistCanvasNotes(ctx.folder, next);
+    ctx.broadcast({ type: "notes-changed" });
     return { removedId: args.noteId };
   });
 }

@@ -4,19 +4,12 @@ import { pathFromString } from "../path.ts";
 
 interface Props {
   initialValue: string;
-  pageId: string;
-  variantIds: string[];
+  screenId: string;
   path: string;
   debounceMs: number;
 }
 
-/**
- * Editable copy for nodes whose `children` is a string. Mirrors local state
- * so typing isn't snapped back by store-driven re-renders. When `variantIds`
- * has more than one entry the same edit is replayed across each — that's how
- * "Sync across variants" works.
- */
-export function CopyField({ initialValue, pageId, variantIds, path, debounceMs }: Props) {
+export function CopyField({ initialValue, screenId, path, debounceMs }: Props) {
   const [draft, setDraft] = useState(initialValue);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -31,18 +24,14 @@ export function CopyField({ initialValue, pageId, variantIds, path, debounceMs }
     setDraft(next);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      const parsedPath = pathFromString(path);
       const value = next === "" ? null : next;
-      for (const variantId of variantIds) {
-        void mutate
-          .updateProps({
-            pageId,
-            variantId,
-            path: parsedPath,
-            propPatch: { children: value },
-          })
-          .catch(() => undefined);
-      }
+      void mutate
+        .updateProps({
+          screenId,
+          path: pathFromString(path),
+          propPatch: { children: value },
+        })
+        .catch(() => undefined);
     }, debounceMs);
   };
 

@@ -1,54 +1,51 @@
 /**
- * Mutation failure modes as a discriminated union (kind-keyed). Pair with
+ * Mutation failure modes as a discriminated union. Pair with
  * Result<T, MutationError> across the layer; consumers `switch (error.kind)`
- * with a `const _: never = error` exhaustiveness guard so a new variant
- * breaks the build at every call site that doesn't handle it.
+ * with a `const _: never = error` exhaustiveness guard.
  */
 export type MutationError =
-  | { kind: "PageNotFound"; pageId: string }
-  | { kind: "VariantNotFound"; pageId: string; variantId: string }
+  | { kind: "ScreenNotFound"; screenId: string }
+  | { kind: "FrameNotFound"; frameId: string }
+  | { kind: "GroupNotFound"; groupId: string }
   | { kind: "UnknownComponent"; ref: string; suggestions: string[] }
   | { kind: "InvalidPath"; reason: string; path?: number[] }
   | { kind: "InvalidMove"; reason: string }
-  | { kind: "LastPage"; pageId: string }
-  | { kind: "LastVariant"; pageId: string }
-  | { kind: "VariantIdConflict"; pageId: string; id: string }
-  | { kind: "PageIdExhausted"; base: string }
-  /** Request body failed zod validation. `issues` carries zod's ZodIssue[]. */
+  | { kind: "LastScreen"; screenId: string }
+  | { kind: "ScreenInUse"; screenId: string; frameIds: string[] }
+  | { kind: "ScreenIdConflict"; screenId: string }
+  | { kind: "ScreenIdExhausted"; base: string }
+  | { kind: "FrameIdConflict"; frameId: string }
+  | { kind: "GroupIdConflict"; groupId: string }
+  /** Request body failed zod validation. */
   | { kind: "BadRequest"; message: string; issues?: unknown }
   | { kind: "SnippetNotFound"; snippetId: string }
-  /** Args passed to instantiate_snippet don't match declared params. */
   | { kind: "SnippetParamMismatch"; snippetId: string; reason: string; details?: unknown }
-  /** Snippet body would reference itself directly or transitively. */
   | { kind: "SnippetCycle"; snippetId: string; viaPath: string[] }
-  /** remove_snippet refused: pages still instantiate it. */
-  | { kind: "SnippetInUse"; snippetId: string; pageIds: string[] }
+  | { kind: "SnippetInUse"; snippetId: string; screenIds: string[] }
   | { kind: "SnippetIdConflict"; snippetId: string }
-  /** A locator `@id` didn't resolve to any node in the variant tree. */
-  | { kind: "IdNotFound"; pageId: string; variantId: string; id: string }
-  /** Two nodes in the same variant share an `$id`. Carries the conflicting id + paths. */
-  | { kind: "IdConflict"; pageId: string; variantId: string; id: string; paths: number[][] }
-  /** A node already has an annotation attached; only one annotation per node. */
+  | { kind: "IdNotFound"; screenId: string; id: string }
+  | { kind: "IdConflict"; screenId: string; id: string; paths: number[][] }
   | {
       kind: "AnnotationConflict";
-      pageId: string;
-      variantId: string;
+      screenId: string;
       locator: number[] | string;
       existingId: string;
     }
-  /** Annotation / note id didn't resolve in the page's sidecar. */
-  | { kind: "AnnotationNotFound"; pageId: string; annotationId: string }
-  | { kind: "CanvasNoteNotFound"; pageId: string; noteId: string };
+  | { kind: "AnnotationNotFound"; screenId: string; annotationId: string }
+  | { kind: "CanvasNoteNotFound"; noteId: string };
 
-// Constructor helpers — keep mutation bodies readable.
-export const pageNotFound = (pageId: string): MutationError => ({
-  kind: "PageNotFound",
-  pageId,
+// Constructor helpers.
+export const screenNotFound = (screenId: string): MutationError => ({
+  kind: "ScreenNotFound",
+  screenId,
 });
-export const variantNotFound = (pageId: string, variantId: string): MutationError => ({
-  kind: "VariantNotFound",
-  pageId,
-  variantId,
+export const frameNotFound = (frameId: string): MutationError => ({
+  kind: "FrameNotFound",
+  frameId,
+});
+export const groupNotFound = (groupId: string): MutationError => ({
+  kind: "GroupNotFound",
+  groupId,
 });
 export const unknownComponent = (ref: string, suggestions: string[]): MutationError => ({
   kind: "UnknownComponent",
@@ -64,19 +61,30 @@ export const invalidMove = (reason: string): MutationError => ({
   kind: "InvalidMove",
   reason,
 });
-export const lastPage = (pageId: string): MutationError => ({ kind: "LastPage", pageId });
-export const lastVariant = (pageId: string): MutationError => ({
-  kind: "LastVariant",
-  pageId,
+export const lastScreen = (screenId: string): MutationError => ({
+  kind: "LastScreen",
+  screenId,
 });
-export const variantIdConflict = (pageId: string, id: string): MutationError => ({
-  kind: "VariantIdConflict",
-  pageId,
-  id,
+export const screenInUse = (screenId: string, frameIds: string[]): MutationError => ({
+  kind: "ScreenInUse",
+  screenId,
+  frameIds,
 });
-export const pageIdExhausted = (base: string): MutationError => ({
-  kind: "PageIdExhausted",
+export const screenIdConflict = (screenId: string): MutationError => ({
+  kind: "ScreenIdConflict",
+  screenId,
+});
+export const screenIdExhausted = (base: string): MutationError => ({
+  kind: "ScreenIdExhausted",
   base,
+});
+export const frameIdConflict = (frameId: string): MutationError => ({
+  kind: "FrameIdConflict",
+  frameId,
+});
+export const groupIdConflict = (groupId: string): MutationError => ({
+  kind: "GroupIdConflict",
+  groupId,
 });
 export const badRequest = (message: string, issues?: unknown): MutationError => ({
   kind: "BadRequest",
@@ -102,59 +110,52 @@ export const snippetCycle = (snippetId: string, viaPath: string[]): MutationErro
   snippetId,
   viaPath,
 });
-export const snippetInUse = (snippetId: string, pageIds: string[]): MutationError => ({
+export const snippetInUse = (snippetId: string, screenIds: string[]): MutationError => ({
   kind: "SnippetInUse",
   snippetId,
-  pageIds,
+  screenIds,
 });
 export const snippetIdConflict = (snippetId: string): MutationError => ({
   kind: "SnippetIdConflict",
   snippetId,
 });
-export const idNotFound = (pageId: string, variantId: string, id: string): MutationError => ({
+export const idNotFound = (screenId: string, id: string): MutationError => ({
   kind: "IdNotFound",
-  pageId,
-  variantId,
+  screenId,
   id,
 });
 export const idConflict = (
-  pageId: string,
-  variantId: string,
+  screenId: string,
   id: string,
   paths: number[][],
 ): MutationError => ({
   kind: "IdConflict",
-  pageId,
-  variantId,
+  screenId,
   id,
   paths,
 });
 export const annotationConflict = (
-  pageId: string,
-  variantId: string,
+  screenId: string,
   locator: number[] | string,
   existingId: string,
 ): MutationError => ({
   kind: "AnnotationConflict",
-  pageId,
-  variantId,
+  screenId,
   locator,
   existingId,
 });
-export const annotationNotFound = (pageId: string, annotationId: string): MutationError => ({
+export const annotationNotFound = (screenId: string, annotationId: string): MutationError => ({
   kind: "AnnotationNotFound",
-  pageId,
+  screenId,
   annotationId,
 });
-export const canvasNoteNotFound = (pageId: string, noteId: string): MutationError => ({
+export const canvasNoteNotFound = (noteId: string): MutationError => ({
   kind: "CanvasNoteNotFound",
-  pageId,
   noteId,
 });
 
 /**
- * Levenshtein distance for ranking nearest component names. Tiny implementation;
- * we only call it on strings under ~30 chars so quadratic cost is irrelevant.
+ * Levenshtein distance for ranking nearest component names.
  */
 export function levenshtein(a: string, b: string): number {
   const al = a.length;
@@ -170,9 +171,9 @@ export function levenshtein(a: string, b: string): number {
       const tmp = dp[j] ?? 0;
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       dp[j] = Math.min(
-        (dp[j] ?? 0) + 1, // deletion
-        (dp[j - 1] ?? 0) + 1, // insertion
-        prev + cost, // substitution
+        (dp[j] ?? 0) + 1,
+        (dp[j - 1] ?? 0) + 1,
+        prev + cost,
       );
       prev = tmp;
     }

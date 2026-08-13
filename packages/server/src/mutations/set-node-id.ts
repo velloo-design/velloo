@@ -1,35 +1,24 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import { isComponentNode, isSnippetInstance, NodeIdSchema } from "@velloo/schema";
 import type { Locator } from "../path.ts";
-import { clonePage } from "./clone.ts";
+import { cloneScreen } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import { badRequest, invalidPath, type MutationError } from "./errors.ts";
-import { getNode, getPage, getVariant, resolve } from "./lookup.ts";
-import { commitPage } from "./persist.ts";
+import { getNode, getScreen, resolve } from "./lookup.ts";
+import { commitScreen } from "./persist.ts";
 
 export interface SetNodeIdArgs {
-  pageId: string;
-  variantId: string;
-  /** Locator for the node — path array or `"@id"` string. */
+  screenId: string;
   path: Locator;
-  /** New id. Pass `null` to clear the existing id. Format: /^[a-zA-Z][a-zA-Z0-9_-]*$/. */
+  /** Pass `null` to clear. Format: /^[a-zA-Z][a-zA-Z0-9_-]*$/. */
   id: string | null;
 }
 
 export interface SetNodeIdResult {
   path: number[];
-  /** The id after the mutation. null if cleared. */
   id: string | null;
 }
 
-/**
- * Set or clear a node's `$id` anchor. Used to retroactively name nodes
- * that were created without an id, or rename one. Per-variant uniqueness
- * is enforced at persist time; collisions surface as `IdConflict`.
- *
- * Targets `ComponentNode` and `SnippetInstance` — both support `$id`.
- * Param refs don't have ids; targeting one returns InvalidPath.
- */
 export async function setNodeId(
   ctx: MutationContext,
   args: SetNodeIdArgs,
@@ -45,15 +34,11 @@ export async function setNodeId(
   }
 
   return DoAsync<SetNodeIdResult, MutationError>(async function* () {
-    const page = yield* $(getPage(ctx, args.pageId));
-    yield* $(getVariant(page, args.pageId, args.variantId));
+    const screen = yield* $(getScreen(ctx, args.screenId));
+    const next = cloneScreen(screen);
 
-    const next = clonePage(page);
-    const nextVariant = next.variants.find((v) => v.id === args.variantId);
-    if (!nextVariant) throw new Error("invariant: variant lost on clone");
-
-    const resolved = yield* $(resolve(nextVariant.tree, args.path, args.pageId, args.variantId));
-    const node = yield* $(getNode(nextVariant.tree, resolved, args.pageId, args.variantId));
+    const resolved = yield* $(resolve(next.tree, args.path, args.screenId));
+    const node = yield* $(getNode(next.tree, resolved, args.screenId));
 
     if (!isComponentNode(node) && !isSnippetInstance(node)) {
       return yield* $({
@@ -71,8 +56,8 @@ export async function setNodeId(
       (node as { $id?: string }).$id = args.id;
     }
 
-    yield* $(await commitPage(ctx.folder, args.pageId, next));
-    ctx.broadcast({ type: "page-changed", pageId: args.pageId });
+    yield* $(await commitScreen(ctx.folder, args.screenId, next));
+    ctx.broadcast({ type: "screen-changed", screenId: args.screenId });
     return { path: resolved, id: args.id };
   });
 }

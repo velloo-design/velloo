@@ -1,15 +1,13 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Locator } from "../path.ts";
-import { clonePage } from "./clone.ts";
+import { cloneScreen } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
-import { getComponentNode, getPage, getVariant, resolve } from "./lookup.ts";
-import { commitPage } from "./persist.ts";
+import { getComponentNode, getScreen, resolve } from "./lookup.ts";
+import { commitScreen } from "./persist.ts";
 
 export interface UpdatePropsArgs {
-  pageId: string;
-  variantId: string;
-  /** Locator for the target node. Either a path or `"@id"`. */
+  screenId: string;
   path: Locator;
   /** Shallow patch. Keys with `null` values are removed. */
   propPatch: Record<string, unknown>;
@@ -23,17 +21,12 @@ export async function updateProps(
   ctx: MutationContext,
   args: UpdatePropsArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  const { pageId, variantId, path, propPatch } = args;
+  const { screenId, path, propPatch } = args;
   return DoAsync<UpdatePropsResult, MutationError>(async function* () {
-    const page = yield* $(getPage(ctx, pageId));
-    yield* $(getVariant(page, pageId, variantId));
-
-    const next = clonePage(page);
-    const nextVariant = next.variants.find((v) => v.id === variantId);
-    if (!nextVariant) throw new Error("invariant: variant lost on clone");
-
-    const resolved = yield* $(resolve(nextVariant.tree, path, pageId, variantId));
-    const node = yield* $(getComponentNode(nextVariant.tree, resolved, pageId, variantId));
+    const screen = yield* $(getScreen(ctx, screenId));
+    const next = cloneScreen(screen);
+    const resolved = yield* $(resolve(next.tree, path, screenId));
+    const node = yield* $(getComponentNode(next.tree, resolved, screenId));
 
     const merged: Record<string, unknown> = { ...(node.props ?? {}) };
     for (const [k, v] of Object.entries(propPatch)) {
@@ -43,8 +36,8 @@ export async function updateProps(
     if (Object.keys(merged).length === 0) delete node.props;
     else node.props = merged;
 
-    yield* $(await commitPage(ctx.folder, pageId, next));
-    ctx.broadcast({ type: "page-changed", pageId });
+    yield* $(await commitScreen(ctx.folder, screenId, next));
+    ctx.broadcast({ type: "screen-changed", screenId });
     return { path: resolved };
   });
 }

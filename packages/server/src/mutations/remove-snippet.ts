@@ -26,8 +26,8 @@ export async function removeSnippet(
     yield* $(getSnippet(ctx, args.snippetId));
 
     const referencers: string[] = [];
-    for (const [pageId, page] of ctx.folder.pages) {
-      if (snippetIdsReferencedBy(page).has(args.snippetId)) referencers.push(pageId);
+    for (const [screenId, screen] of ctx.folder.screens) {
+      if (snippetIdsReferencedBy(screen).has(args.snippetId)) referencers.push(screenId);
     }
     if (referencers.length > 0) {
       return yield* $(err(snippetInUse(args.snippetId, referencers)));

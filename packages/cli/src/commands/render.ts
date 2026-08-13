@@ -1,24 +1,28 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
-import { renderVariant, screenshot } from "@velloo/renderer";
-import { PageSchema, ThemeSchema } from "@velloo/schema";
+import { renderScreen, screenshot } from "@velloo/renderer";
+import { ScreenSchema, ThemeSchema, type Viewport } from "@velloo/schema";
 import { TailwindJit, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
 
 export default defineCommand({
   meta: {
     name: "render",
-    description: "dev: render a variant headless to .html or .png",
+    description: "dev: render a screen headless to .html or .png",
   },
   args: {
-    page: {
+    screen: {
       type: "positional",
       required: true,
-      description: "Path to a page JSON file (e.g. design/pages/onboarding.json)",
+      description: "Path to a screen JSON file (e.g. design/screens/welcome.json)",
     },
-    variant: {
+    w: {
       type: "string",
-      description: "Variant id to render (default: first)",
+      description: "Viewport width in px (default: 1440)",
+    },
+    h: {
+      type: "string",
+      description: "Viewport height in px (default: 900)",
     },
     to: {
       type: "string",
@@ -27,45 +31,39 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const pagePath = resolve(args.page);
+    const screenPath = resolve(args.screen);
     const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
 
-    // Layout assumption: <folder>/pages/<page>.json, <folder>/theme/default.json
-    const folder = dirname(dirname(pagePath));
+    // Layout assumption: <folder>/screens/<screen>.json, <folder>/theme/default.json
+    const folder = dirname(dirname(screenPath));
     const themePath = resolve(folder, "theme", "default.json");
 
-    const [pageJson, themeJson] = await Promise.all([
-      readFile(pagePath, "utf8").then(JSON.parse),
+    const [screenJson, themeJson] = await Promise.all([
+      readFile(screenPath, "utf8").then(JSON.parse),
       readFile(themePath, "utf8").then(JSON.parse),
     ]);
-    const page = PageSchema.parse(pageJson);
+    const screen = ScreenSchema.parse(screenJson);
     const theme = ThemeSchema.parse(themeJson);
 
-    const variant = args.variant
-      ? page.variants.find((v) => v.id === args.variant)
-      : page.variants[0];
-    if (!variant) {
-      console.error(
-        `velloo render: variant ${JSON.stringify(args.variant)} not found in ${pagePath}.\n` +
-          `  Available: ${page.variants.map((v) => v.id).join(", ")}`,
-      );
-      process.exit(1);
-    }
+    const viewport: Viewport = {
+      w: args.w ? Number(args.w) : 1440,
+      h: args.h ? Number(args.h) : 900,
+    };
 
-    const jit = new TailwindJit(join(folder, "pages"));
+    const jit = new TailwindJit(join(folder, "screens"));
     const snapshotCss = await jit.build();
-    const { html } = await renderVariant(variant, theme, { snapshotCss });
+    const { html } = await renderScreen(screen, theme, { viewport, snapshotCss });
     const ext = extname(outPath).toLowerCase();
 
     if (ext === ".html") {
       await writeText(outPath, html);
-      console.log(`velloo render: wrote ${outPath} (variant=${variant.id})`);
+      console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }
 
     if (ext === ".png") {
-      await screenshot({ html, viewport: variant.viewport, outPath });
-      console.log(`velloo render: wrote ${outPath} (variant=${variant.id})`);
+      await screenshot({ html, viewport, outPath });
+      console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }
 

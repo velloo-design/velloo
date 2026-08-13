@@ -6,15 +6,17 @@ export function buildDefaultConfig(): Config {
   return {
     schemaVersion: 1,
     toolVersion: TOOL_VERSION,
-    componentSource: {
-      framework: "shadcn-react",
-      snapshotVersion,
+    library: {
+      id: "shadcn-react",
+      version: snapshotVersion,
+      source: "registry:shadcn",
+      componentsPath: "components",
     },
     viewportPresets: [
       { name: "Mobile", w: 390, h: 844 },
       { name: "Tablet", w: 768, h: 1024 },
       { name: "Desktop", w: 1440, h: 900 },
     ],
-    defaultPage: "welcome",
+    defaultScreen: "welcome",
   };
 }

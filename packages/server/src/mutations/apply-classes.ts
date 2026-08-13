@@ -5,9 +5,7 @@ import type { MutationError } from "./errors.ts";
 import { type UpdatePropsResult, updateProps } from "./update-props.ts";
 
 export interface ApplyClassesArgs {
-  pageId: string;
-  variantId: string;
-  /** Locator — path array or `"@id"` string. */
+  screenId: string;
   path: Locator;
   /** Whitespace-separated Tailwind classes; replaces existing className. */
   classes: string;
@@ -19,8 +17,7 @@ export async function applyClasses(
 ): Promise<Result<UpdatePropsResult, MutationError>> {
   const className = args.classes.trim();
   return updateProps(ctx, {
-    pageId: args.pageId,
-    variantId: args.variantId,
+    screenId: args.screenId,
     path: args.path,
     propPatch: { className: className === "" ? null : className },
   });

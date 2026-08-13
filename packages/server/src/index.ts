@@ -8,8 +8,9 @@ import {
   type DesignFolder,
   loadDesignFolder,
   reloadAnnotations,
+  reloadBoard,
   reloadNotes,
-  reloadPage,
+  reloadScreen,
   reloadSnippet,
   reloadTheme,
 } from "./design-folder.ts";
@@ -74,13 +75,13 @@ async function serveSpaFallback(): Promise<Response> {
 export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const folder: DesignFolder = await loadDesignFolder(opts.folder);
   const broadcaster = new Broadcaster();
-  const jit = new TailwindJit(join(folder.root, "pages"));
-  // Any page edit may introduce a new className not in the cached output. Theme
-  // edits don't touch class lists, but we drop the cache anyway for symmetry —
-  // the Tailwind compile is cheap on a warm process.
+  const jit = new TailwindJit(join(folder.root, "screens"));
   const broadcast = (e: WatchEvent) => {
-    // Any of these can introduce new classes Tailwind hasn't compiled yet.
-    if (e.type === "page-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
+    if (
+      e.type === "screen-changed" ||
+      e.type === "theme-changed" ||
+      e.type === "snippet-changed"
+    ) {
       jit.invalidate();
     }
     broadcaster.broadcast(e);
@@ -91,16 +92,18 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {
     try {
-      if (event.type === "page-changed") {
-        await reloadPage(folder, event.pageId);
+      if (event.type === "screen-changed") {
+        await reloadScreen(folder, event.screenId);
+      } else if (event.type === "board-changed") {
+        await reloadBoard(folder);
       } else if (event.type === "theme-changed") {
         await reloadTheme(folder);
       } else if (event.type === "snippet-changed") {
         await reloadSnippet(folder, event.snippetId);
       } else if (event.type === "annotations-changed") {
-        await reloadAnnotations(folder, event.pageId);
+        await reloadAnnotations(folder, event.screenId);
       } else if (event.type === "notes-changed") {
-        await reloadNotes(folder, event.pageId);
+        await reloadNotes(folder);
       }
       broadcast(event);
     } catch (err) {

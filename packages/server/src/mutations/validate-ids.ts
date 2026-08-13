@@ -1,14 +1,20 @@
 import { err, ok, type Result } from "@velloo/result";
-import { isComponentNode, isSnippetInstance, type Node, nodeId, type Page } from "@velloo/schema";
+import {
+  isComponentNode,
+  isSnippetInstance,
+  type Node,
+  nodeId,
+  type Screen,
+} from "@velloo/schema";
 import { idConflict, type MutationError } from "./errors.ts";
 
 /**
- * Walk a single variant tree and return a map of `$id` → paths it
- * appears at. Snippet instance bodies are opaque from the page's POV;
- * we record the instance's own `$id` but never descend into a snippet
- * body (those ids belong to a different addressing scope).
+ * Walk a screen tree and return a map of `$id` → paths it appears at.
+ * Snippet instance bodies are opaque from the screen's POV; we record
+ * the instance's own `$id` but never descend into a snippet body
+ * (those ids belong to a different addressing scope).
  */
-export function collectIdsInVariant(root: Node): Map<string, number[][]> {
+export function collectIdsInScreen(root: Node): Map<string, number[][]> {
   const out = new Map<string, number[][]>();
   function walk(node: Node, path: number[]): void {
     const id = nodeId(node);
@@ -30,19 +36,13 @@ export function collectIdsInVariant(root: Node): Map<string, number[][]> {
 }
 
 /**
- * Per-variant `$id` uniqueness check on a whole page. Returns ok if
- * every variant has unique ids internally; err on the first duplicate.
- *
- * The same `$id` may legally repeat across variants (e.g. "hero-cta"
- * on mobile + desktop is the same logical anchor); cross-variant
- * duplication is not a conflict.
+ * `$id` uniqueness check on a screen. Returns ok if ids are unique within
+ * the screen tree; err on the first duplicate.
  */
-export function validatePageIds(pageId: string, page: Page): Result<void, MutationError> {
-  for (const variant of page.variants) {
-    const ids = collectIdsInVariant(variant.tree);
-    for (const [id, paths] of ids) {
-      if (paths.length > 1) return err(idConflict(pageId, variant.id, id, paths));
-    }
+export function validateScreenIds(screenId: string, screen: Screen): Result<void, MutationError> {
+  const ids = collectIdsInScreen(screen.tree);
+  for (const [id, paths] of ids) {
+    if (paths.length > 1) return err(idConflict(screenId, id, paths));
   }
   return ok(undefined);
 }

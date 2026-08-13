@@ -4,17 +4,15 @@ import { AddNoteBody, RemoveNoteBody, UpdateNoteBody } from "./mutate-schemas.ts
 import { makeRoute } from "./route.ts";
 
 /**
- * Canvas-facing CRUD for free-positioned notes. Notes are designer-only —
+ * Canvas-facing CRUD for free-positioned board notes. Notes are designer-only —
  * never exposed via MCP.
  */
 export function createNotesRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  r.get("/:pageId", (c) => {
-    const pageId = c.req.param("pageId");
-    const notes = ctxFor().folder.notes.get(pageId) ?? [];
-    return c.json({ notes });
+  r.get("/", (c) => {
+    return c.json({ notes: ctxFor().folder.notes });
   });
 
   r.post(

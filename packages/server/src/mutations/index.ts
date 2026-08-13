@@ -1,16 +1,16 @@
 import type { Result } from "@velloo/result";
 import { type AddNodeArgs, type AddNodeResult, addNode as addNodeImpl } from "./add-node.ts";
-import { type AddPageArgs, type AddPageResult, addPage as addPageImpl } from "./add-page.ts";
+import { type AddFrameArgs, type AddFrameResult, addFrame as addFrameImpl } from "./add-frame.ts";
+import {
+  type AddScreenArgs,
+  type AddScreenResult,
+  addScreen as addScreenImpl,
+} from "./add-screen.ts";
 import {
   type AddSnippetArgs,
   type AddSnippetResult,
   addSnippet as addSnippetImpl,
 } from "./add-snippet.ts";
-import {
-  type AddVariantArgs,
-  type AddVariantResult,
-  addVariant as addVariantImpl,
-} from "./add-variant.ts";
 import {
   type AddAnnotationArgs,
   type AnnotationResult,
@@ -35,7 +35,7 @@ import {
   updateNote as updateNoteImpl,
 } from "./canvas-notes.ts";
 import type { MutationContext } from "./context.ts";
-import { withPageLock, withSnippetLock } from "./context.ts";
+import { withBoardLock, withScreenLock, withSnippetLock } from "./context.ts";
 import {
   type AuditSnippetArgs,
   auditSnippet as auditSnippetImpl,
@@ -44,6 +44,17 @@ import {
   darkModeAudit as darkModeAuditImpl,
 } from "./dark-mode-audit.ts";
 import type { MutationError } from "./errors.ts";
+import {
+  type AddGroupArgs,
+  type AddGroupResult,
+  addGroup as addGroupImpl,
+  type RemoveGroupArgs,
+  type RemoveGroupResult,
+  removeGroup as removeGroupImpl,
+  type UpdateGroupArgs,
+  type UpdateGroupResult,
+  updateGroup as updateGroupImpl,
+} from "./groups.ts";
 import { type InspectArgs, type InspectResult, inspect as inspectImpl } from "./inspect.ts";
 import {
   type InstantiateSnippetArgs,
@@ -52,35 +63,39 @@ import {
 } from "./instantiate-snippet.ts";
 import { type MoveNodeArgs, type MoveNodeResult, moveNode as moveNodeImpl } from "./move-node.ts";
 import {
+  type RemoveFrameArgs,
+  type RemoveFrameResult,
+  removeFrame as removeFrameImpl,
+} from "./remove-frame.ts";
+import {
   type RemoveNodeArgs,
   type RemoveNodeResult,
   removeNode as removeNodeImpl,
 } from "./remove-node.ts";
 import {
-  type RemovePageArgs,
-  type RemovePageResult,
-  removePage as removePageImpl,
-} from "./remove-page.ts";
+  type RemoveScreenArgs,
+  type RemoveScreenResult,
+  removeScreen as removeScreenImpl,
+  removeScreenStrict as removeScreenStrictImpl,
+} from "./remove-screen.ts";
 import {
   type RemoveSnippetArgs,
   type RemoveSnippetResult,
   removeSnippet as removeSnippetImpl,
 } from "./remove-snippet.ts";
 import {
-  type RemoveVariantArgs,
-  type RemoveVariantResult,
-  removeVariant as removeVariantImpl,
-} from "./remove-variant.ts";
-import {
   type SetNodeIdArgs,
   type SetNodeIdResult,
   setNodeId as setNodeIdImpl,
 } from "./set-node-id.ts";
 import {
-  type UpdatePageArgs,
-  type UpdatePageResult,
-  updatePage as updatePageImpl,
-} from "./update-page.ts";
+  type UpdateFrameArgs,
+  type UpdateFrameResult,
+  updateFrame as updateFrameImpl,
+  type UpdateFramesArgs,
+  type UpdateFramesResult,
+  updateFrames as updateFramesImpl,
+} from "./update-frame.ts";
 import {
   type UpdatePropsArgs,
   type UpdatePropsResult,
@@ -92,6 +107,11 @@ import {
   updatePropsBulk as updatePropsBulkImpl,
 } from "./update-props-bulk.ts";
 import {
+  type UpdateScreenArgs,
+  type UpdateScreenResult,
+  updateScreen as updateScreenImpl,
+} from "./update-screen.ts";
+import {
   type UpdateSnippetArgs,
   type UpdateSnippetResult,
   updateSnippet as updateSnippetImpl,
@@ -101,151 +121,170 @@ import {
   type UpdateSnippetArgsResult,
   updateSnippetArgs as updateSnippetArgsImpl,
 } from "./update-snippet-args.ts";
-import {
-  type UpdateVariantArgs,
-  type UpdateVariantResult,
-  updateVariant as updateVariantImpl,
-} from "./update-variant.ts";
-import {
-  type UpdateVariantsArgs,
-  type UpdateVariantsResult,
-  updateVariants as updateVariantsImpl,
-} from "./update-variants.ts";
 
-/** Wrap each write mutation with the per-page mutex. Result flows through `T`. */
+// ── Tree mutations ─────────────────────────────────────────────
 export function addNode(
   ctx: MutationContext,
   args: AddNodeArgs,
 ): Promise<Result<AddNodeResult, MutationError>> {
-  return withPageLock(args.pageId, () => addNodeImpl(ctx, args));
+  return withScreenLock(args.screenId, () => addNodeImpl(ctx, args));
 }
 export function updateProps(
   ctx: MutationContext,
   args: UpdatePropsArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withPageLock(args.pageId, () => updatePropsImpl(ctx, args));
+  return withScreenLock(args.screenId, () => updatePropsImpl(ctx, args));
 }
 export function moveNode(
   ctx: MutationContext,
   args: MoveNodeArgs,
 ): Promise<Result<MoveNodeResult, MutationError>> {
-  return withPageLock(args.pageId, () => moveNodeImpl(ctx, args));
+  return withScreenLock(args.screenId, () => moveNodeImpl(ctx, args));
 }
 export function removeNode(
   ctx: MutationContext,
   args: RemoveNodeArgs,
 ): Promise<Result<RemoveNodeResult, MutationError>> {
-  return withPageLock(args.pageId, () => removeNodeImpl(ctx, args));
-}
-export function addVariant(
-  ctx: MutationContext,
-  args: AddVariantArgs,
-): Promise<Result<AddVariantResult, MutationError>> {
-  return withPageLock(args.pageId, () => addVariantImpl(ctx, args));
-}
-export function removeVariant(
-  ctx: MutationContext,
-  args: RemoveVariantArgs,
-): Promise<Result<RemoveVariantResult, MutationError>> {
-  return withPageLock(args.pageId, () => removeVariantImpl(ctx, args));
-}
-export function addPage(
-  ctx: MutationContext,
-  args: AddPageArgs,
-): Promise<Result<AddPageResult, MutationError>> {
-  return addPageImpl(ctx, args);
-}
-export function removePage(
-  ctx: MutationContext,
-  args: RemovePageArgs,
-): Promise<Result<RemovePageResult, MutationError>> {
-  return withPageLock(args.pageId, () => removePageImpl(ctx, args));
-}
-export function updatePage(
-  ctx: MutationContext,
-  args: UpdatePageArgs,
-): Promise<Result<UpdatePageResult, MutationError>> {
-  return withPageLock(args.pageId, () => updatePageImpl(ctx, args));
+  return withScreenLock(args.screenId, () => removeNodeImpl(ctx, args));
 }
 export function applyClasses(
   ctx: MutationContext,
   args: ApplyClassesArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withPageLock(args.pageId, () => applyClassesImpl(ctx, args));
+  return withScreenLock(args.screenId, () => applyClassesImpl(ctx, args));
 }
 export function applyClassesBulk(
   ctx: MutationContext,
   args: ApplyClassesBulkArgs,
 ): Promise<Result<UpdatePropsBulkResult, MutationError>> {
-  return withPageLock(args.pageId, () => applyClassesBulkImpl(ctx, args));
+  return withScreenLock(args.screenId, () => applyClassesBulkImpl(ctx, args));
 }
 export function updatePropsBulk(
   ctx: MutationContext,
   args: UpdatePropsBulkArgs,
 ): Promise<Result<UpdatePropsBulkResult, MutationError>> {
-  return withPageLock(args.pageId, () => updatePropsBulkImpl(ctx, args));
+  return withScreenLock(args.screenId, () => updatePropsBulkImpl(ctx, args));
 }
 export function setNodeId(
   ctx: MutationContext,
   args: SetNodeIdArgs,
 ): Promise<Result<SetNodeIdResult, MutationError>> {
-  return withPageLock(args.pageId, () => setNodeIdImpl(ctx, args));
+  return withScreenLock(args.screenId, () => setNodeIdImpl(ctx, args));
 }
+
+// ── Screen lifecycle ───────────────────────────────────────────
+export function addScreen(
+  ctx: MutationContext,
+  args: AddScreenArgs,
+): Promise<Result<AddScreenResult, MutationError>> {
+  return addScreenImpl(ctx, args);
+}
+export function removeScreen(
+  ctx: MutationContext,
+  args: RemoveScreenArgs,
+): Promise<Result<RemoveScreenResult, MutationError>> {
+  return withScreenLock(args.screenId, () => removeScreenImpl(ctx, args));
+}
+export function removeScreenStrict(
+  ctx: MutationContext,
+  args: RemoveScreenArgs,
+): Promise<Result<RemoveScreenResult, MutationError>> {
+  return withScreenLock(args.screenId, () => removeScreenStrictImpl(ctx, args));
+}
+export function updateScreen(
+  ctx: MutationContext,
+  args: UpdateScreenArgs,
+): Promise<Result<UpdateScreenResult, MutationError>> {
+  return withScreenLock(args.screenId, () => updateScreenImpl(ctx, args));
+}
+
+// ── Board / frame / group lifecycle ────────────────────────────
+export function addFrame(
+  ctx: MutationContext,
+  args: AddFrameArgs,
+): Promise<Result<AddFrameResult, MutationError>> {
+  return withBoardLock(() => addFrameImpl(ctx, args));
+}
+export function updateFrame(
+  ctx: MutationContext,
+  args: UpdateFrameArgs,
+): Promise<Result<UpdateFrameResult, MutationError>> {
+  return withBoardLock(() => updateFrameImpl(ctx, args));
+}
+export function updateFrames(
+  ctx: MutationContext,
+  args: UpdateFramesArgs,
+): Promise<Result<UpdateFramesResult, MutationError>> {
+  return withBoardLock(() => updateFramesImpl(ctx, args));
+}
+export function removeFrame(
+  ctx: MutationContext,
+  args: RemoveFrameArgs,
+): Promise<Result<RemoveFrameResult, MutationError>> {
+  return withBoardLock(() => removeFrameImpl(ctx, args));
+}
+export function addGroup(
+  ctx: MutationContext,
+  args: AddGroupArgs,
+): Promise<Result<AddGroupResult, MutationError>> {
+  return withBoardLock(() => addGroupImpl(ctx, args));
+}
+export function updateGroup(
+  ctx: MutationContext,
+  args: UpdateGroupArgs,
+): Promise<Result<UpdateGroupResult, MutationError>> {
+  return withBoardLock(() => updateGroupImpl(ctx, args));
+}
+export function removeGroup(
+  ctx: MutationContext,
+  args: RemoveGroupArgs,
+): Promise<Result<RemoveGroupResult, MutationError>> {
+  return withBoardLock(() => removeGroupImpl(ctx, args));
+}
+
+// ── Annotations & notes ────────────────────────────────────────
 export function addAnnotation(
   ctx: MutationContext,
   args: AddAnnotationArgs,
 ): Promise<Result<AnnotationResult, MutationError>> {
-  return withPageLock(args.pageId, () => addAnnotationImpl(ctx, args));
+  return withScreenLock(args.screenId, () => addAnnotationImpl(ctx, args));
 }
 export function updateAnnotation(
   ctx: MutationContext,
   args: UpdateAnnotationArgs,
 ): Promise<Result<AnnotationResult, MutationError>> {
-  return withPageLock(args.pageId, () => updateAnnotationImpl(ctx, args));
+  return withScreenLock(args.screenId, () => updateAnnotationImpl(ctx, args));
 }
 export function removeAnnotation(
   ctx: MutationContext,
   args: RemoveAnnotationArgs,
 ): Promise<Result<{ removedId: string }, MutationError>> {
-  return withPageLock(args.pageId, () => removeAnnotationImpl(ctx, args));
+  return withScreenLock(args.screenId, () => removeAnnotationImpl(ctx, args));
 }
 export function addNote(
   ctx: MutationContext,
   args: AddNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
-  return withPageLock(args.pageId, () => addNoteImpl(ctx, args));
+  return withBoardLock(() => addNoteImpl(ctx, args));
 }
 export function updateNote(
   ctx: MutationContext,
   args: UpdateNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
-  return withPageLock(args.pageId, () => updateNoteImpl(ctx, args));
+  return withBoardLock(() => updateNoteImpl(ctx, args));
 }
 export function removeNote(
   ctx: MutationContext,
   args: RemoveNoteArgs,
 ): Promise<Result<{ removedId: string }, MutationError>> {
-  return withPageLock(args.pageId, () => removeNoteImpl(ctx, args));
+  return withBoardLock(() => removeNoteImpl(ctx, args));
 }
-export function updateVariant(
-  ctx: MutationContext,
-  args: UpdateVariantArgs,
-): Promise<Result<UpdateVariantResult, MutationError>> {
-  return withPageLock(args.pageId, () => updateVariantImpl(ctx, args));
-}
-export function updateVariants(
-  ctx: MutationContext,
-  args: UpdateVariantsArgs,
-): Promise<Result<UpdateVariantsResult, MutationError>> {
-  return withPageLock(args.pageId, () => updateVariantsImpl(ctx, args));
-}
+
+// ── Snippets ───────────────────────────────────────────────────
 export function addSnippet(
   ctx: MutationContext,
   args: AddSnippetArgs,
 ): Promise<Result<AddSnippetResult, MutationError>> {
-  // Add is a single write; the in-memory map check + persist sits inside it.
-  // Use a synthetic lock keyed on the resolved id once known — easier to just
-  // serialize all snippet writes for now.
   return withSnippetLock(args.id ?? args.name, () => addSnippetImpl(ctx, args));
 }
 export function updateSnippet(
@@ -264,32 +303,28 @@ export function instantiateSnippet(
   ctx: MutationContext,
   args: InstantiateSnippetArgs,
 ): Promise<Result<InstantiateSnippetResult, MutationError>> {
-  return withPageLock(args.pageId, () => instantiateSnippetImpl(ctx, args));
+  return withScreenLock(args.screenId, () => instantiateSnippetImpl(ctx, args));
 }
 export function updateSnippetArgs(
   ctx: MutationContext,
   args: UpdateSnippetArgsArgs,
 ): Promise<Result<UpdateSnippetArgsResult, MutationError>> {
-  return withPageLock(args.pageId, () => updateSnippetArgsImpl(ctx, args));
+  return withScreenLock(args.screenId, () => updateSnippetArgsImpl(ctx, args));
 }
 
-/** inspect is read-only; no mutex needed. */
+// ── Read-only ──────────────────────────────────────────────────
 export function inspect(
   ctx: MutationContext,
   args: InspectArgs,
 ): Promise<Result<InspectResult, MutationError>> {
   return inspectImpl(ctx, args);
 }
-
-/** Read-only dark-mode audit. */
 export function darkModeAudit(
   ctx: MutationContext,
   args: DarkModeAuditArgs,
 ): Promise<Result<DarkModeAuditResult, MutationError>> {
   return darkModeAuditImpl(ctx, args);
 }
-
-/** Read-only dark-mode audit, scoped to a single snippet body. */
 export function auditSnippet(
   ctx: MutationContext,
   args: AuditSnippetArgs,
@@ -300,15 +335,17 @@ export function auditSnippet(
 export type { MutationError } from "./errors.ts";
 export type {
   AddAnnotationArgs,
+  AddFrameArgs,
+  AddFrameResult,
+  AddGroupArgs,
+  AddGroupResult,
   AddNodeArgs,
   AddNodeResult,
   AddNoteArgs,
-  AddPageArgs,
-  AddPageResult,
+  AddScreenArgs,
+  AddScreenResult,
   AddSnippetArgs,
   AddSnippetResult,
-  AddVariantArgs,
-  AddVariantResult,
   AnnotationResult,
   ApplyClassesArgs,
   ApplyClassesBulkArgs,
@@ -324,31 +361,35 @@ export type {
   MutationContext,
   NoteResult,
   RemoveAnnotationArgs,
+  RemoveFrameArgs,
+  RemoveFrameResult,
+  RemoveGroupArgs,
+  RemoveGroupResult,
   RemoveNodeArgs,
   RemoveNodeResult,
   RemoveNoteArgs,
-  RemovePageArgs,
-  RemovePageResult,
+  RemoveScreenArgs,
+  RemoveScreenResult,
   RemoveSnippetArgs,
   RemoveSnippetResult,
-  RemoveVariantArgs,
-  RemoveVariantResult,
   SetNodeIdArgs,
   SetNodeIdResult,
   UpdateAnnotationArgs,
+  UpdateFrameArgs,
+  UpdateFrameResult,
+  UpdateFramesArgs,
+  UpdateFramesResult,
+  UpdateGroupArgs,
+  UpdateGroupResult,
   UpdateNoteArgs,
-  UpdatePageArgs,
-  UpdatePageResult,
   UpdatePropsArgs,
   UpdatePropsBulkArgs,
   UpdatePropsBulkResult,
   UpdatePropsResult,
+  UpdateScreenArgs,
+  UpdateScreenResult,
   UpdateSnippetArgs,
   UpdateSnippetArgsArgs,
   UpdateSnippetArgsResult,
   UpdateSnippetResult,
-  UpdateVariantArgs,
-  UpdateVariantResult,
-  UpdateVariantsArgs,
-  UpdateVariantsResult,
 };

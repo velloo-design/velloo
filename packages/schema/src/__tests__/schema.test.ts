@@ -1,16 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
+  BoardSchema,
   ConfigSchema,
+  FrameSchema,
   isComponentNode,
   isParamRef,
   isSnippetInstance,
   NodeIdSchema,
   NodeSchema,
   nodeId,
-  PageSchema,
+  ScreenSchema,
   SnippetSchema,
   ThemeSchema,
-  VariantSchema,
 } from "../index.ts";
 
 describe("NodeSchema", () => {
@@ -153,31 +154,71 @@ describe("SnippetSchema", () => {
   });
 });
 
-describe("VariantSchema", () => {
-  test("accepts a valid variant", () => {
-    const variant = {
-      id: "mobile",
-      name: "Mobile",
-      viewport: { w: 390, h: 844 },
-      tree: { $ref: "Card" },
+describe("ScreenSchema", () => {
+  test("accepts a valid screen", () => {
+    const screen = {
+      id: "landing",
+      name: "Landing",
+      tree: { $ref: "Card", children: [{ $ref: "Heading", props: { children: "Hi" } }] },
     };
-    expect(VariantSchema.safeParse(variant).success).toBe(true);
+    expect(ScreenSchema.safeParse(screen).success).toBe(true);
   });
 
-  test("rejects a variant with non-positive viewport", () => {
-    const variant = {
-      id: "mobile",
-      name: "Mobile",
-      viewport: { w: 0, h: 844 },
-      tree: { $ref: "Card" },
-    };
-    expect(VariantSchema.safeParse(variant).success).toBe(false);
+  test("rejects a screen without a tree", () => {
+    expect(ScreenSchema.safeParse({ id: "x", name: "X" }).success).toBe(false);
   });
 });
 
-describe("PageSchema", () => {
-  test("requires at least one variant", () => {
-    expect(PageSchema.safeParse({ name: "Empty", variants: [] }).success).toBe(false);
+describe("FrameSchema", () => {
+  test("accepts a valid frame", () => {
+    const frame = {
+      id: "f1",
+      screen: "landing",
+      x: 100,
+      y: 100,
+      w: 1440,
+      h: 900,
+    };
+    expect(FrameSchema.safeParse(frame).success).toBe(true);
+  });
+
+  test("accepts a frame with label + group", () => {
+    const frame = {
+      id: "f2",
+      screen: "landing",
+      x: 0,
+      y: 0,
+      w: 390,
+      h: 844,
+      label: "Mobile",
+      group: "marketing",
+    };
+    expect(FrameSchema.safeParse(frame).success).toBe(true);
+  });
+
+  test("rejects a frame with non-positive size", () => {
+    expect(
+      FrameSchema.safeParse({ id: "f", screen: "s", x: 0, y: 0, w: 0, h: 100 }).success,
+    ).toBe(false);
+  });
+});
+
+describe("BoardSchema", () => {
+  test("accepts an empty board", () => {
+    const parsed = BoardSchema.safeParse({});
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.frames).toEqual([]);
+      expect(parsed.data.groups).toEqual([]);
+    }
+  });
+
+  test("accepts a board with frames + groups", () => {
+    const board = {
+      frames: [{ id: "f1", screen: "landing", x: 0, y: 0, w: 390, h: 844 }],
+      groups: [{ id: "marketing", name: "Marketing", color: "#7C3AED" }],
+    };
+    expect(BoardSchema.safeParse(board).success).toBe(true);
   });
 });
 
@@ -186,7 +227,28 @@ describe("ConfigSchema", () => {
     const config = {
       schemaVersion: 1,
       toolVersion: "0.1.0",
-      componentSource: { framework: "shadcn-react", snapshotVersion: "0.0.0-stub" },
+      library: {
+        id: "shadcn-react",
+        version: "2.3.4",
+        source: "registry:shadcn",
+        componentsPath: "components",
+      },
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  test("accepts experimental shared source", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      library: {
+        id: "shadcn-react",
+        version: "2.3.4",
+        source: "shared:../apps/web/components",
+        componentsPath: "../apps/web/components",
+        experimental: "shared",
+      },
       viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
     expect(ConfigSchema.safeParse(config).success).toBe(true);
@@ -196,7 +258,12 @@ describe("ConfigSchema", () => {
     const config = {
       schemaVersion: 1,
       toolVersion: "0.1.0",
-      componentSource: { framework: "shadcn-vue", snapshotVersion: "0.0.0" },
+      library: {
+        id: "shadcn-vue",
+        version: "2.3.4",
+        source: "registry:shadcn",
+        componentsPath: "components",
+      },
       viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
     expect(ConfigSchema.safeParse(config).success).toBe(false);
@@ -206,7 +273,12 @@ describe("ConfigSchema", () => {
     const config = {
       schemaVersion: 2,
       toolVersion: "0.1.0",
-      componentSource: { framework: "shadcn-react", snapshotVersion: "0.0.0" },
+      library: {
+        id: "shadcn-react",
+        version: "2.3.4",
+        source: "registry:shadcn",
+        componentsPath: "components",
+      },
       viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
     expect(ConfigSchema.safeParse(config).success).toBe(false);
@@ -249,7 +321,7 @@ describe("AnnotationSchema", () => {
     const { AnnotationSchema } = await import("../annotation.ts");
     const parsed = AnnotationSchema.safeParse({
       id: "a1",
-      target: { variantId: "mobile", locator: "@hero-cta" },
+      target: { locator: "@hero-cta" },
       body: "**Important** — make this land harder.",
     });
     expect(parsed.success).toBe(true);
@@ -262,7 +334,7 @@ describe("AnnotationSchema", () => {
     const { AnnotationSchema } = await import("../annotation.ts");
     const parsed = AnnotationSchema.safeParse({
       id: "a2",
-      target: { variantId: "desktop", locator: [0, 2, 1] },
+      target: { locator: [0, 2, 1] },
       position: { x: -200, y: 40 },
       body: "x",
       collapsed: true,
@@ -275,14 +347,14 @@ describe("AnnotationSchema", () => {
     expect(
       AnnotationSchema.safeParse({
         id: "a3",
-        target: { variantId: "v", locator: "1-bad-leading-digit" },
+        target: { locator: "1-bad-leading-digit" },
         body: "x",
       }).success,
     ).toBe(false);
     expect(
       AnnotationSchema.safeParse({
         id: "a4",
-        target: { variantId: "v", locator: "@" },
+        target: { locator: "@" },
         body: "x",
       }).success,
     ).toBe(false);
