@@ -1,4 +1,5 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
+import { isComponentNode } from "@velloo/schema";
 import { parentOf, pathAt } from "../path.ts";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
@@ -49,7 +50,10 @@ export async function moveNode(
     const fromParentInfo = parentOf(fromPath);
     if (!fromParentInfo) return yield* $(err(invalidPath("no parent", fromPath)));
     const fromParent = pathAt(nextVariant.tree, fromParentInfo.parent);
-    if (!fromParent?.children || fromParentInfo.index >= fromParent.children.length) {
+    if (!fromParent || !isComponentNode(fromParent) || !fromParent.children) {
+      return yield* $(err(invalidPath(`No node at path ${JSON.stringify(fromPath)}`, fromPath)));
+    }
+    if (fromParentInfo.index >= fromParent.children.length) {
       return yield* $(err(invalidPath(`No node at path ${JSON.stringify(fromPath)}`, fromPath)));
     }
     const [moved] = fromParent.children.splice(fromParentInfo.index, 1);
@@ -75,7 +79,7 @@ export async function moveNode(
     }
 
     const target = pathAt(nextVariant.tree, adjustedToParent);
-    if (!target) {
+    if (!target || !isComponentNode(target)) {
       return yield* $(
         err(invalidPath(`No parent at ${JSON.stringify(adjustedToParent)}`, adjustedToParent)),
       );

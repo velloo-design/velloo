@@ -28,6 +28,20 @@ function slugify(s: string): string {
   );
 }
 
+/**
+ * Pick an id + name for the seeded variant from its viewport. The default
+ * was always "mobile" regardless of what the caller asked for; agents who
+ * passed a desktop viewport got a variant labeled Mobile and had to rename.
+ */
+function variantIdentityForViewport({ w }: { w: number; h: number }): {
+  id: string;
+  name: string;
+} {
+  if (w <= 480) return { id: "mobile", name: "Mobile" };
+  if (w <= 900) return { id: "tablet", name: "Tablet" };
+  return { id: "desktop", name: "Desktop" };
+}
+
 /** Create a new page with a single bare Card variant. */
 export async function addPage(
   ctx: MutationContext,
@@ -43,12 +57,12 @@ export async function addPage(
   }
 
   const viewport = args.viewport ?? { w: 390, h: 844 };
+  const identity = variantIdentityForViewport(viewport);
   const page: Page = {
     name: args.name,
     variants: [
       {
-        id: "mobile",
-        name: "Mobile",
+        ...identity,
         viewport,
         tree: { $ref: "Card", props: { className: "p-6" } },
       },

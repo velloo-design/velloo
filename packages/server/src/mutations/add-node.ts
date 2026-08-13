@@ -1,9 +1,9 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
-import type { Node } from "@velloo/schema";
+import type { ComponentNode, Node } from "@velloo/schema";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
-import { ensureKnownComponent, getNode, getPage, getVariant } from "./lookup.ts";
+import { ensureKnownComponent, getComponentNode, getPage, getVariant } from "./lookup.ts";
 import { persistPage } from "./persist.ts";
 
 export interface AddNodeArgs {
@@ -36,7 +36,7 @@ export async function addNode(
     const nextVariant = next.variants.find((v) => v.id === variantId);
     if (!nextVariant) throw new Error("invariant: variant lost on clone");
 
-    const parent = yield* $(getNode(nextVariant.tree, parentPath));
+    const parent = yield* $(getComponentNode(nextVariant.tree, parentPath));
     if (!parent.children) parent.children = [];
     const idx = args.index ?? parent.children.length;
     if (idx < 0 || idx > parent.children.length) {
@@ -50,7 +50,7 @@ export async function addNode(
       );
     }
 
-    const newNode: Node = {
+    const newNode: ComponentNode = {
       $ref: componentRef,
       ...(args.props ? { props: args.props } : {}),
       ...(args.children ? { children: args.children } : {}),

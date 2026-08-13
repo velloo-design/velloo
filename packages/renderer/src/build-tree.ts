@@ -1,4 +1,11 @@
-import type { Node } from "@velloo/schema";
+import {
+  isComponentNode,
+  isParamRef,
+  isSnippetInstance,
+  type Node,
+  type Snippet,
+  type SnippetInstance,
+} from "@velloo/schema";
 import { isKnownComponent, registry } from "@velloo/shadcn-snapshot";
 import { createElement, Fragment, type ReactElement, type ReactNode } from "react";
 
@@ -9,24 +16,139 @@ export class UnknownComponentError extends Error {
   }
 }
 
-/**
- * Walk the design Node tree and produce a React element tree, resolving
- * each `$ref` against the bundled snapshot registry. Each rendered element
- * carries `data-node-path="i.j.k"` so the canvas iframe runtime can map
- * a clicked DOM element back to its position in the design tree.
- */
-export function buildTree(node: Node, path: number[] = []): ReactElement {
-  if (!isKnownComponent(node.$ref)) throw new UnknownComponentError(node.$ref);
+export class UnknownSnippetError extends Error {
+  constructor(public readonly snippetId: string) {
+    super(`Unknown snippet $snippet="${snippetId}".`);
+    this.name = "UnknownSnippetError";
+  }
+}
 
+export class SnippetCycleError extends Error {
+  readonly snippetId: string;
+  readonly cycle: string[];
+  constructor(snippetId: string, stack: string[]) {
+    super(`Snippet cycle detected: ${[...stack, snippetId].join(" → ")}`);
+    this.name = "SnippetCycleError";
+    this.snippetId = snippetId;
+    this.cycle = stack;
+  }
+}
+
+export class SnippetParamError extends Error {
+  constructor(
+    public readonly snippetId: string,
+    public readonly paramName: string,
+    message?: string,
+  ) {
+    super(message ?? `Snippet "${snippetId}": required param "${paramName}" not supplied.`);
+    this.name = "SnippetParamError";
+  }
+}
+
+export class ParamRefError extends Error {
+  constructor(public readonly paramName: string) {
+    super(`$param "${paramName}" appears outside a snippet body.`);
+    this.name = "ParamRefError";
+  }
+}
+
+export interface BuildTreeOptions {
+  /** Snippet registry used to resolve `$snippet` nodes. Required if the tree contains any. */
+  snippets?: Map<string, Snippet>;
+}
+
+/**
+ * Recursively replace `{ $param: name }` tokens with the corresponding arg
+ * value anywhere in a JSON-like structure. Walks props as well as children
+ * — agents commonly inject string params into `props.children`.
+ */
+function substituteParams(
+  value: unknown,
+  args: Record<string, unknown>,
+  snippetId: string,
+): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((v) => substituteParams(v, args, snippetId));
+  if (typeof (value as { $param?: unknown }).$param === "string") {
+    const name = (value as { $param: string }).$param;
+    if (!(name in args)) throw new SnippetParamError(snippetId, name);
+    return args[name];
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = substituteParams(v, args, snippetId);
+  }
+  return out;
+}
+
+/**
+ * Materialize a snippet instance: resolve args (declared params, defaults
+ * for missing optional ones, error on missing required), then substitute
+ * `$param` placeholders throughout the body.
+ */
+function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet): Node {
+  const resolvedArgs: Record<string, unknown> = {};
+  const passed = instance.args ?? {};
+  for (const param of snippet.params) {
+    if (param.name in passed) {
+      resolvedArgs[param.name] = passed[param.name];
+    } else if (param.default !== undefined) {
+      resolvedArgs[param.name] = param.default;
+    } else {
+      throw new SnippetParamError(snippet.id, param.name);
+    }
+  }
+  return substituteParams(snippet.tree, resolvedArgs, snippet.id) as Node;
+}
+
+/**
+ * Walk the design Node tree and produce a React element tree.
+ *
+ * `lockedPath` is set when we descend into a resolved snippet body so every
+ * DOM element inside the snippet inherits the *instance's* path. The canvas's
+ * click-to-select logic then maps any click inside the snippet to the
+ * instance node, which is the addressable unit from the page's POV.
+ */
+export function buildTree(
+  node: Node,
+  path: number[] = [],
+  opts: BuildTreeOptions = {},
+  stack: string[] = [],
+  lockedPath: number[] | null = null,
+): ReactElement {
+  if (isSnippetInstance(node)) {
+    const snippets = opts.snippets;
+    if (!snippets) throw new UnknownSnippetError(node.$snippet);
+    const snippet = snippets.get(node.$snippet);
+    if (!snippet) throw new UnknownSnippetError(node.$snippet);
+    if (stack.includes(snippet.id)) throw new SnippetCycleError(snippet.id, stack);
+    const resolved = resolveSnippetBody(node, snippet);
+    // Lock the path to the snippet instance's path so every inner DOM node
+    // resolves back to the instance on click.
+    return buildTree(resolved, path, opts, [...stack, snippet.id], lockedPath ?? path);
+  }
+
+  if (isParamRef(node)) {
+    throw new ParamRefError(node.$param);
+  }
+
+  if (!isComponentNode(node)) {
+    // Unreachable: schema union is exhausted above.
+    throw new Error(`buildTree: unknown node shape: ${JSON.stringify(node)}`);
+  }
+
+  if (!isKnownComponent(node.$ref)) throw new UnknownComponentError(node.$ref);
   const Component = registry[node.$ref];
   if (!Component) throw new UnknownComponentError(node.$ref);
 
   const { children: childrenProp, ...restProps } = (node.props ?? {}) as Record<string, unknown>;
-  const dataNodePath = path.join(".");
+  const dataNodePath = (lockedPath ?? path).join(".");
 
   let children: ReactNode;
   if (Array.isArray(node.children) && node.children.length > 0) {
-    children = node.children.map((child, i) => buildTree(child, [...path, i]));
+    children = node.children.map((child, i) =>
+      buildTree(child, [...path, i], opts, stack, lockedPath),
+    );
   } else if (childrenProp !== undefined) {
     children = childrenProp as ReactNode;
   }
@@ -41,6 +163,6 @@ export function buildTree(node: Node, path: number[] = []): ReactElement {
 /**
  * Wrap the tree root in a Fragment so consumers can render it directly.
  */
-export function buildRoot(node: Node): ReactElement {
-  return createElement(Fragment, null, buildTree(node, []));
+export function buildRoot(node: Node, opts: BuildTreeOptions = {}): ReactElement {
+  return createElement(Fragment, null, buildTree(node, [], opts));
 }

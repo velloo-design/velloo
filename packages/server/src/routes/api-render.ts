@@ -17,7 +17,11 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
-      const { html } = await renderVariant(variant, f.theme, { snapshotCss, dark });
+      const { html } = await renderVariant(variant, f.theme, {
+        snapshotCss,
+        snippets: f.snippets,
+        dark,
+      });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
     } catch (err) {
       if (err instanceof UnknownComponentError) {

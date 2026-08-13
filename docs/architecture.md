@@ -11,10 +11,13 @@ my-product/
 ├── apps/web/                  # the user's real app, untouched
 └── product-design/            # the design "file" (a folder)
     ├── .design/
-    │   ├── config.json        # tool version, locked shadcn version, viewport presets
+    │   ├── config.json        # tool version, locked shadcn version, viewport presets, codegen options
     │   └── cache/             # gitignored: screenshots, build artifacts
     ├── theme/
     │   └── default.json       # unified tokens (colors, type, spacing, radius)
+    ├── snippets/              # reusable subtrees with typed params
+    │   ├── feature-card.json
+    │   └── hero-banner.json
     ├── assets/                # imported images, SVGs
     └── pages/
         ├── onboarding.json    # one design page = N variants
@@ -51,7 +54,41 @@ my-product/
 }
 ```
 
-Nodes are `{ $ref: ComponentId, props?, children? }`. Props are JSON literals. No fixtures in V0 — props inline.
+A node is one of:
+
+- `{ $ref: ComponentId, props?, children? }` — a real shadcn / velloo component
+- `{ $snippet: SnippetId, args? }` — instance of a reusable subtree defined in `snippets/`
+- `{ $param: ParamName }` — placeholder only valid inside a snippet body; substituted at render time
+
+Props are JSON literals. No fixtures in V0 — props inline.
+
+```json
+// snippets/feature-card.json
+{
+  "id": "feature-card",
+  "name": "Feature Card",
+  "params": [
+    { "name": "title", "type": "string" },
+    { "name": "body",  "type": "string" },
+    { "name": "icon",  "type": "string", "default": "Sparkles" }
+  ],
+  "tree": {
+    "$ref": "Card",
+    "props": { "className": "p-6 flex flex-col gap-3" },
+    "children": [
+      { "$ref": "Icon", "props": { "name": { "$param": "icon" } } },
+      { "$ref": "Heading", "props": { "level": 3, "children": { "$param": "title" } } },
+      { "$ref": "Text",    "props": { "children": { "$param": "body" } } }
+    ]
+  }
+}
+```
+
+Snippet instances reference their library entry by id:
+
+```json
+{ "$snippet": "feature-card", "args": { "title": "Fast", "body": "Snappy by default." } }
+```
 
 ```json
 // .design/config.json
@@ -103,8 +140,8 @@ V0 ships with **bundled shadcn-react only**, locked per design folder.
 
 - Pinned snapshot of shadcn at a known version (V0 commits to **Tailwind v4 only**).
 - Prop schemas extracted via `ts-morph` at build time, embedded in the binary.
-- ~25–30 most-used shadcn components for V0.
-- Pre-compiled Tailwind CSS bundled — canvas does not run Tailwind at user runtime.
+- ~25–30 most-used shadcn components for V0, plus a small `velloo/` set (typography, Icon over lucide-react).
+- **Tailwind is JIT-compiled at server runtime** against the snapshot components + the live pages folder. Any utility Tailwind supports — including ones we never thought to safelist — renders.
 
 Stateful components (Sidebar, Toaster, Form-with-submit) get explicit "design-mode behavior" declarations: most placeable with stub providers; a few documented as not-renderable. Per-component flags live in the bundled shadcn snapshot manifest.
 
@@ -134,6 +171,7 @@ Requirements for V0 codegen output:
 - Tailwind class consolidation (no duplicates, no string-concat soup, deterministic merge order on conflicts)
 - Prettier pass at the end
 - Output indistinguishable from hand-written shadcn code
+- Snippets emit as real React components under `components/snippets/<PascalName>.tsx` with typed props; instances become `<PascalName ... />` in pages
 
 **This is the moment of truth.** If output is mediocre, the whole pitch collapses. Budget review iterations on real outputs, not just unit tests.
 

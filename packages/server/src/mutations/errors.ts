@@ -15,7 +15,15 @@ export type MutationError =
   | { kind: "VariantIdConflict"; pageId: string; id: string }
   | { kind: "PageIdExhausted"; base: string }
   /** Request body failed zod validation. `issues` carries zod's ZodIssue[]. */
-  | { kind: "BadRequest"; message: string; issues?: unknown };
+  | { kind: "BadRequest"; message: string; issues?: unknown }
+  | { kind: "SnippetNotFound"; snippetId: string }
+  /** Args passed to instantiate_snippet don't match declared params. */
+  | { kind: "SnippetParamMismatch"; snippetId: string; reason: string; details?: unknown }
+  /** Snippet body would reference itself directly or transitively. */
+  | { kind: "SnippetCycle"; snippetId: string; viaPath: string[] }
+  /** remove_snippet refused: pages still instantiate it. */
+  | { kind: "SnippetInUse"; snippetId: string; pageIds: string[] }
+  | { kind: "SnippetIdConflict"; snippetId: string };
 
 // Constructor helpers — keep mutation bodies readable.
 export const pageNotFound = (pageId: string): MutationError => ({
@@ -59,6 +67,34 @@ export const badRequest = (message: string, issues?: unknown): MutationError => 
   kind: "BadRequest",
   message,
   ...(issues !== undefined ? { issues } : {}),
+});
+export const snippetNotFound = (snippetId: string): MutationError => ({
+  kind: "SnippetNotFound",
+  snippetId,
+});
+export const snippetParamMismatch = (
+  snippetId: string,
+  reason: string,
+  details?: unknown,
+): MutationError => ({
+  kind: "SnippetParamMismatch",
+  snippetId,
+  reason,
+  ...(details !== undefined ? { details } : {}),
+});
+export const snippetCycle = (snippetId: string, viaPath: string[]): MutationError => ({
+  kind: "SnippetCycle",
+  snippetId,
+  viaPath,
+});
+export const snippetInUse = (snippetId: string, pageIds: string[]): MutationError => ({
+  kind: "SnippetInUse",
+  snippetId,
+  pageIds,
+});
+export const snippetIdConflict = (snippetId: string): MutationError => ({
+  kind: "SnippetIdConflict",
+  snippetId,
 });
 
 /**

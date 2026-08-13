@@ -1,4 +1,4 @@
-import type { Page, Theme } from "@velloo/schema";
+import type { Page, Snippet, Theme } from "@velloo/schema";
 
 /**
  * Coarse, server-side undo / redo history. Each persisted page or theme write
@@ -13,7 +13,8 @@ import type { Page, Theme } from "@velloo/schema";
  */
 export type HistoryEntry =
   | { kind: "page"; pageId: string; page: Page; ts?: number }
-  | { kind: "theme"; theme: Theme; ts?: number };
+  | { kind: "theme"; theme: Theme; ts?: number }
+  | { kind: "snippet"; snippetId: string; snippet: Snippet | null; ts?: number };
 
 const MAX = 50;
 const COALESCE_WINDOW_MS = 800;
@@ -21,7 +22,9 @@ const undoStack: HistoryEntry[] = [];
 const redoStack: HistoryEntry[] = [];
 
 function keyOf(e: HistoryEntry): string {
-  return e.kind === "page" ? `page:${e.pageId}` : "theme";
+  if (e.kind === "page") return `page:${e.pageId}`;
+  if (e.kind === "snippet") return `snippet:${e.snippetId}`;
+  return "theme";
 }
 
 /** Push a snapshot of the *previous* state before a write. Clears redo. */

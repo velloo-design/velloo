@@ -1,7 +1,7 @@
 import type { Page } from "@velloo/schema";
-import { MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { MoreHorizontal, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { mutate, type PageMeta } from "../api.ts";
+import { mutate, type PageMeta, type SnippetMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
@@ -9,12 +9,13 @@ import { Tree } from "./Tree.tsx";
 
 interface Props {
   pages: PageMeta[];
+  snippets: SnippetMeta[];
   currentPageId: string | null;
   currentPage: Page | null;
   snapshotVersion: string;
 }
 
-export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: Props) {
+export function Sidebar({ pages, snippets, currentPageId, currentPage, snapshotVersion }: Props) {
   const selectPage = useCanvas((s) => s.selectPage);
   const selection = useCanvas((s) => s.selection);
   const cursorMode = useCanvas((s) => s.cursorMode);
@@ -189,6 +190,50 @@ export function Sidebar({ pages, currentPageId, currentPage, snapshotVersion }: 
           )}
         </div>
       </section>
+
+      {snippets.length > 0 ? (
+        <section className="border-t border-[var(--color-border)] py-2">
+          <div className="px-4 py-2 flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
+            <Sparkles size={11} strokeWidth={2} />
+            <span>Snippets</span>
+          </div>
+          <ul className="flex flex-col px-2 gap-0.5">
+            {snippets.map((s) => {
+              const instantiate = async () => {
+                if (!currentPage || !currentPageId || !activeVariantId) return;
+                try {
+                  await mutate.instantiateSnippet({
+                    pageId: currentPageId,
+                    variantId: activeVariantId,
+                    parentPath: selection?.path
+                      ? selection.path.split(".").filter(Boolean).map(Number)
+                      : [],
+                    snippetId: s.id,
+                  });
+                } catch (err) {
+                  toastError(err, "Could not instantiate snippet");
+                }
+              };
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={instantiate}
+                    disabled={!currentPage}
+                    className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-[var(--color-bg)] text-[var(--color-fg)] disabled:opacity-40 disabled:pointer-events-none"
+                    title={`Click to instantiate. ${s.params.length} param${s.params.length === 1 ? "" : "s"}.`}
+                  >
+                    <div className="font-medium truncate">{s.name}</div>
+                    <div className="text-xs text-[var(--color-fg-muted)]">
+                      {s.params.length === 0 ? "no params" : s.params.map((p) => p.name).join(", ")}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <footer className="px-4 py-2 text-xs text-[var(--color-fg-muted)] border-t border-[var(--color-border)]">
         shadcn snapshot {snapshotVersion}

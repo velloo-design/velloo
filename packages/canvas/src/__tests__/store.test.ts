@@ -14,6 +14,7 @@ const designSummary: DesignSummary = {
       variants: [{ id: "mobile", name: "Mobile", viewport: { w: 390, h: 844 } }],
     },
   ],
+  snippets: [],
 };
 
 const page: Page = {
@@ -106,9 +107,13 @@ describe("canvas store", () => {
         },
       ],
     };
-    expect(selectedNode(tree, { variantId: "mobile", path: "" })?.$ref).toBe("Card");
-    expect(selectedNode(tree, { variantId: "mobile", path: "0" })?.$ref).toBe("Heading");
-    expect(selectedNode(tree, { variantId: "mobile", path: "1.0" })?.$ref).toBe("Button");
+    const refOf = (path: string) => {
+      const n = selectedNode(tree, { variantId: "mobile", path });
+      return n && "$ref" in n ? n.$ref : null;
+    };
+    expect(refOf("")).toBe("Card");
+    expect(refOf("0")).toBe("Heading");
+    expect(refOf("1.0")).toBe("Button");
     expect(selectedNode(tree, { variantId: "mobile", path: "5" })).toBeNull();
   });
 });

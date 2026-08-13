@@ -1,4 +1,4 @@
-import type { Node } from "@velloo/schema";
+import { isComponentNode, type Node } from "@velloo/schema";
 
 /** Convert a path array to its DOM string form ("0.2.1"; root = ""). */
 export function pathToString(path: number[]): string {
@@ -17,11 +17,16 @@ export function pathFromString(s: string): number[] {
   });
 }
 
-/** Resolve a path against a root node. Returns null if any index is out of range. */
+/**
+ * Resolve a path against a root node. Returns null if any index is out of
+ * range OR if the path tries to descend into a non-component node (snippet
+ * instances are opaque; param refs have no children).
+ */
 export function pathAt(root: Node, path: number[]): Node | null {
   let node: Node | undefined = root;
   for (const idx of path) {
-    if (!node?.children || idx < 0 || idx >= node.children.length) return null;
+    if (!node || !isComponentNode(node)) return null;
+    if (!node.children || idx < 0 || idx >= node.children.length) return null;
     node = node.children[idx];
   }
   return node ?? null;

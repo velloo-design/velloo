@@ -4,7 +4,13 @@ import { canvasDistPath } from "@velloo/canvas";
 import type { ServerWebSocket } from "bun";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
-import { type DesignFolder, loadDesignFolder, reloadPage, reloadTheme } from "./design-folder.ts";
+import {
+  type DesignFolder,
+  loadDesignFolder,
+  reloadPage,
+  reloadSnippet,
+  reloadTheme,
+} from "./design-folder.ts";
 import { createMcpServer } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -71,7 +77,8 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   // edits don't touch class lists, but we drop the cache anyway for symmetry —
   // the Tailwind compile is cheap on a warm process.
   const broadcast = (e: WatchEvent) => {
-    if (e.type === "page-changed" || e.type === "theme-changed") {
+    // Any of these can introduce new classes Tailwind hasn't compiled yet.
+    if (e.type === "page-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
       jit.invalidate();
     }
     broadcaster.broadcast(e);
@@ -86,6 +93,8 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         await reloadPage(folder, event.pageId);
       } else if (event.type === "theme-changed") {
         await reloadTheme(folder);
+      } else if (event.type === "snippet-changed") {
+        await reloadSnippet(folder, event.snippetId);
       }
       broadcast(event);
     } catch (err) {
@@ -134,6 +143,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const mcp = await createMcpServer(ctx, {
     port: opts.mcpPort ?? 7301,
     host: opts.host ?? "127.0.0.1",
+    jit,
   });
 
   return {

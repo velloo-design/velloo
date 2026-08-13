@@ -2,7 +2,10 @@ export { colorizeDiff, diffFile, type FileDiff } from "./diff.ts";
 export {
   type EmitCodeOptions,
   type EmitCodeResult,
+  type EmitSnippetOptions,
   emitCode,
+  emitSnippet,
+  snippetIdsReferenced,
 } from "./emit-code/index.ts";
 export {
   type EmitThemeFile,

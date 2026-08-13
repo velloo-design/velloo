@@ -24,6 +24,7 @@ const EmitThemeBody = z.object({
 function codegenToHttp(c: Context, error: CodegenError): Response {
   switch (error.kind) {
     case "VariantNotFound":
+    case "SnippetNotFound":
       return c.json({ error }, 404);
     case "UnknownComponent":
       return c.json({ error }, 422);
@@ -63,6 +64,7 @@ export function createEmitRouter(folderFor: () => DesignFolder): Hono {
       outputPath: out,
       apply: args.apply ?? false,
       componentsAlias: args.componentsAlias ?? folder.config.codegen?.componentsAlias,
+      snippets: folder.snippets,
     });
     if (!result.ok) return codegenToHttp(c, result.error);
     return c.json({

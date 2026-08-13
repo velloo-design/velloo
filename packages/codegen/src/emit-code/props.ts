@@ -1,16 +1,33 @@
 /**
  * Serialize a single prop (name + value) to a JSX attribute string.
  * Returns null when the prop should be omitted entirely.
+ *
+ * `paramNames` is set when emitting inside a snippet body — any object of
+ * shape `{ $param: "x" }` becomes `{x}` instead of being JSON-encoded.
  */
-export function serializeProp(name: string, value: unknown): string | null {
+export function serializeProp(
+  name: string,
+  value: unknown,
+  paramNames?: Set<string>,
+): string | null {
   if (value === undefined || value === null) return null;
+
+  if (
+    paramNames &&
+    typeof value === "object" &&
+    typeof (value as { $param?: unknown }).$param === "string"
+  ) {
+    const paramName = (value as { $param: string }).$param;
+    if (paramNames.has(paramName)) {
+      return `${name}={${paramName}}`;
+    }
+  }
 
   if (typeof value === "string") {
     return `${name}=${jsxStringLiteral(value)}`;
   }
 
   if (typeof value === "boolean") {
-    // Idiomatic JSX: <Button asChild /> vs <Button asChild={false} />.
     return value ? name : `${name}={false}`;
   }
 
@@ -18,8 +35,6 @@ export function serializeProp(name: string, value: unknown): string | null {
     return `${name}={${value}}`;
   }
 
-  // Objects, arrays, etc — JSON-serialize inside braces. The user can hand-edit
-  // post-emit if they need something fancier; this keeps codegen lossless.
   return `${name}={${JSON.stringify(value)}}`;
 }
 

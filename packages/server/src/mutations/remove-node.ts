@@ -1,4 +1,5 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
+import { isComponentNode } from "@velloo/schema";
 import { parentOf, pathAt } from "../path.ts";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
@@ -37,7 +38,10 @@ export async function removeNode(
     const parentInfo = parentOf(path);
     if (!parentInfo) return yield* $(err(invalidPath("no parent", path)));
     const parent = pathAt(nextVariant.tree, parentInfo.parent);
-    if (!parent?.children || parentInfo.index >= parent.children.length) {
+    if (!parent || !isComponentNode(parent) || !parent.children) {
+      return yield* $(err(invalidPath(`No node at path ${JSON.stringify(path)}`, path)));
+    }
+    if (parentInfo.index >= parent.children.length) {
       return yield* $(err(invalidPath(`No node at path ${JSON.stringify(path)}`, path)));
     }
 
@@ -47,6 +51,13 @@ export async function removeNode(
     await persistPage(ctx.folder, pageId, next);
     ctx.broadcast({ type: "page-changed", pageId });
 
-    return { removedRef: removed?.$ref ?? "?" };
+    return { removedRef: describeRemoved(removed) };
   });
+}
+
+function describeRemoved(node: import("@velloo/schema").Node | undefined): string {
+  if (!node) return "?";
+  if (isComponentNode(node)) return node.$ref;
+  if ("$snippet" in node) return `@${node.$snippet}`;
+  return `$param:${(node as { $param: string }).$param}`;
 }

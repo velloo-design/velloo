@@ -1,4 +1,4 @@
-import { NodeSchema } from "@velloo/schema";
+import { NodeSchema, SnippetParamSchema } from "@velloo/schema";
 import { z } from "zod";
 
 const Path = z.array(z.number().int().nonnegative());
@@ -97,4 +97,40 @@ export const ApplyClassesBody = z.object({
   variantId: z.string().min(1),
   path: Path.default([]),
   classes: z.string(),
+});
+
+export const AddSnippetBody = z.object({
+  name: z.string().min(1),
+  id: z.string().min(1).optional(),
+  params: z.array(SnippetParamSchema).default([]),
+  tree: NodeSchema,
+});
+
+export const UpdateSnippetBody = z.object({
+  snippetId: z.string().min(1),
+  patch: z.object({
+    name: z.string().min(1).optional(),
+    params: z.array(SnippetParamSchema).optional(),
+    tree: NodeSchema.optional(),
+  }),
+});
+
+export const RemoveSnippetBody = z.object({
+  snippetId: z.string().min(1),
+});
+
+export const InstantiateSnippetBody = z.object({
+  pageId: z.string().min(1),
+  variantId: z.string().min(1),
+  parentPath: Path.default([]),
+  snippetId: z.string().min(1),
+  args: z.record(z.string(), z.unknown()).optional(),
+  index: z.number().int().nonnegative().optional(),
+});
+
+export const UpdateSnippetArgsBody = z.object({
+  pageId: z.string().min(1),
+  variantId: z.string().min(1),
+  path: Path,
+  argPatch: z.record(z.string(), z.unknown()),
 });

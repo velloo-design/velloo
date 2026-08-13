@@ -2,7 +2,7 @@ import { $, DoAsync, type Result } from "@velloo/result";
 import { clonePage } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
-import { getNode, getPage, getVariant } from "./lookup.ts";
+import { getComponentNode, getPage, getVariant } from "./lookup.ts";
 import { persistPage } from "./persist.ts";
 
 export interface UpdatePropsArgs {
@@ -30,7 +30,7 @@ export async function updateProps(
     const nextVariant = next.variants.find((v) => v.id === variantId);
     if (!nextVariant) throw new Error("invariant: variant lost on clone");
 
-    const node = yield* $(getNode(nextVariant.tree, path));
+    const node = yield* $(getComponentNode(nextVariant.tree, path));
 
     const merged: Record<string, unknown> = { ...(node.props ?? {}) };
     for (const [k, v] of Object.entries(propPatch)) {

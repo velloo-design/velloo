@@ -1,10 +1,30 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadManifest, snapshotVersion } from "@velloo/shadcn-snapshot";
+import { type ComponentDescriptor, loadManifest, snapshotVersion } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
 
 function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+}
+
+interface ComponentSummary {
+  id: string;
+  category: ComponentDescriptor["category"];
+  source: ComponentDescriptor["source"];
+  /** Comma-separated list of prop names for quick scan. */
+  props: string[];
+  designModeNotes?: string;
+}
+
+function toSummary(c: ComponentDescriptor): ComponentSummary {
+  const out: ComponentSummary = {
+    id: c.id,
+    category: c.category,
+    source: c.source,
+    props: c.props.map((p) => p.name),
+  };
+  if (c.designModeNotes) out.designModeNotes = c.designModeNotes;
+  return out;
 }
 
 export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): void {
@@ -69,15 +89,19 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        "List the bundled shadcn-snapshot components with their prop schemas. Pass `filter` to substring-match against ids.",
-      inputSchema: { filter: z.string().optional() },
+        'List the bundled shadcn-snapshot components. Default `mode: "summary"` returns only id/category/source/prop-names — call with `mode: "full"` once you\'ve narrowed to the component(s) you need. `filter` substring-matches ids (case-insensitive).',
+      inputSchema: {
+        filter: z.string().optional(),
+        mode: z.enum(["summary", "full"]).optional(),
+      },
     },
-    async ({ filter }) => {
+    async ({ filter, mode }) => {
       const manifest = await loadManifest();
       const filtered = filter
         ? manifest.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()))
         : manifest;
-      return jsonResult(filtered);
+      const out = (mode ?? "summary") === "full" ? filtered : filtered.map(toSummary);
+      return jsonResult(out);
     },
   );
 
@@ -88,5 +112,40 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       inputSchema: {},
     },
     async () => jsonResult(ctx.folder.theme),
+  );
+
+  mcp.registerTool(
+    "list_snippets",
+    {
+      description:
+        "List every snippet defined in design/snippets/. Returns { id, name, params } per entry.",
+      inputSchema: {},
+    },
+    async () => {
+      const snippets = [...ctx.folder.snippets.entries()].map(([id, snippet]) => ({
+        id,
+        name: snippet.name,
+        params: snippet.params,
+      }));
+      return jsonResult({ snippets });
+    },
+  );
+
+  mcp.registerTool(
+    "get_snippet",
+    {
+      description: "Return the full JSON for a single snippet (id, name, params, body tree).",
+      inputSchema: { snippetId: z.string() },
+    },
+    async ({ snippetId }) => {
+      const snippet = ctx.folder.snippets.get(snippetId);
+      if (!snippet) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `Snippet not found: ${snippetId}` }],
+        };
+      }
+      return jsonResult(snippet);
+    },
   );
 }

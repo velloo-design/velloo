@@ -1,3 +1,4 @@
+import { isComponentNode, isSnippetInstance } from "@velloo/schema";
 import { useEffect, useMemo, useRef } from "react";
 import { mutate } from "../api.ts";
 import { pathFromString } from "../path.ts";
@@ -5,6 +6,7 @@ import { selectedNode, useCanvas } from "../store.ts";
 import { ClassesField } from "./ClassesField.tsx";
 import { CopyField } from "./CopyField.tsx";
 import { PropField } from "./PropField.tsx";
+import { SnippetInspector } from "./SnippetInspector.tsx";
 import { Toggle } from "./Toggle.tsx";
 
 interface Props {
@@ -30,7 +32,7 @@ export function Inspector({ pageId }: Props) {
 
   const node = useMemo(() => selectedNode(currentPage, selection), [currentPage, selection]);
   const descriptor = useMemo(() => {
-    if (!node || !components) return null;
+    if (!node || !components || !isComponentNode(node)) return null;
     return components.find((c) => c.id === node.$ref) ?? null;
   }, [node, components]);
 
@@ -48,6 +50,21 @@ export function Inspector({ pageId }: Props) {
     return (
       <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
         Selected node is no longer in the tree.
+      </div>
+    );
+  }
+
+  // Snippet instances get a dedicated inspector — different shape (args, not props).
+  if (isSnippetInstance(node)) {
+    return <SnippetInspector pageId={pageId} selection={selection} node={node} />;
+  }
+
+  // Param refs are only valid inside snippet bodies — we don't currently surface
+  // them in the page tree, but render an explanatory note if one shows up.
+  if (!isComponentNode(node)) {
+    return (
+      <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
+        $param placeholders are only addressable inside a snippet body — open the snippet to edit.
       </div>
     );
   }

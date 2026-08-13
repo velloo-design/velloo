@@ -5,6 +5,8 @@ import {
   ConfigSchema,
   type Page,
   PageSchema,
+  type Snippet,
+  SnippetSchema,
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
@@ -14,6 +16,7 @@ export interface DesignFolder {
   config: Config;
   theme: Theme;
   pages: Map<string, Page>;
+  snippets: Map<string, Snippet>;
 }
 
 /** Page id is the filename stem (e.g. "onboarding" for pages/onboarding.json). */
@@ -21,9 +24,35 @@ export function pageIdFromFilename(filename: string): string {
   return basename(filename, extname(filename));
 }
 
+/** Snippet id is the filename stem (same convention as pages). */
+export function snippetIdFromFilename(filename: string): string {
+  return basename(filename, extname(filename));
+}
+
 async function readJson<T>(path: string): Promise<T> {
   const raw = await readFile(path, "utf8");
   return JSON.parse(raw) as T;
+}
+
+async function loadDir<T>(
+  dir: string,
+  parse: (raw: unknown) => T,
+  idFromFile: (file: string) => string,
+): Promise<Map<string, T>> {
+  const out = new Map<string, T>();
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return out;
+    throw err;
+  }
+  for (const file of entries) {
+    if (extname(file) !== ".json") continue;
+    const raw = await readJson(join(dir, file));
+    out.set(idFromFile(file), parse(raw));
+  }
+  return out;
 }
 
 export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
@@ -33,17 +62,18 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   const config = ConfigSchema.parse(configRaw);
   const theme = ThemeSchema.parse(themeRaw);
 
-  const pagesDir = join(root, "pages");
-  const entries = await readdir(pagesDir);
-  const pages = new Map<string, Page>();
-  for (const file of entries) {
-    if (extname(file) !== ".json") continue;
-    const id = pageIdFromFilename(file);
-    const raw = await readJson(join(pagesDir, file));
-    pages.set(id, PageSchema.parse(raw));
-  }
+  const pages = await loadDir(
+    join(root, "pages"),
+    (raw) => PageSchema.parse(raw),
+    pageIdFromFilename,
+  );
+  const snippets = await loadDir(
+    join(root, "snippets"),
+    (raw) => SnippetSchema.parse(raw),
+    snippetIdFromFilename,
+  );
 
-  return { root, config, theme, pages };
+  return { root, config, theme, pages, snippets };
 }
 
 /** Reload one page from disk and update the cache in place. */
@@ -68,4 +98,24 @@ export async function reloadTheme(folder: DesignFolder): Promise<Theme> {
   const theme = ThemeSchema.parse(raw);
   folder.theme = theme;
   return theme;
+}
+
+/** Reload one snippet from disk and update the cache in place. */
+export async function reloadSnippet(
+  folder: DesignFolder,
+  snippetId: string,
+): Promise<Snippet | null> {
+  const path = join(folder.root, "snippets", `${snippetId}.json`);
+  try {
+    const raw = await readJson(path);
+    const snippet = SnippetSchema.parse(raw);
+    folder.snippets.set(snippetId, snippet);
+    return snippet;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      folder.snippets.delete(snippetId);
+      return null;
+    }
+    throw err;
+  }
 }

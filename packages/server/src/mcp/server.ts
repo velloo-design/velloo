@@ -8,15 +8,19 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { MutationContext } from "../mutations/index.ts";
+import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
+import { registerScreenshotTool } from "./tools/screenshot.ts";
 import { registerThemeTools } from "./tools/theme.ts";
+import { registerValidateTools } from "./tools/validate.ts";
 
 export interface McpServerOptions {
   port: number;
   host: string;
+  jit: TailwindJit;
 }
 
 export interface McpServerHandle {
@@ -31,18 +35,34 @@ interface Session {
 }
 
 const INSTRUCTIONS = [
-  "You are working on a design folder. Components come from a pinned shadcn snapshot.",
-  "Designs are static — click handlers, routing, and forms are no-op.",
-  "Before composing pages, call `list_components` and `get_theme` to understand the available palette and active tokens.",
-].join(" ");
+  "You are working on a Velloo design folder. Components come from a pinned shadcn snapshot. Designs are static — click handlers, routing, and forms are no-op.",
+  "",
+  'Before composing pages, call `list_components` (use mode: "summary" first — the full schema is large) and `get_theme` to understand the available palette and active tokens.',
+  "",
+  "Prefer semantic theme tokens (bg-card, text-foreground, bg-primary, bg-muted, border-border) over raw Tailwind colors (bg-zinc-900, text-white) so designs auto-adapt to dark mode and theme changes.",
+  "",
+  "Use add_node's `children` parameter to add whole subtrees in one call — every child can itself be a full node (with props + children). One call beats N round-trips.",
+  "",
+  "Prefer snippets for repeated structure (feature cards, list items, hero sections). Create the snippet once with add_snippet, then call instantiate_snippet per occurrence. Edits to the body propagate; arg lists keep instances different. Snippets emit as real React components on emit_code.",
+  "",
+  "New pages get one variant at the requested viewport. Use add_variant (or add_variant with fromVariantId to clone) for additional viewports.",
+  "",
+  "Text content for Heading, Text, Button, Badge, Label goes in the `children` prop, not a `text` prop.",
+  "",
+  "Icon takes any lucide-react name as its `name` prop (e.g. Sparkles, ArrowRight, Check). The list is huge; pick by feel.",
+  "",
+  'screenshot is available — call it to verify layout when something feels off rather than guessing. validate_classes answers "do these Tailwind classes compile" if you\'re about to use an arbitrary-value form.',
+].join("\n");
 
-function buildMcpServer(ctx: MutationContext): McpServer {
+function buildMcpServer(ctx: MutationContext, jit: TailwindJit): McpServer {
   const mcp = new McpServer({ name: "velloo", version: "0.1.0" }, { instructions: INSTRUCTIONS });
   registerDiscoveryTools(mcp, ctx);
   registerMutationTools(mcp, ctx);
   registerInspectTool(mcp, ctx);
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
+  registerScreenshotTool(mcp, ctx, jit);
+  registerValidateTools(mcp);
   return mcp;
 }
 
@@ -106,7 +126,7 @@ export async function createMcpServer(
               sessions.set(id, { transport, server });
             },
           });
-          const server = buildMcpServer(ctx);
+          const server = buildMcpServer(ctx, opts.jit);
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
             void server.close().catch(() => undefined);

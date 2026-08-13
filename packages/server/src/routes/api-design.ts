@@ -20,6 +20,11 @@ export function createDesignRouter(folder: () => DesignFolder): Hono {
           viewport: v.viewport,
         })),
       })),
+      snippets: [...f.snippets.entries()].map(([id, snippet]) => ({
+        id,
+        name: snippet.name,
+        params: snippet.params,
+      })),
     });
   });
 

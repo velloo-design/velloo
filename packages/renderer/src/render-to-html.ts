@@ -1,4 +1,4 @@
-import { type Theme, ThemeSchema, type Variant, VariantSchema } from "@velloo/schema";
+import { type Snippet, type Theme, ThemeSchema, type Variant, VariantSchema } from "@velloo/schema";
 import { renderToString } from "react-dom/server";
 import { buildRoot } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
@@ -13,10 +13,11 @@ export interface RenderResult {
 /**
  * Render just the inner body HTML for a variant — no document chrome, no
  * CSS. Used by inspect-style callers that only need the SSR'd subtree.
+ * Pass `snippets` if the tree may contain `$snippet` instances.
  */
-export function renderBody(variant: Variant): string {
+export function renderBody(variant: Variant, snippets?: Map<string, Snippet>): string {
   VariantSchema.parse(variant);
-  return renderToString(buildRoot(variant.tree));
+  return renderToString(buildRoot(variant.tree, { snippets }));
 }
 
 export interface RenderOptions {
@@ -25,6 +26,8 @@ export interface RenderOptions {
    * TailwindJit produces this; the renderer stays pure (no file I/O).
    */
   snapshotCss: string;
+  /** Snippets registry — required if the variant tree contains $snippet nodes. */
+  snippets?: Map<string, Snippet>;
   /** Render with the dark color block active. */
   dark?: boolean;
 }
@@ -43,7 +46,7 @@ export async function renderVariant(
   VariantSchema.parse(variant);
   ThemeSchema.parse(theme);
 
-  const element = buildRoot(variant.tree);
+  const element = buildRoot(variant.tree, { snippets: options.snippets });
   const bodyHtml = renderToString(element);
   const themeCss = themeToCss(theme);
 

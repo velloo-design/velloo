@@ -1,5 +1,6 @@
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page, Theme } from "@velloo/schema";
+import type { Page, Snippet, Theme } from "@velloo/schema";
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
@@ -13,6 +14,11 @@ import {
 } from "../history.ts";
 import { withPageLock } from "../mutations/context.ts";
 import type { WatchEvent } from "../watcher.ts";
+
+type Reverted =
+  | { kind: "page"; pageId: string }
+  | { kind: "theme" }
+  | { kind: "snippet"; snippetId: string };
 
 /**
  * Single-level revert / replay. POPs from the undo (or redo) stack, snapshots
@@ -54,7 +60,7 @@ async function applyRevert(
   folder: DesignFolder,
   broadcast: (e: WatchEvent) => void,
   pushOpposite: "redo" | "undo",
-): Promise<{ kind: "page"; pageId: string } | { kind: "theme" }> {
+): Promise<Reverted> {
   if (entry.kind === "page") {
     // Snapshot what we're about to overwrite so the inverse stack can put it back.
     const current = folder.pages.get(entry.pageId);
@@ -68,6 +74,21 @@ async function applyRevert(
     });
     broadcast({ type: "page-changed", pageId: entry.pageId });
     return { kind: "page", pageId: entry.pageId };
+  }
+
+  if (entry.kind === "snippet") {
+    const current = folder.snippets.get(entry.snippetId) ?? null;
+    const back: HistoryEntry = { kind: "snippet", snippetId: entry.snippetId, snippet: current };
+    if (pushOpposite === "redo") pushRedo(back);
+    else pushUndoSilent(back);
+    if (entry.snippet === null) {
+      // The previous state was "didn't exist" — restore that by deleting.
+      await deleteSnippet(folder, entry.snippetId);
+    } else {
+      await writeSnippet(folder, entry.snippetId, entry.snippet);
+    }
+    broadcast({ type: "snippet-changed", snippetId: entry.snippetId });
+    return { kind: "snippet", snippetId: entry.snippetId };
   }
 
   const current = folder.theme;
@@ -87,4 +108,18 @@ async function writePage(folder: DesignFolder, pageId: string, page: Page): Prom
 async function writeTheme(folder: DesignFolder, theme: Theme): Promise<void> {
   await writeJsonAtomic(join(folder.root, "theme", "default.json"), theme);
   folder.theme = theme;
+}
+
+async function writeSnippet(
+  folder: DesignFolder,
+  snippetId: string,
+  snippet: Snippet,
+): Promise<void> {
+  await writeJsonAtomic(join(folder.root, "snippets", `${snippetId}.json`), snippet);
+  folder.snippets.set(snippetId, snippet);
+}
+
+async function deleteSnippet(folder: DesignFolder, snippetId: string): Promise<void> {
+  await rm(join(folder.root, "snippets", `${snippetId}.json`), { force: true });
+  folder.snippets.delete(snippetId);
 }

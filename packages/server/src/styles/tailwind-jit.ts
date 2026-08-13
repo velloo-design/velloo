@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { compile } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
 import { componentsDir, entryCssPath } from "@velloo/shadcn-snapshot";
@@ -21,10 +21,16 @@ type Compiler = Awaited<ReturnType<typeof compile>>;
 export class TailwindJit {
   private compilerPromise: Promise<Compiler> | null = null;
   private cached: string | null = null;
+  private readonly snippetsDir: string;
 
-  constructor(private readonly pagesDir: string) {}
+  constructor(
+    private readonly pagesDir: string,
+    snippetsDir?: string,
+  ) {
+    this.snippetsDir = snippetsDir ?? join(pagesDir, "..", "snippets");
+  }
 
-  /** Drop the cached CSS so the next build() rescans the page folder. */
+  /** Drop the cached CSS so the next build() rescans the page + snippet folders. */
   invalidate(): void {
     this.cached = null;
   }
@@ -36,6 +42,7 @@ export class TailwindJit {
       sources: [
         { base: componentsDir, pattern: "**/*.tsx", negated: false },
         { base: this.pagesDir, pattern: "**/*.json", negated: false },
+        { base: this.snippetsDir, pattern: "**/*.json", negated: false },
       ],
     });
     const candidates = scanner.scan();

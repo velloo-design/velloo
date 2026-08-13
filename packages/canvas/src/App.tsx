@@ -102,6 +102,7 @@ export function App() {
       <div className="flex-1 flex min-h-0">
         <Sidebar
           pages={design.pages}
+          snippets={design.snippets}
           currentPageId={currentPageId}
           currentPage={currentPage}
           snapshotVersion={design.snapshotVersion}

@@ -1,5 +1,5 @@
 import { err, ok, type Result } from "@velloo/result";
-import type { Node } from "@velloo/schema";
+import { isComponentNode, isParamRef, isSnippetInstance, type Node } from "@velloo/schema";
 import { LOWERED_CONSUMED_PROPS, REGISTRY } from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
@@ -9,6 +9,12 @@ import { serializeProp, serializeTextChild } from "./props.ts";
 export interface EmitContext {
   imports: ImportSet;
   componentsAlias: string;
+  /** Where snippet React components live. Defaults to `<componentsAlias>/../snippets`. */
+  snippetsAlias?: string;
+  /** PascalCase names for each snippet id. Used to emit `<FeatureCard />` from `$snippet: "feature-card"`. */
+  snippetPascalById?: Map<string, string>;
+  /** Set when emitting *inside* a snippet body: `$param` nodes become `{name}`. */
+  snippetParamNames?: Set<string>;
   /** 2-space indentation, baked once. */
   indent(depth: number): string;
 }
@@ -19,6 +25,57 @@ export function emitTree(root: Node, ctx: EmitContext): Result<string, CodegenEr
 }
 
 function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string, CodegenError> {
+  if (isSnippetInstance(node)) {
+    return renderSnippetInstance(node, ctx, depth);
+  }
+  if (isParamRef(node)) {
+    return renderParamRef(node, ctx, depth);
+  }
+  if (!isComponentNode(node)) {
+    return err(unknownComponent(`<unknown node kind>`));
+  }
+  return renderComponent(node, ctx, depth);
+}
+
+function renderSnippetInstance(
+  node: import("@velloo/schema").SnippetInstance,
+  ctx: EmitContext,
+  depth: number,
+): Result<string, CodegenError> {
+  const pascal = ctx.snippetPascalById?.get(node.$snippet);
+  if (!pascal) {
+    return err(unknownComponent(`@${node.$snippet}`));
+  }
+  const snippetsAlias = ctx.snippetsAlias ?? `${ctx.componentsAlias}/../snippets`;
+  // Bare so the path is used verbatim — ImportSet.add() would prepend
+  // componentsAlias a second time.
+  ctx.imports.addBare(`${snippetsAlias}/${pascal}`, pascal);
+
+  const attrParts: string[] = [];
+  for (const [name, value] of Object.entries(node.args ?? {})) {
+    const serialized = serializeProp(name, value, ctx.snippetParamNames);
+    if (serialized !== null) attrParts.push(serialized);
+  }
+  const attrs = attrParts.length > 0 ? ` ${attrParts.join(" ")}` : "";
+  return ok(`${ctx.indent(depth)}<${pascal}${attrs} />`);
+}
+
+function renderParamRef(
+  node: import("@velloo/schema").ParamRef,
+  ctx: EmitContext,
+  depth: number,
+): Result<string, CodegenError> {
+  if (!ctx.snippetParamNames?.has(node.$param)) {
+    return err(unknownComponent(`$param:${node.$param}`));
+  }
+  return ok(`${ctx.indent(depth)}{${node.$param}}`);
+}
+
+function renderComponent(
+  node: import("@velloo/schema").ComponentNode,
+  ctx: EmitContext,
+  depth: number,
+): Result<string, CodegenError> {
   const entry = REGISTRY[node.$ref];
   if (!entry) return err(unknownComponent(node.$ref));
 
@@ -35,7 +92,6 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string,
   if (entry.kind === "lowered") {
     const { tag, extraClasses } = entry.lower(props);
     mergedClassName = mergeClasses(extraClasses, classNameProp);
-    // Strip props consumed by the lowering (e.g. Heading.level, Text.variant).
     const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
     if (consumed) for (const k of consumed) delete props[k];
     openTag = tag;
@@ -57,11 +113,11 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string,
 
   const attrParts: string[] = [];
   if (mergedClassName) {
-    const cn = serializeProp("className", mergedClassName);
+    const cn = serializeProp("className", mergedClassName, ctx.snippetParamNames);
     if (cn) attrParts.push(cn);
   }
   for (const [name, value] of Object.entries(props)) {
-    const serialized = serializeProp(name, value);
+    const serialized = serializeProp(name, value, ctx.snippetParamNames);
     if (serialized !== null) attrParts.push(serialized);
   }
 
@@ -71,9 +127,13 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string,
 
   const hasNodeChildren = Array.isArray(node.children) && node.children.length > 0;
   const hasStringChild = typeof childrenProp === "string" && childrenProp.length > 0;
-  const hasOtherChild = childrenProp !== undefined && !hasStringChild;
+  const isChildParamRef =
+    childrenProp !== null &&
+    typeof childrenProp === "object" &&
+    typeof (childrenProp as { $param?: unknown }).$param === "string";
+  const hasOtherChild = childrenProp !== undefined && !hasStringChild && !isChildParamRef;
 
-  if (!hasNodeChildren && !hasStringChild && !hasOtherChild) {
+  if (!hasNodeChildren && !hasStringChild && !hasOtherChild && !isChildParamRef) {
     return ok(`${pad}<${openTag}${attrs} />`);
   }
 
@@ -87,16 +147,22 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string,
     return ok(`${pad}<${openTag}${attrs}>\n${parts.join("\n")}\n${pad}</${closeTag}>`);
   }
 
+  if (isChildParamRef) {
+    const name = (childrenProp as { $param: string }).$param;
+    if (!ctx.snippetParamNames?.has(name)) {
+      return err(unknownComponent(`$param:${name}`));
+    }
+    return ok(`${pad}<${openTag}${attrs}>{${name}}</${closeTag}>`);
+  }
+
   if (hasStringChild) {
     const text = serializeTextChild(childrenProp as string);
-    // If the text is short enough, keep it inline; otherwise put it on its own line.
     if (text.length < 60 && !text.includes("\n")) {
       return ok(`${pad}<${openTag}${attrs}>${text}</${closeTag}>`);
     }
     return ok(`${pad}<${openTag}${attrs}>\n${childPad}${text}\n${pad}</${closeTag}>`);
   }
 
-  // Non-string children prop (number, boolean, object). JSON-encode inside braces.
   return ok(
     `${pad}<${openTag}${attrs}>\n${childPad}{${JSON.stringify(childrenProp)}}\n${pad}</${closeTag}>`,
   );

@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigSchema, NodeSchema, PageSchema, ThemeSchema, VariantSchema } from "../index.ts";
+import {
+  ConfigSchema,
+  isComponentNode,
+  isParamRef,
+  isSnippetInstance,
+  NodeSchema,
+  PageSchema,
+  SnippetSchema,
+  ThemeSchema,
+  VariantSchema,
+} from "../index.ts";
 
 describe("NodeSchema", () => {
   test("accepts a leaf node", () => {
@@ -25,6 +35,96 @@ describe("NodeSchema", () => {
 
   test("rejects a node with empty $ref", () => {
     expect(NodeSchema.safeParse({ $ref: "" }).success).toBe(false);
+  });
+
+  test("accepts a snippet instance node", () => {
+    const node = { $snippet: "feature-card", args: { title: "Fast" } };
+    const parsed = NodeSchema.safeParse(node);
+    expect(parsed.success).toBe(true);
+    expect(isSnippetInstance(node)).toBe(true);
+    expect(isComponentNode(node)).toBe(false);
+  });
+
+  test("accepts a param-ref node (snippet body usage)", () => {
+    const node = { $param: "title" };
+    expect(NodeSchema.safeParse(node).success).toBe(true);
+    expect(isParamRef(node)).toBe(true);
+  });
+
+  test("rejects empty $snippet / $param ids", () => {
+    expect(NodeSchema.safeParse({ $snippet: "" }).success).toBe(false);
+    expect(NodeSchema.safeParse({ $param: "" }).success).toBe(false);
+  });
+
+  test("type guards are mutually exclusive on canonical shapes", () => {
+    const comp = { $ref: "Card" };
+    const snip = { $snippet: "x" };
+    const param = { $param: "y" };
+    expect([isComponentNode(comp), isSnippetInstance(comp), isParamRef(comp)]).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect([isComponentNode(snip), isSnippetInstance(snip), isParamRef(snip)]).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect([isComponentNode(param), isSnippetInstance(param), isParamRef(param)]).toEqual([
+      false,
+      false,
+      true,
+    ]);
+  });
+});
+
+describe("SnippetSchema", () => {
+  test("accepts a minimal snippet with no params", () => {
+    const snippet = {
+      id: "divider",
+      name: "Divider",
+      params: [],
+      tree: { $ref: "Separator" },
+    };
+    expect(SnippetSchema.safeParse(snippet).success).toBe(true);
+  });
+
+  test("accepts a snippet with typed params and $param refs in the body", () => {
+    const snippet = {
+      id: "feature-card",
+      name: "Feature Card",
+      params: [
+        { name: "title", type: "string" as const },
+        { name: "body", type: "string" as const, default: "" },
+      ],
+      tree: {
+        $ref: "Card",
+        children: [
+          { $ref: "Heading", props: { level: 3, children: { $param: "title" } } },
+          { $ref: "Text", props: { children: { $param: "body" } } },
+        ],
+      },
+    };
+    expect(SnippetSchema.safeParse(snippet).success).toBe(true);
+  });
+
+  test("rejects empty id or name", () => {
+    expect(
+      SnippetSchema.safeParse({ id: "", name: "X", params: [], tree: { $ref: "Card" } }).success,
+    ).toBe(false);
+    expect(
+      SnippetSchema.safeParse({ id: "x", name: "", params: [], tree: { $ref: "Card" } }).success,
+    ).toBe(false);
+  });
+
+  test("rejects an unknown param type", () => {
+    const bad = {
+      id: "x",
+      name: "X",
+      params: [{ name: "y", type: "datetime" }],
+      tree: { $ref: "Card" },
+    };
+    expect(SnippetSchema.safeParse(bad).success).toBe(false);
   });
 });
 

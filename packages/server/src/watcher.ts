@@ -1,7 +1,10 @@
 import { type FSWatcher, watch } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-export type WatchEvent = { type: "page-changed"; pageId: string } | { type: "theme-changed" };
+export type WatchEvent =
+  | { type: "page-changed"; pageId: string }
+  | { type: "theme-changed" }
+  | { type: "snippet-changed"; snippetId: string };
 
 export interface Watcher {
   close(): void;
@@ -42,13 +45,17 @@ export function watchDesignFolder(
     if (parts[0] === "theme" && parts[1] && parts[1].endsWith(".json")) {
       return { type: "theme-changed" };
     }
+    if (parts[0] === "snippets" && parts[1] && parts[1].endsWith(".json")) {
+      const snippetId = parts[1].slice(0, -".json".length);
+      return { type: "snippet-changed", snippetId };
+    }
     return null;
   }
 
   // node:fs watch with recursive: true is supported on macOS/Windows; on Linux
-  // we'd need per-directory watchers. For now we attach to pages/ and theme/
-  // explicitly so this works cross-platform without recursive support.
-  for (const sub of ["pages", "theme"]) {
+  // we'd need per-directory watchers. For now we attach to pages/, theme/, and
+  // snippets/ explicitly so this works cross-platform without recursive support.
+  for (const sub of ["pages", "theme", "snippets"]) {
     try {
       const w = watch(join(root, sub), (_eventType, filename) => {
         if (!filename) return;

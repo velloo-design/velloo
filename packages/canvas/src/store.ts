@@ -92,8 +92,10 @@ export function selectedNode(page: Page | null, sel: Selection | null): Node | n
   const path = pathFromString(sel.path);
   let node: Node | undefined = variant.tree;
   for (const idx of path) {
-    if (!node?.children || idx < 0 || idx >= node.children.length) return null;
-    node = node.children[idx];
+    if (!node || !("$ref" in node)) return null;
+    const children: Node[] | undefined = node.children;
+    if (!children || idx < 0 || idx >= children.length) return null;
+    node = children[idx];
   }
   return node ?? null;
 }

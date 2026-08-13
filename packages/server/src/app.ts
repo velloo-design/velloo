@@ -8,6 +8,7 @@ import { createInspectRouter } from "./routes/api-inspect.ts";
 import { createMutateRouter } from "./routes/api-mutate.ts";
 import { createPageRouter } from "./routes/api-page.ts";
 import { createRenderRouter } from "./routes/api-render.ts";
+import { createSnippetsRouter } from "./routes/api-snippets.ts";
 import { createThemeRouter } from "./routes/api-theme.ts";
 import { createUndoRouter } from "./routes/api-undo.ts";
 import type { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -23,6 +24,7 @@ export function createApp(ctxFor: () => MutationContext, jit: TailwindJit): Hono
   app.get("/api/health", (c) => c.json({ ok: true }));
   app.route("/api/design", createDesignRouter(folder));
   app.route("/api/page", createPageRouter(folder));
+  app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/render", createRenderRouter(folder, jit));
   app.route("/api/components", createComponentsRouter());
   app.route("/api/mutate", createMutateRouter(ctxFor));

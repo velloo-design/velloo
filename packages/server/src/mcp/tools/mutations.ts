@@ -1,19 +1,25 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Result } from "@velloo/result";
+import { NodeSchema, SnippetParamSchema } from "@velloo/schema";
 import { z } from "zod";
 import {
   addNode,
   addPage,
+  addSnippet,
   addVariant,
   applyClasses,
+  instantiateSnippet,
   type MutationContext,
   type MutationError,
   moveNode,
   removeNode,
   removePage,
+  removeSnippet,
   removeVariant,
   updatePage,
   updateProps,
+  updateSnippet,
+  updateSnippetArgs,
   updateVariant,
   updateVariants,
 } from "../../mutations/index.ts";
@@ -236,5 +242,81 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       },
     },
     async (args) => toMcp(await updateVariants(ctx, args)),
+  );
+
+  // --- Snippets -----------------------------------------------------------
+
+  mcp.registerTool(
+    "add_snippet",
+    {
+      description:
+        'Create a reusable subtree. `params` declares typed inputs (each `{ name, type: string|number|boolean|node, default? }`); placeholders inside the `tree` body are `{ "$param": "name" }` nodes that get substituted at render time. Returns { snippetId, snippet }.',
+      inputSchema: {
+        name: z.string(),
+        id: z.string().optional(),
+        params: z.array(SnippetParamSchema).default([]),
+        tree: NodeSchema,
+      },
+    },
+    async (args) => toMcp(await addSnippet(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_snippet",
+    {
+      description:
+        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. The id stays stable so existing instances keep referencing it after a rename. Every page using the snippet is re-broadcast.",
+      inputSchema: {
+        snippetId: z.string(),
+        patch: z.object({
+          name: z.string().optional(),
+          params: z.array(SnippetParamSchema).optional(),
+          tree: NodeSchema.optional(),
+        }),
+      },
+    },
+    async (args) => toMcp(await updateSnippet(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "remove_snippet",
+    {
+      description:
+        "Delete a snippet. Refuses with SnippetInUse if any page instantiates it; the error payload lists the referencing pageIds so the agent can clean up first.",
+      inputSchema: { snippetId: z.string() },
+    },
+    async (args) => toMcp(await removeSnippet(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "instantiate_snippet",
+    {
+      description:
+        "Add a `$snippet` instance to a variant tree under parentPath. `args` supplies values for the snippet's params (defaults fill in missing optional ones). Snippet instances are opaque — you can't address paths inside them; edit via update_snippet_args or update_snippet.",
+      inputSchema: {
+        pageId: z.string(),
+        variantId: z.string(),
+        parentPath: PathSchema,
+        snippetId: z.string(),
+        args: z.record(z.string(), z.unknown()).optional(),
+        index: z.number().int().nonnegative().optional(),
+      },
+    },
+    async (args) => toMcp(await instantiateSnippet(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_snippet_args",
+    {
+      description:
+        "Patch the `args` of a snippet instance without touching the snippet body. `null` in argPatch removes a key (reverts to the param default if declared).",
+      inputSchema: {
+        pageId: z.string(),
+        variantId: z.string(),
+        path: PathSchema,
+        argPatch: z.record(z.string(), z.unknown()),
+      },
+    },
+    async (args) => toMcp(await updateSnippetArgs(ctx, args)),
   );
 }

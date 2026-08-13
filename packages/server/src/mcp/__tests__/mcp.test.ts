@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Page } from "@velloo/schema";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { createMcpServer } from "../server.ts";
 
 const sampleConfig = {
@@ -142,7 +143,8 @@ beforeEach(async () => {
   await writeJson(join(tmp, "pages/onboarding.json"), samplePage);
   folder = await loadDesignFolder(tmp);
   ctx = { folder, broadcast: () => {} };
-  mcp = await createMcpServer(ctx, { port: 0, host: "127.0.0.1" });
+  const jit = new TailwindJit(join(tmp, "pages"));
+  mcp = await createMcpServer(ctx, { port: 0, host: "127.0.0.1", jit });
   sessionId = await openSession(mcp.url);
 });
 
@@ -179,7 +181,11 @@ describe("MCP server", () => {
       propPatch: { level: 2 },
     });
     expect(r.isError).toBeFalsy();
-    expect(folder.pages.get("onboarding")?.variants[0]?.tree.children?.[0]?.props?.level).toBe(2);
+    const root = folder.pages.get("onboarding")?.variants[0]?.tree;
+    if (!root || !("$ref" in root)) throw new Error("expected component root");
+    const first = root.children?.[0];
+    if (!first || !("$ref" in first)) throw new Error("expected component child");
+    expect(first.props?.level).toBe(2);
   });
 
   test("add_node returns the new path", async () => {

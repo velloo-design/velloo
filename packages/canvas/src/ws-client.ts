@@ -1,6 +1,9 @@
 import { useCanvas } from "./store.ts";
 
-type ServerEvent = { type: "page-changed"; pageId: string } | { type: "theme-changed" };
+type ServerEvent =
+  | { type: "page-changed"; pageId: string }
+  | { type: "theme-changed" }
+  | { type: "snippet-changed"; snippetId: string };
 
 export function connectWs(): () => void {
   let socket: WebSocket | null = null;
@@ -43,6 +46,12 @@ export function connectWs(): () => void {
         }
       } else if (payload.type === "theme-changed") {
         void refreshTheme();
+        void refreshCurrentPage();
+      } else if (payload.type === "snippet-changed") {
+        // Snippets affect any page that instantiates them. Refresh both the
+        // sidebar summary (so the snippets list reflects add/remove) and the
+        // current page render (so instances pick up body edits).
+        void refreshDesignSummary();
         void refreshCurrentPage();
       }
     };

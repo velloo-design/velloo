@@ -1,4 +1,4 @@
-import type { Page, Theme } from "@velloo/schema";
+import type { Page, Snippet, SnippetParam, Theme } from "@velloo/schema";
 import type { Manifest } from "@velloo/shadcn-snapshot";
 
 export interface DesignSummary {
@@ -7,6 +7,7 @@ export interface DesignSummary {
   /** Page id the canvas should focus first; null when the config didn't set one. */
   defaultPage: string | null;
   pages: PageMeta[];
+  snippets: SnippetMeta[];
 }
 
 export interface PageMeta {
@@ -19,6 +20,18 @@ export interface VariantMeta {
   id: string;
   name: string;
   viewport: { w: number; h: number };
+}
+
+export interface SnippetMeta {
+  id: string;
+  name: string;
+  params: SnippetParam[];
+}
+
+export async function fetchSnippet(id: string): Promise<Snippet> {
+  const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`fetchSnippet(${id}): ${res.status}`);
+  return (await res.json()) as Snippet;
 }
 
 export async function fetchDesign(): Promise<DesignSummary> {
@@ -195,5 +208,23 @@ export const mutate = {
   },
   removePage(args: { pageId: string }) {
     return postMutate<{ removedPageId: string }>("remove_page", args);
+  },
+  updateSnippetArgs(args: {
+    pageId: string;
+    variantId: string;
+    path: number[];
+    argPatch: Record<string, unknown>;
+  }) {
+    return postMutate<{ path: number[] }>("update_snippet_args", args);
+  },
+  instantiateSnippet(args: {
+    pageId: string;
+    variantId: string;
+    parentPath: number[];
+    snippetId: string;
+    args?: Record<string, unknown>;
+    index?: number;
+  }) {
+    return postMutate<{ path: number[] }>("instantiate_snippet", args);
   },
 };

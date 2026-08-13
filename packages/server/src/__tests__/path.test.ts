@@ -30,11 +30,15 @@ describe("path helpers", () => {
   });
 
   test("pathAt navigates the tree", () => {
-    expect(pathAt(tree, [])?.$ref).toBe("Card");
-    expect(pathAt(tree, [0])?.$ref).toBe("Heading");
-    expect(pathAt(tree, [1])?.$ref).toBe("Card");
-    expect(pathAt(tree, [1, 0])?.$ref).toBe("Text");
-    expect(pathAt(tree, [1, 1])?.$ref).toBe("Button");
+    const refOf = (path: number[]) => {
+      const n = pathAt(tree, path);
+      return n && "$ref" in n ? n.$ref : null;
+    };
+    expect(refOf([])).toBe("Card");
+    expect(refOf([0])).toBe("Heading");
+    expect(refOf([1])).toBe("Card");
+    expect(refOf([1, 0])).toBe("Text");
+    expect(refOf([1, 1])).toBe("Button");
   });
 
   test("pathAt returns null for out-of-range", () => {

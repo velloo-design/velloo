@@ -12,15 +12,27 @@ export interface MutationContext {
  * when canvas + MCP hit the same page concurrently.
  */
 const pageChains = new Map<string, Promise<unknown>>();
+const snippetChains = new Map<string, Promise<unknown>>();
 
-export function withPageLock<T>(pageId: string, fn: () => Promise<T>): Promise<T> {
-  const prev = pageChains.get(pageId) ?? Promise.resolve();
-  const next = prev.then(fn, fn); // run fn even if the previous task threw
-  // Track this task for the chain. Catch its rejection so the chain itself
-  // doesn't leak unhandled-rejection signals.
-  pageChains.set(
-    pageId,
+function chained<T>(
+  chains: Map<string, Promise<unknown>>,
+  key: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = chains.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  chains.set(
+    key,
     next.catch(() => undefined),
   );
   return next;
+}
+
+export function withPageLock<T>(pageId: string, fn: () => Promise<T>): Promise<T> {
+  return chained(pageChains, pageId, fn);
+}
+
+/** Per-snippet write chain. Mirrors withPageLock semantics. */
+export function withSnippetLock<T>(snippetId: string, fn: () => Promise<T>): Promise<T> {
+  return chained(snippetChains, snippetId, fn);
 }

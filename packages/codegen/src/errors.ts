@@ -6,7 +6,8 @@
  */
 export type CodegenError =
   | { kind: "VariantNotFound"; variantId: string }
-  | { kind: "UnknownComponent"; ref: string };
+  | { kind: "UnknownComponent"; ref: string }
+  | { kind: "SnippetNotFound"; snippetId: string };
 
 export const variantNotFound = (variantId: string): CodegenError => ({
   kind: "VariantNotFound",
@@ -15,4 +16,8 @@ export const variantNotFound = (variantId: string): CodegenError => ({
 export const unknownComponent = (ref: string): CodegenError => ({
   kind: "UnknownComponent",
   ref,
+});
+export const snippetNotFound = (snippetId: string): CodegenError => ({
+  kind: "SnippetNotFound",
+  snippetId,
 });

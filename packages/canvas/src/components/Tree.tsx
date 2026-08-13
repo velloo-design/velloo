@@ -1,4 +1,10 @@
-import type { Node, Variant } from "@velloo/schema";
+import {
+  isComponentNode,
+  isParamRef,
+  isSnippetInstance,
+  type Node,
+  type Variant,
+} from "@velloo/schema";
 import { useMemo, useState } from "react";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
@@ -14,6 +20,16 @@ interface Props {
  * help a human map a row to a thing on screen.
  */
 function describeNode(node: Node): string | null {
+  if (isSnippetInstance(node)) {
+    const argEntries = Object.entries(node.args ?? {});
+    const first = argEntries.find(([, v]) => typeof v === "string" && (v as string).trim());
+    if (first) {
+      const v = (first[1] as string).trim();
+      return v.length > 28 ? `${v.slice(0, 27)}…` : v;
+    }
+    return argEntries.length > 0 ? `${argEntries.length} args` : null;
+  }
+  if (isParamRef(node)) return null;
   const p = node.props;
   if (!p) return null;
   const candidates = ["children", "label", "placeholder", "value", "title"];
@@ -30,6 +46,16 @@ function describeNode(node: Node): string | null {
     if (cn) return `.${cn.split(/\s+/)[0]}`;
   }
   return null;
+}
+
+function nodeLabel(node: Node): string {
+  if (isSnippetInstance(node)) return `@${node.$snippet}`;
+  if (isParamRef(node)) return `\${${node.$param}}`;
+  return node.$ref;
+}
+
+function nodeChildren(node: Node): Node[] | undefined {
+  return isComponentNode(node) ? node.children : undefined;
 }
 
 interface RowProps {
@@ -50,7 +76,8 @@ function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: Row
 
   const isSelected = selection?.variantId === variantId && selection.path === pathStr;
   const isHovered = hover?.variantId === variantId && hover.path === pathStr;
-  const hasChildren = (node.children?.length ?? 0) > 0;
+  const childList = nodeChildren(node);
+  const hasChildren = (childList?.length ?? 0) > 0;
   const isOpen = hasChildren ? expandedSet.has(pathStr) : false;
   const description = describeNode(node);
 
@@ -91,7 +118,7 @@ function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: Row
           }}
           className="flex flex-1 min-w-0 items-center gap-1 text-left text-inherit"
         >
-          <span className="font-medium">{node.$ref}</span>
+          <span className="font-medium">{nodeLabel(node)}</span>
           {description ? (
             <span
               className={
@@ -106,7 +133,7 @@ function TreeRow({ node, path, variantId, depth, expandedSet, setExpanded }: Row
       </div>
       {hasChildren && isOpen ? (
         <div>
-          {node.children?.map((child, i) => {
+          {childList?.map((child, i) => {
             const childPath = `${pathStr === "" ? "" : `${pathStr}.`}${i}`;
             return (
               <TreeRow
@@ -138,9 +165,10 @@ function ancestorsOf(target: number[]): Set<string> {
 /** Collect every node path in the tree (used to default-expand everything). */
 function allPaths(node: Node, path: number[] = [], out: Set<string> = new Set()): Set<string> {
   out.add(pathToString(path));
-  if (node.children) {
-    for (let i = 0; i < node.children.length; i++) {
-      const child = node.children[i];
+  const children = nodeChildren(node);
+  if (children) {
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
       if (child) allPaths(child, [...path, i], out);
     }
   }

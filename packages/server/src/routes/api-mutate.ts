@@ -2,29 +2,39 @@ import { Hono } from "hono";
 import {
   addNode,
   addPage,
+  addSnippet,
   addVariant,
   applyClasses,
+  instantiateSnippet,
   type MutationContext,
   moveNode,
   removeNode,
   removePage,
+  removeSnippet,
   removeVariant,
   updatePage,
   updateProps,
+  updateSnippet,
+  updateSnippetArgs,
   updateVariant,
   updateVariants,
 } from "../mutations/index.ts";
 import {
   AddNodeBody,
   AddPageBody,
+  AddSnippetBody,
   AddVariantBody,
   ApplyClassesBody,
+  InstantiateSnippetBody,
   MoveNodeBody,
   RemoveNodeBody,
   RemovePageBody,
+  RemoveSnippetBody,
   RemoveVariantBody,
   UpdatePageBody,
   UpdatePropsBody,
+  UpdateSnippetArgsBody,
+  UpdateSnippetBody,
   UpdateVariantBody,
   UpdateVariantsBody,
 } from "./mutate-schemas.ts";
@@ -81,6 +91,26 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/apply_classes",
     route(ApplyClassesBody, (a, ctx) => applyClasses(ctx, a)),
+  );
+  r.post(
+    "/add_snippet",
+    route(AddSnippetBody, (a, ctx) => addSnippet(ctx, a)),
+  );
+  r.post(
+    "/update_snippet",
+    route(UpdateSnippetBody, (a, ctx) => updateSnippet(ctx, a)),
+  );
+  r.post(
+    "/remove_snippet",
+    route(RemoveSnippetBody, (a, ctx) => removeSnippet(ctx, a)),
+  );
+  r.post(
+    "/instantiate_snippet",
+    route(InstantiateSnippetBody, (a, ctx) => instantiateSnippet(ctx, a)),
+  );
+  r.post(
+    "/update_snippet_args",
+    route(UpdateSnippetArgsBody, (a, ctx) => updateSnippetArgs(ctx, a)),
   );
 
   return r;

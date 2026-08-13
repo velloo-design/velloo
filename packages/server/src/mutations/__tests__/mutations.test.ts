@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Result } from "@velloo/result";
-import type { Page } from "@velloo/schema";
+import type { ComponentNode, Node, Page } from "@velloo/schema";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import {
@@ -17,6 +17,20 @@ import {
   removeNode,
   updateProps,
 } from "../index.ts";
+
+/** Test helper: assert that a Node is a ComponentNode and return it narrowed. */
+function asComp(node: Node | null | undefined): ComponentNode {
+  if (!node || !("$ref" in node)) {
+    throw new Error(`expected ComponentNode, got ${JSON.stringify(node)}`);
+  }
+  return node;
+}
+
+/** Walk into the children of a known-component node. */
+function compChild(node: Node | null | undefined, idx: number): ComponentNode {
+  const c = asComp(node).children?.[idx];
+  return asComp(c);
+}
 
 const sampleConfig = {
   schemaVersion: 1,
@@ -123,8 +137,8 @@ describe("addNode", () => {
     );
     expect(r.path).toEqual([2]);
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.children).toHaveLength(3);
-    expect(onDisk.variants[0]?.tree.children?.[2]?.$ref).toBe("Button");
+    expect(asComp(onDisk.variants[0]?.tree).children).toHaveLength(3);
+    expect(compChild(onDisk.variants[0]?.tree, 2).$ref).toBe("Button");
     expect(broadcasts.at(-1)).toEqual({ type: "page-changed", pageId: "onboarding" });
   });
 
@@ -140,7 +154,7 @@ describe("addNode", () => {
     );
     expect(r.path).toEqual([1]);
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.children?.[1]?.$ref).toBe("Badge");
+    expect(compChild(onDisk.variants[0]?.tree, 1).$ref).toBe("Badge");
   });
 
   test("rejects unknown component with suggestions", async () => {
@@ -180,7 +194,7 @@ describe("updateProps", () => {
     );
     expect(r.path).toEqual([0]);
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.children?.[0]?.props).toEqual({
+    expect(compChild(onDisk.variants[0]?.tree, 0).props).toEqual({
       level: 2,
       children: "Hi",
     });
@@ -196,7 +210,7 @@ describe("updateProps", () => {
       }),
     );
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.children?.[0]?.props).toEqual({ level: 1 });
+    expect(compChild(onDisk.variants[0]?.tree, 0).props).toEqual({ level: 1 });
   });
 });
 
@@ -211,8 +225,8 @@ describe("removeNode", () => {
     );
     expect(r.removedRef).toBe("Heading");
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.children).toHaveLength(1);
-    expect(onDisk.variants[0]?.tree.children?.[0]?.$ref).toBe("Text");
+    expect(asComp(onDisk.variants[0]?.tree).children).toHaveLength(1);
+    expect(compChild(onDisk.variants[0]?.tree, 0).$ref).toBe("Text");
   });
 
   test("refuses to remove the root", async () => {
@@ -236,8 +250,8 @@ describe("moveNode", () => {
     );
     expect(r.newPath).toEqual([1]); // splice-and-reinsert lands at end (index = length-1 after removal)
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.children?.[0]?.$ref).toBe("Text");
-    expect(onDisk.variants[0]?.tree.children?.[1]?.$ref).toBe("Heading");
+    expect(compChild(onDisk.variants[0]?.tree, 0).$ref).toBe("Text");
+    expect(compChild(onDisk.variants[0]?.tree, 1).$ref).toBe("Heading");
   });
 
   test("refuses to move into self", async () => {
@@ -266,7 +280,7 @@ describe("addVariant", () => {
     expect(r.variant.id).toBe("desktop");
     const onDisk = await readPage();
     expect(onDisk.variants).toHaveLength(2);
-    expect(onDisk.variants[1]?.tree.children?.[0]?.$ref).toBe("Heading");
+    expect(compChild(onDisk.variants[1]?.tree, 0).$ref).toBe("Heading");
   });
 
   test("starts from a bare Card when no source", async () => {
@@ -278,8 +292,8 @@ describe("addVariant", () => {
       }),
     );
     expect(r.variant.id).toBe("tablet");
-    expect(r.variant.tree.$ref).toBe("Card");
-    expect(r.variant.tree.children ?? []).toHaveLength(0);
+    expect(asComp(r.variant.tree).$ref).toBe("Card");
+    expect(asComp(r.variant.tree).children ?? []).toHaveLength(0);
   });
 });
 
@@ -294,7 +308,7 @@ describe("applyClasses", () => {
       }),
     );
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.props).toEqual({ className: "p-12 max-w-xl mx-auto" });
+    expect(asComp(onDisk.variants[0]?.tree).props).toEqual({ className: "p-12 max-w-xl mx-auto" });
   });
 
   test("empty string clears className", async () => {
@@ -307,7 +321,7 @@ describe("applyClasses", () => {
       }),
     );
     const onDisk = await readPage();
-    expect(onDisk.variants[0]?.tree.props).toBeUndefined();
+    expect(asComp(onDisk.variants[0]?.tree).props).toBeUndefined();
   });
 });
 

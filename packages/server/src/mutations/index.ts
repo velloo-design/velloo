@@ -2,15 +2,25 @@ import type { Result } from "@velloo/result";
 import { type AddNodeArgs, type AddNodeResult, addNode as addNodeImpl } from "./add-node.ts";
 import { type AddPageArgs, type AddPageResult, addPage as addPageImpl } from "./add-page.ts";
 import {
+  type AddSnippetArgs,
+  type AddSnippetResult,
+  addSnippet as addSnippetImpl,
+} from "./add-snippet.ts";
+import {
   type AddVariantArgs,
   type AddVariantResult,
   addVariant as addVariantImpl,
 } from "./add-variant.ts";
 import { type ApplyClassesArgs, applyClasses as applyClassesImpl } from "./apply-classes.ts";
 import type { MutationContext } from "./context.ts";
-import { withPageLock } from "./context.ts";
+import { withPageLock, withSnippetLock } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { type InspectArgs, type InspectResult, inspect as inspectImpl } from "./inspect.ts";
+import {
+  type InstantiateSnippetArgs,
+  type InstantiateSnippetResult,
+  instantiateSnippet as instantiateSnippetImpl,
+} from "./instantiate-snippet.ts";
 import { type MoveNodeArgs, type MoveNodeResult, moveNode as moveNodeImpl } from "./move-node.ts";
 import {
   type RemoveNodeArgs,
@@ -22,6 +32,11 @@ import {
   type RemovePageResult,
   removePage as removePageImpl,
 } from "./remove-page.ts";
+import {
+  type RemoveSnippetArgs,
+  type RemoveSnippetResult,
+  removeSnippet as removeSnippetImpl,
+} from "./remove-snippet.ts";
 import {
   type RemoveVariantArgs,
   type RemoveVariantResult,
@@ -37,6 +52,16 @@ import {
   type UpdatePropsResult,
   updateProps as updatePropsImpl,
 } from "./update-props.ts";
+import {
+  type UpdateSnippetArgs,
+  type UpdateSnippetResult,
+  updateSnippet as updateSnippetImpl,
+} from "./update-snippet.ts";
+import {
+  type UpdateSnippetArgsArgs,
+  type UpdateSnippetArgsResult,
+  updateSnippetArgs as updateSnippetArgsImpl,
+} from "./update-snippet-args.ts";
 import {
   type UpdateVariantArgs,
   type UpdateVariantResult,
@@ -121,6 +146,39 @@ export function updateVariants(
 ): Promise<Result<UpdateVariantsResult, MutationError>> {
   return withPageLock(args.pageId, () => updateVariantsImpl(ctx, args));
 }
+export function addSnippet(
+  ctx: MutationContext,
+  args: AddSnippetArgs,
+): Promise<Result<AddSnippetResult, MutationError>> {
+  // Add is a single write; the in-memory map check + persist sits inside it.
+  // Use a synthetic lock keyed on the resolved id once known — easier to just
+  // serialize all snippet writes for now.
+  return withSnippetLock(args.id ?? args.name, () => addSnippetImpl(ctx, args));
+}
+export function updateSnippet(
+  ctx: MutationContext,
+  args: UpdateSnippetArgs,
+): Promise<Result<UpdateSnippetResult, MutationError>> {
+  return withSnippetLock(args.snippetId, () => updateSnippetImpl(ctx, args));
+}
+export function removeSnippet(
+  ctx: MutationContext,
+  args: RemoveSnippetArgs,
+): Promise<Result<RemoveSnippetResult, MutationError>> {
+  return withSnippetLock(args.snippetId, () => removeSnippetImpl(ctx, args));
+}
+export function instantiateSnippet(
+  ctx: MutationContext,
+  args: InstantiateSnippetArgs,
+): Promise<Result<InstantiateSnippetResult, MutationError>> {
+  return withPageLock(args.pageId, () => instantiateSnippetImpl(ctx, args));
+}
+export function updateSnippetArgs(
+  ctx: MutationContext,
+  args: UpdateSnippetArgsArgs,
+): Promise<Result<UpdateSnippetArgsResult, MutationError>> {
+  return withPageLock(args.pageId, () => updateSnippetArgsImpl(ctx, args));
+}
 
 /** inspect is read-only; no mutex needed. */
 export function inspect(
@@ -136,11 +194,15 @@ export type {
   AddNodeResult,
   AddPageArgs,
   AddPageResult,
+  AddSnippetArgs,
+  AddSnippetResult,
   AddVariantArgs,
   AddVariantResult,
   ApplyClassesArgs,
   InspectArgs,
   InspectResult,
+  InstantiateSnippetArgs,
+  InstantiateSnippetResult,
   MoveNodeArgs,
   MoveNodeResult,
   MutationContext,
@@ -148,12 +210,18 @@ export type {
   RemoveNodeResult,
   RemovePageArgs,
   RemovePageResult,
+  RemoveSnippetArgs,
+  RemoveSnippetResult,
   RemoveVariantArgs,
   RemoveVariantResult,
   UpdatePageArgs,
   UpdatePageResult,
   UpdatePropsArgs,
   UpdatePropsResult,
+  UpdateSnippetArgs,
+  UpdateSnippetArgsArgs,
+  UpdateSnippetArgsResult,
+  UpdateSnippetResult,
   UpdateVariantArgs,
   UpdateVariantResult,
   UpdateVariantsArgs,
