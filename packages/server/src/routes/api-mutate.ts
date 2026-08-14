@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import {
+  addBoard,
   addFrame,
   addGroup,
   addNode,
@@ -10,12 +11,14 @@ import {
   instantiateSnippet,
   type MutationContext,
   moveNode,
+  removeBoard,
   removeFrame,
   removeGroup,
   removeNode,
   removeScreen,
   removeSnippet,
   setNodeId,
+  updateBoard,
   updateFrame,
   updateFrames,
   updateGroup,
@@ -26,6 +29,7 @@ import {
   updateSnippetArgs,
 } from "../mutations/index.ts";
 import {
+  AddBoardBody,
   AddFrameBody,
   AddGroupBody,
   AddNodeBody,
@@ -35,12 +39,14 @@ import {
   ApplyClassesBulkBody,
   InstantiateSnippetBody,
   MoveNodeBody,
+  RemoveBoardBody,
   RemoveFrameBody,
   RemoveGroupBody,
   RemoveNodeBody,
   RemoveScreenBody,
   RemoveSnippetBody,
   SetNodeIdBody,
+  UpdateBoardBody,
   UpdateFrameBody,
   UpdateFramesBody,
   UpdateGroupBody,
@@ -71,7 +77,12 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post("/remove_screen", route(RemoveScreenBody, (a, ctx) => removeScreen(ctx, a)));
   r.post("/update_screen", route(UpdateScreenBody, (a, ctx) => updateScreen(ctx, a)));
 
-  // Frame / board lifecycle
+  // Board lifecycle
+  r.post("/add_board", route(AddBoardBody, (a, ctx) => addBoard(ctx, a)));
+  r.post("/update_board", route(UpdateBoardBody, (a, ctx) => updateBoard(ctx, a)));
+  r.post("/remove_board", route(RemoveBoardBody, (a, ctx) => removeBoard(ctx, a)));
+
+  // Frame / group lifecycle
   r.post("/add_frame", route(AddFrameBody, (a, ctx) => addFrame(ctx, a)));
   r.post("/update_frame", route(UpdateFrameBody, (a, ctx) => updateFrame(ctx, a)));
   r.post("/update_frames", route(UpdateFramesBody, (a, ctx) => updateFrames(ctx, a)));

@@ -95,7 +95,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       if (event.type === "screen-changed") {
         await reloadScreen(folder, event.screenId);
       } else if (event.type === "board-changed") {
-        await reloadBoard(folder);
+        await reloadBoard(folder, event.boardId);
       } else if (event.type === "theme-changed") {
         await reloadTheme(folder);
       } else if (event.type === "snippet-changed") {
@@ -103,7 +103,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       } else if (event.type === "annotations-changed") {
         await reloadAnnotations(folder, event.screenId);
       } else if (event.type === "notes-changed") {
-        await reloadNotes(folder);
+        await reloadNotes(folder, event.boardId);
       }
       broadcast(event);
     } catch (err) {

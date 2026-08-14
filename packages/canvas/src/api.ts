@@ -5,16 +5,22 @@ import type { AnnotationEntry, CanvasNoteEntry } from "./store.ts";
 export interface DesignSummary {
   snapshotVersion: string;
   theme: { name: string };
-  /** Screen id the canvas should focus first; null when not set. */
   defaultScreen: string | null;
+  defaultBoard: string | null;
   screens: ScreenMeta[];
-  board: Board;
+  boards: BoardMeta[];
   snippets: SnippetMeta[];
 }
 
 export interface ScreenMeta {
   id: string;
   name: string;
+}
+
+export interface BoardMeta {
+  id: string;
+  name: string;
+  frameCount: number;
 }
 
 export interface SnippetMeta {
@@ -36,9 +42,9 @@ export async function fetchAnnotations(screenId: string): Promise<AnnotationEntr
   return body.annotations;
 }
 
-export async function fetchNotes(): Promise<CanvasNoteEntry[]> {
-  const res = await fetch("/api/notes");
-  if (!res.ok) throw new Error(`fetchNotes: ${res.status}`);
+export async function fetchNotes(boardId: string): Promise<CanvasNoteEntry[]> {
+  const res = await fetch(`/api/notes/${encodeURIComponent(boardId)}`);
+  if (!res.ok) throw new Error(`fetchNotes(${boardId}): ${res.status}`);
   const body = (await res.json()) as { notes: CanvasNoteEntry[] };
   return body.notes;
 }
@@ -55,9 +61,9 @@ export async function fetchScreen(id: string): Promise<Screen> {
   return (await res.json()) as Screen;
 }
 
-export async function fetchBoard(): Promise<Board> {
-  const res = await fetch("/api/board");
-  if (!res.ok) throw new Error(`fetchBoard: ${res.status}`);
+export async function fetchBoard(id: string): Promise<Board> {
+  const res = await fetch(`/api/board/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`fetchBoard(${id}): ${res.status}`);
   return (await res.json()) as Board;
 }
 
@@ -125,7 +131,7 @@ export interface HistoryDepths {
 }
 export type RevertedEntry =
   | { kind: "screen"; screenId: string }
-  | { kind: "board" }
+  | { kind: "board"; boardId: string }
   | { kind: "theme" }
   | { kind: "snippet"; snippetId: string };
 export interface HistoryResponse extends HistoryDepths {
@@ -173,6 +179,7 @@ export const theme = {
 
 export const mutate = {
   updateFrame(args: {
+    boardId: string;
     frameId: string;
     patch: {
       x?: number;
@@ -186,6 +193,7 @@ export const mutate = {
     return postMutate<{ frame: unknown }>("update_frame", args);
   },
   updateFrames(args: {
+    boardId: string;
     patches: Array<{
       frameId: string;
       patch: {
@@ -201,6 +209,7 @@ export const mutate = {
     return postMutate<{ frames: unknown[] }>("update_frames", args);
   },
   addFrame(args: {
+    boardId: string;
     screenId: string;
     x?: number;
     y?: number;
@@ -211,8 +220,14 @@ export const mutate = {
   }) {
     return postMutate<{ frame: unknown }>("add_frame", args);
   },
-  removeFrame(args: { frameId: string }) {
+  removeFrame(args: { boardId: string; frameId: string }) {
     return postMutate<{ removedFrameId: string }>("remove_frame", args);
+  },
+  addBoard(args: { name: string; id?: string }) {
+    return postMutate<{ boardId: string; board: unknown }>("add_board", args);
+  },
+  removeBoard(args: { boardId: string }) {
+    return postMutate<{ removedBoardId: string }>("remove_board", args);
   },
   updateProps(args: { screenId: string; path: number[]; propPatch: Record<string, unknown> }) {
     return postMutate<{ path: number[] }>("update_props", args);
@@ -235,10 +250,10 @@ export const mutate = {
     return postMutate<{ screenId: string; screen: Screen }>("add_screen", args);
   },
   removeScreen(args: { screenId: string }) {
-    return postMutate<{ removedScreenId: string; removedFrameIds: string[] }>(
-      "remove_screen",
-      args,
-    );
+    return postMutate<{
+      removedScreenId: string;
+      removedFrames: { boardId: string; frameIds: string[] }[];
+    }>("remove_screen", args);
   },
   setNodeId(args: {
     screenId: string;
@@ -308,16 +323,17 @@ export const annotations = {
 };
 
 export const notes = {
-  add(args: { x: number; y: number; width?: number; body: string }) {
+  add(args: { boardId: string; x: number; y: number; width?: number; body: string }) {
     return postJson<{ note: CanvasNoteEntry }>("/api/notes/add", args);
   },
   update(args: {
+    boardId: string;
     noteId: string;
     patch: { x?: number; y?: number; width?: number; body?: string };
   }) {
     return postJson<{ note: CanvasNoteEntry }>("/api/notes/update", args);
   },
-  remove(args: { noteId: string }) {
+  remove(args: { boardId: string; noteId: string }) {
     return postJson<{ removedId: string }>("/api/notes/remove", args);
   },
 };

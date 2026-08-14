@@ -1,19 +1,29 @@
-import { MoreHorizontal, Plus, Sparkles, Trash2 } from "lucide-react";
+import { LayoutDashboard, MoreHorizontal, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { mutate, type ScreenMeta, type SnippetMeta } from "../api.ts";
+import { type BoardMeta, mutate, type ScreenMeta, type SnippetMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { Tree } from "./Tree.tsx";
 
 interface Props {
+  boards: BoardMeta[];
   screens: ScreenMeta[];
   snippets: SnippetMeta[];
+  currentBoardId: string | null;
   currentScreenId: string | null;
   snapshotVersion: string;
 }
 
-export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }: Props) {
+export function Sidebar({
+  boards,
+  screens,
+  snippets,
+  currentBoardId,
+  currentScreenId,
+  snapshotVersion,
+}: Props) {
+  const selectBoard = useCanvas((s) => s.selectBoard);
   const selectScreen = useCanvas((s) => s.selectScreen);
   const selection = useCanvas((s) => s.selection);
   const cursorMode = useCanvas((s) => s.cursorMode);
@@ -21,63 +31,61 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
   );
 
-  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [boardMenuOpenFor, setBoardMenuOpenFor] = useState<string | null>(null);
+  const [pendingBoardDelete, setPendingBoardDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
-  const onCreateScreen = async () => {
-    const name = window.prompt("Screen name", "New screen");
+  const onCreateBoard = async () => {
+    const name = window.prompt("Board name", "New board");
     if (!name) return;
     try {
-      const result = await mutate.addScreen({ name });
-      void selectScreen(result.screenId);
+      const r = await mutate.addBoard({ name });
+      void selectBoard(r.boardId);
     } catch (err) {
-      toastError(err, "Could not create screen");
+      toastError(err, "Could not create board");
     }
   };
 
-  const onDeleteScreen = (screenId: string, screenName: string) => {
-    setMenuOpenFor(null);
-    setPendingDelete({ id: screenId, name: screenName });
-  };
-
-  const confirmDeleteScreen = () => {
-    if (!pendingDelete) return;
-    const { id } = pendingDelete;
-    setPendingDelete(null);
+  const confirmDeleteBoard = () => {
+    if (!pendingBoardDelete) return;
+    const { id } = pendingBoardDelete;
+    setPendingBoardDelete(null);
     void mutate
-      .removeScreen({ screenId: id })
-      .catch((e) => toastError(e, "Could not delete screen"));
+      .removeBoard({ boardId: id })
+      .catch((e) => toastError(e, "Could not delete board"));
   };
 
   return (
     <aside className="flex h-full w-80 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
       <section className="border-b border-[var(--color-border)] py-2">
         <div className="px-4 py-2 flex items-center justify-between gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
-          <span>Screens</span>
+          <span className="flex items-center gap-1.5">
+            <LayoutDashboard size={11} strokeWidth={2} /> Boards
+          </span>
           <button
             type="button"
-            onClick={onCreateScreen}
-            title="New screen"
+            onClick={onCreateBoard}
+            title="New board"
             className="h-5 w-5 grid place-items-center rounded hover:bg-[var(--color-bg)] hover:text-[var(--color-fg)]"
           >
             <Plus size={13} strokeWidth={2} />
           </button>
         </div>
-        {screens.length === 0 ? (
-          <div className="px-4 py-2 text-sm text-[var(--color-fg-muted)]">
-            No screens yet. Use <Plus size={11} className="inline -mt-0.5" /> above to create one.
-          </div>
+        {boards.length === 0 ? (
+          <div className="px-4 py-2 text-sm text-[var(--color-fg-muted)]">No boards yet.</div>
         ) : (
           <ul className="flex flex-col px-2 gap-0.5 mt-1">
-            {screens.map((s) => {
-              const active = s.id === currentScreenId;
-              const menuOpen = menuOpenFor === s.id;
+            {boards.map((b) => {
+              const active = b.id === currentBoardId;
+              const menuOpen = boardMenuOpenFor === b.id;
               return (
-                <li key={s.id} className="relative group/screen">
+                <li key={b.id} className="relative group/board">
                   <button
                     type="button"
                     onClick={() => {
-                      void selectScreen(s.id);
+                      void selectBoard(b.id);
                     }}
                     className={
                       "w-full text-left px-2 py-1.5 pr-8 rounded text-sm transition-colors " +
@@ -86,18 +94,28 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
                         : "hover:bg-[var(--color-bg)] text-[var(--color-fg)]")
                     }
                   >
-                    <div className="font-medium truncate">{s.name}</div>
+                    <div className="font-medium truncate">{b.name}</div>
+                    <div
+                      className={
+                        "text-xs " +
+                        (active
+                          ? "text-[var(--color-accent-fg)] opacity-80"
+                          : "text-[var(--color-fg-muted)]")
+                      }
+                    >
+                      {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
+                    </div>
                   </button>
                   <button
                     type="button"
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
-                      setMenuOpenFor(menuOpen ? null : s.id);
+                      setBoardMenuOpenFor(menuOpen ? null : b.id);
                     }}
-                    title="Screen menu"
+                    title="Board menu"
                     className={
                       "absolute right-2 top-2 h-5 w-5 grid place-items-center rounded text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface)] " +
-                      (menuOpen ? "opacity-100" : "opacity-0 group-hover/screen:opacity-100")
+                      (menuOpen ? "opacity-100" : "opacity-0 group-hover/board:opacity-100")
                     }
                   >
                     <MoreHorizontal size={13} strokeWidth={2} />
@@ -107,18 +125,21 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
                       <button
                         type="button"
                         aria-label="Close menu"
-                        onClick={() => setMenuOpenFor(null)}
+                        onClick={() => setBoardMenuOpenFor(null)}
                         className="fixed inset-0 z-40 cursor-default"
                       />
                       <div className="absolute right-2 top-9 z-50 w-36 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-md py-1 text-sm">
                         <button
                           type="button"
-                          disabled={screens.length <= 1}
-                          onClick={() => onDeleteScreen(s.id, s.name)}
+                          disabled={boards.length <= 1}
+                          onClick={() => {
+                            setBoardMenuOpenFor(null);
+                            setPendingBoardDelete({ id: b.id, name: b.name });
+                          }}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[var(--color-destructive,red)] hover:bg-[var(--color-bg)] disabled:opacity-40 disabled:pointer-events-none"
                         >
                           <Trash2 size={13} strokeWidth={2} />
-                          Delete screen
+                          Delete board
                         </button>
                       </div>
                     </>
@@ -131,8 +152,26 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
       </section>
 
       <section className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 py-2 flex items-center justify-between gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)] border-b border-[var(--color-border)]">
-          <span>Tree</span>
+        <div className="px-4 py-2 flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)] border-b border-[var(--color-border)]">
+          <span className="flex-1 truncate">
+            Tree {currentScreen ? `· ${currentScreen.name}` : ""}
+          </span>
+          {screens.length > 1 ? (
+            <select
+              value={currentScreenId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value;
+                if (id) void selectScreen(id);
+              }}
+              className="text-[10px] uppercase tracking-wider rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5 max-w-[110px]"
+            >
+              {screens.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
         <div
           className={
@@ -145,7 +184,7 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
             <Tree screen={currentScreen} />
           ) : (
             <div className="px-4 py-2 text-xs text-[var(--color-fg-muted)]">
-              Pick a screen to see its tree.
+              Pick a screen above to see its tree.
             </div>
           )}
         </div>
@@ -161,6 +200,19 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
             {snippets.map((s) => {
               const instantiate = async () => {
                 if (!currentScreenId) return;
+                // Required params (no default) need values — fill with
+                // placeholders so the click always works. User edits them
+                // in the snippet inspector after placement.
+                const args: Record<string, unknown> = {};
+                for (const p of s.params) {
+                  if (p.default !== undefined) continue;
+                  if (p.type === "string") args[p.name] = p.name;
+                  else if (p.type === "number") args[p.name] = 0;
+                  else if (p.type === "boolean") args[p.name] = false;
+                  else if (p.type === "node") {
+                    args[p.name] = { $ref: "Text", props: { children: p.name } };
+                  }
+                }
                 try {
                   await mutate.instantiateSnippet({
                     screenId: currentScreenId,
@@ -168,6 +220,7 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
                       ? selection.path.split(".").filter(Boolean).map(Number)
                       : [],
                     snippetId: s.id,
+                    ...(Object.keys(args).length > 0 ? { args } : {}),
                   });
                 } catch (err) {
                   toastError(err, "Could not instantiate snippet");
@@ -198,17 +251,17 @@ export function Sidebar({ screens, snippets, currentScreenId, snapshotVersion }:
         shadcn snapshot {snapshotVersion}
       </footer>
       <ConfirmDialog
-        open={pendingDelete !== null}
-        title="Delete screen"
+        open={pendingBoardDelete !== null}
+        title="Delete board"
         body={
-          pendingDelete
-            ? `Delete screen "${pendingDelete.name}"? You can put it back with ⌘Z.`
+          pendingBoardDelete
+            ? `Delete board "${pendingBoardDelete.name}"? The screens it references stay; only the placements (frames) on this board are removed. You can put it back with ⌘Z.`
             : ""
         }
         confirmLabel="Delete"
         destructive
-        onCancel={() => setPendingDelete(null)}
-        onConfirm={confirmDeleteScreen}
+        onCancel={() => setPendingBoardDelete(null)}
+        onConfirm={confirmDeleteBoard}
       />
     </aside>
   );

@@ -6,14 +6,9 @@ export interface MutationContext {
   broadcast: (e: WatchEvent) => void;
 }
 
-/**
- * Per-screen write chain. Mutations on the same screen id serialize; different
- * screens run in parallel. Avoids interleaved schema-validate / write / cache
- * when canvas + MCP hit the same screen concurrently.
- */
 const screenChains = new Map<string, Promise<unknown>>();
 const snippetChains = new Map<string, Promise<unknown>>();
-let boardChain: Promise<unknown> = Promise.resolve();
+const boardChains = new Map<string, Promise<unknown>>();
 
 function chained<T>(
   chains: Map<string, Promise<unknown>>,
@@ -37,9 +32,7 @@ export function withSnippetLock<T>(snippetId: string, fn: () => Promise<T>): Pro
   return chained(snippetChains, snippetId, fn);
 }
 
-/** Serializes all board writes — frame add/move/remove/resize, group ops. */
-export function withBoardLock<T>(fn: () => Promise<T>): Promise<T> {
-  const next = boardChain.then(fn, fn);
-  boardChain = next.catch(() => undefined);
-  return next;
+/** Serializes writes for a specific board (frame moves, group ops). */
+export function withBoardLock<T>(boardId: string, fn: () => Promise<T>): Promise<T> {
+  return chained(boardChains, boardId, fn);
 }

@@ -2,6 +2,7 @@ import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Frame } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { frameNotFound, type MutationError } from "./errors.ts";
+import { getBoard } from "./lookup.ts";
 import { persistBoard } from "./persist.ts";
 
 export interface FramePatch {
@@ -9,13 +10,12 @@ export interface FramePatch {
   y?: number;
   w?: number;
   h?: number;
-  /** Pass `null` to clear the label. */
   label?: string | null;
-  /** Pass `null` to remove the frame from its group (un-grouped). */
   group?: string | null;
 }
 
 export interface UpdateFrameArgs {
+  boardId: string;
   frameId: string;
   patch: FramePatch;
 }
@@ -47,25 +47,26 @@ function applyPatch(frame: Frame, patch: FramePatch): Frame {
   return next;
 }
 
-/** Update a frame's position, size, label, or group. */
 export async function updateFrame(
   ctx: MutationContext,
   args: UpdateFrameArgs,
 ): Promise<Result<UpdateFrameResult, MutationError>> {
   return DoAsync<UpdateFrameResult, MutationError>(async function* () {
-    const idx = ctx.folder.board.frames.findIndex((f) => f.id === args.frameId);
-    if (idx === -1) return yield* $(err(frameNotFound(args.frameId)));
+    const board = yield* $(getBoard(ctx, args.boardId));
+    const idx = board.frames.findIndex((f) => f.id === args.frameId);
+    if (idx === -1) return yield* $(err(frameNotFound(args.boardId, args.frameId)));
 
-    const updated = applyPatch(ctx.folder.board.frames[idx] as Frame, args.patch);
-    const nextFrames = [...ctx.folder.board.frames];
+    const updated = applyPatch(board.frames[idx] as Frame, args.patch);
+    const nextFrames = [...board.frames];
     nextFrames[idx] = updated;
-    await persistBoard(ctx.folder, { ...ctx.folder.board, frames: nextFrames });
-    ctx.broadcast({ type: "board-changed" });
+    await persistBoard(ctx.folder, args.boardId, { ...board, frames: nextFrames });
+    ctx.broadcast({ type: "board-changed", boardId: args.boardId });
     return { frame: updated };
   });
 }
 
 export interface UpdateFramesArgs {
+  boardId: string;
   patches: Array<{ frameId: string; patch: FramePatch }>;
 }
 
@@ -73,20 +74,20 @@ export interface UpdateFramesResult {
   frames: Frame[];
 }
 
-/** Atomic bulk frame update — used by drag-multi-select on the board. */
 export async function updateFrames(
   ctx: MutationContext,
   args: UpdateFramesArgs,
 ): Promise<Result<UpdateFramesResult, MutationError>> {
   return DoAsync<UpdateFramesResult, MutationError>(async function* () {
-    const nextFrames = [...ctx.folder.board.frames];
+    const board = yield* $(getBoard(ctx, args.boardId));
+    const nextFrames = [...board.frames];
     for (const { frameId, patch } of args.patches) {
       const idx = nextFrames.findIndex((f) => f.id === frameId);
-      if (idx === -1) return yield* $(err(frameNotFound(frameId)));
+      if (idx === -1) return yield* $(err(frameNotFound(args.boardId, frameId)));
       nextFrames[idx] = applyPatch(nextFrames[idx] as Frame, patch);
     }
-    await persistBoard(ctx.folder, { ...ctx.folder.board, frames: nextFrames });
-    ctx.broadcast({ type: "board-changed" });
+    await persistBoard(ctx.folder, args.boardId, { ...board, frames: nextFrames });
+    ctx.broadcast({ type: "board-changed", boardId: args.boardId });
     return { frames: nextFrames };
   });
 }

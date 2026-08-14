@@ -40,6 +40,8 @@ export const ConfigSchema = z.object({
   viewportPresets: z.array(ViewportPresetSchema).min(1),
   /** Screen id the canvas should focus on first load. Falls back to the first screen. */
   defaultScreen: z.string().min(1).optional(),
+  /** Board id the canvas should open on first load. Falls back to the first board. */
+  defaultBoard: z.string().min(1).optional(),
   codegen: CodegenConfigSchema.optional(),
 });
 

@@ -1,5 +1,5 @@
 import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
-import { Link2, Monitor, Smartphone, Tablet, X } from "lucide-react";
+import { GripVertical, Link2, Monitor, Smartphone, Tablet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
@@ -7,39 +7,45 @@ import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 
 interface FrameProps {
+  boardId: string;
   frame: FrameT;
+  otherFrames: FrameT[];
   presets: ViewportPreset[];
-  /** Number of frames on the board referencing the same screen as this one. */
   sharedCount: number;
 }
 
+const FRAME_PADDING = 16;
+
 /**
  * One placement on the Board: an iframe at the frame's chosen size, rendering
- * the referenced screen. Selecting a node inside any frame of a given screen
- * updates the global selection — and every other frame of that screen
- * highlights the same node because they share the underlying tree.
+ * the referenced screen. Grab the header to drag; pull the edge handles to
+ * resize. Resize clamps against neighboring frames so they never overlap.
  *
- * Edge handles resize the frame in real time; release commits via
- * update_frame so the new size persists in board.json (and undo works).
- * Viewport-preset chips along the bottom snap w/h to common device sizes.
+ * When the canvas cursor is in `hand` or `note` mode, the iframe's
+ * pointer-events are disabled so the parent can capture drag/click through
+ * the frame.
  */
-export function Frame({ frame, presets, sharedCount }: FrameProps) {
+export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: FrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
   const screen = useCanvas((s) => s.screens[frame.screen]);
   const screenVersion = useCanvas((s) => s.screenVersion);
+  const themeVersion = useCanvas((s) => s.themeVersion);
   const selection = useCanvas((s) => s.selection);
   const hover = useCanvas((s) => s.hover);
   const designMode = useCanvas((s) => s.designMode);
+  const cursorMode = useCanvas((s) => s.cursorMode);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
 
-  // Local mid-drag size so the resize handle is buttery; commits on release.
   const [draftSize, setDraftSize] = useState<{ w: number; h: number } | null>(null);
+  const [draftPos, setDraftPos] = useState<{ x: number; y: number } | null>(null);
 
   const w = draftSize?.w ?? frame.w;
   const h = draftSize?.h ?? frame.h;
+  const x = draftPos?.x ?? frame.x;
+  const y = draftPos?.y ?? frame.y;
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -60,6 +66,8 @@ export function Frame({ frame, presets, sharedCount }: FrameProps) {
     channelRef.current = channel;
     const onLoad = () => channel.attach();
     iframe.addEventListener("load", onLoad);
+    // Already loaded (hot reload, fast network, etc.) — attach now.
+    if (iframe.contentDocument?.readyState === "complete") channel.attach();
     return () => {
       iframe.removeEventListener("load", onLoad);
       channel.destroy();
@@ -87,6 +95,29 @@ export function Frame({ frame, presets, sharedCount }: FrameProps) {
     }
   }, [hover, frame.screen]);
 
+  /** Clamp a candidate resize against neighboring frames so we don't overlap. */
+  const clampResize = (nextW: number, nextH: number): { w: number; h: number } => {
+    let cw = nextW;
+    let ch = nextH;
+    for (const other of otherFrames) {
+      const ox1 = other.x;
+      const oy1 = other.y;
+      const ox2 = other.x + other.w;
+      const oy2 = other.y + other.h;
+      // Other frame to our right + in our vertical lane.
+      if (oy1 < frame.y + ch && oy2 > frame.y && ox1 >= frame.x + frame.w - 1) {
+        const maxW = ox1 - frame.x - FRAME_PADDING;
+        if (maxW < cw) cw = maxW;
+      }
+      // Other frame below + in our horizontal lane.
+      if (ox1 < frame.x + cw && ox2 > frame.x && oy1 >= frame.y + frame.h - 1) {
+        const maxH = oy1 - frame.y - FRAME_PADDING;
+        if (maxH < ch) ch = maxH;
+      }
+    }
+    return { w: Math.max(120, cw), h: Math.max(120, ch) };
+  };
+
   const startResize = (direction: "e" | "s" | "se") => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -98,26 +129,66 @@ export function Frame({ frame, presets, sharedCount }: FrameProps) {
     const startY = e.clientY;
     const zoom = useCanvas.getState().canvasZoom || 1;
 
-    const onMove = (ev: PointerEvent) => {
+    const compute = (ev: PointerEvent) => {
       const dx = (ev.clientX - startX) / zoom;
       const dy = (ev.clientY - startY) / zoom;
-      const nextW = direction === "s" ? startW : Math.max(120, Math.round(startW + dx));
-      const nextH = direction === "e" ? startH : Math.max(120, Math.round(startH + dy));
-      setDraftSize({ w: nextW, h: nextH });
+      const rawW = direction === "s" ? startW : Math.round(startW + dx);
+      const rawH = direction === "e" ? startH : Math.round(startH + dy);
+      return clampResize(rawW, rawH);
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      setDraftSize(compute(ev));
     };
     const onUp = (ev: PointerEvent) => {
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onUp);
       target.removeEventListener("pointercancel", onUp);
-      const dx = (ev.clientX - startX) / zoom;
-      const dy = (ev.clientY - startY) / zoom;
-      const nextW = direction === "s" ? startW : Math.max(120, Math.round(startW + dx));
-      const nextH = direction === "e" ? startH : Math.max(120, Math.round(startH + dy));
+      const next = compute(ev);
       setDraftSize(null);
-      if (nextW !== startW || nextH !== startH) {
+      if (next.w !== startW || next.h !== startH) {
         void mutate
-          .updateFrame({ frameId: frame.id, patch: { w: nextW, h: nextH } })
+          .updateFrame({ boardId, frameId: frame.id, patch: { w: next.w, h: next.h } })
           .catch((err) => toastError(err, "Could not resize frame"));
+      }
+    };
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
+  };
+
+  /** Drag the frame around by its header grip handle. */
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const startX = frame.x;
+    const startY = frame.y;
+    const startPx = e.clientX;
+    const startPy = e.clientY;
+    const zoom = useCanvas.getState().canvasZoom || 1;
+
+    const compute = (ev: PointerEvent) => {
+      const dx = (ev.clientX - startPx) / zoom;
+      const dy = (ev.clientY - startPy) / zoom;
+      return { x: Math.round(startX + dx), y: Math.round(startY + dy) };
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      setDraftPos(compute(ev));
+    };
+    const onUp = (ev: PointerEvent) => {
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
+      const next = compute(ev);
+      setDraftPos(null);
+      if (next.x !== startX || next.y !== startY) {
+        void mutate
+          .updateFrame({ boardId, frameId: frame.id, patch: { x: next.x, y: next.y } })
+          .catch((err) => toastError(err, "Could not move frame"));
       }
     };
     target.addEventListener("pointermove", onMove);
@@ -128,13 +199,13 @@ export function Frame({ frame, presets, sharedCount }: FrameProps) {
   const onPickPreset = (preset: ViewportPreset) => {
     if (preset.w === frame.w && preset.h === frame.h) return;
     void mutate
-      .updateFrame({ frameId: frame.id, patch: { w: preset.w, h: preset.h } })
+      .updateFrame({ boardId, frameId: frame.id, patch: { w: preset.w, h: preset.h } })
       .catch((err) => toastError(err, "Could not resize frame"));
   };
 
   const onRemove = () => {
     void mutate
-      .removeFrame({ frameId: frame.id })
+      .removeFrame({ boardId, frameId: frame.id })
       .catch((err) => toastError(err, "Could not remove frame"));
   };
 
@@ -144,16 +215,26 @@ export function Frame({ frame, presets, sharedCount }: FrameProps) {
     return <Monitor size={11} />;
   };
 
+  const passThrough = cursorMode === "hand" || cursorMode === "note";
+
   return (
     <div
       className="absolute group"
-      style={{ left: frame.x, top: frame.y }}
+      style={{ left: x, top: y }}
       data-frame-id={frame.id}
       data-group-id={frame.group ?? ""}
     >
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between gap-2 text-xs text-[var(--color-fg-muted)]">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-1 min-w-0">
+            <div
+              onPointerDown={startDrag}
+              className="shrink-0 h-4 w-4 grid place-items-center rounded cursor-grab active:cursor-grabbing text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface)]"
+              title="Drag to move"
+              role="presentation"
+            >
+              <GripVertical size={12} strokeWidth={2} />
+            </div>
             <span className="font-medium truncate">
               {frame.label ?? screen?.name ?? frame.screen}
             </span>
@@ -192,11 +273,15 @@ export function Frame({ frame, presets, sharedCount }: FrameProps) {
             <iframe
               ref={iframeRef}
               title={`${screen.name} (${frame.id})`}
-              src={`${renderUrl(frame.screen, w, h)}&mode=${designMode}&v=${screenVersion}`}
+              src={`${renderUrl(frame.screen, w, h)}&mode=${designMode}&v=${screenVersion}.${themeVersion}`}
               width={w}
               height={h}
               className="border border-[var(--color-border)] rounded-md bg-white"
-              style={{ width: w, height: h }}
+              style={{
+                width: w,
+                height: h,
+                pointerEvents: passThrough ? "none" : "auto",
+              }}
             />
             <div
               onPointerDown={startResize("e")}

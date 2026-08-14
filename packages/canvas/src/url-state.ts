@@ -2,30 +2,34 @@ import { useEffect, useRef } from "react";
 import { useCanvas } from "./store.ts";
 
 interface UrlState {
+  boardId: string | null;
   screenId: string | null;
   selection: { screenId: string; path: string } | null;
 }
 
-/** Parse ?screen= / ?sel= into a UrlState object. */
 export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
+  const boardId = params.get("board");
   const screenId = params.get("screen");
   const selPath = params.get("sel");
   const selection = screenId && selPath !== null ? { screenId, path: selPath } : null;
-  return { screenId, selection };
+  return { boardId, screenId, selection };
 }
 
 function writeUrl(
+  boardId: string | null,
   screenId: string | null,
   sel: { screenId: string; path: string } | null,
-  pushScreen: boolean,
+  pushBoard: boolean,
 ): void {
   const url = new URL(window.location.href);
+  url.searchParams.delete("board");
   url.searchParams.delete("screen");
   url.searchParams.delete("sel");
+  if (boardId) url.searchParams.set("board", boardId);
   if (screenId) url.searchParams.set("screen", screenId);
   if (sel) url.searchParams.set("sel", sel.path);
-  if (pushScreen) {
+  if (pushBoard) {
     window.history.pushState({}, "", url.toString());
   } else {
     window.history.replaceState({}, "", url.toString());
@@ -33,35 +37,39 @@ function writeUrl(
 }
 
 export function useUrlState(): void {
+  const currentBoardId = useCanvas((s) => s.currentBoardId);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
-  const lastScreenRef = useRef<string | null | undefined>(undefined);
+  const lastBoardRef = useRef<string | null | undefined>(undefined);
   const restoringRef = useRef(false);
 
   useEffect(() => {
     if (restoringRef.current) {
       restoringRef.current = false;
-      lastScreenRef.current = currentScreenId;
+      lastBoardRef.current = currentBoardId;
       return;
     }
-    const prev = lastScreenRef.current;
-    const pushScreen = Boolean(prev && currentScreenId && prev !== currentScreenId);
-    lastScreenRef.current = currentScreenId;
-    writeUrl(currentScreenId, selection, pushScreen);
-  }, [currentScreenId, selection]);
+    const prev = lastBoardRef.current;
+    const pushBoard = Boolean(prev && currentBoardId && prev !== currentBoardId);
+    lastBoardRef.current = currentBoardId;
+    writeUrl(currentBoardId, currentScreenId, selection, pushBoard);
+  }, [currentBoardId, currentScreenId, selection]);
 
   useEffect(() => {
     const onPop = () => {
       const state = readUrlState();
       const store = useCanvas.getState();
       restoringRef.current = true;
-      if (state.screenId && state.screenId !== store.currentScreenId) {
-        void store.selectScreen(state.screenId).then(() => {
-          store.setSelection(state.selection);
-        });
-      } else {
-        store.setSelection(state.selection);
+      const tasks: Promise<unknown>[] = [];
+      if (state.boardId && state.boardId !== store.currentBoardId) {
+        tasks.push(store.selectBoard(state.boardId));
       }
+      if (state.screenId && state.screenId !== store.currentScreenId) {
+        tasks.push(store.selectScreen(state.screenId));
+      }
+      void Promise.all(tasks).then(() => {
+        store.setSelection(state.selection);
+      });
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);

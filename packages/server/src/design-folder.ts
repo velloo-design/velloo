@@ -22,16 +22,24 @@ export interface DesignFolder {
   config: Config;
   theme: Theme;
   screens: Map<string, Screen>;
-  board: Board;
+  /**
+   * Boards keyed by id. A folder has many boards — one per flow ("welcome",
+   * "components", "settings", etc.). Each board has its own frames + groups.
+   */
+  boards: Map<string, Board>;
   snippets: Map<string, Snippet>;
   /** Per-screen annotation arrays. Empty array for screens with no sidecar. */
   annotations: Map<string, Annotation[]>;
-  /** Board-level free notes (single flat array). */
-  notes: CanvasNote[];
+  /** Per-board free notes. Notes live in board coords, so they're scoped per board. */
+  notes: Map<string, CanvasNote[]>;
 }
 
 /** Screen id is the filename stem (e.g. "landing" for screens/landing.json). */
 export function screenIdFromFilename(filename: string): string {
+  return basename(filename, extname(filename));
+}
+
+export function boardIdFromFilename(filename: string): string {
   return basename(filename, extname(filename));
 }
 
@@ -77,10 +85,6 @@ async function loadDir<T>(
   return out;
 }
 
-/**
- * Load per-screen annotation sidecars: `screens/<screenId>.annotations.json`.
- * Board-level notes load separately from `board.notes.json` at the folder root.
- */
 async function loadAnnotations(
   root: string,
   screenIds: Iterable<string>,
@@ -98,20 +102,27 @@ async function loadAnnotations(
   return annotations;
 }
 
-async function loadBoardNotes(root: string): Promise<CanvasNote[]> {
-  const raw = await readJsonOrNull<unknown>(join(root, "board.notes.json"));
-  if (raw === null) return [];
-  return (raw as unknown[]).map((r) => CanvasNoteSchema.parse(r));
-}
-
-async function loadBoard(root: string): Promise<Board> {
-  const raw = await readJsonOrNull<unknown>(join(root, "board.json"));
-  if (raw === null) return { frames: [], groups: [] };
-  return BoardSchema.parse(raw);
+/**
+ * Load board-level notes. Each board can have its own free notes file at
+ * `boards/<id>.notes.json`. Returns a map keyed by boardId.
+ */
+async function loadBoardNotes(
+  root: string,
+  boardIds: Iterable<string>,
+): Promise<Map<string, CanvasNote[]>> {
+  const notes = new Map<string, CanvasNote[]>();
+  for (const boardId of boardIds) {
+    const raw = await readJsonOrNull<unknown>(join(root, "boards", `${boardId}.notes.json`));
+    notes.set(
+      boardId,
+      raw === null ? [] : (raw as unknown[]).map((r) => CanvasNoteSchema.parse(r)),
+    );
+  }
+  return notes;
 }
 
 /** Predicate: accepts `<id>.json` but rejects `<id>.annotations.json` etc. */
-function isPlainScreenJson(file: string): boolean {
+function isPlainJson(file: string): boolean {
   const stem = basename(file, ".json");
   return !stem.includes(".");
 }
@@ -127,18 +138,23 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
     join(root, "screens"),
     (raw) => ScreenSchema.parse(raw),
     screenIdFromFilename,
-    isPlainScreenJson,
+    isPlainJson,
   );
   const snippets = await loadDir(
     join(root, "snippets"),
     (raw) => SnippetSchema.parse(raw),
     snippetIdFromFilename,
   );
-  const board = await loadBoard(root);
+  const boards = await loadDir(
+    join(root, "boards"),
+    (raw) => BoardSchema.parse(raw),
+    boardIdFromFilename,
+    isPlainJson,
+  );
   const annotations = await loadAnnotations(root, screens.keys());
-  const notes = await loadBoardNotes(root);
+  const notes = await loadBoardNotes(root, boards.keys());
 
-  return { root, config, theme, screens, board, snippets, annotations, notes };
+  return { root, config, theme, screens, boards, snippets, annotations, notes };
 }
 
 /** Reload one screen from disk and update the cache in place. */
@@ -162,11 +178,25 @@ export async function reloadScreen(
   }
 }
 
-/** Reload the board.json from disk. */
-export async function reloadBoard(folder: DesignFolder): Promise<Board> {
-  const board = await loadBoard(folder.root);
-  folder.board = board;
-  return board;
+/** Reload one board from disk and update the cache in place. */
+export async function reloadBoard(
+  folder: DesignFolder,
+  boardId: string,
+): Promise<Board | null> {
+  const path = join(folder.root, "boards", `${boardId}.json`);
+  try {
+    const raw = await readJson(path);
+    const board = BoardSchema.parse(raw);
+    folder.boards.set(boardId, board);
+    return board;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      folder.boards.delete(boardId);
+      folder.notes.delete(boardId);
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function reloadTheme(folder: DesignFolder): Promise<Theme> {
@@ -209,9 +239,15 @@ export async function reloadAnnotations(
   return parsed;
 }
 
-/** Reload board-level notes from `board.notes.json`. */
-export async function reloadNotes(folder: DesignFolder): Promise<CanvasNote[]> {
-  const notes = await loadBoardNotes(folder.root);
-  folder.notes = notes;
-  return notes;
+/** Reload notes for one board. */
+export async function reloadNotes(
+  folder: DesignFolder,
+  boardId: string,
+): Promise<CanvasNote[]> {
+  const raw = await readJsonOrNull<unknown>(
+    join(folder.root, "boards", `${boardId}.notes.json`),
+  );
+  const parsed = raw === null ? [] : (raw as unknown[]).map((r) => CanvasNoteSchema.parse(r));
+  folder.notes.set(boardId, parsed);
+  return parsed;
 }

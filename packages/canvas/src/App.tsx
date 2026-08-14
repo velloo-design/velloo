@@ -15,9 +15,13 @@ import { connectWs } from "./ws-client.ts";
 
 export function App() {
   const design = useCanvas((s) => s.design);
-  const board = useCanvas((s) => s.board);
+  const currentBoardId = useCanvas((s) => s.currentBoardId);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
+  const currentBoard = useCanvas((s) =>
+    currentBoardId ? (s.boards[currentBoardId] ?? null) : null,
+  );
   const loadDesign = useCanvas((s) => s.loadDesign);
+  const selectBoard = useCanvas((s) => s.selectBoard);
   const selectScreen = useCanvas((s) => s.selectScreen);
   const setSelection = useCanvas((s) => s.setSelection);
   const initialized = useRef(false);
@@ -29,18 +33,25 @@ export function App() {
     const seed = readUrlState();
     void (async () => {
       await loadDesign();
+      if (seed.boardId) {
+        try {
+          await selectBoard(seed.boardId);
+        } catch {
+          /* board removed */
+        }
+      }
       if (seed.screenId) {
         try {
           await selectScreen(seed.screenId);
         } catch {
-          /* screen may have been removed */
+          /* screen removed */
         }
       }
       if (seed.selection) setSelection(seed.selection);
     })();
     const stop = connectWs();
     return stop;
-  }, [loadDesign, selectScreen, setSelection]);
+  }, [loadDesign, selectBoard, selectScreen, setSelection]);
 
   useUrlState();
   useApplyAppTheme();
@@ -104,8 +115,6 @@ export function App() {
     };
   }, []);
 
-  // Annotate mode: when the user clicks a node, anchor an annotation to it
-  // and pop back into select mode.
   useEffect(() => {
     return useCanvas.subscribe((state) => {
       if (state.cursorMode !== "annotate") return;
@@ -142,18 +151,25 @@ export function App() {
       <TopBar />
       <div className="flex-1 flex min-h-0">
         <Sidebar
+          boards={design.boards}
           screens={design.screens}
           snippets={design.snippets}
+          currentBoardId={currentBoardId}
           currentScreenId={currentScreenId}
           snapshotVersion={design.snapshotVersion}
         />
         <main className="flex-1 flex flex-col min-w-0">
-          {board && board.frames.length > 0 ? (
-            <Board board={board} />
+          {currentBoard && currentBoard.frames.length > 0 ? (
+            <Board board={currentBoard} />
+          ) : currentBoard ? (
+            <EmptyState
+              title={`Board "${currentBoard.name}" is empty`}
+              hint="Add a frame to place a screen here, or pick another board."
+            />
           ) : (
             <EmptyState
-              title="No frames on the board"
-              hint="Add a screen and place a frame to see it here."
+              title="No board selected"
+              hint="Pick a board from the sidebar to see its frames."
             />
           )}
           <StatusBar />

@@ -17,7 +17,7 @@ import type { WatchEvent } from "../watcher.ts";
 
 type Reverted =
   | { kind: "screen"; screenId: string }
-  | { kind: "board" }
+  | { kind: "board"; boardId: string }
   | { kind: "theme" }
   | { kind: "snippet"; snippetId: string };
 
@@ -73,15 +73,19 @@ async function applyRevert(
   }
 
   if (entry.kind === "board") {
-    const current = folder.board;
-    const back: HistoryEntry = { kind: "board", board: current };
+    const current = folder.boards.get(entry.boardId) ?? null;
+    const back: HistoryEntry = { kind: "board", boardId: entry.boardId, board: current };
     if (pushOpposite === "redo") pushRedo(back);
     else pushUndoSilent(back);
-    await withBoardLock(async () => {
-      await writeBoard(folder, entry.board);
+    await withBoardLock(entry.boardId, async () => {
+      if (entry.board === null) {
+        await deleteBoard(folder, entry.boardId);
+      } else {
+        await writeBoard(folder, entry.boardId, entry.board);
+      }
     });
-    broadcast({ type: "board-changed" });
-    return { kind: "board" };
+    broadcast({ type: "board-changed", boardId: entry.boardId });
+    return { kind: "board", boardId: entry.boardId };
   }
 
   if (entry.kind === "snippet") {
@@ -117,9 +121,14 @@ async function deleteScreen(folder: DesignFolder, screenId: string): Promise<voi
   folder.screens.delete(screenId);
 }
 
-async function writeBoard(folder: DesignFolder, board: Board): Promise<void> {
-  await writeJsonAtomic(join(folder.root, "board.json"), board);
-  folder.board = board;
+async function writeBoard(folder: DesignFolder, boardId: string, board: Board): Promise<void> {
+  await writeJsonAtomic(join(folder.root, "boards", `${boardId}.json`), board);
+  folder.boards.set(boardId, board);
+}
+
+async function deleteBoard(folder: DesignFolder, boardId: string): Promise<void> {
+  await rm(join(folder.root, "boards", `${boardId}.json`), { force: true });
+  folder.boards.delete(boardId);
 }
 
 async function writeTheme(folder: DesignFolder, theme: Theme): Promise<void> {

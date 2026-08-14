@@ -3,6 +3,7 @@ import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { CanvasNote } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { canvasNoteNotFound, type MutationError } from "./errors.ts";
+import { getBoard } from "./lookup.ts";
 import { persistCanvasNotes } from "./persist.ts";
 
 function newNoteId(): string {
@@ -12,6 +13,7 @@ function newNoteId(): string {
 const DEFAULT_NOTE_WIDTH = 240;
 
 export interface AddNoteArgs {
+  boardId: string;
   x: number;
   y: number;
   width?: number;
@@ -27,6 +29,7 @@ export async function addNote(
   args: AddNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
   return DoAsync<NoteResult, MutationError>(async function* () {
+    yield* $(getBoard(ctx, args.boardId));
     const note: CanvasNote = {
       id: newNoteId(),
       x: args.x,
@@ -34,13 +37,15 @@ export async function addNote(
       width: args.width ?? DEFAULT_NOTE_WIDTH,
       body: args.body,
     };
-    await persistCanvasNotes(ctx.folder, [...ctx.folder.notes, note]);
-    ctx.broadcast({ type: "notes-changed" });
+    const existing = ctx.folder.notes.get(args.boardId) ?? [];
+    await persistCanvasNotes(ctx.folder, args.boardId, [...existing, note]);
+    ctx.broadcast({ type: "notes-changed", boardId: args.boardId });
     return { note };
   });
 }
 
 export interface UpdateNoteArgs {
+  boardId: string;
   noteId: string;
   patch: {
     x?: number;
@@ -55,9 +60,10 @@ export async function updateNote(
   args: UpdateNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
   return DoAsync<NoteResult, MutationError>(async function* () {
-    const idx = ctx.folder.notes.findIndex((n) => n.id === args.noteId);
+    const existing = ctx.folder.notes.get(args.boardId) ?? [];
+    const idx = existing.findIndex((n) => n.id === args.noteId);
     if (idx === -1) return yield* $(err(canvasNoteNotFound(args.noteId)));
-    const prev = ctx.folder.notes[idx] as CanvasNote;
+    const prev = existing[idx] as CanvasNote;
     const next: CanvasNote = {
       ...prev,
       ...(args.patch.x !== undefined ? { x: args.patch.x } : {}),
@@ -65,15 +71,16 @@ export async function updateNote(
       ...(args.patch.width !== undefined ? { width: args.patch.width } : {}),
       ...(args.patch.body !== undefined ? { body: args.patch.body } : {}),
     };
-    const updated = [...ctx.folder.notes];
+    const updated = [...existing];
     updated[idx] = next;
-    await persistCanvasNotes(ctx.folder, updated);
-    ctx.broadcast({ type: "notes-changed" });
+    await persistCanvasNotes(ctx.folder, args.boardId, updated);
+    ctx.broadcast({ type: "notes-changed", boardId: args.boardId });
     return { note: next };
   });
 }
 
 export interface RemoveNoteArgs {
+  boardId: string;
   noteId: string;
 }
 
@@ -82,12 +89,13 @@ export async function removeNote(
   args: RemoveNoteArgs,
 ): Promise<Result<{ removedId: string }, MutationError>> {
   return DoAsync<{ removedId: string }, MutationError>(async function* () {
-    if (!ctx.folder.notes.some((n) => n.id === args.noteId)) {
+    const existing = ctx.folder.notes.get(args.boardId) ?? [];
+    if (!existing.some((n) => n.id === args.noteId)) {
       return yield* $(err(canvasNoteNotFound(args.noteId)));
     }
-    const next = ctx.folder.notes.filter((n) => n.id !== args.noteId);
-    await persistCanvasNotes(ctx.folder, next);
-    ctx.broadcast({ type: "notes-changed" });
+    const next = existing.filter((n) => n.id !== args.noteId);
+    await persistCanvasNotes(ctx.folder, args.boardId, next);
+    ctx.broadcast({ type: "notes-changed", boardId: args.boardId });
     return { removedId: args.noteId };
   });
 }

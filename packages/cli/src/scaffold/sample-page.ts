@@ -571,41 +571,57 @@ export function buildComponentsScreen(): Screen {
   };
 }
 
-/** Default board layout: welcome + components side-by-side at desktop size. */
-export function buildSampleBoard(): Board {
-  const frames: Frame[] = [
-    {
-      id: "welcome-desktop",
-      screen: "welcome",
-      x: 0,
-      y: 0,
-      w: 1440,
-      h: 1100,
-      label: "Desktop",
-      group: "tutorial",
-    },
-    {
-      id: "welcome-mobile",
-      screen: "welcome",
-      x: 1520,
-      y: 0,
-      w: 390,
-      h: 1500,
-      label: "Mobile",
-      group: "tutorial",
-    },
-    {
-      id: "components-desktop",
-      screen: "components",
-      x: 0,
-      y: 1200,
-      w: 1440,
-      h: 1800,
-      label: "Components",
-    },
-  ];
-  return {
-    frames,
+/**
+ * Default sample boards: a "welcome" board with mobile + desktop frames of
+ * the responsive welcome screen, and a "components" board showcasing the
+ * library. Frames sit at positive coordinates (with a left margin) so the
+ * canvas opens centered on real content, not jammed at the origin.
+ */
+export function buildSampleBoards(): Board[] {
+  const welcome: Board = {
+    id: "welcome",
+    name: "Welcome",
+    frames: [
+      {
+        id: "welcome-desktop",
+        screen: "welcome",
+        x: 200,
+        y: 120,
+        w: 1440,
+        h: 1100,
+        label: "Desktop",
+        group: "tutorial",
+      },
+      {
+        id: "welcome-mobile",
+        screen: "welcome",
+        x: 1720,
+        y: 120,
+        w: 390,
+        h: 1500,
+        label: "Mobile",
+        group: "tutorial",
+      },
+    ],
     groups: [{ id: "tutorial", name: "Tutorial", color: "#7C3AED" }],
   };
+
+  const components: Board = {
+    id: "components",
+    name: "Components",
+    frames: [
+      {
+        id: "components-desktop",
+        screen: "components",
+        x: 200,
+        y: 120,
+        w: 1440,
+        h: 1800,
+        label: "Component library",
+      },
+    ],
+    groups: [],
+  };
+
+  return [welcome, components];
 }

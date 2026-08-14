@@ -26,6 +26,17 @@ import {
   applyClassesBulk as applyClassesBulkImpl,
 } from "./apply-classes-bulk.ts";
 import {
+  type AddBoardArgs,
+  type AddBoardResult,
+  addBoard as addBoardImpl,
+  type RemoveBoardArgs,
+  type RemoveBoardResult,
+  removeBoard as removeBoardImpl,
+  type UpdateBoardArgs,
+  type UpdateBoardResult,
+  updateBoard as updateBoardImpl,
+} from "./boards.ts";
+import {
   type AddNoteArgs,
   addNote as addNoteImpl,
   type NoteResult,
@@ -198,48 +209,68 @@ export function updateScreen(
   return withScreenLock(args.screenId, () => updateScreenImpl(ctx, args));
 }
 
-// ── Board / frame / group lifecycle ────────────────────────────
+// ── Board lifecycle ────────────────────────────────────────────
+export function addBoard(
+  ctx: MutationContext,
+  args: AddBoardArgs,
+): Promise<Result<AddBoardResult, MutationError>> {
+  return addBoardImpl(ctx, args);
+}
+export function updateBoard(
+  ctx: MutationContext,
+  args: UpdateBoardArgs,
+): Promise<Result<UpdateBoardResult, MutationError>> {
+  return withBoardLock(args.boardId, () => updateBoardImpl(ctx, args));
+}
+export function removeBoard(
+  ctx: MutationContext,
+  args: RemoveBoardArgs,
+): Promise<Result<RemoveBoardResult, MutationError>> {
+  return withBoardLock(args.boardId, () => removeBoardImpl(ctx, args));
+}
+
+// ── Frame / group lifecycle ────────────────────────────────────
 export function addFrame(
   ctx: MutationContext,
   args: AddFrameArgs,
 ): Promise<Result<AddFrameResult, MutationError>> {
-  return withBoardLock(() => addFrameImpl(ctx, args));
+  return withBoardLock(args.boardId, () => addFrameImpl(ctx, args));
 }
 export function updateFrame(
   ctx: MutationContext,
   args: UpdateFrameArgs,
 ): Promise<Result<UpdateFrameResult, MutationError>> {
-  return withBoardLock(() => updateFrameImpl(ctx, args));
+  return withBoardLock(args.boardId, () => updateFrameImpl(ctx, args));
 }
 export function updateFrames(
   ctx: MutationContext,
   args: UpdateFramesArgs,
 ): Promise<Result<UpdateFramesResult, MutationError>> {
-  return withBoardLock(() => updateFramesImpl(ctx, args));
+  return withBoardLock(args.boardId, () => updateFramesImpl(ctx, args));
 }
 export function removeFrame(
   ctx: MutationContext,
   args: RemoveFrameArgs,
 ): Promise<Result<RemoveFrameResult, MutationError>> {
-  return withBoardLock(() => removeFrameImpl(ctx, args));
+  return withBoardLock(args.boardId, () => removeFrameImpl(ctx, args));
 }
 export function addGroup(
   ctx: MutationContext,
   args: AddGroupArgs,
 ): Promise<Result<AddGroupResult, MutationError>> {
-  return withBoardLock(() => addGroupImpl(ctx, args));
+  return withBoardLock(args.boardId, () => addGroupImpl(ctx, args));
 }
 export function updateGroup(
   ctx: MutationContext,
   args: UpdateGroupArgs,
 ): Promise<Result<UpdateGroupResult, MutationError>> {
-  return withBoardLock(() => updateGroupImpl(ctx, args));
+  return withBoardLock(args.boardId, () => updateGroupImpl(ctx, args));
 }
 export function removeGroup(
   ctx: MutationContext,
   args: RemoveGroupArgs,
 ): Promise<Result<RemoveGroupResult, MutationError>> {
-  return withBoardLock(() => removeGroupImpl(ctx, args));
+  return withBoardLock(args.boardId, () => removeGroupImpl(ctx, args));
 }
 
 // ── Annotations & notes ────────────────────────────────────────
@@ -265,19 +296,19 @@ export function addNote(
   ctx: MutationContext,
   args: AddNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
-  return withBoardLock(() => addNoteImpl(ctx, args));
+  return withBoardLock(args.boardId, () => addNoteImpl(ctx, args));
 }
 export function updateNote(
   ctx: MutationContext,
   args: UpdateNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
-  return withBoardLock(() => updateNoteImpl(ctx, args));
+  return withBoardLock(args.boardId, () => updateNoteImpl(ctx, args));
 }
 export function removeNote(
   ctx: MutationContext,
   args: RemoveNoteArgs,
 ): Promise<Result<{ removedId: string }, MutationError>> {
-  return withBoardLock(() => removeNoteImpl(ctx, args));
+  return withBoardLock(args.boardId, () => removeNoteImpl(ctx, args));
 }
 
 // ── Snippets ───────────────────────────────────────────────────
@@ -335,6 +366,8 @@ export function auditSnippet(
 export type { MutationError } from "./errors.ts";
 export type {
   AddAnnotationArgs,
+  AddBoardArgs,
+  AddBoardResult,
   AddFrameArgs,
   AddFrameResult,
   AddGroupArgs,
@@ -361,6 +394,8 @@ export type {
   MutationContext,
   NoteResult,
   RemoveAnnotationArgs,
+  RemoveBoardArgs,
+  RemoveBoardResult,
   RemoveFrameArgs,
   RemoveFrameResult,
   RemoveGroupArgs,
@@ -375,6 +410,8 @@ export type {
   SetNodeIdArgs,
   SetNodeIdResult,
   UpdateAnnotationArgs,
+  UpdateBoardArgs,
+  UpdateBoardResult,
   UpdateFrameArgs,
   UpdateFrameResult,
   UpdateFramesArgs,

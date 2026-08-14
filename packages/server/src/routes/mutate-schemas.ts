@@ -87,8 +87,22 @@ export const UpdateScreenBody = z.object({
   patch: z.object({ name: z.string().min(1).optional() }),
 });
 
-// ── Frame / board lifecycle ────────────────────────────────────────────
+// ── Board lifecycle ────────────────────────────────────────────────────
+export const AddBoardBody = z.object({
+  name: z.string().min(1),
+  id: z.string().min(1).optional(),
+});
+export const UpdateBoardBody = z.object({
+  boardId: z.string().min(1),
+  patch: z.object({ name: z.string().min(1).optional() }),
+});
+export const RemoveBoardBody = z.object({
+  boardId: z.string().min(1),
+});
+
+// ── Frame / group lifecycle ────────────────────────────────────────────
 export const AddFrameBody = z.object({
+  boardId: z.string().min(1),
   screenId: z.string().min(1),
   x: z.number().optional(),
   y: z.number().optional(),
@@ -100,25 +114,30 @@ export const AddFrameBody = z.object({
 });
 
 export const UpdateFrameBody = z.object({
+  boardId: z.string().min(1),
   frameId: z.string().min(1),
   patch: FramePatch,
 });
 
 export const UpdateFramesBody = z.object({
+  boardId: z.string().min(1),
   patches: z.array(z.object({ frameId: z.string().min(1), patch: FramePatch })).min(1),
 });
 
 export const RemoveFrameBody = z.object({
+  boardId: z.string().min(1),
   frameId: z.string().min(1),
 });
 
 export const AddGroupBody = z.object({
+  boardId: z.string().min(1),
   name: z.string().min(1),
   color: z.string().optional(),
   id: z.string().min(1).optional(),
 });
 
 export const UpdateGroupBody = z.object({
+  boardId: z.string().min(1),
   groupId: z.string().min(1),
   patch: z.object({
     name: z.string().min(1).optional(),
@@ -127,6 +146,7 @@ export const UpdateGroupBody = z.object({
 });
 
 export const RemoveGroupBody = z.object({
+  boardId: z.string().min(1),
   groupId: z.string().min(1),
 });
 
@@ -198,6 +218,7 @@ export const RemoveAnnotationBody = z.object({
 });
 
 export const AddNoteBody = z.object({
+  boardId: z.string().min(1),
   x: z.number(),
   y: z.number(),
   width: z.number().positive().optional(),
@@ -205,6 +226,7 @@ export const AddNoteBody = z.object({
 });
 
 export const UpdateNoteBody = z.object({
+  boardId: z.string().min(1),
   noteId: z.string().min(1),
   patch: z.object({
     x: z.number().optional(),
@@ -215,5 +237,6 @@ export const UpdateNoteBody = z.object({
 });
 
 export const RemoveNoteBody = z.object({
+  boardId: z.string().min(1),
   noteId: z.string().min(1),
 });

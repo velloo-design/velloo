@@ -3,6 +3,7 @@ import type { Result } from "@velloo/result";
 import { NodeSchema, SnippetParamSchema } from "@velloo/schema";
 import { z } from "zod";
 import {
+  addBoard,
   addFrame,
   addGroup,
   addNode,
@@ -14,12 +15,14 @@ import {
   type MutationContext,
   type MutationError,
   moveNode,
+  removeBoard,
   removeFrame,
   removeGroup,
   removeNode,
   removeScreen,
   removeSnippet,
   setNodeId,
+  updateBoard,
   updateFrame,
   updateFrames,
   updateGroup,
@@ -221,13 +224,46 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => toMcp(await removeScreen(ctx, args)),
   );
 
-  // ── Frame / board lifecycle ────────────────────────────────────────────
+  // ── Board lifecycle ────────────────────────────────────────────────────
+  mcp.registerTool(
+    "add_board",
+    {
+      description:
+        "Create a new empty board. A board is one infinite canvas with its own frames + groups; a design folder can have many.",
+      inputSchema: { name: z.string(), id: z.string().optional() },
+    },
+    async (args) => toMcp(await addBoard(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_board",
+    {
+      description: "Update a board's metadata (name only today).",
+      inputSchema: {
+        boardId: z.string(),
+        patch: z.object({ name: z.string().optional() }),
+      },
+    },
+    async (args) => toMcp(await updateBoard(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "remove_board",
+    {
+      description: "Delete a board. Refuses when it's the last board in the folder.",
+      inputSchema: { boardId: z.string() },
+    },
+    async (args) => toMcp(await removeBoard(ctx, args)),
+  );
+
+  // ── Frame / group lifecycle ────────────────────────────────────────────
   mcp.registerTool(
     "add_frame",
     {
       description:
-        "Place a screen on the board at a chosen size + position. x/y default to a free spot on the board.",
+        "Place a screen on a specific board at a chosen size + position. x/y default to a free spot on that board.",
       inputSchema: {
+        boardId: z.string(),
         screenId: z.string(),
         x: z.number().optional(),
         y: z.number().optional(),
@@ -245,8 +281,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_frame",
     {
       description:
-        "Update a frame's position, size, label, or group. Pass `label: null` or `group: null` to clear.",
+        "Update a frame's position, size, label, or group on a given board. Pass `label: null` or `group: null` to clear.",
       inputSchema: {
+        boardId: z.string(),
         frameId: z.string(),
         patch: z.object({
           x: z.number().optional(),
@@ -265,8 +302,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_frames",
     {
       description:
-        "Atomic bulk frame update — single persist + broadcast + history entry. Use when dragging multiple frames together.",
+        "Atomic bulk frame update on one board — single persist + broadcast + history entry.",
       inputSchema: {
+        boardId: z.string(),
         patches: z
           .array(
             z.object({
@@ -290,8 +328,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "remove_frame",
     {
-      description: "Remove a frame placement. The underlying screen is left intact.",
-      inputSchema: { frameId: z.string() },
+      description:
+        "Remove a frame placement from a board. The underlying screen is left intact.",
+      inputSchema: { boardId: z.string(), frameId: z.string() },
     },
     async (args) => toMcp(await removeFrame(ctx, args)),
   );
@@ -299,8 +338,10 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "add_group",
     {
-      description: "Create a board group — a visual tag for related frames (e.g. 'marketing flow').",
+      description:
+        "Create a group on a board — a visual tag for related frames (e.g. 'marketing flow').",
       inputSchema: {
+        boardId: z.string(),
         name: z.string(),
         color: z.string().optional(),
         id: z.string().optional(),
@@ -312,8 +353,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "update_group",
     {
-      description: "Update a group's name or color. Pass `color: null` to clear.",
+      description: "Update a group's name or color on a board. Pass `color: null` to clear.",
       inputSchema: {
+        boardId: z.string(),
         groupId: z.string(),
         patch: z.object({
           name: z.string().optional(),
@@ -328,8 +370,8 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "remove_group",
     {
       description:
-        "Remove a group. Frames in the group are not deleted — they're un-grouped. Returns the affected frame ids.",
-      inputSchema: { groupId: z.string() },
+        "Remove a group from a board. Frames in the group are not deleted — they're un-grouped.",
+      inputSchema: { boardId: z.string(), groupId: z.string() },
     },
     async (args) => toMcp(await removeGroup(ctx, args)),
   );

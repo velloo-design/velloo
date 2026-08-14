@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "@velloo/result";
 import {
+  type Board,
   type ComponentNode,
   isComponentNode,
   type Node,
@@ -10,6 +11,7 @@ import { isKnownComponent, registry } from "@velloo/shadcn-snapshot";
 import { isIdLocator, type Locator, pathAt, resolveLocator } from "../path.ts";
 import type { MutationContext } from "./context.ts";
 import {
+  boardNotFound,
   idNotFound,
   invalidPath,
   type MutationError,
@@ -25,6 +27,14 @@ export function getScreen(
 ): Result<Screen, MutationError> {
   const s = ctx.folder.screens.get(screenId);
   return s ? ok(s) : err(screenNotFound(screenId));
+}
+
+export function getBoard(
+  ctx: MutationContext,
+  boardId: string,
+): Result<Board, MutationError> {
+  const b = ctx.folder.boards.get(boardId);
+  return b ? ok(b) : err(boardNotFound(boardId));
 }
 
 /**

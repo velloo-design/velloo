@@ -3,21 +3,16 @@ import { join, relative, sep } from "node:path";
 
 export type WatchEvent =
   | { type: "screen-changed"; screenId: string }
-  | { type: "board-changed" }
+  | { type: "board-changed"; boardId: string }
   | { type: "theme-changed" }
   | { type: "snippet-changed"; snippetId: string }
   | { type: "annotations-changed"; screenId: string }
-  | { type: "notes-changed" };
+  | { type: "notes-changed"; boardId: string };
 
 export interface Watcher {
   close(): void;
 }
 
-/**
- * Watch a design folder. Emits debounced events for changes under
- * `screens/`, `theme/`, `snippets/`, and the top-level `board.json` /
- * `board.notes.json` files.
- */
 export function watchDesignFolder(
   root: string,
   onEvent: (e: WatchEvent) => void,
@@ -47,16 +42,20 @@ export function watchDesignFolder(
         const screenId = file.slice(0, -".annotations.json".length);
         return { type: "annotations-changed", screenId };
       }
-      if (file.endsWith(".json") && !file.includes(".")) {
-        const screenId = file.slice(0, -".json".length);
-        return { type: "screen-changed", screenId };
-      }
-      // also accept simple `<id>.json` (without `.` in stem) — fallthrough
       if (file.endsWith(".json")) {
         const stem = file.slice(0, -".json".length);
-        if (!stem.includes(".")) {
-          return { type: "screen-changed", screenId: stem };
-        }
+        if (!stem.includes(".")) return { type: "screen-changed", screenId: stem };
+      }
+    }
+    if (parts[0] === "boards" && parts[1]) {
+      const file = parts[1];
+      if (file.endsWith(".notes.json")) {
+        const boardId = file.slice(0, -".notes.json".length);
+        return { type: "notes-changed", boardId };
+      }
+      if (file.endsWith(".json")) {
+        const stem = file.slice(0, -".json".length);
+        if (!stem.includes(".")) return { type: "board-changed", boardId: stem };
       }
     }
     if (parts[0] === "theme" && parts[1] && parts[1].endsWith(".json")) {
@@ -69,7 +68,7 @@ export function watchDesignFolder(
     return null;
   }
 
-  for (const sub of ["screens", "theme", "snippets"]) {
+  for (const sub of ["screens", "boards", "theme", "snippets"]) {
     try {
       const w = watch(join(root, sub), (_eventType, filename) => {
         if (!filename) return;
@@ -79,20 +78,8 @@ export function watchDesignFolder(
       });
       watchers.push(w);
     } catch {
-      // subdirectory may not exist yet (e.g. snippets/); ignore.
+      // subdir may not exist yet; ignore
     }
-  }
-
-  // Top-level board.json + board.notes.json — watch the root directory.
-  try {
-    const w = watch(root, (_eventType, filename) => {
-      if (!filename) return;
-      if (filename === "board.json") schedule("board", { type: "board-changed" });
-      else if (filename === "board.notes.json") schedule("notes", { type: "notes-changed" });
-    });
-    watchers.push(w);
-  } catch {
-    // ignore — folder root must exist or we wouldn't be here
   }
 
   return {

@@ -11,11 +11,16 @@ export function createDesignRouter(folder: () => DesignFolder): Hono {
       snapshotVersion,
       theme: { name: f.theme.name },
       defaultScreen: f.config.defaultScreen ?? null,
+      defaultBoard: f.config.defaultBoard ?? null,
       screens: [...f.screens.entries()].map(([id, screen]) => ({
         id,
         name: screen.name,
       })),
-      board: f.board,
+      boards: [...f.boards.entries()].map(([id, board]) => ({
+        id,
+        name: board.name,
+        frameCount: board.frames.length,
+      })),
       snippets: [...f.snippets.entries()].map(([id, snippet]) => ({
         id,
         name: snippet.name,

@@ -133,13 +133,40 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   );
 
   mcp.registerTool(
+    "list_boards",
+    {
+      description:
+        "List every board in the design folder. Each board has its own collection of frames + groups. Pass `include_frames: true` to embed the full frame list for each board.",
+      inputSchema: { include_frames: z.boolean().optional() },
+    },
+    async ({ include_frames }) => {
+      const boards = [...ctx.folder.boards.entries()].map(([id, board]) => ({
+        id,
+        name: board.name,
+        frameCount: board.frames.length,
+        ...(include_frames ? { frames: board.frames, groups: board.groups } : {}),
+      }));
+      return jsonResult({ boards });
+    },
+  );
+
+  mcp.registerTool(
     "get_board",
     {
       description:
-        "Return the board layout: frames (placements of screens at chosen sizes) and groups.",
-      inputSchema: {},
+        "Return one board's full JSON — frames (placements of screens at chosen sizes) and groups.",
+      inputSchema: { boardId: z.string() },
     },
-    async () => jsonResult(ctx.folder.board),
+    async ({ boardId }) => {
+      const board = ctx.folder.boards.get(boardId);
+      if (!board) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `Board not found: ${boardId}` }],
+        };
+      }
+      return jsonResult(board);
+    },
   );
 
   mcp.registerTool(
@@ -228,9 +255,12 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_notes",
     {
       description:
-        "List board-level free-positioned markdown notes. Designer scratchpad — read-only from the agent's POV.",
-      inputSchema: {},
+        "List free-positioned markdown notes on one board. Designer scratchpad — read-only from the agent's POV.",
+      inputSchema: { boardId: z.string() },
     },
-    async () => jsonResult({ notes: ctx.folder.notes }),
+    async ({ boardId }) => {
+      const notes = ctx.folder.notes.get(boardId) ?? [];
+      return jsonResult({ notes });
+    },
   );
 }

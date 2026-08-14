@@ -1,20 +1,23 @@
 import type { Board as BoardT, ViewportPreset } from "@velloo/schema";
 import { useEffect, useMemo, useRef } from "react";
+import { notes as notesApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
+import { AnnotationsLayer } from "./AnnotationsLayer.tsx";
 import { Frame } from "./Frame.tsx";
+import { NotesLayer } from "./NotesLayer.tsx";
 
 interface BoardProps {
   board: BoardT;
 }
 
 /**
- * The infinite canvas. Frames are absolutely positioned in board coords;
- * a pan+zoom transform wraps the world. Pan in hand-tool / Space-hold mode;
- * zoom on Cmd/Ctrl+wheel (browser zoom on bare wheel is preserved).
+ * The infinite canvas for one board. Frames are absolutely positioned in
+ * board coords; a pan+zoom transform wraps the world.
  *
- * Sprint D adds the interactive affordances: pan/zoom polish, per-frame
- * resize handles + viewport-preset chips (in Frame.tsx), and the visual
- * linkage badge when multiple frames render the same screen.
+ * Pan in hand-tool / Space-hold mode; zoom on Cmd/Ctrl+wheel. Frames disable
+ * their iframe pointer-events when the cursor is in hand/note mode so
+ * dragging works seamlessly across the whole surface.
  */
 export function Board({ board }: BoardProps) {
   const zoom = useCanvas((s) => s.canvasZoom);
@@ -31,8 +34,8 @@ export function Board({ board }: BoardProps) {
   } | null>(null);
 
   const bounds = useMemo(() => {
-    let maxX = 0;
-    let maxY = 0;
+    let maxX = 800;
+    let maxY = 600;
     for (const f of board.frames) {
       if (f.x + f.w > maxX) maxX = f.x + f.w;
       if (f.y + f.h > maxY) maxY = f.y + f.h;
@@ -45,6 +48,62 @@ export function Board({ board }: BoardProps) {
     for (const f of board.frames) counts[f.screen] = (counts[f.screen] ?? 0) + 1;
     return counts;
   }, [board.frames]);
+
+  /**
+   * On board mount (or board switch), fit-to-content: pick a zoom that shows
+   * the whole frame bounding box with margin, then pan so the box centers in
+   * the visible area. Only runs once per board id — once the user pans/zooms,
+   * we don't yank the view back.
+   */
+  const fitToContentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    if (board.frames.length === 0) return;
+    if (fitToContentRef.current === board.id) return;
+
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    for (const f of board.frames) {
+      if (f.x < minX) minX = f.x;
+      if (f.y < minY) minY = f.y;
+      if (f.x + f.w > maxX) maxX = f.x + f.w;
+      // Allow some height for the frame header + preset chips below.
+      if (f.y + f.h + 60 > maxY) maxY = f.y + f.h + 60;
+    }
+    const boxW = Math.max(1, maxX - minX);
+    const boxH = Math.max(1, maxY - minY);
+    const boxCx = (minX + maxX) / 2;
+    const boxCy = (minY + maxY) / 2;
+
+    const apply = () => {
+      const vw = el.clientWidth;
+      const vh = el.clientHeight;
+      if (vw < 50 || vh < 50) return false;
+      const margin = 80;
+      const zoomX = (vw - margin * 2) / boxW;
+      const zoomY = (vh - margin * 2) / boxH;
+      // Cap at 1.0 — never up-scale; 0.75 is the lower bound for legibility.
+      const fitZoom = Math.max(0.1, Math.min(1.0, Math.min(zoomX, zoomY)));
+      // Reset native scroll so the transform alone positions content.
+      el.scrollLeft = 0;
+      el.scrollTop = 0;
+      setZoom(fitZoom);
+      setPan({
+        x: Math.round(vw / 2 - boxCx * fitZoom),
+        y: Math.round(vh / 2 - boxCy * fitZoom),
+      });
+      fitToContentRef.current = board.id;
+      return true;
+    };
+
+    if (!apply()) {
+      // Wrapper not sized yet (first paint) — try again next frame.
+      requestAnimationFrame(apply);
+    }
+  }, [board.id, board.frames, setZoom, setPan]);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -59,12 +118,44 @@ export function Board({ board }: BoardProps) {
     return () => el.removeEventListener("wheel", onWheel);
   }, [zoom, setZoom]);
 
+  /** Translate a client-space pointer event to world (board) coords. */
+  const clientToBoard = (clientX: number, clientY: number): { x: number; y: number } => {
+    const el = wrapperRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    // The world is `translate(pan) scale(zoom)` of the wrapper's content.
+    // Reverse it: subtract the wrapper's top-left, scroll offsets, and pan;
+    // divide by zoom.
+    return {
+      x: (clientX - rect.left + el.scrollLeft - pan.x) / zoom,
+      y: (clientY - rect.top + el.scrollTop - pan.y) / zoom,
+    };
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (cursorMode !== "hand") return;
     if (e.button !== 0) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    panRef.current = { startX: e.clientX, startY: e.clientY, startPan: { ...pan } };
+    if (cursorMode === "hand") {
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      panRef.current = { startX: e.clientX, startY: e.clientY, startPan: { ...pan } };
+      return;
+    }
+    if (cursorMode === "note") {
+      // Place a note at the click location, in board coords.
+      const where = clientToBoard(e.clientX, e.clientY);
+      const boardId = useCanvas.getState().currentBoardId;
+      if (!boardId) return;
+      e.preventDefault();
+      void notesApi
+        .add({ boardId, x: where.x, y: where.y, body: "" })
+        .then((r) => {
+          useCanvas.getState().setEditingMarkupId(r.note.id);
+        })
+        .catch((err) => toastError(err, "Could not add note"));
+      // Return to select mode after dropping the note so the next click
+      // doesn't spawn another.
+      useCanvas.getState().setCursorMode("select");
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -92,7 +183,13 @@ export function Board({ board }: BoardProps) {
       onPointerCancel={onPointerUp}
       style={{
         cursor:
-          cursorMode === "hand" ? (panRef.current ? "grabbing" : "grab") : "default",
+          cursorMode === "hand"
+            ? panRef.current
+              ? "grabbing"
+              : "grab"
+            : cursorMode === "note"
+              ? "crosshair"
+              : "default",
       }}
     >
       <div
@@ -106,11 +203,15 @@ export function Board({ board }: BoardProps) {
         {board.frames.map((frame) => (
           <Frame
             key={frame.id}
+            boardId={board.id}
             frame={frame}
+            otherFrames={board.frames.filter((f) => f.id !== frame.id)}
             presets={DEFAULT_PRESETS}
             sharedCount={sharedScreenCounts[frame.screen] ?? 1}
           />
         ))}
+        <NotesLayer />
+        <AnnotationsLayer />
       </div>
     </div>
   );

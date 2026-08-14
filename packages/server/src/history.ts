@@ -4,15 +4,15 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
  * Coarse, server-side undo / redo history. Each persisted screen, board, theme,
  * or snippet write pushes a snapshot of the previous state onto the undo stack
  * and clears the redo stack. POST /api/undo pops undo → pushes the *current*
- * state to redo → re-persists. POST /api/redo runs the inverse.
+ * state to redo → re-persists.
  *
  * Consecutive writes within COALESCE_WINDOW_MS that target the same key
- * collapse into the *first* entry — so a stream of live edits (e.g. dragging
- * a frame on the board) produces a single undo step, not one per pixel.
+ * collapse into the first entry — so a stream of live edits (frame drag,
+ * resize) becomes one undo step instead of one per pixel.
  */
 export type HistoryEntry =
   | { kind: "screen"; screenId: string; screen: Screen | null; ts?: number }
-  | { kind: "board"; board: Board; ts?: number }
+  | { kind: "board"; boardId: string; board: Board | null; ts?: number }
   | { kind: "theme"; theme: Theme; ts?: number }
   | { kind: "snippet"; snippetId: string; snippet: Snippet | null; ts?: number };
 
@@ -23,7 +23,7 @@ const redoStack: HistoryEntry[] = [];
 
 function keyOf(e: HistoryEntry): string {
   if (e.kind === "screen") return `screen:${e.screenId}`;
-  if (e.kind === "board") return "board";
+  if (e.kind === "board") return `board:${e.boardId}`;
   if (e.kind === "snippet") return `snippet:${e.snippetId}`;
   return "theme";
 }

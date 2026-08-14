@@ -2,10 +2,11 @@ import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Frame } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { frameIdConflict, type MutationError } from "./errors.ts";
-import { getScreen } from "./lookup.ts";
+import { getBoard, getScreen } from "./lookup.ts";
 import { persistBoard } from "./persist.ts";
 
 export interface AddFrameArgs {
+  boardId: string;
   screenId: string;
   x?: number;
   y?: number;
@@ -20,44 +21,38 @@ export interface AddFrameResult {
   frame: Frame;
 }
 
-/**
- * Pick a free spot on the board for an auto-placed frame. Right of the
- * rightmost existing frame, with a 80px gutter.
- */
-function autoPosition(ctx: MutationContext, w: number): { x: number; y: number } {
-  const frames = ctx.folder.board.frames;
+/** Auto-place to the right of the rightmost existing frame. */
+function autoPosition(frames: Frame[]): { x: number; y: number } {
   if (frames.length === 0) return { x: 0, y: 0 };
   let maxRight = 0;
-  for (const f of frames) {
-    if (f.x + f.w > maxRight) maxRight = f.x + f.w;
-  }
+  for (const f of frames) if (f.x + f.w > maxRight) maxRight = f.x + f.w;
   return { x: maxRight + 80, y: 0 };
 }
 
-function genFrameId(ctx: MutationContext, screenId: string): string {
-  const existing = new Set(ctx.folder.board.frames.map((f) => f.id));
+function genFrameId(board: { frames: Frame[] }, screenId: string): string {
+  const existing = new Set(board.frames.map((f) => f.id));
   let i = 1;
   while (existing.has(`${screenId}-${i}`)) i++;
   return `${screenId}-${i}`;
 }
 
-/** Place a screen on the board at a chosen size + position. */
 export async function addFrame(
   ctx: MutationContext,
   args: AddFrameArgs,
 ): Promise<Result<AddFrameResult, MutationError>> {
   return DoAsync<AddFrameResult, MutationError>(async function* () {
+    const board = yield* $(getBoard(ctx, args.boardId));
     yield* $(getScreen(ctx, args.screenId));
 
-    if (args.id !== undefined && ctx.folder.board.frames.some((f) => f.id === args.id)) {
-      return yield* $(err(frameIdConflict(args.id)));
+    if (args.id !== undefined && board.frames.some((f) => f.id === args.id)) {
+      return yield* $(err(frameIdConflict(args.boardId, args.id)));
     }
 
-    const id = args.id ?? genFrameId(ctx, args.screenId);
+    const id = args.id ?? genFrameId(board, args.screenId);
     const pos =
       args.x !== undefined && args.y !== undefined
         ? { x: args.x, y: args.y }
-        : autoPosition(ctx, args.w);
+        : autoPosition(board.frames);
 
     const frame: Frame = {
       id,
@@ -70,12 +65,9 @@ export async function addFrame(
       ...(args.group !== undefined ? { group: args.group } : {}),
     };
 
-    const nextBoard = {
-      ...ctx.folder.board,
-      frames: [...ctx.folder.board.frames, frame],
-    };
-    await persistBoard(ctx.folder, nextBoard);
-    ctx.broadcast({ type: "board-changed" });
+    const nextBoard = { ...board, frames: [...board.frames, frame] };
+    await persistBoard(ctx.folder, args.boardId, nextBoard);
+    ctx.broadcast({ type: "board-changed", boardId: args.boardId });
     return { frame };
   });
 }

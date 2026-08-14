@@ -35,10 +35,6 @@ export async function persistScreen(
   return validated;
 }
 
-/**
- * The "right" way to land a screen write in mutation code: validates `$id`
- * uniqueness, then schema-validates + persists.
- */
 export function commitScreen(
   folder: DesignFolder,
   screenId: string,
@@ -50,7 +46,6 @@ export function commitScreen(
   });
 }
 
-/** Delete a screen from disk + cache. Pushes history so the deletion is undoable. */
 export async function deletePersistedScreen(
   folder: DesignFolder,
   screenId: string,
@@ -63,16 +58,32 @@ export async function deletePersistedScreen(
   folder.annotations.delete(screenId);
 }
 
-/** Schema-validate then write the board; update the in-memory cache. */
-export async function persistBoard(folder: DesignFolder, board: Board): Promise<Board> {
+/** Schema-validate then write a board; update the in-memory cache. */
+export async function persistBoard(
+  folder: DesignFolder,
+  boardId: string,
+  board: Board,
+): Promise<Board> {
   const validated = BoardSchema.parse(board);
-  pushHistory({ kind: "board", board: folder.board });
-  await writeJsonAtomic(join(folder.root, "board.json"), validated);
-  folder.board = validated;
+  const prev = folder.boards.get(boardId) ?? null;
+  pushHistory({ kind: "board", boardId, board: prev });
+  await writeJsonAtomic(join(folder.root, "boards", `${boardId}.json`), validated);
+  folder.boards.set(boardId, validated);
   return validated;
 }
 
-/** Schema-validate then write the theme; update the in-memory cache. */
+export async function deletePersistedBoard(
+  folder: DesignFolder,
+  boardId: string,
+): Promise<void> {
+  const prev = folder.boards.get(boardId) ?? null;
+  pushHistory({ kind: "board", boardId, board: prev });
+  await rm(join(folder.root, "boards", `${boardId}.json`), { force: true });
+  await rm(join(folder.root, "boards", `${boardId}.notes.json`), { force: true });
+  folder.boards.delete(boardId);
+  folder.notes.delete(boardId);
+}
+
 export async function persistTheme(folder: DesignFolder, theme: Theme): Promise<Theme> {
   const validated = ThemeSchema.parse(theme);
   pushHistory({ kind: "theme", theme: folder.theme });
@@ -81,7 +92,6 @@ export async function persistTheme(folder: DesignFolder, theme: Theme): Promise<
   return validated;
 }
 
-/** Schema-validate then write a snippet; update the in-memory cache. */
 export async function persistSnippet(
   folder: DesignFolder,
   snippetId: string,
@@ -95,7 +105,6 @@ export async function persistSnippet(
   return validated;
 }
 
-/** Delete a snippet from disk + cache. */
 export async function deletePersistedSnippet(
   folder: DesignFolder,
   snippetId: string,
@@ -106,10 +115,6 @@ export async function deletePersistedSnippet(
   folder.snippets.delete(snippetId);
 }
 
-/**
- * Persist a screen's annotations sidecar. Removing the file when the array
- * empties keeps the working directory clean.
- */
 export async function persistAnnotations(
   folder: DesignFolder,
   screenId: string,
@@ -126,18 +131,19 @@ export async function persistAnnotations(
   return validated;
 }
 
-/** Persist board-level free notes — empty array deletes `board.notes.json`. */
+/** Persist a board's free notes. Empty array deletes the sidecar file. */
 export async function persistCanvasNotes(
   folder: DesignFolder,
+  boardId: string,
   notes: CanvasNote[],
 ): Promise<CanvasNote[]> {
   const validated = notes.map((n) => CanvasNoteSchema.parse(n));
-  const path = join(folder.root, "board.notes.json");
+  const path = join(folder.root, "boards", `${boardId}.notes.json`);
   if (validated.length === 0) {
     await rm(path, { force: true });
   } else {
     await writeJsonAtomic(path, validated);
   }
-  folder.notes = validated;
+  folder.notes.set(boardId, validated);
   return validated;
 }

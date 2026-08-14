@@ -3,6 +3,7 @@ import type { Manifest } from "@velloo/shadcn-snapshot";
 import { create } from "zustand";
 import {
   type DesignSummary,
+  fetchBoard,
   fetchComponents,
   fetchDesign,
   fetchHistory,
@@ -52,7 +53,8 @@ export interface Selection {
 export interface CanvasState {
   design: DesignSummary | null;
   screens: Record<string, Screen>;
-  board: Board | null;
+  boards: Record<string, Board>;
+  currentBoardId: string | null;
   currentScreenId: string | null;
   screenVersion: number;
   components: Manifest | null;
@@ -83,11 +85,13 @@ export interface CanvasState {
   loadComponents(): Promise<void>;
   loadTheme(): Promise<void>;
   refreshTheme(): Promise<void>;
+  selectBoard(boardId: string): Promise<void>;
+  loadBoard(boardId: string): Promise<Board | null>;
+  refreshBoard(boardId: string): Promise<void>;
   selectScreen(screenId: string): Promise<void>;
   loadScreen(screenId: string): Promise<Screen | null>;
   refreshCurrentScreen(): Promise<void>;
   refreshScreen(screenId: string): Promise<void>;
-  refreshBoard(): Promise<void>;
   setSelection(s: Selection | null): void;
   setHover(h: Selection | null): void;
   setWsConnected(b: boolean): void;
@@ -130,7 +134,8 @@ export function selectedNode(
 export const useCanvas = create<CanvasState>((set, get) => ({
   design: null,
   screens: {},
-  board: null,
+  boards: {},
+  currentBoardId: null,
   currentScreenId: null,
   screenVersion: 0,
   components: null,
@@ -166,24 +171,28 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   async loadDesign() {
     const design = await fetchDesign();
-    set({ design, board: design.board });
-    const ids = new Set<string>();
-    for (const f of design.board.frames) ids.add(f.screen);
-    for (const id of ids) await get().loadScreen(id);
-    const prefersDefault =
+    set({ design });
+    // Boards: pick default, else first.
+    const prefersBoard =
+      design.defaultBoard && design.boards.some((b) => b.id === design.defaultBoard)
+        ? design.defaultBoard
+        : null;
+    const nextBoardId = get().currentBoardId ?? prefersBoard ?? design.boards[0]?.id ?? null;
+    if (nextBoardId) await get().selectBoard(nextBoardId);
+    // Default screen drives the sidebar Tree.
+    const prefersScreen =
       design.defaultScreen && design.screens.some((s) => s.id === design.defaultScreen)
         ? design.defaultScreen
         : null;
-    const next = get().currentScreenId ?? prefersDefault ?? design.screens[0]?.id ?? null;
-    if (next) await get().selectScreen(next);
+    const nextScreen = get().currentScreenId ?? prefersScreen ?? design.screens[0]?.id ?? null;
+    if (nextScreen) await get().selectScreen(nextScreen);
     await get().loadTheme();
     await get().refreshHistory();
-    await get().refreshNotes();
   },
 
   async refreshDesignSummary() {
     const design = await fetchDesign();
-    set({ design, board: design.board });
+    set({ design });
   },
 
   async loadComponents() {
@@ -214,14 +223,43 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     }
   },
 
-  async refreshBoard() {
-    const { fetchBoard } = await import("./api.ts");
+  async loadBoard(boardId: string): Promise<Board | null> {
     try {
-      const board = await fetchBoard();
-      set({ board });
+      const board = await fetchBoard(boardId);
+      set((s) => ({ boards: { ...s.boards, [boardId]: board } }));
+      // Eagerly load every screen referenced by this board.
+      const seen = new Set<string>();
+      for (const f of board.frames) seen.add(f.screen);
+      for (const id of seen) {
+        if (!get().screens[id]) await get().loadScreen(id);
+      }
+      return board;
+    } catch {
+      return null;
+    }
+  },
+
+  async refreshBoard(boardId: string) {
+    try {
+      const board = await fetchBoard(boardId);
+      set((s) => ({ boards: { ...s.boards, [boardId]: board } }));
+      for (const f of board.frames) {
+        if (!get().screens[f.screen]) await get().loadScreen(f.screen);
+      }
     } catch {
       /* ignore */
     }
+  },
+
+  async selectBoard(boardId: string) {
+    let board = get().boards[boardId];
+    if (!board) {
+      const loaded = await get().loadBoard(boardId);
+      if (!loaded) return;
+      board = loaded;
+    }
+    set({ currentBoardId: boardId, notes: [] });
+    await get().refreshNotes();
   },
 
   async selectScreen(screenId: string) {
@@ -233,8 +271,6 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     }
     set({
       currentScreenId: screenId,
-      selection: null,
-      hover: null,
       annotations: [],
       editingMarkupId: null,
     });
@@ -273,9 +309,11 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   async refreshNotes() {
+    const boardId = get().currentBoardId;
+    if (!boardId) return;
     try {
       const { fetchNotes } = await import("./api.ts");
-      const notes = await fetchNotes();
+      const notes = await fetchNotes(boardId);
       set({ notes });
     } catch {
       /* ignore */
@@ -323,7 +361,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   setCursorMode(cursorMode) {
-    if (cursorMode === "hand" || cursorMode === "annotate") {
+    if (cursorMode === "annotate") {
       set({ cursorMode, hover: null, selection: null, nodeState: "default" });
     } else {
       set({ cursorMode, hover: null });

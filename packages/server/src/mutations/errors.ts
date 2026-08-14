@@ -5,17 +5,21 @@
  */
 export type MutationError =
   | { kind: "ScreenNotFound"; screenId: string }
-  | { kind: "FrameNotFound"; frameId: string }
-  | { kind: "GroupNotFound"; groupId: string }
+  | { kind: "BoardNotFound"; boardId: string }
+  | { kind: "FrameNotFound"; boardId: string; frameId: string }
+  | { kind: "GroupNotFound"; boardId: string; groupId: string }
   | { kind: "UnknownComponent"; ref: string; suggestions: string[] }
   | { kind: "InvalidPath"; reason: string; path?: number[] }
   | { kind: "InvalidMove"; reason: string }
   | { kind: "LastScreen"; screenId: string }
-  | { kind: "ScreenInUse"; screenId: string; frameIds: string[] }
+  | { kind: "LastBoard"; boardId: string }
+  | { kind: "ScreenInUse"; screenId: string; usage: { boardId: string; frameIds: string[] }[] }
   | { kind: "ScreenIdConflict"; screenId: string }
   | { kind: "ScreenIdExhausted"; base: string }
-  | { kind: "FrameIdConflict"; frameId: string }
-  | { kind: "GroupIdConflict"; groupId: string }
+  | { kind: "BoardIdConflict"; boardId: string }
+  | { kind: "BoardIdExhausted"; base: string }
+  | { kind: "FrameIdConflict"; boardId: string; frameId: string }
+  | { kind: "GroupIdConflict"; boardId: string; groupId: string }
   /** Request body failed zod validation. */
   | { kind: "BadRequest"; message: string; issues?: unknown }
   | { kind: "SnippetNotFound"; snippetId: string }
@@ -39,12 +43,18 @@ export const screenNotFound = (screenId: string): MutationError => ({
   kind: "ScreenNotFound",
   screenId,
 });
-export const frameNotFound = (frameId: string): MutationError => ({
+export const boardNotFound = (boardId: string): MutationError => ({
+  kind: "BoardNotFound",
+  boardId,
+});
+export const frameNotFound = (boardId: string, frameId: string): MutationError => ({
   kind: "FrameNotFound",
+  boardId,
   frameId,
 });
-export const groupNotFound = (groupId: string): MutationError => ({
+export const groupNotFound = (boardId: string, groupId: string): MutationError => ({
   kind: "GroupNotFound",
+  boardId,
   groupId,
 });
 export const unknownComponent = (ref: string, suggestions: string[]): MutationError => ({
@@ -65,10 +75,17 @@ export const lastScreen = (screenId: string): MutationError => ({
   kind: "LastScreen",
   screenId,
 });
-export const screenInUse = (screenId: string, frameIds: string[]): MutationError => ({
+export const lastBoard = (boardId: string): MutationError => ({
+  kind: "LastBoard",
+  boardId,
+});
+export const screenInUse = (
+  screenId: string,
+  usage: { boardId: string; frameIds: string[] }[],
+): MutationError => ({
   kind: "ScreenInUse",
   screenId,
-  frameIds,
+  usage,
 });
 export const screenIdConflict = (screenId: string): MutationError => ({
   kind: "ScreenIdConflict",
@@ -78,12 +95,22 @@ export const screenIdExhausted = (base: string): MutationError => ({
   kind: "ScreenIdExhausted",
   base,
 });
-export const frameIdConflict = (frameId: string): MutationError => ({
+export const boardIdConflict = (boardId: string): MutationError => ({
+  kind: "BoardIdConflict",
+  boardId,
+});
+export const boardIdExhausted = (base: string): MutationError => ({
+  kind: "BoardIdExhausted",
+  base,
+});
+export const frameIdConflict = (boardId: string, frameId: string): MutationError => ({
   kind: "FrameIdConflict",
+  boardId,
   frameId,
 });
-export const groupIdConflict = (groupId: string): MutationError => ({
+export const groupIdConflict = (boardId: string, groupId: string): MutationError => ({
   kind: "GroupIdConflict",
+  boardId,
   groupId,
 });
 export const badRequest = (message: string, issues?: unknown): MutationError => ({

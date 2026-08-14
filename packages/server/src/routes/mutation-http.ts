@@ -1,12 +1,10 @@
 import type { Context } from "hono";
 import type { MutationError } from "../mutations/errors.ts";
 
-/**
- * Map a MutationError variant to the right HTTP response.
- */
 export function mutationToHttp(c: Context, error: MutationError): Response {
   switch (error.kind) {
     case "ScreenNotFound":
+    case "BoardNotFound":
     case "FrameNotFound":
     case "GroupNotFound":
     case "SnippetNotFound":
@@ -22,12 +20,15 @@ export function mutationToHttp(c: Context, error: MutationError): Response {
     case "InvalidMove":
     case "ScreenIdConflict":
     case "ScreenIdExhausted":
+    case "BoardIdConflict":
+    case "BoardIdExhausted":
     case "FrameIdConflict":
     case "GroupIdConflict":
     case "SnippetIdConflict":
     case "BadRequest":
       return c.json({ error }, 400);
     case "LastScreen":
+    case "LastBoard":
     case "ScreenInUse":
     case "SnippetInUse":
     case "IdConflict":

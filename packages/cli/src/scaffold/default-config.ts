@@ -3,8 +3,12 @@ import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { TOOL_VERSION } from "../version.ts";
 
 interface DefaultConfigOpts {
-  /** Library declaration. Defaults to shadcn-react registry source. */
+  /** Library declaration. Defaults to embedded shadcn-react. */
   library?: Library;
+  /** Default screen id to focus on first load. */
+  defaultScreen?: string;
+  /** Default board id to open on first load. */
+  defaultBoard?: string;
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
@@ -14,14 +18,15 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     library: opts.library ?? {
       id: "shadcn-react",
       version: snapshotVersion,
-      source: "registry:shadcn",
-      componentsPath: "components",
+      source: "embedded:shadcn",
+      componentsPath: "embedded:shadcn",
     },
     viewportPresets: [
       { name: "Mobile", w: 390, h: 844 },
       { name: "Tablet", w: 768, h: 1024 },
       { name: "Desktop", w: 1440, h: 900 },
     ],
-    defaultScreen: "welcome",
+    ...(opts.defaultScreen ? { defaultScreen: opts.defaultScreen } : {}),
+    ...(opts.defaultBoard ? { defaultBoard: opts.defaultBoard } : {}),
   };
 }

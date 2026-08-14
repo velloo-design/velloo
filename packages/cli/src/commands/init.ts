@@ -7,19 +7,14 @@ import {
   SnippetSchema,
   ThemeSchema,
 } from "@velloo/schema";
-import {
-  buildAndWriteManifest,
-  loadLucideNames,
-  writeJsonAtomic,
-  writeText,
-} from "@velloo/server";
+import { writeJsonAtomic, writeText } from "@velloo/server";
+import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
-import { getLibrary, pullLibraryIntoFolder } from "../library-registry.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { buildDefaultTheme } from "../scaffold/default-theme.ts";
 import {
   buildComponentsScreen,
-  buildSampleBoard,
+  buildSampleBoards,
   buildSampleScreen,
 } from "../scaffold/sample-page.ts";
 import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
@@ -45,17 +40,6 @@ export default defineCommand({
       required: true,
       description: "Target folder for the new design (created if missing)",
     },
-    library: {
-      type: "string",
-      default: "shadcn-react",
-      description:
-        "Library to pull into the design folder. Only shadcn-react is supported today.",
-    },
-    "experimental-shared": {
-      type: "string",
-      description:
-        "Experimental: point the design folder at the user's app components instead of pulling a fresh copy. Pass the path to <app>/components (relative or absolute). Failure modes are surfaced verbosely; treat this as a power-user flag.",
-    },
     force: {
       type: "boolean",
       default: false,
@@ -73,89 +57,59 @@ export default defineCommand({
       process.exit(1);
     }
 
-    let library;
-    try {
-      library = getLibrary(args.library);
-    } catch (err) {
-      console.error(`velloo init: ${(err as Error).message}`);
-      process.exit(1);
-    }
-
-    const experimentalShared = args["experimental-shared"];
-    const componentsPath = experimentalShared ?? "components";
     const config = buildDefaultConfig({
       library: {
-        id: library.id,
-        version: library.version,
-        source: experimentalShared ? `shared:${experimentalShared}` : "registry:shadcn",
-        componentsPath,
-        ...(experimentalShared ? { experimental: "shared" as const } : {}),
+        id: "shadcn-react",
+        version: snapshotVersion,
+        // Components are embedded in the Velloo binary; the design folder
+        // doesn't ship a `components/` copy. Keeps the repo clean for agents
+        // — no risk of two competing `button.tsx` files lying around.
+        source: "embedded:shadcn",
+        componentsPath: "embedded:shadcn",
       },
+      defaultBoard: "welcome",
+      defaultScreen: "welcome",
     });
 
     const theme = buildDefaultTheme();
     const welcome = buildSampleScreen();
     const components = buildComponentsScreen();
-    const board = buildSampleBoard();
+    const boards = buildSampleBoards();
     const snippets = buildSampleSnippets();
 
     ConfigSchema.parse(config);
     ThemeSchema.parse(theme);
     ScreenSchema.parse(welcome);
     ScreenSchema.parse(components);
-    BoardSchema.parse(board);
+    for (const board of boards) BoardSchema.parse(board);
     for (const snippet of snippets) SnippetSchema.parse(snippet);
 
     const configPath = `${folder}/.design/config.json`;
     const themePath = `${folder}/theme/default.json`;
-    const welcomePath = `${folder}/screens/welcome.json`;
-    const componentsScreenPath = `${folder}/screens/components.json`;
-    const boardPath = `${folder}/board.json`;
     const cacheKeep = `${folder}/.design/cache/.gitkeep`;
     const assetsKeep = `${folder}/assets/.gitkeep`;
 
     await Promise.all([
       writeJsonAtomic(configPath, config),
       writeJsonAtomic(themePath, theme),
-      writeJsonAtomic(welcomePath, welcome),
-      writeJsonAtomic(componentsScreenPath, components),
-      writeJsonAtomic(boardPath, board),
+      writeJsonAtomic(`${folder}/screens/welcome.json`, welcome),
+      writeJsonAtomic(`${folder}/screens/components.json`, components),
+      ...boards.map((b) => writeJsonAtomic(`${folder}/boards/${b.id}.json`, b)),
       writeText(cacheKeep, ""),
       writeText(assetsKeep, ""),
       ...snippets.map((s) => writeJsonAtomic(`${folder}/snippets/${s.id}.json`, s)),
     ]);
-
-    let libraryFiles = 0;
-    if (!experimentalShared) {
-      const r = await pullLibraryIntoFolder(library, folder, "components");
-      libraryFiles = r.filesCopied;
-    }
-
-    const componentsRoot = `${folder}/${componentsPath}`;
-    const lucideNames = await loadLucideNames();
-    const manifest = await buildAndWriteManifest({
-      componentsRoot,
-      outPath: `${folder}/.design/manifest.json`,
-      ...(lucideNames ? { lucideNames } : {}),
-    });
 
     console.log(`velloo: scaffolded design folder at ${folder}`);
     console.log("  .design/config.json     — tool + library declaration");
     console.log("  theme/default.json      — token tree (colors, type, spacing, radius)");
     console.log("  screens/welcome.json    — responsive welcome screen");
     console.log("  screens/components.json — every primitive in the library");
-    console.log("  board.json              — canvas layout (frames + groups)");
-    console.log(`  snippets/               — ${snippets.length} starter reusable subtrees`);
-    if (experimentalShared) {
-      console.log(`  (experimental) library  — pointing at ${experimentalShared}`);
-    } else {
-      console.log(
-        `  components/             — ${libraryFiles} files from ${library.label}@${library.version}`,
-      );
-    }
     console.log(
-      `  .design/manifest.json   — ${manifest.length} components extracted via ts-morph`,
+      `  boards/                 — ${boards.length} starter boards (${boards.map((b) => b.id).join(", ")})`,
     );
+    console.log(`  snippets/               — ${snippets.length} starter reusable subtrees`);
+    console.log(`  (library)               — shadcn-react@${snapshotVersion} embedded in velloo`);
     console.log("");
     console.log(`Next: velloo run ${args.folder}`);
   },
