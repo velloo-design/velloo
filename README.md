@@ -6,17 +6,19 @@ See [`docs/`](./docs) for the full design.
 
 ## Status
 
-Working substrate, mid-revamp. Two near-term pivots reshape things:
+Working substrate, used end-to-end. Sprints A → G are done. Highlights:
 
-- **Board + Screen + Frame** replaces pages + variants (see [docs/decisions.md](./docs/decisions.md) — the load-bearing mental-model change).
-- **Library Registry** replaces the bundled `shadcn-snapshot` package — components move into the design folder at `velloo init`, owned by the user.
+- **Board + Screen + Frame** mental model. Multi-board, frames sized freely on each board, sync between frames sharing a screen is implicit.
+- **~50 MCP tools.** Discovery, tree mutations, screen / frame / board / snippet lifecycle, theme ops, inspect + dark-diff, screenshot + render_snippet, agent-consumed `emit_code` IR.
+- **Pulse sample** ships with `velloo init` — 2 boards × 6 screens (landing, pricing, signup, dashboard, insights, settings), 3 snippets, 100% dark-mode coverage.
+- **Components embedded** in `@velloo/shadcn-snapshot` — the design folder ships pure data (no `components/*.tsx`). Customization is via snippets.
 
-See [docs/roadmap.md](./docs/roadmap.md) for the live sprint plan.
+See docs/roadmap.md for what's done and what's next.
 
 ## Repo layout
 
 - `packages/schema` — Zod schemas + TS types for the design folder format
-- `packages/shadcn-snapshot` — current bundled shadcn reference; **scheduled for removal** once the Library Registry lands (roadmap Sprint B–C)
+- `packages/shadcn-snapshot` — pinned shadcn components, embedded in the binary
 - `packages/renderer` — design JSON → HTML (and PNG via Playwright)
 - `packages/codegen` — agent-consumed IR + theme emitters
 - `packages/server` — HTTP + MCP + mutations + theme + watcher
@@ -27,10 +29,11 @@ See [docs/roadmap.md](./docs/roadmap.md) for the live sprint plan.
 
 ```bash
 bun install
-bun --cwd packages/shadcn-snapshot run build    # build dist/styles.css + dist/manifest.json
+bun --cwd packages/shadcn-snapshot run build    # build dist/manifest.json
+bun --cwd packages/canvas run build             # build canvas SPA
 bun run typecheck
-bun test                                        # screenshot test gated on VELLOO_E2E=1
 bun run velloo init /tmp/velloo-smoke
+bun run velloo run /tmp/velloo-smoke            # canvas at :7300, MCP at :7301
 ```
 
 The Playwright screenshot path requires `bunx playwright install chromium` once.

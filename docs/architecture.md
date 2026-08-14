@@ -4,7 +4,7 @@
 
 ## Working directory
 
-Designs live in a folder anywhere on disk — typically inside the user's repo, but the tool doesn't require it. The folder is the unit. Commit it, branch it, PR it. No `node_modules`. No Vite dependency. The folder is pure data plus a copy of the chosen library's components.
+Designs live in a folder anywhere on disk — typically inside the user's repo, but the tool doesn't require it. The folder is the unit. Commit it, branch it, PR it. No `node_modules`. No Vite dependency. The folder is pure data; components are embedded in the Velloo binary.
 
 ```
 my-product/
@@ -12,27 +12,26 @@ my-product/
 └── product-design/            # the design "file" (a folder)
     ├── .design/
     │   ├── config.json        # tool version, library declaration, viewport presets, codegen options
-    │   ├── manifest.json      # generated: prop schemas + design-mode behavior per component
     │   └── cache/             # gitignored: screenshots, build artifacts
-    ├── components/            # the chosen library's components, pulled at init
-    │   ├── ui/                # shadcn primitives: button.tsx, card.tsx, …
-    │   └── velloo/            # Velloo helpers: Heading, Text, Icon, Placeholder
     ├── theme/
-    │   └── default.json       # unified tokens (colors, type, spacing, radius)
+    │   └── default.json       # unified tokens (colors light + dark, type, spacing, radius)
     ├── snippets/              # reusable subtrees with typed params
-    │   ├── feature-card.json
-    │   └── hero-banner.json
+    │   ├── stat-card.json
+    │   ├── feature-row.json
+    │   └── sidebar-nav-row.json
     ├── assets/                # imported images, SVGs
     ├── screens/               # one file per screen
     │   ├── landing.json
     │   ├── pricing.json
     │   ├── signup.json
-    │   ├── landing.annotations.json  # sidecar: node-anchored markdown
-    │   └── landing.notes.json        # sidecar: free-positioned markdown
-    └── board.json             # canvas layout: where frames sit, sizes, labels
+    │   └── landing.annotations.json  # sidecar: node-anchored markdown
+    └── boards/                # one file per board
+        ├── marketing.json     # frames (placements of screens) + groups
+        ├── app.json
+        └── marketing.notes.json   # sidecar: free-positioned markdown notes per board
 ```
 
-**Sidecars** for annotations + screen-level notes live alongside their screen (`screens/<screenId>.annotations.json`). Empty arrays delete the sidecar on persist — the directory stays clean when a screen has none. Codegen ignores both sidecar types; they're canvas-only data. Board-level notes (free-positioned markdown anywhere on the board) live in `board.notes.json` at the folder root.
+**Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Free-positioned markdown notes are board-scoped at `boards/<boardId>.notes.json`. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
 
 ## JSON schema (sketch)
 
@@ -163,7 +162,7 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 }
 ```
 
-The `library` field declares which UI library this design folder uses, the on-disk version, and where its components live within the folder. The default model is straightforward: the design folder owns its copy of the library, the user's app installs the same library independently, and the agent is the bridge.
+The `library` field records which UI library this design folder is designed against and its embedded version. `source: "embedded:shadcn"` is the default — the components live inside the Velloo binary, not the user's repo. `source: "shared:<path>"` (experimental, not yet implemented) points at the user's app components instead.
 
 ## Runtime architecture
 
@@ -172,7 +171,7 @@ The `library` field declares which UI library this design folder uses, the on-di
 │  Global tool (single binary, Bun SEA, ~30MB)        │
 │  ┌──────────────────────────────────────────────┐   │
 │  │ Pre-built canvas (static React app)          │   │
-│  │ Library Registry + cached library copies     │   │
+│  │ Embedded shadcn snapshot + manifest          │   │
 │  │ Tiny HTTP server (canvas + MCP)              │   │
 │  │ JSON read/write, codegen, theme export       │   │
 │  └──────────────────────────────────────────────┘   │
@@ -183,48 +182,38 @@ The `library` field declares which UI library this design folder uses, the on-di
 │  Design folder (anywhere on disk)                   │
 │  ┌──────────────────────────────────────────────┐   │
 │  │ Screens, snippets, theme, annotations (JSON) │   │
-│  │ Board (frame layout) (JSON)                  │   │
-│  │ Library components (real .tsx files on disk) │   │
-│  │ Generated manifest                           │   │
+│  │ Boards (frame layout + per-board notes)      │   │
+│  │ Config (tool + library declaration)          │   │
 │  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
 ```
 
 Two ports started by `velloo run`:
 
-- **:7300** Canvas (HTML/JS UI). The board renders frames as iframes; each iframe mounts a screen at the frame's current size, using the design folder's library. WebSocket for live updates.
+- **:7300** Canvas (HTML/JS UI). The board renders frames as iframes; each iframe mounts a screen at the frame's current size, using components from the embedded shadcn snapshot. WebSocket for live updates.
 - **:7301** MCP server (HTTP, streamable). Same backend the canvas writes through.
 
 Both interfaces drive the same tool surface — agent edits and human edits are operationally identical. No "agent mode" vs "user mode" code paths.
 
 ## Component sourcing
 
-Components are **not bundled** into the Velloo binary. They live on disk inside the design folder, pulled fresh from a known-good registry at `velloo init`. The user owns the files: they can read them, modify them, evolve them, commit them.
+Components are **embedded in the Velloo binary** (`@velloo/shadcn-snapshot` package). The design folder doesn't ship a `components/` directory.
 
-The mechanism is a **Library Registry** — Velloo's list of supported UI libraries. Each entry declares where to fetch components, how to map theme tokens, what import path to emit for the user's app, and a contract the components must satisfy (canvas-safe: no `'use server'`, no required runtime providers, theme via CSS variables only).
+This is a reversal of an earlier decision ( The reversion was driven by AI-agent confusion — two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) made the source of truth unclear. Embedded components keep the design folder pure data.
 
-```bash
-velloo init ./design --library shadcn        # pulls latest shadcn-react components
-velloo init ./design --library shadcn@2.3.4  # pin a specific version
-```
+**Tailwind is JIT-compiled at server runtime** against the embedded component sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes.
 
-The pulled components land at `design/<componentsPath>/`. Manifests (prop schemas + design-mode behavior declarations) are generated via `ts-morph` at init and refreshed on `velloo upgrade`.
+### Customizing components
 
-**Tailwind is JIT-compiled at server runtime** against the on-disk components + screens folder. Any utility Tailwind supports renders, including arbitrary-value classes.
+How do users customize when the components are baked in? Short answer:
 
-### Default: design-folder-owned components
-
-The design folder owns its copy of the library. The user's app installs the library independently. The two are connected by the user's AI agent, which reads designs through MCP and writes the real app code in the user's conventions — not by a build step or a symlink.
-
-Most users will never edit `design/components/ui/button.tsx`. The expectation is that the on-disk library is read-mostly. But because the files are real, on disk, owned by the user: it's available as an escape hatch if needed. Edits show up immediately in the canvas, are visible to the agent on the next emit, and survive in git.
+- **Per-instance className** (`apply_classes`) and **per-instance props** (`update_props`) handle most needs.
+- **Snippets** are the supported "your version of a primitive" layer. A snippet wraps one or more components with typed params; every instance stays in sync.
+- The **experimental shared-components mode** (below) is the escape hatch when neither of those is enough.
 
 ### Stateful components
 
-Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-mode behavior** declarations: most are placeable with stub providers; a few are documented as not-renderable in canvas. These declarations live in the per-folder generated manifest, not in the binary.
-
-### Library upgrades
-
-`velloo upgrade ./design` pulls the latest library version, shows a per-file diff against the design folder's current copy, and lets the user accept or reject changes per file. The folder's `config.library.version` is bumped on success.
+Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-mode behavior** declarations: most are placeable with stub providers; a few are documented as not-renderable in canvas. These declarations live in the manifest (embedded alongside the components).
 
 ## Experimental: shared-components mode
 
@@ -252,8 +241,8 @@ This is gated as experimental because the failure modes are real and not all in 
 
 | Failure | Diagnostic |
 |---|---|
-| Component imports `'use server'` | "`button.tsx` is a server component; cannot render in the canvas. Move client-only logic into a `*.client.tsx` wrapper, or fall back to owned-components mode." |
-| Component requires a runtime provider not stubbed by Velloo | Names the missing provider, links to the contract doc, suggests either stubbing locally or moving to owned-components mode. |
+| Component imports `'use server'` | "`button.tsx` is a server component; cannot render in the canvas. Move client-only logic into a `*.client.tsx` wrapper, or fall back to embedded mode." |
+| Component requires a runtime provider not stubbed by Velloo | Names the missing provider, links to the contract doc, suggests either stubbing locally or falling back to embedded mode. |
 | Component imports from `@/lib/auth` (or any app-internal path) that fails to resolve | Names the path, shows the import chain, suggests configuring a stub. |
 | User edits a component, Tailwind class no longer compiles | Names the class, the file, the line, and suggests `validate_classes` to verify next time. |
 | Manifest regeneration fails (prop types unparseable) | Names the file, the prop, the parser error; offers to skip the affected component with a manifest stub. |

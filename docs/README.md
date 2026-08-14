@@ -13,9 +13,9 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 ## What Velloo is
 
 - A **local CLI** that serves a canvas at `localhost:7300` and an MCP server at `localhost:7301`.
-- A **canvas** that looks like Figma: an infinite board where you arrange the screens of your product (landing, pricing, signup, settings, onboarding) at different sizes so you can see the whole flow at once.
-- An **MCP surface** that exposes the design to your AI agent (Claude Code, Cursor, Codex) with one tool per structural operation — token-efficient by construction.
-- A **design folder** in your repo: pure JSON for screens, board layout, theme, snippets, annotations, plus a copy of the chosen UI library's components on disk.
+- A **canvas** that looks like Figma: many boards, each an infinite canvas with frames pointing at screens. The Pulse sample (shipped by `velloo init`) has a Marketing board with landing/pricing/signup frames and an App board with dashboard/insights/settings frames.
+- An **MCP surface** that exposes the design to your AI agent (Claude Code, Cursor, Codex) — ~50 tools, one per structural operation.
+- A **design folder** in your repo: pure JSON for screens, boards, theme, snippets, and annotations. Components are embedded in the Velloo binary (no `components/*.tsx` in the design folder).
 
 ## Documents
 
@@ -31,11 +31,11 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 
 ## Stance
 
-- **Local-first.** Every byte of design state — pages, theme, manifest, the library's components — lives on disk in the user's repo. No account, no server, no telemetry. The CLI works offline.
+- **Local-first.** Every byte of design state — screens, boards, theme, snippets — lives on disk in the user's repo. No account, no server, no telemetry. The CLI works offline.
 - **Open source.** From the first public release. License TBD at release time; out of scope for now.
 - **Useful first.** No monetization, no cloud, no hosted surfaces are being designed for. Once Velloo is genuinely useful for a single solo developer (the author), the question of what's next becomes worth asking.
 - **shadcn-first.** Other libraries (Mantine, MUI, Chakra) are an internal abstraction for a possible later, not a public promise. React-only.
 
 ## Status
 
-Specification + working substrate (CLI, canvas, MCP server, codegen, theme engine, ~22 MCP tools, file watcher, undo history, screenshot pipeline). Working through the sprints in [roadmap.md](./roadmap.md). No "V0 launch" milestone — the product gets more useful sprint over sprint.
+Working substrate, used end-to-end. Sprints A → G done (see [roadmap.md](./roadmap.md) for the changelog). `velloo init` ships **Pulse** — a sample team-analytics design across two boards and six screens, 100% dark-mode coherent. ~50 MCP tools live. No "V0 launch" milestone — the product gets more useful sprint over sprint.

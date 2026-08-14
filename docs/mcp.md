@@ -147,7 +147,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 
 Server returns the standard MCP `initialize` response with concrete agent nudges in `instructions`. Working text:
 
-> You are working on a Velloo design folder. Components live inside the folder (pulled from the chosen library at `velloo init`; user-owned). Designs are static — click handlers, routing, and forms are no-op.
+> You are working on a Velloo design folder. Components come from a pinned shadcn snapshot embedded in the Velloo binary; the design folder ships pure data. Designs are static — click handlers, routing, and forms are no-op.
 >
 > **Mental model:** a **screen** is a responsive React tree (one JSON file). A **frame** is a placement of a screen on the canvas at a chosen size — multiple frames can show the same screen at different sizes and edits always sync because there's one underlying tree. A **board** is the canvas; it holds frames.
 >

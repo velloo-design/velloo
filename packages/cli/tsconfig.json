@@ -9,7 +9,7 @@
     "emitDeclarationOnly": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src/**/*.json"],
   "references": [
     { "path": "../schema" },
     { "path": "../shadcn-snapshot" },

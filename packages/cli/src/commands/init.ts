@@ -12,11 +12,7 @@ import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { buildDefaultTheme } from "../scaffold/default-theme.ts";
-import {
-  buildComponentsScreen,
-  buildSampleBoards,
-  buildSampleScreen,
-} from "../scaffold/sample-page.ts";
+import { buildSampleBoards, buildSampleScreens } from "../scaffold/sample-page.ts";
 import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
 
 async function isEmptyOrMissing(path: string): Promise<boolean> {
@@ -67,20 +63,18 @@ export default defineCommand({
         source: "embedded:shadcn",
         componentsPath: "embedded:shadcn",
       },
-      defaultBoard: "welcome",
-      defaultScreen: "welcome",
+      defaultBoard: "marketing",
+      defaultScreen: "landing",
     });
 
     const theme = buildDefaultTheme();
-    const welcome = buildSampleScreen();
-    const components = buildComponentsScreen();
+    const screens = buildSampleScreens();
     const boards = buildSampleBoards();
     const snippets = buildSampleSnippets();
 
     ConfigSchema.parse(config);
     ThemeSchema.parse(theme);
-    ScreenSchema.parse(welcome);
-    ScreenSchema.parse(components);
+    for (const screen of screens) ScreenSchema.parse(screen);
     for (const board of boards) BoardSchema.parse(board);
     for (const snippet of snippets) SnippetSchema.parse(snippet);
 
@@ -92,25 +86,34 @@ export default defineCommand({
     await Promise.all([
       writeJsonAtomic(configPath, config),
       writeJsonAtomic(themePath, theme),
-      writeJsonAtomic(`${folder}/screens/welcome.json`, welcome),
-      writeJsonAtomic(`${folder}/screens/components.json`, components),
+      ...screens.map((s) => writeJsonAtomic(`${folder}/screens/${s.id}.json`, s)),
       ...boards.map((b) => writeJsonAtomic(`${folder}/boards/${b.id}.json`, b)),
+      ...snippets.map((s) => writeJsonAtomic(`${folder}/snippets/${s.id}.json`, s)),
       writeText(cacheKeep, ""),
       writeText(assetsKeep, ""),
-      ...snippets.map((s) => writeJsonAtomic(`${folder}/snippets/${s.id}.json`, s)),
     ]);
 
-    console.log(`velloo: scaffolded design folder at ${folder}`);
-    console.log("  .design/config.json     — tool + library declaration");
-    console.log("  theme/default.json      — token tree (colors, type, spacing, radius)");
-    console.log("  screens/welcome.json    — responsive welcome screen");
-    console.log("  screens/components.json — every primitive in the library");
-    console.log(
-      `  boards/                 — ${boards.length} starter boards (${boards.map((b) => b.id).join(", ")})`,
-    );
-    console.log(`  snippets/               — ${snippets.length} starter reusable subtrees`);
-    console.log(`  (library)               — shadcn-react@${snapshotVersion} embedded in velloo`);
+    const boardLabels = boards.map((b) => b.name).join(" + ");
+    const screenCount = screens.length;
+
+    console.log(`velloo: scaffolded ${args.folder}`);
     console.log("");
-    console.log(`Next: velloo run ${args.folder}`);
+    console.log(`  📋 ${boardLabels} — ${screenCount} screens across two boards`);
+    console.log(`     Pulse — a sample team-analytics product, ready to remix.`);
+    console.log("");
+    console.log("  .design/config.json     tool + library declaration");
+    console.log("  theme/default.json      indigo accent, dark-mode coherent");
+    console.log(`  screens/                ${screenCount} screens (${screens.map((s) => s.id).join(", ")})`);
+    console.log(
+      `  boards/                 ${boards.length} boards (${boards.map((b) => b.id).join(", ")})`,
+    );
+    console.log(`  snippets/               ${snippets.length} reusable subtrees`);
+    console.log(`  (library)               shadcn-react@${snapshotVersion} embedded in velloo`);
+    console.log("");
+    console.log(`▶ velloo run ${args.folder}    open the canvas`);
+    console.log("");
+    console.log("Tip: in your AI agent, ask “implement the landing screen in my app”");
+    console.log("     once Velloo MCP is connected. The agent reads the design and writes");
+    console.log("     real .tsx into your app in your conventions.");
   },
 });

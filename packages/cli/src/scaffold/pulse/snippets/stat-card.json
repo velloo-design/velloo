@@ -1,0 +1,88 @@
+{
+  "id": "stat-card",
+  "name": "Stat Card",
+  "params": [
+    {
+      "name": "label",
+      "type": "string"
+    },
+    {
+      "name": "value",
+      "type": "string"
+    },
+    {
+      "name": "change",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "icon",
+      "type": "string",
+      "default": "Activity"
+    }
+  ],
+  "tree": {
+    "$ref": "Card",
+    "props": {
+      "className": "p-5 flex flex-col gap-3"
+    },
+    "children": [
+      {
+        "$ref": "Card",
+        "props": {
+          "className": "flex flex-row items-center justify-between gap-2 ring-0 shadow-none bg-transparent rounded-none p-0"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "props": {
+              "variant": "small",
+              "className": "text-muted-foreground uppercase tracking-wider",
+              "children": {
+                "$param": "label"
+              }
+            }
+          },
+          {
+            "$ref": "Icon",
+            "props": {
+              "name": {
+                "$param": "icon"
+              },
+              "size": 16,
+              "className": "text-muted-foreground"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": {
+          "className": "flex flex-row items-baseline gap-2 ring-0 shadow-none bg-transparent rounded-none p-0"
+        },
+        "children": [
+          {
+            "$ref": "Heading",
+            "props": {
+              "level": 2,
+              "className": "text-3xl font-semibold tabular-nums",
+              "children": {
+                "$param": "value"
+              }
+            }
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "variant": "small",
+              "className": "text-muted-foreground tabular-nums",
+              "children": {
+                "$param": "change"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

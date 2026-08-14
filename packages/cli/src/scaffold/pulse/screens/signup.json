@@ -1,0 +1,328 @@
+{
+  "id": "signup",
+  "name": "Sign up",
+  "tree": {
+    "$ref": "Card",
+    "props": {
+      "className": "flex flex-row min-h-[800px] bg-background ring-0 shadow-none rounded-none p-0 overflow-hidden"
+    },
+    "children": [
+      {
+        "$ref": "Card",
+        "props": {
+          "className": "hidden md:flex flex-col gap-8 w-[44%] p-12 bg-primary ring-0 shadow-none rounded-none text-primary-foreground"
+        },
+        "children": [
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "flex flex-row items-center gap-2 ring-0 shadow-none bg-transparent rounded-none p-0"
+            },
+            "children": [
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "h-7 w-7 grid place-items-center rounded-md bg-primary-foreground/15 ring-0 shadow-none"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "Activity",
+                      "size": 16
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Heading",
+                "props": {
+                  "level": 4,
+                  "className": "text-base font-semibold tracking-tight",
+                  "children": "Pulse"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "flex-1 flex flex-col justify-center gap-6 ring-0 shadow-none bg-transparent rounded-none p-0"
+            },
+            "children": [
+              {
+                "$ref": "Heading",
+                "props": {
+                  "level": 2,
+                  "className": "text-3xl font-semibold tracking-tight leading-tight max-w-md",
+                  "children": "“We stopped guessing about velocity. Pulse showed us the chart, the team got 30% faster.”"
+                }
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-row items-center gap-3 ring-0 shadow-none bg-transparent rounded-none p-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Placeholder",
+                    "props": {
+                      "kind": "image",
+                      "label": "avatar",
+                      "aspect": "1/1",
+                      "size": "md"
+                    }
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "className": "flex flex-col gap-0 ring-0 shadow-none bg-transparent rounded-none p-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "props": {
+                          "variant": "small",
+                          "className": "font-medium",
+                          "children": "Maya Chen"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "props": {
+                          "variant": "small",
+                          "className": "opacity-80",
+                          "children": "VP Eng · Globex"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "variant": "small",
+              "className": "opacity-70",
+              "children": "Trusted by Acme, Globex, Initech, Stark, Wayne, and 600+ teams."
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": {
+          "className": "flex-1 flex items-center justify-center p-6 md:p-12 ring-0 shadow-none bg-background rounded-none"
+        },
+        "children": [
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "w-full max-w-md flex flex-col gap-6 ring-0 shadow-none bg-transparent rounded-none p-0"
+            },
+            "children": [
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-2 ring-0 shadow-none bg-transparent rounded-none p-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Heading",
+                    "props": {
+                      "level": 1,
+                      "className": "text-3xl font-semibold tracking-tight",
+                      "children": "Create your account"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "variant": "muted",
+                      "className": "text-sm",
+                      "children": "Start your 14-day Pro trial. No credit card required."
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-3 ring-0 shadow-none bg-transparent rounded-none p-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "outline",
+                      "size": "default",
+                      "className": "w-full justify-center gap-2",
+                      "children": "Continue with GitHub"
+                    }
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "outline",
+                      "size": "default",
+                      "className": "w-full justify-center gap-2",
+                      "children": "Continue with Google"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-row items-center gap-3 ring-0 shadow-none bg-transparent rounded-none p-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Separator",
+                    "props": {
+                      "className": "flex-1"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "variant": "small",
+                      "className": "text-muted-foreground",
+                      "children": "or"
+                    }
+                  },
+                  {
+                    "$ref": "Separator",
+                    "props": {
+                      "className": "flex-1"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-4 ring-0 shadow-none bg-transparent rounded-none p-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "className": "flex flex-col gap-1.5 ring-0 shadow-none bg-transparent rounded-none p-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Label",
+                        "props": {
+                          "htmlFor": "work-email",
+                          "children": "Work email"
+                        }
+                      },
+                      {
+                        "$ref": "Input",
+                        "props": {
+                          "id": "work-email",
+                          "type": "email",
+                          "placeholder": "ada@yourcompany.com"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "className": "flex flex-col gap-1.5 ring-0 shadow-none bg-transparent rounded-none p-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Label",
+                        "props": {
+                          "htmlFor": "password",
+                          "children": "Password"
+                        }
+                      },
+                      {
+                        "$ref": "Input",
+                        "props": {
+                          "id": "password",
+                          "type": "password",
+                          "placeholder": "At least 12 characters"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "className": "flex flex-col gap-1.5 ring-0 shadow-none bg-transparent rounded-none p-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Label",
+                        "props": {
+                          "htmlFor": "team",
+                          "children": "Team name"
+                        }
+                      },
+                      {
+                        "$ref": "Input",
+                        "props": {
+                          "id": "team",
+                          "placeholder": "Acme Eng"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "default",
+                      "size": "lg",
+                      "className": "w-full mt-1",
+                      "children": "Create account"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Text",
+                "props": {
+                  "variant": "small",
+                  "className": "text-muted-foreground text-center",
+                  "children": "By signing up you agree to our Terms and Privacy. Pulse never shares your code or repo data."
+                }
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-row items-center justify-center gap-1 pt-4 border-t border-border ring-0 shadow-none bg-transparent rounded-none p-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "variant": "small",
+                      "className": "text-muted-foreground",
+                      "children": "Already have an account?"
+                    }
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "link",
+                      "size": "sm",
+                      "className": "h-auto p-0",
+                      "children": "Sign in"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
