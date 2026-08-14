@@ -50,18 +50,36 @@ export function Board({ board }: BoardProps) {
   }, [board.frames]);
 
   /**
-   * On board mount (or board switch), fit-to-content: pick a zoom that shows
-   * the whole frame bounding box with margin, then pan so the box centers in
-   * the visible area. Only runs once per board id — once the user pans/zooms,
-   * we don't yank the view back.
+   * On board mount (or board switch): restore the user's saved pan +
+   * zoom for this board from localStorage. If there's no saved view
+   * (first time seeing this board), fall back to fit-to-content so the
+   * board's frames center in the visible area.
+   *
+   * Only runs once per board id — once the user pans/zooms, we don't
+   * yank the view back, and we persist their changes via the
+   * pan/zoom watcher effect below.
    */
-  const fitToContentRef = useRef<string | null>(null);
+  const restoredRef = useRef<string | null>(null);
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
-    if (board.frames.length === 0) return;
-    if (fitToContentRef.current === board.id) return;
+    if (restoredRef.current === board.id) return;
 
+    const saved = readBoardView(board.id);
+    if (saved) {
+      el.scrollLeft = 0;
+      el.scrollTop = 0;
+      setZoom(saved.zoom);
+      setPan(saved.pan);
+      restoredRef.current = board.id;
+      return;
+    }
+
+    // First-time view: compute fit-to-content.
+    if (board.frames.length === 0) {
+      restoredRef.current = board.id;
+      return;
+    }
     let minX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;
@@ -95,7 +113,7 @@ export function Board({ board }: BoardProps) {
         x: Math.round(vw / 2 - boxCx * fitZoom),
         y: Math.round(vh / 2 - boxCy * fitZoom),
       });
-      fitToContentRef.current = board.id;
+      restoredRef.current = board.id;
       return true;
     };
 
@@ -104,6 +122,15 @@ export function Board({ board }: BoardProps) {
       requestAnimationFrame(apply);
     }
   }, [board.id, board.frames, setZoom, setPan]);
+
+  // Persist pan + zoom whenever they change, scoped per board. A
+  // small debounce keeps localStorage writes off the wheel/drag hot
+  // path — we only write 150ms after the user stops manipulating.
+  useEffect(() => {
+    if (restoredRef.current !== board.id) return;
+    const t = setTimeout(() => writeBoardView(board.id, { pan, zoom }), 150);
+    return () => clearTimeout(t);
+  }, [board.id, pan, zoom]);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -253,3 +280,48 @@ const DEFAULT_PRESETS: ViewportPreset[] = [
   { name: "Tablet", w: 768, h: 1024 },
   { name: "Desktop", w: 1440, h: 900 },
 ];
+
+const VIEW_STORAGE_PREFIX = "velloo:boardView:";
+
+interface BoardView {
+  pan: { x: number; y: number };
+  zoom: number;
+}
+
+/**
+ * Pull this board's last pan+zoom from localStorage. Returns null if
+ * we've never persisted a view for this board (or the stored value
+ * is corrupt) so the caller can fall back to fit-to-content.
+ */
+function readBoardView(boardId: string): BoardView | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(VIEW_STORAGE_PREFIX + boardId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<BoardView>;
+    const zoom =
+      typeof parsed.zoom === "number" && Number.isFinite(parsed.zoom) ? parsed.zoom : null;
+    const px =
+      parsed.pan && typeof parsed.pan.x === "number" && Number.isFinite(parsed.pan.x)
+        ? parsed.pan.x
+        : null;
+    const py =
+      parsed.pan && typeof parsed.pan.y === "number" && Number.isFinite(parsed.pan.y)
+        ? parsed.pan.y
+        : null;
+    if (zoom === null || px === null || py === null) return null;
+    return { pan: { x: px, y: py }, zoom };
+  } catch {
+    return null;
+  }
+}
+
+function writeBoardView(boardId: string, view: BoardView): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(VIEW_STORAGE_PREFIX + boardId, JSON.stringify(view));
+  } catch {
+    // Quota / private-mode failures are silently swallowed —
+    // pan/zoom persistence is a convenience, not a critical path.
+  }
+}

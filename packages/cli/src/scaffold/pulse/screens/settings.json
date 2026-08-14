@@ -4,13 +4,13 @@
   "tree": {
     "$ref": "Card",
     "props": {
-      "className": "flex flex-row h-full min-h-[800px] bg-background ring-0 shadow-none rounded-none p-0 overflow-hidden"
+      "className": "flex flex-row h-full min-h-screen bg-background ring-0 shadow-none rounded-none p-0 overflow-hidden"
     },
     "children": [
       {
         "$ref": "Card",
         "props": {
-          "className": "w-60 shrink-0 ring-0 shadow-none rounded-none p-0 bg-card border-r border-border flex flex-col gap-1 p-3"
+          "className": "hidden md:flex w-60 shrink-0 ring-0 shadow-none rounded-none p-0 bg-card border-r border-border flex-col gap-1 p-3"
         },
         "children": [
           {
@@ -108,7 +108,7 @@
                   "variant": "ghost",
                   "size": "sm",
                   "className": "w-full justify-start gap-2 text-muted-foreground",
-                  "children": "← Back to app"
+                  "children": "\u2190 Back to app"
                 }
               }
             ]
@@ -124,7 +124,7 @@
           {
             "$ref": "Card",
             "props": {
-              "className": "px-8 py-5 border-b border-border ring-0 shadow-none bg-transparent rounded-none"
+              "className": "px-4 md:px-8 py-5 border-b border-border ring-0 shadow-none bg-transparent rounded-none"
             },
             "children": [
               {
@@ -148,7 +148,7 @@
           {
             "$ref": "Card",
             "props": {
-              "className": "flex flex-col gap-6 px-8 py-6 max-w-3xl ring-0 shadow-none bg-transparent rounded-none"
+              "className": "flex flex-col gap-6 px-4 md:px-8 py-6 max-w-3xl ring-0 shadow-none bg-transparent rounded-none"
             },
             "children": [
               {
@@ -188,12 +188,13 @@
                     },
                     "children": [
                       {
-                        "$ref": "Placeholder",
+                        "$ref": "Image",
                         "props": {
-                          "kind": "image",
-                          "label": "avatar",
+                          "src": "https://picsum.photos/seed/maya-chen/200/200",
+                          "alt": "Maya Chen",
                           "aspect": "1/1",
-                          "size": "lg"
+                          "fill": true,
+                          "className": "h-14 w-14 rounded-full overflow-hidden"
                         }
                       },
                       {
@@ -225,7 +226,7 @@
                   {
                     "$ref": "Card",
                     "props": {
-                      "className": "grid grid-cols-2 gap-4 ring-0 shadow-none bg-transparent rounded-none p-0"
+                      "className": "grid grid-cols-1 md:grid-cols-2 gap-4 ring-0 shadow-none bg-transparent rounded-none p-0"
                     },
                     "children": [
                       {
@@ -360,7 +361,7 @@
                                 "props": {
                                   "variant": "small",
                                   "className": "text-muted-foreground",
-                                  "children": "Slack · #ops"
+                                  "children": "Slack \u00b7 #ops"
                                 }
                               }
                             ]
@@ -399,7 +400,7 @@
                                 "props": {
                                   "variant": "small",
                                   "className": "text-muted-foreground",
-                                  "children": "Email + SMS · oncall"
+                                  "children": "Email + SMS \u00b7 oncall"
                                 }
                               }
                             ]
@@ -438,7 +439,7 @@
                                 "props": {
                                   "variant": "small",
                                   "className": "text-muted-foreground",
-                                  "children": "Email · Mondays at 9am"
+                                  "children": "Email \u00b7 Mondays at 9am"
                                 }
                               }
                             ]
@@ -521,7 +522,7 @@
                         "props": {
                           "variant": "destructive",
                           "size": "sm",
-                          "children": "Delete…"
+                          "children": "Delete\u2026"
                         }
                       }
                     ]

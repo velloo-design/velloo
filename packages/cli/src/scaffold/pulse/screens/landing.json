@@ -122,7 +122,7 @@
             "props": {
               "variant": "outline",
               "className": "gap-1.5 py-1 px-3",
-              "children": "✨ Now with DORA insights"
+              "children": "\u2728 Now with DORA insights"
             }
           },
           {
@@ -172,7 +172,7 @@
             "props": {
               "variant": "small",
               "className": "text-muted-foreground",
-              "children": "No credit card · 14-day Pro trial · Slack & GitHub-ready in minutes"
+              "children": "No credit card \u00b7 14-day Pro trial \u00b7 Slack & GitHub-ready in minutes"
             }
           }
         ]
@@ -201,7 +201,11 @@
               },
               {
                 "$ref": "Layer",
-                "props": { "bottom": 24, "left": 24, "right": 24 },
+                "props": {
+                  "bottom": 24,
+                  "left": 24,
+                  "right": 24
+                },
                 "children": [
                   {
                     "$ref": "Card",
@@ -270,48 +274,48 @@
             },
             "children": [
               {
-                "$ref": "Placeholder",
+                "$ref": "SVG",
                 "props": {
-                  "kind": "image",
-                  "label": "acme",
-                  "aspect": "3/1",
-                  "size": "sm"
+                  "content": "<text x=\"50%\" y=\"50%\" dominant-baseline=\"central\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"36\" font-weight=\"700\" letter-spacing=\"3\">ACME</text><path d=\"M20 50 L60 50\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M180 50 L220 50\" stroke=\"currentColor\" stroke-width=\"2\"/>",
+                  "viewBox": "0 0 240 60",
+                  "color": "muted",
+                  "className": "h-8 w-auto opacity-70 hover:opacity-100 transition-opacity"
                 }
               },
               {
-                "$ref": "Placeholder",
+                "$ref": "SVG",
                 "props": {
-                  "kind": "image",
-                  "label": "globex",
-                  "aspect": "3/1",
-                  "size": "sm"
+                  "content": "<circle cx=\"40\" cy=\"30\" r=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\"/><text x=\"65\" y=\"50%\" dominant-baseline=\"central\" font-family=\"sans-serif\" font-size=\"30\" font-weight=\"600\">globex</text>",
+                  "viewBox": "0 0 240 60",
+                  "color": "muted",
+                  "className": "h-8 w-auto opacity-70 hover:opacity-100 transition-opacity"
                 }
               },
               {
-                "$ref": "Placeholder",
+                "$ref": "SVG",
                 "props": {
-                  "kind": "image",
-                  "label": "initech",
-                  "aspect": "3/1",
-                  "size": "sm"
+                  "content": "<rect x=\"18\" y=\"18\" width=\"24\" height=\"24\" fill=\"currentColor\"/><text x=\"55\" y=\"50%\" dominant-baseline=\"central\" font-family=\"monospace\" font-size=\"28\" font-weight=\"700\" letter-spacing=\"2\">INITECH</text>",
+                  "viewBox": "0 0 240 60",
+                  "color": "muted",
+                  "className": "h-8 w-auto opacity-70 hover:opacity-100 transition-opacity"
                 }
               },
               {
-                "$ref": "Placeholder",
+                "$ref": "SVG",
                 "props": {
-                  "kind": "image",
-                  "label": "stark",
-                  "aspect": "3/1",
-                  "size": "sm"
+                  "content": "<path d=\"M20 14 L36 46 L52 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linejoin=\"round\"/><text x=\"68\" y=\"50%\" dominant-baseline=\"central\" font-family=\"sans-serif\" font-size=\"30\" font-weight=\"700\" letter-spacing=\"5\">STARK</text>",
+                  "viewBox": "0 0 240 60",
+                  "color": "muted",
+                  "className": "h-8 w-auto opacity-70 hover:opacity-100 transition-opacity"
                 }
               },
               {
-                "$ref": "Placeholder",
+                "$ref": "SVG",
                 "props": {
-                  "kind": "image",
-                  "label": "wayne",
-                  "aspect": "3/1",
-                  "size": "sm"
+                  "content": "<text x=\"50%\" y=\"50%\" dominant-baseline=\"central\" text-anchor=\"middle\" font-family=\"serif\" font-size=\"34\" font-weight=\"800\" font-style=\"italic\">Wayne</text>",
+                  "viewBox": "0 0 240 60",
+                  "color": "muted",
+                  "className": "h-8 w-auto opacity-70 hover:opacity-100 transition-opacity"
                 }
               }
             ]
@@ -368,7 +372,7 @@
             "$snippet": "feature-row",
             "args": {
               "title": "DORA without the spreadsheet",
-              "body": "Lead time, deploy frequency, change failure, MTTR — computed from your actual events, not surveyed.",
+              "body": "Lead time, deploy frequency, change failure, MTTR \u2014 computed from your actual events, not surveyed.",
               "icon": "TrendingUp"
             }
           },
@@ -384,7 +388,7 @@
             "$snippet": "feature-row",
             "args": {
               "title": "Slack-native alerts",
-              "body": "Notifications you actually read — grouped by service, threaded by incident, mute by tag.",
+              "body": "Notifications you actually read \u2014 grouped by service, threaded by incident, mute by tag.",
               "icon": "MessageSquare"
             }
           },
@@ -467,7 +471,7 @@
             "props": {
               "variant": "small",
               "className": "text-muted-foreground",
-              "children": "© 2026 Pulse Labs · Built in Lisbon"
+              "children": "\u00a9 2026 Pulse Labs \u00b7 Built in Lisbon"
             }
           },
           {

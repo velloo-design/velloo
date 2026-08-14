@@ -14,9 +14,16 @@ export const IFRAME_RUNTIME = String.raw`
   const SELECT_CLASS = '__velloo-selected';
   const HOVER_CLASS = '__velloo-hover';
 
-  // Inject highlight styles once.
+  // Inject highlight styles once. Use inset box-shadow instead of
+  // outline so the ring stays inside the element — outline + a
+  // positive offset extends past the element border, and elements
+  // near the iframe edge get the ring clipped by the iframe's
+  // bounding box. Inset shadow draws at the element's inner edge
+  // and is always fully visible regardless of position.
   const style = document.createElement('style');
-  style.textContent = ".__velloo-hover { outline: 1px dashed #60a5fa !important; outline-offset: 1px !important; } .__velloo-selected { outline: 2px solid #2563eb !important; outline-offset: 1px !important; }";
+  style.textContent =
+    ".__velloo-hover { box-shadow: inset 0 0 0 1px #60a5fa !important; }" +
+    ".__velloo-selected { box-shadow: inset 0 0 0 2px #2563eb !important; }";
   document.head.appendChild(style);
 
   function findPath(target) {

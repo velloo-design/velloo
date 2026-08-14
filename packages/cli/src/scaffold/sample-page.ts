@@ -6,9 +6,9 @@
  * The sample is "Pulse" — a fictional team-analytics product for engineering
  * teams. Three boards (App + Marketing + Playground), seven screens. Every
  * color uses semantic theme tokens so it adapts cleanly to dark mode.
- * Playground hosts the components showcase — every primitive shipped in
- * sprints J/K/L on one screen, useful as a visual reference for what's
- * available to designs.
+ * Playground hosts the components showcase — every component Velloo ships
+ * on one screen, useful as a visual reference for what's available to
+ * designs.
  */
 import type { Board, Screen } from "@velloo/schema";
 

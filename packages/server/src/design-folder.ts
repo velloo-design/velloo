@@ -76,6 +76,10 @@ async function loadDir<T>(
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return out;
     throw err;
   }
+  // Sort so the canvas sidebar displays boards/screens/snippets in a
+  // deterministic order across machines and `readdir` implementations.
+  // Alphabetical by filename matches what users see in the filesystem.
+  entries.sort((a, b) => a.localeCompare(b));
   for (const file of entries) {
     if (extname(file) !== ".json") continue;
     if (predicate && !predicate(file)) continue;
