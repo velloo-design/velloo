@@ -63,6 +63,8 @@ function Tooltip({
 export function TopBar() {
   const design = useCanvas((s) => s.design);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
+  const view = useCanvas((s) => s.view);
+  const libraryItem = useCanvas((s) => s.libraryItem);
   const theme = useCanvas((s) => s.theme);
   const canvasZoom = useCanvas((s) => s.canvasZoom);
   const setCanvasZoom = useCanvas((s) => s.setCanvasZoom);
@@ -112,7 +114,18 @@ export function TopBar() {
       <div className="flex items-center gap-2 min-w-0">
         <Logo size={22} />
         <span className="font-semibold tracking-tight">Velloo</span>
-        {currentScreen ? (
+        {view === "library" ? (
+          <>
+            <span className="text-[var(--color-fg-muted)]">/</span>
+            <span className="text-[var(--color-fg)] truncate">Library</span>
+            {libraryItem ? (
+              <>
+                <span className="text-[var(--color-fg-muted)]">/</span>
+                <span className="text-[var(--color-fg)] truncate">{libraryItem.id}</span>
+              </>
+            ) : null}
+          </>
+        ) : currentScreen ? (
           <>
             <span className="text-[var(--color-fg-muted)]">/</span>
             <span className="text-[var(--color-fg)] truncate">{currentScreen.name}</span>

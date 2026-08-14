@@ -19,6 +19,12 @@ export type CursorMode = "select" | "hand" | "note" | "annotate";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";
 export type DesignMode = "light" | "dark";
+export type ViewMode = "boards" | "library";
+export type LibraryItemKind = "component" | "snippet";
+export interface LibraryItemRef {
+  kind: LibraryItemKind;
+  id: string;
+}
 
 export interface AnnotationEntry {
   id: string;
@@ -78,6 +84,8 @@ export interface CanvasState {
   annotationsVisible: boolean;
   editingMarkupId: string | null;
   focusedAnnotationId: string | null;
+  view: ViewMode;
+  libraryItem: LibraryItemRef | null;
 
   loadDesign(): Promise<void>;
   refreshHistory(): Promise<void>;
@@ -111,6 +119,9 @@ export interface CanvasState {
     screenId: string,
     rects: { path: string; x: number; y: number; w: number; h: number }[],
   ): void;
+  setView(view: ViewMode): void;
+  openLibrary(item?: LibraryItemRef | null): void;
+  closeLibrary(): void;
 }
 
 export function selectedNode(screens: Record<string, Screen>, sel: Selection | null): Node | null {
@@ -177,6 +188,9 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   annotationsVisible: true,
   editingMarkupId: null,
   focusedAnnotationId: null,
+  // ── state: library view ──────────────────────────────────────
+  view: "boards",
+  libraryItem: null,
 
   async refreshHistory() {
     try {
@@ -408,5 +422,19 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setDesignMode(designMode) {
     set({ designMode });
+  },
+
+  setView(view) {
+    set({ view, ...(view === "boards" ? { libraryItem: null } : {}) });
+    if (view === "library") void get().loadComponents();
+  },
+
+  openLibrary(item) {
+    set({ view: "library", libraryItem: item ?? null });
+    void get().loadComponents();
+  },
+
+  closeLibrary() {
+    set({ view: "boards", libraryItem: null });
   },
 }));

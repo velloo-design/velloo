@@ -1,7 +1,8 @@
 import { renderScreen, UnknownComponentError } from "@velloo/renderer";
-import type { Screen, Viewport } from "@velloo/schema";
+import type { Node, Screen, Viewport } from "@velloo/schema";
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
+import { buildShowcaseTree } from "../library/showcases.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -53,6 +54,75 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
         $snippet: snippet.id,
         ...(Object.keys(args).length > 0 ? { args } : {}),
       },
+    };
+
+    try {
+      const dark = c.req.query("mode") === "dark";
+      const snapshotCss = await jit.build();
+      const { html } = await renderScreen(screen, f.theme, {
+        viewport,
+        snapshotCss,
+        snippets: f.snippets,
+        dark,
+      });
+      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
+    } catch (err) {
+      if (err instanceof UnknownComponentError) {
+        return c.json({ error: err.message, ref: err.ref }, 422);
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * Render a single component in isolation. Used by Library tiles and the
+   * variant matrix on the detail page. The `?props` query carries a JSON
+   * object that overrides the top-level component's props — so the same
+   * endpoint serves the tile (default props) and every cell of the
+   * variants matrix (per-cell overrides).
+   *
+   * Routed before `/:screenId` so `/component/:id` doesn't get swallowed
+   * by the screen catch-all.
+   */
+  r.get("/component/:componentId", async (c) => {
+    const f = folder();
+    const componentId = c.req.param("componentId");
+
+    const w = Number(c.req.query("w")) || 480;
+    const h = Number(c.req.query("h")) || 200;
+    const viewport: Viewport = { w, h };
+
+    const rawProps = c.req.query("props");
+    let propOverrides: Record<string, unknown> | undefined;
+    if (rawProps) {
+      try {
+        const parsed = JSON.parse(rawProps);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          propOverrides = parsed as Record<string, unknown>;
+        }
+      } catch {
+        return c.json({ error: "invalid props JSON" }, 400);
+      }
+    }
+
+    const inner = buildShowcaseTree(componentId, propOverrides);
+    // Center the component inside the iframe — without this wrapper the
+    // Screen body lays out at the top-left and previews look stranded.
+    // `min-h-screen` makes the wrapper fill whatever viewport size the
+    // Library tile / variants matrix asked for via `?w` / `?h`.
+    const tree: Node = {
+      $ref: "Card",
+      props: {
+        className:
+          "min-h-screen w-full flex items-center justify-center p-4 ring-0 shadow-none bg-transparent rounded-none",
+      },
+      children: [inner],
+    };
+
+    const screen: Screen = {
+      id: `${componentId}__preview`,
+      name: `${componentId} preview`,
+      tree,
     };
 
     try {

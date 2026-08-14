@@ -3,6 +3,8 @@ import { annotations as annotationsApi, redo as redoApi, undo as undoApi } from 
 import { useApplyAppTheme } from "./app-theme.ts";
 import { Board } from "./components/Board.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
+import { LibraryDetail } from "./components/LibraryDetail.tsx";
+import { LibraryHome } from "./components/LibraryHome.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
@@ -15,6 +17,8 @@ import { connectWs } from "./ws-client.ts";
 
 export function App() {
   const design = useCanvas((s) => s.design);
+  const view = useCanvas((s) => s.view);
+  const libraryItem = useCanvas((s) => s.libraryItem);
   const currentBoardId = useCanvas((s) => s.currentBoardId);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const currentBoard = useCanvas((s) =>
@@ -48,6 +52,9 @@ export function App() {
         }
       }
       if (seed.selection) setSelection(seed.selection);
+      if (seed.view === "library") {
+        useCanvas.getState().openLibrary(seed.libraryItem);
+      }
     })();
     const stop = connectWs();
     return stop;
@@ -159,7 +166,13 @@ export function App() {
           snapshotVersion={design.snapshotVersion}
         />
         <main className="flex-1 flex flex-col min-w-0">
-          {currentBoard && currentBoard.frames.length > 0 ? (
+          {view === "library" ? (
+            libraryItem ? (
+              <LibraryDetail item={libraryItem} snippets={design.snippets} />
+            ) : (
+              <LibraryHome snippets={design.snippets} />
+            )
+          ) : currentBoard && currentBoard.frames.length > 0 ? (
             <Board board={currentBoard} />
           ) : currentBoard ? (
             <EmptyState
@@ -174,7 +187,7 @@ export function App() {
           )}
           <StatusBar />
         </main>
-        <RightPanel screenId={currentScreenId} />
+        {view === "boards" ? <RightPanel screenId={currentScreenId} /> : null}
       </div>
       <Toaster />
     </div>

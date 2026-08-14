@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
+import type { LibraryItemRef, ViewMode } from "./store.ts";
 import { useCanvas } from "./store.ts";
 
 interface UrlState {
+  view: ViewMode;
+  libraryItem: LibraryItemRef | null;
   boardId: string | null;
   screenId: string | null;
   selection: { screenId: string; path: string } | null;
@@ -9,26 +12,44 @@ interface UrlState {
 
 export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
+  const view = params.get("view") === "library" ? "library" : "boards";
+  const itemRaw = params.get("item");
+  let libraryItem: LibraryItemRef | null = null;
+  if (view === "library" && itemRaw) {
+    const [kind, ...rest] = itemRaw.split(":");
+    if ((kind === "component" || kind === "snippet") && rest.length > 0) {
+      libraryItem = { kind, id: rest.join(":") };
+    }
+  }
   const boardId = params.get("board");
   const screenId = params.get("screen");
   const selPath = params.get("sel");
   const selection = screenId && selPath !== null ? { screenId, path: selPath } : null;
-  return { boardId, screenId, selection };
+  return { view, libraryItem, boardId, screenId, selection };
 }
 
 function writeUrl(
+  view: ViewMode,
+  libraryItem: LibraryItemRef | null,
   boardId: string | null,
   screenId: string | null,
   sel: { screenId: string; path: string } | null,
   pushBoard: boolean,
 ): void {
   const url = new URL(window.location.href);
+  url.searchParams.delete("view");
+  url.searchParams.delete("item");
   url.searchParams.delete("board");
   url.searchParams.delete("screen");
   url.searchParams.delete("sel");
-  if (boardId) url.searchParams.set("board", boardId);
-  if (screenId) url.searchParams.set("screen", screenId);
-  if (sel) url.searchParams.set("sel", sel.path);
+  if (view === "library") {
+    url.searchParams.set("view", "library");
+    if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
+  } else {
+    if (boardId) url.searchParams.set("board", boardId);
+    if (screenId) url.searchParams.set("screen", screenId);
+    if (sel) url.searchParams.set("sel", sel.path);
+  }
   if (pushBoard) {
     window.history.pushState({}, "", url.toString());
   } else {
@@ -36,24 +57,55 @@ function writeUrl(
   }
 }
 
+function itemKey(item: LibraryItemRef | null): string {
+  return item ? `${item.kind}:${item.id}` : "";
+}
+
 export function useUrlState(): void {
+  const view = useCanvas((s) => s.view);
+  const libraryItem = useCanvas((s) => s.libraryItem);
   const currentBoardId = useCanvas((s) => s.currentBoardId);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
+  // Track previous board / view / library item so we know when to push vs
+  // replace. Pushing on every state shuffle would spam history; replacing
+  // on a navigation-shaped change would break the browser back button.
   const lastBoardRef = useRef<string | null | undefined>(undefined);
+  const lastViewRef = useRef<ViewMode | undefined>(undefined);
+  const lastItemKeyRef = useRef<string | undefined>(undefined);
   const restoringRef = useRef(false);
 
   useEffect(() => {
     if (restoringRef.current) {
       restoringRef.current = false;
       lastBoardRef.current = currentBoardId;
+      lastViewRef.current = view;
+      lastItemKeyRef.current = itemKey(libraryItem);
       return;
     }
-    const prev = lastBoardRef.current;
-    const pushBoard = Boolean(prev && currentBoardId && prev !== currentBoardId);
+    const prevBoard = lastBoardRef.current;
+    const prevView = lastViewRef.current;
+    const prevItem = lastItemKeyRef.current;
+    const nextItem = itemKey(libraryItem);
+    const pushBoard =
+      view === "boards" && Boolean(prevBoard && currentBoardId && prevBoard !== currentBoardId);
+    const pushView = prevView !== undefined && prevView !== view;
+    // Pushing on item change is what makes the browser back button return
+    // from a component detail to the library home — without it, every
+    // sidebar click is a replaceState and history collapses to one entry.
+    const pushItem = view === "library" && prevItem !== undefined && prevItem !== nextItem;
     lastBoardRef.current = currentBoardId;
-    writeUrl(currentBoardId, currentScreenId, selection, pushBoard);
-  }, [currentBoardId, currentScreenId, selection]);
+    lastViewRef.current = view;
+    lastItemKeyRef.current = nextItem;
+    writeUrl(
+      view,
+      libraryItem,
+      currentBoardId,
+      currentScreenId,
+      selection,
+      pushBoard || pushView || pushItem,
+    );
+  }, [view, libraryItem, currentBoardId, currentScreenId, selection]);
 
   useEffect(() => {
     const onPop = () => {
@@ -61,14 +113,26 @@ export function useUrlState(): void {
       const store = useCanvas.getState();
       restoringRef.current = true;
       const tasks: Promise<unknown>[] = [];
-      if (state.boardId && state.boardId !== store.currentBoardId) {
-        tasks.push(store.selectBoard(state.boardId));
+      if (state.view !== store.view) {
+        if (state.view === "library") {
+          store.openLibrary(state.libraryItem);
+        } else {
+          store.closeLibrary();
+        }
+      } else if (state.view === "library") {
+        // Same view (library) — sync the item without thrashing board state.
+        store.openLibrary(state.libraryItem);
       }
-      if (state.screenId && state.screenId !== store.currentScreenId) {
-        tasks.push(store.selectScreen(state.screenId));
+      if (state.view === "boards") {
+        if (state.boardId && state.boardId !== store.currentBoardId) {
+          tasks.push(store.selectBoard(state.boardId));
+        }
+        if (state.screenId && state.screenId !== store.currentScreenId) {
+          tasks.push(store.selectScreen(state.screenId));
+        }
       }
       void Promise.all(tasks).then(() => {
-        store.setSelection(state.selection);
+        if (state.view === "boards") store.setSelection(state.selection);
       });
     };
     window.addEventListener("popstate", onPop);
