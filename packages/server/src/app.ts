@@ -6,6 +6,7 @@ import { createBoardRouter } from "./routes/api-board.ts";
 import { createComponentsRouter } from "./routes/api-components.ts";
 import { createDesignRouter } from "./routes/api-design.ts";
 import { createEmitRouter } from "./routes/api-emit.ts";
+import { createGenerateRouter } from "./routes/api-generate.ts";
 import { createInspectRouter } from "./routes/api-inspect.ts";
 import { createMutateRouter } from "./routes/api-mutate.ts";
 import { createNotesRouter } from "./routes/api-notes.ts";
@@ -35,6 +36,7 @@ export function createApp(ctxFor: () => MutationContext, jit: TailwindJit): Hono
   app.route("/api/inspect", createInspectRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
   app.route("/api/emit", createEmitRouter(folder));
+  app.route("/api/generate", createGenerateRouter(folder));
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));
   app.route("/api/notes", createNotesRouter(ctxFor));
   app.route(

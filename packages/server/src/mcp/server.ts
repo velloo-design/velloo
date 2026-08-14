@@ -11,6 +11,7 @@ import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
+import { registerGenerateTools } from "./tools/generate.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
@@ -74,6 +75,7 @@ function buildMcpServer(ctx: MutationContext, jit: TailwindJit): McpServer {
   registerEmitTools(mcp, ctx);
   registerScreenshotTool(mcp, ctx, jit);
   registerValidateTools(mcp);
+  registerGenerateTools(mcp, ctx);
   return mcp;
 }
 

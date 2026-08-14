@@ -100,7 +100,9 @@ export default defineCommand({
 
     console.log(`velloo: scaffolded ${args.folder}`);
     console.log("");
-    console.log(`  📋 ${boardLabels} — ${screenCount} screens across two boards`);
+    console.log(
+      `  📋 ${boardLabels} — ${screenCount} screens across ${boards.length} board${boards.length === 1 ? "" : "s"}`,
+    );
     console.log(`     Pulse — a sample team-analytics product, ready to remix.`);
     console.log("");
     console.log("  .design/config.json     tool + library declaration");

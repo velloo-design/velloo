@@ -1,0 +1,31 @@
+{
+  "id": "playground",
+  "name": "Playground",
+  "frames": [
+    {
+      "id": "showcase-1",
+      "screen": "showcase",
+      "x": 200,
+      "y": 120,
+      "w": 1280,
+      "h": 3600,
+      "label": "Showcase · Desktop"
+    },
+    {
+      "id": "showcase-2",
+      "screen": "showcase",
+      "x": 1620,
+      "y": 120,
+      "w": 480,
+      "h": 4400,
+      "label": "Showcase · Mobile"
+    }
+  ],
+  "groups": [
+    {
+      "id": "showcase",
+      "name": "Showcase",
+      "color": "#7c3aed"
+    }
+  ]
+}

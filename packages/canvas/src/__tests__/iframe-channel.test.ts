@@ -39,7 +39,8 @@ class FakeIframe {
   contentWindow = new FakeWindow();
   contentDocument = { readyState: "loading" as "loading" | "complete" };
   addEventListener(type: string, fn: (ev: Event) => void): void {
-    (this.listeners[type] ??= []).push(fn);
+    if (!this.listeners[type]) this.listeners[type] = [];
+    this.listeners[type].push(fn);
   }
   removeEventListener(type: string, fn: (ev: Event) => void): void {
     this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
@@ -124,10 +125,7 @@ describe("IframeChannel", () => {
     iframe.contentWindow.reply({ type: "ready" });
     await tick();
 
-    expect(seen).toEqual([
-      { type: "applyHighlight", path: "0" },
-      { type: "clearHover" },
-    ]);
+    expect(seen).toEqual([{ type: "applyHighlight", path: "0" }, { type: "clearHover" }]);
     channel.destroy();
   });
 

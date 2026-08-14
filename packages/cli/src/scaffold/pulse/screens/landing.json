@@ -184,12 +184,68 @@
         },
         "children": [
           {
-            "$ref": "Placeholder",
+            "$ref": "Card",
             "props": {
-              "kind": "image",
-              "label": "product screenshot",
-              "aspect": "16/9"
-            }
+              "className": "relative ring-1 ring-border rounded-md overflow-hidden bg-muted p-0"
+            },
+            "children": [
+              {
+                "$ref": "Image",
+                "props": {
+                  "src": "https://picsum.photos/seed/pulse-hero/1280/720",
+                  "alt": "Team-analytics dashboard preview",
+                  "aspect": "16/9",
+                  "treatment": "overlay-dark",
+                  "fill": true
+                }
+              },
+              {
+                "$ref": "Layer",
+                "props": { "bottom": 24, "left": 24, "right": 24 },
+                "children": [
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "className": "flex items-end justify-between gap-4 ring-0 shadow-none bg-transparent p-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Card",
+                        "props": {
+                          "className": "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0 text-white"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Text",
+                            "props": {
+                              "variant": "small",
+                              "className": "uppercase tracking-wider opacity-80",
+                              "children": "Pulse Dashboard"
+                            }
+                          },
+                          {
+                            "$ref": "Heading",
+                            "props": {
+                              "level": 4,
+                              "className": "text-white",
+                              "children": "One view of how the team is doing"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Badge",
+                        "props": {
+                          "variant": "outline",
+                          "className": "bg-background/80 border-transparent text-foreground",
+                          "children": "Live preview"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
           }
         ]
       },

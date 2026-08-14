@@ -263,6 +263,247 @@ describe("renderScreen", () => {
     expect(html).toContain("data-node-path");
   });
 
+  test("renders every batch-1 component without throwing", async () => {
+    const trees: Screen["tree"][] = [
+      {
+        $ref: "RadioGroup",
+        props: { defaultValue: "a" },
+        children: [
+          { $ref: "RadioGroupItem", props: { value: "a", id: "a" } },
+          { $ref: "RadioGroupItem", props: { value: "b", id: "b" } },
+        ],
+      },
+      { $ref: "Slider", props: { defaultValue: [40], max: 100 } },
+      {
+        $ref: "Accordion",
+        props: { type: "single", defaultValue: "one" },
+        children: [
+          {
+            $ref: "AccordionItem",
+            props: { value: "one" },
+            children: [
+              { $ref: "AccordionTrigger", props: { children: "Q?" } },
+              { $ref: "AccordionContent", props: { children: "A." } },
+            ],
+          },
+        ],
+      },
+      {
+        $ref: "Collapsible",
+        children: [
+          { $ref: "CollapsibleTrigger", props: { children: "Show" } },
+          { $ref: "CollapsibleContent", props: { children: "hidden body" } },
+        ],
+      },
+      {
+        $ref: "ScrollArea",
+        props: { className: "h-32 w-48" },
+        children: [{ $ref: "Text", props: { children: "scroll me" } }],
+      },
+      {
+        $ref: "Breadcrumb",
+        children: [
+          {
+            $ref: "BreadcrumbList",
+            children: [
+              {
+                $ref: "BreadcrumbItem",
+                children: [{ $ref: "BreadcrumbPage", props: { children: "Now" } }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        $ref: "Pagination",
+        children: [
+          {
+            $ref: "PaginationContent",
+            children: [
+              {
+                $ref: "PaginationItem",
+                children: [{ $ref: "PaginationLink", props: { children: "1", href: "#" } }],
+              },
+            ],
+          },
+        ],
+      },
+      { $ref: "Toggle", props: { defaultPressed: true, children: "B" } },
+      {
+        $ref: "ToggleGroup",
+        props: { type: "single", defaultValue: "a" },
+        children: [
+          { $ref: "ToggleGroupItem", props: { value: "a", children: "A" } },
+          { $ref: "ToggleGroupItem", props: { value: "b", children: "B" } },
+        ],
+      },
+    ];
+    for (const tree of trees) {
+      const screen = screenWith(tree);
+      const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+      expect(bodyHtml.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("renders batch-2 overlays inline (canvas-safe portal contract)", async () => {
+    const trees: Screen["tree"][] = [
+      {
+        $ref: "Dialog",
+        children: [
+          { $ref: "DialogTrigger", props: { children: "Open" } },
+          {
+            $ref: "DialogContent",
+            children: [
+              {
+                $ref: "DialogHeader",
+                children: [{ $ref: "DialogTitle", props: { children: "Hello" } }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        $ref: "AlertDialog",
+        children: [
+          { $ref: "AlertDialogTrigger", props: { children: "Open" } },
+          {
+            $ref: "AlertDialogContent",
+            children: [{ $ref: "AlertDialogTitle", props: { children: "Sure?" } }],
+          },
+        ],
+      },
+      {
+        $ref: "Sheet",
+        children: [
+          { $ref: "SheetTrigger", props: { children: "Open" } },
+          {
+            $ref: "SheetContent",
+            props: { side: "right" },
+            children: [{ $ref: "SheetTitle", props: { children: "Filters" } }],
+          },
+        ],
+      },
+      {
+        $ref: "Popover",
+        children: [
+          { $ref: "PopoverTrigger", props: { children: "Open" } },
+          { $ref: "PopoverContent", props: { children: "anchor body" } },
+        ],
+      },
+      {
+        $ref: "DropdownMenu",
+        children: [
+          { $ref: "DropdownMenuTrigger", props: { children: "Menu" } },
+          {
+            $ref: "DropdownMenuContent",
+            children: [{ $ref: "DropdownMenuItem", props: { children: "Item 1" } }],
+          },
+        ],
+      },
+      {
+        $ref: "Select",
+        children: [
+          {
+            $ref: "SelectTrigger",
+            children: [{ $ref: "SelectValue", props: { children: "Free" } }],
+          },
+          {
+            $ref: "SelectContent",
+            children: [
+              { $ref: "SelectItem", props: { value: "free", selected: true, children: "Free" } },
+              { $ref: "SelectItem", props: { value: "pro", children: "Pro" } },
+            ],
+          },
+        ],
+      },
+    ];
+    for (const tree of trees) {
+      const screen = screenWith(tree);
+      const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+      // Inline portal: the content must appear in the body, not portaled away.
+      expect(bodyHtml).toContain("data-velloo-inline");
+    }
+  });
+
+  test("renders batch-3 components (Toast, Calendar, Carousel, Chart)", async () => {
+    const trees: Screen["tree"][] = [
+      {
+        $ref: "Toast",
+        children: [
+          { $ref: "ToastTitle", props: { children: "Saved" } },
+          { $ref: "ToastDescription", props: { children: "Your changes are live." } },
+        ],
+      },
+      { $ref: "Calendar", props: { month: "2026-05-01", selected: "2026-05-15" } },
+      {
+        $ref: "Carousel",
+        children: [
+          {
+            $ref: "CarouselContent",
+            children: [{ $ref: "CarouselItem", props: { children: "slide" } }],
+          },
+          { $ref: "CarouselPrevious" },
+          { $ref: "CarouselNext" },
+        ],
+      },
+      {
+        $ref: "Chart",
+        props: {
+          kind: "bar",
+          data: [
+            { x: "Mo", y: 4 },
+            { x: "Tu", y: 6 },
+          ],
+        },
+      },
+      {
+        $ref: "Chart",
+        props: {
+          kind: "line",
+          color: "accent",
+          data: [
+            { x: 1, y: 2 },
+            { x: 2, y: 5 },
+            { x: 3, y: 3 },
+          ],
+        },
+      },
+      {
+        $ref: "Chart",
+        props: {
+          kind: "area",
+          data: [
+            { x: 1, y: 1 },
+            { x: 2, y: 4 },
+          ],
+        },
+      },
+    ];
+    for (const tree of trees) {
+      const screen = screenWith(tree);
+      const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+      expect(bodyHtml.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("Calendar highlights selected and today", async () => {
+    const today = new Date();
+    const iso = today.toISOString().slice(0, 10);
+    const screen = screenWith({
+      $ref: "Calendar",
+      props: { month: iso, selected: iso },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    // Selected day uses bg-primary.
+    expect(bodyHtml).toContain("bg-primary");
+  });
+
+  test("Chart renders zero-data state without throwing", async () => {
+    const screen = screenWith({ $ref: "Chart", props: { kind: "bar", data: [] } });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain('data-slot="chart"');
+  });
+
   test("iframe runtime forwards Cmd/Ctrl+wheel as parentZoom", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html } = await renderScreen(screen, sampleTheme, opts);

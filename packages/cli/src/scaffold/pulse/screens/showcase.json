@@ -1,0 +1,968 @@
+{
+  "id": "showcase",
+  "name": "Components Showcase",
+  "tree": {
+    "$ref": "Card",
+    "props": {
+      "className": "flex flex-col gap-10 p-12 bg-background min-h-screen ring-0 shadow-none rounded-none"
+    },
+    "children": [
+      {
+        "$ref": "Card",
+        "props": {
+          "className": "flex flex-col gap-3 ring-0 shadow-none bg-transparent p-0"
+        },
+        "children": [
+          {
+            "$ref": "Heading",
+            "props": {
+              "level": 1,
+              "children": "Components Showcase"
+            }
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "variant": "lead",
+              "children": "Every new component from sprint J/K/L/M, rendered on one page."
+            }
+          },
+          {
+            "$ref": "Breadcrumb",
+            "children": [
+              {
+                "$ref": "BreadcrumbList",
+                "children": [
+                  {
+                    "$ref": "BreadcrumbItem",
+                    "children": [
+                      { "$ref": "BreadcrumbLink", "props": { "children": "Pulse", "href": "#" } }
+                    ]
+                  },
+                  { "$ref": "BreadcrumbSeparator" },
+                  {
+                    "$ref": "BreadcrumbItem",
+                    "children": [
+                      { "$ref": "BreadcrumbLink", "props": { "children": "Design", "href": "#" } }
+                    ]
+                  },
+                  { "$ref": "BreadcrumbSeparator" },
+                  {
+                    "$ref": "BreadcrumbItem",
+                    "children": [{ "$ref": "BreadcrumbPage", "props": { "children": "Showcase" } }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": {
+          "className": "p-6 flex flex-col gap-6 bg-card"
+        },
+        "children": [
+          { "$ref": "Heading", "props": { "level": 3, "children": "Form inputs" } },
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "grid grid-cols-2 gap-6 ring-0 shadow-none bg-transparent p-0"
+            },
+            "children": [
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0"
+                },
+                "children": [
+                  { "$ref": "Label", "props": { "children": "Email" } },
+                  {
+                    "$ref": "Input",
+                    "props": {
+                      "type": "email",
+                      "value": "rod@acme.dev"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0"
+                },
+                "children": [
+                  { "$ref": "Label", "props": { "children": "Bio" } },
+                  {
+                    "$ref": "Textarea",
+                    "props": {
+                      "value": "Designer turned engineer. Pulse alpha tester.",
+                      "rows": 3
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-row items-center justify-between gap-4 ring-0 shadow-none bg-transparent p-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "className": "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Label",
+                        "props": { "children": "Email digest", "htmlFor": "digest" }
+                      },
+                      {
+                        "$ref": "Text",
+                        "props": {
+                          "variant": "small",
+                          "className": "text-muted-foreground",
+                          "children": "Weekly summary of activity."
+                        }
+                      }
+                    ]
+                  },
+                  { "$ref": "Switch", "props": { "checked": true, "id": "digest" } }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0"
+                },
+                "children": [
+                  { "$ref": "Label", "props": { "children": "Plan" } },
+                  {
+                    "$ref": "RadioGroup",
+                    "props": { "value": "pro" },
+                    "children": [
+                      {
+                        "$ref": "Card",
+                        "props": {
+                          "className": "flex items-center gap-2 ring-0 shadow-none bg-transparent p-0"
+                        },
+                        "children": [
+                          {
+                            "$ref": "RadioGroupItem",
+                            "props": { "value": "free", "id": "p-free" }
+                          },
+                          {
+                            "$ref": "Label",
+                            "props": { "htmlFor": "p-free", "children": "Free — $0" }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Card",
+                        "props": {
+                          "className": "flex items-center gap-2 ring-0 shadow-none bg-transparent p-0"
+                        },
+                        "children": [
+                          { "$ref": "RadioGroupItem", "props": { "value": "pro", "id": "p-pro" } },
+                          {
+                            "$ref": "Label",
+                            "props": { "htmlFor": "p-pro", "children": "Pro — $12/mo" }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Card",
+                        "props": {
+                          "className": "flex items-center gap-2 ring-0 shadow-none bg-transparent p-0"
+                        },
+                        "children": [
+                          {
+                            "$ref": "RadioGroupItem",
+                            "props": { "value": "team", "id": "p-team" }
+                          },
+                          {
+                            "$ref": "Label",
+                            "props": { "htmlFor": "p-team", "children": "Team — $40/mo" }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0 col-span-2"
+                },
+                "children": [
+                  { "$ref": "Label", "props": { "children": "Notification volume" } },
+                  { "$ref": "Slider", "props": { "value": [60], "max": 100 } }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "className": "p-6 flex flex-col gap-4 bg-card" },
+        "children": [
+          {
+            "$ref": "Heading",
+            "props": { "level": 3, "children": "Tabs + Select + Toggle group" }
+          },
+          {
+            "$ref": "Tabs",
+            "props": { "defaultValue": "general" },
+            "children": [
+              {
+                "$ref": "TabsList",
+                "children": [
+                  { "$ref": "TabsTrigger", "props": { "value": "general", "children": "General" } },
+                  { "$ref": "TabsTrigger", "props": { "value": "billing", "children": "Billing" } },
+                  { "$ref": "TabsTrigger", "props": { "value": "team", "children": "Team" } }
+                ]
+              },
+              {
+                "$ref": "TabsContent",
+                "props": { "value": "general" },
+                "children": [
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "className": "flex flex-row items-center justify-between gap-4 mt-4 ring-0 shadow-none bg-transparent p-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Card",
+                        "props": {
+                          "className": "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0"
+                        },
+                        "children": [
+                          { "$ref": "Label", "props": { "children": "Workspace" } },
+                          {
+                            "$ref": "Select",
+                            "children": [
+                              {
+                                "$ref": "SelectTrigger",
+                                "children": [
+                                  { "$ref": "SelectValue", "props": { "children": "Acme Inc." } }
+                                ]
+                              },
+                              {
+                                "$ref": "SelectContent",
+                                "children": [
+                                  {
+                                    "$ref": "SelectItem",
+                                    "props": {
+                                      "value": "acme",
+                                      "selected": true,
+                                      "children": "Acme Inc."
+                                    }
+                                  },
+                                  {
+                                    "$ref": "SelectItem",
+                                    "props": { "value": "globex", "children": "Globex" }
+                                  },
+                                  {
+                                    "$ref": "SelectItem",
+                                    "props": { "value": "initech", "children": "Initech" }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "ToggleGroup",
+                        "props": { "type": "single", "value": "grid" },
+                        "children": [
+                          {
+                            "$ref": "ToggleGroupItem",
+                            "props": { "value": "list", "children": "List" }
+                          },
+                          {
+                            "$ref": "ToggleGroupItem",
+                            "props": { "value": "grid", "children": "Grid" }
+                          },
+                          {
+                            "$ref": "ToggleGroupItem",
+                            "props": { "value": "kanban", "children": "Kanban" }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "className": "p-6 flex flex-col gap-6 bg-card" },
+        "children": [
+          { "$ref": "Heading", "props": { "level": 3, "children": "Data display" } },
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "grid grid-cols-3 gap-6 ring-0 shadow-none bg-transparent p-0"
+            },
+            "children": [
+              {
+                "$ref": "Card",
+                "props": { "className": "flex flex-col gap-3 p-4" },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "variant": "small",
+                      "className": "text-muted-foreground uppercase tracking-wider",
+                      "children": "Active users"
+                    }
+                  },
+                  { "$ref": "Heading", "props": { "level": 2, "children": "1,284" } },
+                  {
+                    "$ref": "Chart",
+                    "props": {
+                      "kind": "area",
+                      "color": "primary",
+                      "data": [
+                        { "x": "Mo", "y": 8 },
+                        { "x": "Tu", "y": 12 },
+                        { "x": "We", "y": 11 },
+                        { "x": "Th", "y": 18 },
+                        { "x": "Fr", "y": 24 },
+                        { "x": "Sa", "y": 19 },
+                        { "x": "Su", "y": 22 }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": { "className": "flex flex-col gap-3 p-4" },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "variant": "small",
+                      "className": "text-muted-foreground uppercase tracking-wider",
+                      "children": "Plan signups"
+                    }
+                  },
+                  { "$ref": "Heading", "props": { "level": 2, "children": "+47" } },
+                  {
+                    "$ref": "Chart",
+                    "props": {
+                      "kind": "bar",
+                      "color": "accent",
+                      "data": [
+                        { "x": "Free", "y": 220 },
+                        { "x": "Pro", "y": 47 },
+                        { "x": "Team", "y": 12 }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "props": { "className": "flex flex-col gap-3 p-4" },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "variant": "small",
+                      "className": "text-muted-foreground uppercase tracking-wider",
+                      "children": "Revenue"
+                    }
+                  },
+                  { "$ref": "Heading", "props": { "level": 2, "children": "$28.4k" } },
+                  {
+                    "$ref": "Chart",
+                    "props": {
+                      "kind": "line",
+                      "color": "primary",
+                      "data": [
+                        { "x": "Q1", "y": 16 },
+                        { "x": "Q2", "y": 19 },
+                        { "x": "Q3", "y": 24 },
+                        { "x": "Q4", "y": 28 }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Table",
+            "children": [
+              {
+                "$ref": "TableHeader",
+                "children": [
+                  {
+                    "$ref": "TableRow",
+                    "children": [
+                      { "$ref": "TableHead", "props": { "children": "User" } },
+                      { "$ref": "TableHead", "props": { "children": "Plan" } },
+                      { "$ref": "TableHead", "props": { "children": "Status" } },
+                      { "$ref": "TableHead", "props": { "children": "Last seen" } }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "TableBody",
+                "children": [
+                  {
+                    "$ref": "TableRow",
+                    "children": [
+                      { "$ref": "TableCell", "props": { "children": "Alice Park" } },
+                      { "$ref": "TableCell", "props": { "children": "Pro" } },
+                      {
+                        "$ref": "TableCell",
+                        "children": [
+                          {
+                            "$ref": "Badge",
+                            "props": { "variant": "default", "children": "Active" }
+                          }
+                        ]
+                      },
+                      { "$ref": "TableCell", "props": { "children": "2 min ago" } }
+                    ]
+                  },
+                  {
+                    "$ref": "TableRow",
+                    "children": [
+                      { "$ref": "TableCell", "props": { "children": "Bob Chen" } },
+                      { "$ref": "TableCell", "props": { "children": "Free" } },
+                      {
+                        "$ref": "TableCell",
+                        "children": [
+                          {
+                            "$ref": "Badge",
+                            "props": { "variant": "secondary", "children": "Trialing" }
+                          }
+                        ]
+                      },
+                      { "$ref": "TableCell", "props": { "children": "1 hr ago" } }
+                    ]
+                  },
+                  {
+                    "$ref": "TableRow",
+                    "children": [
+                      { "$ref": "TableCell", "props": { "children": "Carmen Diaz" } },
+                      { "$ref": "TableCell", "props": { "children": "Team" } },
+                      {
+                        "$ref": "TableCell",
+                        "children": [
+                          {
+                            "$ref": "Badge",
+                            "props": { "variant": "outline", "children": "Invited" }
+                          }
+                        ]
+                      },
+                      { "$ref": "TableCell", "props": { "children": "—" } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Pagination",
+            "children": [
+              {
+                "$ref": "PaginationContent",
+                "children": [
+                  { "$ref": "PaginationPrevious", "props": { "href": "#" } },
+                  {
+                    "$ref": "PaginationItem",
+                    "children": [
+                      {
+                        "$ref": "PaginationLink",
+                        "props": { "href": "#", "children": "1", "isActive": true }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "PaginationItem",
+                    "children": [
+                      { "$ref": "PaginationLink", "props": { "href": "#", "children": "2" } }
+                    ]
+                  },
+                  {
+                    "$ref": "PaginationItem",
+                    "children": [
+                      { "$ref": "PaginationLink", "props": { "href": "#", "children": "3" } }
+                    ]
+                  },
+                  { "$ref": "PaginationEllipsis" },
+                  { "$ref": "PaginationNext", "props": { "href": "#" } }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "className": "p-6 flex flex-col gap-6 bg-card" },
+        "children": [
+          { "$ref": "Heading", "props": { "level": 3, "children": "Overlays in design mode" } },
+          {
+            "$ref": "Text",
+            "props": {
+              "variant": "muted",
+              "children": "Dialog / Sheet / Popover / DropdownMenu render their content inline so designs are always visible."
+            }
+          },
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "grid grid-cols-2 gap-6 ring-0 shadow-none bg-transparent p-0"
+            },
+            "children": [
+              {
+                "$ref": "Dialog",
+                "children": [
+                  {
+                    "$ref": "DialogTrigger",
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "props": { "variant": "outline", "children": "Open dialog" }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "DialogContent",
+                    "children": [
+                      {
+                        "$ref": "DialogHeader",
+                        "children": [
+                          { "$ref": "DialogTitle", "props": { "children": "Invite teammates" } },
+                          {
+                            "$ref": "DialogDescription",
+                            "props": { "children": "Send an invite link to your team." }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Card",
+                        "props": {
+                          "className": "flex flex-col gap-3 ring-0 shadow-none bg-transparent p-0"
+                        },
+                        "children": [
+                          { "$ref": "Label", "props": { "children": "Email addresses" } },
+                          { "$ref": "Input", "props": { "value": "alice@acme.dev, bob@acme.dev" } }
+                        ]
+                      },
+                      {
+                        "$ref": "DialogFooter",
+                        "children": [
+                          {
+                            "$ref": "Button",
+                            "props": { "variant": "outline", "children": "Cancel" }
+                          },
+                          { "$ref": "Button", "props": { "children": "Send invites" } }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Popover",
+                "children": [
+                  {
+                    "$ref": "PopoverTrigger",
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "props": { "variant": "outline", "children": "Open popover" }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "PopoverContent",
+                    "children": [
+                      {
+                        "$ref": "Card",
+                        "props": {
+                          "className": "flex flex-col gap-2 ring-0 shadow-none bg-transparent p-0"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Heading",
+                            "props": { "level": 5, "children": "Quick filter" }
+                          },
+                          {
+                            "$ref": "Text",
+                            "props": {
+                              "variant": "small",
+                              "className": "text-muted-foreground",
+                              "children": "Narrow the results to your active filters."
+                            }
+                          },
+                          {
+                            "$ref": "Card",
+                            "props": {
+                              "className": "flex items-center gap-2 ring-0 shadow-none bg-transparent p-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Checkbox",
+                                "props": { "checked": true, "id": "f-active" }
+                              },
+                              {
+                                "$ref": "Label",
+                                "props": { "htmlFor": "f-active", "children": "Active only" }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "DropdownMenu",
+                "children": [
+                  {
+                    "$ref": "DropdownMenuTrigger",
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "props": { "variant": "outline", "children": "Open menu" }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "DropdownMenuContent",
+                    "children": [
+                      { "$ref": "DropdownMenuLabel", "props": { "children": "Actions" } },
+                      { "$ref": "DropdownMenuItem", "props": { "children": "Open in new tab" } },
+                      { "$ref": "DropdownMenuItem", "props": { "children": "Duplicate" } },
+                      { "$ref": "DropdownMenuSeparator" },
+                      {
+                        "$ref": "DropdownMenuItem",
+                        "props": { "variant": "destructive", "children": "Delete" }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "AlertDialog",
+                "children": [
+                  {
+                    "$ref": "AlertDialogTrigger",
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "props": { "variant": "destructive", "children": "Delete workspace" }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "AlertDialogContent",
+                    "children": [
+                      {
+                        "$ref": "AlertDialogHeader",
+                        "children": [
+                          {
+                            "$ref": "AlertDialogTitle",
+                            "props": { "children": "Delete workspace?" }
+                          },
+                          {
+                            "$ref": "AlertDialogDescription",
+                            "props": {
+                              "children": "This permanently deletes Acme Inc. and all its data. This cannot be undone."
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "AlertDialogFooter",
+                        "children": [
+                          { "$ref": "AlertDialogCancel", "props": { "children": "Cancel" } },
+                          { "$ref": "AlertDialogAction", "props": { "children": "Yes, delete" } }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "className": "p-6 flex flex-col gap-4 bg-card" },
+        "children": [
+          {
+            "$ref": "Heading",
+            "props": { "level": 3, "children": "Disclosure: Accordion + Collapsible" }
+          },
+          {
+            "$ref": "Accordion",
+            "props": { "type": "single", "defaultValue": "item-1" },
+            "children": [
+              {
+                "$ref": "AccordionItem",
+                "props": { "value": "item-1" },
+                "children": [
+                  { "$ref": "AccordionTrigger", "props": { "children": "What is Pulse?" } },
+                  {
+                    "$ref": "AccordionContent",
+                    "props": {
+                      "children": "Pulse is a team analytics product designed in Velloo. Real-time dashboards, weekly digests, and a sane settings page."
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "AccordionItem",
+                "props": { "value": "item-2" },
+                "children": [
+                  {
+                    "$ref": "AccordionTrigger",
+                    "props": { "children": "How is billing handled?" }
+                  },
+                  {
+                    "$ref": "AccordionContent",
+                    "props": {
+                      "children": "Stripe subscriptions. Pro plans renew monthly; annual plans get 20% off."
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "AccordionItem",
+                "props": { "value": "item-3" },
+                "children": [
+                  { "$ref": "AccordionTrigger", "props": { "children": "Can I export my data?" } },
+                  {
+                    "$ref": "AccordionContent",
+                    "props": {
+                      "children": "Yes — CSV, JSON, and webhook export from every dashboard."
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "className": "p-6 flex flex-col gap-4 bg-card" },
+        "children": [
+          { "$ref": "Heading", "props": { "level": 3, "children": "Feedback + status" } },
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "grid grid-cols-2 gap-6 ring-0 shadow-none bg-transparent p-0"
+            },
+            "children": [
+              {
+                "$ref": "Alert",
+                "children": [
+                  { "$ref": "AlertTitle", "props": { "children": "Heads up!" } },
+                  {
+                    "$ref": "AlertDescription",
+                    "props": {
+                      "children": "Your trial ends in 3 days. Pick a plan to keep your data."
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Alert",
+                "props": { "variant": "destructive" },
+                "children": [
+                  { "$ref": "AlertTitle", "props": { "children": "Payment failed" } },
+                  {
+                    "$ref": "AlertDescription",
+                    "props": {
+                      "children": "We couldn't charge your card on file. Update billing to resume."
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Toast",
+            "props": { "className": "w-fit" },
+            "children": [
+              {
+                "$ref": "Card",
+                "props": {
+                  "className": "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0"
+                },
+                "children": [
+                  { "$ref": "ToastTitle", "props": { "children": "Saved" } },
+                  {
+                    "$ref": "ToastDescription",
+                    "props": { "children": "Your changes are now live for the team." }
+                  }
+                ]
+              },
+              { "$ref": "ToastAction", "props": { "children": "Undo" } }
+            ]
+          },
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "flex flex-row items-center gap-6 ring-0 shadow-none bg-transparent p-0"
+            },
+            "children": [
+              { "$ref": "Progress", "props": { "value": 64, "className": "flex-1" } },
+              { "$ref": "Skeleton", "props": { "className": "h-6 w-40" } }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "className": "p-6 flex flex-col gap-4 bg-card" },
+        "children": [
+          { "$ref": "Heading", "props": { "level": 3, "children": "Calendar + Carousel" } },
+          {
+            "$ref": "Card",
+            "props": {
+              "className": "grid grid-cols-2 gap-6 ring-0 shadow-none bg-transparent p-0"
+            },
+            "children": [
+              {
+                "$ref": "Calendar",
+                "props": {
+                  "month": "2026-05-01",
+                  "selected": "2026-05-15"
+                }
+              },
+              {
+                "$ref": "Carousel",
+                "children": [
+                  {
+                    "$ref": "CarouselContent",
+                    "children": [
+                      {
+                        "$ref": "CarouselItem",
+                        "children": [
+                          {
+                            "$ref": "Card",
+                            "props": {
+                              "className": "p-8 flex flex-col gap-2 bg-primary text-primary-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Heading",
+                                "props": {
+                                  "level": 4,
+                                  "children": "\"Pulse cut our weekly status meeting in half.\""
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "props": {
+                                  "variant": "small",
+                                  "className": "opacity-80",
+                                  "children": "— Eng lead at Acme"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "CarouselItem",
+                        "children": [
+                          {
+                            "$ref": "Card",
+                            "props": {
+                              "className": "p-8 flex flex-col gap-2 bg-accent text-accent-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Heading",
+                                "props": {
+                                  "level": 4,
+                                  "children": "\"Finally, dashboards I trust.\""
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "props": {
+                                  "variant": "small",
+                                  "className": "opacity-80",
+                                  "children": "— Founder at Globex"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  { "$ref": "CarouselPrevious" },
+                  { "$ref": "CarouselNext" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "className": "relative h-72 overflow-hidden ring-1 ring-border p-0" },
+        "children": [
+          {
+            "$ref": "Gradient",
+            "props": { "preset": "primary", "direction": "br", "className": "absolute inset-0" }
+          },
+          {
+            "$ref": "Layer",
+            "props": { "top": 32, "left": 32 },
+            "children": [
+              {
+                "$ref": "Heading",
+                "props": { "level": 2, "children": "Marketing hero composition" }
+              },
+              {
+                "$ref": "Text",
+                "props": { "children": "Layer + Gradient + SVG decoration in one tile." }
+              }
+            ]
+          },
+          {
+            "$ref": "Layer",
+            "props": { "bottom": 32, "right": 32 },
+            "children": [
+              {
+                "$ref": "SVG",
+                "props": {
+                  "viewBox": "0 0 64 64",
+                  "color": "primary",
+                  "content": "<circle cx='32' cy='32' r='28' opacity='0.2' /><circle cx='32' cy='32' r='18' opacity='0.4' /><circle cx='32' cy='32' r='8' />",
+                  "className": "h-24 w-24"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
