@@ -6,6 +6,8 @@ import {
   matchImage,
   matchVibe,
   PRESET_NAMES,
+  PRESETS,
+  scoreThemeContrast,
   setToken,
   type ThemeContext,
 } from "../theme/index.ts";
@@ -24,6 +26,29 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
 
   r.get("/", (c) => c.json(ctxFor().folder.theme));
   r.get("/presets", (c) => c.json({ presets: PRESET_NAMES }));
+  /**
+   * Returns each preset's name plus a short list of swatch colors the
+   * canvas previews in the gallery grid. Cheap to compute (the preset
+   * table is in-memory) so we don't bother caching.
+   */
+  r.get("/preset-summaries", (c) => {
+    const summaries = PRESET_NAMES.map((name) => {
+      const t = PRESETS[name];
+      if (!t) return null;
+      return {
+        name,
+        swatches: {
+          background: t.colors.background,
+          primary:
+            (t.colors.primary as { DEFAULT?: string })?.DEFAULT ?? (t.colors.primary as string),
+          accent: (t.colors.accent as { DEFAULT?: string })?.DEFAULT ?? (t.colors.accent as string),
+          foreground: t.colors.foreground,
+        },
+      };
+    }).filter((x): x is NonNullable<typeof x> => x !== null);
+    return c.json({ presets: summaries });
+  });
+  r.get("/contrast", (c) => c.json({ results: scoreThemeContrast(ctxFor().folder.theme) }));
 
   r.post(
     "/set_token",

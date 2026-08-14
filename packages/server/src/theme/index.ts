@@ -94,6 +94,13 @@ export async function matchImage(
   });
 }
 
+export {
+  type ContrastResult,
+  type ContrastTier,
+  contrastRatio,
+  scoreThemeContrast,
+  tierForRatio,
+} from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
 export type { MatchImageResult } from "./match-image.ts";

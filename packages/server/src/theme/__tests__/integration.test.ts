@@ -17,7 +17,12 @@ import {
 const sampleConfig = {
   schemaVersion: 1,
   toolVersion: "0.1.0",
-  componentSource: { framework: "shadcn-react", snapshotVersion: "test" },
+  library: {
+    id: "shadcn-react" as const,
+    version: "test",
+    source: "registry:shadcn",
+    componentsPath: "components/ui",
+  },
   viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
 };
 const sampleTheme: Theme = {
@@ -31,16 +36,10 @@ const sampleTheme: Theme = {
   spacing: {},
   radius: {},
 };
-const samplePage = {
+const sampleScreen = {
+  id: "onboarding",
   name: "Onboarding",
-  variants: [
-    {
-      id: "mobile",
-      name: "Mobile",
-      viewport: { w: 390, h: 844 },
-      tree: { $ref: "Card", children: [{ $ref: "Heading", props: { level: 1 } }] },
-    },
-  ],
+  tree: { $ref: "Card", children: [{ $ref: "Heading", props: { level: 1 } }] },
 };
 
 let tmp: string;
@@ -59,10 +58,10 @@ beforeEach(async () => {
   tmp = join(tmpdir(), `velloo-theme-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(join(tmp, ".design"), { recursive: true });
   await mkdir(join(tmp, "theme"), { recursive: true });
-  await mkdir(join(tmp, "pages"), { recursive: true });
+  await mkdir(join(tmp, "screens"), { recursive: true });
   await writeJson(join(tmp, ".design/config.json"), sampleConfig);
   await writeJson(join(tmp, "theme/default.json"), sampleTheme);
-  await writeJson(join(tmp, "pages/onboarding.json"), samplePage);
+  await writeJson(join(tmp, "screens/onboarding.json"), sampleScreen);
   folder = await loadDesignFolder(tmp);
   events = [];
   ctx = { folder, broadcast: (e) => events.push(e) };

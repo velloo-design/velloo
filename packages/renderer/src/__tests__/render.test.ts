@@ -92,6 +92,127 @@ describe("renderScreen", () => {
     expect(bodyHtml).toContain('data-node-path="2"');
   });
 
+  test("renders every post-Sprint-J shadcn component without throwing", async () => {
+    // Pin the new palette so a regression that breaks one component
+    // gets caught at unit-test speed, not at canvas-load-time.
+    const trees: Screen["tree"][] = [
+      { $ref: "Alert", children: [{ $ref: "AlertTitle", props: { children: "Heads up!" } }] },
+      {
+        $ref: "Avatar",
+        children: [{ $ref: "AvatarFallback", props: { children: "RM" } }],
+      },
+      { $ref: "Skeleton", props: { className: "h-4 w-32" } },
+      { $ref: "Textarea", props: { placeholder: "Tell us…" } },
+      { $ref: "Progress", props: { value: 60 } },
+      { $ref: "Switch" },
+      { $ref: "Checkbox" },
+      {
+        $ref: "Tabs",
+        props: { defaultValue: "a" },
+        children: [
+          {
+            $ref: "TabsList",
+            children: [
+              { $ref: "TabsTrigger", props: { value: "a", children: "First" } },
+              { $ref: "TabsTrigger", props: { value: "b", children: "Second" } },
+            ],
+          },
+          { $ref: "TabsContent", props: { value: "a", children: "A content" } },
+        ],
+      },
+      {
+        $ref: "Table",
+        children: [
+          {
+            $ref: "TableHeader",
+            children: [
+              {
+                $ref: "TableRow",
+                children: [{ $ref: "TableHead", props: { children: "Name" } }],
+              },
+            ],
+          },
+          {
+            $ref: "TableBody",
+            children: [
+              {
+                $ref: "TableRow",
+                children: [{ $ref: "TableCell", props: { children: "Alice" } }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        $ref: "Tooltip",
+        children: [
+          { $ref: "TooltipTrigger", props: { children: "Hover me" } },
+          { $ref: "TooltipContent", props: { children: "Tip text" } },
+        ],
+      },
+    ];
+
+    for (const tree of trees) {
+      const screen = screenWith(tree);
+      const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+      expect(bodyHtml.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("renders every post-Sprint-L marketing helper", async () => {
+    const trees: Screen["tree"][] = [
+      {
+        $ref: "SVG",
+        props: { viewBox: "0 0 16 16", content: '<path d="M0 0h16v16H0z" />' },
+      },
+      {
+        $ref: "Image",
+        props: { src: "/assets/hero.jpg", alt: "hero", aspect: "16/9", treatment: "overlay-dark" },
+      },
+      {
+        $ref: "Layer",
+        props: { top: 24, left: "20%", z: 3 },
+        children: [{ $ref: "Text", props: { children: "absolute" } }],
+      },
+      { $ref: "Divider", props: { variant: "gradient", label: "OR" } },
+      { $ref: "Gradient", props: { preset: "mesh", className: "h-32 w-full" } },
+    ];
+    for (const tree of trees) {
+      const screen = screenWith(tree);
+      const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+      expect(bodyHtml.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("Image with focal carries object-position", async () => {
+    const screen = screenWith({
+      $ref: "Image",
+      props: { src: "/a.jpg", alt: "x", aspect: "1/1", focal: { x: 0.25, y: 0.75 }, fill: true },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("object-position");
+  });
+
+  test("Divider with label renders the label inline", async () => {
+    const screen = screenWith({ $ref: "Divider", props: { variant: "dotted", label: "OR" } });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("OR");
+  });
+
+  test("Layer applies positioning via inline style", async () => {
+    const screen = screenWith({
+      $ref: "Layer",
+      props: { top: 10, right: "1rem", z: 5, pointerEvents: false },
+      children: [{ $ref: "Text", props: { children: "x" } }],
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("absolute");
+    expect(bodyHtml).toContain("10px");
+    expect(bodyHtml).toContain("1rem");
+    expect(bodyHtml).toContain("z-index:5");
+    expect(bodyHtml).toContain("pointer-events:none");
+  });
+
   test("includes the iframe runtime script in the document", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html } = await renderScreen(screen, sampleTheme, opts);

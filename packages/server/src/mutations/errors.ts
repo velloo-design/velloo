@@ -151,11 +151,7 @@ export const idNotFound = (screenId: string, id: string): MutationError => ({
   screenId,
   id,
 });
-export const idConflict = (
-  screenId: string,
-  id: string,
-  paths: number[][],
-): MutationError => ({
+export const idConflict = (screenId: string, id: string, paths: number[][]): MutationError => ({
   kind: "IdConflict",
   screenId,
   id,
@@ -197,11 +193,7 @@ export function levenshtein(a: string, b: string): number {
     for (let j = 1; j <= bl; j++) {
       const tmp = dp[j] ?? 0;
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[j] = Math.min(
-        (dp[j] ?? 0) + 1,
-        (dp[j - 1] ?? 0) + 1,
-        prev + cost,
-      );
+      dp[j] = Math.min((dp[j] ?? 0) + 1, (dp[j - 1] ?? 0) + 1, prev + cost);
       prev = tmp;
     }
   }

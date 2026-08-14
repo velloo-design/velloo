@@ -4,6 +4,7 @@ import { type BoardMeta, mutate, type ScreenMeta, type SnippetMeta } from "../ap
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
+import { SnippetsBrowser } from "./SnippetsBrowser.tsx";
 import { Tree } from "./Tree.tsx";
 
 interface Props {
@@ -25,7 +26,6 @@ export function Sidebar({
 }: Props) {
   const selectBoard = useCanvas((s) => s.selectBoard);
   const selectScreen = useCanvas((s) => s.selectScreen);
-  const selection = useCanvas((s) => s.selection);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const currentScreen = useCanvas((s) =>
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
@@ -52,9 +52,7 @@ export function Sidebar({
     if (!pendingBoardDelete) return;
     const { id } = pendingBoardDelete;
     setPendingBoardDelete(null);
-    void mutate
-      .removeBoard({ boardId: id })
-      .catch((e) => toastError(e, "Could not delete board"));
+    void mutate.removeBoard({ boardId: id }).catch((e) => toastError(e, "Could not delete board"));
   };
 
   return (
@@ -196,54 +194,7 @@ export function Sidebar({
             <Sparkles size={11} strokeWidth={2} />
             <span>Snippets</span>
           </div>
-          <ul className="flex flex-col px-2 gap-0.5">
-            {snippets.map((s) => {
-              const instantiate = async () => {
-                if (!currentScreenId) return;
-                // Required params (no default) need values — fill with
-                // placeholders so the click always works. User edits them
-                // in the snippet inspector after placement.
-                const args: Record<string, unknown> = {};
-                for (const p of s.params) {
-                  if (p.default !== undefined) continue;
-                  if (p.type === "string") args[p.name] = p.name;
-                  else if (p.type === "number") args[p.name] = 0;
-                  else if (p.type === "boolean") args[p.name] = false;
-                  else if (p.type === "node") {
-                    args[p.name] = { $ref: "Text", props: { children: p.name } };
-                  }
-                }
-                try {
-                  await mutate.instantiateSnippet({
-                    screenId: currentScreenId,
-                    parentPath: selection?.path
-                      ? selection.path.split(".").filter(Boolean).map(Number)
-                      : [],
-                    snippetId: s.id,
-                    ...(Object.keys(args).length > 0 ? { args } : {}),
-                  });
-                } catch (err) {
-                  toastError(err, "Could not instantiate snippet");
-                }
-              };
-              return (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={instantiate}
-                    disabled={!currentScreenId}
-                    className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-[var(--color-bg)] text-[var(--color-fg)] disabled:opacity-40 disabled:pointer-events-none"
-                    title={`Click to instantiate. ${s.params.length} param${s.params.length === 1 ? "" : "s"}.`}
-                  >
-                    <div className="font-medium truncate">{s.name}</div>
-                    <div className="text-xs text-[var(--color-fg-muted)]">
-                      {s.params.length === 0 ? "no params" : s.params.map((p) => p.name).join(", ")}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <SnippetsBrowser snippets={snippets} />
         </section>
       ) : null}
 

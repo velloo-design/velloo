@@ -35,30 +35,78 @@ export interface ChannelHandlers {
   onRects?(rects: NodeRect[]): void;
 }
 
+const INIT_RETRY_MS = 150;
+const INIT_MAX_ATTEMPTS = 20;
+
 export class IframeChannel {
   private port: MessagePort | null = null;
   private buffered: ParentMessage[] = [];
   private ready = false;
+  private destroyed = false;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private attempts = 0;
 
   constructor(
     private readonly iframe: HTMLIFrameElement,
     private readonly handlers: ChannelHandlers,
   ) {}
 
-  /** Call once, after the iframe's contentWindow is available (load event). */
+  /**
+   * Begin the handshake. Safe to call multiple times — extra calls
+   * re-arm the retry without leaking ports. Retries every
+   * `INIT_RETRY_MS` until the child posts `ready` or attempts run out.
+   * This defeats the race where `__velloo_init` lands before the
+   * iframe runtime has registered its `message` listener.
+   */
   attach(): void {
+    if (this.destroyed) return;
+    if (this.ready) return;
+    this.cancelRetry();
+    this.attempts = 0;
+    this.sendInit();
+  }
+
+  private sendInit(): void {
+    if (this.destroyed || this.ready) return;
     const w = this.iframe.contentWindow;
-    if (!w) return;
+    if (!w) {
+      this.scheduleRetry();
+      return;
+    }
+    this.attempts += 1;
+    // Each attempt creates fresh ports so the old port (if any) gets
+    // garbage-collected when we re-try. The previous port's onmessage
+    // never fires because the child hasn't kept a reference yet.
+    this.port?.close();
     const channel = new MessageChannel();
     this.port = channel.port1;
     this.port.onmessage = (ev: MessageEvent) => this.handleMessage(ev.data as ChildMessage);
     w.postMessage({ type: "__velloo_init" }, "*", [channel.port2]);
+    this.scheduleRetry();
+  }
+
+  private scheduleRetry(): void {
+    if (this.destroyed || this.ready) return;
+    if (this.attempts >= INIT_MAX_ATTEMPTS) return;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (this.ready || this.destroyed) return;
+      this.sendInit();
+    }, INIT_RETRY_MS);
+  }
+
+  private cancelRetry(): void {
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
   }
 
   private handleMessage(msg: ChildMessage): void {
     if (!msg || typeof msg !== "object") return;
     if (msg.type === "ready") {
       this.ready = true;
+      this.cancelRetry();
       for (const queued of this.buffered) this.port?.postMessage(queued);
       this.buffered = [];
       this.handlers.onReady?.();
@@ -78,6 +126,8 @@ export class IframeChannel {
   }
 
   destroy(): void {
+    this.destroyed = true;
+    this.cancelRetry();
     this.port?.close();
     this.port = null;
     this.buffered = [];

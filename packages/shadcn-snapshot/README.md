@@ -1,0 +1,18 @@
+# @velloo/shadcn-snapshot
+
+The pinned shadcn component snapshot Velloo ships with. **Components are embedded here, not in user design folders** (see `docs/decisions.md` #4 + #17).
+
+Contents:
+
+- `src/components/` — vendored shadcn primitives (button, card, input, …) plus Velloo wrappers (`Placeholder`, `Icon`, `Text`, `Heading`).
+- `src/manifest.json` — built by `build.ts`; the prop descriptor data the inspector + MCP `list_components` consume. Includes categorized props (boolean, number, string, color, enum, icon) and cva variants.
+- `snapshotVersion` — single source of truth for the version string the CLI stamps into `.design/config.json` at `velloo init`.
+
+**Don't add components here casually.** Every new entry must pass the canvas-safe contract:
+
+- No portals that escape the iframe.
+- No router-required behavior.
+- Stub providers for design mode (Dialog renders inline, Popover renders inline, etc.).
+- Manifest entry with explicit prop categorization.
+
+Build the manifest with `bun --cwd packages/shadcn-snapshot run build`.

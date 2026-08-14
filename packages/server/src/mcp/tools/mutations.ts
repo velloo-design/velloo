@@ -328,8 +328,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "remove_frame",
     {
-      description:
-        "Remove a frame placement from a board. The underlying screen is left intact.",
+      description: "Remove a frame placement from a board. The underlying screen is left intact.",
       inputSchema: { boardId: z.string(), frameId: z.string() },
     },
     async (args) => toMcp(await removeFrame(ctx, args)),

@@ -46,9 +46,7 @@ export async function addAnnotation(
     const existing = ctx.folder.annotations.get(args.screenId) ?? [];
     for (const a of existing) {
       if (sameTarget(screen.tree, a.target.locator, args.target.locator)) {
-        return yield* $(
-          err(annotationConflict(args.screenId, args.target.locator, a.id)),
-        );
+        return yield* $(err(annotationConflict(args.screenId, args.target.locator, a.id)));
       }
     }
 

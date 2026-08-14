@@ -46,10 +46,7 @@ export function commitScreen(
   });
 }
 
-export async function deletePersistedScreen(
-  folder: DesignFolder,
-  screenId: string,
-): Promise<void> {
+export async function deletePersistedScreen(folder: DesignFolder, screenId: string): Promise<void> {
   const prev = folder.screens.get(screenId) ?? null;
   pushHistory({ kind: "screen", screenId, screen: prev });
   await rm(join(folder.root, "screens", `${screenId}.json`), { force: true });
@@ -72,10 +69,7 @@ export async function persistBoard(
   return validated;
 }
 
-export async function deletePersistedBoard(
-  folder: DesignFolder,
-  boardId: string,
-): Promise<void> {
+export async function deletePersistedBoard(folder: DesignFolder, boardId: string): Promise<void> {
   const prev = folder.boards.get(boardId) ?? null;
   pushHistory({ kind: "board", boardId, board: prev });
   await rm(join(folder.root, "boards", `${boardId}.json`), { force: true });

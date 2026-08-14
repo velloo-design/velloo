@@ -18,7 +18,9 @@ function playwrightMissingMessage(msg: string): string {
   return `screenshot: Playwright is not installed. Run \`bunx playwright install chromium\`. Underlying error: ${msg}`;
 }
 
-function defaultViewport(folder: { config: { viewportPresets: Array<{ name: string; w: number; h: number }> } }): Viewport {
+function defaultViewport(folder: {
+  config: { viewportPresets: Array<{ name: string; w: number; h: number }> };
+}): Viewport {
   // Prefer Desktop, fall back to first preset.
   const presets = folder.config.viewportPresets;
   const desktop = presets.find((p) => p.name.toLowerCase().includes("desktop"));
@@ -104,7 +106,7 @@ export function registerScreenshotTool(
     "render_snippet",
     {
       description:
-        'Render a snippet in isolation and return a screenshot. Useful for iterating on a snippet\'s styling before stamping it. viewport defaults to 480×640.',
+        "Render a snippet in isolation and return a screenshot. Useful for iterating on a snippet's styling before stamping it. viewport defaults to 480×640.",
       inputSchema: {
         snippetId: z.string(),
         args: z.record(z.string(), z.unknown()).optional(),

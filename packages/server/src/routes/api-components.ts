@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type Manifest, loadManifest as loadBundledManifest } from "@velloo/shadcn-snapshot";
+import { loadManifest as loadBundledManifest, type Manifest } from "@velloo/shadcn-snapshot";
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
 

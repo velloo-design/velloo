@@ -21,18 +21,12 @@ import {
   unknownComponent,
 } from "./errors.ts";
 
-export function getScreen(
-  ctx: MutationContext,
-  screenId: string,
-): Result<Screen, MutationError> {
+export function getScreen(ctx: MutationContext, screenId: string): Result<Screen, MutationError> {
   const s = ctx.folder.screens.get(screenId);
   return s ? ok(s) : err(screenNotFound(screenId));
 }
 
-export function getBoard(
-  ctx: MutationContext,
-  boardId: string,
-): Result<Board, MutationError> {
+export function getBoard(ctx: MutationContext, boardId: string): Result<Board, MutationError> {
   const b = ctx.folder.boards.get(boardId);
   return b ? ok(b) : err(boardNotFound(boardId));
 }

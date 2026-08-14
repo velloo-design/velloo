@@ -1,10 +1,12 @@
 import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
-import { GripVertical, Link2, Monitor, Smartphone, Tablet, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { FrameHeader } from "./Frame/FrameHeader.tsx";
+import { FrameViewportPresets } from "./Frame/FrameViewportPresets.tsx";
+import { useFrameInteractions } from "./Frame/useFrameInteractions.ts";
 
 interface FrameProps {
   boardId: string;
@@ -13,8 +15,6 @@ interface FrameProps {
   presets: ViewportPreset[];
   sharedCount: number;
 }
-
-const FRAME_PADDING = 16;
 
 /**
  * One placement on the Board: an iframe at the frame's chosen size, rendering
@@ -39,8 +39,11 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   const setHover = useCanvas((s) => s.setHover);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
 
-  const [draftSize, setDraftSize] = useState<{ w: number; h: number } | null>(null);
-  const [draftPos, setDraftPos] = useState<{ x: number; y: number } | null>(null);
+  const { draftPos, draftSize, startDrag, startResize } = useFrameInteractions({
+    boardId,
+    frame,
+    otherFrames,
+  });
 
   const w = draftSize?.w ?? frame.w;
   const h = draftSize?.h ?? frame.h;
@@ -95,107 +98,6 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
     }
   }, [hover, frame.screen]);
 
-  /** Clamp a candidate resize against neighboring frames so we don't overlap. */
-  const clampResize = (nextW: number, nextH: number): { w: number; h: number } => {
-    let cw = nextW;
-    let ch = nextH;
-    for (const other of otherFrames) {
-      const ox1 = other.x;
-      const oy1 = other.y;
-      const ox2 = other.x + other.w;
-      const oy2 = other.y + other.h;
-      // Other frame to our right + in our vertical lane.
-      if (oy1 < frame.y + ch && oy2 > frame.y && ox1 >= frame.x + frame.w - 1) {
-        const maxW = ox1 - frame.x - FRAME_PADDING;
-        if (maxW < cw) cw = maxW;
-      }
-      // Other frame below + in our horizontal lane.
-      if (ox1 < frame.x + cw && ox2 > frame.x && oy1 >= frame.y + frame.h - 1) {
-        const maxH = oy1 - frame.y - FRAME_PADDING;
-        if (maxH < ch) ch = maxH;
-      }
-    }
-    return { w: Math.max(120, cw), h: Math.max(120, ch) };
-  };
-
-  const startResize = (direction: "e" | "s" | "se") => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const target = e.currentTarget;
-    target.setPointerCapture(e.pointerId);
-    const startW = frame.w;
-    const startH = frame.h;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const zoom = useCanvas.getState().canvasZoom || 1;
-
-    const compute = (ev: PointerEvent) => {
-      const dx = (ev.clientX - startX) / zoom;
-      const dy = (ev.clientY - startY) / zoom;
-      const rawW = direction === "s" ? startW : Math.round(startW + dx);
-      const rawH = direction === "e" ? startH : Math.round(startH + dy);
-      return clampResize(rawW, rawH);
-    };
-
-    const onMove = (ev: PointerEvent) => {
-      setDraftSize(compute(ev));
-    };
-    const onUp = (ev: PointerEvent) => {
-      target.removeEventListener("pointermove", onMove);
-      target.removeEventListener("pointerup", onUp);
-      target.removeEventListener("pointercancel", onUp);
-      const next = compute(ev);
-      setDraftSize(null);
-      if (next.w !== startW || next.h !== startH) {
-        void mutate
-          .updateFrame({ boardId, frameId: frame.id, patch: { w: next.w, h: next.h } })
-          .catch((err) => toastError(err, "Could not resize frame"));
-      }
-    };
-    target.addEventListener("pointermove", onMove);
-    target.addEventListener("pointerup", onUp);
-    target.addEventListener("pointercancel", onUp);
-  };
-
-  /** Drag the frame around by its header grip handle. */
-  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const target = e.currentTarget;
-    target.setPointerCapture(e.pointerId);
-    const startX = frame.x;
-    const startY = frame.y;
-    const startPx = e.clientX;
-    const startPy = e.clientY;
-    const zoom = useCanvas.getState().canvasZoom || 1;
-
-    const compute = (ev: PointerEvent) => {
-      const dx = (ev.clientX - startPx) / zoom;
-      const dy = (ev.clientY - startPy) / zoom;
-      return { x: Math.round(startX + dx), y: Math.round(startY + dy) };
-    };
-
-    const onMove = (ev: PointerEvent) => {
-      setDraftPos(compute(ev));
-    };
-    const onUp = (ev: PointerEvent) => {
-      target.removeEventListener("pointermove", onMove);
-      target.removeEventListener("pointerup", onUp);
-      target.removeEventListener("pointercancel", onUp);
-      const next = compute(ev);
-      setDraftPos(null);
-      if (next.x !== startX || next.y !== startY) {
-        void mutate
-          .updateFrame({ boardId, frameId: frame.id, patch: { x: next.x, y: next.y } })
-          .catch((err) => toastError(err, "Could not move frame"));
-      }
-    };
-    target.addEventListener("pointermove", onMove);
-    target.addEventListener("pointerup", onUp);
-    target.addEventListener("pointercancel", onUp);
-  };
-
   const onPickPreset = (preset: ViewportPreset) => {
     if (preset.w === frame.w && preset.h === frame.h) return;
     void mutate
@@ -209,12 +111,6 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       .catch((err) => toastError(err, "Could not remove frame"));
   };
 
-  const presetIcon = (preset: ViewportPreset) => {
-    if (preset.name.toLowerCase().includes("mobile")) return <Smartphone size={11} />;
-    if (preset.name.toLowerCase().includes("tablet")) return <Tablet size={11} />;
-    return <Monitor size={11} />;
-  };
-
   const passThrough = cursorMode === "hand" || cursorMode === "note";
 
   return (
@@ -225,41 +121,14 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       data-group-id={frame.group ?? ""}
     >
       <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-2 text-xs text-[var(--color-fg-muted)]">
-          <div className="flex items-center gap-1 min-w-0">
-            <div
-              onPointerDown={startDrag}
-              className="shrink-0 h-4 w-4 grid place-items-center rounded cursor-grab active:cursor-grabbing text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface)]"
-              title="Drag to move"
-              role="presentation"
-            >
-              <GripVertical size={12} strokeWidth={2} />
-            </div>
-            <span className="font-medium truncate">
-              {frame.label ?? screen?.name ?? frame.screen}
-            </span>
-            <span className="opacity-50 tabular-nums">
-              {w}×{h}
-            </span>
-            {sharedCount > 1 ? (
-              <span
-                className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                title={`${sharedCount} frames share this screen — edits sync across all of them.`}
-              >
-                <Link2 size={10} />
-                {sharedCount}
-              </span>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-[var(--color-surface)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-            title="Remove this frame (the underlying screen stays)"
-          >
-            <X size={11} />
-          </button>
-        </div>
+        <FrameHeader
+          label={frame.label ?? screen?.name ?? frame.screen}
+          w={w}
+          h={h}
+          sharedCount={sharedCount}
+          onPointerDownGrip={startDrag}
+          onRemove={onRemove}
+        />
 
         {!screen ? (
           <div
@@ -301,28 +170,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
           </div>
         )}
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {presets.map((preset) => {
-            const active = preset.w === frame.w && preset.h === frame.h;
-            return (
-              <button
-                key={preset.name}
-                type="button"
-                onClick={() => onPickPreset(preset)}
-                title={`${preset.name}: ${preset.w}×${preset.h}`}
-                className={
-                  "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] " +
-                  (active
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                    : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]")
-                }
-              >
-                {presetIcon(preset)}
-                {preset.name}
-              </button>
-            );
-          })}
-        </div>
+        <FrameViewportPresets frame={frame} presets={presets} onPick={onPickPreset} />
       </div>
     </div>
   );

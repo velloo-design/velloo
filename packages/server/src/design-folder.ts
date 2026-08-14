@@ -158,10 +158,7 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
 }
 
 /** Reload one screen from disk and update the cache in place. */
-export async function reloadScreen(
-  folder: DesignFolder,
-  screenId: string,
-): Promise<Screen | null> {
+export async function reloadScreen(folder: DesignFolder, screenId: string): Promise<Screen | null> {
   const path = join(folder.root, "screens", `${screenId}.json`);
   try {
     const raw = await readJson(path);
@@ -179,10 +176,7 @@ export async function reloadScreen(
 }
 
 /** Reload one board from disk and update the cache in place. */
-export async function reloadBoard(
-  folder: DesignFolder,
-  boardId: string,
-): Promise<Board | null> {
+export async function reloadBoard(folder: DesignFolder, boardId: string): Promise<Board | null> {
   const path = join(folder.root, "boards", `${boardId}.json`);
   try {
     const raw = await readJson(path);
@@ -240,13 +234,8 @@ export async function reloadAnnotations(
 }
 
 /** Reload notes for one board. */
-export async function reloadNotes(
-  folder: DesignFolder,
-  boardId: string,
-): Promise<CanvasNote[]> {
-  const raw = await readJsonOrNull<unknown>(
-    join(folder.root, "boards", `${boardId}.notes.json`),
-  );
+export async function reloadNotes(folder: DesignFolder, boardId: string): Promise<CanvasNote[]> {
+  const raw = await readJsonOrNull<unknown>(join(folder.root, "boards", `${boardId}.notes.json`));
   const parsed = raw === null ? [] : (raw as unknown[]).map((r) => CanvasNoteSchema.parse(r));
   folder.notes.set(boardId, parsed);
   return parsed;

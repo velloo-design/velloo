@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
+import { findSnippetInstances } from "../mutations/snippet-instances.ts";
 
 export function createSnippetsRouter(folder: () => DesignFolder): Hono {
   const r = new Hono();
@@ -13,6 +14,13 @@ export function createSnippetsRouter(folder: () => DesignFolder): Hono {
         params: snippet.params,
       })),
     });
+  });
+
+  r.get("/:snippetId/instances", (c) => {
+    const f = folder();
+    const snippetId = c.req.param("snippetId");
+    if (!f.snippets.has(snippetId)) return c.json({ error: "snippet not found" }, 404);
+    return c.json({ instances: findSnippetInstances(f, snippetId) });
   });
 
   r.get("/:snippetId", (c) => {

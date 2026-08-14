@@ -1,12 +1,7 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Board } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
-import {
-  boardIdConflict,
-  boardIdExhausted,
-  lastBoard,
-  type MutationError,
-} from "./errors.ts";
+import { boardIdConflict, boardIdExhausted, lastBoard, type MutationError } from "./errors.ts";
 import { getBoard } from "./lookup.ts";
 import { deletePersistedBoard, persistBoard } from "./persist.ts";
 

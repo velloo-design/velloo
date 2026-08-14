@@ -103,7 +103,9 @@ export default defineCommand({
     console.log("");
     console.log("  .design/config.json     tool + library declaration");
     console.log("  theme/default.json      indigo accent, dark-mode coherent");
-    console.log(`  screens/                ${screenCount} screens (${screens.map((s) => s.id).join(", ")})`);
+    console.log(
+      `  screens/                ${screenCount} screens (${screens.map((s) => s.id).join(", ")})`,
+    );
     console.log(
       `  boards/                 ${boards.length} boards (${boards.map((b) => b.id).join(", ")})`,
     );

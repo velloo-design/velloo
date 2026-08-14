@@ -39,8 +39,11 @@ function categorize(
     ? filePath.slice(componentsDir.length).replace(/^\/+/, "")
     : filePath;
   if (rel.startsWith("velloo/")) {
-    const category = id === "Icon" || id === "Placeholder" ? "ui" : "typography";
-    return { source: "velloo", category };
+    // Typography helpers are `Text` and `Heading`. Everything else
+    // under `velloo/` (Icon, Placeholder, SVG, Image, Layer, Divider,
+    // Gradient, …) is a UI primitive.
+    const isTypography = id === "Text" || id === "Heading";
+    return { source: "velloo", category: isTypography ? "typography" : "ui" };
   }
   return { source: "shadcn", category: "ui" };
 }
@@ -218,10 +221,10 @@ async function buildManifest(): Promise<void> {
   const components: ComponentDescriptor[] = [];
 
   for (const id of Object.keys(registry).sort()) {
-    const srcFile = project.getSourceFiles().find((f) => {
-      const text = f.getFullText();
-      return text.includes(`export const ${id}`) || text.includes(`export function ${id}`);
-    });
+    // Word-bounded match so e.g. "Text" doesn't accidentally hit
+    // "Textarea" in another file. Anchor on the identifier boundary.
+    const identifierRe = new RegExp(`export\\s+(?:const|function)\\s+${id}\\b`);
+    const srcFile = project.getSourceFiles().find((f) => identifierRe.test(f.getFullText()));
     if (!srcFile) {
       console.warn(`! manifest: no source file found for ${id}, skipping`);
       continue;

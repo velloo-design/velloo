@@ -37,4 +37,9 @@ export {
 export { type Screen, ScreenSchema } from "./screen.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";
 export { type ColorPair, type Colors, ColorsSchema, type Theme, ThemeSchema } from "./theme.ts";
+export {
+  collectIds,
+  type DuplicateId,
+  findDuplicateIds,
+} from "./validate-ids.ts";
 export { type Viewport, ViewportSchema } from "./viewport.ts";

@@ -84,8 +84,109 @@ export function SnippetInspector({ selection, node }: Props) {
             ))}
           </section>
         )}
+        <SnippetInstances snippetId={node.$snippet} selection={selection} />
       </div>
     </div>
+  );
+}
+
+interface InstanceLocation {
+  screenId: string;
+  path: string;
+  hasOverride: boolean;
+}
+
+/**
+ * Sibling-instances widget: show every other place this snippet is
+ * used, so the designer knows the blast radius before they edit it.
+ * Click an entry to jump to it.
+ */
+function SnippetInstances({ snippetId, selection }: { snippetId: string; selection: Selection }) {
+  const [locs, setLocs] = useState<InstanceLocation[] | null>(null);
+  const screenVersion = useCanvas((s) => s.screenVersion);
+  const selectScreen = useCanvas((s) => s.selectScreen);
+  const setSelection = useCanvas((s) => s.setSelection);
+
+  useEffect(() => {
+    // screenVersion isn't read here, but bumping it is the cue to
+    // refetch — every screen edit can change instance counts.
+    void screenVersion;
+    let alive = true;
+    void fetch(`/api/snippets/${encodeURIComponent(snippetId)}/instances`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
+      .then((body: { instances: InstanceLocation[] }) => {
+        if (alive) setLocs(body.instances);
+      })
+      .catch(() => {
+        if (alive) setLocs([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [snippetId, screenVersion]);
+
+  if (!locs) return null;
+  const others = locs.filter(
+    (l) => !(l.screenId === selection.screenId && l.path === selection.path),
+  );
+  const overrideCount = locs.filter((l) => l.hasOverride).length;
+
+  return (
+    <section className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-4">
+      <div className="flex items-center justify-between">
+        <div className="text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
+          Instances
+        </div>
+        <div className="text-[10px] text-[var(--color-fg-muted)] tabular-nums">
+          {locs.length} total · {overrideCount} with override
+        </div>
+      </div>
+      {others.length === 0 ? (
+        <div className="text-[10px] text-[var(--color-fg-muted)]">
+          {locs.length === 1
+            ? "Only this one — editing the snippet body affects nothing else."
+            : "No other instances on the current selection's path."}
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-0.5">
+          {others.map((l) => {
+            const isSnippetHost = l.screenId.startsWith("snippet:");
+            const label = isSnippetHost ? l.screenId.slice("snippet:".length) : l.screenId;
+            return (
+              <li key={`${l.screenId}:${l.path}`}>
+                <button
+                  type="button"
+                  disabled={isSnippetHost}
+                  onClick={async () => {
+                    if (isSnippetHost) return;
+                    await selectScreen(l.screenId);
+                    setSelection({ screenId: l.screenId, path: l.path });
+                  }}
+                  title={
+                    isSnippetHost
+                      ? `Used inside snippet "${label}" — open via Snippets list.`
+                      : `Jump to ${l.screenId} · ${l.path === "" ? "(root)" : l.path}`
+                  }
+                  className="flex w-full items-center justify-between gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-1 text-left text-[10px] hover:bg-[var(--color-surface)] disabled:opacity-60"
+                >
+                  <span className="truncate text-[var(--color-fg)]">
+                    {isSnippetHost ? `↳ snippet: ${label}` : label}
+                  </span>
+                  <span className="shrink-0 font-mono text-[var(--color-fg-muted)]">
+                    {l.path === "" ? "(root)" : l.path}
+                  </span>
+                  {l.hasOverride ? (
+                    <span className="shrink-0 rounded bg-[var(--color-accent)]/10 px-1 text-[var(--color-accent)]">
+                      override
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

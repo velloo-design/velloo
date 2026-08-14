@@ -1,7 +1,9 @@
 import type { ColorPair, Theme } from "@velloo/schema";
 import { useState } from "react";
 import { theme as themeApi } from "../api.ts";
+import { useCanvas } from "../store.ts";
 import { ColorSwatch } from "./ColorSwatch.tsx";
+import { ContrastReport } from "./ContrastReport.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
 
 interface Props {
@@ -48,6 +50,8 @@ export function ThemePanel({ theme, presets }: Props) {
   const [vibeUseAi, setVibeUseAi] = useState(false);
   const [busy, setBusy] = useState<null | "vibe" | "derive">(null);
   const [status, setStatus] = useState<string | null>(null);
+  // Re-fetch contrast whenever the theme changes anywhere.
+  const themeVersion = useCanvas((s) => s.themeVersion);
 
   const onDerive = async () => {
     if (!seed.trim()) return;
@@ -144,6 +148,13 @@ export function ThemePanel({ theme, presets }: Props) {
           </label>
         </div>
         {status ? <div className="text-[10px] text-[var(--color-fg-muted)]">{status}</div> : null}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <div className="text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
+          Accessibility
+        </div>
+        <ContrastReport bumpKey={themeVersion} />
       </section>
 
       <section className="flex flex-col gap-2">

@@ -10,7 +10,7 @@ import {
 } from "../index.ts";
 
 describe("registry", () => {
-  test("has the 8 starter components plus Card subcomponents", () => {
+  test("has the starter components", () => {
     const ids = Object.keys(registry).sort();
     for (const id of [
       "Badge",
@@ -22,6 +22,31 @@ describe("registry", () => {
       "Separator",
       "Text",
     ]) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  test("has the post-Sprint-J components (Alert, Tabs, Switch, Tooltip, …)", () => {
+    const ids = Object.keys(registry);
+    for (const id of [
+      "Alert",
+      "Avatar",
+      "Checkbox",
+      "Progress",
+      "Skeleton",
+      "Switch",
+      "Table",
+      "Tabs",
+      "Textarea",
+      "Tooltip",
+    ]) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  test("has the post-Sprint-L marketing helpers (SVG, Image, Layer, Divider, Gradient)", () => {
+    const ids = Object.keys(registry);
+    for (const id of ["SVG", "Image", "Layer", "Divider", "Gradient"]) {
       expect(ids).toContain(id);
     }
   });
@@ -81,7 +106,10 @@ describe("snapshot artifacts", () => {
 
     const variant = manifest.find((c) => c.id === "Text")?.props.find((p) => p.name === "variant");
     expect(variant?.control).toBe("enum");
-    expect(variant?.enumValues).toEqual(["default", "muted", "small", "lead"]);
+    // Order of union members is TypeScript-inferred; test set-equality.
+    expect(new Set(variant?.enumValues ?? [])).toEqual(
+      new Set(["default", "muted", "small", "lead"]),
+    );
   });
 
   test("extracts cva variant/size props from VariantProps<typeof X>", async () => {

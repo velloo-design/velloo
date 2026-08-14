@@ -8,6 +8,7 @@ import {
   matchImage,
   matchVibe,
   PRESET_NAMES,
+  scoreThemeContrast,
   setToken,
   type ThemeContext,
 } from "../../theme/index.ts";
@@ -92,5 +93,20 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       inputSchema: { imagePath: z.string() },
     },
     async (args) => toMcp(await matchImage(ctx, args.imagePath)),
+  );
+
+  mcp.registerTool(
+    "score_theme_contrast",
+    {
+      description:
+        "Score WCAG contrast ratios for the active theme's salient color pairs (foreground/background, primary/primary-foreground, …). Returns ratio + tier (AAA / AA / AAlarge / Fail). Use after a derive/preset/match-vibe to confirm accessibility before shipping.",
+      inputSchema: {},
+    },
+    async () => {
+      const results = scoreThemeContrast(ctx.folder.theme);
+      const fails = results.filter((r) => r.tier === "Fail").length;
+      const passes = results.length - fails;
+      return jsonResult({ summary: { total: results.length, passes, fails }, results });
+    },
   );
 }

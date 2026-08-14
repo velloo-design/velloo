@@ -197,15 +197,15 @@ describe("FrameSchema", () => {
   });
 
   test("rejects a frame with non-positive size", () => {
-    expect(
-      FrameSchema.safeParse({ id: "f", screen: "s", x: 0, y: 0, w: 0, h: 100 }).success,
-    ).toBe(false);
+    expect(FrameSchema.safeParse({ id: "f", screen: "s", x: 0, y: 0, w: 0, h: 100 }).success).toBe(
+      false,
+    );
   });
 });
 
 describe("BoardSchema", () => {
-  test("accepts an empty board", () => {
-    const parsed = BoardSchema.safeParse({});
+  test("accepts a minimal board (id + name; frames and groups default to [])", () => {
+    const parsed = BoardSchema.safeParse({ id: "app", name: "App" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.frames).toEqual([]);
@@ -213,8 +213,16 @@ describe("BoardSchema", () => {
     }
   });
 
+  test("rejects a board missing id + name (post-pivot: every board is identified)", () => {
+    expect(BoardSchema.safeParse({}).success).toBe(false);
+    expect(BoardSchema.safeParse({ id: "app" }).success).toBe(false);
+    expect(BoardSchema.safeParse({ name: "App" }).success).toBe(false);
+  });
+
   test("accepts a board with frames + groups", () => {
     const board = {
+      id: "app",
+      name: "App",
       frames: [{ id: "f1", screen: "landing", x: 0, y: 0, w: 390, h: 844 }],
       groups: [{ id: "marketing", name: "Marketing", color: "#7C3AED" }],
     };

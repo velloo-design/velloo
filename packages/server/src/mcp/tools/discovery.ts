@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   isComponentNode,
@@ -7,8 +9,6 @@ import {
   nodeId,
   type Screen,
 } from "@velloo/schema";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import {
   type ComponentDescriptor,
   loadManifest as loadBundledManifest,

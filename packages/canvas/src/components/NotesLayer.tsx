@@ -151,7 +151,11 @@ function Note({ note }: { note: CanvasNoteEntry }) {
         />
       ) : (
         <div className="text-sm leading-snug">
-          {note.body ? <Markdown body={note.body} /> : <span className="opacity-50">(empty note — double-click to edit)</span>}
+          {note.body ? (
+            <Markdown body={note.body} />
+          ) : (
+            <span className="opacity-50">(empty note — double-click to edit)</span>
+          )}
         </div>
       )}
     </div>

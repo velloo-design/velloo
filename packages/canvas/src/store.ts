@@ -113,10 +113,7 @@ export interface CanvasState {
   ): void;
 }
 
-export function selectedNode(
-  screens: Record<string, Screen>,
-  sel: Selection | null,
-): Node | null {
+export function selectedNode(screens: Record<string, Screen>, sel: Selection | null): Node | null {
   if (!sel) return null;
   const screen = screens[sel.screenId];
   if (!screen) return null;
@@ -131,7 +128,21 @@ export function selectedNode(
   return node ?? null;
 }
 
+/**
+ * Single zustand slice for the canvas. Internally grouped by concern;
+ * convenience hooks for the most common groupings live in
+ * `store-hooks.ts`. Action sections:
+ *
+ *   1. Design / boards / screens — load + refresh from the server
+ *   2. Theme — load + refresh
+ *   3. Selection + hover
+ *   4. Viewport (zoom + pan + cursor mode + node state)
+ *   5. App theme + design mode (light/dark)
+ *   6. Annotations + canvas notes
+ *   7. Connection / right tab / history
+ */
 export const useCanvas = create<CanvasState>((set, get) => ({
+  // ── state: design ────────────────────────────────────────────
   design: null,
   screens: {},
   boards: {},
@@ -139,20 +150,27 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   currentScreenId: null,
   screenVersion: 0,
   components: null,
+  // ── state: theme ─────────────────────────────────────────────
   theme: null,
   themeVersion: 0,
   presets: [],
+  // ── state: selection ─────────────────────────────────────────
   selection: null,
   hover: null,
+  // ── state: connection / chrome ───────────────────────────────
   wsConnected: false,
   rightTab: "node",
+  // ── state: viewport ──────────────────────────────────────────
   canvasZoom: 0.75,
   cursorMode: "select",
   pan: { x: 0, y: 0 },
   nodeState: "default",
+  // ── state: app theme / design mode ───────────────────────────
   appTheme: readAppTheme(),
-  history: { undo: 0, redo: 0 },
   designMode: "light",
+  // ── state: history ───────────────────────────────────────────
+  history: { undo: 0, redo: 0 },
+  // ── state: annotations + notes ───────────────────────────────
   annotations: [],
   notes: [],
   nodeRects: {},
