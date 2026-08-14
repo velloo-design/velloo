@@ -55,7 +55,9 @@ describe("velloo init", () => {
     const configRaw = await readFile(join(tmp, ".design/config.json"), "utf8");
     const config = ConfigSchema.parse(JSON.parse(configRaw));
     expect(config.library.id).toBe("shadcn-react");
-    expect(config.defaultBoard).toBeDefined();
+    // No `defaultBoard` is set so the canvas falls back to the
+    // alphabetically-first board (the order the sidebar shows).
+    expect(config.defaultBoard).toBeUndefined();
     expect(config.defaultScreen).toBeDefined();
 
     // theme/default.json

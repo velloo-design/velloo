@@ -169,9 +169,40 @@ export function Board({ board }: BoardProps) {
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!panRef.current) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // The captured element may already be detached; ignore.
+    }
     panRef.current = null;
   };
+
+  // Safety net: if a pan starts and the pointer is released outside the
+  // wrapper (e.g. browser dispatches the up to a foreign iframe or the
+  // capture is lost on an unrelated re-render), the wrapper never gets
+  // pointerup and `panRef` stays set — every subsequent mousemove drags
+  // the world. A window-level pointerup catches every release and clears
+  // the ref so the pointer tool can never get permanently wedged.
+  useEffect(() => {
+    const onWindowUp = () => {
+      panRef.current = null;
+    };
+    window.addEventListener("pointerup", onWindowUp);
+    window.addEventListener("pointercancel", onWindowUp);
+    window.addEventListener("blur", onWindowUp);
+    return () => {
+      window.removeEventListener("pointerup", onWindowUp);
+      window.removeEventListener("pointercancel", onWindowUp);
+      window.removeEventListener("blur", onWindowUp);
+    };
+  }, []);
+
+  // When cursor mode changes (e.g. user Esc'd out of hand or note),
+  // clear any in-flight pan state defensively. Stops "tool sometimes
+  // doesn't work" wedges where panRef survived a mode flip.
+  useEffect(() => {
+    if (cursorMode !== "hand") panRef.current = null;
+  }, [cursorMode]);
 
   return (
     <div

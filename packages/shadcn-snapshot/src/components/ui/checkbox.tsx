@@ -11,6 +11,13 @@ export function Checkbox({
   className,
   ...props
 }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
+  // Canvas-safe contract: a `checked` prop without `onCheckedChange`
+  // means the design is showing a static "ticked" state — promote it to
+  // `defaultChecked` so React doesn't warn about a missing handler.
+  const isStaticControlled = props.checked !== undefined && props.onCheckedChange === undefined;
+  const finalProps = isStaticControlled
+    ? { ...props, checked: undefined, defaultChecked: props.checked }
+    : props;
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
@@ -18,7 +25,7 @@ export function Checkbox({
         "peer size-4 shrink-0 rounded-[4px] border border-input shadow-xs outline-none transition-shadow focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary aria-invalid:border-destructive aria-invalid:ring-destructive/20",
         className,
       )}
-      {...props}
+      {...finalProps}
     >
       <CheckboxPrimitive.Indicator
         data-slot="checkbox-indicator"

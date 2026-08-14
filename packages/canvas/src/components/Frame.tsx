@@ -1,9 +1,10 @@
 import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { FrameHeader } from "./Frame/FrameHeader.tsx";
 import { FrameViewportPresets } from "./Frame/FrameViewportPresets.tsx";
 import { useFrameInteractions } from "./Frame/useFrameInteractions.ts";
@@ -65,6 +66,14 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       onRects(rects) {
         setNodeRects(frame.screen, rects);
       },
+      // Cmd/Ctrl + wheel inside the iframe → zoom the board. Same
+      // factor as Board.tsx's own onWheel handler so the two routes
+      // feel identical.
+      onParentZoom(deltaY) {
+        const state = useCanvas.getState();
+        const factor = deltaY > 0 ? 0.95 : 1.05;
+        state.setCanvasZoom(state.canvasZoom * factor);
+      },
     });
     channelRef.current = channel;
     const onLoad = () => channel.attach();
@@ -105,10 +114,21 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       .catch((err) => toastError(err, "Could not resize frame"));
   };
 
-  const onRemove = () => {
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const onRemove = () => setConfirmRemove(true);
+
+  const doRemove = () => {
+    setConfirmRemove(false);
     void mutate
       .removeFrame({ boardId, frameId: frame.id })
       .catch((err) => toastError(err, "Could not remove frame"));
+  };
+
+  const onResize = (patch: { w?: number; h?: number }) => {
+    void mutate
+      .updateFrame({ boardId, frameId: frame.id, patch })
+      .catch((err) => toastError(err, "Could not resize frame"));
   };
 
   const passThrough = cursorMode === "hand" || cursorMode === "note";
@@ -128,6 +148,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
           sharedCount={sharedCount}
           onPointerDownGrip={startDrag}
           onRemove={onRemove}
+          onResize={onResize}
         />
 
         {!screen ? (
@@ -152,19 +173,25 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
                 pointerEvents: passThrough ? "none" : "auto",
               }}
             />
+            {/*
+              Resize handles. Default visual is a faint dashed border
+              edge — barely there until hover. On hover the affordance
+              firms up but stays accent/40 rather than full accent, so
+              the frame's content isn't drowned out.
+            */}
             <div
               onPointerDown={startResize("e")}
-              className="absolute top-0 right-0 h-full w-1.5 -mr-0.5 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-[var(--color-accent)] rounded-r-md"
+              className="absolute top-0 right-0 h-full w-0.5 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity border-r border-dashed border-[var(--color-accent)]/40 hover:border-solid hover:border-r-2 hover:border-[var(--color-accent)]/70"
               role="presentation"
             />
             <div
               onPointerDown={startResize("s")}
-              className="absolute bottom-0 left-0 w-full h-1.5 -mb-0.5 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-[var(--color-accent)] rounded-b-md"
+              className="absolute bottom-0 left-0 w-full h-0.5 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity border-b border-dashed border-[var(--color-accent)]/40 hover:border-solid hover:border-b-2 hover:border-[var(--color-accent)]/70"
               role="presentation"
             />
             <div
               onPointerDown={startResize("se")}
-              className="absolute bottom-0 right-0 h-3 w-3 -mb-0.5 -mr-0.5 cursor-nwse-resize opacity-0 group-hover:opacity-100 bg-[var(--color-accent)] rounded-br-md"
+              className="absolute bottom-0 right-0 h-2 w-2 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--color-accent)]/50 hover:bg-[var(--color-accent)] rounded-br"
               role="presentation"
             />
           </div>
@@ -172,6 +199,15 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
 
         <FrameViewportPresets frame={frame} presets={presets} onPick={onPickPreset} />
       </div>
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remove frame"
+        body={`Remove this placement of "${frame.label ?? screen?.name ?? frame.screen}" from the board? The underlying screen stays — only this frame is removed. You can put it back with ⌘Z.`}
+        confirmLabel="Remove"
+        destructive
+        onConfirm={doRemove}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </div>
   );
 }

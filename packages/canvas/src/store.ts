@@ -360,6 +360,13 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setSelection(selection) {
     set({ selection });
+    // If the selected node lives on a screen other than the currently
+    // open one, follow it — otherwise the sidebar Tree shows a tree
+    // unrelated to what's selected in the canvas. Annotations follow
+    // along too so the right panel stays coherent.
+    if (selection && selection.screenId !== get().currentScreenId) {
+      void get().selectScreen(selection.screenId);
+    }
   },
 
   setHover(hover) {

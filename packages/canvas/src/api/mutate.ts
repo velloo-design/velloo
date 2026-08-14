@@ -92,7 +92,7 @@ export const mutate = {
   },
   instantiateSnippet(args: {
     screenId: string;
-    parentPath: number[];
+    parentPath: number[] | string;
     snippetId: string;
     args?: Record<string, unknown>;
     index?: number;

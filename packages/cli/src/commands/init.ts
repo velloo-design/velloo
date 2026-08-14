@@ -63,7 +63,9 @@ export default defineCommand({
         source: "embedded:shadcn",
         componentsPath: "embedded:shadcn",
       },
-      defaultBoard: "marketing",
+      // No defaultBoard: let the canvas pick the alphabetically-first
+      // one ("app" in Pulse). "Marketing" was a personal preference and
+      // confused first-time users who expected the top-of-list to win.
       defaultScreen: "landing",
     });
 

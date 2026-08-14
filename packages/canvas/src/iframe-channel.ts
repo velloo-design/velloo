@@ -14,7 +14,8 @@ export type ChildMessage =
   | { type: "ready" }
   | { type: "select"; path: string | null }
   | { type: "hover"; path: string | null }
-  | { type: "nodeRects"; rects: NodeRect[] };
+  | { type: "nodeRects"; rects: NodeRect[] }
+  | { type: "parentZoom"; deltaY: number };
 
 export type ParentMessage =
   | { type: "applyHighlight"; path: string }
@@ -33,6 +34,8 @@ export interface ChannelHandlers {
   onHover?(path: string | null): void;
   onReady?(): void;
   onRects?(rects: NodeRect[]): void;
+  /** Cmd/Ctrl + wheel forwarded from the iframe (pinch-zoom). */
+  onParentZoom?(deltaY: number): void;
 }
 
 const INIT_RETRY_MS = 150;
@@ -52,16 +55,29 @@ export class IframeChannel {
   ) {}
 
   /**
-   * Begin the handshake. Safe to call multiple times — extra calls
-   * re-arm the retry without leaking ports. Retries every
-   * `INIT_RETRY_MS` until the child posts `ready` or attempts run out.
-   * This defeats the race where `__velloo_init` lands before the
-   * iframe runtime has registered its `message` listener.
+   * Begin (or restart) the handshake. Safe to call multiple times —
+   * extra calls reset `ready` and start a fresh handshake. This is
+   * critical for iframe reloads: when the iframe src changes (e.g. a
+   * prop edit bumps `screenVersion` and we cache-bust), the iframe
+   * loads new HTML with a fresh runtime that doesn't know about the
+   * old port. Without re-handshaking, the new iframe is mute — clicks
+   * and hovers never reach the parent and the canvas pointer-tool
+   * appears stuck.
+   *
+   * Retries every `INIT_RETRY_MS` until the child posts `ready` or
+   * attempts run out. Defeats the race where `__velloo_init` lands
+   * before the iframe runtime has registered its `message` listener.
    */
   attach(): void {
     if (this.destroyed) return;
-    if (this.ready) return;
     this.cancelRetry();
+    // Close the previous port so the old runtime stops receiving on a
+    // dead channel; reset `ready` so handleMessage will re-fire onReady
+    // and we'll re-send any buffered messages once the new child
+    // acknowledges.
+    this.port?.close();
+    this.port = null;
+    this.ready = false;
     this.attempts = 0;
     this.sendInit();
   }
@@ -115,6 +131,7 @@ export class IframeChannel {
     if (msg.type === "select") this.handlers.onSelect?.(msg.path);
     else if (msg.type === "hover") this.handlers.onHover?.(msg.path);
     else if (msg.type === "nodeRects") this.handlers.onRects?.(msg.rects);
+    else if (msg.type === "parentZoom") this.handlers.onParentZoom?.(msg.deltaY);
   }
 
   send(msg: ParentMessage): void {

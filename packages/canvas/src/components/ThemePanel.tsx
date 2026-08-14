@@ -2,6 +2,7 @@ import type { ColorPair, Theme } from "@velloo/schema";
 import { useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
+import { CollapsibleSection } from "./CollapsibleSection.tsx";
 import { ColorSwatch } from "./ColorSwatch.tsx";
 import { ContrastReport } from "./ContrastReport.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
@@ -83,15 +84,11 @@ export function ThemePanel({ theme, presets }: Props) {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
-      <section className="flex flex-col gap-2">
-        <div className="text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">Presets</div>
+      <CollapsibleSection title="Presets" storageKey="theme-presets">
         <PresetPicker presets={presets} activeName={theme.name} />
-      </section>
+      </CollapsibleSection>
 
-      <section className="flex flex-col gap-2">
-        <div className="text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
-          Generate
-        </div>
+      <CollapsibleSection title="Generate" storageKey="theme-generate">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="theme-seed" className="text-xs text-[var(--color-fg-muted)]">
             derive palette from color
@@ -148,17 +145,13 @@ export function ThemePanel({ theme, presets }: Props) {
           </label>
         </div>
         {status ? <div className="text-[10px] text-[var(--color-fg-muted)]">{status}</div> : null}
-      </section>
+      </CollapsibleSection>
 
-      <section className="flex flex-col gap-2">
-        <div className="text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
-          Accessibility
-        </div>
+      <CollapsibleSection title="Accessibility" storageKey="theme-accessibility">
         <ContrastReport bumpKey={themeVersion} />
-      </section>
+      </CollapsibleSection>
 
-      <section className="flex flex-col gap-2">
-        <div className="text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">Colors</div>
+      <CollapsibleSection title="Colors" storageKey="theme-colors" defaultOpen={false}>
         <div className="flex flex-col gap-3">
           {SLOTS.map((slot) => {
             const v = theme.colors[slot.key];
@@ -189,7 +182,7 @@ export function ThemePanel({ theme, presets }: Props) {
             );
           })}
         </div>
-      </section>
+      </CollapsibleSection>
     </div>
   );
 }

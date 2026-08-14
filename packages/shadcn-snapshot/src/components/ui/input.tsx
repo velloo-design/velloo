@@ -7,6 +7,12 @@ import { cn } from "../../lib/utils.ts";
  * The data-*-ignore attributes defeat LastPass / 1Password / Bitwarden so they
  * don't decorate Velloo design inputs with their UI. `autoComplete="off"` is the
  * standard browser hint. All can be overridden by passing the prop explicitly.
+ *
+ * Canvas-safe contract: designs ship JSON like `<Input value="Rod">` to show
+ * a populated state. Without an `onChange` handler React renders a read-only
+ * input and warns at runtime. Auto-injecting `readOnly` when `value` is set
+ * but no handler is bound suppresses the warning and matches the design-mode
+ * static contract. Pass `onChange` to opt into controlled mode.
  */
 export function Input({
   className,
@@ -14,6 +20,8 @@ export function Input({
   autoComplete = "off",
   ...props
 }: React.ComponentProps<"input">) {
+  const isStaticControlled =
+    props.value !== undefined && props.onChange === undefined && props.readOnly === undefined;
   return (
     <input
       type={type}
@@ -28,6 +36,7 @@ export function Input({
         className,
       )}
       {...props}
+      readOnly={isStaticControlled ? true : props.readOnly}
     />
   );
 }

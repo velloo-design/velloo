@@ -213,12 +213,60 @@ describe("renderScreen", () => {
     expect(bodyHtml).toContain("pointer-events:none");
   });
 
+  test("Input with value and no onChange gets readOnly (canvas-safe contract)", async () => {
+    // Pulse designs ship JSON like <Input value="Rod"> — without
+    // readOnly React warns. The component auto-injects readOnly so
+    // the iframe stays warning-free in design mode. Match the
+    // attribute case-insensitively because react-dom-server emits
+    // the JSX casing verbatim for some element/attribute pairs.
+    const screen = screenWith({
+      $ref: "Input",
+      props: { value: "Rod" },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toMatch(/readonly=""/i);
+    expect(bodyHtml).toContain('value="Rod"');
+  });
+
+  test("Input without value never injects readOnly", async () => {
+    const screen = screenWith({
+      $ref: "Input",
+      props: { placeholder: "type here" },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).not.toMatch(/readonly/i);
+  });
+
+  test("Textarea with static value gets readOnly", async () => {
+    const screen = screenWith({
+      $ref: "Textarea",
+      props: { value: "long-form text" },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toMatch(/readonly=""/i);
+  });
+
+  test("Checkbox with static `checked` swaps to defaultChecked", async () => {
+    const screen = screenWith({ $ref: "Checkbox", props: { checked: true } });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    // Radix renders aria-checked, but the underlying input shouldn't be
+    // a controlled-checkbox warning trigger (no `checked` prop on the
+    // hidden input element).
+    expect(bodyHtml).toContain('data-state="checked"');
+  });
+
   test("includes the iframe runtime script in the document", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html } = await renderScreen(screen, sampleTheme, opts);
     expect(html).toContain("__velloo_init");
     expect(html).toContain("__velloo-selected");
     expect(html).toContain("data-node-path");
+  });
+
+  test("iframe runtime forwards Cmd/Ctrl+wheel as parentZoom", async () => {
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, sampleTheme, opts);
+    expect(html).toContain("parentZoom");
   });
 });
 

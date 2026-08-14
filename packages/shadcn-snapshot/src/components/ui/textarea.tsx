@@ -4,6 +4,10 @@ import type * as React from "react";
 import { cn } from "../../lib/utils.ts";
 
 export function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+  // Same canvas-safe contract as Input: `value` + no `onChange` opts into
+  // read-only so designs can show populated state without React warnings.
+  const isStaticControlled =
+    props.value !== undefined && props.onChange === undefined && props.readOnly === undefined;
   return (
     <textarea
       data-slot="textarea"
@@ -12,6 +16,7 @@ export function Textarea({ className, ...props }: React.ComponentProps<"textarea
         className,
       )}
       {...props}
+      readOnly={isStaticControlled ? true : props.readOnly}
     />
   );
 }

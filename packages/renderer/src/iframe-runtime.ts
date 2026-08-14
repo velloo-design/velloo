@@ -99,6 +99,17 @@ export const IFRAME_RUNTIME = String.raw`
     send({ type: 'hover', path: null });
   });
 
+  // Cmd/Ctrl + wheel inside the iframe is a "zoom the canvas" gesture
+  // for the parent — without this handler the browser treats it as
+  // page-zoom (especially on macOS pinch-zoom which dispatches as
+  // ctrlKey+wheel). preventDefault stops the page-zoom, and we forward
+  // the delta to the parent so Board.tsx can react.
+  window.addEventListener('wheel', (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey)) return;
+    ev.preventDefault();
+    send({ type: 'parentZoom', deltaY: ev.deltaY });
+  }, { passive: false });
+
   // Wait for the parent to send a port via window.postMessage.
   window.addEventListener('message', (ev) => {
     if (ev.data && ev.data.type === '__velloo_init' && ev.ports && ev.ports[0]) {

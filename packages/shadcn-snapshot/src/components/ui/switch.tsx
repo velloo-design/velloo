@@ -7,6 +7,12 @@ import type * as React from "react";
 import { cn } from "../../lib/utils.ts";
 
 export function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
+  // Canvas-safe: `checked` without a handler → `defaultChecked` to
+  // suppress React's controlled-component warning in design mode.
+  const isStaticControlled = props.checked !== undefined && props.onCheckedChange === undefined;
+  const finalProps = isStaticControlled
+    ? { ...props, checked: undefined, defaultChecked: props.checked }
+    : props;
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
@@ -14,7 +20,7 @@ export function Switch({ className, ...props }: React.ComponentProps<typeof Swit
         "peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted",
         className,
       )}
-      {...props}
+      {...finalProps}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
