@@ -17,8 +17,9 @@
     },
     {
       "name": "icon",
-      "type": "string",
-      "default": "Activity"
+      "type": "icon",
+      "default": "Activity",
+      "description": "Lucide icon name"
     }
   ],
   "tree": {

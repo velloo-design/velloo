@@ -12,8 +12,9 @@
     },
     {
       "name": "icon",
-      "type": "string",
-      "default": "Sparkles"
+      "type": "icon",
+      "default": "Sparkles",
+      "description": "Lucide icon name"
     }
   ],
   "tree": {

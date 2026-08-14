@@ -15,7 +15,13 @@ export type ChildMessage =
   | { type: "select"; path: string | null }
   | { type: "hover"; path: string | null }
   | { type: "nodeRects"; rects: NodeRect[] }
-  | { type: "parentZoom"; deltaY: number };
+  /**
+   * Cmd/Ctrl+wheel inside the iframe. clientX/Y are in the iframe
+   * document coordinates — the parent translates them into board
+   * coords using the iframe's bounding rect so zoom anchors on
+   * the actual cursor position, not (0,0).
+   */
+  | { type: "parentZoom"; deltaY: number; clientX: number; clientY: number };
 
 export type ParentMessage =
   | { type: "applyHighlight"; path: string }
@@ -34,8 +40,13 @@ export interface ChannelHandlers {
   onHover?(path: string | null): void;
   onReady?(): void;
   onRects?(rects: NodeRect[]): void;
-  /** Cmd/Ctrl + wheel forwarded from the iframe (pinch-zoom). */
-  onParentZoom?(deltaY: number): void;
+  /**
+   * Cmd/Ctrl + wheel forwarded from the iframe (pinch-zoom).
+   * clientX/Y are coordinates inside the iframe document; the
+   * receiver translates them to canvas coords via the iframe's
+   * bounding rect to anchor zoom on the cursor.
+   */
+  onParentZoom?(deltaY: number, clientX: number, clientY: number): void;
 }
 
 const INIT_RETRY_MS = 150;
@@ -131,7 +142,8 @@ export class IframeChannel {
     if (msg.type === "select") this.handlers.onSelect?.(msg.path);
     else if (msg.type === "hover") this.handlers.onHover?.(msg.path);
     else if (msg.type === "nodeRects") this.handlers.onRects?.(msg.rects);
-    else if (msg.type === "parentZoom") this.handlers.onParentZoom?.(msg.deltaY);
+    else if (msg.type === "parentZoom")
+      this.handlers.onParentZoom?.(msg.deltaY, msg.clientX, msg.clientY);
   }
 
   send(msg: ParentMessage): void {

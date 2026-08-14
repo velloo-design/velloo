@@ -41,6 +41,9 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
       else if (p.type === "number") args[p.name] = 0;
       else if (p.type === "boolean") args[p.name] = false;
       else if (p.type === "node") args[p.name] = { $ref: "Text", props: { children: p.name } };
+      else if (p.type === "icon") args[p.name] = "Circle";
+      else if (p.type === "color") args[p.name] = "#7c3aed";
+      else if (p.type === "enum") args[p.name] = p.enum?.[0] ?? "";
     }
 
     const screen: Screen = {

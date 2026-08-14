@@ -1,8 +1,9 @@
 import type { Snippet, SnippetInstance, SnippetParam } from "@velloo/schema";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchSnippet, mutate, type SnippetMeta } from "../api.ts";
 import { pathFromString } from "../path.ts";
 import { type Selection, useCanvas } from "../store.ts";
+import { IconPicker } from "./IconPicker.tsx";
 
 const DEBOUNCE_MS = 200;
 
@@ -19,7 +20,18 @@ interface Props {
  */
 export function SnippetInspector({ selection, node }: Props) {
   const design = useCanvas((s) => s.design);
+  const components = useCanvas((s) => s.components);
   const snippetMeta: SnippetMeta | undefined = design?.snippets.find((s) => s.id === node.$snippet);
+
+  // Lucide icon names come from the Icon component's manifest entry —
+  // the snapshot ships an `enumValues` list of every name the build
+  // saw. Feed that into the icon picker so `type: "icon"` params get
+  // a typeahead grid like the regular node inspector.
+  const lucideIconNames = useMemo<string[]>(() => {
+    const icon = components?.find((c) => c.id === "Icon");
+    const name = icon?.props.find((p) => p.name === "name");
+    return Array.isArray(name?.enumValues) ? (name.enumValues as string[]) : [];
+  }, [components]);
 
   // Load full snippet body lazily if we ever want it; for now we only need params,
   // and design already carries them.
@@ -80,6 +92,7 @@ export function SnippetInspector({ selection, node }: Props) {
                 param={p}
                 initialValue={node.args?.[p.name]}
                 onChange={(v) => commitArg(p.name, v)}
+                lucideIconNames={lucideIconNames}
               />
             ))}
           </section>
@@ -126,10 +139,9 @@ function SnippetInstances({ snippetId, selection }: { snippetId: string; selecti
   }, [snippetId, screenVersion]);
 
   if (!locs) return null;
-  const others = locs.filter(
-    (l) => !(l.screenId === selection.screenId && l.path === selection.path),
-  );
   const overrideCount = locs.filter((l) => l.hasOverride).length;
+  const isCurrent = (l: InstanceLocation) =>
+    l.screenId === selection.screenId && l.path === selection.path;
 
   return (
     <section className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-4">
@@ -141,36 +153,48 @@ function SnippetInstances({ snippetId, selection }: { snippetId: string; selecti
           {locs.length} total · {overrideCount} with override
         </div>
       </div>
-      {others.length === 0 ? (
+      {locs.length === 0 ? (
         <div className="text-[10px] text-[var(--color-fg-muted)]">
-          {locs.length === 1
-            ? "Only this one — editing the snippet body affects nothing else."
-            : "No other instances on the current selection's path."}
+          Not used yet — instantiate from the Snippets panel to see this list populate.
         </div>
       ) : (
         <ul className="flex flex-col gap-0.5">
-          {others.map((l) => {
+          {locs.map((l) => {
             const isSnippetHost = l.screenId.startsWith("snippet:");
             const label = isSnippetHost ? l.screenId.slice("snippet:".length) : l.screenId;
+            const current = isCurrent(l);
             return (
               <li key={`${l.screenId}:${l.path}`}>
                 <button
                   type="button"
-                  disabled={isSnippetHost}
+                  disabled={isSnippetHost || current}
                   onClick={async () => {
-                    if (isSnippetHost) return;
+                    if (isSnippetHost || current) return;
                     await selectScreen(l.screenId);
                     setSelection({ screenId: l.screenId, path: l.path });
                   }}
                   title={
-                    isSnippetHost
-                      ? `Used inside snippet "${label}" — open via Snippets list.`
-                      : `Jump to ${l.screenId} · ${l.path === "" ? "(root)" : l.path}`
+                    current
+                      ? "This is the instance you're currently editing."
+                      : isSnippetHost
+                        ? `Used inside snippet "${label}" — open via Snippets list.`
+                        : `Jump to ${l.screenId} · ${l.path === "" ? "(root)" : l.path}`
                   }
-                  className="flex w-full items-center justify-between gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-1 text-left text-[10px] hover:bg-[var(--color-surface)] disabled:opacity-60"
+                  className={
+                    current
+                      ? "flex w-full items-center justify-between gap-2 rounded border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-1.5 py-1 text-left text-[10px] cursor-default"
+                      : "flex w-full items-center justify-between gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-1 text-left text-[10px] hover:bg-[var(--color-surface)] disabled:opacity-60"
+                  }
                 >
-                  <span className="truncate text-[var(--color-fg)]">
-                    {isSnippetHost ? `↳ snippet: ${label}` : label}
+                  <span
+                    className={
+                      current
+                        ? "truncate text-[var(--color-accent)] font-medium"
+                        : "truncate text-[var(--color-fg)]"
+                    }
+                  >
+                    {current ? "● " : isSnippetHost ? "↳ snippet: " : ""}
+                    {label}
                   </span>
                   <span className="shrink-0 font-mono text-[var(--color-fg-muted)]">
                     {l.path === "" ? "(root)" : l.path}
@@ -194,9 +218,11 @@ interface ArgFieldProps {
   param: SnippetParam;
   initialValue: unknown;
   onChange: (v: unknown) => void;
+  /** Full lucide name list from the manifest; only consumed by `type: "icon"`. */
+  lucideIconNames: string[];
 }
 
-function ArgField({ param, initialValue, onChange }: ArgFieldProps) {
+function ArgField({ param, initialValue, onChange, lucideIconNames }: ArgFieldProps) {
   const [value, setValue] = useState<string>(() => {
     if (initialValue === undefined || initialValue === null) return "";
     if (typeof initialValue === "string") return initialValue;
@@ -206,7 +232,10 @@ function ArgField({ param, initialValue, onChange }: ArgFieldProps) {
   if (param.type === "boolean") {
     const checked = initialValue === true;
     return (
-      <label className="flex items-center justify-between gap-3 text-xs">
+      <label
+        className="flex items-center justify-between gap-3 text-xs"
+        title={param.description ?? undefined}
+      >
         <span className="text-[var(--color-fg)]">{param.name}</span>
         <input
           type="checkbox"
@@ -219,12 +248,15 @@ function ArgField({ param, initialValue, onChange }: ArgFieldProps) {
 
   if (param.type === "number") {
     return (
-      <label className="flex flex-col gap-1 text-xs">
+      <label className="flex flex-col gap-1 text-xs" title={param.description ?? undefined}>
         <span className="text-[var(--color-fg)]">{param.name}</span>
         <input
           type="number"
           className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1"
           value={value}
+          min={param.min}
+          max={param.max}
+          step={param.step ?? 1}
           onChange={(e) => {
             setValue(e.target.value);
             const n = Number(e.target.value);
@@ -235,8 +267,71 @@ function ArgField({ param, initialValue, onChange }: ArgFieldProps) {
     );
   }
 
+  if (param.type === "icon") {
+    return (
+      <div className="flex flex-col gap-1 text-xs" title={param.description ?? undefined}>
+        <span className="text-[var(--color-fg)]">{param.name}</span>
+        <IconPicker
+          value={typeof initialValue === "string" ? initialValue : ""}
+          options={lucideIconNames}
+          onChange={(name) => onChange(name)}
+        />
+      </div>
+    );
+  }
+
+  if (param.type === "enum" && Array.isArray(param.enum) && param.enum.length > 0) {
+    return (
+      <label className="flex flex-col gap-1 text-xs" title={param.description ?? undefined}>
+        <span className="text-[var(--color-fg)]">{param.name}</span>
+        <select
+          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            onChange(e.target.value);
+          }}
+        >
+          {param.enum.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  if (param.type === "color") {
+    return (
+      <label className="flex flex-col gap-1 text-xs" title={param.description ?? undefined}>
+        <span className="text-[var(--color-fg)]">{param.name}</span>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            className="h-7 w-9 cursor-pointer rounded border border-[var(--color-border)]"
+            value={value.startsWith("#") ? value : "#000000"}
+            onChange={(e) => {
+              setValue(e.target.value);
+              onChange(e.target.value);
+            }}
+          />
+          <input
+            type="text"
+            className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              onChange(e.target.value);
+            }}
+          />
+        </div>
+      </label>
+    );
+  }
+
   return (
-    <label className="flex flex-col gap-1 text-xs">
+    <label className="flex flex-col gap-1 text-xs" title={param.description ?? undefined}>
       <span className="text-[var(--color-fg)]">{param.name}</span>
       <input
         type="text"

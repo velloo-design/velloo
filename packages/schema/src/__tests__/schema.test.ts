@@ -152,6 +152,39 @@ describe("SnippetSchema", () => {
     };
     expect(SnippetSchema.safeParse(bad).success).toBe(false);
   });
+
+  test("accepts icon, color, enum param types with their constraints", () => {
+    const snippet = {
+      id: "nav-row",
+      name: "Nav row",
+      params: [
+        {
+          name: "icon",
+          type: "icon" as const,
+          default: "Activity",
+          description: "Lucide icon name",
+        },
+        { name: "tint", type: "color" as const, default: "#7c3aed" },
+        {
+          name: "size",
+          type: "enum" as const,
+          enum: ["sm", "md", "lg"],
+          default: "md",
+        },
+        {
+          name: "count",
+          type: "number" as const,
+          min: 0,
+          max: 99,
+          step: 1,
+          default: 0,
+        },
+      ],
+      tree: { $ref: "Card" },
+    };
+    const r = SnippetSchema.safeParse(snippet);
+    expect(r.success).toBe(true);
+  });
 });
 
 describe("ScreenSchema", () => {

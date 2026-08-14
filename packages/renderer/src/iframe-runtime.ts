@@ -114,7 +114,7 @@ export const IFRAME_RUNTIME = String.raw`
   window.addEventListener('wheel', (ev) => {
     if (!(ev.ctrlKey || ev.metaKey)) return;
     ev.preventDefault();
-    send({ type: 'parentZoom', deltaY: ev.deltaY });
+    send({ type: 'parentZoom', deltaY: ev.deltaY, clientX: ev.clientX, clientY: ev.clientY });
   }, { passive: false });
 
   // Wait for the parent to send a port via window.postMessage.

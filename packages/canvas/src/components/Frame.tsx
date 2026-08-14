@@ -68,11 +68,33 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       },
       // Cmd/Ctrl + wheel inside the iframe → zoom the board. Same
       // factor as Board.tsx's own onWheel handler so the two routes
-      // feel identical.
-      onParentZoom(deltaY) {
+      // feel identical. clientX/Y are inside the iframe document; we
+      // translate them to board-wrapper coords using the iframe's
+      // bounding rect so zoom anchors on the cursor instead of (0,0).
+      onParentZoom(deltaY, clientX, clientY) {
         const state = useCanvas.getState();
         const factor = deltaY > 0 ? 0.95 : 1.05;
-        state.setCanvasZoom(state.canvasZoom * factor);
+        const iframeEl = iframeRef.current;
+        const wrapper = iframeEl?.closest<HTMLDivElement>('[data-velloo-board="true"]');
+        if (!iframeEl || !wrapper) {
+          state.setCanvasZoom(state.canvasZoom * factor);
+          return;
+        }
+        const iframeRect = iframeEl.getBoundingClientRect();
+        const wrapperRect = wrapper.getBoundingClientRect();
+        // No scrollLeft/scrollTop — the board wrapper is
+        // `overflow-hidden`; pan is the only movement axis.
+        const anchorX = iframeRect.left - wrapperRect.left + clientX * state.canvasZoom;
+        const anchorY = iframeRect.top - wrapperRect.top + clientY * state.canvasZoom;
+        const nextZoom = Math.max(0.1, Math.min(4, state.canvasZoom * factor));
+        if (nextZoom === state.canvasZoom) return;
+        const worldX = (anchorX - state.pan.x) / state.canvasZoom;
+        const worldY = (anchorY - state.pan.y) / state.canvasZoom;
+        state.setCanvasZoom(nextZoom);
+        state.setPan({
+          x: Math.round(anchorX - worldX * nextZoom),
+          y: Math.round(anchorY - worldY * nextZoom),
+        });
       },
     });
     channelRef.current = channel;

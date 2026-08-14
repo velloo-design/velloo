@@ -67,8 +67,6 @@ export function Board({ board }: BoardProps) {
 
     const saved = readBoardView(board.id);
     if (saved) {
-      el.scrollLeft = 0;
-      el.scrollTop = 0;
       setZoom(saved.zoom);
       setPan(saved.pan);
       restoredRef.current = board.id;
@@ -106,8 +104,6 @@ export function Board({ board }: BoardProps) {
       // Cap at 1.0 — never up-scale; 0.75 is the lower bound for legibility.
       const fitZoom = Math.max(0.1, Math.min(1.0, Math.min(zoomX, zoomY)));
       // Reset native scroll so the transform alone positions content.
-      el.scrollLeft = 0;
-      el.scrollTop = 0;
       setZoom(fitZoom);
       setPan({
         x: Math.round(vw / 2 - boxCx * fitZoom),
@@ -117,10 +113,24 @@ export function Board({ board }: BoardProps) {
       return true;
     };
 
-    if (!apply()) {
-      // Wrapper not sized yet (first paint) — try again next frame.
-      requestAnimationFrame(apply);
-    }
+    // Try right now; retry on the next frame for the common "wrapper
+    // not laid out yet" case. If neither attempt works (slow first
+    // paint, fonts loading, sidebar still expanding), watch the
+    // wrapper with ResizeObserver and re-apply as soon as it gets
+    // real dimensions — then disconnect.
+    if (apply()) return;
+    let ro: ResizeObserver | null = null;
+    const rafId = requestAnimationFrame(() => {
+      if (apply()) return;
+      ro = new ResizeObserver(() => {
+        if (apply()) ro?.disconnect();
+      });
+      ro.observe(el);
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro?.disconnect();
+    };
   }, [board.id, board.frames, setZoom, setPan]);
 
   // Persist pan + zoom whenever they change, scoped per board. A
@@ -136,14 +146,29 @@ export function Board({ board }: BoardProps) {
     const el = wrapperRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl + wheel → zoom anchored on the cursor. Keeps
+        // the world coordinate under the cursor pinned across the
+        // zoom step so the user doesn't have to re-pan after each
+        // zoom in/out.
+        e.preventDefault();
+        const factor = e.deltaY > 0 ? 0.95 : 1.05;
+        const rect = el.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        zoomAtPoint(cx, cy, factor, zoom, pan, setZoom, setPan);
+        return;
+      }
+      // Plain wheel → pan via transform. We don't use native overflow
+      // scrolling because transform changes don't affect scroll size,
+      // which made the canvas feel like it had a "wrong-sized" world
+      // depending on zoom. Now pan is the only movement axis.
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 0.95 : 1.05;
-      setZoom(zoom * factor);
+      setPan({ x: pan.x - e.deltaX, y: pan.y - e.deltaY });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [zoom, setZoom]);
+  }, [zoom, pan, setZoom, setPan]);
 
   /** Translate a client-space pointer event to world (board) coords. */
   const clientToBoard = (clientX: number, clientY: number): { x: number; y: number } => {
@@ -151,11 +176,12 @@ export function Board({ board }: BoardProps) {
     if (!el) return { x: 0, y: 0 };
     const rect = el.getBoundingClientRect();
     // The world is `translate(pan) scale(zoom)` of the wrapper's content.
-    // Reverse it: subtract the wrapper's top-left, scroll offsets, and pan;
-    // divide by zoom.
+    // Reverse it: subtract the wrapper's top-left and pan, divide by
+    // zoom. (No scroll offsets — the wrapper is `overflow-hidden` and
+    // pan is the only movement mechanism.)
     return {
-      x: (clientX - rect.left + el.scrollLeft - pan.x) / zoom,
-      y: (clientY - rect.top + el.scrollTop - pan.y) / zoom,
+      x: (clientX - rect.left - pan.x) / zoom,
+      y: (clientY - rect.top - pan.y) / zoom,
     };
   };
 
@@ -234,7 +260,8 @@ export function Board({ board }: BoardProps) {
   return (
     <div
       ref={wrapperRef}
-      className="flex-1 overflow-auto bg-[var(--color-bg-soft)] relative"
+      data-velloo-board="true"
+      className="flex-1 overflow-hidden bg-[var(--color-bg-soft)] relative"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -280,6 +307,35 @@ const DEFAULT_PRESETS: ViewportPreset[] = [
   { name: "Tablet", w: 768, h: 1024 },
   { name: "Desktop", w: 1440, h: 900 },
 ];
+
+/**
+ * Apply a zoom step centered on a point in wrapper-local coords.
+ * Keeps the world coordinate under (anchorX, anchorY) fixed across
+ * the zoom transition: `cursor = pan + world * zoom` solved for the
+ * new pan after zoom changes. Clamps the result to the same bounds
+ * setCanvasZoom uses so we never overshoot.
+ */
+function zoomAtPoint(
+  anchorX: number,
+  anchorY: number,
+  factor: number,
+  zoom: number,
+  pan: { x: number; y: number },
+  setZoom: (z: number) => void,
+  setPan: (p: { x: number; y: number }) => void,
+): void {
+  const nextZoom = Math.max(0.1, Math.min(4, zoom * factor));
+  if (nextZoom === zoom) return;
+  // world coord under the cursor before the zoom change
+  const worldX = (anchorX - pan.x) / zoom;
+  const worldY = (anchorY - pan.y) / zoom;
+  // after the zoom change, pin the same world coord under the cursor
+  setZoom(nextZoom);
+  setPan({
+    x: Math.round(anchorX - worldX * nextZoom),
+    y: Math.round(anchorY - worldY * nextZoom),
+  });
+}
 
 const VIEW_STORAGE_PREFIX = "velloo:boardView:";
 

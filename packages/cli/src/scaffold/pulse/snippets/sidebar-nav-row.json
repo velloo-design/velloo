@@ -8,7 +8,9 @@
     },
     {
       "name": "icon",
-      "type": "string"
+      "type": "icon",
+      "description": "Lucide icon name",
+      "default": "Circle"
     },
     {
       "name": "badge",
