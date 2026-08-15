@@ -116,6 +116,13 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       broadcast(event);
     } catch (err) {
       console.error("velloo: failed to reload after change:", err);
+      // The file on disk changed but the in-memory state didn't — tell
+      // clients instead of letting them keep rendering stale state.
+      broadcast({
+        type: "reload-error",
+        source: event.type,
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   });
 

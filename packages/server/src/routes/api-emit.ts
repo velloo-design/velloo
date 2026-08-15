@@ -1,10 +1,10 @@
 import { resolve } from "node:path";
-import { type CodegenError, emitCode, emitTheme } from "@velloo/codegen";
-import { type Context, Hono } from "hono";
+import { emitCode, emitTheme } from "@velloo/codegen";
+import { Hono } from "hono";
 import { z } from "zod";
 import type { DesignFolder } from "../design-folder.ts";
 import { screenNotFound } from "../mutations/errors.ts";
-import { mutationToHttp } from "./mutation-http.ts";
+import { codegenToHttp, mutationToHttp } from "./error-http.ts";
 
 const EmitCodeBody = z.object({
   screenId: z.string().min(1),
@@ -16,21 +16,6 @@ const EmitThemeBody = z.object({
   apply: z.boolean().optional(),
   cssOnly: z.boolean().optional(),
 });
-
-function codegenToHttp(c: Context, error: CodegenError): Response {
-  switch (error.kind) {
-    case "ScreenNotFound":
-    case "SnippetNotFound":
-      return c.json({ error }, 404);
-    case "UnknownComponent":
-      return c.json({ error }, 422);
-    default: {
-      const _exhaustive: never = error;
-      void _exhaustive;
-      return c.json({ error: { kind: "Unknown" } }, 500);
-    }
-  }
-}
 
 export function createEmitRouter(folderFor: () => DesignFolder): Hono {
   const r = new Hono();

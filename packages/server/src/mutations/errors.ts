@@ -190,6 +190,25 @@ export const canvasNoteNotFound = (noteId: string): MutationError => ({
   kind: "CanvasNoteNotFound",
   noteId,
 });
+export const extensionIdConflict = (extensionId: string): MutationError => ({
+  kind: "ExtensionIdConflict",
+  message: `Extension "${extensionId}" already exists. Use update_extension to patch it.`,
+  extensionId,
+});
+export const extensionNotFound = (extensionId: string): MutationError => ({
+  kind: "ExtensionNotFound",
+  message: `Extension "${extensionId}" doesn't exist.`,
+  extensionId,
+});
+export const extensionInUse = (
+  extensionId: string,
+  references: { screenId: string; path: string }[],
+): MutationError => ({
+  kind: "ExtensionInUse",
+  message: `Extension "${extensionId}" is referenced by ${references.length} node${references.length === 1 ? "" : "s"} — remove the usages first.`,
+  extensionId,
+  references,
+});
 
 /**
  * Levenshtein distance for ranking nearest component names.

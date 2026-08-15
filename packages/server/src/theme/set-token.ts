@@ -1,5 +1,5 @@
 import { err, ok, type Result, tryCatchAsync } from "@velloo/result";
-import type { Theme } from "@velloo/schema";
+import { type Theme, ThemeSchema } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { persistTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError } from "./errors.ts";
@@ -33,8 +33,21 @@ export async function setToken(
   }
   cursor[segments[segments.length - 1] as string] = value;
 
+  // Validate here rather than relying on persistTheme to throw — the
+  // error then names the offending path before any write is attempted.
+  const parsed = ThemeSchema.safeParse(next);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const where = issue?.path.join(".") || path;
+    return err(
+      invalidThemePath(
+        `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme at "${where}": ${issue?.message ?? "schema mismatch"}`,
+      ),
+    );
+  }
+
   const persisted = await tryCatchAsync(
-    () => persistTheme(folder, next as unknown as Theme),
+    () => persistTheme(folder, parsed.data),
     (e) =>
       invalidThemePath(
         `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme: ${

@@ -17,16 +17,28 @@ import { z } from "zod";
  */
 export const PropControlSchema = z.enum(["boolean", "number", "string", "color", "enum", "icon"]);
 
-export const ExtensionPropDescriptorSchema = z.object({
-  name: z.string().min(1),
-  /** Raw TS type string (e.g. "boolean | undefined"). Free-form; just used for display. */
-  type: z.string().min(1),
-  optional: z.boolean(),
-  defaultValue: z.string().optional(),
-  control: PropControlSchema,
-  /** Allowed values when `control === "enum"`. */
-  enumValues: z.array(z.union([z.string(), z.number()])).optional(),
-});
+export const ExtensionPropDescriptorSchema = z
+  .object({
+    name: z.string().min(1),
+    /** Raw TS type string (e.g. "boolean | undefined"). Free-form; just used for display. */
+    type: z.string().min(1),
+    optional: z.boolean(),
+    defaultValue: z.string().optional(),
+    control: PropControlSchema,
+    /** Allowed values when `control === "enum"`. */
+    enumValues: z.array(z.union([z.string(), z.number()])).optional(),
+  })
+  .superRefine((prop, ctx) => {
+    // An enum control with no values would render an empty select in the
+    // inspector — reject it at parse time instead.
+    if (prop.control === "enum" && (!prop.enumValues || prop.enumValues.length === 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["enumValues"],
+        message: `prop "${prop.name}": control "enum" requires a non-empty \`enumValues\` array`,
+      });
+    }
+  });
 
 export type ExtensionPropDescriptor = z.infer<typeof ExtensionPropDescriptorSchema>;
 

@@ -1,4 +1,5 @@
 import { useCanvas } from "./store.ts";
+import { pushToast } from "./toast.ts";
 
 type ServerEvent =
   | { type: "screen-changed"; screenId: string }
@@ -6,7 +7,9 @@ type ServerEvent =
   | { type: "theme-changed" }
   | { type: "snippet-changed"; snippetId: string }
   | { type: "annotations-changed"; screenId: string }
-  | { type: "notes-changed"; boardId: string };
+  | { type: "notes-changed"; boardId: string }
+  | { type: "config-changed" }
+  | { type: "reload-error"; source: string; message: string };
 
 export function connectWs(): () => void {
   let socket: WebSocket | null = null;
@@ -78,6 +81,17 @@ export function connectWs(): () => void {
         if (payload.screenId === currentScreenId) void refreshAnnotations();
       } else if (payload.type === "notes-changed") {
         if (payload.boardId === currentBoardId) void refreshNotes();
+      } else if (payload.type === "config-changed") {
+        // Extensions / library config changed — the Library tab reads
+        // from the design summary.
+        void refreshDesignSummary();
+      } else if (payload.type === "reload-error") {
+        pushToast({
+          kind: "error",
+          title: "File change not applied",
+          message: `${payload.source}: ${payload.message}`,
+          ttl: 8000,
+        });
       }
     };
 

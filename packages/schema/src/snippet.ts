@@ -17,19 +17,52 @@ import { NodeSchema } from "./node.ts";
  * For `enum`, declare the allowed strings in `enum`; for `number`,
  * `min`/`max`/`step` shape the input.
  */
-export const SnippetParamSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(["string", "number", "boolean", "node", "icon", "color", "enum"]),
-  default: z.unknown().optional(),
-  /** Allowed values for `type: "enum"`. */
-  enum: z.array(z.string()).optional(),
-  /** Numeric constraints for `type: "number"`. */
-  min: z.number().optional(),
-  max: z.number().optional(),
-  step: z.number().optional(),
-  /** Free-form description for the inspector tooltip. */
-  description: z.string().optional(),
-});
+export const SnippetParamSchema = z
+  .object({
+    name: z.string().min(1),
+    type: z.enum(["string", "number", "boolean", "node", "icon", "color", "enum"]),
+    default: z.unknown().optional(),
+    /** Allowed values for `type: "enum"`. */
+    enum: z.array(z.string()).optional(),
+    /** Numeric constraints for `type: "number"`. */
+    min: z.number().optional(),
+    max: z.number().optional(),
+    step: z.number().optional(),
+    /** Free-form description for the inspector tooltip. */
+    description: z.string().optional(),
+  })
+  .superRefine((param, ctx) => {
+    // Catch type/default mismatches at parse time — otherwise the canvas
+    // inspector and render-time substitution each have to coerce bad data.
+    if (param.type === "enum") {
+      if (!param.enum || param.enum.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["enum"],
+          message: `param "${param.name}": type "enum" requires a non-empty \`enum\` array`,
+        });
+        return;
+      }
+      if (param.default !== undefined && !param.enum.includes(param.default as string)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["default"],
+          message: `param "${param.name}": default ${JSON.stringify(param.default)} is not one of the declared enum values`,
+        });
+      }
+      return;
+    }
+    if (param.default === undefined || param.type === "node") return;
+    const expected =
+      param.type === "number" ? "number" : param.type === "boolean" ? "boolean" : "string";
+    if (typeof param.default !== expected) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["default"],
+        message: `param "${param.name}": default ${JSON.stringify(param.default)} does not match declared type "${param.type}"`,
+      });
+    }
+  });
 
 export type SnippetParam = z.infer<typeof SnippetParamSchema>;
 

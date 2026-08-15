@@ -16,11 +16,14 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
+import { HistoryManager } from "./history.ts";
 
 export interface DesignFolder {
   root: string;
   config: Config;
   theme: Theme;
+  /** Per-folder undo/redo stacks — see history.ts. */
+  history: HistoryManager;
   screens: Map<string, Screen>;
   /**
    * Boards keyed by id. A folder has many boards — one per flow ("welcome",
@@ -158,7 +161,17 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   const annotations = await loadAnnotations(root, screens.keys());
   const notes = await loadBoardNotes(root, boards.keys());
 
-  return { root, config, theme, screens, boards, snippets, annotations, notes };
+  return {
+    root,
+    config,
+    theme,
+    history: new HistoryManager(),
+    screens,
+    boards,
+    snippets,
+    annotations,
+    notes,
+  };
 }
 
 /** Reload one screen from disk and update the cache in place. */

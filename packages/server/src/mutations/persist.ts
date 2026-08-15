@@ -19,7 +19,6 @@ import {
 } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
-import { pushHistory } from "../history.ts";
 import type { MutationError } from "./errors.ts";
 import { snippetNotFound } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
@@ -33,7 +32,7 @@ export async function persistScreen(
 ): Promise<Screen> {
   const validated = ScreenSchema.parse(screen);
   const prev = folder.screens.get(screenId) ?? null;
-  pushHistory({ kind: "screen", screenId, screen: prev });
+  folder.history.push({ kind: "screen", screenId, screen: prev });
   await writeJsonAtomic(join(folder.root, "screens", `${screenId}.json`), validated);
   folder.screens.set(screenId, validated);
   return validated;
@@ -64,7 +63,7 @@ export function commitScreen(
 
 export async function deletePersistedScreen(folder: DesignFolder, screenId: string): Promise<void> {
   const prev = folder.screens.get(screenId) ?? null;
-  pushHistory({ kind: "screen", screenId, screen: prev });
+  folder.history.push({ kind: "screen", screenId, screen: prev });
   await rm(join(folder.root, "screens", `${screenId}.json`), { force: true });
   await rm(join(folder.root, "screens", `${screenId}.annotations.json`), { force: true });
   folder.screens.delete(screenId);
@@ -79,7 +78,7 @@ export async function persistBoard(
 ): Promise<Board> {
   const validated = BoardSchema.parse(board);
   const prev = folder.boards.get(boardId) ?? null;
-  pushHistory({ kind: "board", boardId, board: prev });
+  folder.history.push({ kind: "board", boardId, board: prev });
   await writeJsonAtomic(join(folder.root, "boards", `${boardId}.json`), validated);
   folder.boards.set(boardId, validated);
   return validated;
@@ -87,7 +86,7 @@ export async function persistBoard(
 
 export async function deletePersistedBoard(folder: DesignFolder, boardId: string): Promise<void> {
   const prev = folder.boards.get(boardId) ?? null;
-  pushHistory({ kind: "board", boardId, board: prev });
+  folder.history.push({ kind: "board", boardId, board: prev });
   await rm(join(folder.root, "boards", `${boardId}.json`), { force: true });
   await rm(join(folder.root, "boards", `${boardId}.notes.json`), { force: true });
   folder.boards.delete(boardId);
@@ -96,7 +95,7 @@ export async function deletePersistedBoard(folder: DesignFolder, boardId: string
 
 export async function persistTheme(folder: DesignFolder, theme: Theme): Promise<Theme> {
   const validated = ThemeSchema.parse(theme);
-  pushHistory({ kind: "theme", theme: folder.theme });
+  folder.history.push({ kind: "theme", theme: folder.theme });
   await writeJsonAtomic(join(folder.root, "theme", "default.json"), validated);
   folder.theme = validated;
   return validated;
@@ -109,7 +108,7 @@ export async function persistSnippet(
 ): Promise<Snippet> {
   const validated = SnippetSchema.parse(snippet);
   const prev = folder.snippets.get(snippetId) ?? null;
-  pushHistory({ kind: "snippet", snippetId, snippet: prev });
+  folder.history.push({ kind: "snippet", snippetId, snippet: prev });
   await writeJsonAtomic(join(folder.root, "snippets", `${snippetId}.json`), validated);
   folder.snippets.set(snippetId, validated);
   return validated;
@@ -120,7 +119,7 @@ export async function deletePersistedSnippet(
   snippetId: string,
 ): Promise<void> {
   const prev = folder.snippets.get(snippetId);
-  if (prev) pushHistory({ kind: "snippet", snippetId, snippet: prev });
+  if (prev) folder.history.push({ kind: "snippet", snippetId, snippet: prev });
   await rm(join(folder.root, "snippets", `${snippetId}.json`), { force: true });
   folder.snippets.delete(snippetId);
 }

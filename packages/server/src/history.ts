@@ -9,6 +9,9 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
  * Consecutive writes within COALESCE_WINDOW_MS that target the same key
  * collapse into the first entry — so a stream of live edits (frame drag,
  * resize) becomes one undo step instead of one per pixel.
+ *
+ * One instance per design folder (carried on `DesignFolder.history`) so
+ * parallel folders — and tests — never share stacks.
  */
 export type HistoryEntry =
   | { kind: "screen"; screenId: string; screen: Screen | null; ts?: number }
@@ -18,8 +21,6 @@ export type HistoryEntry =
 
 const MAX = 50;
 const COALESCE_WINDOW_MS = 800;
-const undoStack: HistoryEntry[] = [];
-const redoStack: HistoryEntry[] = [];
 
 function keyOf(e: HistoryEntry): string {
   if (e.kind === "screen") return `screen:${e.screenId}`;
@@ -28,45 +29,51 @@ function keyOf(e: HistoryEntry): string {
   return "theme";
 }
 
-/** Push a snapshot of the *previous* state before a write. Clears redo. */
-export function pushHistory(entry: HistoryEntry): void {
-  const stamped: HistoryEntry = { ...entry, ts: Date.now() };
-  const top = undoStack[undoStack.length - 1];
-  if (top?.ts && stamped.ts && stamped.ts - top.ts < COALESCE_WINDOW_MS) {
-    if (keyOf(top) === keyOf(stamped)) {
-      top.ts = stamped.ts;
-      redoStack.length = 0;
-      return;
+export class HistoryManager {
+  private undoStack: HistoryEntry[] = [];
+  private redoStack: HistoryEntry[] = [];
+
+  /** Push a snapshot of the *previous* state before a write. Clears redo. */
+  push(entry: HistoryEntry): void {
+    const stamped: HistoryEntry = { ...entry, ts: Date.now() };
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (top?.ts && stamped.ts && stamped.ts - top.ts < COALESCE_WINDOW_MS) {
+      if (keyOf(top) === keyOf(stamped)) {
+        top.ts = stamped.ts;
+        this.redoStack.length = 0;
+        return;
+      }
     }
+    this.undoStack.push(stamped);
+    if (this.undoStack.length > MAX) this.undoStack.splice(0, this.undoStack.length - MAX);
+    this.redoStack.length = 0;
   }
-  undoStack.push(stamped);
-  if (undoStack.length > MAX) undoStack.splice(0, undoStack.length - MAX);
-  redoStack.length = 0;
-}
 
-export function pushRedo(entry: HistoryEntry): void {
-  redoStack.push(entry);
-  if (redoStack.length > MAX) redoStack.splice(0, redoStack.length - MAX);
-}
+  pushRedo(entry: HistoryEntry): void {
+    this.redoStack.push(entry);
+    if (this.redoStack.length > MAX) this.redoStack.splice(0, this.redoStack.length - MAX);
+  }
 
-export function pushUndoSilent(entry: HistoryEntry): void {
-  undoStack.push(entry);
-  if (undoStack.length > MAX) undoStack.splice(0, undoStack.length - MAX);
-}
+  /** Push to undo without clearing redo — used when applying a redo. */
+  pushUndoSilent(entry: HistoryEntry): void {
+    this.undoStack.push(entry);
+    if (this.undoStack.length > MAX) this.undoStack.splice(0, this.undoStack.length - MAX);
+  }
 
-export function popUndo(): HistoryEntry | undefined {
-  return undoStack.pop();
-}
+  popUndo(): HistoryEntry | undefined {
+    return this.undoStack.pop();
+  }
 
-export function popRedo(): HistoryEntry | undefined {
-  return redoStack.pop();
-}
+  popRedo(): HistoryEntry | undefined {
+    return this.redoStack.pop();
+  }
 
-export function historyDepths(): { undo: number; redo: number } {
-  return { undo: undoStack.length, redo: redoStack.length };
-}
+  depths(): { undo: number; redo: number } {
+    return { undo: this.undoStack.length, redo: this.redoStack.length };
+  }
 
-export function clearHistory(): void {
-  undoStack.length = 0;
-  redoStack.length = 0;
+  clear(): void {
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
+  }
 }

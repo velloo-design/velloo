@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Screen, Snippet, Theme } from "@velloo/schema";
 import type { DesignFolder } from "../../design-folder.ts";
+import { HistoryManager } from "../../history.ts";
 import { findSnippetInstances } from "../snippet-instances.ts";
 
 /**
@@ -50,6 +51,7 @@ function makeFolder(screens: Screen[], snippets: Snippet[]): DesignFolder {
       viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
     },
     theme: blankTheme(),
+    history: new HistoryManager(),
     screens: new Map(screens.map((s) => [s.id, s])),
     boards: new Map(),
     snippets: new Map(snippets.map((s) => [s.id, s])),

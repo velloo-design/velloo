@@ -3,8 +3,7 @@ import type { Context } from "hono";
 import type { z } from "zod";
 import { type MutationError, badRequest as mutationBadRequest } from "../mutations/errors.ts";
 import { type ThemeError, themeBadRequest } from "../theme/errors.ts";
-import { mutationToHttp } from "./mutation-http.ts";
-import { themeToHttp } from "./theme-http.ts";
+import { mutationToHttp, themeToHttp } from "./error-http.ts";
 
 async function readBody(c: Context): Promise<unknown> {
   try {

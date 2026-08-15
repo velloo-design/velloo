@@ -8,38 +8,14 @@ import {
   type Node,
 } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
-import { type MutationError, unknownComponent } from "./errors.ts";
+import {
+  extensionIdConflict,
+  extensionInUse,
+  extensionNotFound,
+  type MutationError,
+  unknownComponent,
+} from "./errors.ts";
 import { persistConfig } from "./persist.ts";
-
-/**
- * Errors specific to the extension lifecycle. Modelled with the same
- * Result<T, MutationError> shape every other mutation uses, so callers
- * can surface them uniformly through the MCP tool wrapper.
- */
-function extensionIdConflict(id: string): MutationError {
-  return {
-    kind: "ExtensionIdConflict",
-    message: `Extension "${id}" already exists. Use update_extension to patch it.`,
-    extensionId: id,
-  };
-}
-
-function extensionNotFound(id: string): MutationError {
-  return {
-    kind: "ExtensionNotFound",
-    message: `Extension "${id}" doesn't exist.`,
-    extensionId: id,
-  };
-}
-
-function extensionInUse(id: string, refs: { screenId: string; path: string }[]): MutationError {
-  return {
-    kind: "ExtensionInUse",
-    message: `Extension "${id}" is referenced by ${refs.length} node${refs.length === 1 ? "" : "s"} — remove the usages first.`,
-    extensionId: id,
-    references: refs,
-  };
-}
 
 /**
  * Walk every screen + snippet tree looking for `{ $ref: <id> }` nodes

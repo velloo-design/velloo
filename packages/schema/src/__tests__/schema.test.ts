@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   BoardSchema,
   ConfigSchema,
+  ExtensionPropDescriptorSchema,
   FrameSchema,
   isComponentNode,
   isParamRef,
@@ -10,6 +11,7 @@ import {
   NodeSchema,
   nodeId,
   ScreenSchema,
+  SnippetParamSchema,
   SnippetSchema,
   ThemeSchema,
 } from "../index.ts";
@@ -654,5 +656,84 @@ describe("CanvasNoteSchema", () => {
     expect(CanvasNoteSchema.safeParse({ id: "n2", x: 0, y: 0, width: 0, body: "" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("SnippetParamSchema refinements", () => {
+  test("rejects a default that does not match the declared type", () => {
+    expect(
+      SnippetParamSchema.safeParse({ name: "open", type: "boolean", default: "yes" }).success,
+    ).toBe(false);
+    expect(
+      SnippetParamSchema.safeParse({ name: "count", type: "number", default: "3" }).success,
+    ).toBe(false);
+    expect(
+      SnippetParamSchema.safeParse({ name: "title", type: "string", default: 3 }).success,
+    ).toBe(false);
+  });
+
+  test("accepts matching defaults for every scalar type", () => {
+    expect(
+      SnippetParamSchema.safeParse({ name: "open", type: "boolean", default: true }).success,
+    ).toBe(true);
+    expect(
+      SnippetParamSchema.safeParse({ name: "count", type: "number", default: 3 }).success,
+    ).toBe(true);
+    expect(
+      SnippetParamSchema.safeParse({ name: "icon", type: "icon", default: "Sparkles" }).success,
+    ).toBe(true);
+    expect(
+      SnippetParamSchema.safeParse({ name: "tint", type: "color", default: "#fff" }).success,
+    ).toBe(true);
+  });
+
+  test("enum type requires non-empty enum values and a member default", () => {
+    expect(SnippetParamSchema.safeParse({ name: "size", type: "enum" }).success).toBe(false);
+    expect(
+      SnippetParamSchema.safeParse({ name: "size", type: "enum", enum: [] }).success,
+    ).toBe(false);
+    expect(
+      SnippetParamSchema.safeParse({
+        name: "size",
+        type: "enum",
+        enum: ["sm", "lg"],
+        default: "xl",
+      }).success,
+    ).toBe(false);
+    expect(
+      SnippetParamSchema.safeParse({
+        name: "size",
+        type: "enum",
+        enum: ["sm", "lg"],
+        default: "sm",
+      }).success,
+    ).toBe(true);
+  });
+
+  test("node params accept arbitrary defaults", () => {
+    expect(
+      SnippetParamSchema.safeParse({ name: "slot", type: "node", default: { $ref: "Card" } })
+        .success,
+    ).toBe(true);
+  });
+});
+
+describe("ExtensionPropDescriptorSchema refinements", () => {
+  test("enum control requires non-empty enumValues", () => {
+    const base = { name: "variant", type: "string", optional: true };
+    expect(
+      ExtensionPropDescriptorSchema.safeParse({ ...base, control: "enum" }).success,
+    ).toBe(false);
+    expect(
+      ExtensionPropDescriptorSchema.safeParse({ ...base, control: "enum", enumValues: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      ExtensionPropDescriptorSchema.safeParse({
+        ...base,
+        control: "enum",
+        enumValues: ["a", "b"],
+      }).success,
+    ).toBe(true);
   });
 });

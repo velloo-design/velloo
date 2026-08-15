@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { auditSnippet, darkModeAudit, inspect, type MutationContext } from "../mutations/index.ts";
 import { pathFromString } from "../path.ts";
-import { mutationToHttp } from "./mutation-http.ts";
+import { mutationToHttp } from "./error-http.ts";
 
 export function createInspectRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();

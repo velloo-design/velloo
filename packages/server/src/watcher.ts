@@ -14,7 +14,15 @@ export type WatchEvent =
    * mutation. The canvas refreshes its Library tab so new extensions
    * appear without a full page reload.
    */
-  | { type: "config-changed" };
+  | { type: "config-changed" }
+  /**
+   * A watched file changed but failed to reload into memory
+   * (unparseable JSON, schema violation). Emitted by the server's
+   * reload pipeline rather than the watcher itself; clients surface it
+   * so an on-disk edit is never silently dropped while the canvas
+   * keeps rendering stale state.
+   */
+  | { type: "reload-error"; source: string; message: string };
 
 export interface Watcher {
   close(): void;

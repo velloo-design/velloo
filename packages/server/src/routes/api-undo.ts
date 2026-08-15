@@ -4,14 +4,7 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
-import {
-  type HistoryEntry,
-  historyDepths,
-  popRedo,
-  popUndo,
-  pushRedo,
-  pushUndoSilent,
-} from "../history.ts";
+import type { HistoryEntry } from "../history.ts";
 import { withBoardLock, withScreenLock } from "../mutations/context.ts";
 import type { WatchEvent } from "../watcher.ts";
 
@@ -27,23 +20,25 @@ export function createUndoRouter(
 ): Hono {
   const r = new Hono();
 
-  r.get("/", (c) => c.json(historyDepths()));
+  r.get("/", (c) => c.json(folderFor().history.depths()));
 
   r.post("/", async (c) => {
-    const entry = popUndo();
-    if (!entry) return c.json({ reverted: null, ...historyDepths() });
+    const folder = folderFor();
+    const entry = folder.history.popUndo();
+    if (!entry) return c.json({ reverted: null, ...folder.history.depths() });
     return c.json({
-      reverted: await applyRevert(entry, folderFor(), broadcast, "redo"),
-      ...historyDepths(),
+      reverted: await applyRevert(entry, folder, broadcast, "redo"),
+      ...folder.history.depths(),
     });
   });
 
   r.post("/redo", async (c) => {
-    const entry = popRedo();
-    if (!entry) return c.json({ reverted: null, ...historyDepths() });
+    const folder = folderFor();
+    const entry = folder.history.popRedo();
+    if (!entry) return c.json({ reverted: null, ...folder.history.depths() });
     return c.json({
-      reverted: await applyRevert(entry, folderFor(), broadcast, "undo"),
-      ...historyDepths(),
+      reverted: await applyRevert(entry, folder, broadcast, "undo"),
+      ...folder.history.depths(),
     });
   });
 
@@ -59,8 +54,8 @@ async function applyRevert(
   if (entry.kind === "screen") {
     const current = folder.screens.get(entry.screenId) ?? null;
     const back: HistoryEntry = { kind: "screen", screenId: entry.screenId, screen: current };
-    if (pushOpposite === "redo") pushRedo(back);
-    else pushUndoSilent(back);
+    if (pushOpposite === "redo") folder.history.pushRedo(back);
+    else folder.history.pushUndoSilent(back);
     await withScreenLock(entry.screenId, async () => {
       if (entry.screen === null) {
         await deleteScreen(folder, entry.screenId);
@@ -75,8 +70,8 @@ async function applyRevert(
   if (entry.kind === "board") {
     const current = folder.boards.get(entry.boardId) ?? null;
     const back: HistoryEntry = { kind: "board", boardId: entry.boardId, board: current };
-    if (pushOpposite === "redo") pushRedo(back);
-    else pushUndoSilent(back);
+    if (pushOpposite === "redo") folder.history.pushRedo(back);
+    else folder.history.pushUndoSilent(back);
     await withBoardLock(entry.boardId, async () => {
       if (entry.board === null) {
         await deleteBoard(folder, entry.boardId);
@@ -91,8 +86,8 @@ async function applyRevert(
   if (entry.kind === "snippet") {
     const current = folder.snippets.get(entry.snippetId) ?? null;
     const back: HistoryEntry = { kind: "snippet", snippetId: entry.snippetId, snippet: current };
-    if (pushOpposite === "redo") pushRedo(back);
-    else pushUndoSilent(back);
+    if (pushOpposite === "redo") folder.history.pushRedo(back);
+    else folder.history.pushUndoSilent(back);
     if (entry.snippet === null) {
       await deleteSnippet(folder, entry.snippetId);
     } else {
@@ -104,8 +99,8 @@ async function applyRevert(
 
   const current = folder.theme;
   const back: HistoryEntry = { kind: "theme", theme: current };
-  if (pushOpposite === "redo") pushRedo(back);
-  else pushUndoSilent(back);
+  if (pushOpposite === "redo") folder.history.pushRedo(back);
+  else folder.history.pushUndoSilent(back);
   await writeTheme(folder, entry.theme);
   broadcast({ type: "theme-changed" });
   return { kind: "theme" };
