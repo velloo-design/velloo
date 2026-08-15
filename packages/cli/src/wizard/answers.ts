@@ -4,7 +4,7 @@
  * `--flag` in non-interactive mode.
  */
 
-export type LibraryId = "shadcn-react" | "none" | "mui";
+export type LibraryId = "shadcn-react" | "shadcn-upstream" | "none" | "mui";
 
 /**
  * Where the library's component sources live.

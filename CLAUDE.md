@@ -4,10 +4,10 @@ This file orients you when you're modifying **the Velloo repo itself**. For guid
 
 ## Mental model
 
-Velloo is a local, code-shaped design canvas for solo devs. The repo is a Bun-workspaces monorepo split into eleven packages with one-way dependencies:
+Velloo is a local, code-shaped design canvas for solo devs. The repo is a Bun-workspaces monorepo split into thirteen packages with one-way dependencies:
 
 ```
-schema → result → provider → shadcn-snapshot → provider-none, provider-mui → renderer → codegen → server → canvas → cli
+schema → result → provider → shadcn-snapshot → shadcn-adapter, provider-none, provider-mui, provider-shadcn-upstream → renderer → codegen → server → canvas → cli
 ```
 
 The cleanest packages (`schema`, `result`, `provider`) have no internal runtime deps. Everything else builds on them. **Do not introduce cycles** — every cross-package import must respect this order.
@@ -17,7 +17,9 @@ The cleanest packages (`schema`, `result`, `provider`) have no internal runtime 
 - **`@velloo/schema`** — Zod schemas + TS types for everything on disk in a design folder (Screen, Board, Frame, Snippet, Theme, Config, Node, Annotation, CanvasNote). Plus pure utilities like `collectIds` / `findDuplicateIds`. **No I/O. No framework imports.** This package is the contract between every other package — keep it minimal.
 - **`@velloo/result`** — `Result<T, E>` helpers (`ok`, `err`, `unwrap`, `Do`/`DoAsync` generator monads). Used throughout for typed errors instead of throwing.
 - **`@velloo/provider`** — The `ComponentProvider` interface every library entry implements (shadcn, no-lib, MUI, future host-scan). Owns the `Manifest` / `ComponentDescriptor` / `PropDescriptor` types. No runtime code beyond the loader plumbing — concrete providers live in their own packages.
-- **`@velloo/shadcn-snapshot`** — The default `ComponentProvider`: the pinned shadcn component snapshot Velloo ships with. Also exports `installSnapshot()` for `--source=in-repo`/`--source=cache` modes that copy the snapshot's `.tsx` sources to disk.
+- **`@velloo/shadcn-snapshot`** — Legacy (Sprint-Y-and-prior) `ComponentProvider`: the hand-vendored shadcn component snapshot. Exports `installSnapshot()` for `--source=in-repo`/`--source=cache` modes. **On a deprecation path**. New folders default to `shadcn-upstream`.
+- **`@velloo/shadcn-adapter`** — Canvas-safe replacement components + the adaptation map. Wrap-at-render-time pattern for `Dialog`, `Popover`, `DropdownMenu`, etc. — the canvas-unsafe shadcn surface. Used by `@velloo/provider-shadcn-upstream` (and reusable by Sprint Y.2 Tier-2 extension previews + Sprint X+2.1 MUI bundle).
+- **`@velloo/provider-shadcn-upstream`** — Sprint-Z provider: fetches vanilla shadcn from `ui.shadcn.com/r/styles/<style>/<id>.json` at a pinned version, generates a manifest via ts-morph against the fetched files, writes a lockfile with per-file SHA256 checksums + npm dependency aggregation. Hybrid Sprint-Z scope: canvas runtime registry reuses the snapshot's components; install side writes byte-identical vanilla shadcn to the user's app/cache.
 - **`@velloo/provider-none`** — The no-library provider. Six bare primitives (Box, Stack, Container, Card, Button, Input) wrapping plain HTML, plus the reusable velloo helpers (Heading, Text, Icon, …) re-used from shadcn-snapshot. The trivial-end proof the abstraction works.
 - **`@velloo/provider-mui`** — Material UI v6 provider, **scaffold-only**. Registered in the loader and the wizard; the factory currently throws a "not yet vendored" message. Real MUI bundle lands in Sprint X+2.1 (see README).
 - **`@velloo/renderer`** — Pure design JSON → React tree → HTML (server-render) + Playwright screenshot path. Provider-agnostic: the registry is supplied through `BuildTreeOptions` / `RenderOptions`, not imported. Includes the design-mode iframe runtime that talks to the canvas via MessageChannel.

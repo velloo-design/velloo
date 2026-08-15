@@ -39,7 +39,16 @@ export async function runInteractive(defaults: { folder: string }): Promise<Wiza
   const library = await select<LibraryId>({
     message: "Component library",
     options: [
-      { value: "shadcn-react", label: "shadcn", hint: "React + Tailwind, recommended" },
+      {
+        value: "shadcn-upstream",
+        label: "shadcn (upstream)",
+        hint: "Fetch from shadcn-ui at a pinned version. Recommended.",
+      },
+      {
+        value: "shadcn-react",
+        label: "shadcn (bundled)",
+        hint: "Vendored snapshot — back-compat for legacy folders",
+      },
       {
         value: "none",
         label: "No library",
@@ -47,12 +56,12 @@ export async function runInteractive(defaults: { folder: string }): Promise<Wiza
       },
       { value: "mui", label: "Material UI", hint: "MUI v6 — Sprint X+2" },
     ],
-    initialValue: "shadcn-react",
+    initialValue: "shadcn-upstream",
   });
   if (isAborted(library)) return abort();
 
   let source: LibrarySource = "cache";
-  if (library === "shadcn-react") {
+  if (library === "shadcn-react" || library === "shadcn-upstream") {
     const picked = await select<LibrarySource>({
       message: "Where should the components live?",
       options: [

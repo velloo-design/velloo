@@ -307,6 +307,21 @@ describe("ConfigSchema", () => {
     }
   });
 
+  test("accepts the Sprint-Z shadcn-upstream id", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      library: {
+        id: "shadcn-upstream",
+        version: "2026.05.26",
+        source: "cache",
+        componentsPath: "~/.velloo/providers/shadcn-upstream@2026.05.26",
+      },
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
   test("accepts experimental shared source", () => {
     const config = {
       schemaVersion: 1,

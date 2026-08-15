@@ -48,6 +48,7 @@
         "@clack/prompts": "1.4.0",
         "@velloo/codegen": "workspace:*",
         "@velloo/provider-none": "workspace:*",
+        "@velloo/provider-shadcn-upstream": "workspace:*",
         "@velloo/renderer": "workspace:*",
         "@velloo/schema": "workspace:*",
         "@velloo/server": "workspace:*",
@@ -111,6 +112,21 @@
         "@velloo/schema": "workspace:*",
       },
     },
+    "packages/provider-shadcn-upstream": {
+      "name": "@velloo/provider-shadcn-upstream",
+      "version": "0.1.0",
+      "dependencies": {
+        "@velloo/provider": "workspace:*",
+        "@velloo/schema": "workspace:*",
+        "@velloo/shadcn-adapter": "workspace:*",
+        "@velloo/shadcn-snapshot": "workspace:*",
+        "ts-morph": "28.0.0",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.14",
+        "react": "19.2.6",
+      },
+    },
     "packages/renderer": {
       "name": "@velloo/renderer",
       "version": "0.1.0",
@@ -150,6 +166,7 @@
         "@velloo/provider": "workspace:*",
         "@velloo/provider-mui": "workspace:*",
         "@velloo/provider-none": "workspace:*",
+        "@velloo/provider-shadcn-upstream": "workspace:*",
         "@velloo/renderer": "workspace:*",
         "@velloo/result": "workspace:*",
         "@velloo/schema": "workspace:*",
@@ -166,6 +183,23 @@
         "@types/culori": "4.0.1",
         "@types/react": "19.2.14",
         "react": "19.2.6",
+      },
+    },
+    "packages/shadcn-adapter": {
+      "name": "@velloo/shadcn-adapter",
+      "version": "0.1.0",
+      "dependencies": {
+        "class-variance-authority": "0.7.1",
+        "clsx": "2.1.1",
+        "lucide-react": "1.16.0",
+        "radix-ui": "1.4.3",
+        "react": "19.2.6",
+        "react-dom": "19.2.6",
+        "tailwind-merge": "3.6.0",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.14",
+        "@types/react-dom": "19.2.3",
       },
     },
     "packages/shadcn-snapshot": {
@@ -477,6 +511,8 @@
 
     "@velloo/provider-none": ["@velloo/provider-none@workspace:packages/provider-none"],
 
+    "@velloo/provider-shadcn-upstream": ["@velloo/provider-shadcn-upstream@workspace:packages/provider-shadcn-upstream"],
+
     "@velloo/renderer": ["@velloo/renderer@workspace:packages/renderer"],
 
     "@velloo/result": ["@velloo/result@workspace:packages/result"],
@@ -484,6 +520,8 @@
     "@velloo/schema": ["@velloo/schema@workspace:packages/schema"],
 
     "@velloo/server": ["@velloo/server@workspace:packages/server"],
+
+    "@velloo/shadcn-adapter": ["@velloo/shadcn-adapter@workspace:packages/shadcn-adapter"],
 
     "@velloo/shadcn-snapshot": ["@velloo/shadcn-snapshot@workspace:packages/shadcn-snapshot"],
 

@@ -1,6 +1,8 @@
 # @velloo/shadcn-snapshot
 
-The pinned shadcn component snapshot Velloo ships with. **Components are embedded here, not in user design folders** (see `docs/decisions.md` #4 + #17).
+> **Status — legacy.** This package is the pre-Sprint-Z provider, kept registered for back-compat with existing folders (`library.id: "shadcn-react"`). New folders default to [`@velloo/provider-shadcn-upstream`](../provider-shadcn-upstream/), which fetches vanilla shadcn from upstream at a pinned version and applies canvas-safe behavior through [`@velloo/shadcn-adapter`](../shadcn-adapter/). See `docs/decisions.md` #25 for the deprecation timeline.
+
+The pinned shadcn component snapshot Velloo originally shipped with. **Components are embedded here, not in user design folders** (see `docs/decisions.md` #4 + #17).
 
 Contents:
 

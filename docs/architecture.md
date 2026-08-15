@@ -255,11 +255,17 @@ The renderer, the Tailwind JIT, MCP discovery, codegen — every consumer reads 
 
 The reasoning behind not putting components on disk in the design folder still holds: an earlier draft had `velloo init` pull components into the design folder so the user "owned" them on disk. The reversion was driven by AI-agent confusion — two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) made the source of truth unclear. The provider abstraction keeps the design folder pure data while still letting different libraries take the active slot.
 
-### The shadcn provider
+### shadcn providers (two flavors)
 
-The default. Carries ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus 9 Velloo helpers (`<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`). Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-snapshot/src/components/canvas-portal.tsx` and. Calendar / Chart / Carousel are static fakes for the same reason (the real components require runtime state or canvas APIs Velloo deliberately doesn't simulate).
+**`shadcn-upstream` (Sprint Z, default for new folders).** Fetches components from the official shadcn registry at a pinned version and deposits byte-identical vanilla shadcn into the user's app (or `~/.velloo/providers/shadcn-upstream-<projectId>/`). No Velloo modifications visible in the user's files — `npx shadcn add <component>` works alongside it. The canvas-safe contract (Radix portal replacements, runtime-state fakes for Calendar/Chart/Carousel) is applied through `@velloo/shadcn-adapter`'s wrap-at-render-time adapter layer.
 
-The snapshot's `snapshotVersion` (`2026.05.22` at the time of this section) is the provider's `version`.
+**`shadcn-react` (legacy, back-compat).** The hand-vendored snapshot in `@velloo/shadcn-snapshot`. Pre-Sprint-Z folders default to this; existing folders keep working unchanged through the migration shim. Deprecation path is documented in; the snapshot stays registered for at least two more sprints before being collapsed into a shim around the upstream provider.
+
+Both ship ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus 9 Velloo helpers (`<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`).
+
+Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-adapter/src/lib/canvas-portal.tsx` (or the legacy snapshot's `canvas-portal.tsx`) and. Calendar / Chart / Carousel are static fakes for the same reason.
+
+The snapshot's `snapshotVersion` (`2026.05.22` at the time of this section) is the legacy provider's `version`. The upstream provider's `version` reflects the date the cache was fetched.
 
 ### Tailwind is a canvas concern, not a provider concern
 

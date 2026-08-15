@@ -1,0 +1,150 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { SHADCN_COMPONENT_IDS } from "./components.ts";
+import { dateStampVersion, hashContent, type ShadcnUpstreamLock } from "./lock.ts";
+
+/**
+ * Shape of shadcn's registry response per component. Documented at
+ * <https://ui.shadcn.com/docs/registry/registry-item-json>.
+ */
+export interface ShadcnRegistryItem {
+  $schema?: string;
+  name: string;
+  type?: string;
+  /** npm packages this component imports from (e.g. "@radix-ui/react-dialog"). */
+  dependencies?: string[];
+  /** Other shadcn registry items this depends on (e.g. "button" for some compounds). */
+  registryDependencies?: string[];
+  files: { path: string; content: string; type?: string; target?: string }[];
+}
+
+/** Standard shadcn `lib/utils.ts` — the `cn()` helper. */
+export const LIB_UTILS_CONTENT = `import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+`;
+
+export interface FetchOptions {
+  /** Destination directory. Components land at `<destination>/ui/<id>.tsx`. */
+  destination: string;
+  /** Component ids to fetch. Defaults to the canonical SHADCN_COMPONENT_IDS list. */
+  components?: readonly string[];
+  /** Registry style slug. Defaults to `"new-york"`. */
+  style?: string;
+  /** Override base URL for testing (defaults to the public shadcn registry). */
+  registryBase?: string;
+  /**
+   * Custom fetch implementation. Tests inject a mock; production
+   * defaults to `globalThis.fetch`.
+   */
+  fetchImpl?: typeof fetch;
+}
+
+export interface FetchResult {
+  lock: ShadcnUpstreamLock;
+  lockPath: string;
+  /** Absolute paths of every file written. */
+  filesWritten: string[];
+}
+
+const DEFAULT_REGISTRY = "https://ui.shadcn.com/r/styles";
+
+/**
+ * Fetch a shadcn component subset from upstream and write it to a cache
+ * directory. Produces a lockfile recording version + per-file
+ * checksums so subsequent runs can detect upstream drift.
+ *
+ * The fetcher does not generate the manifest (that requires walking
+ * the .tsx with ts-morph) — `generateManifest` in `manifest.ts` is the
+ * follow-up step.
+ */
+export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
+  const components = opts.components ?? SHADCN_COMPONENT_IDS;
+  const style = opts.style ?? "new-york";
+  const registryBase = opts.registryBase ?? DEFAULT_REGISTRY;
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchedAt = new Date();
+
+  await mkdir(opts.destination, { recursive: true });
+  const filesWritten: string[] = [];
+  const lockComponents: ShadcnUpstreamLock["components"] = {};
+
+  for (const id of components) {
+    const url = `${registryBase}/${style}/${id}.json`;
+    const res = await fetchImpl(url);
+    if (!res.ok) {
+      throw new Error(
+        `velloo: failed to fetch shadcn component "${id}" from ${url} (HTTP ${res.status})`,
+      );
+    }
+    const item = (await res.json()) as ShadcnRegistryItem;
+    if (!item.files || item.files.length === 0) {
+      throw new Error(`velloo: shadcn registry returned no files for "${id}".`);
+    }
+    const fileEntries: { path: string; sha256: string }[] = [];
+    for (const file of item.files) {
+      // shadcn returns paths like "ui/button.tsx". Mirror them under
+      // the destination so `<dest>/ui/button.tsx` exists exactly where
+      // a user's app would expect to find it.
+      const targetPath = file.path;
+      const abs = join(opts.destination, targetPath);
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, file.content, "utf8");
+      filesWritten.push(abs);
+      fileEntries.push({ path: targetPath, sha256: hashContent(file.content) });
+    }
+    lockComponents[id] = {
+      files: fileEntries,
+      dependencies: item.dependencies ?? [],
+      registryDependencies: item.registryDependencies ?? [],
+    };
+  }
+
+  // The shadcn `cn` helper. Hardcoded because the registry doesn't
+  // expose it as a fetch-able entry; the content is stable across
+  // shadcn versions (cn = clsx + twMerge).
+  const utilsPath = join(opts.destination, "lib", "utils.ts");
+  await mkdir(dirname(utilsPath), { recursive: true });
+  await writeFile(utilsPath, LIB_UTILS_CONTENT, "utf8");
+  filesWritten.push(utilsPath);
+
+  const lock: ShadcnUpstreamLock = {
+    version: dateStampVersion(fetchedAt),
+    fetchedAt: fetchedAt.toISOString(),
+    registry: `${registryBase}/${style}`,
+    style,
+    components: lockComponents,
+  };
+  const lockPath = join(opts.destination, "shadcn-upstream-lock.json");
+  await writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
+
+  return { lock, lockPath, filesWritten };
+}
+
+/**
+ * Verify a previously-fetched cache against its lock. Returns the
+ * list of paths whose on-disk content no longer matches the lock's
+ * checksum — empty array = no drift.
+ */
+export async function verifyCache(
+  destination: string,
+  lock: ShadcnUpstreamLock,
+): Promise<string[]> {
+  const { readFile } = await import("node:fs/promises");
+  const drifted: string[] = [];
+  for (const [, entry] of Object.entries(lock.components)) {
+    for (const file of entry.files) {
+      const abs = join(destination, file.path);
+      try {
+        const content = await readFile(abs, "utf8");
+        if (hashContent(content) !== file.sha256) drifted.push(file.path);
+      } catch {
+        drifted.push(file.path);
+      }
+    }
+  }
+  return drifted;
+}

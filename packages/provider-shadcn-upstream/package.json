@@ -1,0 +1,21 @@
+{
+  "name": "@velloo/provider-shadcn-upstream",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Velloo provider that fetches shadcn components from upstream at a pinned version and bundles them with the canvas-safe adapter layer",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@velloo/provider": "workspace:*",
+    "@velloo/schema": "workspace:*",
+    "@velloo/shadcn-adapter": "workspace:*",
+    "@velloo/shadcn-snapshot": "workspace:*",
+    "ts-morph": "28.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "react": "19.2.6"
+  }
+}

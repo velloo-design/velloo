@@ -14,6 +14,7 @@
     "@velloo/provider": "workspace:*",
     "@velloo/provider-mui": "workspace:*",
     "@velloo/provider-none": "workspace:*",
+    "@velloo/provider-shadcn-upstream": "workspace:*",
     "@velloo/renderer": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",

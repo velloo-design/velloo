@@ -13,14 +13,9 @@
   },
   "include": ["src/**/*"],
   "references": [
-    { "path": "../result" },
-    { "path": "../schema" },
     { "path": "../provider" },
-    { "path": "../shadcn-snapshot" },
-    { "path": "../provider-none" },
-    { "path": "../provider-mui" },
-    { "path": "../provider-shadcn-upstream" },
-    { "path": "../renderer" },
-    { "path": "../codegen" }
+    { "path": "../schema" },
+    { "path": "../shadcn-adapter" },
+    { "path": "../shadcn-snapshot" }
   ]
 }

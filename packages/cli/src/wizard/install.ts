@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { noLibVersion } from "@velloo/provider-none";
+import { installShadcnUpstream } from "@velloo/provider-shadcn-upstream";
 import type { Library } from "@velloo/schema";
 import { type InstalledSnapshot, installSnapshot, snapshotVersion } from "@velloo/shadcn-snapshot";
 import type { WizardAnswers } from "./answers.ts";
@@ -16,6 +17,13 @@ export interface InstallPlan {
    * plus where the components landed.
    */
   summary: { name: string; location: string };
+  /**
+   * Optional npm dependencies the user's app needs to install (e.g.
+   * `@radix-ui/react-slot`). The Sprint-Z upstream provider populates
+   * this; legacy paths leave it empty. The wizard echoes this list to
+   * the post-init summary.
+   */
+  npmDependencies?: string[];
 }
 
 /**
@@ -54,6 +62,10 @@ export async function executeInstall(
         "Use --library=shadcn-react (default) or --library=none for now.",
       ].join("\n"),
     );
+  }
+
+  if (answers.library === "shadcn-upstream") {
+    return executeUpstreamInstall(answers, projectId);
   }
 
   if (answers.source === "binary") {
@@ -106,5 +118,75 @@ export async function executeInstall(
     },
     installed,
     summary: { name: `shadcn (${snapshotVersion})`, location: cacheRoot },
+  };
+}
+
+/**
+ * Sprint Z install path for shadcn-upstream. The user's choice of
+ * `in-repo` / `cache` decides the destination directory exactly like
+ * the legacy path; the install machinery is the upstream fetcher
+ * (`@velloo/provider-shadcn-upstream`) instead of the snapshot
+ * copier. Result: byte-identical vanilla shadcn lands in the chosen
+ * location, plus a manifest the canvas's inspector reads at boot.
+ */
+async function executeUpstreamInstall(
+  answers: WizardAnswers,
+  projectId: string,
+): Promise<InstallPlan> {
+  if (answers.source === "binary") {
+    // No on-disk install — the canvas uses the snapshot-equivalent
+    // registry baked into the binary. Useful for offline + greenfield
+    // explorations; the user can later run the cache/in-repo install
+    // to drop vanilla shadcn into their app.
+    return {
+      library: {
+        id: "shadcn-upstream",
+        version: snapshotVersion,
+        source: "binary",
+        componentsPath: "binary",
+      },
+      installed: null,
+      summary: {
+        name: `shadcn (upstream, no on-disk install)`,
+        location: "bundled with velloo",
+      },
+    };
+  }
+
+  // Pick the destination. `in-repo` writes into the user's app; `cache`
+  // writes under ~/.velloo so the install is isolated from any host
+  // codebase (useful when the design folder ships in greenfield).
+  let destination: string;
+  let componentsPath: string;
+  if (answers.source === "in-repo") {
+    if (!answers.appPath) {
+      throw new Error("in-repo install requires --app-path / `appPath`.");
+    }
+    // shadcn's `ui/` subfolder is added by the fetcher; we point at
+    // the parent so the resulting layout matches what `npx shadcn add`
+    // produces (`src/components/ui/*.tsx`).
+    destination = resolve(answers.appPath, answers.componentsRelative.replace(/\/ui$/, ""));
+    await mkdir(destination, { recursive: true });
+    const rel = relative(answers.folder, destination);
+    componentsPath = rel || ".";
+  } else {
+    destination = join(homedir(), ".velloo", "providers", `shadcn-upstream-${projectId}`);
+    componentsPath = `~/.velloo/providers/shadcn-upstream-${projectId}`;
+  }
+
+  const result = await installShadcnUpstream({ destination });
+  return {
+    library: {
+      id: "shadcn-upstream",
+      version: result.lock.version,
+      source: answers.source,
+      componentsPath,
+    },
+    installed: null,
+    summary: {
+      name: `shadcn (upstream @ ${result.lock.version})`,
+      location: destination,
+    },
+    npmDependencies: result.npmDependencies,
   };
 }

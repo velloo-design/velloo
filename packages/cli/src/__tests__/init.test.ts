@@ -204,6 +204,20 @@ describe("velloo init", () => {
     expect(screenFiles.length).toBe(0);
   }, 30_000);
 
+  test("--library=shadcn-upstream --source=binary works offline (Sprint Z)", async () => {
+    const { exitCode } = await runInit(tmp, [
+      "--library=shadcn-upstream",
+      "--source=binary",
+      "--initial-content=blank",
+    ]);
+    expect(exitCode).toBe(0);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(tmp, ".design/config.json"), "utf8")),
+    );
+    expect(config.library?.id).toBe("shadcn-upstream");
+    expect(config.library?.source).toBe("binary");
+  }, 30_000);
+
   test("--initial-content=scan generates one screen per Next.js app-router route", async () => {
     const appPath = join(tmp, "next-app");
     await mkdir(join(appPath, "app", "dashboard"), { recursive: true });

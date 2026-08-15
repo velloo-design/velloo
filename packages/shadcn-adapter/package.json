@@ -1,0 +1,26 @@
+{
+  "name": "@velloo/shadcn-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Canvas-safe adapter layer for shadcn components — overlay replacements, static fakes, and the adaptation map the upstream provider's bundler reads",
+  "exports": {
+    ".": "./src/index.ts",
+    "./lib/utils": "./src/lib/utils.ts",
+    "./lib/canvas-portal": "./src/lib/canvas-portal.tsx",
+    "./components/*": "./src/components/*.tsx"
+  },
+  "dependencies": {
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.16.0",
+    "radix-ui": "1.4.3",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "tailwind-merge": "3.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3"
+  }
+}

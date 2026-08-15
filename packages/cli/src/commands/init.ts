@@ -57,7 +57,7 @@ function shouldRunWizard(args: { nonInteractive?: boolean }): boolean {
 }
 
 function isValidLibraryId(v: string): v is LibraryId {
-  return v === "shadcn-react" || v === "none" || v === "mui";
+  return v === "shadcn-react" || v === "shadcn-upstream" || v === "none" || v === "mui";
 }
 
 function isValidSource(v: string): v is LibrarySource {

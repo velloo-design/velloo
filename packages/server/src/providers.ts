@@ -4,6 +4,7 @@ import type { ComponentProvider, ProviderLoader } from "@velloo/provider";
 import { createProviderLoader, UnknownProviderError } from "@velloo/provider";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoLibProvider } from "@velloo/provider-none";
+import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
 import type { Config, Library } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 
@@ -37,7 +38,39 @@ export function createServerProviderLoader(folderRoot?: string): ProviderLoader 
     // "not yet vendored" error. Registered here so `library.id = "mui"`
     // doesn't get a generic UnknownProviderError.
     mui: () => createMuiProvider(),
+    // Sprint Z: shadcn-upstream — components fetched from the official
+    // registry, deposited at the user's chosen location, and the canvas
+    // renders against the cached manifest. `componentsPath` resolves to
+    // the cache root so `loadManifest` and the JIT scan target follow
+    // the install location.
+    "shadcn-upstream": (library) => {
+      const cacheDir = resolveUpstreamCacheDir(library, folderRoot);
+      return createUpstreamProvider(
+        cacheDir ? { cacheDir, version: library.version } : { version: library.version },
+      );
+    },
   });
+}
+
+/**
+ * Resolve `library.componentsPath` to an absolute directory for the
+ * shadcn-upstream provider. The path can be relative (relative to the
+ * design folder), absolute, or `~/`-prefixed. Returns `null` when the
+ * path is the binary-only marker or can't be resolved.
+ */
+function resolveUpstreamCacheDir(library: Library, folderRoot: string | undefined): string | null {
+  const path = library.componentsPath;
+  if (!path || path === "binary") return null;
+  if (path.startsWith("~/")) {
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+    if (!home) return null;
+    const abs = resolve(home, path.slice(2));
+    return existsSync(abs) ? abs : null;
+  }
+  if (isAbsolute(path)) return existsSync(path) ? path : null;
+  if (!folderRoot) return null;
+  const abs = resolve(folderRoot, path);
+  return existsSync(abs) ? abs : null;
 }
 
 function resolveComponentsPath(

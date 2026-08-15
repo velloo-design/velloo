@@ -33,11 +33,13 @@ export type ViewportPreset = z.infer<typeof ViewportPresetSchema>;
  */
 export const LibrarySchema = z.object({
   /**
-   * Component provider id. Existing folders use `"shadcn-react"`;
-   * forthcoming providers add their own ids ("none", "mui", …). The
-   * server's provider loader maps ids to factories.
+   * Component provider id. Pre-Sprint-Z folders use `"shadcn-react"`
+   * (the vendored snapshot); Sprint-Z folders default to
+   * `"shadcn-upstream"` (fetched from upstream). Other providers add
+   * their own ids ("none", "mui", …). The server's provider loader
+   * maps ids to factories.
    */
-  id: z.enum(["shadcn-react", "none", "mui"]),
+  id: z.enum(["shadcn-react", "shadcn-upstream", "none", "mui"]),
   version: z.string().min(1),
   source: z.string().min(1),
   /** Where the components live, relative to the design folder root. */
