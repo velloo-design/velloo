@@ -11,6 +11,7 @@
 import { Tooltip as TooltipPrimitive } from "radix-ui";
 import type * as React from "react";
 import { cn } from "../../lib/utils.ts";
+import { inlineOpenAttrs, pinOpenInDesignMode } from "../canvas-portal.tsx";
 
 export function TooltipProvider({
   children,
@@ -30,7 +31,7 @@ export function Tooltip({
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
   return (
     <TooltipPrimitive.Provider delayDuration={0}>
-      <TooltipPrimitive.Root {...props}>{children}</TooltipPrimitive.Root>
+      <TooltipPrimitive.Root {...pinOpenInDesignMode(props)}>{children}</TooltipPrimitive.Root>
     </TooltipPrimitive.Provider>
   );
 }
@@ -57,6 +58,7 @@ export function TooltipContent({
     <div
       data-slot="tooltip-content"
       data-side-offset={sideOffset}
+      {...inlineOpenAttrs()}
       className={cn(
         "z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95",
         className,

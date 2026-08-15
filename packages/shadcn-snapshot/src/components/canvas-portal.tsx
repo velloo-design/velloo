@@ -1,34 +1,38 @@
 /**
- * Canvas-safe portal contract.
+ * Canvas-safe portal contract — the heart of the adapter pattern.
  *
  * Radix primitives portal their "open" content to `document.body` so it
- * stacks above page chrome. In design mode that's a problem: a Dialog
- * preview that lives in the body is invisible inside the canvas iframe,
- * and any styling pinned to a transformed ancestor breaks the math.
+ * stacks above page chrome. Inside Velloo's canvas iframes, a portal to
+ * the body is invisible (the iframe's body has nothing for the design
+ * to attach to), and any styling pinned to a transformed ancestor breaks
+ * the math.
  *
  * The Velloo contract: render the content **inline** under the
- * component itself, never through a portal. We don't actually want
- * users clicking the dropdown shut in design mode — they want to see
- * the styled state at all times. So:
+ * component itself, never through a portal. We don't actually want users
+ * clicking the dropdown shut in design mode — they want to see the
+ * styled state at all times. So:
  *
  *   <Dialog>
  *     <DialogTrigger>Open</DialogTrigger>
- *     <DialogContent>…</DialogContent>   ← rendered inline, always visible
+ *     <DialogContent>...</DialogContent>   ← rendered inline, always visible
  *   </Dialog>
  *
  * Implementation:
  *
- *   1. The Velloo wrapper for each Radix root forces `open={true}` /
- *      `defaultOpen={true}` in design mode so Radix actually mounts
- *      Content (otherwise Content is conditional on open state).
+ *   1. The Velloo Root for each Radix-shaped component forces
+ *      `open={true}` / `defaultOpen={true}` in design mode so Radix
+ *      mounts Content (otherwise Content is conditional on open state).
  *   2. The Velloo `Content` ditches Radix's `Portal` wrapper — it
  *      renders the styled card with the same data-slot attribute that
- *      shadcn ships, so user-app TSX (which imports the real shadcn
- *      components) keeps the same look.
+ *      shadcn ships, so user-app CSS still targets it normally.
  *
- * Real apps that ingest the agent's `emit_code` output ignore this
- * file and import the real shadcn primitives. The Velloo snapshot is
- * design-mode-only.
+ * The user's real app imports unmodified shadcn from their own
+ * `components/ui/<name>.tsx` (fetched at `velloo init` from upstream)
+ * and gets the actual modal behavior. The canvas-only adapter is what
+ * lets the *canvas* render those modals inline.
+ *
+ * See `docs/decisions.md` #18 (snapshot stays design-mode only) and
+ * #25 (upstream provider + adapter layer).
  */
 import type * as React from "react";
 

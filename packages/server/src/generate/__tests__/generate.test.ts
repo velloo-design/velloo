@@ -244,6 +244,9 @@ describe("generateImage", () => {
   });
 
   test("source is claude+picsum when not using fal", async () => {
+    // Clear the key so suggestAltText takes the offline fallback — with a
+    // real key in the environment this test would call the live API.
+    delete process.env.ANTHROPIC_API_KEY;
     const r = await generateImage(folder, "test");
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value.source).toBe("claude+picsum");

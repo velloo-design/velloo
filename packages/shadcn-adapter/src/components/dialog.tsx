@@ -1,7 +1,11 @@
-// Canvas-safe Dialog replacement. The upstream shadcn Dialog uses
-// DialogPrimitive.Portal which targets document.body; we render the
-// Content inline so the canvas iframe sees it. Forces open=true unless
-// the design explicitly passes a value. See lib/canvas-portal.tsx.
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/dialog).
+// Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
+//
+// Canvas-safe: see canvas-portal.tsx. The Velloo Dialog renders the
+// content inline (no portal) and pins open in design mode when neither
+// `open` nor `defaultOpen` is provided. Real apps using the agent's
+// emitted code get the proper modal behavior from the runtime shadcn
+// Dialog (which they import locally), not this design-mode stand-in.
 "use client";
 
 import { X } from "lucide-react";
@@ -22,6 +26,13 @@ export function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrim
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
+/**
+ * Inline DialogContent — bypasses Radix's Portal so the design surface
+ * sees the styled card directly under the trigger. Keeps the
+ * `data-slot="dialog-content"` attribute so shadcn CSS targets it as
+ * usual; adds `data-velloo-inline="true"` so audits can spot canvas-
+ * rendered overlays at inspection time.
+ */
 export function DialogContent({
   className,
   children,

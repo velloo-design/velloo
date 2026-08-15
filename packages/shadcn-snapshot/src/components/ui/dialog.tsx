@@ -1,12 +1,11 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/dialog).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
 //
-// Canvas-safe: see ../canvas-portal.tsx. The Velloo Dialog renders the
+// Canvas-safe: see canvas-portal.tsx. The Velloo Dialog renders the
 // content inline (no portal) and pins open in design mode when neither
 // `open` nor `defaultOpen` is provided. Real apps using the agent's
-// emitted code get the proper modal behavior from shadcn's runtime
-// shadcn Dialog (which they import locally), not this design-mode
-// stand-in.
+// emitted code get the proper modal behavior from the runtime shadcn
+// Dialog (which they import locally), not this design-mode stand-in.
 "use client";
 
 import { X } from "lucide-react";
@@ -99,6 +98,20 @@ export function DialogDescription({ className, ...props }: React.ComponentProps<
     <p
       data-slot="dialog-description"
       className={cn("text-muted-foreground text-sm", className)}
+      {...props}
+    />
+  );
+}
+
+export function DialogOverlay({ className, ...props }: React.ComponentProps<"div">) {
+  // Inline overlay — design mode doesn't need a portal-mounted backdrop.
+  // Rendered as a flat div so the visual mass is there for screenshots.
+  return (
+    <div
+      data-slot="dialog-overlay"
+      data-velloo-inline="true"
+      data-state="open"
+      className={cn("fixed inset-0 z-50 bg-black/50", className)}
       {...props}
     />
   );
