@@ -1,45 +1,20 @@
 /**
  * Parent side of the Storybook-style channel between canvas and design iframes.
  * One channel per iframe; owns its own MessageChannel ports.
+ *
+ * The message contract lives in @velloo/renderer's iframe-protocol module
+ * — the same package whose runtime string is injected into the iframe —
+ * so the two sides can't drift independently.
  */
-export interface NodeRect {
-  path: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+import {
+  type ChildMessage,
+  INIT_MESSAGE_TYPE,
+  type NodeRect,
+  type ParentMessage,
+  PROTOCOL_VERSION,
+} from "@velloo/renderer/iframe-protocol";
 
-export type ChildMessage =
-  | { type: "ready" }
-  | { type: "select"; path: string | null }
-  | { type: "hover"; path: string | null }
-  | { type: "nodeRects"; rects: NodeRect[] }
-  /**
-   * Cmd/Ctrl+wheel inside the iframe. clientX/Y are in the iframe
-   * document coordinates — the parent translates them into board
-   * coords using the iframe's bounding rect so zoom anchors on
-   * the actual cursor position, not (0,0).
-   */
-  | { type: "parentZoom"; deltaY: number; clientX: number; clientY: number }
-  /**
-   * Plain wheel / trackpad-scroll inside the iframe. The board uses
-   * this to pan the canvas; without it the iframe absorbs the scroll
-   * silently and the user can't move when their cursor is over a frame.
-   */
-  | { type: "parentPan"; deltaX: number; deltaY: number };
-
-export type ParentMessage =
-  | { type: "applyHighlight"; path: string }
-  | { type: "clearHighlight" }
-  | { type: "applyHover"; path: string }
-  | { type: "clearHover" }
-  | {
-      type: "applyVelloState";
-      path: string | null;
-      state: "default" | "hover" | "focus" | "active" | "disabled";
-    }
-  | { type: "requestRects"; paths: string[] };
+export type { ChildMessage, NodeRect, ParentMessage };
 
 export interface ChannelHandlers {
   onSelect?(path: string | null): void;
@@ -116,7 +91,7 @@ export class IframeChannel {
     const channel = new MessageChannel();
     this.port = channel.port1;
     this.port.onmessage = (ev: MessageEvent) => this.handleMessage(ev.data as ChildMessage);
-    w.postMessage({ type: "__velloo_init" }, "*", [channel.port2]);
+    w.postMessage({ type: INIT_MESSAGE_TYPE, version: PROTOCOL_VERSION }, "*", [channel.port2]);
     this.scheduleRetry();
   }
 
@@ -140,6 +115,14 @@ export class IframeChannel {
   private handleMessage(msg: ChildMessage): void {
     if (!msg || typeof msg !== "object") return;
     if (msg.type === "ready") {
+      if (msg.version !== PROTOCOL_VERSION) {
+        // Stale iframe doc (cached HTML from an older runtime). Keep
+        // operating best-effort, but say so — silent protocol drift is
+        // exactly what the version field exists to catch.
+        console.error(
+          `velloo: iframe protocol mismatch — canvas v${PROTOCOL_VERSION}, iframe v${msg.version ?? "<unversioned>"}. Reload the page.`,
+        );
+      }
       this.ready = true;
       this.cancelRetry();
       for (const queued of this.buffered) this.port?.postMessage(queued);

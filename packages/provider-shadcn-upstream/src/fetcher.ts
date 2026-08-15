@@ -68,10 +68,10 @@ export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const fetchedAt = new Date();
 
-  await mkdir(opts.destination, { recursive: true });
-  const filesWritten: string[] = [];
-  const lockComponents: ShadcnUpstreamLock["components"] = {};
-
+  // Fetch everything into memory before touching disk — a network
+  // failure on component N must not leave N-1 new files mixed with a
+  // stale lockfile from the previous fetch.
+  const fetched: { id: string; item: ShadcnRegistryItem }[] = [];
   for (const id of components) {
     const url = `${registryBase}/${style}/${id}.json`;
     const res = await fetchImpl(url);
@@ -84,6 +84,14 @@ export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
     if (!item.files || item.files.length === 0) {
       throw new Error(`velloo: shadcn registry returned no files for "${id}".`);
     }
+    fetched.push({ id, item });
+  }
+
+  await mkdir(opts.destination, { recursive: true });
+  const filesWritten: string[] = [];
+  const lockComponents: ShadcnUpstreamLock["components"] = {};
+
+  for (const { id, item } of fetched) {
     const fileEntries: { path: string; sha256: string }[] = [];
     for (const file of item.files) {
       // shadcn returns paths like "ui/button.tsx". Mirror them under

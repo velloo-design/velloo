@@ -1,4 +1,4 @@
-import type { ComponentDescriptor, PropDescriptor } from "@velloo/shadcn-snapshot";
+import type { ComponentDescriptor, PropDescriptor } from "@velloo/provider";
 import { ArrowLeft, LibraryBig, PanelsTopLeft } from "lucide-react";
 import { useMemo } from "react";
 import type { SnippetMeta } from "../api.ts";

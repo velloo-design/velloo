@@ -4,6 +4,7 @@ import { renderScreen, screenshot } from "@velloo/renderer";
 import { ConfigSchema, ScreenSchema, ThemeSchema, type Viewport } from "@velloo/schema";
 import { migrateConfig, resolveProviders, TailwindJit, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
+import { fail } from "../fail.ts";
 
 export default defineCommand({
   meta: {
@@ -78,9 +79,6 @@ export default defineCommand({
       return;
     }
 
-    console.error(
-      `velloo render: unsupported output extension ${JSON.stringify(ext)}. Use .html or .png.`,
-    );
-    process.exit(1);
+    fail("render", `unsupported output extension ${JSON.stringify(ext)}. Use .html or .png.`);
   },
 });

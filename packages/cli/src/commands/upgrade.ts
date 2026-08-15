@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { fail } from "../fail.ts";
 
 export default defineCommand({
   meta: {
@@ -9,7 +10,6 @@ export default defineCommand({
     folder: { type: "positional", required: true, description: "Design folder" },
   },
   async run() {
-    console.error("velloo upgrade: coming soon (Sprint 7).");
-    process.exit(1);
+    fail("upgrade", "coming soon (Sprint 7).");
   },
 });

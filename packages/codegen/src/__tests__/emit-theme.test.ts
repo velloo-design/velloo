@@ -106,3 +106,25 @@ describe("emitTheme", () => {
     expect(css).not.toContain(".dark {");
   }, 30_000);
 });
+
+describe("emitTheme contentGlobs", () => {
+  test("custom globs land in the emitted tailwind.config.ts", async () => {
+    const outDir = join(tmpdir(), `velloo-theme-globs-${Date.now()}`);
+    const result = await emitTheme(buildDefaultTheme(), {
+      outputDir: outDir,
+      apply: false,
+      contentGlobs: ["./src/**/*.{ts,tsx,astro}"],
+    });
+    const ts = result.files.find((f) => f.path.endsWith("tailwind.config.ts"));
+    expect(ts?.contents).toContain('"./src/**/*.{ts,tsx,astro}"');
+    expect(ts?.contents).not.toContain("./pages/**");
+  });
+
+  test("defaults keep the Next.js layout", async () => {
+    const outDir = join(tmpdir(), `velloo-theme-globs-default-${Date.now()}`);
+    const result = await emitTheme(buildDefaultTheme(), { outputDir: outDir, apply: false });
+    const ts = result.files.find((f) => f.path.endsWith("tailwind.config.ts"));
+    expect(ts?.contents).toContain('"./app/**/*.{ts,tsx}"');
+    expect(ts?.contents).toContain('"./pages/**/*.{ts,tsx}"');
+  });
+});

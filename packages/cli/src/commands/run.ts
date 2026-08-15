@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { createServer } from "@velloo/server";
 import { defineCommand } from "citty";
+import { fail } from "../fail.ts";
 
 export default defineCommand({
   meta: {
@@ -26,13 +27,11 @@ export default defineCommand({
     const folder = resolve(args.folder);
     const port = args.port ? Number(args.port) : 7300;
     if (!Number.isFinite(port) || port <= 0) {
-      console.error(`velloo run: invalid --port ${JSON.stringify(args.port)}`);
-      process.exit(1);
+      fail("run", `invalid --port ${JSON.stringify(args.port)}`);
     }
     const mcpPort = args["mcp-port"] ? Number(args["mcp-port"]) : 7301;
     if (!Number.isFinite(mcpPort) || mcpPort <= 0) {
-      console.error(`velloo run: invalid --mcp-port ${JSON.stringify(args["mcp-port"])}`);
-      process.exit(1);
+      fail("run", `invalid --mcp-port ${JSON.stringify(args["mcp-port"])}`);
     }
 
     const handle = await createServer({

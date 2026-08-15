@@ -1,6 +1,7 @@
+import type { Manifest } from "@velloo/provider";
 import type { Board, Screen, Snippet, SnippetParam, Theme, ViewportPreset } from "@velloo/schema";
-import type { Manifest } from "@velloo/shadcn-snapshot";
 import type { AnnotationEntry, CanvasNoteEntry } from "../store.ts";
+import type { MutateError } from "./http.ts";
 
 export interface DesignSummary {
   snapshotVersion: string;
@@ -56,60 +57,64 @@ export interface ComponentManifestEntry {
   importPath?: string;
 }
 
-export async function fetchDesign(): Promise<DesignSummary> {
-  const res = await fetch("/api/design");
-  if (!res.ok) throw new Error(`fetchDesign: ${res.status}`);
-  return (await res.json()) as DesignSummary;
+/**
+ * GET + parse. Failures read the server's `{error: {...}}` envelope and
+ * attach the typed payload, same as http.ts's POST helpers — one error
+ * shape across the whole API layer.
+ */
+async function getJson<T>(path: string, label: string): Promise<T> {
+  const res = await fetch(path);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: MutateError };
+    const err = new Error(body.error?.message ?? `${label}: ${res.status}`);
+    (err as Error & { payload?: MutateError }).payload = body.error;
+    throw err;
+  }
+  return (await res.json()) as T;
 }
 
-export async function fetchScreen(id: string): Promise<Screen> {
-  const res = await fetch(`/api/screen/${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error(`fetchScreen(${id}): ${res.status}`);
-  return (await res.json()) as Screen;
+export function fetchDesign(): Promise<DesignSummary> {
+  return getJson("/api/design", "fetchDesign");
 }
 
-export async function fetchBoard(id: string): Promise<Board> {
-  const res = await fetch(`/api/board/${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error(`fetchBoard(${id}): ${res.status}`);
-  return (await res.json()) as Board;
+export function fetchScreen(id: string): Promise<Screen> {
+  return getJson(`/api/screen/${encodeURIComponent(id)}`, `fetchScreen(${id})`);
 }
 
-export async function fetchSnippet(id: string): Promise<Snippet> {
-  const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error(`fetchSnippet(${id}): ${res.status}`);
-  return (await res.json()) as Snippet;
+export function fetchBoard(id: string): Promise<Board> {
+  return getJson(`/api/board/${encodeURIComponent(id)}`, `fetchBoard(${id})`);
+}
+
+export function fetchSnippet(id: string): Promise<Snippet> {
+  return getJson(`/api/snippets/${encodeURIComponent(id)}`, `fetchSnippet(${id})`);
 }
 
 export async function fetchAnnotations(screenId: string): Promise<AnnotationEntry[]> {
-  const res = await fetch(`/api/annotations/${encodeURIComponent(screenId)}`);
-  if (!res.ok) throw new Error(`fetchAnnotations(${screenId}): ${res.status}`);
-  const body = (await res.json()) as { annotations: AnnotationEntry[] };
+  const body = await getJson<{ annotations: AnnotationEntry[] }>(
+    `/api/annotations/${encodeURIComponent(screenId)}`,
+    `fetchAnnotations(${screenId})`,
+  );
   return body.annotations;
 }
 
 export async function fetchNotes(boardId: string): Promise<CanvasNoteEntry[]> {
-  const res = await fetch(`/api/notes/${encodeURIComponent(boardId)}`);
-  if (!res.ok) throw new Error(`fetchNotes(${boardId}): ${res.status}`);
-  const body = (await res.json()) as { notes: CanvasNoteEntry[] };
+  const body = await getJson<{ notes: CanvasNoteEntry[] }>(
+    `/api/notes/${encodeURIComponent(boardId)}`,
+    `fetchNotes(${boardId})`,
+  );
   return body.notes;
 }
 
-export async function fetchComponents(): Promise<Manifest> {
-  const res = await fetch("/api/components");
-  if (!res.ok) throw new Error(`fetchComponents: ${res.status}`);
-  return (await res.json()) as Manifest;
+export function fetchComponents(): Promise<Manifest> {
+  return getJson("/api/components", "fetchComponents");
 }
 
-export async function fetchTheme(): Promise<Theme> {
-  const res = await fetch("/api/theme");
-  if (!res.ok) throw new Error(`fetchTheme: ${res.status}`);
-  return (await res.json()) as Theme;
+export function fetchTheme(): Promise<Theme> {
+  return getJson("/api/theme", "fetchTheme");
 }
 
-export async function fetchPresets(): Promise<{ presets: string[] }> {
-  const res = await fetch("/api/theme/presets");
-  if (!res.ok) throw new Error(`fetchPresets: ${res.status}`);
-  return (await res.json()) as { presets: string[] };
+export function fetchPresets(): Promise<{ presets: string[] }> {
+  return getJson("/api/theme/presets", "fetchPresets");
 }
 
 export function renderUrl(screenId: string, w: number, h: number): string {

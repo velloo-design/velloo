@@ -5,6 +5,7 @@ import { emitCode } from "@velloo/codegen";
 import { ScreenSchema } from "@velloo/schema";
 import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
+import { fail } from "../fail.ts";
 
 export default defineCommand({
   meta: {
@@ -39,14 +40,14 @@ export default defineCommand({
       ...(componentsAlias ? { componentsAlias } : {}),
     });
     if (!result.ok) {
-      if (result.error.kind === "UnknownComponent") {
-        console.error(`velloo emit: unknown component: ${JSON.stringify(result.error.ref)}`);
-      } else if (result.error.kind === "SnippetNotFound") {
-        console.error(`velloo emit: snippet not found: ${JSON.stringify(result.error.snippetId)}`);
-      } else if (result.error.kind === "ScreenNotFound") {
-        console.error(`velloo emit: screen not found: ${JSON.stringify(result.error.screenId)}`);
+      const e = result.error;
+      if (e.kind === "UnknownComponent") {
+        fail("emit", `unknown component: ${JSON.stringify(e.ref)}`);
+      } else if (e.kind === "SnippetNotFound") {
+        fail("emit", `snippet not found: ${JSON.stringify(e.snippetId)}`);
+      } else {
+        fail("emit", `screen not found: ${JSON.stringify(e.screenId)}`);
       }
-      process.exit(1);
     }
 
     if (args.to) {

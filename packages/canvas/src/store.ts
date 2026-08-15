@@ -1,5 +1,5 @@
+import type { Manifest } from "@velloo/provider";
 import type { Board, Node, Screen, Theme } from "@velloo/schema";
-import type { Manifest } from "@velloo/shadcn-snapshot";
 import { create } from "zustand";
 import {
   type DesignSummary,

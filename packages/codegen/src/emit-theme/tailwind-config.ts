@@ -1,8 +1,18 @@
+/** Next.js-shaped defaults; Vite/Astro/Remix hosts pass their own. */
+export const DEFAULT_CONTENT_GLOBS = [
+  "./app/**/*.{ts,tsx}",
+  "./components/**/*.{ts,tsx}",
+  "./pages/**/*.{ts,tsx}",
+] as const;
+
 /**
  * Emit a minimal Tailwind v4 config. Most of the tokens live in globals.css
  * via @theme; this file is the framework hook for `content` paths + plugins.
  */
-export function emitTailwindConfig(): string {
+export function emitTailwindConfig(
+  contentGlobs: readonly string[] = DEFAULT_CONTENT_GLOBS,
+): string {
+  const content = contentGlobs.map((g) => `    ${JSON.stringify(g)},`).join("\n");
   return `import type { Config } from "tailwindcss";
 
 /**
@@ -11,9 +21,7 @@ export function emitTailwindConfig(): string {
  */
 export default {
   content: [
-    "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./pages/**/*.{ts,tsx}",
+${content}
   ],
 } satisfies Config;
 `;

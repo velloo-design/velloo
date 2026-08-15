@@ -18,6 +18,7 @@ import { writeJsonAtomic, writeText } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import { fail } from "../fail.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { buildDefaultTheme } from "../scaffold/default-theme.ts";
 import {
@@ -28,7 +29,8 @@ import {
 import { buildSampleBoards, buildSampleScreens } from "../scaffold/sample-page.ts";
 import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
 import { buildBoardFromScan, buildScreensFromScan, scanAppRoutes } from "../scan/index.ts";
-import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "../wizard/answers.ts";
+import type { WizardAnswers } from "../wizard/answers.ts";
+import { answersFromArgs, type InitCliArgs, shouldRunWizard } from "../wizard/args.ts";
 import { executeInstall, type InstallPlan } from "../wizard/install.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
@@ -42,67 +44,6 @@ async function isEmptyOrMissing(path: string): Promise<boolean> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return true;
     throw err;
   }
-}
-
-/**
- * Auto-decide whether to run the interactive wizard. Skips when stdin
- * isn't a TTY (CI, piping, scripted invocations) or when the user
- * passes `--non-interactive`. This keeps the existing init smoke test
- * working without changes.
- */
-function shouldRunWizard(args: { nonInteractive?: boolean }): boolean {
-  if (args.nonInteractive) return false;
-  if (!process.stdin.isTTY) return false;
-  return true;
-}
-
-function isValidLibraryId(v: string): v is LibraryId {
-  return v === "shadcn-react" || v === "shadcn-upstream" || v === "none" || v === "mui";
-}
-
-function isValidSource(v: string): v is LibrarySource {
-  return v === "binary" || v === "in-repo" || v === "cache";
-}
-
-function isValidContent(v: string): v is InitialContent {
-  return v === "sample" || v === "blank" || v === "scan";
-}
-
-interface CliArgs {
-  folder?: string;
-  force?: boolean;
-  nonInteractive?: boolean;
-  library?: string;
-  source?: string;
-  appPath?: string;
-  componentsDir?: string;
-  initialContent?: string;
-  themeColor?: string;
-  themeVibe?: string;
-}
-
-function answersFromArgs(args: CliArgs): WizardAnswers {
-  const library: LibraryId = isValidLibraryId(args.library ?? "")
-    ? (args.library as LibraryId)
-    : "shadcn-react";
-  const source: LibrarySource = isValidSource(args.source ?? "")
-    ? (args.source as LibrarySource)
-    : "binary";
-  if (source === "in-repo" && !args.appPath) {
-    throw new Error(`velloo init: --source=in-repo requires --app-path=<path-to-your-app>.`);
-  }
-  return {
-    folder: resolve(args.folder ?? "design"),
-    library,
-    source,
-    appPath: args.appPath ? resolve(args.appPath) : undefined,
-    componentsRelative: args.componentsDir ?? "src/components/ui",
-    initialContent: isValidContent(args.initialContent ?? "")
-      ? (args.initialContent as InitialContent)
-      : "sample",
-    themeColor: args.themeColor && args.themeColor.trim() !== "" ? args.themeColor : undefined,
-    themeVibe: args.themeVibe && args.themeVibe.trim() !== "" ? args.themeVibe : undefined,
-  };
 }
 
 interface Scaffold {
@@ -331,15 +272,16 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const cliArgs = args as CliArgs;
+    const cliArgs = args as InitCliArgs;
     let answers: WizardAnswers;
 
-    if (shouldRunWizard(cliArgs)) {
+    if (shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY))) {
       printLogo();
       const result = await runInteractive({
         folder: resolve(cliArgs.folder ?? "design"),
       });
       if (!result) {
+        // The wizard already printed its cancellation notice.
         process.exit(1);
       }
       answers = result;
@@ -347,18 +289,16 @@ export default defineCommand({
       try {
         answers = answersFromArgs(cliArgs);
       } catch (err) {
-        console.error(`${pc.red("velloo init:")} ${(err as Error).message}`);
-        process.exit(1);
+        fail("init", (err as Error).message);
       }
     }
 
     const folder = answers.folder;
     if (!cliArgs.force && !(await isEmptyOrMissing(folder))) {
-      console.error(
-        `${pc.red("velloo init:")} target folder is not empty: ${folder}\n` +
-          `  Pick an empty path, or pass --force to scaffold over it.`,
+      fail(
+        "init",
+        `target folder is not empty: ${folder}\n  Pick an empty path, or pass --force to scaffold over it.`,
       );
-      process.exit(1);
     }
 
     const projectId = randomUUID();
@@ -366,16 +306,14 @@ export default defineCommand({
     try {
       plan = await executeInstall(answers, projectId);
     } catch (err) {
-      console.error(`${pc.red("velloo init:")} ${(err as Error).message}`);
-      process.exit(1);
+      fail("init", (err as Error).message);
     }
 
     let scaffold: Scaffold;
     try {
       scaffold = await buildScaffold(answers);
     } catch (err) {
-      console.error(`${pc.red("velloo init:")} ${(err as Error).message}`);
-      process.exit(1);
+      fail("init", (err as Error).message);
     }
     await writeScaffold(folder, scaffold, plan, answers, projectId);
 

@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@velloo/schema": "workspace:*",
-    "@velloo/shadcn-snapshot": "workspace:*",
+    "@velloo/provider": "workspace:*",
+    "@velloo/renderer": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "culori": "4.0.2",

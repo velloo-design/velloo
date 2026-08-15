@@ -14,8 +14,9 @@
       "name": "@velloo/canvas",
       "version": "0.1.0",
       "dependencies": {
+        "@velloo/provider": "workspace:*",
+        "@velloo/renderer": "workspace:*",
         "@velloo/schema": "workspace:*",
-        "@velloo/shadcn-snapshot": "workspace:*",
         "class-variance-authority": "0.7.1",
         "clsx": "2.1.1",
         "culori": "4.0.2",

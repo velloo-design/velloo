@@ -134,6 +134,25 @@ describe("fetchShadcn", () => {
       }),
     ).rejects.toThrow(/HTTP 404/);
   });
+
+  test("a mid-list fetch failure writes nothing to disk", async () => {
+    const fetchImpl: typeof fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/button.json")) {
+        return new Response(JSON.stringify(buildRegistryStub("button", fakeButtonTsx())));
+      }
+      // Second component fails — the first must not have hit disk.
+      return new Response("boom", { status: 500 });
+    }) as unknown as typeof fetch;
+
+    await expect(
+      fetchShadcn({ destination: tmp, components: ["button", "card"], fetchImpl }),
+    ).rejects.toThrow(/HTTP 500/);
+
+    // No partial files, no lockfile, not even the destination dir.
+    expect(await Bun.file(join(tmp, "ui", "button.tsx")).exists()).toBe(false);
+    expect(await Bun.file(join(tmp, "shadcn-upstream-lock.json")).exists()).toBe(false);
+  });
 });
 
 describe("verifyCache", () => {

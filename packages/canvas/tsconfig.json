@@ -15,5 +15,5 @@
     }
   },
   "include": ["src/**/*", "vite.config.ts"],
-  "references": [{ "path": "../schema" }, { "path": "../shadcn-snapshot" }]
+  "references": [{ "path": "../schema" }, { "path": "../provider" }, { "path": "../renderer" }]
 }

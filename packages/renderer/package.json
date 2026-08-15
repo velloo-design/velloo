@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Headless renderer: design JSON → HTML + screenshot",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./iframe-protocol": "./src/iframe-protocol.ts"
   },
   "dependencies": {
     "@velloo/provider": "workspace:*",

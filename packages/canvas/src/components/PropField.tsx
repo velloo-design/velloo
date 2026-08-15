@@ -1,4 +1,4 @@
-import type { PropDescriptor } from "@velloo/shadcn-snapshot";
+import type { PropDescriptor } from "@velloo/provider";
 import { useState } from "react";
 import { IconPicker } from "./IconPicker.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";

@@ -1,14 +1,21 @@
+import { PROTOCOL_VERSION } from "./iframe-protocol.ts";
+
 /**
  * Inlined into every rendered design HTML doc. Establishes a Storybook-style
  * MessageChannel with the parent canvas, reports clicks/hover with the
  * data-node-path of the closest ancestor, and applies highlights when the
  * parent asks for them. Parent owns selection; iframe is a thin reporter.
+ *
+ * This is a raw JS string, so it can't be type-checked against the
+ * iframe-protocol unions — __tests__/iframe-protocol.test.ts greps the
+ * source for message literals to catch drift, and the handshake carries
+ * PROTOCOL_VERSION (interpolated below) so a stale doc fails loudly.
  */
 export const IFRAME_RUNTIME = String.raw`
 (() => {
   if (window.__velloo) return;
+  const PROTOCOL_VERSION = ${PROTOCOL_VERSION};
   let port = null;
-  let pendingHighlight = null;
   let pendingHover = null;
 
   const SELECT_CLASS = '__velloo-selected';
@@ -134,11 +141,7 @@ export const IFRAME_RUNTIME = String.raw`
     if (ev.data && ev.data.type === '__velloo_init' && ev.ports && ev.ports[0]) {
       port = ev.ports[0];
       port.onmessage = handleParentMessage;
-      port.postMessage({ type: 'ready' });
-      if (pendingHighlight !== null) {
-        send({ type: 'applyHighlight', path: pendingHighlight });
-        pendingHighlight = null;
-      }
+      port.postMessage({ type: 'ready', version: PROTOCOL_VERSION });
     }
   });
 

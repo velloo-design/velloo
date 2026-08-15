@@ -689,9 +689,9 @@ describe("SnippetParamSchema refinements", () => {
 
   test("enum type requires non-empty enum values and a member default", () => {
     expect(SnippetParamSchema.safeParse({ name: "size", type: "enum" }).success).toBe(false);
-    expect(
-      SnippetParamSchema.safeParse({ name: "size", type: "enum", enum: [] }).success,
-    ).toBe(false);
+    expect(SnippetParamSchema.safeParse({ name: "size", type: "enum", enum: [] }).success).toBe(
+      false,
+    );
     expect(
       SnippetParamSchema.safeParse({
         name: "size",
@@ -721,12 +721,11 @@ describe("SnippetParamSchema refinements", () => {
 describe("ExtensionPropDescriptorSchema refinements", () => {
   test("enum control requires non-empty enumValues", () => {
     const base = { name: "variant", type: "string", optional: true };
+    expect(ExtensionPropDescriptorSchema.safeParse({ ...base, control: "enum" }).success).toBe(
+      false,
+    );
     expect(
-      ExtensionPropDescriptorSchema.safeParse({ ...base, control: "enum" }).success,
-    ).toBe(false);
-    expect(
-      ExtensionPropDescriptorSchema.safeParse({ ...base, control: "enum", enumValues: [] })
-        .success,
+      ExtensionPropDescriptorSchema.safeParse({ ...base, control: "enum", enumValues: [] }).success,
     ).toBe(false);
     expect(
       ExtensionPropDescriptorSchema.safeParse({

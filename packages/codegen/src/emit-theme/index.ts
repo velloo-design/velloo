@@ -13,6 +13,12 @@ export interface EmitThemeOptions {
   cssOnly?: boolean;
   /** Whether to actually write files. Default false → returns diffs only. */
   apply?: boolean;
+  /**
+   * `content` globs for the emitted tailwind.config.ts. Defaults to the
+   * Next.js layout (app/, components/, pages/) — Vite/Astro hosts pass
+   * the globs matching their structure.
+   */
+  contentGlobs?: readonly string[];
 }
 
 export interface EmitThemeFile {
@@ -52,7 +58,7 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
 
   if (!options.cssOnly) {
     const tsPath = join(options.outputDir, "tailwind.config.ts");
-    const tsRaw = emitTailwindConfig();
+    const tsRaw = emitTailwindConfig(options.contentGlobs);
     const tsDiff = await diffFile(tsPath, tsRaw);
     let tsApplied = false;
     if (options.apply && !tsDiff.identical) {
