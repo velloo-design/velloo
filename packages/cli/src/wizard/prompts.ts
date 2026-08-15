@@ -54,7 +54,9 @@ export async function runInteractive(defaults: { folder: string }): Promise<Wiza
         label: "No library",
         hint: "Box / Stack / Text primitives — Sprint X+2",
       },
-      { value: "mui", label: "Material UI", hint: "MUI v6 — Sprint X+2" },
+      // "mui" stays out of the list until the provider ships (Sprint
+      // X+2.1) — the factory throws "not yet vendored", so offering it
+      // here walks the user through every prompt and then fails init.
     ],
     initialValue: "shadcn-upstream",
   });

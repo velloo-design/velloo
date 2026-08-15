@@ -61,7 +61,9 @@ export async function moveNode(
     }
     const [moved] = fromParent.children.splice(fromParentInfo.index, 1);
     if (fromParent.children.length === 0) delete fromParent.children;
-    if (!moved) throw new Error("invariant: detach lost node");
+    if (!moved) {
+      return yield* $(err(invalidPath("internal: detach lost node during move", resolvedFrom)));
+    }
 
     let adjustedToParent = resolvedTo;
     const sameParent = JSON.stringify(fromParentInfo.parent) === JSON.stringify(resolvedTo);

@@ -110,12 +110,17 @@ describe("fetchShadcn", () => {
 
     // Lockfile records the registry + per-file SHA256 + npm deps.
     const lock = result.lock;
-    expect(lock.version).toMatch(/^\d{4}\.\d{2}\.\d{2}$/);
+    expect(lock.version).toMatch(/^\d{4}\.\d{2}\.\d{2}-\d{4}$/);
     expect(lock.style).toBe("new-york");
     expect(lock.components.button?.dependencies).toEqual(["@radix-ui/react-slot"]);
     expect(lock.components.button?.files[0]?.path).toBe("ui/button.tsx");
     expect(lock.components.button?.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(lock.components.card?.dependencies).toEqual([]);
+
+    // The hardcoded cn helper is locked like any component, so drift
+    // detection covers it and its npm deps are aggregated.
+    expect(lock.components.utils?.files[0]?.path).toBe("lib/utils.ts");
+    expect(lock.components.utils?.dependencies).toEqual(["clsx", "tailwind-merge"]);
   });
 
   test("surfaces non-200 responses as typed errors", async () => {
@@ -160,6 +165,21 @@ describe("verifyCache", () => {
     await writeFile(join(tmp, "ui", "button.tsx"), "// hand-edit\n");
     const drifted = await verifyCache(tmp, lock);
     expect(drifted).toEqual(["ui/button.tsx"]);
+  });
+
+  test("detects drift in lib/utils.ts", async () => {
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(
+        JSON.stringify(buildRegistryStub("button", fakeButtonTsx())),
+      )) as unknown as typeof fetch;
+    const { lock } = await fetchShadcn({
+      destination: tmp,
+      components: ["button"],
+      fetchImpl,
+    });
+    await writeFile(join(tmp, "lib", "utils.ts"), "// hand-edit\n");
+    const drifted = await verifyCache(tmp, lock);
+    expect(drifted).toEqual(["lib/utils.ts"]);
   });
 });
 

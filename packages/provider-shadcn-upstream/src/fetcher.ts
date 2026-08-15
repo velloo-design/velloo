@@ -105,11 +105,18 @@ export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
 
   // The shadcn `cn` helper. Hardcoded because the registry doesn't
   // expose it as a fetch-able entry; the content is stable across
-  // shadcn versions (cn = clsx + twMerge).
+  // shadcn versions (cn = clsx + twMerge). Recorded in the lockfile
+  // like any fetched component so verifyCache covers it and the npm
+  // dependency aggregation includes what cn() imports.
   const utilsPath = join(opts.destination, "lib", "utils.ts");
   await mkdir(dirname(utilsPath), { recursive: true });
   await writeFile(utilsPath, LIB_UTILS_CONTENT, "utf8");
   filesWritten.push(utilsPath);
+  lockComponents.utils = {
+    files: [{ path: "lib/utils.ts", sha256: hashContent(LIB_UTILS_CONTENT) }],
+    dependencies: ["clsx", "tailwind-merge"],
+    registryDependencies: [],
+  };
 
   const lock: ShadcnUpstreamLock = {
     version: dateStampVersion(fetchedAt),

@@ -97,7 +97,9 @@ export function Badge({ variant, ...props }: BadgeProps) {
     });
     expect(result.destination).toBe(tmp);
     expect(result.lock.components.badge).toBeDefined();
-    expect(result.npmDependencies).toEqual([]);
+    // lib/utils.ts ships with every install, so cn()'s imports are
+    // always part of the aggregate even when components declare none.
+    expect(result.npmDependencies).toEqual(["clsx", "tailwind-merge"]);
 
     // Provider built from this cache sees the fetched-manifest Badge entry.
     const provider = createProvider({ cacheDir: tmp });

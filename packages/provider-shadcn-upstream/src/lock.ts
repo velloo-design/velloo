@@ -43,7 +43,9 @@ export function dateStampVersion(at: Date): string {
   const year = at.getUTCFullYear();
   const month = String(at.getUTCMonth() + 1).padStart(2, "0");
   const day = String(at.getUTCDate()).padStart(2, "0");
-  return `${year}.${month}.${day}`;
+  const hour = String(at.getUTCHours()).padStart(2, "0");
+  const minute = String(at.getUTCMinutes()).padStart(2, "0");
+  return `${year}.${month}.${day}-${hour}${minute}`;
 }
 
 /**

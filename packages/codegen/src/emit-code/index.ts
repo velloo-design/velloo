@@ -148,12 +148,13 @@ function collectMetadata(
     if (isComponentNode(node)) {
       components.add(node.$ref);
       // Icon's `name` prop drives an inline lucide JSX; record the name
-      // so the agent imports it.
+      // so the agent imports it. Mirrors the registry's resolve fallback —
+      // invalid/missing names render <HelpCircle />, which needs an import too.
       if (node.$ref === "Icon") {
         const name = node.props?.name;
-        if (typeof name === "string" && /^[A-Z][A-Za-z0-9]*$/.test(name)) {
-          icons.add(name);
-        }
+        icons.add(
+          typeof name === "string" && /^[A-Z][A-Za-z0-9]*$/.test(name) ? name : "HelpCircle",
+        );
       }
       for (const child of node.children ?? []) walk(child);
       return;
