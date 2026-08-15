@@ -16,6 +16,14 @@ import { NodeSchema } from "./node.ts";
 export const ScreenSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  /**
+   * Library id (key in `Config.libraries`) this screen renders against.
+   * Optional — when absent the folder's `defaultLibrary` is used.
+   * Multi-library per folder; one library per screen. A screen's
+   * components and extensions resolve against this library's registry.
+   *
+   */
+  library: z.string().min(1).optional(),
   tree: NodeSchema,
 });
 

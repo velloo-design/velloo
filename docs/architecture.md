@@ -149,15 +149,37 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 ### Config
 
 ```json
-// .design/config.json
+// .design/config.json (Sprint Y multi-library shape)
 {
   "schemaVersion": 1,
   "toolVersion": "0.1.0",
-  "library": {
-    "id": "shadcn-react",
-    "version": "2026.05.22",
-    "source": "embedded:shadcn",
-    "componentsPath": "embedded:shadcn"
+  "projectId": "01J9C8N3M2X4Z6Y7K",
+  "libraries": {
+    "shadcn": {
+      "id": "shadcn-react",
+      "version": "2026.05.22",
+      "source": "binary",
+      "componentsPath": "binary"
+    },
+    "marketing": {
+      "id": "none",
+      "version": "0.1.0",
+      "source": "binary",
+      "componentsPath": "binary"
+    }
+  },
+  "defaultLibrary": "shadcn",
+  "extensions": {
+    "DataTable": {
+      "importPath": "@/components/data-table",
+      "category": "ui",
+      "description": "Sortable, paginated table",
+      "props": [
+        { "name": "data", "type": "any[]", "optional": false, "control": "string" },
+        { "name": "sortable", "type": "boolean | undefined", "optional": true, "control": "boolean" }
+      ],
+      "origin": "agent"
+    }
   },
   "viewportPresets": [
     { "name": "Mobile", "w": 390, "h": 844 },
@@ -170,7 +192,13 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 }
 ```
 
-The `library` field records which UI library this design folder is designed against and its embedded snapshot version (a `YYYY.MM.DD` date string matching `@velloo/shadcn-snapshot`'s `snapshotVersion`). `source: "embedded:shadcn"` is the default — the components live inside the Velloo binary, not the user's repo. `source: "shared:<path>"` (experimental, not yet implemented) would point at the user's app components instead.
+The `libraries` map (Sprint Y) declares every library this folder uses; each screen pins one via its own `library` field. `defaultLibrary` names the entry used when a screen doesn't specify. The legacy single-library shape (`library: Library` at the top level) still parses for backward compat — the server normalizes it to `libraries: { default: Library }` in-memory at load time.
+
+The `extensions` map (Sprint Y) holds user-declared custom components — agent-registered via the `add_extension` MCP tool. Each entry records the bare `importPath` codegen emits, a hand-authored prop schema, and an `origin` tag (`"agent"` or `"manual"`). Extensions are folder-global: every screen in every library sees them. Extension ids shadow library components with the same name.
+
+`source` is the canonical vocabulary for "where do the components live" — `"binary"` (default: shipped with the velloo binary, the embedded shadcn snapshot today), `"cache"` (Sprint X+1: `~/.velloo/<projectId>/...`), `"in-repo"` (Sprint X+1: the user's app folder), or `"shared:<path>"` (experimental — designed but not yet implemented). Legacy `"embedded:shadcn"` and `"registry:shadcn"` values are normalized in-memory at folder load.
+
+`projectId` (optional) is a stable id used to key external-cache paths. Existing folders without one fall back to a path-derived hash.
 
 `defaultBoard` + `defaultScreen` are optional hints the canvas uses on first load. `codegen.componentsAlias` lets the design folder declare the import prefix `emit_code` should suggest (`@/components/ui` for Next.js, `~/components/ui` for Astro, etc.).
 
@@ -181,7 +209,8 @@ The `library` field records which UI library this design folder is designed agai
 │  Global tool (single binary, Bun SEA, ~30MB)        │
 │  ┌──────────────────────────────────────────────┐   │
 │  │ Pre-built canvas (static React app)          │   │
-│  │ Embedded shadcn snapshot + manifest          │   │
+│  │ ComponentProvider loader + default shadcn    │   │
+│  │ Embedded Tailwind v4 (canvas concern)        │   │
 │  │ Tiny HTTP server (canvas + MCP)              │   │
 │  │ JSON read/write, codegen, theme export       │   │
 │  └──────────────────────────────────────────────┘   │
@@ -207,13 +236,36 @@ Both interfaces drive the same tool surface — agent edits and human edits are 
 
 ## Component sourcing
 
-Components are **embedded in the Velloo binary** (`@velloo/shadcn-snapshot` package). The design folder doesn't ship a `components/` directory.
+Components come from the **active component provider** (`@velloo/provider`). The design folder doesn't ship a `components/` directory. Today the only provider that ships is the embedded shadcn snapshot; Sprint X+2 will add no-lib + MUI alongside, and a host-repo provider is later on the roadmap.
 
-This is a reversal of an earlier decision ( The reversion was driven by AI-agent confusion — two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) made the source of truth unclear. Embedded components keep the design folder pure data.
+The provider interface is the contract every library entry implements:
 
-The snapshot today carries ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus 9 Velloo helpers (`<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`). Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-snapshot/src/components/canvas-portal.tsx` and. Calendar / Chart / Carousel are static fakes for the same reason (the real components require runtime state or canvas APIs Velloo deliberately doesn't simulate).
+```ts
+interface ComponentProvider {
+  id: string;                       // "shadcn-react", "none", "mui", "host"
+  version: string;
+  componentsDir: string;            // Tailwind JIT scan target
+  styleEntryPath: string;           // Tailwind v4 @theme entry
+  registry: ComponentRegistry;      // $ref → React component
+  loadManifest(): Promise<Manifest>;
+}
+```
 
-**Tailwind is JIT-compiled at server runtime** against the embedded component sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
+The renderer, the Tailwind JIT, MCP discovery, codegen — every consumer reads through this. The server's `MutationContext` carries one resolved `provider` instance per design folder, looked up at boot via a `ProviderLoader` (`packages/server/src/providers.ts`). This is a Sprint-X refactor of an earlier hardcoded design where every consumer imported from `@velloo/shadcn-snapshot` directly.
+
+The reasoning behind not putting components on disk in the design folder still holds: an earlier draft had `velloo init` pull components into the design folder so the user "owned" them on disk. The reversion was driven by AI-agent confusion — two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) made the source of truth unclear. The provider abstraction keeps the design folder pure data while still letting different libraries take the active slot.
+
+### The shadcn provider
+
+The default. Carries ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus 9 Velloo helpers (`<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`). Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-snapshot/src/components/canvas-portal.tsx` and. Calendar / Chart / Carousel are static fakes for the same reason (the real components require runtime state or canvas APIs Velloo deliberately doesn't simulate).
+
+The snapshot's `snapshotVersion` (`2026.05.22` at the time of this section) is the provider's `version`.
+
+### Tailwind is a canvas concern, not a provider concern
+
+**Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
+
+Tailwind v4 stays embedded in the velloo binary forever, regardless of which provider is active. Per-instance overrides (`apply_classes`) are always Tailwind classes; codegen translates them to the user's styling system at emit time (verbatim for shadcn/no-lib; converted to `sx` props for MUI when that provider ships). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
 
 ### Customizing components
 

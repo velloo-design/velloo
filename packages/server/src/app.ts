@@ -26,12 +26,12 @@ export function createApp(ctxFor: () => MutationContext, jit: TailwindJit): Hono
   const folder: () => DesignFolder = () => ctxFor().folder;
 
   app.get("/api/health", (c) => c.json({ ok: true }));
-  app.route("/api/design", createDesignRouter(folder));
+  app.route("/api/design", createDesignRouter(ctxFor));
   app.route("/api/screen", createScreenRouter(folder));
   app.route("/api/board", createBoardRouter(folder));
   app.route("/api/snippets", createSnippetsRouter(folder));
-  app.route("/api/render", createRenderRouter(folder, jit));
-  app.route("/api/components", createComponentsRouter(folder));
+  app.route("/api/render", createRenderRouter(ctxFor, jit));
+  app.route("/api/components", createComponentsRouter(ctxFor));
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/inspect", createInspectRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));

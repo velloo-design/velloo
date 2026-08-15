@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { renderScreen, screenshot } from "@velloo/renderer";
-import { ScreenSchema, ThemeSchema, type Viewport } from "@velloo/schema";
-import { TailwindJit, writeText } from "@velloo/server";
+import { ConfigSchema, ScreenSchema, ThemeSchema, type Viewport } from "@velloo/schema";
+import { migrateConfig, resolveProviders, TailwindJit, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
 
 export default defineCommand({
@@ -37,22 +37,33 @@ export default defineCommand({
     // Layout assumption: <folder>/screens/<screen>.json, <folder>/theme/default.json
     const folder = dirname(dirname(screenPath));
     const themePath = resolve(folder, "theme", "default.json");
+    const configPath = resolve(folder, ".design", "config.json");
 
-    const [screenJson, themeJson] = await Promise.all([
+    const [screenJson, themeJson, configJson] = await Promise.all([
       readFile(screenPath, "utf8").then(JSON.parse),
       readFile(themePath, "utf8").then(JSON.parse),
+      readFile(configPath, "utf8").then(JSON.parse),
     ]);
     const screen = ScreenSchema.parse(screenJson);
     const theme = ThemeSchema.parse(themeJson);
+    const config = migrateConfig(ConfigSchema.parse(configJson));
 
     const viewport: Viewport = {
       w: args.w ? Number(args.w) : 1440,
       h: args.h ? Number(args.h) : 900,
     };
 
-    const jit = new TailwindJit(join(folder, "screens"));
+    const { providers, defaultProvider } = await resolveProviders(config, folder);
+    const screenProvider = screen.library
+      ? (providers[screen.library] ?? defaultProvider)
+      : defaultProvider;
+    const jit = new TailwindJit(Object.values(providers), join(folder, "screens"));
     const snapshotCss = await jit.build();
-    const { html } = await renderScreen(screen, theme, { viewport, snapshotCss });
+    const { html } = await renderScreen(screen, theme, {
+      viewport,
+      snapshotCss,
+      registry: screenProvider.registry,
+    });
     const ext = extname(outPath).toLowerCase();
 
     if (ext === ".html") {

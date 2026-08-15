@@ -271,12 +271,40 @@ describe("ConfigSchema", () => {
       library: {
         id: "shadcn-react",
         version: "2.3.4",
-        source: "registry:shadcn",
-        componentsPath: "components",
+        source: "binary",
+        componentsPath: "binary",
       },
       viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
     expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  test("accepts legacy embedded:shadcn source for backward compat", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      library: {
+        id: "shadcn-react",
+        version: "2.3.4",
+        source: "embedded:shadcn",
+        componentsPath: "embedded:shadcn",
+      },
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  test("accepts new provider ids reserved for Sprint X+2", () => {
+    const baseViewports = [{ name: "Mobile", w: 390, h: 844 }];
+    for (const id of ["none", "mui"] as const) {
+      const config = {
+        schemaVersion: 1,
+        toolVersion: "0.1.0",
+        library: { id, version: "0.1.0", source: "binary", componentsPath: "binary" },
+        viewportPresets: baseViewports,
+      };
+      expect(ConfigSchema.safeParse(config).success).toBe(true);
+    }
   });
 
   test("accepts experimental shared source", () => {
@@ -295,15 +323,15 @@ describe("ConfigSchema", () => {
     expect(ConfigSchema.safeParse(config).success).toBe(true);
   });
 
-  test("rejects an unknown framework", () => {
+  test("rejects an unknown provider id", () => {
     const config = {
       schemaVersion: 1,
       toolVersion: "0.1.0",
       library: {
         id: "shadcn-vue",
         version: "2.3.4",
-        source: "registry:shadcn",
-        componentsPath: "components",
+        source: "binary",
+        componentsPath: "binary",
       },
       viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
@@ -317,12 +345,202 @@ describe("ConfigSchema", () => {
       library: {
         id: "shadcn-react",
         version: "2.3.4",
-        source: "registry:shadcn",
-        componentsPath: "components",
+        source: "binary",
+        componentsPath: "binary",
       },
       viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
     expect(ConfigSchema.safeParse(config).success).toBe(false);
+  });
+
+  test("accepts an optional projectId", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      projectId: "01J9C8N3M2X4Z6Y7K",
+      library: {
+        id: "shadcn-react",
+        version: "2.3.4",
+        source: "binary",
+        componentsPath: "binary",
+      },
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  test("accepts the new multi-library shape (Sprint Y)", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      libraries: {
+        shadcn: {
+          id: "shadcn-react" as const,
+          version: "2026.05.22",
+          source: "binary",
+          componentsPath: "binary",
+        },
+        marketing: {
+          id: "none" as const,
+          version: "0.1.0",
+          source: "binary",
+          componentsPath: "binary",
+        },
+      },
+      defaultLibrary: "shadcn",
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  test("rejects a config that mixes legacy library with new multi-library shape", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      library: {
+        id: "shadcn-react" as const,
+        version: "2.3.4",
+        source: "binary",
+        componentsPath: "binary",
+      },
+      libraries: {
+        shadcn: {
+          id: "shadcn-react" as const,
+          version: "2026.05.22",
+          source: "binary",
+          componentsPath: "binary",
+        },
+      },
+      defaultLibrary: "shadcn",
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(false);
+  });
+
+  test("rejects a config with neither library nor multi-library", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(false);
+  });
+
+  test("rejects when defaultLibrary doesn't match any registered library", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      libraries: {
+        shadcn: {
+          id: "shadcn-react" as const,
+          version: "2026.05.22",
+          source: "binary",
+          componentsPath: "binary",
+        },
+      },
+      defaultLibrary: "marketing",
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(false);
+  });
+
+  test("accepts an extensions map alongside multi-library", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      libraries: {
+        shadcn: {
+          id: "shadcn-react" as const,
+          version: "2026.05.22",
+          source: "binary",
+          componentsPath: "binary",
+        },
+      },
+      defaultLibrary: "shadcn",
+      extensions: {
+        DataTable: {
+          importPath: "@/components/data-table",
+          category: "ui" as const,
+          description: "Sortable table component",
+          props: [
+            {
+              name: "data",
+              type: "any[]",
+              optional: false,
+              control: "string" as const,
+            },
+            {
+              name: "sortable",
+              type: "boolean | undefined",
+              optional: true,
+              control: "boolean" as const,
+            },
+          ],
+        },
+      },
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+});
+
+describe("ScreenSchema (Sprint Y additions)", () => {
+  test("accepts an optional library field", () => {
+    const screen = {
+      id: "landing",
+      name: "Landing",
+      library: "marketing",
+      tree: { $ref: "Box" },
+    };
+    expect(ScreenSchema.safeParse(screen).success).toBe(true);
+  });
+
+  test("rejects an empty library string", () => {
+    const screen = {
+      id: "x",
+      name: "X",
+      library: "",
+      tree: { $ref: "Box" },
+    };
+    expect(ScreenSchema.safeParse(screen).success).toBe(false);
+  });
+});
+
+describe("ExtensionSchema", () => {
+  test("accepts a typical extension", async () => {
+    const { ExtensionSchema } = await import("../extension.ts");
+    const extension = {
+      importPath: "@/components/data-table",
+      category: "ui" as const,
+      props: [{ name: "data", type: "any[]", optional: false, control: "string" as const }],
+    };
+    expect(ExtensionSchema.safeParse(extension).success).toBe(true);
+  });
+
+  test("rejects an extension with an empty importPath", async () => {
+    const { ExtensionSchema } = await import("../extension.ts");
+    const extension = {
+      importPath: "",
+      props: [],
+    };
+    expect(ExtensionSchema.safeParse(extension).success).toBe(false);
+  });
+
+  test("accepts enum control with enumValues", async () => {
+    const { ExtensionSchema } = await import("../extension.ts");
+    const extension = {
+      importPath: "@/components/chart",
+      props: [
+        {
+          name: "kind",
+          type: '"bar" | "line" | "area"',
+          optional: false,
+          control: "enum" as const,
+          enumValues: ["bar", "line", "area"],
+        },
+      ],
+    };
+    expect(ExtensionSchema.safeParse(extension).success).toBe(true);
   });
 });
 

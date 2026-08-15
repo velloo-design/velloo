@@ -1,0 +1,23 @@
+{
+  "name": "@velloo/provider-none",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "No-library provider — bare HTML primitives (Box, Stack, Text, Heading, Button) for prototyping without a component library",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tailwind-entry.css": "./src/tailwind-entry.css"
+  },
+  "dependencies": {
+    "@velloo/provider": "workspace:*",
+    "@velloo/shadcn-snapshot": "workspace:*",
+    "clsx": "2.1.1",
+    "react": "19.2.6",
+    "tailwindcss": "4.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@velloo/renderer": "workspace:*",
+    "@velloo/schema": "workspace:*"
+  }
+}

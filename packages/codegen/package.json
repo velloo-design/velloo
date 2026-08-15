@@ -12,7 +12,6 @@
     "@velloo/renderer": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
-    "@velloo/shadcn-snapshot": "workspace:*",
     "diff": "9.0.0",
     "tailwind-merge": "3.5.0",
     "typescript": "6.0.3"

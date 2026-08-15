@@ -40,6 +40,7 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
+        extensions: ctx.folder.config.extensions,
       });
       if (!result.ok) return codegenErrorResult(result.error);
       return jsonResult(result.value);
@@ -64,6 +65,7 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       const result = await emitSnippet(snippet, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
+        extensions: ctx.folder.config.extensions,
       });
       if (!result.ok) return codegenErrorResult(result.error);
       return jsonResult(result.value);

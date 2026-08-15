@@ -11,10 +11,12 @@ export function mutationToHttp(c: Context, error: MutationError): Response {
     case "IdNotFound":
     case "AnnotationNotFound":
     case "CanvasNoteNotFound":
+    case "ExtensionNotFound":
       return c.json({ error }, 404);
     case "UnknownComponent":
     case "SnippetParamMismatch":
     case "SnippetCycle":
+    case "InvalidExtensionProp":
       return c.json({ error }, 422);
     case "InvalidPath":
     case "InvalidMove":
@@ -33,6 +35,8 @@ export function mutationToHttp(c: Context, error: MutationError): Response {
     case "SnippetInUse":
     case "IdConflict":
     case "AnnotationConflict":
+    case "ExtensionIdConflict":
+    case "ExtensionInUse":
       return c.json({ error }, 409);
     default: {
       const _exhaustive: never = error;

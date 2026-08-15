@@ -7,7 +7,14 @@ export type WatchEvent =
   | { type: "theme-changed" }
   | { type: "snippet-changed"; snippetId: string }
   | { type: "annotations-changed"; screenId: string }
-  | { type: "notes-changed"; boardId: string };
+  | { type: "notes-changed"; boardId: string }
+  /**
+   * `.design/config.json` changed — typically a Sprint-Y
+   * `add_extension` / `update_extension` / `remove_extension`
+   * mutation. The canvas refreshes its Library tab so new extensions
+   * appear without a full page reload.
+   */
+  | { type: "config-changed" };
 
 export interface Watcher {
   close(): void;

@@ -11,6 +11,7 @@ import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
+import { registerExtensionTools } from "./tools/extensions.ts";
 import { registerGenerateTools } from "./tools/generate.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
@@ -48,6 +49,12 @@ const INSTRUCTIONS = [
   "",
   'Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), you can pass a stable id reference like `"@hero-cta"` instead of a number array. Pass `id: "hero-cta"` to `add_node` / `instantiate_snippet` to assign one, or `set_node_id` to retroactively name an existing node. Ids survive sibling insertions and deletions — use them for anchors you\'ll reference more than once.',
   "",
+  "**Three customization layers** stack additively in every folder ( A folder registers N (`config.libraries`); each screen pins one via `screen.library`. Multi-library lets marketing boards use no-lib while app boards use shadcn in the same folder. Component ids resolve against the screen's library only.",
+  "  - **Extensions** add wholly new components the active library doesn't have — your app's custom `DataTable`, a brand `Hero`, a bespoke `PriceChart`. Register one with `add_extension` (it persists in `.design/config.json`); the canvas renders a placeholder card carrying the component id + props, and `emit_code` emits a real `import` from the extension's declared `importPath`. Extensions are folder-global and shadow library components with the same id. Use them for *additive customization*, NOT for compositions (snippets cover that).",
+  "  - **Snippets** compose existing components (library + extension) into named subtrees with typed params. Use them for repeated structure (FeatureCard, NavRow, PricingTier).",
+  "",
+  '`list_components` returns both library entries and extensions in one call, each tagged with `kind: "library" | "extension"`. Filter with `kind` when you only want one type.',
+  "",
   "Prefer snippets for repeated structure (feature cards, list items, hero sections). Create the snippet once with `add_snippet`, then call `instantiate_snippet` per occurrence. **Snippet instances are opaque** — you can't address paths inside them; design for variation up-front:",
   "",
   '  - `{"$if": "paramName", "then": <value>, "else": <value>}` — picks a branch by truthiness of `args.paramName`. **Boolean params only** (true/false). Non-boolean truthy values "work" via JS coercion but you\'ll trip on edge cases (empty string is falsy, the string `"false"` is truthy). Declare params as `type: "boolean"`.',
@@ -74,8 +81,9 @@ function buildMcpServer(ctx: MutationContext, jit: TailwindJit): McpServer {
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
   registerScreenshotTool(mcp, ctx, jit);
-  registerValidateTools(mcp);
+  registerValidateTools(mcp, ctx);
   registerGenerateTools(mcp, ctx);
+  registerExtensionTools(mcp, ctx);
   return mcp;
 }
 

@@ -6,6 +6,7 @@ import { emitCode } from "@velloo/codegen";
 import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { isComponentNode } from "@velloo/schema";
+import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { addNode, applyClasses, type MutationContext } from "../index.ts";
@@ -23,11 +24,13 @@ const sampleConfig = {
   library: {
     id: "shadcn-react" as const,
     version: "test",
-    source: "registry:shadcn",
-    componentsPath: "components/ui",
+    source: "binary",
+    componentsPath: "binary",
   },
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
+
+const provider = createShadcnProvider();
 
 const sampleTheme: Theme = {
   name: "default",
@@ -70,7 +73,13 @@ beforeEach(async () => {
   await writeJson(join(tmp, "screens/landing.json"), sampleScreen);
   folder = await loadDesignFolder(tmp);
   events = [];
-  ctx = { folder, broadcast: (e) => events.push(e) };
+  ctx = {
+    folder,
+    providers: { default: provider },
+    defaultProvider: provider,
+    provider,
+    broadcast: (e) => events.push(e),
+  };
 });
 
 afterEach(async () => {
@@ -152,7 +161,13 @@ describe("mutation happy path", () => {
     });
     folder = await loadDesignFolder(tmp);
     events = [];
-    ctx = { folder, broadcast: (e) => events.push(e) };
+    ctx = {
+      folder,
+      providers: { default: provider },
+      defaultProvider: provider,
+      provider,
+      broadcast: (e) => events.push(e),
+    };
 
     // The snippet body's root is the Card we just wrote — patch its
     // className via the virtualized screen id. The mutation layer

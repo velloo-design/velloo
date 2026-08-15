@@ -27,8 +27,8 @@ export async function addNode(
 ): Promise<Result<AddNodeResult, MutationError>> {
   const { screenId, parentPath, componentRef } = args;
   return DoAsync<AddNodeResult, MutationError>(async function* () {
-    yield* $(ensureKnownComponent(componentRef));
     const screen = yield* $(getScreen(ctx, screenId));
+    yield* $(ensureKnownComponent(ctx, componentRef, screen));
     const next = cloneScreen(screen);
 
     const resolvedParent = yield* $(resolve(next.tree, parentPath, screenId));

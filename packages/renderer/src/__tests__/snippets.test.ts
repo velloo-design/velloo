@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Screen, Snippet, Theme, Viewport } from "@velloo/schema";
+import { registry } from "@velloo/shadcn-snapshot";
 import {
   renderBody,
   renderScreen,
@@ -21,7 +22,7 @@ const theme: Theme = {
 };
 
 const viewport: Viewport = { w: 320, h: 240 };
-const opts = { snapshotCss: "", viewport };
+const opts = { snapshotCss: "", viewport, registry };
 
 const featureCard: Snippet = {
   id: "feature-card",
@@ -208,7 +209,7 @@ describe("snippet resolution", () => {
       $ref: "Card",
       children: [{ $snippet: "feature-card", args: { title: "X" } }],
     });
-    const html = renderBody(screen, snippets);
+    const html = renderBody(screen, registry, snippets);
     const matches = html.match(/data-node-path="0"/g);
     expect(matches?.length ?? 0).toBeGreaterThanOrEqual(2);
   });

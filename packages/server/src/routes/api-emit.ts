@@ -58,6 +58,7 @@ export function createEmitRouter(folderFor: () => DesignFolder): Hono {
     const result = await emitCode(screen, {
       ...(componentsAlias ? { componentsAlias } : {}),
       snippets: folder.snippets,
+      extensions: folder.config.extensions,
     });
     if (!result.ok) return codegenToHttp(c, result.error);
     return c.json(result.value);

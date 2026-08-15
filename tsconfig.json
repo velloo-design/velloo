@@ -3,7 +3,10 @@
   "references": [
     { "path": "./packages/result" },
     { "path": "./packages/schema" },
+    { "path": "./packages/provider" },
     { "path": "./packages/shadcn-snapshot" },
+    { "path": "./packages/provider-none" },
+    { "path": "./packages/provider-mui" },
     { "path": "./packages/renderer" },
     { "path": "./packages/canvas" },
     { "path": "./packages/codegen" },

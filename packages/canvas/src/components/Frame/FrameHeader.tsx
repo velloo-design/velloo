@@ -1,4 +1,4 @@
-import { GripVertical, Link2, X } from "lucide-react";
+import { GripVertical, Library as LibraryIcon, Link2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface FrameHeaderProps {
@@ -6,6 +6,12 @@ interface FrameHeaderProps {
   w: number;
   h: number;
   sharedCount: number;
+  /**
+   * The library id this frame's screen pins (Sprint Y). When unset we
+   * skip rendering the badge — a single-library folder doesn't need
+   * the extra chrome.
+   */
+  library?: string | null;
   onPointerDownGrip: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
   /** Commit a new size from the header's inline w/h inputs. */
@@ -33,6 +39,7 @@ export function FrameHeader({
   w,
   h,
   sharedCount,
+  library,
   onPointerDownGrip,
   onRemove,
   onResize,
@@ -62,6 +69,15 @@ export function FrameHeader({
             onCommit={(v) => onResize({ h: clamp(v) })}
           />
         </span>
+        {library ? (
+          <span
+            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-muted text-muted-foreground"
+            title={`This screen renders against library "${library}".`}
+          >
+            <LibraryIcon size={10} strokeWidth={2} />
+            {library}
+          </span>
+        ) : null}
         {sharedCount > 1 ? (
           <span
             className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-primary/10 text-primary"

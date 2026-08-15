@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ComponentDescriptor, Manifest } from "@velloo/provider";
 import {
   isComponentNode,
   isParamRef,
@@ -9,12 +10,6 @@ import {
   nodeId,
   type Screen,
 } from "@velloo/schema";
-import {
-  type ComponentDescriptor,
-  loadManifest as loadBundledManifest,
-  type Manifest,
-  snapshotVersion,
-} from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
@@ -69,14 +64,14 @@ function toOutline(screen: Screen): { id: string; name: string; tree: OutlineNod
   return { id: screen.id, name: screen.name, tree: nodeToOutline(screen.tree) };
 }
 
-/** Read the design folder's on-disk manifest, falling back to the bundled one. */
+/** Read the design folder's on-disk manifest, falling back to the active provider's. */
 async function loadManifestForCtx(ctx: MutationContext): Promise<Manifest> {
   const onDisk = join(ctx.folder.root, ".design", "manifest.json");
   try {
     const raw = await readFile(onDisk, "utf8");
     return JSON.parse(raw) as Manifest;
   } catch {
-    return loadBundledManifest();
+    return ctx.provider.loadManifest();
   }
 }
 
@@ -105,7 +100,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         name: screen.name,
         ...(include_tree ? { tree: screen.tree } : {}),
       }));
-      return jsonResult({ snapshotVersion, screens });
+      return jsonResult({ snapshotVersion: ctx.provider.version, screens });
     },
   );
 
@@ -173,18 +168,49 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List the available components. Default `mode: "summary"` returns only id/category/source/prop-names — call with `mode: "full"` once you\'ve narrowed to the component(s) you need. `filter` substring-matches ids (case-insensitive).',
+        'List the available components — library entries first, then registered extensions. Default `mode: "summary"` returns id/source/category/prop-names; `mode: "full"` returns the complete descriptors. `filter` substring-matches ids (case-insensitive). `kind: "library"` or `kind: "extension"` narrows the result; extensions are user-declared custom components (DataTable, BrandHero, …) that shadow library entries with the same id.',
       inputSchema: {
         filter: z.string().optional(),
         mode: z.enum(["summary", "full"]).optional(),
+        kind: z.enum(["library", "extension"]).optional(),
       },
     },
-    async ({ filter, mode }) => {
+    async ({ filter, mode, kind }) => {
       const manifest = await loadManifestForCtx(ctx);
+      const libraryEntries = manifest.map((c) => ({ ...c, kind: "library" as const }));
+      const extensions = ctx.folder.config.extensions ?? {};
+      const extensionEntries = Object.entries(extensions).map(([id, ext]) => ({
+        id,
+        category: ext.category ?? "ui",
+        source: "extension",
+        props: ext.props,
+        designModeNotes: ext.description,
+        kind: "extension" as const,
+        importPath: ext.importPath,
+      }));
+      const all =
+        kind === "library"
+          ? libraryEntries
+          : kind === "extension"
+            ? extensionEntries
+            : [...libraryEntries, ...extensionEntries];
       const filtered = filter
-        ? manifest.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()))
-        : manifest;
-      const out = (mode ?? "summary") === "full" ? filtered : filtered.map(toSummary);
+        ? all.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()))
+        : all;
+      const out =
+        (mode ?? "summary") === "full"
+          ? filtered
+          : filtered.map((c) => {
+              const summary = toSummary(c);
+              // Carry the kind + importPath through the summary view so the
+              // agent can decide between two same-named components without
+              // re-fetching the full descriptor.
+              return {
+                ...summary,
+                kind: c.kind,
+                ...("importPath" in c ? { importPath: c.importPath } : {}),
+              };
+            });
       return jsonResult(out);
     },
   );

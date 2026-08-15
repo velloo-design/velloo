@@ -8,6 +8,8 @@ import {
   BoardSchema,
   type CanvasNote,
   CanvasNoteSchema,
+  type Config,
+  ConfigSchema,
   type Screen,
   ScreenSchema,
   type Snippet,
@@ -136,6 +138,20 @@ export async function persistAnnotations(
     await writeJsonAtomic(path, validated);
   }
   folder.annotations.set(screenId, validated);
+  return validated;
+}
+
+/**
+ * Persist `.design/config.json` and refresh the in-memory cache. Used
+ * by the Sprint-Y extension mutations (`add_extension`,
+ * `update_extension`, `remove_extension`). Validates the full config
+ * against the schema first so a malformed write can't leave a folder
+ * unloadable.
+ */
+export async function persistConfig(folder: DesignFolder, config: Config): Promise<Config> {
+  const validated = ConfigSchema.parse(config);
+  await writeJsonAtomic(join(folder.root, ".design", "config.json"), validated);
+  folder.config = validated;
   return validated;
 }
 

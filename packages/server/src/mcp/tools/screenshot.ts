@@ -3,6 +3,7 @@ import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo
 import type { Screen, Viewport } from "@velloo/schema";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
+import { registryForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 
 type McpResult = {
@@ -56,17 +57,20 @@ export function registerScreenshotTool(
       let buf: Buffer;
       try {
         const snapshotCss = await jit.build();
+        const screenRegistry = registryForScreen(ctx, screen);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
             renderScreen(screen, ctx.folder.theme, {
               viewport,
               snapshotCss,
+              registry: screenRegistry,
               snippets: ctx.folder.snippets,
               dark: false,
             }),
             renderScreen(screen, ctx.folder.theme, {
               viewport,
               snapshotCss,
+              registry: screenRegistry,
               snippets: ctx.folder.snippets,
               dark: true,
             }),
@@ -80,6 +84,7 @@ export function registerScreenshotTool(
           const { html } = await renderScreen(screen, ctx.folder.theme, {
             viewport,
             snapshotCss,
+            registry: screenRegistry,
             snippets: ctx.folder.snippets,
             dark: mode === "dark",
           });
@@ -140,17 +145,25 @@ export function registerScreenshotTool(
       let buf: Buffer;
       try {
         const snapshotCss = await jit.build();
+        // render_snippet: a synthesized screen wraps the snippet instance
+        // so registry resolution honors the snippet's library, not a stray
+        // default. Wrap the synthetic screen with the snippet's library so
+        // ext placeholders still merge in.
+        const syntheticScreen = { ...screen, library: snippet.library };
+        const screenRegistry = registryForScreen(ctx, syntheticScreen);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
-            renderScreen(screen, ctx.folder.theme, {
+            renderScreen(syntheticScreen, ctx.folder.theme, {
               viewport: vp,
               snapshotCss,
+              registry: screenRegistry,
               snippets: ctx.folder.snippets,
               dark: false,
             }),
-            renderScreen(screen, ctx.folder.theme, {
+            renderScreen(syntheticScreen, ctx.folder.theme, {
               viewport: vp,
               snapshotCss,
+              registry: screenRegistry,
               snippets: ctx.folder.snippets,
               dark: true,
             }),
@@ -161,9 +174,10 @@ export function registerScreenshotTool(
             viewport: vp,
           });
         } else {
-          const { html } = await renderScreen(screen, ctx.folder.theme, {
+          const { html } = await renderScreen(syntheticScreen, ctx.folder.theme, {
             viewport: vp,
             snapshotCss,
+            registry: screenRegistry,
             snippets: ctx.folder.snippets,
             dark: mode === "dark",
           });

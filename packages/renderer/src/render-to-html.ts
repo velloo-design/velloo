@@ -1,3 +1,4 @@
+import type { ComponentRegistry } from "@velloo/provider";
 import {
   type Screen,
   ScreenSchema,
@@ -22,9 +23,13 @@ export interface RenderResult {
  * CSS. Used by inspect-style callers that only need the SSR'd subtree.
  * Pass `snippets` if the tree may contain `$snippet` instances.
  */
-export function renderBody(screen: Screen, snippets?: Map<string, Snippet>): string {
+export function renderBody(
+  screen: Screen,
+  registry: ComponentRegistry,
+  snippets?: Map<string, Snippet>,
+): string {
   ScreenSchema.parse(screen);
-  return renderToString(buildRoot(screen.tree, { snippets }));
+  return renderToString(buildRoot(screen.tree, { registry, snippets }));
 }
 
 export interface RenderOptions {
@@ -35,6 +40,8 @@ export interface RenderOptions {
    * The server's TailwindJit produces this; the renderer stays pure.
    */
   snapshotCss: string;
+  /** Component registry from the active provider. */
+  registry: ComponentRegistry;
   /** Snippets registry — required if the screen tree contains $snippet nodes. */
   snippets?: Map<string, Snippet>;
   /** Render with the dark color block active. */
@@ -54,7 +61,10 @@ export async function renderScreen(
   ScreenSchema.parse(screen);
   ThemeSchema.parse(theme);
 
-  const element = buildRoot(screen.tree, { snippets: options.snippets });
+  const element = buildRoot(screen.tree, {
+    registry: options.registry,
+    snippets: options.snippets,
+  });
   const bodyHtml = renderToString(element);
   const themeCss = themeToCss(theme);
 

@@ -4,6 +4,17 @@ import type { AnnotationEntry, CanvasNoteEntry } from "../store.ts";
 
 export interface DesignSummary {
   snapshotVersion: string;
+  /** Provider id for the default library (Sprint Y). */
+  providerId?: string;
+  /**
+   * Multi-library map (Sprint Y). `null` for older builds; `{}` if none
+   * registered. Keys are user-chosen library ids (the same string a
+   * screen pins via `screen.library`).
+   */
+  libraries?: Record<string, { providerId: string; version: string }>;
+  defaultLibrary?: string | null;
+  /** Count of folder-global extensions for sidebar headcount. */
+  extensionsCount?: number;
   theme: { name: string };
   defaultScreen: string | null;
   defaultBoard: string | null;
@@ -16,6 +27,8 @@ export interface DesignSummary {
 export interface ScreenMeta {
   id: string;
   name: string;
+  /** Resolved library id (Sprint Y) — falls back to defaultLibrary server-side. */
+  library?: string | null;
 }
 
 export interface BoardMeta {
@@ -28,6 +41,19 @@ export interface SnippetMeta {
   id: string;
   name: string;
   params: SnippetParam[];
+  /** Resolved library id (Sprint Y). */
+  library?: string | null;
+}
+
+/** A manifest entry returned by /api/components after Sprint Y. */
+export interface ComponentManifestEntry {
+  id: string;
+  category: string;
+  source: string;
+  props: { name: string }[];
+  designModeNotes?: string;
+  kind?: "library" | "extension";
+  importPath?: string;
 }
 
 export async function fetchDesign(): Promise<DesignSummary> {

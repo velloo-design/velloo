@@ -36,7 +36,21 @@ export type MutationError =
       existingId: string;
     }
   | { kind: "AnnotationNotFound"; screenId: string; annotationId: string }
-  | { kind: "CanvasNoteNotFound"; noteId: string };
+  | { kind: "CanvasNoteNotFound"; noteId: string }
+  | { kind: "ExtensionIdConflict"; extensionId: string; message: string }
+  | { kind: "ExtensionNotFound"; extensionId: string; message: string }
+  | {
+      kind: "ExtensionInUse";
+      extensionId: string;
+      message: string;
+      references: { screenId: string; path: string }[];
+    }
+  | {
+      kind: "InvalidExtensionProp";
+      extensionId: string;
+      message: string;
+      prop: string;
+    };
 
 // Constructor helpers.
 export const screenNotFound = (screenId: string): MutationError => ({

@@ -11,5 +11,6 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["bun", "react", "react-dom"]
   },
-  "include": ["src/**/*", "build.ts", "package.json"]
+  "include": ["src/**/*", "build.ts", "package.json"],
+  "references": [{ "path": "../provider" }]
 }

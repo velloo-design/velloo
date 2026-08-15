@@ -3,6 +3,7 @@ import { rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Screen, Theme, Viewport } from "@velloo/schema";
+import { registry } from "@velloo/shadcn-snapshot";
 import { renderScreen, screenshot } from "../index.ts";
 
 // Opt-in: requires `bunx playwright install chromium`.
@@ -37,7 +38,11 @@ describe.skipIf(!RUN)("screenshot (Playwright)", () => {
     const viewport: Viewport = { w: 800, h: 400 };
     const out = join(tmpdir(), `velloo-shot-${Date.now()}.png`);
     try {
-      const { html } = await renderScreen(screen, theme, { snapshotCss: "", viewport });
+      const { html } = await renderScreen(screen, theme, {
+        snapshotCss: "",
+        viewport,
+        registry,
+      });
       await screenshot({ html, viewport, outPath: out });
       const s = await stat(out);
       expect(s.size).toBeGreaterThan(1000);

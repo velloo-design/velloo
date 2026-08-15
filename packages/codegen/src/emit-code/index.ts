@@ -25,6 +25,7 @@
  */
 import { $, DoAsync, type Result } from "@velloo/result";
 import {
+  type Extension,
   isComponentNode,
   isSnippetInstance,
   type Node,
@@ -91,6 +92,14 @@ export interface EmitCodeOptions {
   snippetsAlias?: string;
   /** Snippets registry — required if the screen tree contains $snippet instances. */
   snippets?: Map<string, Snippet>;
+  /**
+   * Extensions registry — folder-global custom components (Sprint Y).
+   * Required for emit_code to emit imports for any extension $refs in the
+   * tree; without it, references to a registered extension surface as
+   * `UnknownComponent`. Pass `Object.entries(config.extensions ?? {})`
+   * mapped to importPath-only records.
+   */
+  extensions?: Record<string, Extension>;
 }
 
 const DEFAULT_ALIAS = "@/components/ui";
@@ -169,11 +178,13 @@ export async function emitCode(
   return DoAsync<EmitCodeResult, CodegenError>(async function* () {
     const componentsAlias = options.componentsAlias ?? DEFAULT_ALIAS;
     const snippetPascalById = buildSnippetPascalMap(options.snippets);
+    const extensionsMap = buildExtensionsMap(options.extensions);
     const ctx = {
       imports: new ImportSet(),
       componentsAlias,
       snippetsAlias: options.snippetsAlias,
       snippetPascalById,
+      extensions: extensionsMap,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(screen.tree, ctx));
@@ -187,7 +198,11 @@ export async function emitCode(
       const snippet = options.snippets?.get(id);
       if (!snippet) continue;
       const snippetR = yield* $(
-        await emitSnippet(snippet, { componentsAlias, snippets: options.snippets }),
+        await emitSnippet(snippet, {
+          componentsAlias,
+          snippets: options.snippets,
+          extensions: options.extensions,
+        }),
       );
       snippetIRs.push(snippetR);
     }
@@ -207,6 +222,17 @@ export interface EmitSnippetOptions {
   componentsAlias?: string;
   snippetsAlias?: string;
   snippets?: Map<string, Snippet>;
+  /** Folder-global extensions (Sprint Y) — same shape as `EmitCodeOptions.extensions`. */
+  extensions?: Record<string, Extension>;
+}
+
+function buildExtensionsMap(
+  extensions: Record<string, Extension> | undefined,
+): Map<string, { importPath: string }> | undefined {
+  if (!extensions) return undefined;
+  const m = new Map<string, { importPath: string }>();
+  for (const [id, ext] of Object.entries(extensions)) m.set(id, { importPath: ext.importPath });
+  return m;
 }
 
 /** Emit one snippet's IR. Used by emit_code recursively and by emit_snippet. */
@@ -219,12 +245,14 @@ export async function emitSnippet(
     const componentName = pascal(snippet.name || snippet.id);
     const paramNames = new Set(snippet.params.map((p) => p.name));
     const snippetPascalById = buildSnippetPascalMap(options.snippets);
+    const extensionsMap = buildExtensionsMap(options.extensions);
     const ctx = {
       imports: new ImportSet(),
       componentsAlias,
       snippetsAlias: options.snippetsAlias,
       snippetPascalById,
       snippetParamNames: paramNames,
+      extensions: extensionsMap,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(snippet.tree, ctx));

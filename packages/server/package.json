@@ -11,6 +11,9 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "@velloo/canvas": "workspace:*",
     "@velloo/codegen": "workspace:*",
+    "@velloo/provider": "workspace:*",
+    "@velloo/provider-mui": "workspace:*",
+    "@velloo/provider-none": "workspace:*",
     "@velloo/renderer": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
@@ -26,6 +29,8 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@types/culori": "4.0.1"
+    "@types/culori": "4.0.1",
+    "@types/react": "19.2.14",
+    "react": "19.2.6"
   }
 }

@@ -7,13 +7,18 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "types": ["bun"]
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun", "react"]
   },
   "include": ["src/**/*"],
   "references": [
     { "path": "../result" },
     { "path": "../schema" },
+    { "path": "../provider" },
     { "path": "../shadcn-snapshot" },
+    { "path": "../provider-none" },
+    { "path": "../provider-mui" },
     { "path": "../renderer" },
     { "path": "../codegen" }
   ]

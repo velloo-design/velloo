@@ -1,3 +1,4 @@
+import type { ComponentRegistry } from "@velloo/provider";
 import {
   type ComponentNode,
   isComponentNode,
@@ -7,12 +8,11 @@ import {
   type Snippet,
   type SnippetInstance,
 } from "@velloo/schema";
-import { isKnownComponent, registry } from "@velloo/shadcn-snapshot";
 import { createElement, Fragment, type ReactElement, type ReactNode } from "react";
 
 export class UnknownComponentError extends Error {
   constructor(public readonly ref: string) {
-    super(`Unknown component $ref="${ref}". Not in @velloo/shadcn-snapshot registry.`);
+    super(`Unknown component $ref="${ref}". Not in the active component provider's registry.`);
     this.name = "UnknownComponentError";
   }
 }
@@ -54,6 +54,12 @@ export class ParamRefError extends Error {
 }
 
 export interface BuildTreeOptions {
+  /**
+   * Component registry from the active provider. Required — the renderer
+   * is provider-agnostic and never imports a registry directly. See
+   *.
+   */
+  registry: ComponentRegistry;
   /** Snippet registry used to resolve `$snippet` nodes. Required if the tree contains any. */
   snippets?: Map<string, Snippet>;
 }
@@ -160,8 +166,8 @@ function applyExtraClassName(node: Node, extra: string): Node {
  */
 export function buildTree(
   node: Node,
+  opts: BuildTreeOptions,
   path: number[] = [],
-  opts: BuildTreeOptions = {},
   stack: string[] = [],
   lockedPath: number[] | null = null,
 ): ReactElement {
@@ -174,7 +180,7 @@ export function buildTree(
     const resolved = resolveSnippetBody(node, snippet);
     // Lock the path to the snippet instance's path so every inner DOM node
     // resolves back to the instance on click.
-    return buildTree(resolved, path, opts, [...stack, snippet.id], lockedPath ?? path);
+    return buildTree(resolved, opts, path, [...stack, snippet.id], lockedPath ?? path);
   }
 
   if (isParamRef(node)) {
@@ -186,8 +192,7 @@ export function buildTree(
     throw new Error(`buildTree: unknown node shape: ${JSON.stringify(node)}`);
   }
 
-  if (!isKnownComponent(node.$ref)) throw new UnknownComponentError(node.$ref);
-  const Component = registry[node.$ref];
+  const Component = opts.registry[node.$ref];
   if (!Component) throw new UnknownComponentError(node.$ref);
 
   const { children: childrenProp, ...restProps } = (node.props ?? {}) as Record<string, unknown>;
@@ -196,7 +201,7 @@ export function buildTree(
   let children: ReactNode;
   if (Array.isArray(node.children) && node.children.length > 0) {
     children = node.children.map((child, i) =>
-      buildTree(child, [...path, i], opts, stack, lockedPath),
+      buildTree(child, opts, [...path, i], stack, lockedPath),
     );
   } else if (childrenProp !== undefined) {
     children = childrenProp as ReactNode;
@@ -212,8 +217,8 @@ export function buildTree(
 /**
  * Wrap the tree root in a Fragment so consumers can render it directly.
  */
-export function buildRoot(node: Node, opts: BuildTreeOptions = {}): ReactElement {
-  return createElement(Fragment, null, buildTree(node, [], opts));
+export function buildRoot(node: Node, opts: BuildTreeOptions): ReactElement {
+  return createElement(Fragment, null, buildTree(node, opts));
 }
 
 /**

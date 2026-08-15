@@ -21,6 +21,12 @@ export {
   type ViewportPreset,
   ViewportPresetSchema,
 } from "./config.ts";
+export {
+  type Extension,
+  type ExtensionPropDescriptor,
+  ExtensionPropDescriptorSchema,
+  ExtensionSchema,
+} from "./extension.ts";
 export { type Frame, FrameSchema } from "./frame.ts";
 export {
   type ComponentNode,

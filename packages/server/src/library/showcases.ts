@@ -400,6 +400,9 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
       },
     ],
   }),
+  // Uses only intersection components (Card + Text) — Badge is shadcn-only,
+  // and Layer exists in every shipped provider, so its showcase has to
+  // render under every registry.
   Layer: () => ({
     $ref: "Card",
     props: { className: "relative h-24 w-40 bg-muted rounded-md overflow-hidden" },
@@ -409,8 +412,17 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
         props: { top: "1rem", left: "1rem" },
         children: [
           {
-            $ref: "Badge",
-            props: { children: "Layer" },
+            $ref: "Card",
+            props: {
+              className:
+                "px-2 py-0.5 rounded-full bg-primary text-primary-foreground ring-0 shadow-none",
+            },
+            children: [
+              {
+                $ref: "Text",
+                props: { className: "text-xs font-medium", children: "Layer" },
+              },
+            ],
           },
         ],
       },

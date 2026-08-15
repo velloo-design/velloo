@@ -1,23 +1,12 @@
-export type ControlType = "boolean" | "number" | "string" | "color" | "enum" | "icon";
-
-export interface PropDescriptor {
-  name: string;
-  /** Raw TS type string from ts-morph (e.g. "boolean | undefined"). */
-  type: string;
-  optional: boolean;
-  defaultValue?: string;
-  /** Inferred control type for the inspector. */
-  control: ControlType;
-  /** Allowed values when `control === "enum"`. */
-  enumValues?: (string | number)[];
-}
-
-export interface ComponentDescriptor {
-  id: string;
-  category: "ui" | "typography";
-  source: "shadcn" | "velloo";
-  props: PropDescriptor[];
-  designModeNotes?: string;
-}
-
-export type Manifest = ComponentDescriptor[];
+/**
+ * Manifest types moved to `@velloo/provider`. This module re-exports them
+ * so existing imports (`from "@velloo/shadcn-snapshot"`) keep working
+ * through the migration; consumers should prefer importing from
+ * `@velloo/provider` going forward.
+ */
+export type {
+  ComponentDescriptor,
+  ControlType,
+  Manifest,
+  PropDescriptor,
+} from "@velloo/provider";

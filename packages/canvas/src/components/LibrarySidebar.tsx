@@ -1,4 +1,4 @@
-import { Component as ComponentIcon, Search } from "lucide-react";
+import { Component as ComponentIcon, Package, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { LIBRARY_CATEGORIES } from "../library-categories.ts";
@@ -15,14 +15,32 @@ export function LibrarySidebar({ snippets }: Props) {
   const openLibrary = useCanvas((s) => s.openLibrary);
   const [query, setQuery] = useState("");
 
-  const componentIds = useMemo(() => {
-    if (!components) return new Set<string>();
-    return new Set(components.map((c) => c.id));
+  const { libraryComponentIds, extensions } = useMemo(() => {
+    if (!components) {
+      return {
+        libraryComponentIds: new Set<string>(),
+        extensions: [] as { id: string; label: string }[],
+      };
+    }
+    // Sprint Y: /api/components now returns library entries + extensions,
+    // each tagged with `kind`. Older builds omit `kind`; treat those as library.
+    const ids = new Set<string>();
+    const exts: { id: string; label: string }[] = [];
+    for (const c of components as Array<(typeof components)[number] & { kind?: string }>) {
+      if (c.kind === "extension") {
+        exts.push({ id: c.id, label: c.id });
+      } else {
+        ids.add(c.id);
+      }
+    }
+    exts.sort((a, b) => a.id.localeCompare(b.id));
+    return { libraryComponentIds: ids, extensions: exts };
   }, [components]);
 
   const q = query.trim().toLowerCase();
   const matches = (s: string) => !q || s.toLowerCase().includes(q);
   const filteredSnippets = snippets.filter((s) => matches(s.name) || matches(s.id));
+  const filteredExtensions = extensions.filter((e) => matches(e.id));
 
   return (
     <>
@@ -83,11 +101,53 @@ export function LibrarySidebar({ snippets }: Props) {
           </ul>
         )}
 
+        {extensions.length > 0 ? (
+          <>
+            <div className="h-px bg-border mx-2 my-3" />
+            <SectionHeader
+              icon={<Package size={11} strokeWidth={2} />}
+              label="Extensions"
+              count={filteredExtensions.length}
+              accent
+            />
+            {filteredExtensions.length === 0 ? (
+              <div className="px-4 py-3 text-xs text-muted-foreground">
+                No extension matches "{query}".
+              </div>
+            ) : (
+              <ul className="flex flex-col px-2 gap-0.5 pb-1">
+                {filteredExtensions.map((e) => {
+                  const active = libraryItem?.kind === "component" && libraryItem.id === e.id;
+                  return (
+                    <li key={e.id}>
+                      <button
+                        type="button"
+                        onClick={() => openLibrary({ kind: "component", id: e.id })}
+                        className={`w-full text-left px-2 py-1 rounded-md text-sm transition-colors flex items-center gap-2 ${
+                          active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                        }`}
+                        title={`Custom component registered via add_extension`}
+                      >
+                        <span
+                          className={`h-1 w-1 rounded-full shrink-0 ${
+                            active ? "bg-primary-foreground" : "bg-primary/60"
+                          }`}
+                        />
+                        <span className="truncate">{e.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        ) : null}
+
         <div className="h-px bg-border mx-2 my-3" />
 
         {LIBRARY_CATEGORIES.map((cat) => {
           const items = cat.components.filter(
-            (id) => componentIds.size === 0 || componentIds.has(id),
+            (id) => libraryComponentIds.size === 0 || libraryComponentIds.has(id),
           );
           const filtered = items.filter(matches);
           if (filtered.length === 0) return null;

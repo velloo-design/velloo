@@ -12,5 +12,9 @@
     "types": ["bun", "react", "react-dom"]
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../schema" }, { "path": "../shadcn-snapshot" }]
+  "references": [
+    { "path": "../schema" },
+    { "path": "../provider" },
+    { "path": "../shadcn-snapshot" }
+  ]
 }

@@ -1,14 +1,28 @@
-import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { Hono } from "hono";
-import type { DesignFolder } from "../design-folder.ts";
+import type { MutationContext } from "../mutations/index.ts";
 
-export function createDesignRouter(folder: () => DesignFolder): Hono {
+export function createDesignRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
 
   r.get("/", (c) => {
-    const f = folder();
+    const ctx = ctxFor();
+    const f = ctx.folder;
+    const libraries = f.config.libraries
+      ? Object.fromEntries(
+          Object.entries(f.config.libraries).map(([id, lib]) => [
+            id,
+            { providerId: lib.id, version: lib.version },
+          ]),
+        )
+      : {};
     return c.json({
-      snapshotVersion,
+      snapshotVersion: ctx.provider.version,
+      providerId: ctx.provider.id,
+      // Multi-library summary (Sprint Y). The canvas reads this to
+      // render the library badge per frame and the active-library
+      // selector in the Library tab.
+      libraries,
+      defaultLibrary: f.config.defaultLibrary ?? null,
       theme: { name: f.theme.name },
       defaultScreen: f.config.defaultScreen ?? null,
       defaultBoard: f.config.defaultBoard ?? null,
@@ -16,6 +30,7 @@ export function createDesignRouter(folder: () => DesignFolder): Hono {
       screens: [...f.screens.entries()].map(([id, screen]) => ({
         id,
         name: screen.name,
+        library: screen.library ?? f.config.defaultLibrary ?? null,
       })),
       boards: [...f.boards.entries()].map(([id, board]) => ({
         id,
@@ -26,7 +41,9 @@ export function createDesignRouter(folder: () => DesignFolder): Hono {
         id,
         name: snippet.name,
         params: snippet.params,
+        library: snippet.library ?? f.config.defaultLibrary ?? null,
       })),
+      extensionsCount: Object.keys(f.config.extensions ?? {}).length,
     });
   });
 

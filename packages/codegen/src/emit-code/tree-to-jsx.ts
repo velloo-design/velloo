@@ -16,6 +16,14 @@ export interface EmitContext {
   /** Set when emitting *inside* a snippet body: `$param` nodes become `{name}`. */
   snippetParamNames?: Set<string>;
   /**
+   * Folder-scoped extensions. Keyed by component id, value carries the
+   * import specifier emit_code should produce. When a `$ref` isn't in the
+   * built-in REGISTRY, the resolver falls through to here — and codegen
+   * emits `import { <id> } from <importPath>` (verbatim, no alias rewrite)
+   * so the agent's emit lands in the user's app at the path they declared.
+   */
+  extensions?: Map<string, { importPath: string }>;
+  /**
    * Single-shot: when present, the next ComponentNode renderComponent call
    * (the snippet body's root) splices `${holder.varName}` into its className.
    * Cleared after first use so descendants don't re-merge it.
@@ -88,7 +96,26 @@ function renderComponent(
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
-  const entry = REGISTRY[node.$ref];
+  // Built-in (library) component? Use the static registry entry which
+  // knows the lowering / cva variant / shadcn import path.
+  let entry = REGISTRY[node.$ref];
+  if (!entry) {
+    // Registered extension? Synthesize a shadcn-shaped registry entry so
+    // the rest of this function reads the importPath off it and uses the
+    // ref's own id as the JSX name. Extensions are always emitted as
+    // bare external imports with the user-supplied importPath.
+    const ext = ctx.extensions?.get(node.$ref);
+    if (ext) {
+      entry = {
+        kind: "shadcn",
+        jsxName: node.$ref,
+        importFile: ext.importPath,
+        // Mark so the import set uses `addBare` (verbatim path) rather
+        // than `add` (which prepends componentsAlias).
+        __bareImport: true,
+      } as (typeof REGISTRY)[string] & { __bareImport?: boolean };
+    }
+  }
   if (!entry) return err(unknownComponent(node.$ref));
 
   const props = { ...(node.props ?? {}) };
@@ -134,7 +161,14 @@ function renderComponent(
     openTag = jsxName;
     closeTag = jsxName;
   } else {
-    ctx.imports.add(entry.importFile, entry.jsxName);
+    // Synthetic extension entries set `__bareImport` so the importPath
+    // flows through verbatim instead of being prefixed with the
+    // components alias.
+    if ((entry as { __bareImport?: boolean }).__bareImport) {
+      ctx.imports.addBare(entry.importFile, entry.jsxName);
+    } else {
+      ctx.imports.add(entry.importFile, entry.jsxName);
+    }
     mergedClassName = mergeClasses(classNameProp);
     openTag = entry.jsxName;
     closeTag = entry.jsxName;

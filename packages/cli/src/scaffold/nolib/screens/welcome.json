@@ -1,0 +1,65 @@
+{
+  "id": "welcome",
+  "name": "Welcome",
+  "tree": {
+    "$ref": "Container",
+    "props": { "size": "lg", "className": "py-16" },
+    "children": [
+      {
+        "$ref": "Stack",
+        "props": { "gap": 6, "align": "start" },
+        "children": [
+          {
+            "$ref": "Heading",
+            "props": { "level": 1, "children": "Designs that ship", "className": "text-foreground" }
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "variant": "lead",
+              "children": "This is the no-library starter — bare primitives, no shadcn, no MUI. Pure HTML behind Tailwind classes."
+            }
+          },
+          {
+            "$ref": "Stack",
+            "props": { "direction": "row", "gap": 3 },
+            "children": [
+              { "$ref": "Button", "props": { "variant": "default", "children": "Get started" } },
+              { "$ref": "Button", "props": { "variant": "outline", "children": "View docs" } }
+            ]
+          },
+          {
+            "$ref": "Card",
+            "props": { "className": "mt-8 w-full" },
+            "children": [
+              {
+                "$ref": "Stack",
+                "props": { "gap": 3 },
+                "children": [
+                  {
+                    "$ref": "Heading",
+                    "props": { "level": 3, "children": "What's in this provider" }
+                  },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "Box, Stack, Container, Card, Button, Input — plus the velloo helpers (Heading, Text, Icon, SVG, Image, Layer, Divider, Gradient, Placeholder)."
+                    }
+                  },
+                  { "$ref": "Divider", "props": {} },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "variant": "muted",
+                      "children": "Ask your AI agent: \u201cadd a hero section with three feature cards\u201d and watch the canvas update."
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

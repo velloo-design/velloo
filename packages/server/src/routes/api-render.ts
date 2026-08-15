@@ -1,8 +1,9 @@
 import { renderScreen, resolveSnippetBodyForEdit, UnknownComponentError } from "@velloo/renderer";
 import type { Node, Screen, Viewport } from "@velloo/schema";
 import { Hono } from "hono";
-import type { DesignFolder } from "../design-folder.ts";
 import { buildShowcaseTree } from "../library/showcases.ts";
+import type { MutationContext } from "../mutations/index.ts";
+import { registryForScreen } from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -11,7 +12,7 @@ import type { TailwindJit } from "../styles/tailwind-jit.ts";
  * preset if missing. Used by the canvas to mount a screen inside each frame
  * iframe at the frame's current size.
  */
-export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit): Hono {
+export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJit): Hono {
   const r = new Hono();
 
   /**
@@ -27,7 +28,8 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
    * of pinned to the top-left.
    */
   r.get("/snippet/:snippetId", async (c) => {
-    const f = folder();
+    const ctx = ctxFor();
+    const f = ctx.folder;
     const snippet = f.snippets.get(c.req.param("snippetId"));
     if (!snippet) return c.json({ error: "snippet not found" }, 404);
 
@@ -76,6 +78,7 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
       const { html } = await renderScreen(screen, f.theme, {
         viewport,
         snapshotCss,
+        registry: registryForScreen(ctx, snippet),
         snippets: f.snippets,
         dark,
       });
@@ -98,7 +101,8 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
    * virtualized `snippet:<id>` screenId.
    */
   r.get("/snippet-body/:snippetId", async (c) => {
-    const f = folder();
+    const ctx = ctxFor();
+    const f = ctx.folder;
     const snippet = f.snippets.get(c.req.param("snippetId"));
     if (!snippet) return c.json({ error: "snippet not found" }, 404);
 
@@ -136,6 +140,7 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
       const { html } = await renderScreen(screen, f.theme, {
         viewport,
         snapshotCss,
+        registry: registryForScreen(ctx, snippet),
         snippets: f.snippets,
         dark,
       });
@@ -159,7 +164,8 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
    * by the screen catch-all.
    */
   r.get("/component/:componentId", async (c) => {
-    const f = folder();
+    const ctx = ctxFor();
+    const f = ctx.folder;
     const componentId = c.req.param("componentId");
 
     const w = Number(c.req.query("w")) || 480;
@@ -202,9 +208,12 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
+      // Component previews render against the folder default library —
+      // showcases live in the default-provider's surface today.
       const { html } = await renderScreen(screen, f.theme, {
         viewport,
         snapshotCss,
+        registry: registryForScreen(ctx, screen),
         snippets: f.snippets,
         dark,
       });
@@ -218,7 +227,8 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
   });
 
   r.get("/:screenId", async (c) => {
-    const f = folder();
+    const ctx = ctxFor();
+    const f = ctx.folder;
     const screen = f.screens.get(c.req.param("screenId"));
     if (!screen) return c.json({ error: "screen not found" }, 404);
 
@@ -233,6 +243,7 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
       const { html } = await renderScreen(screen, f.theme, {
         viewport,
         snapshotCss,
+        registry: registryForScreen(ctx, screen),
         snippets: f.snippets,
         dark,
       });

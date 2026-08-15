@@ -11,12 +11,15 @@
     ".": "./src/cli.ts"
   },
   "dependencies": {
+    "@clack/prompts": "1.4.0",
     "@velloo/codegen": "workspace:*",
+    "@velloo/provider-none": "workspace:*",
     "@velloo/renderer": "workspace:*",
     "@velloo/schema": "workspace:*",
     "@velloo/server": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*",
     "citty": "0.2.2",
+    "picocolors": "1.1.1",
     "zod": "4.4.3"
   }
 }

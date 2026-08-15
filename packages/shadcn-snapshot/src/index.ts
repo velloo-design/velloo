@@ -1,42 +1,42 @@
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { Manifest } from "./manifest.ts";
+import type { ComponentProvider, Manifest } from "@velloo/provider";
+import { componentsDir, entryCssPath, manifestPath, snapshotVersion } from "./paths.ts";
+import { registry } from "./registry.ts";
 
+export { type InstalledSnapshot, installSnapshot } from "./install.ts";
 export type { ComponentDescriptor, Manifest, PropDescriptor } from "./manifest.ts";
+export { componentsDir, entryCssPath, snapshotVersion } from "./paths.ts";
 export { type ComponentRef, isKnownComponent, registry } from "./registry.ts";
-
-import pkg from "../package.json" with { type: "json" };
-
-export const snapshotVersion: string = (pkg as { snapshotVersion: string }).snapshotVersion;
-
-const here = dirname(fileURLToPath(import.meta.url));
-const srcDir = join(here, "..", "src");
-const distDir = join(here, "..", "dist");
-
-/**
- * Absolute path to the Tailwind entry CSS shipped with the snapshot. The
- * server's JIT compiler reads this and runs Tailwind v4 against the live page
- * folder so any class — including ones we haven't thought of yet — renders
- * without a hand-rolled safelist.
- */
-export const entryCssPath: string = join(srcDir, "tailwind-entry.css");
-
-/**
- * Absolute path to the snapshot's component sources. The JIT scanner reads
- * these so the canvas picks up classes used by shipped components even if no
- * page references them directly.
- */
-export const componentsDir: string = join(srcDir, "components");
 
 /**
  * Prop manifest extracted from the vendored sources via ts-morph at build time.
  */
 export async function loadManifest(): Promise<Manifest> {
-  const file = Bun.file(join(distDir, "manifest.json"));
+  const file = Bun.file(manifestPath);
   if (!(await file.exists())) {
     throw new Error(
       `@velloo/shadcn-snapshot: dist/manifest.json missing. Run \`bun run build\` in packages/shadcn-snapshot.`,
     );
   }
   return (await file.json()) as Manifest;
+}
+
+/**
+ * Build a `ComponentProvider` instance for this snapshot. Optionally
+ * overrides the on-disk `componentsDir` when the user installed the
+ * snapshot files outside the binary (in-repo or cache mode) — the
+ * runtime registry stays bundled with velloo (so what the canvas
+ * renders is byte-identical across folders), but the JIT scan target
+ * follows the install location so user customizations contribute to
+ * the compiled CSS.
+ */
+export function createProvider(opts: { componentsDir?: string } = {}): ComponentProvider {
+  return {
+    id: "shadcn-react",
+    version: snapshotVersion,
+    componentsDir: opts.componentsDir ?? componentsDir,
+    styleEntryPath: entryCssPath,
+    registry,
+    loadManifest,
+    label: `shadcn-react ${snapshotVersion}`,
+  };
 }

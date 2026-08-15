@@ -12,6 +12,7 @@
   "include": ["src/**/*", "src/**/*.json"],
   "references": [
     { "path": "../schema" },
+    { "path": "../provider-none" },
     { "path": "../shadcn-snapshot" },
     { "path": "../renderer" },
     { "path": "../codegen" },

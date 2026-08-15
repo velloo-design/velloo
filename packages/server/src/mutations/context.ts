@@ -1,9 +1,37 @@
+import type { ComponentProvider } from "@velloo/provider";
 import type { DesignFolder } from "../design-folder.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 
+/**
+ * Per-design-folder server state. Multi-library (Sprint Y): every
+ * library registered in `folder.config.libraries` resolves to a
+ * provider in `providers` keyed by the same id; `defaultProvider`
+ * is `providers[folder.config.defaultLibrary]` for fast access.
+ *
+ * `extensions` is the folder's user-declared custom component
+ * registry — agent-managed via `add_extension` / `remove_extension`.
+ * The map's source of truth is `folder.config.extensions`; this is a
+ * convenience copy the renderer reads on every render. Stays in sync
+ * via the `commitConfig` persistence path.
+ */
 export interface MutationContext {
   folder: DesignFolder;
+  /**
+   * One provider per registered library, keyed by `libraryId`. A
+   * screen with `library: "marketing"` resolves through
+   * `providers["marketing"]`.
+   */
+  providers: Record<string, ComponentProvider>;
+  /** Provider used when a screen / snippet doesn't declare a `library`. */
+  defaultProvider: ComponentProvider;
+  /**
+   * Sole provider — back-compat shim. Equal to `defaultProvider`. Code
+   * paths that don't care about per-screen libraries (the validate JIT,
+   * the design-summary route's reported version) read this without
+   * branching. Will go away when every reader supplies a screen context.
+   */
+  provider: ComponentProvider;
   broadcast: (e: WatchEvent) => void;
 }
 

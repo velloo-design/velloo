@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "build": "bun --filter='*' run build",
     "typecheck": "tsc -b",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

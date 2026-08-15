@@ -16,6 +16,7 @@ import {
 } from "./design-folder.ts";
 import { createMcpServer } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
+import { migrateConfig, resolveProviders } from "./providers.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
 import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
 
@@ -74,15 +75,26 @@ async function serveSpaFallback(): Promise<Response> {
 
 export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const folder: DesignFolder = await loadDesignFolder(opts.folder);
+  // Promote legacy single-library configs to the Sprint-Y multi-library
+  // shape in-memory so older Pulse folders keep working without
+  // rewriting their config on disk. See providers.ts#migrateConfig.
+  folder.config = migrateConfig(folder.config);
+  const { providers, defaultProvider } = await resolveProviders(folder.config, folder.root);
   const broadcaster = new Broadcaster();
-  const jit = new TailwindJit(join(folder.root, "screens"));
+  const jit = new TailwindJit(Object.values(providers), join(folder.root, "screens"));
   const broadcast = (e: WatchEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
       jit.invalidate();
     }
     broadcaster.broadcast(e);
   };
-  const ctx: MutationContext = { folder, broadcast };
+  const ctx: MutationContext = {
+    folder,
+    providers,
+    defaultProvider,
+    provider: defaultProvider,
+    broadcast,
+  };
   const app = createApp(() => ctx, jit);
 
   let watcher: Watcher | null = null;
@@ -167,5 +179,12 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 // Re-export key types and helpers for downstream consumers.
 export type { DesignFolder } from "./design-folder.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+export {
+  createServerProviderLoader,
+  DEFAULT_LEGACY_LIBRARY_ID,
+  migrateConfig,
+  migrateLibrarySource,
+  resolveProviders,
+} from "./providers.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";
 export type { WatchEvent } from "./watcher.ts";

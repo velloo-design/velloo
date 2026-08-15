@@ -121,3 +121,15 @@ export {
 } from "./api/tree.ts";
 export type { MutationContext } from "./context.ts";
 export type { MutationError } from "./errors.ts";
+export {
+  type AddExtensionArgs,
+  type AddExtensionResult,
+  addExtension,
+  ensureKnownExtension,
+  type RemoveExtensionArgs,
+  type RemoveExtensionResult,
+  removeExtension,
+  type UpdateExtensionArgs,
+  type UpdateExtensionResult,
+  updateExtension,
+} from "./extensions.ts";

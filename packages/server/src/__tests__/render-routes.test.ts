@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { createApp } from "../app.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
+
+const provider = createShadcnProvider();
 
 /**
  * Integration tests for the `/api/render/snippet*` routes. Guards two
@@ -25,8 +28,8 @@ const sampleConfig = {
   library: {
     id: "shadcn-react" as const,
     version: "test",
-    source: "registry:shadcn",
-    componentsPath: "components/ui",
+    source: "binary",
+    componentsPath: "binary",
   },
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
@@ -79,8 +82,14 @@ beforeEach(async () => {
   await writeJson(join(tmp, "theme/default.json"), sampleTheme);
   await writeJson(join(tmp, "snippets/stat-card.json"), sampleSnippet);
   folder = await loadDesignFolder(tmp);
-  jit = new TailwindJit(join(folder.root, "screens"));
-  const ctx: MutationContext = { folder, broadcast: () => undefined };
+  jit = new TailwindJit(provider, join(folder.root, "screens"));
+  const ctx: MutationContext = {
+    folder,
+    providers: { default: provider },
+    defaultProvider: provider,
+    provider,
+    broadcast: () => undefined,
+  };
   app = createApp(() => ctx, jit);
 });
 

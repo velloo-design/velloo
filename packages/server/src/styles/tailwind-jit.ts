@@ -2,31 +2,43 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { compile } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
-import { componentsDir, entryCssPath } from "@velloo/shadcn-snapshot";
+import type { ComponentProvider } from "@velloo/provider";
 
 type Compiler = Awaited<ReturnType<typeof compile>>;
 
 /**
- * Tailwind v4 compiled on-demand against the snapshot components + the user's
- * live pages folder. Replaces the static safelisted CSS the snapshot used to
- * ship: anything the user (or an agent) writes as a className is generated.
+ * Tailwind v4 compiled on-demand against the active providers' component
+ * sources + the user's live pages folder. Replaces the static safelisted
+ * CSS the snapshot used to ship: anything the user (or an agent) writes
+ * as a className is generated.
+ *
+ * Sprint Y: takes an array of providers (one per registered library).
+ * Each provider contributes its `componentsDir` to the scan and its
+ * `styleEntryPath` to the entry-CSS merge. Single-library folders pass
+ * an array of one — no special-case path.
  *
  * The expensive step is `compile()` (parse entry CSS, resolve @theme,
- * register @custom-variant rules). We do that once at server start and reuse
- * the returned `build(candidates)` function on every fetch — the cheap path.
+ * register @custom-variant rules). We do that once at server start and
+ * reuse the returned `build(candidates)` function on every fetch.
  *
- * The scan + build is cached and invalidated on any page/theme change so a
- * burst of MCP edits doesn't pay the cost N times.
+ * The scan + build is cached and invalidated on any page/theme change so
+ * a burst of MCP edits doesn't pay the cost N times.
  */
 export class TailwindJit {
   private compilerPromise: Promise<Compiler> | null = null;
   private cached: string | null = null;
   private readonly snippetsDir: string;
+  private readonly providers: ComponentProvider[];
 
   constructor(
+    providers: ComponentProvider[] | ComponentProvider,
     private readonly pagesDir: string,
     snippetsDir?: string,
   ) {
+    this.providers = Array.isArray(providers) ? providers : [providers];
+    if (this.providers.length === 0) {
+      throw new Error("TailwindJit: at least one provider is required.");
+    }
     this.snippetsDir = snippetsDir ?? join(pagesDir, "..", "snippets");
   }
 
@@ -38,9 +50,10 @@ export class TailwindJit {
   async build(): Promise<string> {
     if (this.cached !== null) return this.cached;
     const compiler = await this.getCompiler();
+    const dedupedDirs = Array.from(new Set(this.providers.map((p) => p.componentsDir)));
     const scanner = new Scanner({
       sources: [
-        { base: componentsDir, pattern: "**/*.tsx", negated: false },
+        ...dedupedDirs.map((base) => ({ base, pattern: "**/*.tsx", negated: false })),
         { base: this.pagesDir, pattern: "**/*.json", negated: false },
         { base: this.snippetsDir, pattern: "**/*.json", negated: false },
       ],
@@ -50,12 +63,38 @@ export class TailwindJit {
     return this.cached;
   }
 
+  /**
+   * Merge each provider's entry CSS into one Tailwind input. Today every
+   * shipping provider uses the same `@theme` token names; the merge is
+   * effectively a `cat`. When a future provider ships divergent tokens
+   * (e.g. MUI mapping to a different palette shape) we'll need real
+   * conflict detection — left as a TODO with a soft-warn for now.
+   */
+  private async mergedEntryCss(): Promise<{ css: string; base: string }> {
+    const primary = this.providers[0];
+    if (!primary) {
+      throw new Error("TailwindJit: providers is empty, cannot build entry CSS.");
+    }
+    const primaryBase = dirname(primary.styleEntryPath);
+    if (this.providers.length === 1) {
+      const css = await readFile(primary.styleEntryPath, "utf8");
+      return { css, base: primaryBase };
+    }
+    const sources = await Promise.all(
+      this.providers.map(async (p) => {
+        const css = await readFile(p.styleEntryPath, "utf8");
+        return `/* === provider: ${p.id} (${p.version}) === */\n${css}`;
+      }),
+    );
+    return { css: sources.join("\n\n"), base: primaryBase };
+  }
+
   private getCompiler(): Promise<Compiler> {
     if (this.compilerPromise) return this.compilerPromise;
     this.compilerPromise = (async () => {
-      const css = await readFile(entryCssPath, "utf8");
+      const { css, base } = await this.mergedEntryCss();
       return compile(css, {
-        base: dirname(entryCssPath),
+        base,
         onDependency: () => {},
       });
     })();

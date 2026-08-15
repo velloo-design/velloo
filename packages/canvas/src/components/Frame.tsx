@@ -206,6 +206,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
           w={w}
           h={h}
           sharedCount={sharedCount}
+          library={screen?.library ?? null}
           onPointerDownGrip={startDrag}
           onRemove={onRemove}
           onResize={onResize}

@@ -2,18 +2,27 @@ import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { __unstable__loadDesignSystem } from "@tailwindcss/node";
-import { entryCssPath } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
+import type { MutationContext } from "../../mutations/index.ts";
 
 type DesignSystem = Awaited<ReturnType<typeof __unstable__loadDesignSystem>>;
 
 let designSystemPromise: Promise<DesignSystem> | null = null;
+let designSystemKey: string | null = null;
 
-function getDesignSystem(): Promise<DesignSystem> {
-  if (designSystemPromise) return designSystemPromise;
+/**
+ * Load the Tailwind v4 design system for class-candidate parsing. Keyed
+ * on the active provider's entry CSS path so a provider swap (Sprint X+2
+ * onward) rebuilds against the right entry. Today there's one provider,
+ * so the cache effectively lives forever.
+ */
+function getDesignSystem(ctx: MutationContext): Promise<DesignSystem> {
+  const key = ctx.provider.styleEntryPath;
+  if (designSystemPromise && designSystemKey === key) return designSystemPromise;
+  designSystemKey = key;
   designSystemPromise = (async () => {
-    const css = await readFile(entryCssPath, "utf8");
-    return __unstable__loadDesignSystem(css, { base: dirname(entryCssPath) });
+    const css = await readFile(key, "utf8");
+    return __unstable__loadDesignSystem(css, { base: dirname(key) });
   })();
   return designSystemPromise;
 }
@@ -28,7 +37,7 @@ function jsonResult(value: unknown): { content: { type: "text"; text: string }[]
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
 }
 
-export function registerValidateTools(mcp: McpServer): void {
+export function registerValidateTools(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
     "validate_classes",
     {
@@ -39,7 +48,7 @@ export function registerValidateTools(mcp: McpServer): void {
       },
     },
     async ({ classes }) => {
-      const ds = await getDesignSystem();
+      const ds = await getDesignSystem(ctx);
       const reports: ClassReport[] = classes.map((cls) => {
         const trimmed = cls.trim();
         if (trimmed === "") return { class: cls, valid: false, reason: "empty class" };

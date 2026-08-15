@@ -42,6 +42,14 @@ export const SnippetSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   params: z.array(SnippetParamSchema),
+  /**
+   * Library id (key in `Config.libraries`) this snippet's body
+   * resolves against. Optional — when absent the folder's
+   * `defaultLibrary` is used. Snippets are pinned to one library; an
+   * instance placed in a screen using a different library renders
+   * against the snippet's library, not the embedding screen's.
+   */
+  library: z.string().min(1).optional(),
   tree: NodeSchema,
 });
 

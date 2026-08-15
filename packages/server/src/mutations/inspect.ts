@@ -4,7 +4,7 @@ import type { Screen } from "@velloo/schema";
 import type { Locator } from "../path.ts";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
-import { getComponentNode, getScreen } from "./lookup.ts";
+import { getComponentNode, getScreen, registryForScreen } from "./lookup.ts";
 
 export interface InspectArgs {
   screenId: string;
@@ -30,9 +30,10 @@ export async function inspect(
     const subScreen: Screen = {
       id: `${screen.id}__inspect`,
       name: `${screen.name} inspect`,
+      library: screen.library,
       tree: node,
     };
-    const bodyHtml = renderBody(subScreen, ctx.folder.snippets);
+    const bodyHtml = renderBody(subScreen, registryForScreen(ctx, subScreen), ctx.folder.snippets);
 
     const className = (node.props?.className ?? "") as string;
     const classes =

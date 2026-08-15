@@ -8,14 +8,15 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@velloo/provider": "workspace:*",
     "@velloo/schema": "workspace:*",
-    "@velloo/shadcn-snapshot": "workspace:*",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@velloo/shadcn-snapshot": "workspace:*",
     "playwright": "1.59.1"
   }
 }

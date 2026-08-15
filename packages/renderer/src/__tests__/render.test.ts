@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import type { Screen, Theme, Viewport } from "@velloo/schema";
+import { registry } from "@velloo/shadcn-snapshot";
 import { renderScreen, themeToCss, UnknownComponentError } from "../index.ts";
 
 // Synthetic CSS so the renderer test stays a pure function test — actual
 // Tailwind compilation is the server's TailwindJit concern.
 const SNAPSHOT_CSS = "/* preflight stub */ .test { color: red; }";
 const viewport: Viewport = { w: 800, h: 600 };
-const opts = { snapshotCss: SNAPSHOT_CSS, viewport };
+// Provider-agnostic renderer: tests pass the shadcn snapshot's registry
+// explicitly (the snapshot is just a test fixture here, not a build-time
+// dependency of the renderer itself).
+const opts = { snapshotCss: SNAPSHOT_CSS, viewport, registry };
 
 const sampleTheme: Theme = {
   name: "test",

@@ -4,28 +4,31 @@ This file orients you when you're modifying **the Velloo repo itself**. For guid
 
 ## Mental model
 
-Velloo is a local, code-shaped design canvas for solo devs. The repo is a Bun-workspaces monorepo split into eight packages with one-way dependencies:
+Velloo is a local, code-shaped design canvas for solo devs. The repo is a Bun-workspaces monorepo split into eleven packages with one-way dependencies:
 
 ```
-schema → result → renderer → codegen → shadcn-snapshot → server → canvas → cli
+schema → result → provider → shadcn-snapshot → provider-none, provider-mui → renderer → codegen → server → canvas → cli
 ```
 
-The cleanest packages (`schema`, `result`) have no internal deps. Everything else builds on them. **Do not introduce cycles** — every cross-package import must respect this order.
+The cleanest packages (`schema`, `result`, `provider`) have no internal runtime deps. Everything else builds on them. **Do not introduce cycles** — every cross-package import must respect this order.
 
 ### Package responsibilities
 
 - **`@velloo/schema`** — Zod schemas + TS types for everything on disk in a design folder (Screen, Board, Frame, Snippet, Theme, Config, Node, Annotation, CanvasNote). Plus pure utilities like `collectIds` / `findDuplicateIds`. **No I/O. No framework imports.** This package is the contract between every other package — keep it minimal.
 - **`@velloo/result`** — `Result<T, E>` helpers (`ok`, `err`, `unwrap`, `Do`/`DoAsync` generator monads). Used throughout for typed errors instead of throwing.
-- **`@velloo/renderer`** — Pure design JSON → React tree → HTML (server-render) + Playwright screenshot path. Includes the design-mode iframe runtime that talks to the canvas via MessageChannel.
+- **`@velloo/provider`** — The `ComponentProvider` interface every library entry implements (shadcn, no-lib, MUI, future host-scan). Owns the `Manifest` / `ComponentDescriptor` / `PropDescriptor` types. No runtime code beyond the loader plumbing — concrete providers live in their own packages.
+- **`@velloo/shadcn-snapshot`** — The default `ComponentProvider`: the pinned shadcn component snapshot Velloo ships with. Also exports `installSnapshot()` for `--source=in-repo`/`--source=cache` modes that copy the snapshot's `.tsx` sources to disk.
+- **`@velloo/provider-none`** — The no-library provider. Six bare primitives (Box, Stack, Container, Card, Button, Input) wrapping plain HTML, plus the reusable velloo helpers (Heading, Text, Icon, …) re-used from shadcn-snapshot. The trivial-end proof the abstraction works.
+- **`@velloo/provider-mui`** — Material UI v6 provider, **scaffold-only**. Registered in the loader and the wizard; the factory currently throws a "not yet vendored" message. Real MUI bundle lands in Sprint X+2.1 (see README).
+- **`@velloo/renderer`** — Pure design JSON → React tree → HTML (server-render) + Playwright screenshot path. Provider-agnostic: the registry is supplied through `BuildTreeOptions` / `RenderOptions`, not imported. Includes the design-mode iframe runtime that talks to the canvas via MessageChannel.
 - **`@velloo/codegen`** — `emit_code` (agent-consumed IR) + `emit_theme` (writes Tailwind v4 `globals.css` + `tailwind.config.ts` with diffs).
-- **`@velloo/shadcn-snapshot`** — The pinned shadcn component snapshot Velloo ships with. Components are **embedded** here, not in user design folders.
-- **`@velloo/server`** — HTTP + MCP + watcher + mutations + theme operations. Hono for routes, custom Bun-based static + WS server in `index.ts`.
-- **`@velloo/canvas`** — Vite/React canvas SPA. Ships its own `src/components/ui/` (real shadcn — real Radix portals, Sonner toaster, working dialogs/popovers/etc.). The canvas only imports *types* (`Manifest`, `ComponentDescriptor`, `PropDescriptor`) from `@velloo/shadcn-snapshot`; their components are design-mode stubs not meant to drive live UI.
-- **`@velloo/cli`** — `velloo` binary (citty). Subcommands: `init`, `run`, `emit`, `render`, `theme-export`, `upgrade`.
+- **`@velloo/server`** — HTTP + MCP + watcher + mutations + theme operations. Hono for routes, custom Bun-based static + WS server in `index.ts`. Resolves the active provider at boot via `packages/server/src/providers.ts` (knows about `shadcn-react`, `none`, `mui`); `MutationContext` carries the resolved instance.
+- **`@velloo/canvas`** — Vite/React canvas SPA. Ships its own `src/components/ui/` (real shadcn — real Radix portals, Sonner toaster, working dialogs/popovers/etc.). The canvas only imports *types* (`Manifest`, `ComponentDescriptor`, `PropDescriptor`) from `@velloo/shadcn-snapshot` (which re-exports them from `@velloo/provider`); their components are design-mode stubs not meant to drive live UI.
+- **`@velloo/cli`** — `velloo` binary (citty). Subcommands: `init`, `run`, `emit`, `render`, `theme-export`, `upgrade`. `init` is interactive (clack-driven wizard); the `wizard/` module composes the prompts and the `scan/` module produces screens from a host app's route structure.
 
 ## Important architecture invariants
 
-1. **Components are embedded, not on disk in design folders.** Pre-pivot Velloo wrote `components/*.tsx` into every design folder. Now the snapshot is embedded in `@velloo/shadcn-snapshot` and the design folder ships pure data. **Do not** reintroduce on-disk components for user folders. See `docs/decisions.md` #4 + #17.
+1. **Components come from a `ComponentProvider`, not from a direct snapshot import.** Pre-pivot Velloo wrote `components/*.tsx` into every design folder; post-pivot it imported from `@velloo/shadcn-snapshot` directly across half the codebase. Post-Sprint-X, every consumer reads through the `ComponentProvider` interface (`@velloo/provider`) and the server resolves one provider instance per *library* per folder. Sprint Y made this multi-provider: `ctx.providers` is a map keyed by library id, `providerForScreen(ctx, screen)` and `registryForScreen(ctx, screen)` pick the right one per render. **Do not** import from `@velloo/shadcn-snapshot` outside the `providers.ts` factory registration or test fixtures. **Do not** reintroduce on-disk components for user folders. **Do not** read `ctx.provider` at render call sites — use `registryForScreen` so the right library + extensions are merged. See `docs/decisions.md` #4 + #17 + #22 + #24.
 2. **Two copies of shadcn, one upstream pull.** `@velloo/shadcn-snapshot` is the design-mode-only fork (overlays inline-stubbed via `canvas-portal.tsx`, Calendar/Chart/Carousel are static fakes). `@velloo/canvas/src/components/ui/` is the real shadcn for the IDE chrome. They re-vendor from the same upstream pull on the same day and the snapshot's `snapshotVersion` records it. See `docs/decisions.md` #18.
 3. **Customization happens through snippets, not custom components.** Users who want a custom Button wrap the snapshot's Button in a snippet. No dynamic component loading.
 4. **Designs are static.** Click handlers, routing, form state — all no-ops in the canvas. The renderer's iframe runtime intercepts clicks for selection only.
@@ -34,8 +37,10 @@ The cleanest packages (`schema`, `result`) have no internal deps. Everything els
 
 ## Where things live
 
-- **Mutations** — `packages/server/src/mutations/<verb>.ts` for implementations; `packages/server/src/mutations/api/<area>.ts` for the orchestration wrappers (lock + impl); `packages/server/src/mutations/index.ts` re-exports.
+- **Mutations** — `packages/server/src/mutations/<verb>.ts` for implementations; `packages/server/src/mutations/api/<area>.ts` for the orchestration wrappers (lock + impl); `packages/server/src/mutations/index.ts` re-exports. Extension lifecycle (`addExtension` / `updateExtension` / `removeExtension`) lives at `packages/server/src/mutations/extensions.ts`.
 - **MCP tools** — `packages/server/src/mcp/tools/<area>.ts`. The instructions string lives in `packages/server/src/mcp/server.ts` (around `INSTRUCTIONS`).
+- **Provider plumbing** — `packages/provider/src/` for the interface + loader. `packages/server/src/providers.ts` for the server-side factory registration + migration shims (`migrateLibrarySource`, `migrateConfig`, `resolveProviders`). Concrete providers live in their own packages.
+- **Extensions** — `packages/server/src/extensions/registry.ts` for the per-screen registry composer (library + extensions, with shadowing). `packages/server/src/extensions/placeholder.tsx` for the canvas Tier-1 render. Schema lives in `packages/schema/src/extension.ts`.
 - **Canvas state** — single Zustand slice in `packages/canvas/src/store.ts`. Convenience namespaced hooks (`useSelection`, `useViewport`, etc.) in `store-hooks.ts`.
 - **Canvas HTTP surface** — `packages/canvas/src/api/<area>.ts`, re-exported from `packages/canvas/src/api.ts`.
 - **Renderer iframe runtime** — `packages/renderer/src/iframe-runtime.ts` (the script injected into design iframes). Pair with `packages/canvas/src/iframe-channel.ts` (parent side).

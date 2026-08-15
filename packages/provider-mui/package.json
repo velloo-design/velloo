@@ -1,0 +1,14 @@
+{
+  "name": "@velloo/provider-mui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Material UI v6 provider for Velloo. Scaffold only — actual MUI bundle pending Sprint X+2.1.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@velloo/provider": "workspace:*",
+    "@velloo/schema": "workspace:*"
+  }
+}
