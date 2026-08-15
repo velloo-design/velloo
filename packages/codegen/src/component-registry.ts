@@ -99,6 +99,18 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   Label: shadcn("Label", "label"),
   Separator: shadcn("Separator", "separator"),
 
+  // Velloo-owned composition helpers with real runtime logic (gradient
+  // presets, focal cropping, divider label slots). Too structural to
+  // lower to a single HTML tag, so the IR keeps the identifier verbatim
+  // — the agent reads it from componentsUsed and materializes the
+  // component in the host app (emit_code is honest IR,
+  // not paste-ready output).
+  Divider: shadcn("Divider", "velloo/divider"),
+  Gradient: shadcn("Gradient", "velloo/gradient"),
+  Image: shadcn("Image", "velloo/image"),
+  Layer: shadcn("Layer", "velloo/layer"),
+  SVG: shadcn("SVG", "velloo/svg"),
+
   // Velloo-owned typography primitives — lower to plain HTML so the user's
   // shadcn install is enough.
   Heading: {

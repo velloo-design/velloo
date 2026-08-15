@@ -138,6 +138,28 @@ describe("emitCode", () => {
     expect([...snippetIdsReferenced(screen)]).toEqual(["feature-card"]);
   });
 
+  test("emits velloo composition helpers verbatim (the sample screens use them)", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Card",
+          children: [
+            { $ref: "Gradient", props: { preset: "mesh", className: "absolute inset-0" } },
+            { $ref: "Layer", props: { top: 24, z: 2 } },
+            { $ref: "Image", props: { src: "assets/hero.png", aspect: "16/9" } },
+            { $ref: "SVG", props: { content: "<path d='M0 0' />" } },
+            { $ref: "Divider", props: { variant: "gradient", label: "OR" } },
+          ],
+        }),
+      ),
+    );
+    expect(result.jsx).toContain(`<Gradient className="absolute inset-0" preset="mesh" />`);
+    expect(result.jsx).toContain(`<Layer top={24} z={2} />`);
+    expect(result.jsx).toContain(`<Image src="assets/hero.png" aspect="16/9" />`);
+    expect(result.jsx).toContain(`<Divider variant="gradient" label="OR" />`);
+    expect(result.componentsUsed).toEqual(["Card", "Divider", "Gradient", "Image", "Layer", "SVG"]);
+  });
+
   test("emits registered extensions as JSX with their declared id", async () => {
     const result = unwrap(
       await emitCode(screenOf({ $ref: "PriceChart", props: { period: "30d" } }), {

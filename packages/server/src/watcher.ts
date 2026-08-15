@@ -28,6 +28,47 @@ export interface Watcher {
   close(): void;
 }
 
+/**
+ * Map a folder-relative path (e.g. "screens/landing.json") to its watch
+ * event. Pure — exported for tests. Returns null for paths that should
+ * never fire (temp files, unknown subdirs, dotted stems from atomic
+ * writes).
+ */
+export function classifyWatchPath(filename: string | null): WatchEvent | null {
+  if (!filename) return null;
+  const parts = filename.split(sep);
+  if (parts[0] === "screens" && parts[1]) {
+    const file = parts[1];
+    if (file.endsWith(".annotations.json")) {
+      const screenId = file.slice(0, -".annotations.json".length);
+      return { type: "annotations-changed", screenId };
+    }
+    if (file.endsWith(".json")) {
+      const stem = file.slice(0, -".json".length);
+      if (!stem.includes(".")) return { type: "screen-changed", screenId: stem };
+    }
+  }
+  if (parts[0] === "boards" && parts[1]) {
+    const file = parts[1];
+    if (file.endsWith(".notes.json")) {
+      const boardId = file.slice(0, -".notes.json".length);
+      return { type: "notes-changed", boardId };
+    }
+    if (file.endsWith(".json")) {
+      const stem = file.slice(0, -".json".length);
+      if (!stem.includes(".")) return { type: "board-changed", boardId: stem };
+    }
+  }
+  if (parts[0] === "theme" && parts[1] && parts[1].endsWith(".json")) {
+    return { type: "theme-changed" };
+  }
+  if (parts[0] === "snippets" && parts[1] && parts[1].endsWith(".json")) {
+    const snippetId = parts[1].slice(0, -".json".length);
+    return { type: "snippet-changed", snippetId };
+  }
+  return null;
+}
+
 export function watchDesignFolder(
   root: string,
   onEvent: (e: WatchEvent) => void,
@@ -48,47 +89,12 @@ export function watchDesignFolder(
     );
   }
 
-  function classifySubdir(filename: string | null): WatchEvent | null {
-    if (!filename) return null;
-    const parts = filename.split(sep);
-    if (parts[0] === "screens" && parts[1]) {
-      const file = parts[1];
-      if (file.endsWith(".annotations.json")) {
-        const screenId = file.slice(0, -".annotations.json".length);
-        return { type: "annotations-changed", screenId };
-      }
-      if (file.endsWith(".json")) {
-        const stem = file.slice(0, -".json".length);
-        if (!stem.includes(".")) return { type: "screen-changed", screenId: stem };
-      }
-    }
-    if (parts[0] === "boards" && parts[1]) {
-      const file = parts[1];
-      if (file.endsWith(".notes.json")) {
-        const boardId = file.slice(0, -".notes.json".length);
-        return { type: "notes-changed", boardId };
-      }
-      if (file.endsWith(".json")) {
-        const stem = file.slice(0, -".json".length);
-        if (!stem.includes(".")) return { type: "board-changed", boardId: stem };
-      }
-    }
-    if (parts[0] === "theme" && parts[1] && parts[1].endsWith(".json")) {
-      return { type: "theme-changed" };
-    }
-    if (parts[0] === "snippets" && parts[1] && parts[1].endsWith(".json")) {
-      const snippetId = parts[1].slice(0, -".json".length);
-      return { type: "snippet-changed", snippetId };
-    }
-    return null;
-  }
-
   for (const sub of ["screens", "boards", "theme", "snippets"]) {
     try {
       const w = watch(join(root, sub), (_eventType, filename) => {
         if (!filename) return;
         const rel = `${sub}${sep}${filename}`;
-        const ev = classifySubdir(rel);
+        const ev = classifyWatchPath(rel);
         if (ev) schedule(rel, ev);
       });
       watchers.push(w);
