@@ -56,6 +56,24 @@ export function connectWs(): () => void {
       } else if (payload.type === "snippet-changed") {
         void refreshDesignSummary();
         if (currentScreenId) void refreshScreen(currentScreenId);
+        // If the snippet currently open in the editor view is the one
+        // that changed, re-pull the body into its synthetic screen.
+        const editingId = useCanvas.getState().editingSnippetId;
+        if (editingId === payload.snippetId) {
+          void (async () => {
+            const { fetchSnippet } = await import("./api.ts");
+            try {
+              const s = await fetchSnippet(payload.snippetId);
+              useCanvas.getState().setSyntheticScreen(`snippet:${payload.snippetId}`, {
+                id: `snippet:${payload.snippetId}`,
+                name: s.name,
+                tree: s.tree,
+              });
+            } catch {
+              /* the snippet may have been deleted; ignore */
+            }
+          })();
+        }
       } else if (payload.type === "annotations-changed") {
         if (payload.screenId === currentScreenId) void refreshAnnotations();
       } else if (payload.type === "notes-changed") {

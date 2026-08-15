@@ -107,6 +107,13 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
           y: Math.round(anchorY - worldY * nextZoom),
         });
       },
+      // Plain wheel/trackpad inside the iframe → pan the board. Matches
+      // the parent board's own onWheel handler so panning feels the
+      // same whether the cursor sits over a frame or the grid.
+      onParentPan(deltaX, deltaY) {
+        const state = useCanvas.getState();
+        state.setPan({ x: state.pan.x - deltaX, y: state.pan.y - deltaY });
+      },
     });
     channelRef.current = channel;
     const onLoad = () => channel.attach();

@@ -21,7 +21,13 @@ export type ChildMessage =
    * coords using the iframe's bounding rect so zoom anchors on
    * the actual cursor position, not (0,0).
    */
-  | { type: "parentZoom"; deltaY: number; clientX: number; clientY: number };
+  | { type: "parentZoom"; deltaY: number; clientX: number; clientY: number }
+  /**
+   * Plain wheel / trackpad-scroll inside the iframe. The board uses
+   * this to pan the canvas; without it the iframe absorbs the scroll
+   * silently and the user can't move when their cursor is over a frame.
+   */
+  | { type: "parentPan"; deltaX: number; deltaY: number };
 
 export type ParentMessage =
   | { type: "applyHighlight"; path: string }
@@ -47,6 +53,8 @@ export interface ChannelHandlers {
    * bounding rect to anchor zoom on the cursor.
    */
   onParentZoom?(deltaY: number, clientX: number, clientY: number): void;
+  /** Plain wheel/trackpad-scroll forwarded from the iframe (pan). */
+  onParentPan?(deltaX: number, deltaY: number): void;
 }
 
 const INIT_RETRY_MS = 150;
@@ -144,6 +152,7 @@ export class IframeChannel {
     else if (msg.type === "nodeRects") this.handlers.onRects?.(msg.rects);
     else if (msg.type === "parentZoom")
       this.handlers.onParentZoom?.(msg.deltaY, msg.clientX, msg.clientY);
+    else if (msg.type === "parentPan") this.handlers.onParentPan?.(msg.deltaX, msg.deltaY);
   }
 
   send(msg: ParentMessage): void {

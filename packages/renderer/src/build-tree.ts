@@ -1,4 +1,5 @@
 import {
+  type ComponentNode,
   isComponentNode,
   isParamRef,
   isSnippetInstance,
@@ -213,4 +214,54 @@ export function buildTree(
  */
 export function buildRoot(node: Node, opts: BuildTreeOptions = {}): ReactElement {
   return createElement(Fragment, null, buildTree(node, [], opts));
+}
+
+/**
+ * Resolve a snippet body for *editing* in the canvas — preserves the
+ * body's path space so clicks in the iframe map back to update_props
+ * calls on the snippet tree.
+ *
+ * Param substitutions are scoped to *value positions* (props that
+ * embed `$param` refs), not whole-node positions. A `$param` node
+ * sitting as a child stays in the tree as a small Badge placeholder
+ * so the path index for its siblings doesn't shift when a default is
+ * substituted. The placeholder visibly shows "$<name>" so designers
+ * see what's slotted in by each instance.
+ */
+export function resolveSnippetBodyForEdit(
+  body: Node,
+  paramDefaults: Record<string, unknown>,
+  snippetId: string,
+): Node {
+  if (isParamRef(body)) {
+    return placeholderForParam(body.$param);
+  }
+  if (isSnippetInstance(body)) {
+    // Inner snippet instance: keep it. Nested-snippet edits happen by
+    // opening that snippet directly.
+    return body;
+  }
+  if (!isComponentNode(body)) return body;
+  const nextProps = body.props
+    ? (substituteParams(body.props, paramDefaults, snippetId) as Record<string, unknown>)
+    : undefined;
+  const nextChildren = body.children?.map((c) =>
+    resolveSnippetBodyForEdit(c, paramDefaults, snippetId),
+  );
+  return {
+    ...body,
+    ...(nextProps ? { props: nextProps } : {}),
+    ...(nextChildren ? { children: nextChildren } : {}),
+  };
+}
+
+function placeholderForParam(name: string): ComponentNode {
+  return {
+    $ref: "Badge",
+    props: {
+      variant: "outline",
+      className: "font-mono text-[10px] bg-muted/40 border-dashed text-muted-foreground",
+      children: `$${name}`,
+    },
+  };
 }

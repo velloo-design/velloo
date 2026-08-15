@@ -140,4 +140,38 @@ describe("mutation happy path", () => {
     });
     expect(r.ok).toBe(false);
   });
+
+  test("update_props against snippet:<id> routes to snippet body + broadcasts snippet-changed", async () => {
+    // Seed a snippet on disk so `loadDesignFolder` picks it up.
+    await mkdir(join(tmp, "snippets"), { recursive: true });
+    await writeJson(join(tmp, "snippets/feature-row.json"), {
+      id: "feature-row",
+      name: "Feature Row",
+      params: [],
+      tree: { $ref: "Card", props: { className: "p-4" }, children: [] },
+    });
+    folder = await loadDesignFolder(tmp);
+    events = [];
+    ctx = { folder, broadcast: (e) => events.push(e) };
+
+    // The snippet body's root is the Card we just wrote — patch its
+    // className via the virtualized screen id. The mutation layer
+    // recognizes the `snippet:` prefix, persists the snippet (not a
+    // screen), and broadcasts `snippet-changed`.
+    const { applyClasses: ac } = await import("../index.ts");
+    const result = await ac(ctx, {
+      screenId: "snippet:feature-row",
+      path: [],
+      classes: "p-8 rounded-lg",
+    });
+    expect(result.ok).toBe(true);
+
+    const updated = folder.snippets.get("feature-row");
+    expect(updated).toBeDefined();
+    if (updated && isComponentNode(updated.tree)) {
+      expect(updated.tree.props?.className).toBe("p-8 rounded-lg");
+    }
+    expect(events.some((e) => e.type === "snippet-changed")).toBe(true);
+    expect(events.some((e) => e.type === "screen-changed")).toBe(false);
+  });
 });

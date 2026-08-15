@@ -1,4 +1,4 @@
-import { renderScreen, UnknownComponentError } from "@velloo/renderer";
+import { renderScreen, resolveSnippetBodyForEdit, UnknownComponentError } from "@velloo/renderer";
 import type { Node, Screen, Viewport } from "@velloo/schema";
 import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
@@ -54,6 +54,66 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
         $snippet: snippet.id,
         ...(Object.keys(args).length > 0 ? { args } : {}),
       },
+    };
+
+    try {
+      const dark = c.req.query("mode") === "dark";
+      const snapshotCss = await jit.build();
+      const { html } = await renderScreen(screen, f.theme, {
+        viewport,
+        snapshotCss,
+        snippets: f.snippets,
+        dark,
+      });
+      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
+    } catch (err) {
+      if (err instanceof UnknownComponentError) {
+        return c.json({ error: err.message, ref: err.ref }, 422);
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * Render a snippet *body* (not the instance wrapper) — used by the
+   * canvas's snippet editor view. Substitutes `$param` references in
+   * prop positions with their declared defaults, but leaves `$param`
+   * nodes as small placeholder badges so the body's path space stays
+   * intact. Clicks in the iframe report paths that match the snippet
+   * tree, which the canvas maps to `update_props` calls against the
+   * virtualized `snippet:<id>` screenId.
+   */
+  r.get("/snippet-body/:snippetId", async (c) => {
+    const f = folder();
+    const snippet = f.snippets.get(c.req.param("snippetId"));
+    if (!snippet) return c.json({ error: "snippet not found" }, 404);
+
+    const w = Number(c.req.query("w")) || 480;
+    const h = Number(c.req.query("h")) || 320;
+    const viewport: Viewport = { w, h };
+
+    const paramDefaults: Record<string, unknown> = {};
+    for (const p of snippet.params) {
+      if (p.default !== undefined) {
+        paramDefaults[p.name] = p.default;
+        continue;
+      }
+      // Type-aware fallbacks for required params so the edit-preview
+      // doesn't crash on a missing arg. Mirrors `/snippet/:id`.
+      if (p.type === "string") paramDefaults[p.name] = `$${p.name}`;
+      else if (p.type === "number") paramDefaults[p.name] = 0;
+      else if (p.type === "boolean") paramDefaults[p.name] = false;
+      else if (p.type === "icon") paramDefaults[p.name] = "Circle";
+      else if (p.type === "color") paramDefaults[p.name] = "#7c3aed";
+      else if (p.type === "enum") paramDefaults[p.name] = p.enum?.[0] ?? "";
+      else paramDefaults[p.name] = `$${p.name}`;
+    }
+
+    const tree = resolveSnippetBodyForEdit(snippet.tree, paramDefaults, snippet.id);
+    const screen: Screen = {
+      id: `${snippet.id}__body`,
+      name: `${snippet.name} body`,
+      tree,
     };
 
     try {

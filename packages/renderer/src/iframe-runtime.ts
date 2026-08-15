@@ -109,12 +109,24 @@ export const IFRAME_RUNTIME = String.raw`
   // Cmd/Ctrl + wheel inside the iframe is a "zoom the canvas" gesture
   // for the parent — without this handler the browser treats it as
   // page-zoom (especially on macOS pinch-zoom which dispatches as
-  // ctrlKey+wheel). preventDefault stops the page-zoom, and we forward
-  // the delta to the parent so Board.tsx can react.
+  // ctrlKey+wheel). Plain wheel/trackpad-scroll is a "pan the canvas"
+  // gesture — without forwarding, the iframe absorbs scroll deltas
+  // (often it's smaller than its iframe, so they're a no-op) and the
+  // parent sees nothing.
+  //
+  // We only preventDefault + forward when the parent has established a
+  // channel (port is non-null). Library-tile iframes don't run a
+  // handshake; preventDefault'ing their wheels would freeze the
+  // surrounding masonry's scroll.
   window.addEventListener('wheel', (ev) => {
-    if (!(ev.ctrlKey || ev.metaKey)) return;
+    if (!port) return;
+    if (ev.ctrlKey || ev.metaKey) {
+      ev.preventDefault();
+      send({ type: 'parentZoom', deltaY: ev.deltaY, clientX: ev.clientX, clientY: ev.clientY });
+      return;
+    }
     ev.preventDefault();
-    send({ type: 'parentZoom', deltaY: ev.deltaY, clientX: ev.clientX, clientY: ev.clientY });
+    send({ type: 'parentPan', deltaX: ev.deltaX, deltaY: ev.deltaY });
   }, { passive: false });
 
   // Wait for the parent to send a port via window.postMessage.

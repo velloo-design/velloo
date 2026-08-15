@@ -2,7 +2,7 @@ import { $, DoAsync, err, type Result } from "@velloo/result";
 import { isSnippetInstance } from "@velloo/schema";
 import type { Locator } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
-import type { MutationContext } from "./context.ts";
+import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
 import { getNode, getScreen, resolve } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
@@ -54,7 +54,7 @@ export async function updateSnippetArgs(
     }
 
     yield* $(await commitScreen(ctx.folder, args.screenId, next));
-    ctx.broadcast({ type: "screen-changed", screenId: args.screenId });
+    broadcastTreeChange(ctx, args.screenId);
     return { path: resolved };
   });
 }

@@ -1,7 +1,7 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Locator } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
-import type { MutationContext } from "./context.ts";
+import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { getComponentNode, getScreen, resolve } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
@@ -41,7 +41,7 @@ export async function updatePropsBulk(
     }
 
     yield* $(await commitScreen(ctx.folder, args.screenId, next));
-    ctx.broadcast({ type: "screen-changed", screenId: args.screenId });
+    broadcastTreeChange(ctx, args.screenId);
     return { paths: resolvedPaths };
   });
 }

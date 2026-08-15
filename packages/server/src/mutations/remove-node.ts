@@ -2,7 +2,7 @@ import { $, DoAsync, err, type Result } from "@velloo/result";
 import { isComponentNode } from "@velloo/schema";
 import { type Locator, parentOf, pathAt } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
-import type { MutationContext } from "./context.ts";
+import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
 import { getScreen, resolve } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
@@ -44,7 +44,7 @@ export async function removeNode(
     if (parent.children.length === 0) delete parent.children;
 
     yield* $(await commitScreen(ctx.folder, screenId, next));
-    ctx.broadcast({ type: "screen-changed", screenId });
+    broadcastTreeChange(ctx, screenId);
     return { removedRef: describeRemoved(removed) };
   });
 }

@@ -65,6 +65,32 @@ describe("snippet resolution", () => {
     await expect(renderScreen(screen, theme, opts)).rejects.toBeInstanceOf(UnknownSnippetError);
   });
 
+  test("snippet of a snippet renders the inner body correctly", async () => {
+    // Outer wraps Feature Card inside a banner Card so we can confirm
+    // nested resolution works end-to-end.
+    const wrapper: Snippet = {
+      id: "wrapper",
+      name: "Wrapper",
+      params: [{ name: "label", type: "string" }],
+      tree: {
+        $ref: "Card",
+        children: [
+          { $ref: "Heading", props: { level: 2, children: { $param: "label" } } },
+          { $snippet: "feature-card", args: { title: "Fast", body: "Snappy by default." } },
+        ],
+      },
+    };
+    const snippets = new Map([
+      [featureCard.id, featureCard],
+      [wrapper.id, wrapper],
+    ]);
+    const screen = screenWith({ $snippet: "wrapper", args: { label: "Section" } });
+    const { bodyHtml } = await renderScreen(screen, theme, { ...opts, snippets });
+    expect(bodyHtml).toContain("Section");
+    expect(bodyHtml).toContain("Fast");
+    expect(bodyHtml).toContain("Snappy by default.");
+  });
+
   test("snippet body referencing itself triggers SnippetCycleError", async () => {
     const recursive: Snippet = {
       id: "recur",

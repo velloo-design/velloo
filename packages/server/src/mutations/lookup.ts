@@ -21,7 +21,32 @@ import {
   unknownComponent,
 } from "./errors.ts";
 
+/**
+ * Sentinel screenId prefix that virtualizes a snippet body as a screen so
+ * the existing tree mutations work against it. The canvas's snippet
+ * editor sets `selection.screenId = "snippet:<id>"`; everything
+ * downstream (resolve, clone, persist) flows through this adapter. See
+ * `decisions.md` note on snippet body editing.
+ */
+export const SNIPPET_TREE_PREFIX = "snippet:";
+
+export function isSnippetTreeId(screenId: string): boolean {
+  return screenId.startsWith(SNIPPET_TREE_PREFIX);
+}
+
+export function snippetIdFromTreeId(screenId: string): string {
+  return screenId.slice(SNIPPET_TREE_PREFIX.length);
+}
+
 export function getScreen(ctx: MutationContext, screenId: string): Result<Screen, MutationError> {
+  if (isSnippetTreeId(screenId)) {
+    const snippetId = snippetIdFromTreeId(screenId);
+    const snippet = ctx.folder.snippets.get(snippetId);
+    if (!snippet) return err(snippetNotFound(snippetId));
+    // Synthesize a screen so downstream impls don't need to branch.
+    // Persistence routes back to the snippet via `commitScreen`'s detection.
+    return ok({ id: screenId, name: snippet.name, tree: snippet.tree });
+  }
   const s = ctx.folder.screens.get(screenId);
   return s ? ok(s) : err(screenNotFound(screenId));
 }

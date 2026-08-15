@@ -2,7 +2,7 @@ import { $, DoAsync, err, type Result } from "@velloo/result";
 import { isComponentNode } from "@velloo/schema";
 import { type Locator, parentOf, pathAt } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
-import type { MutationContext } from "./context.ts";
+import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidMove, invalidPath, type MutationError } from "./errors.ts";
 import { getScreen, resolve } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
@@ -91,7 +91,7 @@ export async function moveNode(
     target.children.splice(toIdx, 0, moved);
 
     yield* $(await commitScreen(ctx.folder, screenId, next));
-    ctx.broadcast({ type: "screen-changed", screenId });
+    broadcastTreeChange(ctx, screenId);
     return { newPath: [...adjustedToParent, toIdx] };
   });
 }

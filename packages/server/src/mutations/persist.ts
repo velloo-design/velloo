@@ -19,6 +19,8 @@ import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { pushHistory } from "../history.ts";
 import type { MutationError } from "./errors.ts";
+import { snippetNotFound } from "./errors.ts";
+import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 import { validateScreenIds } from "./validate-ids.ts";
 
 /** Schema-validate then write a screen; update the in-memory cache. */
@@ -42,6 +44,18 @@ export function commitScreen(
 ): Promise<Result<Screen, MutationError>> {
   return DoAsync<Screen, MutationError>(async function* () {
     yield* $(validateScreenIds(screenId, screen));
+    // Virtualized snippet body: persist the tree back to the snippet
+    // file (keeping name + params intact) and return a synthetic Screen
+    // shape so callers don't have to special-case.
+    if (isSnippetTreeId(screenId)) {
+      const snippetId = snippetIdFromTreeId(screenId);
+      const prev = folder.snippets.get(snippetId);
+      if (!prev) {
+        return yield* $({ ok: false, error: snippetNotFound(snippetId) });
+      }
+      const updated = await persistSnippet(folder, snippetId, { ...prev, tree: screen.tree });
+      return { id: screenId, name: updated.name, tree: updated.tree };
+    }
     return await persistScreen(folder, screenId, screen);
   });
 }

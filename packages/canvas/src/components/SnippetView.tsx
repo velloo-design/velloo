@@ -1,12 +1,17 @@
-import type { Snippet, SnippetParam, ViewportPreset } from "@velloo/schema";
-import { ArrowLeft, FileJson, Pencil, Save, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { Screen, Snippet, SnippetParam, ViewportPreset } from "@velloo/schema";
+import { ArrowLeft, Pencil, Save, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { postMutate } from "../api/http.ts";
 import { fetchSnippet, type SnippetMeta } from "../api.ts";
+import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
+import { IconPicker } from "./IconPicker.tsx";
+import { Inspector } from "./Inspector.tsx";
+import { Tree } from "./Tree.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
+import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
@@ -21,14 +26,19 @@ const DEFAULT_VIEWPORT: ViewportPreset = { name: "Snippet", w: 480, h: 360 };
 
 /**
  * Focused view of a single snippet. Replaces the board canvas while
- * `editingSnippetId` is set in the store. Renders the snippet in a
- * resizable preview frame at a chosen viewport with a sidecar for
- * name + params editing (which round-trips through `update_snippet`).
+ * `editingSnippetId` is set in the store.
  *
- * Inline body editing isn't wired here yet — a `$snippet` instance is
- * opaque, so paths inside the body aren't addressable from the parent
- * iframe. The callout points users at MCP / hand-editing the body
- * until the body editor lands.
+ * Layout mirrors the boards mode so the inspector + tree feel familiar:
+ *  - Left rail: Tree of the snippet body, plus snippet-level controls
+ *    (rename, params).
+ *  - Center: a single iframe rendering the body (via the
+ *    `/api/render/snippet-body/:id` route which surfaces internal paths
+ *    for click-selection) plus a "Back to boards" header.
+ *  - Right rail: the standard Inspector. When the user clicks into the
+ *    iframe, selection is set with `screenId = "snippet:<id>"` and the
+ *    server's mutation layer routes the resulting `update_props` /
+ *    `apply_classes` calls back to the snippet body via the virtualized
+ *    screen path (see `mutations/lookup.ts#SNIPPET_TREE_PREFIX`).
  */
 export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const closeSnippetEditor = useCanvas((s) => s.closeSnippetEditor);
@@ -36,24 +46,48 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const designMode = useCanvas((s) => s.designMode);
   const screenVersion = useCanvas((s) => s.screenVersion);
   const refreshDesignSummary = useCanvas((s) => s.refreshDesignSummary);
+  const setSelection = useCanvas((s) => s.setSelection);
+  const setHover = useCanvas((s) => s.setHover);
+  const setNodeRects = useCanvas((s) => s.setNodeRects);
+  const clearNodeRects = useCanvas((s) => s.clearNodeRects);
+  const selection = useCanvas((s) => s.selection);
+  const setScreen = useCanvas((s) => s.setSyntheticScreen);
+  const components = useCanvas((s) => s.components);
+  const loadComponents = useCanvas((s) => s.loadComponents);
+
+  void snippetMeta;
+  const virtualScreenId = `snippet:${snippetId}`;
+  const syntheticScreen: Screen | null = useCanvas((s) => s.screens[virtualScreenId] ?? null);
+
+  useEffect(() => {
+    void loadComponents();
+  }, [loadComponents]);
+
+  const iconNames: string[] =
+    (components?.find((c) => c.id === "Icon")?.props.find((p) => p.name === "name")?.enumValues as
+      | string[]
+      | undefined) ?? [];
 
   const [snippet, setSnippet] = useState<Snippet | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // screenVersion is intentionally in the dep array: it bumps when
-    // any screen/snippet rebroadcasts, which is the signal we use to
-    // pull a fresh copy of the snippet body after an update_snippet
-    // call (ours or someone else's via the watcher).
+    // screenVersion bumps when any screen or snippet rebroadcasts. We
+    // use it as a one-bit signal to re-fetch the snippet so the params
+    // panel + synthetic-screen tree stay in lockstep with the file.
     void screenVersion;
     let alive = true;
     setLoading(true);
     fetchSnippet(snippetId)
       .then((s) => {
-        if (alive) {
-          setSnippet(s);
-          setLoading(false);
-        }
+        if (!alive) return;
+        setSnippet(s);
+        setLoading(false);
+        // Install the body as a synthetic screen keyed by the
+        // `snippet:` prefix. Selection / Tree / Inspector are all
+        // screen-shaped — letting them target this id lets us reuse
+        // them unchanged.
+        setScreen(virtualScreenId, { id: virtualScreenId, name: s.name, tree: s.tree });
       })
       .catch(() => {
         if (alive) setLoading(false);
@@ -61,21 +95,74 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
     return () => {
       alive = false;
     };
-  }, [snippetId, screenVersion]);
+  }, [snippetId, screenVersion, setScreen, virtualScreenId]);
 
   const initialPreset =
     presets.find((p) => p.name.toLowerCase().includes("desktop")) ?? presets[0] ?? DEFAULT_VIEWPORT;
   const [viewport, setViewport] = useState<ViewportPreset>(initialPreset);
 
   const previewModeQs = designMode === "dark" ? "&mode=dark" : "";
-  const previewUrl = `/api/render/snippet/${encodeURIComponent(snippetId)}?w=${viewport.w}&h=${viewport.h}&v=${themeVersion}.${screenVersion}${previewModeQs}`;
-  void snippetMeta;
+  const previewUrl = `/api/render/snippet-body/${encodeURIComponent(snippetId)}?w=${viewport.w}&h=${viewport.h}&v=${themeVersion}.${screenVersion}${previewModeQs}`;
 
-  const onPatch = async (patch: Partial<Pick<Snippet, "name" | "params">>) => {
+  // Per-iframe channel so clicks in the snippet preview report paths
+  // into the body (not collapsed to the snippet-instance root, which
+  // is what the `/api/render/snippet/:id` route does).
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const scrollWrapRef = useRef<HTMLDivElement>(null);
+  const channelRef = useRef<IframeChannel | null>(null);
+  const frameId = `snippet-view-${snippetId}`;
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const channel = new IframeChannel(iframe, {
+      onSelect(path) {
+        if (path === null) setSelection(null);
+        else setSelection({ screenId: virtualScreenId, path });
+      },
+      onHover(path) {
+        if (path === null) setHover(null);
+        else setHover({ screenId: virtualScreenId, path });
+      },
+      onRects(rects) {
+        setNodeRects(frameId, rects);
+      },
+      // Wheel forwarded from the iframe — when the cursor sits over
+      // the preview, scroll the outer container. Without this the
+      // iframe absorbs the trackpad pan and a wide viewport feels
+      // stuck.
+      onParentPan(deltaX, deltaY) {
+        const el = scrollWrapRef.current;
+        if (!el) return;
+        el.scrollLeft += deltaX;
+        el.scrollTop += deltaY;
+      },
+    });
+    channelRef.current = channel;
+    const onLoad = () => channel.attach();
+    iframe.addEventListener("load", onLoad);
+    if (iframe.contentDocument?.readyState === "complete") channel.attach();
+    return () => {
+      iframe.removeEventListener("load", onLoad);
+      channel.destroy();
+      channelRef.current = null;
+      clearNodeRects(frameId);
+    };
+  }, [virtualScreenId, frameId, setSelection, setHover, setNodeRects, clearNodeRects]);
+
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel) return;
+    if (selection?.screenId === virtualScreenId) {
+      channel.send({ type: "applyHighlight", path: selection.path });
+    } else {
+      channel.send({ type: "clearHighlight" });
+    }
+  }, [selection, virtualScreenId]);
+
+  const onPatchMeta = async (patch: Partial<Pick<Snippet, "name" | "params">>) => {
     try {
       await postMutate("update_snippet", { snippetId, patch });
-      // Watcher will rebroadcast; refresh the summary so the sidebar
-      // labels follow renames without a manual reload.
       void refreshDesignSummary();
     } catch (err) {
       toastError(err, "Could not update snippet");
@@ -101,62 +188,96 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
     );
   }
 
+  const showInspector = selection?.screenId === virtualScreenId;
+
   return (
     <div className="flex-1 flex min-h-0">
-      <div className="flex-1 flex flex-col min-w-0 bg-background">
-        <Header
+      <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-card">
+        <div className="flex items-center gap-2 px-3 py-2 border-b">
+          <Button variant="ghost" size="xs" onClick={closeSnippetEditor} className="-ml-1">
+            <ArrowLeft size={12} />
+            Back
+          </Button>
+          <Badge variant="outline" className="ml-auto text-[10px] font-mono">
+            snippet
+          </Badge>
+        </div>
+        <SnippetHeader snippet={snippet} onPatchName={(name) => onPatchMeta({ name })} />
+        <ParamsPanel
           snippet={snippet}
+          onPatchParams={(params) => onPatchMeta({ params })}
+          iconNames={iconNames}
+        />
+        <div className="border-t flex-1 overflow-y-auto">
+          <SectionLabel>Body</SectionLabel>
+          {syntheticScreen ? (
+            <Tree screen={syntheticScreen} />
+          ) : (
+            <div className="px-4 py-3 text-xs text-muted-foreground">No body to display.</div>
+          )}
+        </div>
+      </aside>
+
+      <main className="flex-1 flex flex-col min-w-0 bg-background">
+        <PreviewToolbar
           presets={presets}
           viewport={viewport}
           setViewport={setViewport}
-          onClose={closeSnippetEditor}
-          onPatchName={(name) => onPatch({ name })}
+          snippet={snippet}
         />
-        <div className="flex-1 overflow-auto p-8">
-          <div className="mx-auto flex flex-col items-center gap-4">
-            <div
-              className="rounded-md border bg-white shadow-sm overflow-hidden"
-              style={{ width: viewport.w, height: viewport.h }}
-            >
-              <iframe
-                title={`${snippet.name} preview`}
-                src={previewUrl}
-                className="block w-full h-full border-0"
+        <div ref={scrollWrapRef} className="flex-1 overflow-auto bg-muted/30">
+          <div className="min-w-fit min-h-full flex items-center justify-center p-8">
+            <div className="flex flex-col items-center gap-3">
+              <div
+                className="rounded-md border bg-white shadow-sm overflow-hidden shrink-0"
                 style={{ width: viewport.w, height: viewport.h }}
-              />
-            </div>
-            <div className="text-xs text-muted-foreground tabular-nums">
-              {viewport.w} × {viewport.h}
+              >
+                <iframe
+                  ref={iframeRef}
+                  title={`${snippet.name} preview`}
+                  src={previewUrl}
+                  className="block border-0"
+                  style={{ width: viewport.w, height: viewport.h }}
+                />
+              </div>
+              <div className="text-xs text-muted-foreground tabular-nums">
+                {viewport.w} × {viewport.h}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
+
       <aside className="w-80 shrink-0 border-l bg-card flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-            Snippet
+        {showInspector ? (
+          <Inspector />
+        ) : (
+          <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center leading-relaxed">
+            Click a node in the snippet preview to edit its props, classes, or stable id. Param
+            slots render as <span className="font-mono">$name</span> badges — open the param's
+            instances elsewhere to see how each is filled.
           </div>
-          <div className="mt-0.5 font-mono text-sm">@{snippet.id}</div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
-          <ParamsPanel snippet={snippet} onPatchParams={(params) => onPatch({ params })} />
-          <BodyEditHint snippetId={snippet.id} />
-        </div>
+        )}
       </aside>
     </div>
   );
 }
 
-interface HeaderProps {
-  snippet: Snippet;
-  presets: ViewportPreset[];
-  viewport: ViewportPreset;
-  setViewport: (p: ViewportPreset) => void;
-  onClose: () => void;
-  onPatchName: (name: string) => void;
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+      {children}
+    </div>
+  );
 }
 
-function Header({ snippet, presets, viewport, setViewport, onClose, onPatchName }: HeaderProps) {
+function SnippetHeader({
+  snippet,
+  onPatchName,
+}: {
+  snippet: Snippet;
+  onPatchName: (name: string) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(snippet.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -177,52 +298,58 @@ function Header({ snippet, presets, viewport, setViewport, onClose, onPatchName 
   };
 
   return (
-    <header className="border-b bg-card/40 backdrop-blur-sm px-6 py-3 flex items-center gap-3">
-      <Button variant="ghost" size="sm" onClick={onClose} className="-ml-2">
-        <ArrowLeft />
-        Back
-      </Button>
-      <div className="flex-1 flex items-center gap-2 min-w-0">
-        {editing ? (
-          <Input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") {
-                setEditing(false);
-                setDraft(snippet.name);
-              }
-            }}
-            className="h-7 max-w-xs"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="font-semibold text-sm truncate inline-flex items-center gap-1.5 hover:text-primary group"
-            title="Rename snippet"
-          >
-            {snippet.name}
-            <Pencil
-              size={12}
-              strokeWidth={2}
-              className="opacity-0 group-hover:opacity-50 transition-opacity"
-            />
-          </button>
-        )}
-        <Badge variant="outline" className="text-[10px] font-mono">
-          snippet
-        </Badge>
-        <Sparkles
-          size={12}
-          strokeWidth={2}
-          className="text-muted-foreground/60"
-          aria-hidden="true"
+    <div className="px-3 py-2 border-b">
+      {editing ? (
+        <Input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") {
+              setEditing(false);
+              setDraft(snippet.name);
+            }
+          }}
+          className="h-7"
         />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="w-full text-left font-semibold text-sm flex items-center gap-1.5 hover:text-primary group truncate"
+          title="Rename snippet"
+        >
+          <Sparkles size={11} className="text-muted-foreground shrink-0" aria-hidden="true" />
+          <span className="truncate">{snippet.name}</span>
+          <Pencil
+            size={10}
+            className="opacity-0 group-hover:opacity-50 transition-opacity shrink-0"
+          />
+        </button>
+      )}
+      <div className="mt-0.5 text-[10px] font-mono text-muted-foreground truncate">
+        @{snippet.id}
       </div>
+    </div>
+  );
+}
+
+interface PreviewToolbarProps {
+  snippet: Snippet;
+  presets: ViewportPreset[];
+  viewport: ViewportPreset;
+  setViewport: (p: ViewportPreset) => void;
+}
+
+function PreviewToolbar({ snippet, presets, viewport, setViewport }: PreviewToolbarProps) {
+  return (
+    <header className="border-b bg-card/40 backdrop-blur-sm px-6 py-2.5 flex items-center gap-3">
+      <div className="text-xs text-muted-foreground">
+        Preview · <span className="font-medium text-foreground">{snippet.name}</span>
+      </div>
+      <div className="flex-1" />
       <Select
         value={viewport.name}
         onValueChange={(name) => {
@@ -230,7 +357,7 @@ function Header({ snippet, presets, viewport, setViewport, onClose, onPatchName 
           if (next) setViewport(next);
         }}
       >
-        <SelectTrigger size="sm" className="text-xs w-32">
+        <SelectTrigger size="sm" className="text-xs w-44">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -248,24 +375,16 @@ function Header({ snippet, presets, viewport, setViewport, onClose, onPatchName 
 interface ParamsPanelProps {
   snippet: Snippet;
   onPatchParams: (params: SnippetParam[]) => void;
+  iconNames: string[];
 }
 
-function ParamsPanel({ snippet, onPatchParams }: ParamsPanelProps) {
+function ParamsPanel({ snippet, onPatchParams, iconNames }: ParamsPanelProps) {
   const [editingParam, setEditingParam] = useState<number | null>(null);
-  const [draft, setDraft] = useState<SnippetParam | null>(null);
 
-  const openEdit = (index: number) => {
-    setEditingParam(index);
-    setDraft({ ...(snippet.params[index] as SnippetParam) });
-  };
-
-  const commit = () => {
-    if (editingParam === null || draft === null) return;
-    const next = [...snippet.params];
-    next[editingParam] = draft;
-    setEditingParam(null);
-    setDraft(null);
-    onPatchParams(next);
+  const updateParam = (index: number, next: SnippetParam) => {
+    const list = [...snippet.params];
+    list[index] = next;
+    onPatchParams(list);
   };
 
   const remove = (index: number) => {
@@ -275,8 +394,7 @@ function ParamsPanel({ snippet, onPatchParams }: ParamsPanelProps) {
       )
     )
       return;
-    const next = snippet.params.filter((_, i) => i !== index);
-    onPatchParams(next);
+    onPatchParams(snippet.params.filter((_, i) => i !== index));
   };
 
   const addParam = () => {
@@ -284,47 +402,44 @@ function ParamsPanel({ snippet, onPatchParams }: ParamsPanelProps) {
     let name = "param";
     let i = 1;
     while (existing.has(name)) name = `param${++i}`;
-    const next: SnippetParam[] = [...snippet.params, { name, type: "string" }];
-    onPatchParams(next);
+    onPatchParams([...snippet.params, { name, type: "string" }]);
     pushToast({ kind: "success", message: `Added param "${name}"` });
   };
 
   return (
-    <section className="flex flex-col gap-2">
+    <section className="border-b flex flex-col gap-1 px-3 pt-3 pb-2">
       <div className="flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          Parameters
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          Params
         </div>
-        <Button variant="ghost" size="xs" onClick={addParam} className="h-6 text-xs">
+        <Button variant="ghost" size="xs" onClick={addParam} className="h-6 text-xs px-1.5">
           + add
         </Button>
       </div>
       {snippet.params.length === 0 ? (
-        <div className="text-xs text-muted-foreground rounded-md border border-dashed p-3 leading-relaxed">
-          No parameters yet. Params are typed inputs an instance passes in via{" "}
-          <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-muted">args</code>; the body
-          can reference them as{" "}
+        <div className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+          No params yet. Add one above, then reference it in the body as{" "}
           <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-muted">
-            {"{ $param: name }"}
+            {"{$param:name}"}
           </code>
           .
         </div>
       ) : (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-1">
           {snippet.params.map((p, i) => (
             <li key={p.name} className="rounded-md border bg-background">
-              {editingParam === i && draft ? (
+              {editingParam === i ? (
                 <ParamEditor
-                  param={draft}
-                  onChange={setDraft}
-                  onSave={commit}
-                  onCancel={() => {
+                  initial={p}
+                  iconNames={iconNames}
+                  onSave={(next) => {
                     setEditingParam(null);
-                    setDraft(null);
+                    updateParam(i, next);
                   }}
+                  onCancel={() => setEditingParam(null)}
                 />
               ) : (
-                <ParamRow param={p} onEdit={() => openEdit(i)} onRemove={() => remove(i)} />
+                <ParamRow param={p} onEdit={() => setEditingParam(i)} onRemove={() => remove(i)} />
               )}
             </li>
           ))}
@@ -343,45 +458,56 @@ function ParamRow({
   onEdit: () => void;
   onRemove: () => void;
 }) {
+  const summary = formatDefaultSummary(param);
   return (
-    <div className="flex items-center gap-2 px-2.5 py-1.5">
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="font-mono text-xs truncate">{param.name}</span>
-        <Badge variant="outline" className="text-[10px] font-mono">
+    <div className="flex items-center gap-1.5 px-2 py-1">
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        <span className="font-mono text-[11px] truncate">{param.name}</span>
+        <Badge variant="outline" className="text-[9px] font-mono shrink-0">
           {param.type}
         </Badge>
-        {param.default !== undefined ? (
-          <span className="text-[10px] text-muted-foreground font-mono truncate">
-            = {JSON.stringify(param.default)}
-          </span>
-        ) : null}
+        {summary ? (
+          <span className="text-[10px] text-muted-foreground truncate">{summary}</span>
+        ) : (
+          <span className="text-[10px] text-amber-600 dark:text-amber-400">required</span>
+        )}
       </div>
-      <Button variant="ghost" size="xs" onClick={onEdit} className="h-6 px-1.5">
-        <Pencil size={11} />
+      <Button variant="ghost" size="xs" onClick={onEdit} className="h-5 px-1">
+        <Pencil size={10} />
       </Button>
       <Button
         variant="ghost"
         size="xs"
         onClick={onRemove}
-        className="h-6 px-1.5 text-destructive hover:bg-destructive/10"
+        className="h-5 px-1 text-destructive hover:bg-destructive/10"
       >
-        <X size={11} />
+        <X size={10} />
       </Button>
     </div>
   );
 }
 
+function formatDefaultSummary(param: SnippetParam): string | null {
+  if (param.default === undefined) return null;
+  if (typeof param.default === "string") return `= "${param.default}"`;
+  if (typeof param.default === "number" || typeof param.default === "boolean")
+    return `= ${param.default}`;
+  return "= …";
+}
+
 function ParamEditor({
-  param,
-  onChange,
+  initial,
+  iconNames,
   onSave,
   onCancel,
 }: {
-  param: SnippetParam;
-  onChange: (p: SnippetParam) => void;
-  onSave: () => void;
+  initial: SnippetParam;
+  iconNames: string[];
+  onSave: (next: SnippetParam) => void;
   onCancel: () => void;
 }) {
+  const [draft, setDraft] = useState<SnippetParam>(initial);
+  const required = draft.default === undefined;
   const types: SnippetParam["type"][] = [
     "string",
     "number",
@@ -391,27 +517,44 @@ function ParamEditor({
     "color",
     "enum",
   ];
-  const enumDraft = useMemo(
-    () => (Array.isArray(param.enum) ? param.enum.join(", ") : ""),
-    [param.enum],
-  );
+
+  const setRequired = (req: boolean) => {
+    if (req) {
+      const { default: _omit, ...rest } = draft;
+      void _omit;
+      setDraft(rest);
+    } else {
+      // Re-add a default appropriate for the type.
+      setDraft({ ...draft, default: defaultValueForType(draft.type, draft.enum) });
+    }
+  };
 
   return (
-    <div className="p-2.5 flex flex-col gap-2">
-      <div className="grid grid-cols-2 gap-2">
+    <div className="p-2 flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         <div className="flex flex-col gap-1">
           <Label className="text-[10px]">name</Label>
           <Input
-            value={param.name}
-            onChange={(e) => onChange({ ...param, name: e.target.value })}
+            value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             className="h-7 font-mono text-xs"
           />
         </div>
         <div className="flex flex-col gap-1">
           <Label className="text-[10px]">type</Label>
           <Select
-            value={param.type}
-            onValueChange={(v) => onChange({ ...param, type: v as SnippetParam["type"] })}
+            value={draft.type}
+            onValueChange={(v) => {
+              const nextType = v as SnippetParam["type"];
+              // Reset default to a sensible value for the new type so
+              // the user doesn't end up with e.g. number default after
+              // switching to "icon".
+              const next: SnippetParam = { ...draft, type: nextType };
+              if (next.default !== undefined) {
+                next.default = defaultValueForType(nextType, next.enum);
+              }
+              setDraft(next);
+            }}
           >
             <SelectTrigger size="sm" className="text-xs">
               <SelectValue />
@@ -426,52 +569,38 @@ function ParamEditor({
           </Select>
         </div>
       </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-[10px]">default (JSON)</Label>
-        <Input
-          value={param.default === undefined ? "" : JSON.stringify(param.default)}
-          onChange={(e) => {
-            const raw = e.target.value;
-            if (raw.trim() === "") {
-              const { default: _omit, ...rest } = param;
-              void _omit;
-              onChange(rest);
-              return;
-            }
-            try {
-              const parsed = JSON.parse(raw);
-              onChange({ ...param, default: parsed });
-            } catch {
-              // Leave the previous default in place if the JSON is malformed;
-              // the user will see their text persist while they fix it.
-            }
-          }}
-          className="h-7 font-mono text-xs"
-          placeholder={'"" or 0 or true'}
+
+      {draft.type === "enum" ? (
+        <EnumValuesField
+          value={draft.enum ?? []}
+          onChange={(enumValues) => setDraft({ ...draft, enum: enumValues })}
         />
-      </div>
-      {param.type === "enum" ? (
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px]">enum (comma-separated)</Label>
-          <Input
-            defaultValue={enumDraft}
-            onBlur={(e) => {
-              const values = e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean);
-              onChange({ ...param, enum: values.length > 0 ? values : undefined });
-            }}
-            className="h-7 font-mono text-xs"
-            placeholder="solid, ghost, outline"
-          />
-        </div>
       ) : null}
+
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="param-required"
+          checked={required}
+          onCheckedChange={(c) => setRequired(Boolean(c))}
+        />
+        <Label htmlFor="param-required" className="text-[11px]">
+          Required (no default — instances must supply a value)
+        </Label>
+      </div>
+
+      {!required ? (
+        <DefaultField
+          param={draft}
+          iconNames={iconNames}
+          onChange={(value) => setDraft({ ...draft, default: value })}
+        />
+      ) : null}
+
       <div className="flex gap-1.5 justify-end">
         <Button variant="ghost" size="xs" onClick={onCancel} className="h-6 text-xs">
           Cancel
         </Button>
-        <Button size="xs" onClick={onSave} className="h-6 text-xs">
+        <Button size="xs" onClick={() => onSave(draft)} className="h-6 text-xs">
           <Save size={11} /> Save
         </Button>
       </div>
@@ -479,38 +608,184 @@ function ParamEditor({
   );
 }
 
-function BodyEditHint({ snippetId }: { snippetId: string }) {
+function defaultValueForType(type: SnippetParam["type"], enumValues?: string[]): unknown {
+  switch (type) {
+    case "string":
+      return "";
+    case "number":
+      return 0;
+    case "boolean":
+      return false;
+    case "icon":
+      return "Sparkles";
+    case "color":
+      return "#7c3aed";
+    case "enum":
+      return enumValues?.[0] ?? "";
+    case "node":
+      return { $ref: "Text", props: { children: "node default" } };
+    default:
+      return null;
+  }
+}
+
+function DefaultField({
+  param,
+  iconNames,
+  onChange,
+}: {
+  param: SnippetParam;
+  iconNames: string[];
+  onChange: (value: unknown) => void;
+}) {
+  const id = `param-default-${param.name}`;
+  switch (param.type) {
+    case "string":
+      return (
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={id} className="text-[10px]">
+            default
+          </Label>
+          <Input
+            id={id}
+            value={typeof param.default === "string" ? param.default : ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="default text"
+            className="h-7 text-xs"
+          />
+        </div>
+      );
+    case "number":
+      return (
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={id} className="text-[10px]">
+            default
+          </Label>
+          <Input
+            id={id}
+            type="number"
+            value={typeof param.default === "number" ? param.default : 0}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              onChange(Number.isFinite(n) ? n : 0);
+            }}
+            className="h-7 text-xs"
+          />
+        </div>
+      );
+    case "boolean":
+      return (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={id}
+            checked={Boolean(param.default)}
+            onCheckedChange={(c) => onChange(Boolean(c))}
+          />
+          <Label htmlFor={id} className="text-[11px]">
+            default {param.default ? "true" : "false"}
+          </Label>
+        </div>
+      );
+    case "icon": {
+      const current = typeof param.default === "string" ? param.default : "Sparkles";
+      return (
+        <div className="flex flex-col gap-1">
+          <Label className="text-[10px]">default icon</Label>
+          <IconPicker value={current} options={iconNames} onChange={(name) => onChange(name)} />
+        </div>
+      );
+    }
+    case "color": {
+      const current = typeof param.default === "string" ? param.default : "#7c3aed";
+      return (
+        <div className="flex flex-col gap-1">
+          <Label className="text-[10px]">default color</Label>
+          <div className="flex gap-1.5">
+            <input
+              type="color"
+              aria-label="default color"
+              value={current.startsWith("#") ? current : "#7c3aed"}
+              onChange={(e) => onChange(e.target.value)}
+              className="h-7 w-9 rounded border border-input bg-transparent"
+            />
+            <Input
+              value={current}
+              onChange={(e) => onChange(e.target.value)}
+              className="flex-1 h-7 font-mono text-xs"
+            />
+          </div>
+        </div>
+      );
+    }
+    case "enum": {
+      const current = typeof param.default === "string" ? param.default : "";
+      return (
+        <div className="flex flex-col gap-1">
+          <Label className="text-[10px]">default</Label>
+          <Select value={current || undefined} onValueChange={(v) => onChange(v)}>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue placeholder="(pick one)" />
+            </SelectTrigger>
+            <SelectContent>
+              {(param.enum ?? []).map((v) => (
+                <SelectItem key={v} value={v}>
+                  {v}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+    case "node":
+      return (
+        <div className="flex flex-col gap-1">
+          <Label className="text-[10px]">default (JSON node)</Label>
+          <Input
+            value={JSON.stringify(param.default ?? null)}
+            onChange={(e) => {
+              try {
+                onChange(JSON.parse(e.target.value));
+              } catch {
+                // Keep the previous default if the JSON is malformed —
+                // the user is mid-edit. We don't show a control here
+                // because the input is uncontrolled-by-content.
+              }
+            }}
+            className="h-7 font-mono text-[10px]"
+            placeholder='{"$ref":"Text","props":{"children":"..."}}'
+          />
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+function EnumValuesField({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [draft, setDraft] = useState(value.join(", "));
   return (
-    <section className="flex flex-col gap-2">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        Edit the body
-      </div>
-      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed flex flex-col gap-2">
-        <p>
-          The snippet body lives in{" "}
-          <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-background border">
-            snippets/{snippetId}.json
-          </code>
-          . Today the canvas inspector targets screens, not snippet bodies — so edits land via your
-          AI agent or the file directly.
-        </p>
-        <p className="flex items-center gap-1.5">
-          <FileJson size={12} strokeWidth={2} aria-hidden="true" />
-          From your agent:{" "}
-          <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-background border">
-            update_snippet
-          </code>
-          ,{" "}
-          <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-background border">
-            add_node
-          </code>{" "}
-          (with a synthesized parent path), or hand-edit + save.
-        </p>
-        <p>
-          Either path triggers the watcher, this preview hot-updates, and every instance follows
-          live.
-        </p>
-      </div>
-    </section>
+    <div className="flex flex-col gap-1">
+      <Label className="text-[10px]">enum (comma-separated)</Label>
+      <Input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const parsed = draft
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          onChange(parsed);
+        }}
+        className="h-7 font-mono text-xs"
+        placeholder="solid, ghost, outline"
+      />
+    </div>
   );
 }

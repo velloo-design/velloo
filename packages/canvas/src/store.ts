@@ -141,6 +141,13 @@ export interface CanvasState {
   closeLibrary(): void;
   openSnippetEditor(snippetId: string): void;
   closeSnippetEditor(): void;
+  /**
+   * Install a synthetic screen — used by the snippet editor view to
+   * surface the snippet body under `screens["snippet:<id>"]` so the
+   * Tree, Inspector, and selection model can target it without
+   * special-casing.
+   */
+  setSyntheticScreen(screenId: string, screen: Screen): void;
 }
 
 export function selectedNode(screens: Record<string, Screen>, sel: Selection | null): Node | null {
@@ -425,8 +432,14 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     // If the selected node lives on a screen other than the currently
     // open one, follow it — otherwise the sidebar Tree shows a tree
     // unrelated to what's selected in the canvas. Annotations follow
-    // along too so the right panel stays coherent.
-    if (selection && selection.screenId !== get().currentScreenId) {
+    // along too so the right panel stays coherent. Snippet-virtual
+    // screen ids (`snippet:<id>`) don't live on disk and are owned by
+    // the snippet editor view — skip auto-switching for them.
+    if (
+      selection &&
+      selection.screenId !== get().currentScreenId &&
+      !selection.screenId.startsWith("snippet:")
+    ) {
       void get().selectScreen(selection.screenId);
     }
   },
@@ -503,12 +516,28 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   closeSnippetEditor() {
     const fallback = get().preSnippetView ?? "boards";
-    set({
-      view: fallback,
-      editingSnippetId: null,
-      preSnippetView: null,
-      selection: null,
-      hover: null,
+    set((s) => {
+      // Sweep synthetic `snippet:<id>` screens — they're scoped to the
+      // editor view and shouldn't linger in store state after exit.
+      const cleaned: Record<string, Screen> = {};
+      for (const [id, screen] of Object.entries(s.screens)) {
+        if (!id.startsWith("snippet:")) cleaned[id] = screen;
+      }
+      return {
+        view: fallback,
+        editingSnippetId: null,
+        preSnippetView: null,
+        selection: null,
+        hover: null,
+        screens: cleaned,
+      };
     });
+  },
+
+  setSyntheticScreen(screenId, screen) {
+    set((s) => ({
+      screens: { ...s.screens, [screenId]: screen },
+      screenVersion: s.screenVersion + 1,
+    }));
   },
 }));
