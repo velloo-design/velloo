@@ -72,10 +72,13 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // screenVersion bumps when any screen or snippet rebroadcasts. We
-    // use it as a one-bit signal to re-fetch the snippet so the params
-    // panel + synthetic-screen tree stay in lockstep with the file.
-    void screenVersion;
+    // One-shot fetch on mount + snippetId change. The WS handler in
+    // `ws-client.ts` re-pulls the snippet (and re-installs the
+    // synthetic screen) on every `snippet-changed` broadcast, so we
+    // don't need to depend on `screenVersion` here — and listing it
+    // would create a re-fetch loop: `setSyntheticScreen` bumps the
+    // version, the effect re-fires, refetches, bumps again, and the
+    // user sees "Loading snippet…" forever.
     let alive = true;
     setLoading(true);
     fetchSnippet(snippetId)
@@ -95,7 +98,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
     return () => {
       alive = false;
     };
-  }, [snippetId, screenVersion, setScreen, virtualScreenId]);
+  }, [snippetId, setScreen, virtualScreenId]);
 
   const initialPreset =
     presets.find((p) => p.name.toLowerCase().includes("desktop")) ?? presets[0] ?? DEFAULT_VIEWPORT;

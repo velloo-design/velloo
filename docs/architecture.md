@@ -223,6 +223,12 @@ How do users customize when the components are baked in? Short answer:
 - **Snippets** are the supported "your version of a primitive" layer. A snippet wraps one or more components with typed params; every instance stays in sync.
 - The **experimental shared-components mode** (below) is the escape hatch when neither of those is enough.
 
+### Editing a snippet body
+
+Snippet bodies are first-class editable surfaces — both in the canvas's snippet editor view and through MCP. The mutation layer treats any `screenId` prefixed with `snippet:` as a virtualized screen whose tree is the snippet's body; tree mutations route persistence back through `persistSnippet` and broadcast as `snippet-changed`. From an agent's perspective, `update_props({ screenId: "snippet:feature-row", path: [0, 1], propPatch: { className: "..." } })` works exactly like a screen edit. From the canvas's perspective, the Inspector targets the virtualized screen id and the same `mutate.updateProps` / `mutate.applyClasses` / `mutate.addNode` flows that drive board editing.
+
+The renderer ships two snippet routes: `/api/render/snippet/:id` wraps the snippet in a centering Card with padding for library previews (used by masonry tiles + the Library Detail page); `/api/render/snippet-body/:id` renders the body *without* a wrapper, substituting `$param` refs in prop positions with their defaults and leaving `$param` nodes in child positions as visible Badge placeholders. The second route's iframe-reported click paths match the body's on-disk path space exactly, which is what makes Inspector-driven edits land on the right node.
+
 ### Stateful components
 
 Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-mode behavior** declarations: most are placeable with stub providers; a few are documented as not-renderable in canvas. These declarations live in the manifest (embedded alongside the components).

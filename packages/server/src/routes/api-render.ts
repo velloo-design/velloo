@@ -20,6 +20,11 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
    * tool works) so the same renderer code path handles both. Defaults
    * fill required params with placeholder strings — the agent can
    * always override via ?arg.<name>=<value> in a future iteration.
+   *
+   * The snippet instance is wrapped in a centering Card so previews —
+   * library masonry tiles, snippet detail pages — render in the
+   * middle of their iframe with breathing room around them, instead
+   * of pinned to the top-left.
    */
   r.get("/snippet/:snippetId", async (c) => {
     const f = folder();
@@ -47,12 +52,21 @@ export function createRenderRouter(folder: () => DesignFolder, jit: TailwindJit)
       else if (p.type === "enum") args[p.name] = p.enum?.[0] ?? "";
     }
 
+    const snippetInstance: Node = {
+      $snippet: snippet.id,
+      ...(Object.keys(args).length > 0 ? { args } : {}),
+    };
     const screen: Screen = {
       id: `${snippet.id}__preview`,
       name: `${snippet.name} preview`,
       tree: {
-        $snippet: snippet.id,
-        ...(Object.keys(args).length > 0 ? { args } : {}),
+        $ref: "Card",
+        props: {
+          className:
+            "min-h-screen w-full flex items-center justify-center p-6 ring-0 shadow-none bg-transparent rounded-none",
+          "data-velloo-snippet-preview": "true",
+        },
+        children: [snippetInstance],
       },
     };
 

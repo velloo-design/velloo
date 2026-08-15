@@ -535,9 +535,21 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   setSyntheticScreen(screenId, screen) {
-    set((s) => ({
-      screens: { ...s.screens, [screenId]: screen },
-      screenVersion: s.screenVersion + 1,
-    }));
+    set((s) => {
+      // Bail out early when the synthetic screen is byte-identical to
+      // the one already installed. Critical for breaking the obvious
+      // re-render loop where a useEffect listens for `screenVersion`
+      // changes AND calls `setSyntheticScreen` from its body — the
+      // first set would bump the version, the effect would re-fire,
+      // fetch the same snippet, call this again, bump the version
+      // again, ad infinitum. Cheap to compare because synthetic
+      // screens are plain JSON shaped like the on-disk Screen.
+      const existing = s.screens[screenId];
+      if (existing && JSON.stringify(existing) === JSON.stringify(screen)) return s;
+      return {
+        screens: { ...s.screens, [screenId]: screen },
+        screenVersion: s.screenVersion + 1,
+      };
+    });
   },
 }));

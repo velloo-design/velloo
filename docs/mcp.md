@@ -140,7 +140,24 @@ Agents assign ids two ways: pass `id: "hero-cta"` when creating a node (`add_nod
 
 Edits return the resolved path of the affected node so the agent can chain operations without a re-read.
 
-**Snippet instances are opaque.** A `$snippet` node has a path and may carry its own `$id`, but the structure rendered inside it is not addressable from the screen. To edit the contents, edit the snippet body itself; every instance updates.
+**Snippet instances are opaque.** A `$snippet` node has a path and may carry its own `$id`, but the structure rendered inside it is not addressable from the screen. To edit the contents, edit the snippet body itself (see below); every instance updates.
+
+### Editing a snippet body
+
+Every tree mutation also accepts a virtualized `screenId` of the form `"snippet:<snippetId>"`. The mutation layer routes those writes through the snippet's body — same impl, same path semantics, same error model. So:
+
+- `update_props({ screenId: "snippet:feature-row", path: [0], propPatch: { className: "p-6" } })` patches the snippet body's root node.
+- `add_node({ screenId: "snippet:feature-row", parentPath: [], componentRef: "Icon", props: { name: "Sparkles" }, id: "leading-icon" })` adds a child to the body's root and assigns a stable id.
+- `apply_classes`, `apply_classes_bulk`, `update_props_bulk`, `move_node`, `remove_node`, `set_node_id`, `instantiate_snippet`, `update_snippet_args` all work the same way.
+
+Two things to know:
+
+- Edits broadcast as `snippet-changed` (not `screen-changed`), and the `update_snippet` lock guards them so a body edit and a wholesale `update_snippet` can't race.
+- `$param` refs and `$if` branches are not `ComponentNode`s — `add_node` can't insert them. To add a `$param` placeholder or `$if` branch, use `update_snippet` with a patched `tree`.
+
+The canvas's snippet editor view uses exactly this surface — the Inspector targets `screenId: "snippet:<id>"` for every mutation it commits.
+
+See `decisions.md` #21 for the rationale.
 
 ### Locator-aware tools
 
