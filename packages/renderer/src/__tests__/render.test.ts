@@ -425,14 +425,11 @@ describe("renderScreen", () => {
     }
   });
 
-  test("renders batch-3 components (Toast, Calendar, Carousel, Chart)", async () => {
+  test("renders batch-3 components (Toaster, Calendar, Carousel, Chart)", async () => {
     const trees: Screen["tree"][] = [
       {
-        $ref: "Toast",
-        children: [
-          { $ref: "ToastTitle", props: { children: "Saved" } },
-          { $ref: "ToastDescription", props: { children: "Your changes are live." } },
-        ],
+        $ref: "Toaster",
+        props: { position: "bottom-right" },
       },
       { $ref: "Calendar", props: { month: "2026-05-01", selected: "2026-05-15" } },
       {

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Pinned shadcn snapshot — vendored components, Tailwind v4 entry CSS, prop manifest",
-  "snapshotVersion": "2026.05.0",
+  "snapshotVersion": "2026.05.22",
   "exports": {
     ".": "./src/index.ts",
     "./tailwind-entry.css": "./src/tailwind-entry.css",
@@ -16,11 +16,12 @@
   "dependencies": {
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "lucide-react": "1.14.0",
+    "lucide-react": "1.16.0",
     "radix-ui": "1.4.3",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tailwind-merge": "3.5.0"
+    "sonner": "2.0.7",
+    "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
     "@types/react": "19.2.14",

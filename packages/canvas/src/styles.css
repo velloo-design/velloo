@@ -1,29 +1,92 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /*
- * Canvas tool chrome. Intentionally distinct from the design content's
- * theme — the snapshot's stylesheet is loaded only inside iframes.
+ * Canvas chrome theme. Tokens follow shadcn's idiom (--background,
+ * --foreground, --card, --primary, …) so vendored shadcn components
+ * style themselves with no extra plumbing. Intentionally distinct
+ * from the snapshot's theme (which styles the inside of design
+ * iframes, not the IDE around them).
+ *
+ * The palette is "editor graphite + indigo accent" — feels like a
+ * code editor / Linear / Cursor, fits Velloo's code-shaped framing.
  */
-@theme {
-  --color-bg: oklch(0.985 0 0);
-  --color-surface: oklch(1 0 0);
-  --color-border: oklch(0.92 0 0);
-  --color-fg: oklch(0.205 0 0);
-  --color-fg-muted: oklch(0.55 0 0);
-  --color-accent: oklch(0.55 0.18 250);
-  --color-accent-fg: oklch(0.99 0 0);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-/* Explicit dark mode for the chrome. */
-html[data-app-theme="dark"] {
-  --color-bg: oklch(0.165 0 0);
-  --color-surface: oklch(0.22 0 0);
-  --color-border: oklch(0.32 0 0);
-  --color-fg: oklch(0.96 0 0);
-  --color-fg-muted: oklch(0.65 0 0);
-  --color-accent: oklch(0.62 0.2 250);
-  --color-accent-fg: oklch(0.99 0 0);
+:root {
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.18 0.01 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 264);
+  --primary: oklch(0.56 0.18 264);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.005 264);
+  --secondary-foreground: oklch(0.22 0.01 264);
+  --muted: oklch(0.96 0.005 264);
+  --muted-foreground: oklch(0.5 0.01 264);
+  --accent: oklch(0.95 0.02 264);
+  --accent-foreground: oklch(0.22 0.01 264);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.95 0.004 264);
+  --input: oklch(0.93 0.005 264);
+  --ring: oklch(0.56 0.18 264);
+  --radius: 0.625rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+.dark {
+  --background: oklch(0.15 0.005 264);
+  --foreground: oklch(0.96 0.005 264);
+  --card: oklch(0.19 0.005 264);
+  --card-foreground: oklch(0.96 0.005 264);
+  --popover: oklch(0.19 0.005 264);
+  --popover-foreground: oklch(0.96 0.005 264);
+  --primary: oklch(0.7 0.18 264);
+  --primary-foreground: oklch(0.15 0.005 264);
+  --secondary: oklch(0.24 0.005 264);
+  --secondary-foreground: oklch(0.96 0.005 264);
+  --muted: oklch(0.22 0.005 264);
+  --muted-foreground: oklch(0.65 0.01 264);
+  --accent: oklch(0.27 0.01 264);
+  --accent-foreground: oklch(0.96 0.005 264);
+  --destructive: oklch(0.65 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.245 0.005 264);
+  --input: oklch(0.27 0.005 264);
+  --ring: oklch(0.7 0.18 264);
   color-scheme: dark;
 }
 
@@ -34,8 +97,38 @@ body,
   margin: 0;
 }
 
-/* Hand-mode visuals: iframes don't intercept mousedown so the grid can pan,
- * the cursor reflects the active tool, and no text gets selected mid-drag. */
+/*
+ * Tailwind v4 changed the default border color from `gray-200` (v3) to
+ * `currentColor`. Without this rule, bare `border`/`border-b`/`border-r`
+ * utilities paint with --foreground (near-black) instead of --border.
+ * This restores the v3 expectation that's baked into shadcn-style markup.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Cursor mode visuals.
+ *
+ * The body carries a mode class so the cursor + iframe pointer-events
+ * are consistent across the entire workspace, even when the cursor is
+ * over a design iframe.
+ */
+
+/* Hand mode: iframes don't intercept mousedown so the grid can pan. */
 .velloo-hand .velloo-frame-iframe {
   pointer-events: none;
 }
@@ -45,9 +138,8 @@ body,
   -webkit-user-select: none;
 }
 
-/* Note-mode visuals: crosshair cursor, no text selection, and iframes
- * don't intercept clicks so a single canvas-level pointerdown drops a note
- * anywhere over the workspace. */
+/* Note mode: crosshair cursor; iframes don't intercept so a pointerdown
+ * over the workspace drops a sticky note anywhere. */
 .velloo-note .velloo-frame-iframe {
   pointer-events: none;
 }
@@ -58,10 +150,8 @@ body,
   -webkit-user-select: none;
 }
 
-/* Annotate-mode visuals: `cell` cursor (table-cell reticle) — visually
- * distinct from note mode's plain `crosshair`, conveys "pick a target"
- * rather than "drop a point". Iframe pointer events stay live: the click
- * needs to bubble up as a node selection. */
+/* Annotate mode: `cell` cursor — "pick a target" reticle. Iframe
+ * pointer events stay live so the click reaches a node selection. */
 .velloo-annotate,
 .velloo-annotate * {
   cursor: cell !important;
@@ -69,9 +159,8 @@ body,
   -webkit-user-select: none;
 }
 
-/* Mid-drag: kill iframe pointer events so a cursor that crosses a variant
- * doesn't swallow our window-level mouseup. Also force the grabbing cursor
- * regardless of which child is hovered. */
+/* Mid-drag: kill iframe pointer events so a cursor crossing a frame
+ * doesn't swallow our window-level mouseup. */
 .velloo-dragging .velloo-frame-iframe {
   pointer-events: none;
 }
@@ -80,11 +169,4 @@ body,
   cursor: grabbing !important;
   user-select: none;
   -webkit-user-select: none;
-}
-
-body {
-  background: var(--color-bg);
-  color: var(--color-fg);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
 }

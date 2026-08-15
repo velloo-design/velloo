@@ -261,7 +261,7 @@ export function Board({ board }: BoardProps) {
     <div
       ref={wrapperRef}
       data-velloo-board="true"
-      className="flex-1 overflow-hidden bg-[var(--color-bg-soft)] relative"
+      className="flex-1 overflow-hidden bg-muted/30 relative"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

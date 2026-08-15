@@ -82,8 +82,8 @@ function Annotation({
     // biome-ignore lint/a11y/noStaticElementInteractions: canvas-positioned interactive
     <div
       className={
-        "absolute select-none rounded-md pl-3 pr-2 py-1.5 bg-[var(--color-surface)] border-l-2 border-l-[var(--color-accent)] shadow-sm w-60 " +
-        (isEditing ? "ring-1 ring-[var(--color-accent)]" : "")
+        "absolute select-none rounded-md pl-3 pr-2 py-1.5 bg-card border-l-2 border-l-primary shadow-sm w-60 " +
+        (isEditing ? "ring-1 ring-primary" : "")
       }
       style={{ left: pos.x, top: pos.y }}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: hotkey target

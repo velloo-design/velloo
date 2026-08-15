@@ -8,6 +8,8 @@ import { CopyField } from "./CopyField.tsx";
 import { IdField } from "./IdField.tsx";
 import { PropField } from "./PropField.tsx";
 import { SnippetInspector } from "./SnippetInspector.tsx";
+import { Label } from "./ui/label.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
 const DEBOUNCE_MS = 200;
 const HIDDEN_PROPS = new Set(["className", "asChild", "children"]);
@@ -32,7 +34,7 @@ export function Inspector() {
 
   if (!selection) {
     return (
-      <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
+      <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
         Click a node in the canvas to edit its props.
       </div>
     );
@@ -40,7 +42,7 @@ export function Inspector() {
 
   if (!node) {
     return (
-      <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
+      <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
         Selected node is no longer in the tree.
       </div>
     );
@@ -52,7 +54,7 @@ export function Inspector() {
 
   if (!isComponentNode(node)) {
     return (
-      <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
+      <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
         $param placeholders are only addressable inside a snippet body — open the snippet to edit.
       </div>
     );
@@ -81,9 +83,9 @@ export function Inspector() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <header className="px-4 py-3 border-b border-[var(--color-border)]">
+      <header className="px-4 py-3 border-b">
         <div className="font-semibold text-sm truncate">{node.$ref}</div>
-        <div className="text-xs text-[var(--color-fg-muted)] mt-0.5">
+        <div className="text-xs text-muted-foreground mt-0.5">
           {selection.screenId} · {selection.path === "" ? "(root)" : selection.path}
         </div>
       </header>
@@ -110,9 +112,7 @@ export function Inspector() {
 
         {descriptor && descriptor.props.filter((p) => !HIDDEN_PROPS.has(p.name)).length > 0 ? (
           <section className="flex flex-col gap-3">
-            <div className="text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
-              Props
-            </div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Props</div>
             {descriptor.props
               .filter((p) => !HIDDEN_PROPS.has(p.name))
               .map((p) => (
@@ -150,25 +150,25 @@ function StatePreview() {
   }, [setNodeState]);
 
   return (
-    <div className="px-4 py-2 border-b border-[var(--color-border)] flex items-center gap-2">
-      <label
+    <div className="px-4 py-2 border-b flex items-center gap-2">
+      <Label
         htmlFor="node-state"
-        className="text-xs text-[var(--color-fg-muted)] uppercase tracking-wider"
+        className="text-xs uppercase tracking-wider text-muted-foreground"
       >
         State
-      </label>
-      <select
-        id="node-state"
-        value={nodeState}
-        onChange={(e) => setNodeState(e.target.value as typeof nodeState)}
-        className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
-      >
-        {STATES.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
+      </Label>
+      <Select value={nodeState} onValueChange={(v) => setNodeState(v as typeof nodeState)}>
+        <SelectTrigger id="node-state" size="sm" className="flex-1 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {STATES.map((s) => (
+            <SelectItem key={s} value={s}>
+              {s}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

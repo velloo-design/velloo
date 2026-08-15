@@ -38,11 +38,11 @@ export function FrameHeader({
   onResize,
 }: FrameHeaderProps) {
   return (
-    <div className="flex items-center justify-between gap-2 text-xs text-[var(--color-fg-muted)]">
+    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
       <div className="flex items-center gap-1 min-w-0">
         <div
           onPointerDown={onPointerDownGrip}
-          className="shrink-0 h-4 w-4 grid place-items-center rounded cursor-grab active:cursor-grabbing text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface)]"
+          className="shrink-0 h-4 w-4 grid place-items-center rounded cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground hover:bg-card"
           title="Drag to move"
           role="presentation"
         >
@@ -64,7 +64,7 @@ export function FrameHeader({
         </span>
         {sharedCount > 1 ? (
           <span
-            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-primary/10 text-primary"
             title={`${sharedCount} frames share this screen — edits sync across all of them.`}
           >
             <Link2 size={10} />
@@ -75,7 +75,7 @@ export function FrameHeader({
       <button
         type="button"
         onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-[var(--color-surface)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+        className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-card text-muted-foreground hover:text-foreground"
         title="Remove this frame (the underlying screen stays)"
       >
         <X size={11} />
@@ -134,7 +134,7 @@ function SizeInput({ value, ariaLabel, onCommit }: SizeInputProps) {
         }
       }}
       onPointerDown={(e) => e.stopPropagation()}
-      className="w-10 bg-transparent text-right tabular-nums outline-none hover:bg-[var(--color-surface)] focus:bg-[var(--color-surface)] rounded-sm px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      className="w-10 bg-transparent text-right tabular-nums outline-none hover:bg-card focus:bg-card rounded-sm px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
     />
   );
 }

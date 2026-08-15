@@ -1,9 +1,19 @@
 import type { ComponentDescriptor, PropDescriptor } from "@velloo/shadcn-snapshot";
-import { ArrowLeft, ChevronRight, LibraryBig } from "lucide-react";
+import { ArrowLeft, LibraryBig } from "lucide-react";
 import { useMemo } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { categoryForComponent } from "../library-categories.ts";
 import { type LibraryItemRef, useCanvas } from "../store.ts";
+import { Badge } from "./ui/badge.tsx";
+import {
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+  Breadcrumb as UIBreadcrumb,
+} from "./ui/breadcrumb.tsx";
+import { Button } from "./ui/button.tsx";
 
 interface Props {
   item: LibraryItemRef;
@@ -52,24 +62,22 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-[var(--color-bg)]">
+    <div className="flex-1 overflow-auto bg-background">
       <div className="mx-auto w-full max-w-5xl flex flex-col">
-        <header className="sticky top-0 z-10 bg-[var(--color-bg)]/85 backdrop-blur-sm border-b border-[var(--color-border)] px-8 pt-4 pb-5">
+        <header className="sticky top-0 z-10 bg-background/85 backdrop-blur-sm border-b px-8 pt-4 pb-5">
           <BackButton onClick={() => openLibrary(null)} />
           <div className="mt-3">
-            <Breadcrumb category={category} name={item.id} />
+            <DetailBreadcrumb category={category} name={item.id} />
           </div>
           <div className="mt-2 flex items-baseline gap-2.5 flex-wrap">
-            <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-fg)]">
-              {item.id}
-            </h1>
+            <h1 className="text-3xl font-semibold tracking-tight">{item.id}</h1>
             {descriptor ? (
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-fg-muted)] uppercase tracking-wider">
+              <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider">
                 {descriptor.source}
-              </span>
+              </Badge>
             ) : null}
             {descriptor?.designModeNotes ? (
-              <span className="text-xs text-[var(--color-fg-muted)] italic">
+              <span className="text-xs text-muted-foreground italic">
                 {descriptor.designModeNotes}
               </span>
             ) : null}
@@ -77,10 +85,10 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
         </header>
 
         <section className="px-8 py-6 flex flex-col gap-3">
-          <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
             Preview
           </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+          <div className="rounded-lg border bg-card overflow-hidden">
             <iframe
               src={renderUrl(undefined, { w: 720, h: 220 })}
               title={`${item.id} preview`}
@@ -93,10 +101,10 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
         {variants.length > 0 || sizes.length > 0 ? (
           <section className="px-8 pb-6 flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
-              <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                 Variants
               </div>
-              <div className="text-xs text-[var(--color-fg-muted)]">
+              <div className="text-xs text-muted-foreground">
                 {variants.length || 1} × {sizes.length || 1} ={" "}
                 {(variants.length || 1) * (sizes.length || 1)} combinations
               </div>
@@ -112,7 +120,7 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
 
         {descriptor && descriptor.props.length > 0 ? (
           <section className="px-8 pb-10 flex flex-col gap-3">
-            <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
               Props
             </div>
             <PropsTable props={descriptor.props} />
@@ -134,23 +142,22 @@ function VariantsMatrix({
   sizes: string[];
   renderUrl: (props?: Record<string, unknown>, opts?: { w?: number; h?: number }) => string;
 }) {
-  // Normalize: at least one row, at least one column.
   const rows = variants.length > 0 ? variants : [null];
   const cols = sizes.length > 0 ? sizes : [null];
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+    <div className="rounded-lg border bg-card overflow-hidden">
       <div
-        className="grid border-b border-[var(--color-border)] bg-[var(--color-bg)]"
+        className="grid border-b bg-muted/30"
         style={{ gridTemplateColumns: `120px repeat(${cols.length}, 1fr)` }}
       >
-        <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium">
+        <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
           {variants.length > 0 ? "variant" : ""}
         </div>
         {cols.map((c, i) => (
           <div
             key={c ?? `col-${i}`}
-            className="px-4 py-2 text-[10px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium text-center"
+            className="px-4 py-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium text-center"
           >
             {c ?? "preview"}
           </div>
@@ -159,13 +166,10 @@ function VariantsMatrix({
       {rows.map((row, ri) => (
         <div
           key={row ?? `row-${ri}`}
-          className={
-            "grid items-center " +
-            (ri < rows.length - 1 ? "border-b border-[var(--color-border)]" : "")
-          }
+          className={`grid items-center ${ri < rows.length - 1 ? "border-b" : ""}`}
           style={{ gridTemplateColumns: `120px repeat(${cols.length}, 1fr)` }}
         >
-          <div className="px-4 py-2 text-xs font-mono text-[var(--color-fg)]">{row ?? ""}</div>
+          <div className="px-4 py-2 text-xs font-mono">{row ?? ""}</div>
           {cols.map((col, ci) => {
             const props: Record<string, unknown> = {};
             if (row !== null) props.variant = row;
@@ -192,32 +196,29 @@ function VariantsMatrix({
 
 function PropsTable({ props }: { props: PropDescriptor[] }) {
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+    <div className="rounded-lg border bg-card divide-y">
       {props.map((p) => (
         <div key={p.name} className="px-4 py-3 flex items-start gap-4">
           <div className="w-32 shrink-0">
-            <div className="text-xs font-mono font-medium text-[var(--color-fg)]">{p.name}</div>
+            <div className="text-xs font-mono font-medium">{p.name}</div>
             {p.optional ? (
-              <div className="text-[10px] text-[var(--color-fg-muted)] mt-0.5">optional</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">optional</div>
             ) : null}
           </div>
           <div className="flex-1 flex flex-row flex-wrap gap-1 items-center">
             {p.enumValues && p.enumValues.length > 0 ? (
               p.enumValues.map((v) => (
-                <span
-                  key={String(v)}
-                  className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-fg)]"
-                >
+                <Badge key={String(v)} variant="outline" className="font-mono text-[10px]">
                   {String(v)}
-                </span>
+                </Badge>
               ))
             ) : (
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-fg-muted)]">
+              <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">
                 {p.control}
-              </span>
+              </Badge>
             )}
             {p.defaultValue ? (
-              <span className="text-xs text-[var(--color-fg-muted)] ml-2">
+              <span className="text-xs text-muted-foreground ml-2">
                 default: <span className="font-mono">{p.defaultValue}</span>
               </span>
             ) : null}
@@ -237,23 +238,24 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
   const previewModeQs = dark ? "&mode=dark" : "";
 
   return (
-    <div className="flex-1 overflow-auto bg-[var(--color-bg)]">
+    <div className="flex-1 overflow-auto bg-background">
       <div className="mx-auto w-full max-w-5xl flex flex-col">
-        <header className="sticky top-0 z-10 bg-[var(--color-bg)]/85 backdrop-blur-sm border-b border-[var(--color-border)] px-8 pt-4 pb-5">
+        <header className="sticky top-0 z-10 bg-background/85 backdrop-blur-sm border-b px-8 pt-4 pb-5">
           <BackButton onClick={() => openLibrary(null)} />
           <div className="mt-3">
-            <Breadcrumb category="Snippets" name={meta?.name ?? item.id} />
+            <DetailBreadcrumb category="Snippets" name={meta?.name ?? item.id} />
           </div>
           <div className="mt-2 flex items-baseline gap-2.5 flex-wrap">
-            <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-fg)]">
-              {meta?.name ?? item.id}
-            </h1>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--color-accent)]/40 text-[var(--color-accent)] uppercase tracking-wider">
+            <h1 className="text-3xl font-semibold tracking-tight">{meta?.name ?? item.id}</h1>
+            <Badge
+              variant="outline"
+              className="text-[10px] font-mono uppercase tracking-wider border-primary/40 text-primary"
+            >
               snippet
-            </span>
+            </Badge>
           </div>
           {meta ? (
-            <p className="mt-1 text-sm text-[var(--color-fg-muted)] max-w-xl">
+            <p className="mt-1 text-sm text-muted-foreground max-w-xl">
               {meta.params.length} parameter{meta.params.length === 1 ? "" : "s"}
               {meta.params.length > 0 ? ` · ${meta.params.map((p) => p.name).join(", ")}` : ""}
             </p>
@@ -261,10 +263,10 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
         </header>
 
         <section className="px-8 py-6 flex flex-col gap-3">
-          <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
             Preview
           </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+          <div className="rounded-lg border bg-card overflow-hidden">
             <iframe
               src={`/api/render/snippet/${encodeURIComponent(item.id)}?w=720&h=260&v=${themeVersion}${previewModeQs}`}
               title={`${item.id} preview`}
@@ -276,23 +278,21 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
 
         {meta && meta.params.length > 0 ? (
           <section className="px-8 pb-10 flex flex-col gap-3">
-            <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
               Parameters
             </div>
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+            <div className="rounded-lg border bg-card divide-y">
               {meta.params.map((p) => (
                 <div key={p.name} className="px-4 py-3 flex items-start gap-4">
                   <div className="w-32 shrink-0">
-                    <div className="text-xs font-mono font-medium text-[var(--color-fg)]">
-                      {p.name}
-                    </div>
+                    <div className="text-xs font-mono font-medium">{p.name}</div>
                   </div>
                   <div className="flex-1 flex flex-row flex-wrap gap-1 items-center">
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-fg)]">
+                    <Badge variant="outline" className="font-mono text-[10px]">
                       {p.type}
-                    </span>
+                    </Badge>
                     {p.default !== undefined ? (
-                      <span className="text-xs text-[var(--color-fg-muted)] ml-2">
+                      <span className="text-xs text-muted-foreground ml-2">
                         default: <span className="font-mono">{JSON.stringify(p.default)}</span>
                       </span>
                     ) : null}
@@ -307,28 +307,32 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
   );
 }
 
-function Breadcrumb({ category, name }: { category: string; name: string }) {
+function DetailBreadcrumb({ category, name }: { category: string; name: string }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs text-[var(--color-fg-muted)]">
-      <LibraryBig size={12} strokeWidth={2} />
-      <span>Library</span>
-      <ChevronRight size={10} strokeWidth={2} className="opacity-60" />
-      <span>{category}</span>
-      <ChevronRight size={10} strokeWidth={2} className="opacity-60" />
-      <span className="text-[var(--color-fg)]">{name}</span>
-    </div>
+    <UIBreadcrumb>
+      <BreadcrumbList className="text-xs">
+        <BreadcrumbItem>
+          <LibraryBig size={12} strokeWidth={2} />
+          <BreadcrumbLink href="#">Library</BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <span>{category}</span>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbPage>{name}</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </UIBreadcrumb>
   );
 }
 
 function BackButton({ onClick }: { onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 h-7 px-2 -ml-2 rounded-md text-xs text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg)] transition-colors"
-    >
-      <ArrowLeft size={13} strokeWidth={2} />
+    <Button variant="ghost" size="sm" onClick={onClick} className="-ml-2 text-muted-foreground">
+      <ArrowLeft />
       Library
-    </button>
+    </Button>
   );
 }

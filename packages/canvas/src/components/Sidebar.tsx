@@ -3,6 +3,7 @@ import type { BoardMeta, ScreenMeta, SnippetMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { BoardsSidebar } from "./BoardsSidebar.tsx";
 import { LibrarySidebar } from "./LibrarySidebar.tsx";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs.tsx";
 
 interface Props {
   boards: BoardMeta[];
@@ -32,34 +33,20 @@ export function Sidebar({
   const setView = useCanvas((s) => s.setView);
 
   return (
-    <aside className="flex h-full w-80 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
-      <div className="p-2 flex gap-1 border-b border-[var(--color-border)]">
-        <button
-          type="button"
-          onClick={() => setView("boards")}
-          className={
-            "flex-1 h-8 px-3 rounded-md flex items-center justify-center gap-1.5 text-sm transition-colors " +
-            (view === "boards"
-              ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)] font-medium"
-              : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg)]")
-          }
-        >
-          <LayoutDashboard size={13} strokeWidth={2} />
-          Boards
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("library")}
-          className={
-            "flex-1 h-8 px-3 rounded-md flex items-center justify-center gap-1.5 text-sm transition-colors " +
-            (view === "library"
-              ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)] font-medium"
-              : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg)]")
-          }
-        >
-          <LibraryBig size={13} strokeWidth={2} />
-          Library
-        </button>
+    <aside className="flex h-full w-80 shrink-0 flex-col border-r bg-card">
+      <div className="p-2 border-b">
+        <Tabs value={view} onValueChange={(v) => setView(v as "boards" | "library")}>
+          <TabsList className="w-full h-8">
+            <TabsTrigger value="boards">
+              <LayoutDashboard />
+              Boards
+            </TabsTrigger>
+            <TabsTrigger value="library">
+              <LibraryBig />
+              Library
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {view === "boards" ? (
@@ -73,7 +60,7 @@ export function Sidebar({
         <LibrarySidebar snippets={snippets} />
       )}
 
-      <footer className="px-4 py-2 text-xs text-[var(--color-fg-muted)] border-t border-[var(--color-border)]">
+      <footer className="px-4 py-2 text-xs text-muted-foreground border-t">
         shadcn snapshot {snapshotVersion}
       </footer>
     </aside>

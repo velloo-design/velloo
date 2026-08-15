@@ -20,16 +20,17 @@ The cleanest packages (`schema`, `result`) have no internal deps. Everything els
 - **`@velloo/codegen`** — `emit_code` (agent-consumed IR) + `emit_theme` (writes Tailwind v4 `globals.css` + `tailwind.config.ts` with diffs).
 - **`@velloo/shadcn-snapshot`** — The pinned shadcn component snapshot Velloo ships with. Components are **embedded** here, not in user design folders.
 - **`@velloo/server`** — HTTP + MCP + watcher + mutations + theme operations. Hono for routes, custom Bun-based static + WS server in `index.ts`.
-- **`@velloo/canvas`** — Vite/React canvas SPA. Imports from server via `@velloo/server` (canvas itself only needs the dist path constant from server).
+- **`@velloo/canvas`** — Vite/React canvas SPA. Ships its own `src/components/ui/` (real shadcn — real Radix portals, Sonner toaster, working dialogs/popovers/etc.). The canvas only imports *types* (`Manifest`, `ComponentDescriptor`, `PropDescriptor`) from `@velloo/shadcn-snapshot`; their components are design-mode stubs not meant to drive live UI.
 - **`@velloo/cli`** — `velloo` binary (citty). Subcommands: `init`, `run`, `emit`, `render`, `theme-export`, `upgrade`.
 
 ## Important architecture invariants
 
 1. **Components are embedded, not on disk in design folders.** Pre-pivot Velloo wrote `components/*.tsx` into every design folder. Now the snapshot is embedded in `@velloo/shadcn-snapshot` and the design folder ships pure data. **Do not** reintroduce on-disk components for user folders. See `docs/decisions.md` #4 + #17.
-2. **Customization happens through snippets, not custom components.** Users who want a custom Button wrap the snapshot's Button in a snippet. No dynamic component loading.
-3. **Designs are static.** Click handlers, routing, form state — all no-ops in the canvas. The renderer's iframe runtime intercepts clicks for selection only.
-4. **Board → Frame → Screen, not Pages → Variants.** A screen has one tree; viewport size is a property of the frame *placement*. Different viewports of the same screen are multiple frames pointing at the same screen (edits sync). Different layouts per breakpoint are separate screens.
-5. **Every mutation returns `Result<T, MutationError>`.** Don't throw across mutation boundaries. Look in `packages/server/src/mutations/errors.ts` for the error variants.
+2. **Two copies of shadcn, one upstream pull.** `@velloo/shadcn-snapshot` is the design-mode-only fork (overlays inline-stubbed via `canvas-portal.tsx`, Calendar/Chart/Carousel are static fakes). `@velloo/canvas/src/components/ui/` is the real shadcn for the IDE chrome. They re-vendor from the same upstream pull on the same day and the snapshot's `snapshotVersion` records it. See `docs/decisions.md` #18.
+3. **Customization happens through snippets, not custom components.** Users who want a custom Button wrap the snapshot's Button in a snippet. No dynamic component loading.
+4. **Designs are static.** Click handlers, routing, form state — all no-ops in the canvas. The renderer's iframe runtime intercepts clicks for selection only.
+5. **Board → Frame → Screen, not Pages → Variants.** A screen has one tree; viewport size is a property of the frame *placement*. Different viewports of the same screen are multiple frames pointing at the same screen (edits sync). Different layouts per breakpoint are separate screens.
+6. **Every mutation returns `Result<T, MutationError>`.** Don't throw across mutation boundaries. Look in `packages/server/src/mutations/errors.ts` for the error variants.
 
 ## Where things live
 
@@ -51,6 +52,7 @@ The cleanest packages (`schema`, `result`) have no internal deps. Everything els
 ## Common pitfalls
 
 - **Don't add to `@velloo/shadcn-snapshot` casually.** Every new component must pass the canvas-safe contract (no portals that escape, no router-required behavior, stub providers for design mode). Manifests need explicit prop categorization.
+- **Don't import snapshot components for canvas chrome.** Their overlays are pinned-open inline stubs by design. Use the canvas's own `@/components/ui/*` (real shadcn) instead.
 - **Don't introduce optional fields in `@velloo/schema` without thinking about persistence.** Every Zod field is part of the on-disk contract. Adding a required field is a breaking change for existing design folders.
 - **Don't read a folder's `screens/` or `boards/` directly.** Use `loadDesignFolder` (server) or the design-folder structure returned by it.
 - **Don't touch a screen tree from outside the mutation layer.** Every modification goes through `withScreenLock`. Direct mutation breaks the watcher invariant and may corrupt history.

@@ -40,7 +40,7 @@ export function Logo({ className, size = 24, inkColor = "currentColor", sparkCol
            L20.4 12.6
            L18 11
            L20.4 9.4 Z"
-        fill={sparkColor ?? "var(--color-accent, oklch(0.65 0.2 250))"}
+        fill={sparkColor ?? "var(--primary, oklch(0.56 0.18 264))"}
       />
     </svg>
   );

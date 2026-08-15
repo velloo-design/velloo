@@ -1253,38 +1253,10 @@
             ]
           },
           {
-            "$ref": "Toast",
+            "$ref": "Toaster",
             "props": {
-              "className": "w-fit"
-            },
-            "children": [
-              {
-                "$ref": "Card",
-                "props": {
-                  "className": "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0"
-                },
-                "children": [
-                  {
-                    "$ref": "ToastTitle",
-                    "props": {
-                      "children": "Saved"
-                    }
-                  },
-                  {
-                    "$ref": "ToastDescription",
-                    "props": {
-                      "children": "Your changes are now live for the team."
-                    }
-                  }
-                ]
-              },
-              {
-                "$ref": "ToastAction",
-                "props": {
-                  "children": "Undo"
-                }
-              }
-            ]
+              "position": "bottom-right"
+            }
           },
           {
             "$ref": "Card",

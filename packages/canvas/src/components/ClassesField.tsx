@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { mutate } from "../api.ts";
 import { pathFromString } from "../path.ts";
+import { Label } from "./ui/label.tsx";
+import { Textarea } from "./ui/textarea.tsx";
 
 interface Props {
   initialValue: string;
@@ -31,17 +33,17 @@ export function ClassesField({ initialValue, screenId, path, debounceMs }: Props
   };
 
   return (
-    <section className="flex flex-col gap-1">
-      <label htmlFor="prop-className" className="text-xs font-medium text-[var(--color-fg-muted)]">
+    <section className="flex flex-col gap-1.5">
+      <Label htmlFor="prop-className" className="text-xs font-medium text-muted-foreground">
         classes
-      </label>
-      <textarea
+      </Label>
+      <Textarea
         id="prop-className"
         value={draft}
         onChange={(e) => onChange(e.target.value)}
         rows={4}
         spellCheck={false}
-        className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm font-mono"
+        className="min-h-0 font-mono"
       />
     </section>
   );

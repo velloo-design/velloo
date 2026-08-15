@@ -129,6 +129,7 @@ import {
 } from "./components/ui/sheet.tsx";
 import { Skeleton } from "./components/ui/skeleton.tsx";
 import { Slider } from "./components/ui/slider.tsx";
+import { Toaster as SonnerToaster } from "./components/ui/sonner.tsx";
 import { Switch } from "./components/ui/switch.tsx";
 import {
   Table,
@@ -142,15 +143,6 @@ import {
 } from "./components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs.tsx";
 import { Textarea } from "./components/ui/textarea.tsx";
-import {
-  Toast,
-  ToastAction,
-  ToastClose,
-  ToastDescription,
-  Toaster,
-  ToastProvider,
-  ToastTitle,
-} from "./components/ui/toast.tsx";
 import { Toggle } from "./components/ui/toggle.tsx";
 import { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group.tsx";
 import {
@@ -304,13 +296,7 @@ export const registry: Record<string, ComponentType<any>> = {
   TabsTrigger,
   Text,
   Textarea,
-  Toast,
-  ToastAction,
-  ToastClose,
-  ToastDescription,
-  ToastProvider,
-  ToastTitle,
-  Toaster,
+  Toaster: SonnerToaster,
   Toggle,
   ToggleGroup,
   ToggleGroupItem,

@@ -27,8 +27,8 @@ export function FrameViewportPresets({ frame, presets, onPick }: FrameViewportPr
             className={
               "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] " +
               (active
-                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]")
+                ? "border-primary bg-primary/10 text-primary"
+                : "bg-card text-muted-foreground hover:text-foreground")
             }
           >
             {presetIcon(preset)}

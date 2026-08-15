@@ -101,7 +101,7 @@ function Note({ note }: { note: CanvasNoteEntry }) {
     // biome-ignore lint/a11y/noStaticElementInteractions: canvas-positioned note — interactive div is intentional
     <div
       className={
-        "absolute select-none rounded-md px-3 py-2 bg-amber-100 border border-amber-300 shadow-sm group/note text-[var(--color-fg)] " +
+        "absolute select-none rounded-md px-3 py-2 bg-amber-100 border border-amber-300 shadow-sm group/note text-amber-950 dark:text-amber-950 " +
         (isEditing ? "ring-2 ring-amber-500" : "")
       }
       style={{ left: note.x, top: note.y, width: note.width }}

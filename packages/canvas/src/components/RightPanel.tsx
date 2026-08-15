@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useCanvas } from "../store.ts";
 import { Inspector } from "./Inspector.tsx";
 import { ThemePanel } from "./ThemePanel.tsx";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs.tsx";
 
 interface Props {
   screenId: string | null;
@@ -22,14 +23,14 @@ export function RightPanel({ screenId }: Props) {
   const handMode = cursorMode === "hand";
 
   return (
-    <aside className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col overflow-hidden">
-      <div className="flex border-b border-[var(--color-border)]">
-        <TabButton active={rightTab === "node"} onClick={() => setRightTab("node")}>
-          Node
-        </TabButton>
-        <TabButton active={rightTab === "theme"} onClick={() => setRightTab("theme")}>
-          Theme
-        </TabButton>
+    <aside className="w-80 shrink-0 border-l bg-card flex flex-col overflow-hidden">
+      <div className="border-b p-2">
+        <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "node" | "theme")}>
+          <TabsList className="w-full h-8">
+            <TabsTrigger value="node">Node</TabsTrigger>
+            <TabsTrigger value="theme">Theme</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
       {rightTab === "node" ? (
         handMode ? (
@@ -50,34 +51,9 @@ export function RightPanel({ screenId }: Props) {
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        "flex-1 py-2 text-xs font-medium uppercase tracking-wider transition-colors " +
-        (active
-          ? "text-[var(--color-fg)] border-b-2 border-[var(--color-accent)]"
-          : "text-[var(--color-fg-muted)] border-b-2 border-transparent hover:text-[var(--color-fg)]")
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
 function EmptyMessage({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex-1 grid place-items-center text-xs text-[var(--color-fg-muted)] p-6 text-center">
+    <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
       {children}
     </div>
   );

@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { LIBRARY_CATEGORIES } from "../library-categories.ts";
 import { type LibraryItemRef, useCanvas } from "../store.ts";
+import { Input } from "./ui/input.tsx";
+import { Separator } from "./ui/separator.tsx";
 
 interface Props {
   snippets: SnippetMeta[];
@@ -45,7 +47,7 @@ const COMPONENT_TILE_HEIGHTS: Record<string, number> = {
   RadioGroup: 100,
   ToggleGroup: 100,
   Select: 100,
-  Toast: 140,
+  Toaster: 140,
   Gradient: 130,
 };
 
@@ -98,7 +100,6 @@ export function LibraryHome({ snippets }: Props) {
         label: s.name,
         category: "Snippets",
         isSnippet: true,
-        // Snippets are usually richer than a single component — taller previews.
         previewHeight: 150,
       });
     }
@@ -116,8 +117,6 @@ export function LibraryHome({ snippets }: Props) {
     return true;
   });
 
-  // Split into 3 roughly-equal columns by running height so the masonry
-  // doesn't get top-heavy.
   const COLS = 3;
   const columns: Tile[][] = Array.from({ length: COLS }, () => []);
   const heights: number[] = Array.from({ length: COLS }, () => 0);
@@ -139,36 +138,34 @@ export function LibraryHome({ snippets }: Props) {
   const previewMode = dark ? "&mode=dark" : "";
 
   return (
-    <div className="flex-1 overflow-auto bg-[var(--color-bg)]">
+    <div className="flex-1 overflow-auto bg-background">
       <div className="mx-auto w-full max-w-6xl flex flex-col">
         <header className="px-8 pt-10 pb-5">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-fg)]">
-              Library
-            </h1>
-            <span className="text-sm text-[var(--color-fg-muted)]">
+            <h1 className="text-3xl font-semibold tracking-tight">Library</h1>
+            <span className="text-sm text-muted-foreground">
               {componentCount} components · {snippetCount} snippets
             </span>
           </div>
-          <p className="mt-1 text-sm text-[var(--color-fg-muted)] max-w-2xl">
+          <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
             Everything you can drop onto a board. Click a tile to see variants and props.
           </p>
         </header>
 
-        <div className="sticky top-0 z-20 bg-[var(--color-bg)]/85 backdrop-blur-sm px-8 pt-3 pb-3">
+        <div className="sticky top-0 z-20 bg-background/85 backdrop-blur-sm px-8 pt-3 pb-3">
           <div className="flex items-center gap-3 mb-3">
             <div className="relative flex-1 max-w-md">
               <Search
                 size={14}
                 strokeWidth={2}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-fg-muted)] pointer-events-none"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
               />
-              <input
+              <Input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search components and snippets…"
-                className="w-full h-9 pl-9 pr-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-sm focus:outline-none focus:border-[var(--color-accent)]/60"
+                className="h-9 pl-9"
               />
             </div>
           </div>
@@ -193,7 +190,7 @@ export function LibraryHome({ snippets }: Props) {
             })}
             {snippetCount > 0 ? (
               <>
-                <div className="h-5 w-px bg-[var(--color-border)] mx-1" />
+                <Separator orientation="vertical" className="mx-1 h-5" />
                 <Chip
                   active={activeCategory === "Snippets"}
                   onClick={() => setActiveCategory("Snippets")}
@@ -207,15 +204,12 @@ export function LibraryHome({ snippets }: Props) {
 
         <div className="px-8 pb-12 mt-5">
           {filtered.length === 0 ? (
-            <div className="py-16 text-center text-sm text-[var(--color-fg-muted)]">
+            <div className="py-16 text-center text-sm text-muted-foreground">
               No matches for "{query}".
             </div>
           ) : (
             <div className="flex items-start gap-4">
               {columns.map((col, i) => {
-                // Column index is stable (always COLS columns, no reordering),
-                // so the index is a fine key — but using a string label keeps
-                // biome's noArrayIndexKey happy and makes the markup readable.
                 const colKey = `col-${i}`;
                 return (
                   <div key={colKey} className="flex-1 flex flex-col gap-4 min-w-0">
@@ -253,20 +247,18 @@ function Chip({
   accent?: boolean;
 }) {
   const base =
-    "px-3 h-7 rounded-full text-xs flex items-center transition-colors whitespace-nowrap";
+    "px-3 h-7 rounded-full text-xs flex items-center transition-colors whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background";
   let cls: string;
   if (active && prominent) {
-    cls = "bg-[var(--color-fg)] text-[var(--color-bg)] font-medium";
+    cls = "bg-foreground text-background font-medium";
   } else if (active && accent) {
-    cls = "bg-[var(--color-accent)] text-[var(--color-accent-fg)] font-medium";
+    cls = "bg-primary text-primary-foreground font-medium";
   } else if (active) {
-    cls = "bg-[var(--color-fg)] text-[var(--color-bg)] font-medium";
+    cls = "bg-foreground text-background font-medium";
   } else if (accent) {
-    cls =
-      "border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/5 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10";
+    cls = "border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10";
   } else {
-    cls =
-      "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]";
+    cls = "border bg-card text-muted-foreground hover:text-foreground";
   }
   return (
     <button type="button" onClick={onClick} className={`${base} ${cls}`}>
@@ -297,14 +289,14 @@ function TileButton({
       type="button"
       onClick={onClick}
       className={
-        "group block w-full overflow-hidden rounded-lg border bg-[var(--color-surface)] text-left transition-colors " +
+        "group block w-full overflow-hidden rounded-lg border bg-card text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background " +
         (isSnippet
-          ? "border-[var(--color-accent)]/30 ring-1 ring-[var(--color-accent)]/10 hover:border-[var(--color-accent)]/60"
-          : "border-[var(--color-border)] hover:border-[var(--color-accent)]/40")
+          ? "border-primary/30 ring-1 ring-primary/10 hover:border-primary/60"
+          : "hover:border-primary/40")
       }
     >
       <div
-        className="relative w-full overflow-hidden bg-[var(--color-bg)]"
+        className="relative w-full overflow-hidden bg-background"
         style={{ height: tile.previewHeight }}
       >
         <iframe
@@ -314,20 +306,20 @@ function TileButton({
           className="absolute inset-0 w-full h-full pointer-events-none border-0"
         />
       </div>
-      <div className="px-3 py-2 border-t border-[var(--color-border)] flex items-center justify-between gap-2">
+      <div className="px-3 py-2 border-t flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className={
               "h-1.5 w-1.5 rounded-full shrink-0 " +
-              (isSnippet ? "bg-[var(--color-accent)]" : "bg-[var(--color-fg-muted)]")
+              (isSnippet ? "bg-primary" : "bg-muted-foreground")
             }
           />
-          <span className="text-xs font-medium truncate text-[var(--color-fg)]">{tile.label}</span>
+          <span className="text-xs font-medium truncate">{tile.label}</span>
         </div>
         <span
           className={
             "text-[10px] uppercase tracking-wider " +
-            (isSnippet ? "text-[var(--color-accent)] opacity-80" : "text-[var(--color-fg-muted)]")
+            (isSnippet ? "text-primary opacity-80" : "text-muted-foreground")
           }
         >
           {isSnippet ? "Snippet" : tile.category}

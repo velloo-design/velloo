@@ -3,8 +3,25 @@ import { useMemo, useState } from "react";
 import { type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { Tree } from "./Tree.tsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog.tsx";
+import { Button } from "./ui/button.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
 interface Props {
   boards: BoardMeta[];
@@ -48,7 +65,6 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     return out;
   }, [currentBoard, screens]);
 
-  const [boardMenuOpenFor, setBoardMenuOpenFor] = useState<string | null>(null);
   const [pendingBoardDelete, setPendingBoardDelete] = useState<{
     id: string;
     name: string;
@@ -74,27 +90,21 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
 
   return (
     <>
-      <section className="border-b border-[var(--color-border)] py-2">
-        <div className="px-4 py-2 flex items-center justify-between gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
+      <section className="border-b py-2">
+        <div className="px-4 py-2 flex items-center justify-between gap-2 text-xs uppercase tracking-wider text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <LayoutDashboard size={11} strokeWidth={2} /> Boards
           </span>
-          <button
-            type="button"
-            onClick={onCreateBoard}
-            title="New board"
-            className="h-5 w-5 grid place-items-center rounded hover:bg-[var(--color-bg)] hover:text-[var(--color-fg)]"
-          >
-            <Plus size={13} strokeWidth={2} />
-          </button>
+          <Button variant="ghost" size="icon-xs" onClick={onCreateBoard} title="New board">
+            <Plus />
+          </Button>
         </div>
         {boards.length === 0 ? (
-          <div className="px-4 py-2 text-sm text-[var(--color-fg-muted)]">No boards yet.</div>
+          <div className="px-4 py-2 text-sm text-muted-foreground">No boards yet.</div>
         ) : (
           <ul className="flex flex-col px-2 gap-0.5 mt-1">
             {boards.map((b) => {
               const active = b.id === currentBoardId;
-              const menuOpen = boardMenuOpenFor === b.id;
               return (
                 <li key={b.id} className="relative group/board">
                   <button
@@ -103,62 +113,44 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                       void selectBoard(b.id);
                     }}
                     className={
-                      "w-full text-left px-2 py-1.5 pr-8 rounded text-sm transition-colors " +
+                      "w-full text-left px-2 py-1.5 pr-8 rounded-md text-sm transition-colors " +
                       (active
-                        ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                        : "hover:bg-[var(--color-bg)] text-[var(--color-fg)]")
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted text-foreground")
                     }
                   >
                     <div className="font-medium truncate">{b.name}</div>
                     <div
                       className={
                         "text-xs " +
-                        (active
-                          ? "text-[var(--color-accent-fg)] opacity-80"
-                          : "text-[var(--color-fg-muted)]")
+                        (active ? "text-primary-foreground/80" : "text-muted-foreground")
                       }
                     >
                       {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
                     </div>
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e: React.MouseEvent) => {
-                      e.stopPropagation();
-                      setBoardMenuOpenFor(menuOpen ? null : b.id);
-                    }}
-                    title="Board menu"
-                    className={
-                      "absolute right-2 top-2 h-5 w-5 grid place-items-center rounded text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface)] " +
-                      (menuOpen ? "opacity-100" : "opacity-0 group-hover/board:opacity-100")
-                    }
-                  >
-                    <MoreHorizontal size={13} strokeWidth={2} />
-                  </button>
-                  {menuOpen ? (
-                    <>
-                      <button
-                        type="button"
-                        aria-label="Close menu"
-                        onClick={() => setBoardMenuOpenFor(null)}
-                        className="fixed inset-0 z-40 cursor-default"
-                      />
-                      <div className="absolute right-2 top-9 z-50 w-36 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-md py-1 text-sm">
-                        <button
-                          type="button"
-                          disabled={boards.length <= 1}
-                          onClick={() => {
-                            setBoardMenuOpenFor(null);
-                            setPendingBoardDelete({ id: b.id, name: b.name });
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[var(--color-destructive,red)] hover:bg-[var(--color-bg)] disabled:opacity-40 disabled:pointer-events-none"
-                        >
-                          <Trash2 size={13} strokeWidth={2} />
-                          Delete board
-                        </button>
-                      </div>
-                    </>
-                  ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        title="Board menu"
+                        className="absolute right-2 top-2 opacity-0 group-hover/board:opacity-100 data-[state=open]:opacity-100"
+                      >
+                        <MoreHorizontal />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={boards.length <= 1}
+                        onSelect={() => setPendingBoardDelete({ id: b.id, name: b.name })}
+                      >
+                        <Trash2 />
+                        Delete board
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </li>
               );
             })}
@@ -167,25 +159,31 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
       </section>
 
       <section className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 py-2 flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)] border-b border-[var(--color-border)]">
+        <div className="px-4 py-2 flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground border-b">
           <span className="flex-1 truncate">
             Tree {currentScreen ? `· ${currentScreen.name}` : ""}
           </span>
           {boardScreens.length > 1 ? (
-            <select
+            <Select
               value={currentScreenId ?? ""}
-              onChange={(e) => {
-                const id = e.target.value;
+              onValueChange={(id) => {
                 if (id) void selectScreen(id);
               }}
-              className="text-[10px] uppercase tracking-wider rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5 max-w-[110px]"
             >
-              {boardScreens.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                size="sm"
+                className="h-6 max-w-[110px] px-2 text-[10px] uppercase tracking-wider"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {boardScreens.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : null}
         </div>
         <div
@@ -198,26 +196,39 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
           {currentScreen ? (
             <Tree screen={currentScreen} />
           ) : (
-            <div className="px-4 py-2 text-xs text-[var(--color-fg-muted)]">
+            <div className="px-4 py-2 text-xs text-muted-foreground">
               Pick a screen above to see its tree.
             </div>
           )}
         </div>
       </section>
 
-      <ConfirmDialog
+      <AlertDialog
         open={pendingBoardDelete !== null}
-        title="Delete board"
-        body={
-          pendingBoardDelete
-            ? `Delete board "${pendingBoardDelete.name}"? The screens it references stay; only the placements (frames) on this board are removed. You can put it back with ⌘Z.`
-            : ""
-        }
-        confirmLabel="Delete"
-        destructive
-        onCancel={() => setPendingBoardDelete(null)}
-        onConfirm={confirmDeleteBoard}
-      />
+        onOpenChange={(open) => {
+          if (!open) setPendingBoardDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete board</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingBoardDelete
+                ? `Delete board "${pendingBoardDelete.name}"? The screens it references stay; only the placements (frames) on this board are removed. You can put it back with ⌘Z.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteBoard}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

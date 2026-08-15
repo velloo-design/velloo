@@ -4,9 +4,9 @@ The pinned shadcn component snapshot Velloo ships with. **Components are embedde
 
 Contents:
 
-- `src/components/` — vendored shadcn primitives (button, card, input, …) plus Velloo wrappers (`Placeholder`, `Icon`, `Text`, `Heading`).
+- `src/components/` — vendored shadcn primitives (button, card, input, …) plus Velloo wrappers (`Placeholder`, `Icon`, `Text`, `Heading`). Overlays use a canvas-safe contract (see `canvas-portal.tsx`): Portal/Content replaced with pinned-open inline `<div>`s so the design surface shows the styled state without escaping the iframe.
 - `src/manifest.json` — built by `build.ts`; the prop descriptor data the inspector + MCP `list_components` consume. Includes categorized props (boolean, number, string, color, enum, icon) and cva variants.
-- `snapshotVersion` — single source of truth for the version string the CLI stamps into `.design/config.json` at `velloo init`.
+- `snapshotVersion` — single source of truth for the version string the CLI stamps into `.design/config.json` at `velloo init`. Bumped whenever components are re-vendored from upstream shadcn. The Velloo canvas SPA (`@velloo/canvas`) re-vendors *real* shadcn from the same upstream pull on the same day and uses this same version stamp as its lockstep marker — see `docs/decisions.md` #18.
 
 **Don't add components here casually.** Every new entry must pass the canvas-safe contract:
 

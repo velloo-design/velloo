@@ -8,8 +8,8 @@ import { LibraryHome } from "./components/LibraryHome.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
-import { Toaster } from "./components/Toaster.tsx";
 import { TopBar } from "./components/TopBar.tsx";
+import { Toaster } from "./components/ui/sonner.tsx";
 import { useCanvas } from "./store.ts";
 import { toastError } from "./toast.ts";
 import { readUrlState, useUrlState } from "./url-state.ts";
@@ -147,9 +147,7 @@ export function App() {
 
   if (!design) {
     return (
-      <div className="h-full grid place-items-center text-sm text-[var(--color-fg-muted)]">
-        Loading…
-      </div>
+      <div className="h-full grid place-items-center text-sm text-muted-foreground">Loading…</div>
     );
   }
 

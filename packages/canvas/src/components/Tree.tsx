@@ -79,10 +79,10 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
   const rowClass = [
     "w-full flex items-center gap-1 px-2 py-1 rounded-sm text-sm cursor-default select-none text-left",
     isSelected
-      ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+      ? "bg-primary text-primary-foreground"
       : isHovered
-        ? "bg-[var(--color-bg)]"
-        : "hover:bg-[var(--color-bg)] text-[var(--color-fg)]",
+        ? "bg-muted"
+        : "hover:bg-muted text-foreground",
   ].join(" ");
 
   return (
@@ -119,8 +119,8 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
               className={
                 "shrink-0 rounded px-1 py-0.5 text-[10px] font-mono leading-none border " +
                 (isSelected
-                  ? "border-[var(--color-accent-fg)]/40 text-[var(--color-accent-fg)]"
-                  : "border-[var(--color-border)] text-[var(--color-fg-muted)]")
+                  ? "border-primary-foreground/40 text-primary-foreground"
+                  : "border-border text-muted-foreground")
               }
               title={`Stable anchor: @${nodeId(node)}`}
             >
@@ -131,7 +131,7 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
             <span
               className={
                 "truncate text-xs opacity-70 " +
-                (isSelected ? "text-[var(--color-accent-fg)]" : "text-[var(--color-fg-muted)]")
+                (isSelected ? "text-primary-foreground" : "text-muted-foreground")
               }
             >
               {description}

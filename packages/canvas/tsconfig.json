@@ -9,7 +9,10 @@
     "emitDeclarationOnly": true,
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["bun", "react", "react-dom", "vite/client"]
+    "types": ["bun", "react", "react-dom", "vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*", "vite.config.ts"],
   "references": [{ "path": "../schema" }, { "path": "../shadcn-snapshot" }]

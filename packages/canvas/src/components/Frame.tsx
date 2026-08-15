@@ -4,10 +4,19 @@ import { mutate, renderUrl } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { FrameHeader } from "./Frame/FrameHeader.tsx";
 import { FrameViewportPresets } from "./Frame/FrameViewportPresets.tsx";
 import { useFrameInteractions } from "./Frame/useFrameInteractions.ts";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog.tsx";
 
 interface FrameProps {
   boardId: string;
@@ -176,7 +185,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
         {!screen ? (
           <div
             style={{ width: w, height: h }}
-            className="border border-dashed border-[var(--color-fg-muted)]/30 rounded-md grid place-items-center text-xs text-[var(--color-fg-muted)]"
+            className="border border-dashed border-muted-foreground/30 rounded-md grid place-items-center text-xs text-muted-foreground"
           >
             Loading {frame.screen}…
           </div>
@@ -188,7 +197,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
               src={`${renderUrl(frame.screen, w, h)}&mode=${designMode}&v=${screenVersion}.${themeVersion}`}
               width={w}
               height={h}
-              className="border border-[var(--color-border)] rounded-md bg-white"
+              className="velloo-frame-iframe border rounded-md bg-white"
               style={{
                 width: w,
                 height: h,
@@ -196,24 +205,23 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
               }}
             />
             {/*
-              Resize handles. Default visual is a faint dashed border
-              edge — barely there until hover. On hover the affordance
-              firms up but stays accent/40 rather than full accent, so
-              the frame's content isn't drowned out.
+              Resize handles. Faint dashed edge by default; firms up on
+              hover but stays accent/40 rather than full accent so the
+              frame's content isn't drowned out.
             */}
             <div
               onPointerDown={startResize("e")}
-              className="absolute top-0 right-0 h-full w-0.5 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity border-r border-dashed border-[var(--color-accent)]/40 hover:border-solid hover:border-r-2 hover:border-[var(--color-accent)]/70"
+              className="absolute top-0 right-0 h-full w-0.5 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity border-r border-dashed border-primary/40 hover:border-solid hover:border-r-2 hover:border-primary/70"
               role="presentation"
             />
             <div
               onPointerDown={startResize("s")}
-              className="absolute bottom-0 left-0 w-full h-0.5 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity border-b border-dashed border-[var(--color-accent)]/40 hover:border-solid hover:border-b-2 hover:border-[var(--color-accent)]/70"
+              className="absolute bottom-0 left-0 w-full h-0.5 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity border-b border-dashed border-primary/40 hover:border-solid hover:border-b-2 hover:border-primary/70"
               role="presentation"
             />
             <div
               onPointerDown={startResize("se")}
-              className="absolute bottom-0 right-0 h-2 w-2 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--color-accent)]/50 hover:bg-[var(--color-accent)] rounded-br"
+              className="absolute bottom-0 right-0 h-2 w-2 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity bg-primary/50 hover:bg-primary rounded-br"
               role="presentation"
             />
           </div>
@@ -221,15 +229,30 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
 
         <FrameViewportPresets frame={frame} presets={presets} onPick={onPickPreset} />
       </div>
-      <ConfirmDialog
+      <AlertDialog
         open={confirmRemove}
-        title="Remove frame"
-        body={`Remove this placement of "${frame.label ?? screen?.name ?? frame.screen}" from the board? The underlying screen stays — only this frame is removed. You can put it back with ⌘Z.`}
-        confirmLabel="Remove"
-        destructive
-        onConfirm={doRemove}
-        onCancel={() => setConfirmRemove(false)}
-      />
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemove(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove frame</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`Remove this placement of "${frame.label ?? screen?.name ?? frame.screen}" from the board? The underlying screen stays — only this frame is removed. You can put it back with ⌘Z.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={doRemove}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

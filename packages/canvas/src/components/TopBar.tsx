@@ -12,51 +12,39 @@ import {
   Sun,
   Undo2,
 } from "lucide-react";
-import { useState } from "react";
 import { redo as redoApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Logo } from "./Logo.tsx";
+import { Button } from "./ui/button.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
+import { Separator } from "./ui/separator.tsx";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip.tsx";
 
-/**
- * Lightweight tooltip — appears on hover/focus with the action label and
- * its hotkey. Native `title` is too slow for a toolbar where users sweep
- * across icons; this gives an immediate visual readout.
- */
-function Tooltip({
+function HotkeyTip({
   label,
   hotkey,
   children,
 }: {
   label: string;
   hotkey?: string;
-  children: React.ReactNode;
+  children: React.ReactElement;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: hover-only wrapper around a real button; pointer events drive only the tooltip visibility
-    <span
-      className="relative inline-flex"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
-    >
-      {children}
-      {open ? (
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-fg)] shadow-md"
-        >
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent>
+        <span className="flex items-center gap-1.5">
           {label}
           {hotkey ? (
-            <kbd className="ml-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-px font-mono text-[10px] text-[var(--color-fg-muted)]">
+            <kbd className="rounded border border-border/40 bg-background/10 px-1 py-px font-mono text-[10px] opacity-80">
               {hotkey}
             </kbd>
           ) : null}
         </span>
-      ) : null}
-    </span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -109,197 +97,175 @@ export function TopBar() {
       .finally(() => refreshHistory());
   };
 
+  const cursorOptions: {
+    value: CursorMode;
+    icon: React.ReactNode;
+    label: string;
+    hotkey: string;
+  }[] = [
+    {
+      value: "select",
+      icon: <MousePointer2 size={14} strokeWidth={2} />,
+      label: "Select",
+      hotkey: "V",
+    },
+    { value: "hand", icon: <Hand size={14} strokeWidth={2} />, label: "Pan canvas", hotkey: "H" },
+    {
+      value: "note",
+      icon: <StickyNote size={14} strokeWidth={2} />,
+      label: "Drop a free note",
+      hotkey: "T",
+    },
+    {
+      value: "annotate",
+      icon: <MessageSquareText size={14} strokeWidth={2} />,
+      label: "Annotate a node",
+      hotkey: "Y",
+    },
+  ];
+
   return (
-    <header className="h-11 shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex items-center gap-3 px-4 text-sm">
-      <div className="flex items-center gap-2 min-w-0">
-        <Logo size={22} />
-        <span className="font-semibold tracking-tight">Velloo</span>
-        {view === "library" ? (
-          <>
-            <span className="text-[var(--color-fg-muted)]">/</span>
-            <span className="text-[var(--color-fg)] truncate">Library</span>
-            {libraryItem ? (
-              <>
-                <span className="text-[var(--color-fg-muted)]">/</span>
-                <span className="text-[var(--color-fg)] truncate">{libraryItem.id}</span>
-              </>
-            ) : null}
-          </>
-        ) : currentScreen ? (
-          <>
-            <span className="text-[var(--color-fg-muted)]">/</span>
-            <span className="text-[var(--color-fg)] truncate">{currentScreen.name}</span>
-          </>
-        ) : null}
-      </div>
-
-      <div className="ml-auto flex items-center gap-1.5">
-        <SegmentedButton
-          options={[
-            {
-              value: "select",
-              icon: <MousePointer2 size={14} strokeWidth={2} />,
-              label: "Select",
-              hotkey: "V",
-            },
-            {
-              value: "hand",
-              icon: <Hand size={14} strokeWidth={2} />,
-              label: "Pan canvas (hold Space)",
-              hotkey: "H",
-            },
-            {
-              value: "note",
-              icon: <StickyNote size={14} strokeWidth={2} />,
-              label: "Drop a free note",
-              hotkey: "T",
-            },
-            {
-              value: "annotate",
-              icon: <MessageSquareText size={14} strokeWidth={2} />,
-              label: "Annotate a node",
-              hotkey: "Y",
-            },
-          ]}
-          value={cursorMode}
-          onChange={(v) => setCursorMode(v as CursorMode)}
-        />
-
-        <AnnotationsToggle />
-
-        <div className="flex items-center gap-1 ml-2">
-          <SmallButton
-            label={`Undo${history.undo > 0 ? ` — ${history.undo} step${history.undo === 1 ? "" : "s"}` : ""}`}
-            hotkey="⌘Z"
-            onClick={onUndo}
-            disabled={history.undo === 0}
-          >
-            <Undo2 size={14} strokeWidth={2} />
-          </SmallButton>
-          <SmallButton
-            label={`Redo${history.redo > 0 ? ` — ${history.redo} step${history.redo === 1 ? "" : "s"}` : ""}`}
-            hotkey="⌘⇧Z"
-            onClick={onRedo}
-            disabled={history.redo === 0}
-          >
-            <Redo2 size={14} strokeWidth={2} />
-          </SmallButton>
+    <TooltipProvider delayDuration={200}>
+      <header className="h-11 shrink-0 border-b bg-card flex items-center gap-3 px-4 text-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <Logo size={22} />
+          <span className="font-semibold tracking-tight">Velloo</span>
+          {view === "library" ? (
+            <>
+              <span className="text-muted-foreground">/</span>
+              <span className="truncate">Library</span>
+              {libraryItem ? (
+                <>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="truncate">{libraryItem.id}</span>
+                </>
+              ) : null}
+            </>
+          ) : currentScreen ? (
+            <>
+              <span className="text-muted-foreground">/</span>
+              <span className="truncate">{currentScreen.name}</span>
+            </>
+          ) : null}
         </div>
 
-        <div className="h-5 w-px bg-[var(--color-border)]" />
+        <div className="ml-auto flex items-center gap-1.5">
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            value={cursorMode}
+            onValueChange={(v) => v && setCursorMode(v as CursorMode)}
+          >
+            {cursorOptions.map((opt) => (
+              <HotkeyTip key={opt.value} label={opt.label} hotkey={opt.hotkey}>
+                <ToggleGroupItem value={opt.value} aria-label={opt.label}>
+                  {opt.icon}
+                </ToggleGroupItem>
+              </HotkeyTip>
+            ))}
+          </ToggleGroup>
 
-        <div className="flex items-center gap-1">
-          <SmallButton label="Zoom out" hotkey="−" onClick={() => setCanvasZoom(canvasZoom - 0.1)}>
-            <Minus size={14} strokeWidth={2} />
-          </SmallButton>
-          <Tooltip label="Reset zoom" hotkey="0">
-            <button
-              type="button"
-              onClick={onZoomReset}
-              className="px-2 py-1 text-xs tabular-nums text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] min-w-[3rem] text-center"
+          <AnnotationsToggle />
+
+          <div className="flex items-center gap-1 ml-2">
+            <HotkeyTip
+              label={`Undo${history.undo > 0 ? ` — ${history.undo} step${history.undo === 1 ? "" : "s"}` : ""}`}
+              hotkey="⌘Z"
             >
-              {Math.round(canvasZoom * 100)}%
-            </button>
-          </Tooltip>
-          <SmallButton label="Zoom in" hotkey="+" onClick={() => setCanvasZoom(canvasZoom + 0.1)}>
-            <Plus size={14} strokeWidth={2} />
-          </SmallButton>
-        </div>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={onUndo}
+                disabled={history.undo === 0}
+              >
+                <Undo2 />
+              </Button>
+            </HotkeyTip>
+            <HotkeyTip
+              label={`Redo${history.redo > 0 ? ` — ${history.redo} step${history.redo === 1 ? "" : "s"}` : ""}`}
+              hotkey="⌘⇧Z"
+            >
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={onRedo}
+                disabled={history.redo === 0}
+              >
+                <Redo2 />
+              </Button>
+            </HotkeyTip>
+          </div>
 
-        <div className="h-5 w-px bg-[var(--color-border)] mx-1" />
+          <Separator orientation="vertical" className="mx-1 h-5" />
 
-        <Tooltip
-          label={isDesignDark ? "Design: switch to light preset" : "Design: switch to dark preset"}
-        >
-          <button
-            type="button"
-            onClick={toggleDesignDark}
-            className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs hover:bg-[var(--color-surface)] flex items-center gap-1"
+          <div className="flex items-center gap-1">
+            <HotkeyTip label="Zoom out" hotkey="−">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => setCanvasZoom(canvasZoom - 0.1)}
+              >
+                <Minus />
+              </Button>
+            </HotkeyTip>
+            <HotkeyTip label="Reset zoom" hotkey="0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onZoomReset}
+                className="min-w-[3rem] tabular-nums text-muted-foreground"
+              >
+                {Math.round(canvasZoom * 100)}%
+              </Button>
+            </HotkeyTip>
+            <HotkeyTip label="Zoom in" hotkey="+">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => setCanvasZoom(canvasZoom + 0.1)}
+              >
+                <Plus />
+              </Button>
+            </HotkeyTip>
+          </div>
+
+          <Separator orientation="vertical" className="mx-1 h-5" />
+
+          <HotkeyTip
+            label={
+              isDesignDark ? "Design: switch to light preset" : "Design: switch to dark preset"
+            }
           >
-            {isDesignDark ? <Sun size={13} /> : <Moon size={13} />}
-            <span>Design</span>
-          </button>
-        </Tooltip>
+            <Button variant="outline" size="sm" onClick={toggleDesignDark}>
+              {isDesignDark ? <Sun /> : <Moon />}
+              <span>Design</span>
+            </Button>
+          </HotkeyTip>
 
-        <AppThemePicker value={appTheme} onChange={setAppTheme} />
-      </div>
-    </header>
+          <AppThemePicker value={appTheme} onChange={setAppTheme} />
+        </div>
+      </header>
+    </TooltipProvider>
   );
 }
 
 function AppThemePicker({ value, onChange }: { value: AppTheme; onChange: (t: AppTheme) => void }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as AppTheme)}
-      title="App theme (Velloo UI). Independent of the design's theme."
-      className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs hover:bg-[var(--color-surface)]"
-    >
-      <option value="light">App: Light</option>
-      <option value="dark">App: Dark</option>
-      <option value="system">App: System</option>
-    </select>
-  );
-}
-
-function SmallButton({
-  onClick,
-  label,
-  hotkey,
-  children,
-  disabled,
-}: {
-  onClick: () => void;
-  label: string;
-  hotkey?: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <Tooltip label={label} hotkey={hotkey}>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className="h-7 w-7 grid place-items-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs hover:bg-[var(--color-surface)] disabled:opacity-40 disabled:pointer-events-none"
+    <Select value={value} onValueChange={(v) => onChange(v as AppTheme)}>
+      <SelectTrigger
+        size="sm"
+        className="w-[7.5rem] text-xs"
+        title="App theme (Velloo UI). Independent of the design's theme."
       >
-        {children}
-      </button>
-    </Tooltip>
-  );
-}
-
-function SegmentedButton<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; icon: React.ReactNode; label: string; hotkey?: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex items-center rounded border border-[var(--color-border)] bg-[var(--color-bg)] overflow-hidden">
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <Tooltip key={opt.value} label={opt.label} hotkey={opt.hotkey}>
-            <button
-              type="button"
-              onClick={() => onChange(opt.value)}
-              className={
-                "h-7 w-8 grid place-items-center transition-colors " +
-                (active
-                  ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                  : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]")
-              }
-            >
-              {opt.icon}
-            </button>
-          </Tooltip>
-        );
-      })}
-    </div>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="light">App: Light</SelectItem>
+        <SelectItem value="dark">App: Dark</SelectItem>
+        <SelectItem value="system">App: System</SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -307,14 +273,10 @@ function AnnotationsToggle() {
   const visible = useCanvas((s) => s.annotationsVisible);
   const setVisible = useCanvas((s) => s.setAnnotationsVisible);
   return (
-    <Tooltip label={visible ? "Hide annotations + notes" : "Show annotations + notes"}>
-      <button
-        type="button"
-        onClick={() => setVisible(!visible)}
-        className="h-7 px-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] flex items-center gap-1"
-      >
-        {visible ? <Eye size={13} strokeWidth={2} /> : <EyeOff size={13} strokeWidth={2} />}
-      </button>
-    </Tooltip>
+    <HotkeyTip label={visible ? "Hide annotations + notes" : "Show annotations + notes"}>
+      <Button variant="outline" size="icon-sm" onClick={() => setVisible(!visible)}>
+        {visible ? <Eye /> : <EyeOff />}
+      </Button>
+    </HotkeyTip>
   );
 }

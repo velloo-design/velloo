@@ -60,9 +60,7 @@ export function ContrastReport({ bumpKey }: Props) {
 
   if (!results) return null;
   if (results.length === 0) {
-    return (
-      <div className="text-[10px] text-[var(--color-fg-muted)]">Contrast: no parseable pairs.</div>
-    );
+    return <div className="text-[10px] text-muted-foreground">Contrast: no parseable pairs.</div>;
   }
   const fails = results.filter((r) => r.tier === "Fail");
   const summary = `${results.length - fails.length}/${results.length} pass WCAG AA`;
@@ -70,7 +68,7 @@ export function ContrastReport({ bumpKey }: Props) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-[var(--color-fg)] font-medium">Contrast</span>
+        <span className="font-medium">Contrast</span>
         <span
           className={
             "tabular-nums " +
@@ -86,9 +84,9 @@ export function ContrastReport({ bumpKey }: Props) {
         {results.map((r) => (
           <li
             key={r.label}
-            className="flex items-center justify-between gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-1 text-[10px]"
+            className="flex items-center justify-between gap-2 rounded-md border bg-background px-1.5 py-1 text-[10px]"
           >
-            <span className="truncate text-[var(--color-fg-muted)]">{r.label}</span>
+            <span className="truncate text-muted-foreground">{r.label}</span>
             <span className={`shrink-0 tabular-nums ${TIER_COLOR[r.tier]}`}>
               {r.ratio.toFixed(2)}:1 {TIER_LABEL[r.tier]}
             </span>

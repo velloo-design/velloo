@@ -171,12 +171,9 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
       },
     ],
   }),
-  Toast: () => ({
-    $ref: "Toast",
-    children: [
-      { $ref: "ToastTitle", props: { children: "Saved" } },
-      { $ref: "ToastDescription", props: { children: "Your changes are persisted." } },
-    ],
+  Toaster: () => ({
+    $ref: "Toaster",
+    props: { position: "bottom-right" },
   }),
   // Headless overlays only render when open / open-state is forced. Showing
   // just the trigger button reads as "this is a click target" without any

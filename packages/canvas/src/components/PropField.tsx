@@ -1,6 +1,10 @@
 import type { PropDescriptor } from "@velloo/shadcn-snapshot";
 import { useState } from "react";
 import { IconPicker } from "./IconPicker.tsx";
+import { Checkbox } from "./ui/checkbox.tsx";
+import { Input } from "./ui/input.tsx";
+import { Label } from "./ui/label.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
 interface Props {
   descriptor: PropDescriptor;
@@ -10,10 +14,11 @@ interface Props {
 }
 
 /**
- * Each PropField owns local draft state. The parent passes a `key` tied to
- * selection identity, so switching selections remounts the field with a fresh
- * value. Within one selection, local draft survives store-driven re-renders
- * (hover events, WS refreshes) so the user's in-progress edit never snaps back.
+ * Each PropField owns local draft state. The parent passes a `key` tied
+ * to selection identity, so switching selections remounts the field
+ * with a fresh value. Within one selection, local draft survives
+ * store-driven re-renders (hover events, WS refreshes) so the user's
+ * in-progress edit never snaps back.
  */
 export function PropField({ descriptor, initialValue, onChange }: Props) {
   const [draft, setDraft] = useState<unknown>(initialValue);
@@ -25,25 +30,23 @@ export function PropField({ descriptor, initialValue, onChange }: Props) {
   }
 
   const label = (
-    <label htmlFor={id} className="text-xs font-medium text-[var(--color-fg-muted)] capitalize">
+    <Label htmlFor={id} className="text-xs font-medium text-muted-foreground capitalize">
       {descriptor.name}
-      {descriptor.optional ? null : <span className="text-red-500"> *</span>}
-    </label>
+      {descriptor.optional ? null : <span className="text-destructive"> *</span>}
+    </Label>
   );
 
   if (descriptor.control === "boolean") {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label}
         <div className="flex items-center gap-2">
-          <input
+          <Checkbox
             id={id}
-            type="checkbox"
             checked={Boolean(draft)}
-            onChange={(e) => commit(e.target.checked)}
-            className="h-4 w-4 rounded border border-[var(--color-border)]"
+            onCheckedChange={(checked) => commit(Boolean(checked))}
           />
-          <span className="text-xs text-[var(--color-fg-muted)]">{String(Boolean(draft))}</span>
+          <span className="text-xs text-muted-foreground">{String(Boolean(draft))}</span>
         </div>
       </div>
     );
@@ -52,7 +55,7 @@ export function PropField({ descriptor, initialValue, onChange }: Props) {
   if (descriptor.control === "icon" && descriptor.enumValues) {
     const current = typeof draft === "string" ? draft : "";
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label}
         <IconPicker
           value={current}
@@ -66,41 +69,43 @@ export function PropField({ descriptor, initialValue, onChange }: Props) {
   if (descriptor.control === "enum" && descriptor.enumValues) {
     const isNumeric = typeof descriptor.enumValues[0] === "number";
     const current = draft === undefined || draft === null ? "" : String(draft);
+    const UNSET = "__velloo_unset__";
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label}
-        <select
-          id={id}
-          value={current}
-          onChange={(e) => {
-            const raw = e.target.value;
-            if (raw === "") commit(undefined);
+        <Select
+          value={current === "" ? UNSET : current}
+          onValueChange={(raw) => {
+            if (raw === UNSET) commit(undefined);
             else commit(isNumeric ? Number(raw) : raw);
           }}
-          className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
         >
-          {descriptor.optional ? <option value="">(unset)</option> : null}
-          {descriptor.enumValues.map((v) => (
-            <option key={String(v)} value={String(v)}>
-              {String(v)}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id={id} size="sm" className="text-sm">
+            <SelectValue placeholder="(unset)" />
+          </SelectTrigger>
+          <SelectContent>
+            {descriptor.optional ? <SelectItem value={UNSET}>(unset)</SelectItem> : null}
+            {descriptor.enumValues.map((v) => (
+              <SelectItem key={String(v)} value={String(v)}>
+                {String(v)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     );
   }
 
   if (descriptor.control === "number") {
-    const numValue = draft === undefined || draft === null ? "" : Number(draft);
+    const numValue = draft === undefined || draft === null ? "" : String(Number(draft));
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label}
-        <input
+        <Input
           id={id}
           type="number"
           value={numValue}
           onChange={(e) => commit(e.target.value === "" ? undefined : Number(e.target.value))}
-          className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
         />
       </div>
     );
@@ -109,39 +114,38 @@ export function PropField({ descriptor, initialValue, onChange }: Props) {
   if (descriptor.control === "color") {
     const current = typeof draft === "string" ? draft : "";
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {label}
         <div className="flex gap-2">
-          <input
+          <Input
             id={id}
             type="text"
             value={current}
             onChange={(e) => commit(e.target.value || undefined)}
             placeholder="oklch(... 0 0) or #rrggbb"
-            className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm font-mono"
+            className="flex-1 font-mono"
           />
           <input
             type="color"
+            aria-label={`${descriptor.name} color picker`}
             value={current.startsWith("#") ? current : "#000000"}
             onChange={(e) => commit(e.target.value)}
-            className="h-8 w-10 rounded border border-[var(--color-border)]"
+            className="h-8 w-10 rounded border border-input bg-transparent"
           />
         </div>
       </div>
     );
   }
 
-  // string fallback
   const current = typeof draft === "string" ? draft : draft === undefined ? "" : String(draft);
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       {label}
-      <input
+      <Input
         id={id}
         type="text"
         value={current}
         onChange={(e) => commit(e.target.value === "" ? undefined : e.target.value)}
-        className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
       />
     </div>
   );

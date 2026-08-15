@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { toastError } from "../toast.ts";
+import { Button } from "./ui/button.tsx";
 
 interface Props {
   presets: string[];
@@ -54,19 +55,15 @@ export function PresetPicker({ presets, activeName }: Props) {
     return (
       <div className="flex flex-wrap gap-1">
         {presets.map((p) => (
-          <button
+          <Button
             key={p}
-            type="button"
+            variant={p === activeName ? "default" : "outline"}
+            size="xs"
             onClick={() => apply(p)}
-            className={
-              "rounded-full border px-2.5 py-1 text-xs transition-colors " +
-              (p === activeName
-                ? "bg-[var(--color-accent)] text-[var(--color-accent-fg)] border-[var(--color-accent)]"
-                : "bg-[var(--color-bg)] text-[var(--color-fg)] border-[var(--color-border)] hover:bg-[var(--color-surface)]")
-            }
+            className="rounded-full"
           >
             {p}
-          </button>
+          </Button>
         ))}
       </div>
     );
@@ -82,10 +79,10 @@ export function PresetPicker({ presets, activeName }: Props) {
             type="button"
             onClick={() => apply(s.name)}
             className={
-              "group flex flex-col items-stretch gap-1.5 rounded-md border p-2 text-left transition-colors " +
+              "group flex flex-col items-stretch gap-1.5 rounded-md border p-2 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background " +
               (active
-                ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/30"
-                : "border-[var(--color-border)] hover:border-[var(--color-accent)]/50")
+                ? "border-primary ring-2 ring-primary/30"
+                : "border-border hover:border-primary/50")
             }
             title={`${s.name}${active ? " — active" : ""}`}
           >
@@ -98,11 +95,9 @@ export function PresetPicker({ presets, activeName }: Props) {
               <div className="flex-1" style={{ backgroundColor: s.swatches.background }} />
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-[var(--color-fg)]">{s.name}</span>
+              <span className="text-xs font-medium">{s.name}</span>
               {active ? (
-                <span className="text-[10px] uppercase tracking-wider text-[var(--color-accent)]">
-                  active
-                </span>
+                <span className="text-[10px] uppercase tracking-wider text-primary">active</span>
               ) : null}
             </div>
           </button>

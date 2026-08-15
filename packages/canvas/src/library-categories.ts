@@ -37,7 +37,7 @@ export const LIBRARY_CATEGORIES: LibraryCategory[] = [
   {
     id: "feedback",
     label: "Feedback",
-    components: ["Alert", "Progress", "Toast"],
+    components: ["Alert", "Progress", "Toaster"],
   },
   {
     id: "navigation",

@@ -1,11 +1,15 @@
 import type { ColorPair, Theme } from "@velloo/schema";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
-import { CollapsibleSection } from "./CollapsibleSection.tsx";
 import { ColorSwatch } from "./ColorSwatch.tsx";
 import { ContrastReport } from "./ContrastReport.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion.tsx";
+import { Button } from "./ui/button.tsx";
+import { Checkbox } from "./ui/checkbox.tsx";
+import { Input } from "./ui/input.tsx";
+import { Label } from "./ui/label.tsx";
 
 interface Props {
   theme: Theme;
@@ -45,14 +49,36 @@ function foregroundOf(value: ColorPair | string | undefined): string | null {
   return null;
 }
 
+const SECTION_STORAGE_KEY = "velloo:theme-panel:sections";
+const DEFAULT_OPEN = ["presets", "generate", "accessibility"];
+
+function readStoredSections(): string[] {
+  if (typeof localStorage === "undefined") return DEFAULT_OPEN;
+  const raw = localStorage.getItem(SECTION_STORAGE_KEY);
+  if (!raw) return DEFAULT_OPEN;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((s): s is string => typeof s === "string");
+  } catch {
+    /* fallthrough */
+  }
+  return DEFAULT_OPEN;
+}
+
 export function ThemePanel({ theme, presets }: Props) {
   const [vibe, setVibe] = useState("");
   const [seed, setSeed] = useState("");
   const [vibeUseAi, setVibeUseAi] = useState(false);
   const [busy, setBusy] = useState<null | "vibe" | "derive">(null);
   const [status, setStatus] = useState<string | null>(null);
-  // Re-fetch contrast whenever the theme changes anywhere.
   const themeVersion = useCanvas((s) => s.themeVersion);
+
+  const [openSections, setOpenSections] = useState<string[]>(() => readStoredSections());
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(openSections));
+  }, [openSections]);
 
   const onDerive = async () => {
     if (!seed.trim()) return;
@@ -83,106 +109,131 @@ export function ThemePanel({ theme, presets }: Props) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
-      <CollapsibleSection title="Presets" storageKey="theme-presets">
-        <PresetPicker presets={presets} activeName={theme.name} />
-      </CollapsibleSection>
+    <div className="flex-1 overflow-y-auto p-4">
+      <Accordion
+        type="multiple"
+        value={openSections}
+        onValueChange={(v) => setOpenSections(v)}
+        className="flex flex-col gap-1"
+      >
+        <AccordionItem value="presets">
+          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
+            Presets
+          </AccordionTrigger>
+          <AccordionContent>
+            <PresetPicker presets={presets} activeName={theme.name} />
+          </AccordionContent>
+        </AccordionItem>
 
-      <CollapsibleSection title="Generate" storageKey="theme-generate">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="theme-seed" className="text-xs text-[var(--color-fg-muted)]">
-            derive palette from color
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="theme-seed"
-              type="text"
-              value={seed}
-              onChange={(e) => setSeed(e.target.value)}
-              placeholder="#7c3aed or oklch(...)"
-              spellCheck={false}
-              className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs font-mono"
-            />
-            <button
-              type="button"
-              onClick={onDerive}
-              disabled={busy !== null || !seed.trim()}
-              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs disabled:opacity-50"
-            >
-              {busy === "derive" ? "…" : "Apply"}
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="theme-vibe" className="text-xs text-[var(--color-fg-muted)]">
-            match a vibe
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="theme-vibe"
-              type="text"
-              value={vibe}
-              onChange={(e) => setVibe(e.target.value)}
-              placeholder="playful, corporate, forest…"
-              className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
-            />
-            <button
-              type="button"
-              onClick={onMatchVibe}
-              disabled={busy !== null || !vibe.trim()}
-              className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs disabled:opacity-50"
-            >
-              {busy === "vibe" ? "…" : "Match"}
-            </button>
-          </div>
-          <label className="flex items-center gap-1.5 text-[10px] text-[var(--color-fg-muted)]">
-            <input
-              type="checkbox"
-              checked={vibeUseAi}
-              onChange={(e) => setVibeUseAi(e.target.checked)}
-            />
-            use Claude (requires ANTHROPIC_API_KEY)
-          </label>
-        </div>
-        {status ? <div className="text-[10px] text-[var(--color-fg-muted)]">{status}</div> : null}
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Accessibility" storageKey="theme-accessibility">
-        <ContrastReport bumpKey={themeVersion} />
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Colors" storageKey="theme-colors" defaultOpen={false}>
-        <div className="flex flex-col gap-3">
-          {SLOTS.map((slot) => {
-            const v = theme.colors[slot.key];
-            const def = defaultOf(v);
-            if (!def) return null;
-            const fg = foregroundOf(v);
-            return (
-              <div key={slot.key} className="flex flex-col gap-1">
-                <ColorSwatch
-                  label={slot.label}
-                  tokenPath={
-                    slot.pair && typeof v === "object"
-                      ? `colors.${slot.key}.DEFAULT`
-                      : `colors.${slot.key}`
-                  }
-                  value={def}
-                />
-                {slot.pair && fg ? (
-                  <div className="pl-9">
-                    <ColorSwatch
-                      label={`${slot.label} fg`}
-                      tokenPath={`colors.${slot.key}.foreground`}
-                      value={fg}
-                    />
-                  </div>
-                ) : null}
+        <AccordionItem value="generate">
+          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
+            Generate
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="theme-seed" className="text-xs text-muted-foreground">
+                  derive palette from color
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="theme-seed"
+                    type="text"
+                    value={seed}
+                    onChange={(e) => setSeed(e.target.value)}
+                    placeholder="#7c3aed or oklch(...)"
+                    spellCheck={false}
+                    className="flex-1 text-xs font-mono"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onDerive}
+                    disabled={busy !== null || !seed.trim()}
+                  >
+                    {busy === "derive" ? "…" : "Apply"}
+                  </Button>
+                </div>
               </div>
-            );
-          })}
-        </div>
-      </CollapsibleSection>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="theme-vibe" className="text-xs text-muted-foreground">
+                  match a vibe
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="theme-vibe"
+                    type="text"
+                    value={vibe}
+                    onChange={(e) => setVibe(e.target.value)}
+                    placeholder="playful, corporate, forest…"
+                    className="flex-1 text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onMatchVibe}
+                    disabled={busy !== null || !vibe.trim()}
+                  >
+                    {busy === "vibe" ? "…" : "Match"}
+                  </Button>
+                </div>
+                <Label className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-normal">
+                  <Checkbox checked={vibeUseAi} onCheckedChange={(c) => setVibeUseAi(Boolean(c))} />
+                  use Claude (requires ANTHROPIC_API_KEY)
+                </Label>
+              </div>
+              {status ? <div className="text-[10px] text-muted-foreground">{status}</div> : null}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="accessibility">
+          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
+            Accessibility
+          </AccordionTrigger>
+          <AccordionContent>
+            <ContrastReport bumpKey={themeVersion} />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="colors">
+          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
+            Colors
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3">
+              {SLOTS.map((slot) => {
+                const v = theme.colors[slot.key];
+                const def = defaultOf(v);
+                if (!def) return null;
+                const fg = foregroundOf(v);
+                return (
+                  <div key={slot.key} className="flex flex-col gap-1.5">
+                    <ColorSwatch
+                      label={slot.label}
+                      tokenPath={
+                        slot.pair && typeof v === "object"
+                          ? `colors.${slot.key}.DEFAULT`
+                          : `colors.${slot.key}`
+                      }
+                      value={def}
+                    />
+                    {slot.pair && fg ? (
+                      <div className="pl-9">
+                        <ColorSwatch
+                          label={`${slot.label} fg`}
+                          tokenPath={`colors.${slot.key}.foreground`}
+                          value={fg}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
