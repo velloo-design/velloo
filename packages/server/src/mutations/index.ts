@@ -133,3 +133,9 @@ export {
   type UpdateExtensionResult,
   updateExtension,
 } from "./extensions.ts";
+export {
+  type FindNodesArgs,
+  type FindNodesResult,
+  type FoundNode,
+  findNodes,
+} from "./find-nodes.ts";

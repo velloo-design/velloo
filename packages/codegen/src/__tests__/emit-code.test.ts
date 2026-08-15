@@ -138,6 +138,30 @@ describe("emitCode", () => {
     expect([...snippetIdsReferenced(screen)]).toEqual(["feature-card"]);
   });
 
+  test("$if with eq serializes to a strict-equality ternary in snippet JSX", async () => {
+    const tile: Snippet = {
+      id: "stat-tile",
+      name: "stat tile",
+      params: [{ name: "trend", type: "enum", enum: ["up", "down", "flat"], default: "flat" }],
+      tree: {
+        $ref: "Card",
+        props: {
+          className: {
+            $if: "trend",
+            eq: "up",
+            then: "text-emerald-600",
+            else: "text-red-500",
+          },
+        },
+      },
+    };
+    const screen = screenOf({ $ref: "Card", children: [{ $snippet: "stat-tile" }] });
+    const result = unwrap(await emitCode(screen, { snippets: new Map([[tile.id, tile]]) }));
+    expect(result.snippetsUsed[0]?.jsx).toBe(
+      `<Card className={trend === "up" ? "text-emerald-600" : "text-red-500"} />`,
+    );
+  });
+
   test("emits velloo composition helpers verbatim (the sample screens use them)", async () => {
     const result = unwrap(
       await emitCode(

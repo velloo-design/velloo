@@ -139,6 +139,43 @@ describe("snippet resolution", () => {
     expect(plain.bodyHtml).toContain("ring-zinc-800");
   });
 
+  test("$if with eq branches on enum param equality", async () => {
+    const tile: Snippet = {
+      id: "stat",
+      name: "Stat tile",
+      params: [{ name: "trend", type: "enum", enum: ["up", "down", "flat"], default: "flat" }],
+      tree: {
+        $ref: "Card",
+        props: {
+          className: {
+            $if: "trend",
+            eq: "up",
+            then: "text-emerald-600",
+            else: { $if: "trend", eq: "down", then: "text-red-500", else: "text-muted-foreground" },
+          },
+        },
+      },
+    };
+    const snippets = new Map([[tile.id, tile]]);
+    const up = await renderScreen(screenWith({ $snippet: "stat", args: { trend: "up" } }), theme, {
+      ...opts,
+      snippets,
+    });
+    expect(up.bodyHtml).toContain("text-emerald-600");
+    const down = await renderScreen(
+      screenWith({ $snippet: "stat", args: { trend: "down" } }),
+      theme,
+      { ...opts, snippets },
+    );
+    expect(down.bodyHtml).toContain("text-red-500");
+    const flat = await renderScreen(
+      screenWith({ $snippet: "stat", args: { trend: "flat" } }),
+      theme,
+      { ...opts, snippets },
+    );
+    expect(flat.bodyHtml).toContain("text-muted-foreground");
+  });
+
   test("$if in props.children renders the selected branch", async () => {
     const label: Snippet = {
       id: "label",

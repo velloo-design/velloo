@@ -15,6 +15,7 @@ import { registerExtensionTools } from "./tools/extensions.ts";
 import { registerGenerateTools } from "./tools/generate.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
+import { registerNoteTools } from "./tools/notes.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
 import { registerThemeTools } from "./tools/theme.ts";
 import { registerValidateTools } from "./tools/validate.ts";
@@ -84,6 +85,7 @@ function buildMcpServer(ctx: MutationContext, jit: TailwindJit): McpServer {
   registerValidateTools(mcp, ctx);
   registerGenerateTools(mcp, ctx);
   registerExtensionTools(mcp, ctx);
+  registerNoteTools(mcp, ctx);
   return mcp;
 }
 

@@ -48,12 +48,15 @@ function presetClasses(
       return cn(DIRECTION_CLASS[direction], "from-primary/20 via-accent/15 to-background");
     case "dawn":
       return cn(DIRECTION_CLASS[direction], "from-accent/20 via-primary/10 to-background");
+    // Tailwind v4 radial utilities — raw radial-gradient() arbitrary
+    // values are too paren-heavy for the JIT scanner to extract from
+    // source, so they never make it into compiled CSS.
     case "radial":
-      return "bg-[radial-gradient(circle_at_center,var(--color-primary)/20%,transparent_70%)]";
+      return "bg-radial-[circle_at_center] from-primary/20 to-transparent to-70%";
     case "mesh":
-      return cn(
-        "bg-[radial-gradient(at_top_left,var(--color-primary)/25%,transparent_50%),radial-gradient(at_bottom_right,var(--color-accent)/30%,transparent_55%)]",
-      );
+      // Two layered radials; rendered as stacked children below since a
+      // single element can only carry one gradient utility set.
+      return "";
   }
 }
 
@@ -63,6 +66,19 @@ export function Gradient({
   className,
   ...rest
 }: GradientProps) {
+  if (preset === "mesh") {
+    return (
+      <div
+        data-slot="gradient"
+        data-preset={preset}
+        className={cn("relative", className)}
+        {...rest}
+      >
+        <div className="absolute inset-0 bg-radial-[at_top_left] from-primary/25 to-transparent to-55%" />
+        <div className="absolute inset-0 bg-radial-[at_bottom_right] from-accent/40 to-transparent to-60%" />
+      </div>
+    );
+  }
   return (
     <div
       data-slot="gradient"

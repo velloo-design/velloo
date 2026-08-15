@@ -83,7 +83,10 @@ export async function runInteractive(defaults: { folder: string }): Promise<Wiza
           hint: "No on-disk copy. The classic Pulse default.",
         },
       ],
-      initialValue: "in-repo",
+      // Cache is the safe default: in-repo writes 140+ files into the
+      // user's app the moment they press Enter through the wizard, and
+      // the copy then drifts from the bundled components.
+      initialValue: "cache",
     });
     if (isAborted(picked)) return abort();
     source = picked;

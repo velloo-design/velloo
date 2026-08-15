@@ -49,6 +49,8 @@ export function serializeProp(
 
 interface IfExpr {
   $if: string;
+  /** When present, the branch tests strict equality instead of truthiness. */
+  eq?: unknown;
   then?: unknown;
   else?: unknown;
 }
@@ -62,7 +64,8 @@ export function serializeIfExpr(value: IfExpr, paramNames: Set<string>): string 
   if (!paramNames.has(value.$if)) return null;
   const then = serializeIfLeaf(value.then, paramNames);
   const els = serializeIfLeaf(value.else, paramNames);
-  return `${value.$if} ? ${then} : ${els}`;
+  const test = "eq" in value ? `${value.$if} === ${JSON.stringify(value.eq)}` : value.$if;
+  return `${test} ? ${then} : ${els}`;
 }
 
 function serializeIfLeaf(v: unknown, paramNames: Set<string>): string {

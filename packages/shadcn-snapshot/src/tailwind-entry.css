@@ -60,3 +60,15 @@ html, body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/*
+ * Tailwind v4 defaults bare `border-*` utilities to currentColor, which
+ * paints near-black hairlines on Table/Accordion/Separator. shadcn
+ * expects the border token — this mirrors the @layer base rule codegen
+ * emits into user apps (see emit-theme/globals-css.ts).
+ */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+}

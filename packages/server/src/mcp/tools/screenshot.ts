@@ -38,16 +38,17 @@ export function registerScreenshotTool(
     "screenshot",
     {
       description:
-        'Render a screen headless via Playwright and return the PNG as image content. mode: "light" (default), "dark", or "compare". w/h default to the desktop viewport preset; the screen renders responsively at that size. Defaults fullPage: true.',
+        'Render a screen headless via Playwright and return the PNG as image content. mode: "light" (default), "dark", or "compare". w/h default to the desktop viewport preset; the screen renders responsively at that size. Defaults fullPage: true. Pass scale (0.25–1, e.g. 0.5) for a smaller PNG when checking layout rather than pixel detail — it keeps your context lean.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
         h: z.number().int().positive().optional(),
         mode: z.enum(["light", "dark", "compare"]).optional(),
         fullPage: z.boolean().optional(),
+        scale: z.number().min(0.25).max(1).optional(),
       },
     },
-    async ({ screenId, w, h, mode, fullPage }) => {
+    async ({ screenId, w, h, mode, fullPage, scale }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
 
@@ -79,6 +80,7 @@ export function registerScreenshotTool(
             leftHtml: light.html,
             rightHtml: dark.html,
             viewport,
+            ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
           const { html } = await renderScreen(screen, ctx.folder.theme, {
@@ -92,6 +94,7 @@ export function registerScreenshotTool(
             html,
             viewport,
             fullPage: fullPage ?? true,
+            ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         }
       } catch (err) {
@@ -123,9 +126,10 @@ export function registerScreenshotTool(
           })
           .optional(),
         mode: z.enum(["light", "dark", "compare"]).optional(),
+        scale: z.number().min(0.25).max(1).optional(),
       },
     },
-    async ({ snippetId, args, extraClassName, viewport, mode }) => {
+    async ({ snippetId, args, extraClassName, viewport, mode, scale }) => {
       const snippet = ctx.folder.snippets.get(snippetId);
       if (!snippet) return errorResult(`Snippet not found: ${snippetId}`);
 
@@ -172,6 +176,7 @@ export function registerScreenshotTool(
             leftHtml: light.html,
             rightHtml: dark.html,
             viewport: vp,
+            ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
           const { html } = await renderScreen(syntheticScreen, ctx.folder.theme, {
@@ -181,7 +186,12 @@ export function registerScreenshotTool(
             snippets: ctx.folder.snippets,
             dark: mode === "dark",
           });
-          buf = await screenshotBuffer({ html, viewport: vp, fullPage: true });
+          buf = await screenshotBuffer({
+            html,
+            viewport: vp,
+            fullPage: true,
+            ...(scale ? { deviceScaleFactor: scale } : {}),
+          });
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

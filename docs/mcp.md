@@ -21,7 +21,8 @@ A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`
 | `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
 | `get_theme` | — | full token tree |
 | `list_annotations` | `screenId` | Designer-authored markdown annotations on a screen. Each carries a `target: { locator }` and a `resolved` path (null when the targeted node has been removed — treat as low-priority). Read-only: agents can act on annotations but not create or edit them |
-| `list_notes` | `boardId` | Board-level free-positioned markdown notes (designer-authored, read-only) |
+| `list_notes` | `boardId` | Board-level free-positioned markdown notes. Writable via `add_note` / `update_note` / `remove_note` |
+| `find_nodes` | `screenId, ref?, snippetId?, id?, classContains?, prop?, propValue?, limit?` | Query a screen tree for matching nodes (filters AND together). Returns `{ matches: [{ path, kind, ref, id?, className?, textPreview?, childCount }], total }` — locate targets for path-accepting tools without fetching and walking the whole tree |
 
 ### Tree mutations
 
@@ -59,6 +60,16 @@ Boards are the canvases of a design folder; one folder has many. Each board owns
 | `add_board` | `name, id?` | Create a new empty board. Id is derived from `name` if omitted |
 | `update_board` | `boardId, patch` | Sparse patch on `name` (only field today) |
 | `remove_board` | `boardId` | Refuses to remove the last board (returns `LastBoard`). Undoable |
+
+### Canvas notes
+
+Board-level sticky notes in board coordinates (the same space as frame `x`/`y`). The agent uses them for guidance that belongs next to frames — tour steps, review remarks, handoff context. Node-anchored *annotations* remain designer-authored; the agent reads those via `list_annotations`.
+
+| Tool | Args |
+|---|---|
+| `add_note` | `boardId, x, y, width?, body` — markdown-lite body |
+| `update_note` | `boardId, noteId, patch: { x?, y?, width?, body? }` |
+| `remove_note` | `boardId, noteId` |
 
 ### Frame / group lifecycle
 
@@ -111,8 +122,8 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Returns |
 |---|---|---|
-| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean` | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
-| `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?` | Render a snippet in isolation (no host screen) and return a PNG. Defaults to a 480×640 viewport. Useful for iterating on snippet visuals before stamping |
+| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1` | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
+| `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?, scale?` | Render a snippet in isolation (no host screen) and return a PNG. Defaults to a 480×640 viewport. Useful for iterating on snippet visuals before stamping |
 
 ### Codegen and export
 
@@ -162,6 +173,10 @@ See `decisions.md` #21 for the rationale.
 ### Locator-aware tools
 
 `add_node`, `update_props`, `apply_classes`, `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_args`, `apply_classes_bulk`, `update_props_bulk`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.
+
+## Advisory prop warnings
+
+`add_node`, `update_props`, and `add_screen` validate props against the active library's manifest after the mutation succeeds and attach a `propWarnings: string[]` field to the result when something looks off — a typo'd prop name (with nearest-known suggestions), an enum value outside the declared set, or a boolean/number type mismatch. Warnings never fail the mutation: DOM passthrough props (`data-*`, `aria-*`, `className`, …) are exempt, components that declare no manifest props skip validation entirely, and `$param`/`$if` substitution values are ignored. Treat a warning as "this will probably render wrong" and self-correct in the same turn.
 
 ## Error model
 

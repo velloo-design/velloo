@@ -70,6 +70,8 @@ export interface BuildTreeOptions {
  * - `{ $param: "name" }` → `args.name` (the param's value, of any JSON type).
  * - `{ $if: "name", then: <a>, else: <b> }` → `<a>` if `args.name` is truthy,
  *   else `<b>`. Recurses into both branches first so nested $param/$if work.
+ * - `{ $if: "name", eq: <v>, then: <a>, else: <b> }` → equality branch, so
+ *   enum params can drive per-value styling (`eq: "up"` → green, else red).
  *
  * Walks props as well as children — agents commonly inject string params
  * into `props.children` and toggle class strings with `$if`.
@@ -87,9 +89,10 @@ function substituteParams(
     return args[name];
   }
   if (typeof (value as { $if?: unknown }).$if === "string") {
-    const v = value as { $if: string; then?: unknown; else?: unknown };
+    const v = value as { $if: string; eq?: unknown; then?: unknown; else?: unknown };
     if (!(v.$if in args)) throw new SnippetParamError(snippetId, v.$if);
-    const branch = isTruthy(args[v.$if]) ? v.then : v.else;
+    const matched = "eq" in v ? args[v.$if] === v.eq : isTruthy(args[v.$if]);
+    const branch = matched ? v.then : v.else;
     return substituteParams(branch, args, snippetId);
   }
   const out: Record<string, unknown> = {};

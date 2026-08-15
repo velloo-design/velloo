@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Result } from "@velloo/result";
-import { NodeSchema, SnippetParamSchema } from "@velloo/schema";
+import { isComponentNode, type Node, NodeSchema, SnippetParamSchema } from "@velloo/schema";
 import { z } from "zod";
 import {
   addBoard,
@@ -32,6 +32,8 @@ import {
   updateSnippet,
   updateSnippetArgs,
 } from "../../mutations/index.ts";
+import { propWarnings, propWarningsForTree } from "../../mutations/prop-warnings.ts";
+import { pathAt } from "../../path.ts";
 
 type McpResult = {
   content: { type: "text"; text: string }[];
@@ -48,6 +50,20 @@ function mutationErrorResult(error: MutationError): McpResult {
 
 function toMcp<T>(result: Result<T, MutationError>): McpResult {
   return result.ok ? jsonResult(result.value) : mutationErrorResult(result.error);
+}
+
+/**
+ * Like toMcp, but on success attaches advisory `propWarnings` (typo'd
+ * prop names, enum mismatches) so the agent can self-correct without a
+ * follow-up inspect round-trip. Warnings never fail the mutation.
+ */
+async function toMcpWithWarnings<T>(
+  result: Result<T, MutationError>,
+  warn: (value: T) => Promise<string[]>,
+): Promise<McpResult> {
+  if (!result.ok) return mutationErrorResult(result.error);
+  const propWarnings = await warn(result.value).catch(() => [] as string[]);
+  return jsonResult(propWarnings.length > 0 ? { ...result.value, propWarnings } : result.value);
 }
 
 const IdLocator = z
@@ -83,7 +99,17 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         index: z.number().int().nonnegative().optional(),
       },
     },
-    async (args) => toMcp(await addNode(ctx, args as never)),
+    async (args) =>
+      toMcpWithWarnings(await addNode(ctx, args as never), async () => {
+        const screen = ctx.folder.screens.get(args.screenId as string);
+        if (!screen) return [];
+        const inserted = {
+          $ref: args.componentRef,
+          ...(args.props ? { props: args.props } : {}),
+          ...(args.children ? { children: args.children } : {}),
+        } as Node;
+        return propWarningsForTree(ctx, screen, inserted);
+      }),
   );
 
   mcp.registerTool(
@@ -96,7 +122,14 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         propPatch: z.record(z.string(), z.unknown()),
       },
     },
-    async (args) => toMcp(await updateProps(ctx, args)),
+    async (args) =>
+      toMcpWithWarnings(await updateProps(ctx, args), async (value) => {
+        const screen = ctx.folder.screens.get(args.screenId);
+        if (!screen) return [];
+        const node = pathAt(screen.tree, value.path);
+        if (!node || !isComponentNode(node)) return [];
+        return propWarnings(ctx, screen, node.$ref, args.propPatch);
+      }),
   );
 
   mcp.registerTool(
@@ -198,7 +231,15 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         tree: NodeSchema.optional(),
       },
     },
-    async (args) => toMcp(await addScreen(ctx, args)),
+    async (args) =>
+      toMcpWithWarnings(await addScreen(ctx, args), async () => {
+        const created = args.id ?? "";
+        const screen =
+          ctx.folder.screens.get(created) ??
+          [...ctx.folder.screens.values()].find((s) => s.name === args.name);
+        if (!screen) return [];
+        return propWarningsForTree(ctx, screen, screen.tree);
+      }),
   );
 
   mcp.registerTool(

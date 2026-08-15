@@ -42,6 +42,11 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
     });
     const page = await context.newPage();
     await page.setContent(opts.html, { waitUntil: "domcontentloaded" });
+    // Give network images a bounded chance to land — otherwise every
+    // remote <img> screenshots as a blank box and the agent's visual
+    // QA loop is blind to imagery. Offline/slow assets just time out
+    // and the capture proceeds.
+    await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
     const fullPage = opts.fullPage ?? true;
     if (opts.outPath) {
       await page.screenshot({ path: opts.outPath, fullPage });
@@ -95,6 +100,8 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
       const r = document.getElementById("R") as HTMLIFrameElement | null;
       return !!(l && r && l.dataset.ready === "1" && r.dataset.ready === "1");
     });
+    // Bounded grace for network images (see screenshotInternal).
+    await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
     return await page.screenshot({ fullPage: true });
   } finally {
     await browser.close();
