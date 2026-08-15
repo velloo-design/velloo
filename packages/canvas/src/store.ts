@@ -210,14 +210,21 @@ export const useCanvas = create<CanvasState>((set, get) => ({
         ? design.defaultBoard
         : null;
     const nextBoardId = get().currentBoardId ?? prefersBoard ?? design.boards[0]?.id ?? null;
+    // selectBoard handles screen coercion: if the current screen isn't
+    // placed on the new board, it switches to the board's first frame.
     if (nextBoardId) await get().selectBoard(nextBoardId);
-    // Default screen drives the sidebar Tree.
-    const prefersScreen =
-      design.defaultScreen && design.screens.some((s) => s.id === design.defaultScreen)
-        ? design.defaultScreen
-        : null;
-    const nextScreen = get().currentScreenId ?? prefersScreen ?? design.screens[0]?.id ?? null;
-    if (nextScreen) await get().selectScreen(nextScreen);
+    // Only fall back to the global default screen if no board ended up
+    // scoping the tree (no boards at all, or selectBoard failed). The
+    // configured `defaultScreen` may not live on the active board —
+    // honouring it there would desync the tree from the canvas.
+    if (!get().currentScreenId) {
+      const prefersScreen =
+        design.defaultScreen && design.screens.some((s) => s.id === design.defaultScreen)
+          ? design.defaultScreen
+          : null;
+      const nextScreen = prefersScreen ?? design.screens[0]?.id ?? null;
+      if (nextScreen) await get().selectScreen(nextScreen);
+    }
     await get().loadTheme();
     await get().refreshHistory();
   },
@@ -291,6 +298,17 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       board = loaded;
     }
     set({ currentBoardId: boardId, notes: [] });
+    // Keep the sidebar Tree scoped to the active board. If the current
+    // screen isn't placed on this board, jump to the first frame's
+    // screen — or clear the screen entirely when the board is empty.
+    const screenIdsOnBoard = new Set(board.frames.map((f) => f.screen));
+    const current = get().currentScreenId;
+    if (board.frames.length === 0) {
+      if (current) set({ currentScreenId: null, annotations: [], editingMarkupId: null });
+    } else if (!current || !screenIdsOnBoard.has(current)) {
+      const firstScreen = board.frames[0]?.screen;
+      if (firstScreen) await get().selectScreen(firstScreen);
+    }
     await get().refreshNotes();
   },
 

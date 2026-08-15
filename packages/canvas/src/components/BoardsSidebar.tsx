@@ -1,40 +1,52 @@
-import { LayoutDashboard, MoreHorizontal, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { type BoardMeta, mutate, type ScreenMeta, type SnippetMeta } from "../api.ts";
+import { LayoutDashboard, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
-import { SnippetsBrowser } from "./SnippetsBrowser.tsx";
 import { Tree } from "./Tree.tsx";
 
 interface Props {
   boards: BoardMeta[];
   screens: ScreenMeta[];
-  snippets: SnippetMeta[];
   currentBoardId: string | null;
   currentScreenId: string | null;
 }
 
 /**
- * The classic boards-mode left sidebar: list of boards, tree of the
- * active screen, snippets palette at the bottom. Lifted unchanged from
- * the previous `Sidebar` — only difference is it no longer owns the
- * outer `<aside>` so the `Sidebar` shell can swap it for `LibrarySidebar`
- * without duplicating chrome.
+ * The boards-mode left sidebar: list of boards plus the tree of the
+ * active screen. The outer `<aside>` lives on the `Sidebar` shell so
+ * it can swap this for `LibrarySidebar` without duplicating chrome.
+ * Snippets live in the Library tab now.
  */
-export function BoardsSidebar({
-  boards,
-  screens,
-  snippets,
-  currentBoardId,
-  currentScreenId,
-}: Props) {
+export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId }: Props) {
   const selectBoard = useCanvas((s) => s.selectBoard);
   const selectScreen = useCanvas((s) => s.selectScreen);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const currentScreen = useCanvas((s) =>
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
   );
+  const currentBoard = useCanvas((s) =>
+    currentBoardId ? (s.boards[currentBoardId] ?? null) : null,
+  );
+
+  // Only screens placed on the active board belong in the Tree
+  // dropdown — otherwise the picker offers screens unrelated to what's
+  // on the canvas. Preserves frame order so the first option matches
+  // the canvas' first frame.
+  const boardScreens = useMemo<ScreenMeta[]>(() => {
+    if (!currentBoard) return [];
+    const byId = new Map(screens.map((s) => [s.id, s]));
+    const seen = new Set<string>();
+    const out: ScreenMeta[] = [];
+    for (const f of currentBoard.frames) {
+      if (seen.has(f.screen)) continue;
+      seen.add(f.screen);
+      const meta = byId.get(f.screen);
+      if (meta) out.push(meta);
+    }
+    return out;
+  }, [currentBoard, screens]);
 
   const [boardMenuOpenFor, setBoardMenuOpenFor] = useState<string | null>(null);
   const [pendingBoardDelete, setPendingBoardDelete] = useState<{
@@ -159,7 +171,7 @@ export function BoardsSidebar({
           <span className="flex-1 truncate">
             Tree {currentScreen ? `· ${currentScreen.name}` : ""}
           </span>
-          {screens.length > 1 ? (
+          {boardScreens.length > 1 ? (
             <select
               value={currentScreenId ?? ""}
               onChange={(e) => {
@@ -168,7 +180,7 @@ export function BoardsSidebar({
               }}
               className="text-[10px] uppercase tracking-wider rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5 max-w-[110px]"
             >
-              {screens.map((s) => (
+              {boardScreens.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -192,16 +204,6 @@ export function BoardsSidebar({
           )}
         </div>
       </section>
-
-      {snippets.length > 0 ? (
-        <section className="border-t border-[var(--color-border)] py-2">
-          <div className="px-4 py-2 flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--color-fg-muted)]">
-            <Sparkles size={11} strokeWidth={2} />
-            <span>Snippets</span>
-          </div>
-          <SnippetsBrowser snippets={snippets} />
-        </section>
-      ) : null}
 
       <ConfirmDialog
         open={pendingBoardDelete !== null}

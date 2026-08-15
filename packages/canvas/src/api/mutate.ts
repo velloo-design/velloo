@@ -90,13 +90,4 @@ export const mutate = {
   updateSnippetArgs(args: { screenId: string; path: number[]; argPatch: Record<string, unknown> }) {
     return postMutate<{ path: number[] }>("update_snippet_args", args);
   },
-  instantiateSnippet(args: {
-    screenId: string;
-    parentPath: number[] | string;
-    snippetId: string;
-    args?: Record<string, unknown>;
-    index?: number;
-  }) {
-    return postMutate<{ path: number[] }>("instantiate_snippet", args);
-  },
 };

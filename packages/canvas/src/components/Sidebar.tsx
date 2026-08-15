@@ -14,8 +14,8 @@ interface Props {
 }
 
 /**
- * Outer sidebar shell. The top tab swaps between "Boards" mode (the
- * classic boards/tree/snippets palette) and "Library" mode (categorized
+ * Outer sidebar shell. The top tab swaps between "Boards" mode (boards
+ * list + tree of the active screen) and "Library" mode (categorized
  * components + snippets to browse and drill into). Footer + outer
  * chrome are shared so the swap feels like a tab change rather than a
  * page nav.
@@ -66,7 +66,6 @@ export function Sidebar({
         <BoardsSidebar
           boards={boards}
           screens={screens}
-          snippets={snippets}
           currentBoardId={currentBoardId}
           currentScreenId={currentScreenId}
         />
