@@ -8,11 +8,14 @@ interface UrlState {
   boardId: string | null;
   screenId: string | null;
   selection: { screenId: string; path: string } | null;
+  snippetId: string | null;
 }
 
 export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
-  const view = params.get("view") === "library" ? "library" : "boards";
+  const rawView = params.get("view");
+  const view: ViewMode =
+    rawView === "library" ? "library" : rawView === "snippet" ? "snippet" : "boards";
   const itemRaw = params.get("item");
   let libraryItem: LibraryItemRef | null = null;
   if (view === "library" && itemRaw) {
@@ -25,7 +28,8 @@ export function readUrlState(): UrlState {
   const screenId = params.get("screen");
   const selPath = params.get("sel");
   const selection = screenId && selPath !== null ? { screenId, path: selPath } : null;
-  return { view, libraryItem, boardId, screenId, selection };
+  const snippetId = view === "snippet" ? params.get("snippet") : null;
+  return { view, libraryItem, boardId, screenId, selection, snippetId };
 }
 
 function writeUrl(
@@ -34,6 +38,7 @@ function writeUrl(
   boardId: string | null,
   screenId: string | null,
   sel: { screenId: string; path: string } | null,
+  editingSnippetId: string | null,
   pushBoard: boolean,
 ): void {
   const url = new URL(window.location.href);
@@ -42,7 +47,11 @@ function writeUrl(
   url.searchParams.delete("board");
   url.searchParams.delete("screen");
   url.searchParams.delete("sel");
-  if (view === "library") {
+  url.searchParams.delete("snippet");
+  if (view === "snippet" && editingSnippetId) {
+    url.searchParams.set("view", "snippet");
+    url.searchParams.set("snippet", editingSnippetId);
+  } else if (view === "library") {
     url.searchParams.set("view", "library");
     if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
   } else {
@@ -67,6 +76,7 @@ export function useUrlState(): void {
   const currentBoardId = useCanvas((s) => s.currentBoardId);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
+  const editingSnippetId = useCanvas((s) => s.editingSnippetId);
   // Track previous board / view / library item so we know when to push vs
   // replace. Pushing on every state shuffle would spam history; replacing
   // on a navigation-shaped change would break the browser back button.
@@ -103,9 +113,10 @@ export function useUrlState(): void {
       currentBoardId,
       currentScreenId,
       selection,
+      editingSnippetId,
       pushBoard || pushView || pushItem,
     );
-  }, [view, libraryItem, currentBoardId, currentScreenId, selection]);
+  }, [view, libraryItem, currentBoardId, currentScreenId, selection, editingSnippetId]);
 
   useEffect(() => {
     const onPop = () => {
@@ -114,14 +125,18 @@ export function useUrlState(): void {
       restoringRef.current = true;
       const tasks: Promise<unknown>[] = [];
       if (state.view !== store.view) {
-        if (state.view === "library") {
+        if (state.view === "snippet" && state.snippetId) {
+          store.openSnippetEditor(state.snippetId);
+        } else if (state.view === "library") {
           store.openLibrary(state.libraryItem);
         } else {
-          store.closeLibrary();
+          if (store.editingSnippetId) store.closeSnippetEditor();
+          else store.closeLibrary();
         }
       } else if (state.view === "library") {
-        // Same view (library) — sync the item without thrashing board state.
         store.openLibrary(state.libraryItem);
+      } else if (state.view === "snippet" && state.snippetId) {
+        store.openSnippetEditor(state.snippetId);
       }
       if (state.view === "boards") {
         if (state.boardId && state.boardId !== store.currentBoardId) {

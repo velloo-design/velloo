@@ -1,5 +1,5 @@
 import type { ComponentDescriptor, PropDescriptor } from "@velloo/shadcn-snapshot";
-import { ArrowLeft, LibraryBig } from "lucide-react";
+import { ArrowLeft, LibraryBig, PanelsTopLeft } from "lucide-react";
 import { useMemo } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { categoryForComponent } from "../library-categories.ts";
@@ -233,6 +233,7 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
   const themeVersion = useCanvas((s) => s.themeVersion);
   const designMode = useCanvas((s) => s.designMode);
   const openLibrary = useCanvas((s) => s.openLibrary);
+  const openSnippetEditor = useCanvas((s) => s.openSnippetEditor);
   const meta = snippets.find((s) => s.id === item.id) ?? null;
   const dark = designMode === "dark";
   const previewModeQs = dark ? "&mode=dark" : "";
@@ -253,6 +254,12 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
             >
               snippet
             </Badge>
+            <div className="ml-auto">
+              <Button size="sm" onClick={() => openSnippetEditor(item.id)}>
+                <PanelsTopLeft />
+                Open in canvas
+              </Button>
+            </div>
           </div>
           {meta ? (
             <p className="mt-1 text-sm text-muted-foreground max-w-xl">

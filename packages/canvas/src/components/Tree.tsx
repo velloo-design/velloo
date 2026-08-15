@@ -6,6 +6,7 @@ import {
   nodeId,
   type Screen,
 } from "@velloo/schema";
+import { PanelsTopLeft } from "lucide-react";
 import { useMemo, useState } from "react";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
@@ -68,6 +69,7 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
   const setHover = useCanvas((s) => s.setHover);
   const selection = useCanvas((s) => s.selection);
   const hover = useCanvas((s) => s.hover);
+  const openSnippetEditor = useCanvas((s) => s.openSnippetEditor);
 
   const isSelected = selection?.screenId === screenId && selection.path === pathStr;
   const isHovered = hover?.screenId === screenId && hover.path === pathStr;
@@ -75,15 +77,18 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
   const hasChildren = (childList?.length ?? 0) > 0;
   const isOpen = hasChildren ? expandedSet.has(pathStr) : false;
   const description = describeNode(node);
+  const snippetRef = isSnippetInstance(node) ? node.$snippet : null;
 
   const rowClass = [
-    "w-full flex items-center gap-1 px-2 py-1 rounded-sm text-sm cursor-default select-none text-left",
+    "w-full flex items-center gap-1 px-2 py-1 rounded-sm text-sm cursor-default select-none text-left group/row",
     isSelected
       ? "bg-primary text-primary-foreground"
       : isHovered
         ? "bg-muted"
         : "hover:bg-muted text-foreground",
   ].join(" ");
+
+  const select = () => setSelection({ screenId, path: pathStr });
 
   return (
     <div>
@@ -99,7 +104,14 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
         </button>
         <button
           type="button"
-          onClick={() => setSelection({ screenId, path: pathStr })}
+          onClick={select}
+          onDoubleClick={() => {
+            // Double-clicking a snippet instance jumps to the focused
+            // snippet view — the same affordance as Library Detail's
+            // "Open in canvas" button. For non-snippet rows the dblclick
+            // is a no-op (single-click already selected the row).
+            if (snippetRef) openSnippetEditor(snippetRef);
+          }}
           onMouseEnter={() => setHover({ screenId, path: pathStr })}
           onMouseLeave={() => setHover(null)}
           onKeyDown={(e) => {
@@ -109,9 +121,13 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
             } else if (e.key === "ArrowLeft" && hasChildren && isOpen) {
               e.preventDefault();
               setExpanded(pathStr, false);
+            } else if (e.key === "Enter" && snippetRef) {
+              e.preventDefault();
+              openSnippetEditor(snippetRef);
             }
           }}
           className="flex flex-1 min-w-0 items-center gap-1 text-left text-inherit"
+          title={snippetRef ? `Double-click or Enter to open ${snippetRef} in canvas` : undefined}
         >
           <span className="font-medium">{nodeLabel(node)}</span>
           {nodeId(node) ? (
@@ -138,6 +154,23 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
             </span>
           ) : null}
         </button>
+        {snippetRef ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openSnippetEditor(snippetRef);
+            }}
+            className={
+              "shrink-0 inline-flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover/row:opacity-70 hover:opacity-100 transition-opacity " +
+              (isSelected ? "text-primary-foreground" : "text-muted-foreground")
+            }
+            aria-label={`Open ${snippetRef} in canvas`}
+            title={`Open ${snippetRef} in canvas`}
+          >
+            <PanelsTopLeft size={11} strokeWidth={2} />
+          </button>
+        ) : null}
       </div>
       {hasChildren && isOpen ? (
         <div>

@@ -7,6 +7,7 @@ import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
+import { SnippetView } from "./components/SnippetView.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Toaster } from "./components/ui/sonner.tsx";
@@ -19,6 +20,7 @@ export function App() {
   const design = useCanvas((s) => s.design);
   const view = useCanvas((s) => s.view);
   const libraryItem = useCanvas((s) => s.libraryItem);
+  const editingSnippetId = useCanvas((s) => s.editingSnippetId);
   const currentBoardId = useCanvas((s) => s.currentBoardId);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const currentBoard = useCanvas((s) =>
@@ -54,6 +56,8 @@ export function App() {
       if (seed.selection) setSelection(seed.selection);
       if (seed.view === "library") {
         useCanvas.getState().openLibrary(seed.libraryItem);
+      } else if (seed.view === "snippet" && seed.snippetId) {
+        useCanvas.getState().openSnippetEditor(seed.snippetId);
       }
     })();
     const stop = connectWs();
@@ -103,6 +107,11 @@ export function App() {
         spaceHeldRef.current = state.cursorMode;
         state.setCursorMode("hand");
       } else if (e.key === "Escape") {
+        if (state.editingSnippetId) {
+          e.preventDefault();
+          state.closeSnippetEditor();
+          return;
+        }
         state.setCursorMode("select");
         state.setEditingMarkupId(null);
       }
@@ -164,7 +173,13 @@ export function App() {
           snapshotVersion={design.snapshotVersion}
         />
         <main className="flex-1 flex flex-col min-w-0">
-          {view === "library" ? (
+          {view === "snippet" && editingSnippetId ? (
+            <SnippetView
+              snippetId={editingSnippetId}
+              snippetMeta={design.snippets.find((s) => s.id === editingSnippetId) ?? null}
+              presets={design.viewportPresets}
+            />
+          ) : view === "library" ? (
             libraryItem ? (
               <LibraryDetail item={libraryItem} snippets={design.snippets} />
             ) : (

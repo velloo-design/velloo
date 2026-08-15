@@ -19,7 +19,7 @@ export type CursorMode = "select" | "hand" | "note" | "annotate";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";
 export type DesignMode = "light" | "dark";
-export type ViewMode = "boards" | "library";
+export type ViewMode = "boards" | "library" | "snippet";
 export type LibraryItemKind = "component" | "snippet";
 export interface LibraryItemRef {
   kind: LibraryItemKind;
@@ -80,12 +80,28 @@ export interface CanvasState {
   designMode: DesignMode;
   annotations: AnnotationEntry[];
   notes: CanvasNoteEntry[];
+  /**
+   * Reported by each frame's iframe runtime when the canvas asks for
+   * geometry. Keyed by frameId so multi-frame screens (same tree at
+   * different viewport sizes) don't clobber each other's rects.
+   * Coordinates are in iframe-document space — the consumer adds the
+   * frame's board-world offset to anchor in the canvas.
+   */
   nodeRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>;
   annotationsVisible: boolean;
   editingMarkupId: string | null;
   focusedAnnotationId: string | null;
   view: ViewMode;
   libraryItem: LibraryItemRef | null;
+  /**
+   * Snippet currently open in the focused snippet view. When non-null the main
+   * area renders the snippet as a single iframe at the chosen viewport, with
+   * the right panel scoped to snippet metadata + params. `view` is set to
+   * `"snippet"` while this is non-null and snaps back to the prior view on close.
+   */
+  editingSnippetId: string | null;
+  /** View the canvas was on before entering snippet mode; restored on close. */
+  preSnippetView: ViewMode | null;
 
   loadDesign(): Promise<void>;
   refreshHistory(): Promise<void>;
@@ -116,12 +132,15 @@ export interface CanvasState {
   setEditingMarkupId(id: string | null): void;
   setFocusedAnnotationId(id: string | null): void;
   setNodeRects(
-    screenId: string,
+    frameId: string,
     rects: { path: string; x: number; y: number; w: number; h: number }[],
   ): void;
+  clearNodeRects(frameId: string): void;
   setView(view: ViewMode): void;
   openLibrary(item?: LibraryItemRef | null): void;
   closeLibrary(): void;
+  openSnippetEditor(snippetId: string): void;
+  closeSnippetEditor(): void;
 }
 
 export function selectedNode(screens: Record<string, Screen>, sel: Selection | null): Node | null {
@@ -191,6 +210,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   // ── state: library view ──────────────────────────────────────
   view: "boards",
   libraryItem: null,
+  editingSnippetId: null,
+  preSnippetView: null,
 
   async refreshHistory() {
     try {
@@ -382,11 +403,20 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     set({ focusedAnnotationId });
   },
 
-  setNodeRects(screenId, rects) {
+  setNodeRects(frameId, rects) {
     set((s) => {
       const next: Record<string, { x: number; y: number; w: number; h: number }> = {};
       for (const r of rects) next[r.path] = { x: r.x, y: r.y, w: r.w, h: r.h };
-      return { nodeRects: { ...s.nodeRects, [screenId]: next } };
+      return { nodeRects: { ...s.nodeRects, [frameId]: next } };
+    });
+  },
+
+  clearNodeRects(frameId) {
+    set((s) => {
+      if (!(frameId in s.nodeRects)) return s;
+      const { [frameId]: _drop, ...rest } = s.nodeRects;
+      void _drop;
+      return { nodeRects: rest };
     });
   },
 
@@ -444,7 +474,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setView(view) {
     set({ view, ...(view === "boards" ? { libraryItem: null } : {}) });
-    if (view === "library") void get().loadComponents();
+    if (view === "library" || view === "snippet") void get().loadComponents();
   },
 
   openLibrary(item) {
@@ -454,5 +484,31 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   closeLibrary() {
     set({ view: "boards", libraryItem: null });
+  },
+
+  openSnippetEditor(snippetId) {
+    const current = get().view;
+    set({
+      view: "snippet",
+      editingSnippetId: snippetId,
+      preSnippetView: current === "snippet" ? get().preSnippetView : current,
+      // Clear screen-anchored selection — the snippet view has its own
+      // (screen-shaped) selection space and stale screen selections
+      // would render highlights for the wrong context.
+      selection: null,
+      hover: null,
+    });
+    void get().loadComponents();
+  },
+
+  closeSnippetEditor() {
+    const fallback = get().preSnippetView ?? "boards";
+    set({
+      view: fallback,
+      editingSnippetId: null,
+      preSnippetView: null,
+      selection: null,
+      hover: null,
+    });
   },
 }));

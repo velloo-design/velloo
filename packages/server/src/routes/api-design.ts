@@ -12,6 +12,7 @@ export function createDesignRouter(folder: () => DesignFolder): Hono {
       theme: { name: f.theme.name },
       defaultScreen: f.config.defaultScreen ?? null,
       defaultBoard: f.config.defaultBoard ?? null,
+      viewportPresets: f.config.viewportPresets,
       screens: [...f.screens.entries()].map(([id, screen]) => ({
         id,
         name: screen.name,

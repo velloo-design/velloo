@@ -14,22 +14,25 @@ my-product/
     │   ├── config.json        # tool version, library declaration, viewport presets, codegen options
     │   └── cache/             # gitignored: screenshots, build artifacts
     ├── theme/
-    │   └── default.json       # unified tokens (colors light + dark, type, spacing, radius)
+    │   └── default.json       # unified tokens (colors, type, spacing, radius — derived dark via OKLCH)
     ├── snippets/              # reusable subtrees with typed params
     │   ├── stat-card.json
     │   ├── feature-row.json
     │   └── sidebar-nav-row.json
-    ├── assets/                # imported images, SVGs
-    ├── screens/               # one file per screen
+    ├── assets/                # imported images, SVGs (generate_image / generate_svg write here)
+    ├── screens/               # one file per screen, plus optional annotation sidecars
     │   ├── landing.json
     │   ├── pricing.json
     │   ├── signup.json
     │   └── landing.annotations.json  # sidecar: node-anchored markdown
-    └── boards/                # one file per board
+    └── boards/                # many boards — one file per board, plus optional note sidecars
         ├── marketing.json     # frames (placements of screens) + groups
         ├── app.json
-        └── marketing.notes.json   # sidecar: free-positioned markdown notes per board
+        ├── playground.json
+        └── marketing.notes.json   # sidecar: free-positioned markdown notes for this board
 ```
+
+**Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Pulse sample ships three boards: Marketing, App, Playground.
 
 **Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Free-positioned markdown notes are board-scoped at `boards/<boardId>.notes.json`. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
 
@@ -101,11 +104,13 @@ Snippet instances reference their library entry by id:
 
 ### Board
 
-The board is the canvas. It holds **frames** — placements of screens at chosen sizes and positions.
+A board is one infinite canvas. It holds **frames** — placements of screens at chosen sizes and positions — and **groups** that visually tag related frames. Each board persists as `boards/<id>.json`; a folder typically has several.
 
 ```json
-// board.json
+// boards/marketing.json
 {
+  "id": "marketing",
+  "name": "Marketing",
   "frames": [
     {
       "id": "f-landing-desktop",
@@ -150,19 +155,24 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
   "toolVersion": "0.1.0",
   "library": {
     "id": "shadcn-react",
-    "version": "2.3.4",
-    "source": "registry:shadcn",
-    "componentsPath": "components"
+    "version": "2026.05.22",
+    "source": "embedded:shadcn",
+    "componentsPath": "embedded:shadcn"
   },
   "viewportPresets": [
     { "name": "Mobile", "w": 390, "h": 844 },
     { "name": "Tablet", "w": 768, "h": 1024 },
     { "name": "Desktop", "w": 1440, "h": 900 }
-  ]
+  ],
+  "defaultScreen": "landing",
+  "defaultBoard": "marketing",
+  "codegen": { "componentsAlias": "@/components/ui" }
 }
 ```
 
-The `library` field records which UI library this design folder is designed against and its embedded version. `source: "embedded:shadcn"` is the default — the components live inside the Velloo binary, not the user's repo. `source: "shared:<path>"` (experimental, not yet implemented) points at the user's app components instead.
+The `library` field records which UI library this design folder is designed against and its embedded snapshot version (a `YYYY.MM.DD` date string matching `@velloo/shadcn-snapshot`'s `snapshotVersion`). `source: "embedded:shadcn"` is the default — the components live inside the Velloo binary, not the user's repo. `source: "shared:<path>"` (experimental, not yet implemented) would point at the user's app components instead.
+
+`defaultBoard` + `defaultScreen` are optional hints the canvas uses on first load. `codegen.componentsAlias` lets the design folder declare the import prefix `emit_code` should suggest (`@/components/ui` for Next.js, `~/components/ui` for Astro, etc.).
 
 ## Runtime architecture
 
@@ -201,7 +211,9 @@ Components are **embedded in the Velloo binary** (`@velloo/shadcn-snapshot` pack
 
 This is a reversal of an earlier decision ( The reversion was driven by AI-agent confusion — two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) made the source of truth unclear. Embedded components keep the design folder pure data.
 
-**Tailwind is JIT-compiled at server runtime** against the embedded component sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes.
+The snapshot today carries ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus 9 Velloo helpers (`<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`). Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-snapshot/src/components/canvas-portal.tsx` and. Calendar / Chart / Carousel are static fakes for the same reason (the real components require runtime state or canvas APIs Velloo deliberately doesn't simulate).
+
+**Tailwind is JIT-compiled at server runtime** against the embedded component sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
 
 ### Customizing components
 
@@ -262,7 +274,9 @@ Unified tokens (single source) → adapters per framework.
 - **Token tree:** colors, typography (font family, scale, line-height), spacing scale, radius, shadows.
 - **Shadcn adapter:** maps tokens to shadcn CSS-variable conventions (`--primary`, `--primary-foreground`, …).
 - **Color generation:** OKLCH lightness scales for accessibility — *not* HSL.
-- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_token`, `derive_palette_from_color`, `apply_preset`, `match_vibe`, `match_image`).
+- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_token`, `derive_palette_from_color`, `apply_preset`, `match_vibe`, `match_image`, `score_theme_contrast`).
+- **Preset library** ships 12 curated presets — `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum`. Each is a complete token tree so `apply_preset` swaps wholesale.
+- **Contrast scoring** is built in: `score_theme_contrast` returns ratio + tier (`AAA` / `AA` / `AAlarge` / `Fail`) for every salient pair (`foreground/background`, `primary/primary-foreground`, etc.). The canvas's theme panel renders this inline.
 
 `velloo theme:export ./apps/web/` writes `tailwind.config.ts` and `globals.css` in **diff mode** — shows changes, user applies manually. Never auto-overwrites user files.
 
@@ -273,15 +287,24 @@ Unified tokens (single source) → adapters per framework.
 What `emit_code` produces (per screen):
 
 - JSX-shaped representation using the design folder's library identifiers (`<Button>`, `<Card>`) and Tailwind utility classes verbatim from the design
-- Snippets emit as named subtrees with typed parameters — the agent decides whether to materialize them as real components in the user's app
+- Snippets emit as named subtrees with typed parameters — the agent decides whether to materialize them as real components in the user's app, or call `emit_snippet` for a per-snippet IR (PascalCase name, params, JSX body) and write each one as its own file
 - Tailwind class consolidation (no duplicates, deterministic merge order on conflicts) is applied as an IR quality property
-- No automatic import paths or prettier pass — the agent picks the right import path for the user's app and runs the user's existing prettier/eslint as part of writing the file
+- No automatic import paths or prettier pass — the agent picks the right import path for the user's app (using `config.codegen.componentsAlias` as a hint) and runs the user's existing prettier/eslint as part of writing the file
 
 The board layout (frame positions, sizes, groups) is **not** part of `emit_code` — it's canvas-only data. The agent emits one screen at a time and writes one file at a time, in the user's app structure.
 
-Reference corpus (15–20 hand-curated `(screen.json, ideal page.tsx)` pairs) is retained as a **quality measure on the agent loop**, not a snapshot test on emit output. Test setup: feed the screen via MCP to a real agent, point it at a sample app, score the resulting file against the reference.
+Reference corpus (15–20 hand-curated `(screen.json, ideal page.tsx)` pairs) is retained as a **quality measure on the agent loop**, not a snapshot test on emit output. Test setup: feed the screen via MCP to a real agent, point it at a sample app, score the resulting file against the reference. Not yet built.
 
-Drift detection is cut for `emit_code` — there's no longer a "last emit" file in the user's app to drift from. It survives only as a guard for `emit_theme`, which still writes Tailwind config and globals directly.
+Drift detection is cut for `emit_code` — there's no longer a "last emit" file in the user's app to drift from. It survives only as a guard for `emit_theme`, which still writes Tailwind config and globals directly. The `velloo theme:export` CLI uses the same diff path and colorizes output for terminal display.
+
+## AI asset generators
+
+`generate_svg` and `generate_image` are MCP tools that produce ready-to-stamp `<SVG>` / `<Image>` nodes from natural-language prompts.
+
+- **`generate_svg`** posts the prompt to **Claude Haiku** (`claude-haiku-4-5`) with a constrained system prompt — inner SVG markup only, capped element count, no scripts/animations, `currentColor` by default so the result theme-flips. Output is cleaned (markdown fences stripped, full `<svg>` wrapper peeled), validated by a small allowlist of permitted tags, and returned either inline or persisted under `assets/`. Requires `ANTHROPIC_API_KEY`.
+- **`generate_image`** has two routes. Default: Claude suggests alt text for the prompt, and the URL is a Picsum placeholder seeded by the prompt hash — same prompt always returns the same image, easy to swap for a real photo later, no API key required. Upgrade: if `FAL_KEY` is set and `filename` is given, the tool calls **fal.ai flux-schnell** and writes the binary to `assets/<filename>.png`.
+
+Both tools return a `node:` shape (`{ $ref: "SVG" | "Image", props: { … } }`) the agent can drop into an `add_node` call directly.
 
 ## Distribution
 

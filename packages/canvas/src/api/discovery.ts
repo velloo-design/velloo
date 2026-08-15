@@ -1,4 +1,4 @@
-import type { Board, Screen, Snippet, SnippetParam, Theme } from "@velloo/schema";
+import type { Board, Screen, Snippet, SnippetParam, Theme, ViewportPreset } from "@velloo/schema";
 import type { Manifest } from "@velloo/shadcn-snapshot";
 import type { AnnotationEntry, CanvasNoteEntry } from "../store.ts";
 
@@ -7,6 +7,7 @@ export interface DesignSummary {
   theme: { name: string };
   defaultScreen: string | null;
   defaultBoard: string | null;
+  viewportPresets: ViewportPreset[];
   screens: ScreenMeta[];
   boards: BoardMeta[];
   snippets: SnippetMeta[];

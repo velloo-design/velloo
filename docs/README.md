@@ -13,9 +13,9 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 ## What Velloo is
 
 - A **local CLI** that serves a canvas at `localhost:7300` and an MCP server at `localhost:7301`.
-- A **canvas** that looks like Figma: many boards, each an infinite canvas with frames pointing at screens. The Pulse sample (shipped by `velloo init`) has a Marketing board with landing/pricing/signup frames and an App board with dashboard/insights/settings frames.
-- An **MCP surface** that exposes the design to your AI agent (Claude Code, Cursor, Codex) — ~50 tools, one per structural operation.
-- A **design folder** in your repo: pure JSON for screens, boards, theme, snippets, and annotations. Components are embedded in the Velloo binary (no `components/*.tsx` in the design folder).
+- A **canvas** that looks like Figma: many boards, each an infinite canvas with frames pointing at screens. The Pulse sample (shipped by `velloo init`) has a Marketing board (landing / pricing / signup), an App board (dashboard / insights / settings), and a Playground board hosting a Showcase screen that renders every shipping component.
+- An **MCP surface** that exposes the design to your AI agent (Claude Code, Cursor, Codex) — ~55 tools, one per structural operation. Includes structural discovery + mutation, snippet management, theme synthesis (palette derivation, vibe matching, image extraction, contrast scoring), dark-mode audits, screenshots, codegen IR for screens + snippets, theme export, Tailwind class validation, and Claude Haiku / fal.ai-backed asset generation.
+- A **design folder** in your repo: pure JSON for screens, boards (one per file under `boards/`), theme, snippets, annotations, and board notes. Components are embedded in the Velloo binary (no `components/*.tsx` in the design folder).
 
 ## Documents
 
@@ -38,4 +38,4 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 
 ## Status
 
-Working substrate, used end-to-end. Sprints A → G done (see [roadmap.md](./roadmap.md) for the changelog). `velloo init` ships **Pulse** — a sample team-analytics design across two boards and six screens, 100% dark-mode coherent. ~50 MCP tools live. No "V0 launch" milestone — the product gets more useful sprint over sprint.
+Working substrate, used end-to-end. Sprints A → L done (see [roadmap.md](./roadmap.md) for the changelog) — schema pivot, responsive viewport tooling, agent-consumed IR, Pulse sample, DX refactor pass, expanded shadcn palette (~35 primitives + 9 Velloo helpers), theme preset gallery with WCAG scoring, marketing helper nodes (SVG / Image / Layer / Gradient / Divider), and AI asset generators. Sprint I is partially done — the snippet editor view inside the canvas is the next thing on the list. `velloo init` ships **Pulse** — a sample team-analytics design across three boards (Marketing + App + Playground) and seven screens, 100% dark-mode coherent. ~55 MCP tools live. No "V0 launch" milestone — the product gets more useful sprint over sprint.

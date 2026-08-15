@@ -48,6 +48,8 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
+  const clearNodeRects = useCanvas((s) => s.clearNodeRects);
+  const annotations = useCanvas((s) => s.annotations);
 
   const { draftPos, draftSize, startDrag, startResize } = useFrameInteractions({
     boardId,
@@ -73,7 +75,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
         else setHover({ screenId: frame.screen, path });
       },
       onRects(rects) {
-        setNodeRects(frame.screen, rects);
+        setNodeRects(frame.id, rects);
       },
       // Cmd/Ctrl + wheel inside the iframe → zoom the board. Same
       // factor as Board.tsx's own onWheel handler so the two routes
@@ -115,8 +117,9 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       iframe.removeEventListener("load", onLoad);
       channel.destroy();
       channelRef.current = null;
+      clearNodeRects(frame.id);
     };
-  }, [frame.screen, setSelection, setHover, setNodeRects]);
+  }, [frame.id, frame.screen, setSelection, setHover, setNodeRects, clearNodeRects]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -137,6 +140,25 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       channel.send({ type: "clearHover" });
     }
   }, [hover, frame.screen]);
+
+  // Ask the iframe to report rects for every annotated path on this
+  // screen. The channel buffers until handshake completes; once the
+  // iframe re-renders (screenVersion bump), we re-request so the rects
+  // stay fresh after edits. AnnotationsLayer reads what comes back and
+  // anchors each annotation to the actual node geometry.
+  useEffect(() => {
+    void screenVersion;
+    const channel = channelRef.current;
+    if (!channel) return;
+    const annotatedPaths = annotations
+      .filter((a) => a.resolved !== null)
+      .map((a) => (a.resolved ?? []).join("."));
+    if (annotatedPaths.length === 0) {
+      clearNodeRects(frame.id);
+      return;
+    }
+    channel.send({ type: "requestRects", paths: annotatedPaths });
+  }, [annotations, frame.id, screenVersion, clearNodeRects]);
 
   const onPickPreset = (preset: ViewportPreset) => {
     if (preset.w === frame.w && preset.h === frame.h) return;

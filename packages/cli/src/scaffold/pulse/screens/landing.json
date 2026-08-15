@@ -114,14 +114,40 @@
       {
         "$ref": "Card",
         "props": {
-          "className": "flex flex-col items-center text-center gap-6 px-6 md:px-12 pt-12 md:pt-24 pb-12 ring-0 shadow-none bg-transparent rounded-none"
+          "className": "relative flex flex-col items-center text-center gap-6 px-6 md:px-12 pt-12 md:pt-24 pb-12 ring-0 shadow-none bg-transparent rounded-none overflow-hidden"
         },
         "children": [
+          {
+            "$ref": "Gradient",
+            "props": {
+              "preset": "mesh",
+              "className": "absolute inset-0 pointer-events-none -z-0"
+            }
+          },
+          {
+            "$ref": "Layer",
+            "props": {
+              "top": 40,
+              "left": "50%",
+              "pointerEvents": false,
+              "className": "-translate-x-1/2 text-primary/30 -z-0"
+            },
+            "children": [
+              {
+                "$ref": "SVG",
+                "props": {
+                  "content": "<g><path d=\"M50 4 L52 48 L96 50 L52 52 L50 96 L48 52 L4 50 L48 48 Z\" fill=\"currentColor\"/><circle cx=\"50\" cy=\"50\" r=\"3\" fill=\"currentColor\"/></g>",
+                  "viewBox": "0 0 100 100",
+                  "className": "h-32 w-32"
+                }
+              }
+            ]
+          },
           {
             "$ref": "Badge",
             "props": {
               "variant": "outline",
-              "className": "gap-1.5 py-1 px-3",
+              "className": "relative z-10 gap-1.5 py-1 px-3 bg-background/70 backdrop-blur-sm",
               "children": "\u2728 Now with DORA insights"
             }
           },
@@ -129,7 +155,7 @@
             "$ref": "Heading",
             "props": {
               "level": 1,
-              "className": "text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05] max-w-3xl",
+              "className": "relative z-10 text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05] max-w-3xl",
               "children": "Ship faster. With proof."
             }
           },
@@ -137,14 +163,14 @@
             "$ref": "Text",
             "props": {
               "variant": "lead",
-              "className": "max-w-xl text-muted-foreground",
+              "className": "relative z-10 max-w-xl text-muted-foreground",
               "children": "Pulse turns your deploys, incidents, and PRs into one live picture. Built for engineering teams that ship every day."
             }
           },
           {
             "$ref": "Card",
             "props": {
-              "className": "flex flex-col sm:flex-row items-center gap-3 pt-2 ring-0 shadow-none bg-transparent rounded-none p-0"
+              "className": "relative z-10 flex flex-col sm:flex-row items-center gap-3 pt-2 ring-0 shadow-none bg-transparent rounded-none p-0"
             },
             "children": [
               {
@@ -171,7 +197,7 @@
             "$ref": "Text",
             "props": {
               "variant": "small",
-              "className": "text-muted-foreground",
+              "className": "relative z-10 text-muted-foreground",
               "children": "No credit card \u00b7 14-day Pro trial \u00b7 Slack & GitHub-ready in minutes"
             }
           }
@@ -413,14 +439,22 @@
       {
         "$ref": "Card",
         "props": {
-          "className": "flex flex-col items-center text-center gap-4 px-6 md:px-12 py-16 border-t border-border ring-0 shadow-none bg-accent/40 rounded-none"
+          "className": "relative flex flex-col items-center text-center gap-4 px-6 md:px-12 py-16 border-t border-border ring-0 shadow-none bg-transparent rounded-none overflow-hidden"
         },
         "children": [
+          {
+            "$ref": "Gradient",
+            "props": {
+              "preset": "dawn",
+              "direction": "tr",
+              "className": "absolute inset-0 pointer-events-none -z-0"
+            }
+          },
           {
             "$ref": "Heading",
             "props": {
               "level": 2,
-              "className": "text-3xl md:text-4xl font-semibold tracking-tight max-w-2xl",
+              "className": "relative z-10 text-3xl md:text-4xl font-semibold tracking-tight max-w-2xl",
               "children": "Five minutes to live numbers."
             }
           },
@@ -428,14 +462,14 @@
             "$ref": "Text",
             "props": {
               "variant": "muted",
-              "className": "max-w-lg",
+              "className": "relative z-10 max-w-lg",
               "children": "Connect GitHub + Slack, and Pulse backfills 90 days of history before your coffee gets cold."
             }
           },
           {
             "$ref": "Card",
             "props": {
-              "className": "flex flex-col sm:flex-row items-center gap-3 pt-2 ring-0 shadow-none bg-transparent rounded-none p-0"
+              "className": "relative z-10 flex flex-col sm:flex-row items-center gap-3 pt-2 ring-0 shadow-none bg-transparent rounded-none p-0"
             },
             "children": [
               {
