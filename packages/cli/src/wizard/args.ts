@@ -43,14 +43,28 @@ export function shouldRunWizard(args: { nonInteractive?: boolean }, stdinIsTTY: 
 }
 
 export function answersFromArgs(args: InitCliArgs): WizardAnswers {
-  const library: LibraryId = isValidLibraryId(args.library ?? "")
-    ? (args.library as LibraryId)
-    : "shadcn-react";
-  const source: LibrarySource = isValidSource(args.source ?? "")
-    ? (args.source as LibrarySource)
-    : "binary";
+  // Unset flags get defaults; set-but-invalid flags fail loudly — a
+  // typo'd --library silently scaffolding the wrong provider is worse
+  // than an error.
+  if (args.library && !isValidLibraryId(args.library)) {
+    throw new Error(
+      `unknown --library ${JSON.stringify(args.library)}. Valid: shadcn-upstream | shadcn-react | none | mui.`,
+    );
+  }
+  if (args.source && !isValidSource(args.source)) {
+    throw new Error(
+      `unknown --source ${JSON.stringify(args.source)}. Valid: binary | in-repo | cache.`,
+    );
+  }
+  if (args.initialContent && !isValidContent(args.initialContent)) {
+    throw new Error(
+      `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan.`,
+    );
+  }
+  const library: LibraryId = (args.library as LibraryId | undefined) ?? "shadcn-react";
+  const source: LibrarySource = (args.source as LibrarySource | undefined) ?? "binary";
   if (source === "in-repo" && !args.appPath) {
-    throw new Error(`velloo init: --source=in-repo requires --app-path=<path-to-your-app>.`);
+    throw new Error(`--source=in-repo requires --app-path=<path-to-your-app>.`);
   }
   return {
     folder: resolve(args.folder ?? "design"),
@@ -58,9 +72,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     source,
     appPath: args.appPath ? resolve(args.appPath) : undefined,
     componentsRelative: args.componentsDir ?? "src/components/ui",
-    initialContent: isValidContent(args.initialContent ?? "")
-      ? (args.initialContent as InitialContent)
-      : "sample",
+    initialContent: (args.initialContent as InitialContent | undefined) ?? "sample",
     themeColor: args.themeColor && args.themeColor.trim() !== "" ? args.themeColor : undefined,
     themeVibe: args.themeVibe && args.themeVibe.trim() !== "" ? args.themeVibe : undefined,
   };

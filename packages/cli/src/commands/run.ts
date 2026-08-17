@@ -41,6 +41,7 @@ export default defineCommand({
       host: args.host ?? "127.0.0.1",
     });
     console.log(`velloo: canvas at ${handle.url}`);
+    console.log(`velloo: MCP server at ${handle.mcpUrl} (point your AI agent here)`);
     console.log("(Ctrl-C to stop)");
 
     const shutdown = async () => {

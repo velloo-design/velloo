@@ -70,6 +70,13 @@ export interface EmitCodeResult {
    * use this to verify the user's tailwind config covers everything used.
    */
   classesUsed: string[];
+  /**
+   * Non-fatal emit caveats — things that couldn't be expressed faithfully
+   * in JSX and need agent attention (e.g. a dynamic Icon name baked to its
+   * fallback). Empty when the screen body emits cleanly; per-snippet
+   * caveats live on each `snippetsUsed[].warnings`.
+   */
+  warnings: string[];
 }
 
 export interface EmitSnippetIR {
@@ -80,6 +87,8 @@ export interface EmitSnippetIR {
   params: { name: string; type: string; default?: string }[];
   /** JSX body of the snippet, same shape as a screen's `jsx`. */
   jsx: string;
+  /** Non-fatal emit caveats for this snippet body (see EmitCodeResult.warnings). */
+  warnings: string[];
 }
 
 export interface EmitCodeOptions {
@@ -178,6 +187,7 @@ export async function emitCode(
     const componentsAlias = options.componentsAlias ?? DEFAULT_ALIAS;
     const snippetPascalById = buildSnippetPascalMap(options.snippets);
     const extensionsMap = buildExtensionsMap(options.extensions);
+    const warnings: string[] = [];
     const ctx = {
       imports: new ImportSet(),
       componentsAlias,
@@ -185,6 +195,7 @@ export async function emitCode(
       snippetPascalById,
       snippets: options.snippets,
       extensions: extensionsMap,
+      warnings,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(screen.tree, ctx));
@@ -214,6 +225,7 @@ export async function emitCode(
       iconsUsed: [...meta.icons].sort(),
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
+      warnings: [...new Set(warnings)],
     };
   });
 }
@@ -246,6 +258,7 @@ export async function emitSnippet(
     const paramNames = new Set(snippet.params.map((p) => p.name));
     const snippetPascalById = buildSnippetPascalMap(options.snippets);
     const extensionsMap = buildExtensionsMap(options.extensions);
+    const warnings: string[] = [];
     const ctx = {
       imports: new ImportSet(),
       componentsAlias,
@@ -254,6 +267,7 @@ export async function emitSnippet(
       snippets: options.snippets,
       snippetParamNames: paramNames,
       extensions: extensionsMap,
+      warnings,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(snippet.tree, ctx));
@@ -266,6 +280,7 @@ export async function emitSnippet(
         ...(p.default !== undefined ? { default: String(p.default) } : {}),
       })),
       jsx: body,
+      warnings: [...new Set(warnings)],
     };
   });
 }

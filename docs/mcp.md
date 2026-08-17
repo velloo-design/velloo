@@ -32,7 +32,7 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 |---|---|
 | `add_node` | `screenId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
 | `update_props` | `screenId, path?, propPatch?` OR `patches: [{ path, propPatch }]` — shallow prop merge (null removes a key; className is a prop like any other). `patches` applies many nodes in one atomic write. Successful calls may carry advisory `propWarnings` |
-| `override_snippet_props` | `screenId, path, innerPath, propPatch` — patch props on one node *inside* a snippet instance's body (path = instance locator; innerPath = dotted index into the body, "" for root). Persists as `$overrides` on the instance; applied after param substitution at render; emit_code inlines overridden instances |
+| `override_snippet_props` | `screenId, path, innerPath, propPatch` — patch props on one node *inside* a snippet instance's body (path = instance locator; innerPath = `"@id"` of a body node (preferred — survives restructures), dotted index, or "" for root). Persists as `$overrides` on the instance; applied after param substitution at render; emit_code inlines overridden instances |
 | `move_node` | `screenId, fromPath, toParent, toIndex?` |
 | `remove_node` | `screenId, path` |
 | `inspect` | `screenId, path` — returns SSR'd HTML, resolved className list, `$ref`, and resolved props for the node |
@@ -117,7 +117,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Notes |
 |---|---|---|
-| `set_token` | `path, value, theme?` | Mutates one token at a dot-path (`colors.primary.DEFAULT`). The full theme is schema-validated after the patch |
+| `set_token` | `path, value` or `tokens, theme?` | Mutates tokens at dot-paths (`colors.primary.DEFAULT`); bulk via `tokens: { <path>: <value> }`. The full theme is schema-validated after each patch; returns the applied paths |
 | `add_theme` | `name, from?, overwrite?` — clone a named theme to `theme/<name>.json`; boards pin it via `update_board { patch: { theme } }`, renders/screenshots via their `theme` param |
 | `list_themes` | — | named themes + which boards use each |
 | `set_fonts` | `fonts: [{ role, family, fallback?, google? }], theme?` — each role becomes `--font-<role>` + a `font-<role>` utility; `google` loads the family in design mode and emits an @import in globals.css |
@@ -126,7 +126,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `derive_palette_from_color` | `seedColor, name?` | Generates an OKLCH-based palette from a seed (`#hex`, `oklch()`, `rgb()`, …). Foreground/background contrast is auto-adjusted to WCAG AA |
 | `match_vibe` | `description, useAi?: boolean` | Maps a vibe description ("playful", "corporate", "forest") to a seed color via a curated table, then derives + applies a palette. Set `useAi: true` to ask Claude Haiku for a seed color when `ANTHROPIC_API_KEY` is set |
 | `match_image` | `imagePath` | Extracts a palette from an image (vibrant + muted + dark/light variants) and applies a derived theme. Path is relative to `assets/` or absolute |
-| `score_theme_contrast` | — | Score WCAG contrast ratios for the active theme's salient color pairs. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset / match-vibe to confirm accessibility before shipping |
+| `score_theme_contrast` | `mode?` | Score WCAG contrast ratios for the active theme's salient color pairs in both light and dark palettes (each result carries `mode`); pass `mode` to score one. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset / match-vibe to confirm accessibility before shipping |
 | `import_theme` | `css?` OR `cssPath?`, `theme?`, `apply?` | Code-to-design: seed the theme from a host app's stylesheet. Parses shadcn-convention `:root`/`.dark` custom props (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars (var() indirection resolved), plus `--radius` and `--font-*` roles. Undeclared slots keep their current values. Dry-run by default — returns `changes: [{ token, from, to }]`; `apply: true` persists |
 
 ### Visualization
@@ -171,7 +171,7 @@ Every tree mutation also accepts a virtualized `screenId` of the form `"snippet:
 
 - `update_props({ screenId: "snippet:feature-row", path: [0], propPatch: { className: "p-6" } })` patches the snippet body's root node.
 - `add_node({ screenId: "snippet:feature-row", parentPath: [], componentRef: "Icon", props: { name: "Sparkles" }, id: "leading-icon" })` adds a child to the body's root and assigns a stable id.
-- `apply_classes`, `apply_classes_bulk`, `update_props_bulk`, `move_node`, `remove_node`, `set_node_id`, `instantiate_snippet`, `update_snippet_args` all work the same way.
+- `move_node`, `remove_node`, `set_node_id`, `instantiate_snippet`, `update_snippet_args`, and `update_props`'s bulk `patches` form all work the same way.
 
 Two things to know:
 
@@ -184,7 +184,7 @@ See `decisions.md` #21 for the rationale.
 
 ### Locator-aware tools
 
-`add_node`, `update_props`, `apply_classes`, `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_args`, `apply_classes_bulk`, `update_props_bulk`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.
+`add_node`, `update_props` (single and `patches` bulk), `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_args`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.
 
 ## Advisory prop warnings
 
@@ -233,7 +233,7 @@ Server returns the standard MCP `initialize` response with concrete agent nudges
 - **Velloo is the design source; you are the bridge to code.** When asked to implement, call `emit_code` (per screen) or `emit_snippet` and write the real file in the user's stack — Velloo's output is IR, not finished JSX.
 - **Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`) over raw Tailwind palette colors so designs auto-flip under `screenshot mode: "dark"` and survive theme changes. Use raw palette only for *intentional* accent colors that should not theme-flip — and mark those nodes with `data-accent: "ok"` so `inspect_dark_diff` exempts them.
 - **`inspect_dark_diff` is a triage signal, not a gate.** Read the per-node `problems[]` and decide; the coverage number is a guide, not a target.
-- **Use `add_node`'s `children` array** to land whole subtrees in one call. The bulk variants (`update_props_bulk`, `apply_classes_bulk`, `update_frames`) collapse N round-trips into one persist + one undo entry.
+- **Use `add_node`'s `children` array** to land whole subtrees in one call. The bulk forms (`update_props` with `patches`, `update_frames`) collapse N round-trips into one persist + one undo entry; `batch` covers multi-tool sequences atomically.
 - **Use `@id` locators** for anchors you reference more than once. Pass `id: "hero-cta"` to `add_node` / `instantiate_snippet`, or call `set_node_id` to retroactively name a node. Ids survive sibling insertions.
 - **Snippet instances are opaque.** Design for variation up-front: boolean params + `$if`, `enum` params for full-className swaps, `node` params for slot composition, `extraClassName` for one-off per-instance tweaks.
 - **Always call `render_snippet` after `add_snippet`** — `$param` wiring bugs and `$if` truthy-coercion mistakes are silent at definition time and only surface at instantiation.

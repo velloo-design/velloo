@@ -24,11 +24,12 @@ describe("answersFromArgs", () => {
     expect(a.themeVibe).toBeUndefined();
   });
 
-  test("unknown flag values fall back to defaults rather than erroring", () => {
-    const a = answersFromArgs({ library: "bootstrap", source: "ftp", initialContent: "kitchen" });
-    expect(a.library).toBe("shadcn-react");
-    expect(a.source).toBe("binary");
-    expect(a.initialContent).toBe("sample");
+  test("unknown flag values fail loudly instead of silently scaffolding defaults", () => {
+    expect(() => answersFromArgs({ library: "bootstrap" })).toThrow(/unknown --library/);
+    expect(() => answersFromArgs({ source: "ftp" })).toThrow(/unknown --source/);
+    expect(() => answersFromArgs({ initialContent: "kitchen" })).toThrow(
+      /unknown --initial-content/,
+    );
   });
 
   test("valid flags pass through, paths resolved to absolute", () => {

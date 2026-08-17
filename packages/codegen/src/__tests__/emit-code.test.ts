@@ -142,6 +142,37 @@ describe("emitCode", () => {
     expect([...snippetIdsReferenced(screen)]).toEqual(["feature-card"]);
   });
 
+  test("warns when a dynamic icon-name param bakes to the fallback, but a node param stays a slot", async () => {
+    const row: Snippet = {
+      id: "issue-row",
+      name: "issue row",
+      params: [
+        { name: "priorityIcon", type: "icon", default: "SignalMedium" },
+        { name: "statusDot", type: "node" },
+      ],
+      tree: {
+        $ref: "Box",
+        children: [
+          // Dynamic icon NAME — can't survive lowering (tag must be literal).
+          { $ref: "Icon", props: { name: { $param: "priorityIcon" } } },
+          // Dynamic NODE — emits as a clean {slot}, no warning.
+          { $param: "statusDot" },
+        ],
+      },
+    };
+    const screen = screenOf({ $ref: "Box", children: [{ $snippet: "issue-row" }] });
+    const result = unwrap(await emitCode(screen, { snippets: new Map([[row.id, row]]) }));
+
+    const ir = result.snippetsUsed[0];
+    expect(ir?.jsx).toContain("<HelpCircle />");
+    expect(ir?.jsx).toContain("{statusDot}");
+    expect(ir?.warnings.length).toBe(1);
+    expect(ir?.warnings[0]).toContain('Icon "name" is dynamic (param "priorityIcon")');
+    expect(ir?.warnings[0]).toContain("node");
+    // The screen body itself emits a clean <IssueRow /> — no warning there.
+    expect(result.warnings).toEqual([]);
+  });
+
   test("$if with eq serializes to a strict-equality ternary in snippet JSX", async () => {
     const tile: Snippet = {
       id: "stat-tile",

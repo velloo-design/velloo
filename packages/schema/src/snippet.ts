@@ -16,6 +16,12 @@ import { NodeSchema } from "./node.ts";
  *
  * For `enum`, declare the allowed strings in `enum`; for `number`,
  * `min`/`max`/`step` shape the input.
+ *
+ * `icon` is for ONE icon chosen at design time — `emit_code` bakes it into
+ * the JSX as a literal `<Sparkles/>`. For an icon that varies per instance
+ * (by status, priority, …), use a `node` param instead: it emits as a
+ * `{slot}` the caller fills, where an `icon` param would collapse every
+ * instance to the same glyph (a lucide name must be a literal JSX tag).
  */
 export const SnippetParamSchema = z
   .object({

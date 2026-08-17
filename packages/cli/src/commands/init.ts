@@ -64,7 +64,9 @@ async function buildScaffold(answers: WizardAnswers): Promise<Scaffold> {
       groups: [],
     };
     return {
-      theme: buildDefaultTheme(),
+      // Pulse's token tree is the base palette, but only the sample
+      // scaffold should carry its name — blank folders get "default".
+      theme: { ...buildDefaultTheme(), name: "default" },
       screens: [],
       boards: [board],
       snippets: [],
@@ -93,7 +95,7 @@ async function buildScaffold(answers: WizardAnswers): Promise<Scaffold> {
     const screens = buildScreensFromScan({ routes: result.routes, hasBadge });
     const board = buildBoardFromScan({ screens });
     return {
-      theme: buildDefaultTheme(),
+      theme: { ...buildDefaultTheme(), name: "default" },
       screens,
       boards: [board],
       snippets: [],
@@ -105,8 +107,9 @@ async function buildScaffold(answers: WizardAnswers): Promise<Scaffold> {
   // have no no-lib equivalents). Ship a smaller two-screen welcome
   // sample that demonstrates the primitive set instead.
   if (answers.library === "none") {
+    // The no-lib welcome sample isn't Pulse either — same name reset.
     return {
-      theme: buildDefaultTheme(),
+      theme: { ...buildDefaultTheme(), name: "default" },
       screens: buildNoLibScreens(),
       boards: buildNoLibBoards(),
       snippets: buildNoLibSnippets(),
@@ -244,7 +247,8 @@ export default defineCommand({
     },
     library: {
       type: "string",
-      description: "Component library: shadcn-react | none | mui (default shadcn-react)",
+      description:
+        "Component library: shadcn-upstream (recommended) | shadcn-react | none | mui (default shadcn-react)",
     },
     source: {
       type: "string",
@@ -260,7 +264,8 @@ export default defineCommand({
     },
     initialContent: {
       type: "string",
-      description: "Initial content: sample | blank (default sample)",
+      description:
+        "Initial content: sample | blank | scan (one screen per detected route; default sample)",
     },
     themeColor: {
       type: "string",
