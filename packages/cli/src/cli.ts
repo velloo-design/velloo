@@ -13,6 +13,7 @@ const main = defineCommand({
     connect: () => import("./commands/connect.ts").then((m) => m.default),
     run: () => import("./commands/run.ts").then((m) => m.default),
     render: () => import("./commands/render.ts").then((m) => m.default),
+    publish: () => import("./commands/publish.ts").then((m) => m.default),
     emit: () => import("./commands/emit.ts").then((m) => m.default),
     "theme:export": () => import("./commands/theme-export.ts").then((m) => m.default),
     upgrade: () => import("./commands/upgrade.ts").then((m) => m.default),

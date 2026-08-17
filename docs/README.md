@@ -34,7 +34,7 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 ## Stance
 
 - **Local-first.** Every byte of design state — screens, boards, theme, snippets — lives on disk in the user's repo. The local tool needs no account, no server, no telemetry, and works offline. Cloud features are additive — they publish the git artifact, never replace it (see [monetization.md](./monetization.md)).
-- **Open source.** The local tool, from the first public release, under a permissive license (exact choice open). Paid cloud services are closed-source and live outside this repo. See [monetization.md](./monetization.md).
+- **Open source.** The local tool, from the first public release, under Apache-2.0. Paid cloud services are closed-source and live outside this repo. See [monetization.md](./monetization.md).
 - **Useful first.** The bar is: genuinely useful to a single solo developer (the author) for real product work. Commercial plans live in [monetization.md](./monetization.md) and don't reorder that.
 - **shadcn-first.** Other libraries (Mantine, MUI, Chakra) are an internal abstraction for a possible later, not a public promise. React-only.
 
