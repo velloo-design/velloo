@@ -385,6 +385,25 @@ export function shadcnInstallTargets(refs: Iterable<string>): string[] {
   return [...out].sort();
 }
 
+/**
+ * Of the component refs used, the velloo composition helpers the agent must
+ * author in their app — `Gradient`, `SVG`, `Image`, `Layer`, `Divider`.
+ * These carry real runtime logic (gradient presets, focal cropping, divider
+ * label slots), so emit keeps the identifier rather than lowering to HTML or
+ * pointing at an installable package. Box/Heading/Text/Icon are excluded —
+ * they lower to plain HTML (or lucide) and need nothing.
+ */
+export function helpersToMaterialize(refs: Iterable<string>): string[] {
+  const out = new Set<string>();
+  for (const ref of refs) {
+    const entry = REGISTRY[ref];
+    if (entry?.kind === "shadcn" && entry.importFile.startsWith("velloo/")) {
+      out.add(entry.jsxName);
+    }
+  }
+  return [...out].sort();
+}
+
 /** Props that the snapshot's lowered primitives consume — strip from output. */
 export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Heading: new Set(["level"]),

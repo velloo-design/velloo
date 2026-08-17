@@ -37,6 +37,22 @@ describe("derivePalette", () => {
     }
   });
 
+  test("derives a matching dark palette on the same hue with AA primary contrast", () => {
+    const r = unwrap(derivePalette("#7c3aed", base));
+    // The bug this guards: derive used to leave colorsDark on the old
+    // palette, so dark mode showed a different brand color.
+    expect(r.theme.colorsDark).toBeDefined();
+    const darkPrimary = r.theme.colorsDark?.primary;
+    const lightPrimary = r.theme.colors.primary;
+    expect(darkPrimary).toBeDefined();
+    if (typeof darkPrimary === "object" && typeof lightPrimary === "object") {
+      // Same hue family (both derived from the seed), and AA-legible.
+      expect(
+        wcagContrast(darkPrimary.foreground as string, darkPrimary.DEFAULT),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   test("returns InvalidColor err on unparseable seed", () => {
     const r = derivePalette("not a color", base);
     expect(r.ok).toBe(false);

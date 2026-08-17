@@ -82,5 +82,6 @@ The CLI test (`packages/cli/src/__tests__/init.test.ts`) spawns `velloo init` as
 - `docs/decisions.md` — every load-bearing decision with reasoning.
 - `docs/mcp.md` — MCP tool catalogue + handshake.
 - `docs/roadmap.md` — what's done, what's next.
+- `docs/monetization.md` — commercial plan: tiers, billing requirements, cloud surface, the Velloo agent add-on. The single source of truth for monetization — other docs only point here.
 - `docs/product.md` — product framing.
 - `docs/comparison/` — dated per-tool competitive comparisons; the README there has the consensus-gap rollup.

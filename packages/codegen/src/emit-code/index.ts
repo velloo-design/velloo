@@ -32,7 +32,11 @@ import {
   type Screen,
   type Snippet,
 } from "@velloo/schema";
-import { resolveLucideJsxName, shadcnInstallTargets } from "../component-registry.ts";
+import {
+  helpersToMaterialize,
+  resolveLucideJsxName,
+  shadcnInstallTargets,
+} from "../component-registry.ts";
 import type { CodegenError } from "../errors.ts";
 import { ImportSet } from "./imports.ts";
 import { emitTree } from "./tree-to-jsx.ts";
@@ -77,6 +81,13 @@ export interface EmitCodeResult {
    */
   componentsToInstall: string[];
   /**
+   * Velloo composition helpers (Gradient, SVG, Image, Layer, Divider) used
+   * that the agent must author in the app — emit keeps their identifier
+   * because they carry runtime logic. Box/Heading/Text/Icon are excluded
+   * (they lower to plain HTML / lucide).
+   */
+  helpersToMaterialize: string[];
+  /**
    * Non-fatal emit caveats — things that couldn't be expressed faithfully
    * in JSX and need agent attention (e.g. a dynamic Icon name baked to its
    * fallback). Empty when the screen body emits cleanly; per-snippet
@@ -95,6 +106,8 @@ export interface EmitSnippetIR {
   jsx: string;
   /** shadcn primitives used in this snippet body needing install (see EmitCodeResult). */
   componentsToInstall: string[];
+  /** Velloo composition helpers used in this snippet body to author (see EmitCodeResult). */
+  helpersToMaterialize: string[];
   /** Non-fatal emit caveats for this snippet body (see EmitCodeResult.warnings). */
   warnings: string[];
 }
@@ -234,6 +247,7 @@ export async function emitCode(
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
       componentsToInstall: shadcnInstallTargets(meta.components),
+      helpersToMaterialize: helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
     };
   });
@@ -291,6 +305,7 @@ export async function emitSnippet(
       })),
       jsx: body,
       componentsToInstall: shadcnInstallTargets(meta.components),
+      helpersToMaterialize: helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
     };
   });

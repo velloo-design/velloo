@@ -253,6 +253,8 @@ describe("emitCode", () => {
     // Only Card is an installable shadcn primitive; the velloo composition
     // helpers (Gradient/Image/Layer/SVG/Divider) need no `shadcn add`.
     expect(result.componentsToInstall).toEqual(["card"]);
+    // …but those helpers DO need authoring in the app.
+    expect(result.helpersToMaterialize).toEqual(["Divider", "Gradient", "Image", "Layer", "SVG"]);
   });
 
   test("componentsToInstall lists kebab shadcn add targets, deduped, excluding helpers", async () => {

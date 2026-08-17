@@ -23,6 +23,7 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 - [architecture.md](./architecture.md) — Folder format, runtime, component sourcing, codegen
 - [mcp.md](./mcp.md) — MCP tool surface for agents
 - [roadmap.md](./roadmap.md) — Roadmap philosophy and the next ~8 weeks of sprints
+- [monetization.md](./monetization.md) — Commercial plan: tiers, billing requirements, cloud surface, the Velloo agent add-on
 - [decisions.md](./decisions.md) — Pivot log and design rationale
 - [comparison/](./comparison/) — Dated per-tool competitive comparisons; the README there carries the consensus-gap rollup
 
@@ -32,9 +33,9 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 
 ## Stance
 
-- **Local-first.** Every byte of design state — screens, boards, theme, snippets — lives on disk in the user's repo. No account, no server, no telemetry. The CLI works offline.
-- **Open source.** From the first public release. License TBD at release time; out of scope for now.
-- **Useful first.** No monetization, no cloud, no hosted surfaces are being designed for. Once Velloo is genuinely useful for a single solo developer (the author), the question of what's next becomes worth asking.
+- **Local-first.** Every byte of design state — screens, boards, theme, snippets — lives on disk in the user's repo. The local tool needs no account, no server, no telemetry, and works offline. Cloud features are additive — they publish the git artifact, never replace it (see [monetization.md](./monetization.md)).
+- **Open source.** The local tool, from the first public release, under a permissive license (exact choice open). Paid cloud services are closed-source and live outside this repo. See [monetization.md](./monetization.md).
+- **Useful first.** The bar is: genuinely useful to a single solo developer (the author) for real product work. Commercial plans live in [monetization.md](./monetization.md) and don't reorder that.
 - **shadcn-first.** Other libraries (Mantine, MUI, Chakra) are an internal abstraction for a possible later, not a public promise. React-only.
 
 ## Status

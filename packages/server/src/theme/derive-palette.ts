@@ -153,8 +153,44 @@ export function derivePalette(
     ring: lowChroma(seed, 0.708, 0.5),
   };
 
+  // Dark palette from the SAME seed: a brightened primary on a faintly
+  // seed-tinted near-black, neutrals carrying a whisper of the hue. Without
+  // this, deriving a new brand color left dark mode on the previous
+  // palette — a brand-color mismatch and silent dark-contrast failures.
+  const darkFg = "oklch(0.985 0 0)";
+  const darkPrimary = withL(seed, 0.72);
+  const darkPrimaryFg = ensureContrast("oklch(0.16 0 0)", darkPrimary);
+  if (darkPrimaryFg.adjusted) {
+    adjustments.push({
+      slot: "dark:primary.foreground",
+      from: "oklch(0.16 0 0)",
+      to: darkPrimaryFg.color,
+    });
+  }
+  const darkAccent = lowChroma(seed, 0.3, 0.6);
+  const darkAccentFg = ensureContrast(darkFg, darkAccent);
+  if (darkAccentFg.adjusted) {
+    adjustments.push({ slot: "dark:accent.foreground", from: darkFg, to: darkAccentFg.color });
+  }
+  const darkDestructive = "oklch(0.62 0.21 25)";
+  const darkDestructiveFg = ensureContrast(darkFg, darkDestructive);
+  const colorsDark: Colors = {
+    background: lowChroma(seed, 0.16, 0.3),
+    foreground: darkFg,
+    primary: { DEFAULT: darkPrimary, foreground: darkPrimaryFg.color },
+    secondary: { DEFAULT: lowChroma(seed, 0.27, 0.35), foreground: darkFg },
+    muted: { DEFAULT: lowChroma(seed, 0.27, 0.35), foreground: "oklch(0.708 0 0)" },
+    accent: { DEFAULT: darkAccent, foreground: darkAccentFg.color },
+    destructive: { DEFAULT: darkDestructive, foreground: darkDestructiveFg.color },
+    card: { DEFAULT: lowChroma(seed, 0.205, 0.3), foreground: darkFg },
+    popover: { DEFAULT: lowChroma(seed, 0.205, 0.3), foreground: darkFg },
+    border: "oklch(1 0 0 / 0.1)",
+    input: "oklch(1 0 0 / 0.15)",
+    ring: darkPrimary,
+  };
+
   return ok({
-    theme: { ...current, name: name ?? current.name, colors },
+    theme: { ...current, name: name ?? current.name, colors, colorsDark },
     adjustments,
   });
 }
