@@ -28,6 +28,7 @@ export {
   ExtensionSchema,
 } from "./extension.ts";
 export { type Frame, FrameSchema } from "./frame.ts";
+export { pascalizeIconName } from "./icon-name.ts";
 export {
   type ComponentNode,
   isComponentNode,

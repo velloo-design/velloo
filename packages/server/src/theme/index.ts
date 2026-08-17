@@ -198,6 +198,7 @@ export {
   type ContrastTier,
   contrastRatio,
   scoreThemeContrast,
+  scoreThemeContrastBoth,
   tierForRatio,
 } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";

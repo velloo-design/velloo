@@ -24,7 +24,7 @@ export interface OverrideSnippetPropsArgs {
   screenId: string;
   /** Locator of the snippet instance node in the screen tree. */
   path: Locator;
-  /** Dotted path into the resolved body; "" targets the body root. */
+  /** Dotted path or "@id" into the resolved body; "" targets the body root. */
   innerPath: string;
   /** Shallow merge into the body node's props; null removes a key. */
   propPatch: Record<string, unknown>;
@@ -37,7 +37,20 @@ export interface OverrideSnippetPropsResult {
   overrides: Record<string, { props: Record<string, unknown> }>;
 }
 
+function findNodeById(root: Node, id: string): Node | undefined {
+  if (!isComponentNode(root)) return undefined;
+  if (root.$id === id) return root;
+  for (const child of root.children ?? []) {
+    const hit = findNodeById(child, id);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 function innerPathResolves(body: Node, innerPath: string): boolean {
+  if (innerPath.startsWith("@")) {
+    return findNodeById(body, innerPath.slice(1)) !== undefined;
+  }
   const segments = innerPath === "" ? [] : innerPath.split(".").map(Number);
   let cursor: Node | undefined = body;
   for (const i of segments) {
@@ -52,9 +65,13 @@ export async function overrideSnippetProps(
   args: OverrideSnippetPropsArgs,
 ): Promise<Result<OverrideSnippetPropsResult, MutationError>> {
   return DoAsync<OverrideSnippetPropsResult, MutationError>(async function* () {
-    if (!/^$|^\d+(\.\d+)*$/.test(args.innerPath)) {
+    if (!/^$|^\d+(\.\d+)*$|^@[a-zA-Z][a-zA-Z0-9_-]*$/.test(args.innerPath)) {
       return yield* $(
-        err(invalidPath(`innerPath must be a dotted index path like "0.2" (or "" for the root)`)),
+        err(
+          invalidPath(
+            `innerPath must be a dotted index path like "0.2", an "@id" of a node inside the body, or "" for the root`,
+          ),
+        ),
       );
     }
     const screen = yield* $(getScreen(ctx, args.screenId));

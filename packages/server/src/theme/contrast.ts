@@ -17,6 +17,8 @@ export type ContrastTier = "AAA" | "AA" | "AAlarge" | "Fail";
 export interface ContrastResult {
   /** e.g. "primary / primary-foreground" */
   label: string;
+  /** Which palette the pair came from. */
+  mode: "light" | "dark";
   fg: string;
   bg: string;
   ratio: number;
@@ -90,12 +92,19 @@ function fgValue(slot: unknown): string | undefined {
 }
 
 /**
- * Score every salient color pair in a theme. Pairs that can't be parsed
- * (missing or malformed values) are skipped silently — the canvas should
- * treat the audit as opportunistic, not exhaustive.
+ * Score every salient color pair in a theme's light or dark palette.
+ * Dark is where contrast usually breaks (tuned primaries, translucent
+ * borders), so callers should score both — `scoreThemeContrastBoth`
+ * below. Pairs that can't be parsed (missing or malformed values) are
+ * skipped silently — the canvas should treat the audit as
+ * opportunistic, not exhaustive.
  */
-export function scoreThemeContrast(theme: Theme): ContrastResult[] {
-  const c = theme.colors;
+export function scoreThemeContrast(
+  theme: Theme,
+  mode: "light" | "dark" = "light",
+): ContrastResult[] {
+  // colorsDark is a partial overlay — undefined slots inherit light values.
+  const c = mode === "dark" ? { ...theme.colors, ...(theme.colorsDark ?? {}) } : theme.colors;
   const pairs: Pair[] = [
     { label: "foreground on background", fg: c.foreground as string, bg: c.background as string },
     {
@@ -127,6 +136,7 @@ export function scoreThemeContrast(theme: Theme): ContrastResult[] {
     if (ratio === null) continue;
     out.push({
       label: p.label,
+      mode,
       fg: p.fg,
       bg: p.bg,
       ratio: Math.round(ratio * 100) / 100,
@@ -134,4 +144,9 @@ export function scoreThemeContrast(theme: Theme): ContrastResult[] {
     });
   }
   return out;
+}
+
+/** Light + dark palettes scored in one pass. */
+export function scoreThemeContrastBoth(theme: Theme): ContrastResult[] {
+  return [...scoreThemeContrast(theme, "light"), ...scoreThemeContrast(theme, "dark")];
 }

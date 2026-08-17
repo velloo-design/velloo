@@ -171,11 +171,13 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "override_snippet_props",
     {
       description:
-        'Patch props on one node INSIDE a snippet instance\'s body — the one-off escape hatch ("this instance\'s badge is red") without forking the snippet. path locates the instance; innerPath is a dotted index path into its body ("" = body root, "0.2" = third child of first child — read the snippet definition to find it). Merges into the instance\'s $overrides; null values remove keys; an empty result clears the override. emit_code inlines overridden instances instead of emitting the shared component.',
+        'Patch props on one node INSIDE a snippet instance\'s body — the one-off escape hatch ("this instance\'s badge is red") without forking the snippet. path locates the instance; innerPath addresses the body node: "@id" when the body node carries a $id (preferred — survives body restructures), a dotted index path ("0.2" = third child of first child), or "" for the body root. Merges into the instance\'s $overrides; null values remove keys; an empty result clears the override. emit_code inlines overridden instances instead of emitting the shared component.',
       inputSchema: {
         screenId: z.string(),
         path: PathSchema,
-        innerPath: z.string().describe('Dotted index path into the resolved body; "" for the root'),
+        innerPath: z
+          .string()
+          .describe('"@id" of a body node (preferred), dotted index path, or "" for the root'),
         propPatch: z.record(z.string(), z.unknown()),
       },
     },

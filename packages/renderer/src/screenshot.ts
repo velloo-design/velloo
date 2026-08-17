@@ -193,7 +193,8 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
   const labelLeft = opts.leftLabel ?? "light";
   const labelRight = opts.rightLabel ?? "dark";
   const w = opts.viewport.w;
-  const wrapper = buildCompareWrapper(opts.leftHtml, opts.rightHtml, w, labelLeft, labelRight);
+  const h = opts.viewport.h;
+  const wrapper = buildCompareWrapper(opts.leftHtml, opts.rightHtml, w, h, labelLeft, labelRight);
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({
@@ -222,6 +223,7 @@ function buildCompareWrapper(
   leftHtml: string,
   rightHtml: string,
   panelWidth: number,
+  panelHeight: number,
   leftLabel: string,
   rightLabel: string,
 ): string {
@@ -236,17 +238,22 @@ function buildCompareWrapper(
     ".label{font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#71717a}",
     "iframe{border:1px solid #e4e4e7;background:#fff;display:block}",
   ].join("");
+  // Each iframe starts at the requested viewport height — never measure
+  // from the 150px iframe default, because viewport-bound layouts
+  // (h-screen roots) size themselves to whatever the iframe is, so the
+  // scrollHeight probe would just read the default back and "confirm"
+  // a sliver. Grow only when content genuinely overflows the viewport.
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>${styles}</style></head>
 <body>
   <div class="row">
     <div class="panel">
       <div class="label">${esc(leftLabel)}</div>
-      <iframe id="L" width="${panelWidth}" srcdoc="${esc(leftHtml)}"></iframe>
+      <iframe id="L" width="${panelWidth}" height="${panelHeight}" srcdoc="${esc(leftHtml)}"></iframe>
     </div>
     <div class="panel">
       <div class="label">${esc(rightLabel)}</div>
-      <iframe id="R" width="${panelWidth}" srcdoc="${esc(rightHtml)}"></iframe>
+      <iframe id="R" width="${panelWidth}" height="${panelHeight}" srcdoc="${esc(rightHtml)}"></iframe>
     </div>
   </div>
   <script>
@@ -255,7 +262,7 @@ function buildCompareWrapper(
       f.addEventListener("load", () => {
         const doc = f.contentDocument;
         if (!doc) { f.dataset.ready = "1"; return; }
-        const h = doc.documentElement.scrollHeight;
+        const h = Math.max(${panelHeight}, doc.documentElement.scrollHeight);
         f.height = String(h);
         f.dataset.ready = "1";
       });

@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { Result } from "@velloo/result";
+import { err, type Result } from "@velloo/result";
 import type { Board, CanvasNote, Screen, Snippet } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
@@ -17,9 +17,10 @@ import {
   removeNode,
   setNodeId,
   updateProps,
+  updatePropsBulk,
 } from "./api/tree.ts";
 import type { MutationContext } from "./context.ts";
-import type { MutationError } from "./errors.ts";
+import { badRequest, type MutationError } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 
 /**
@@ -53,13 +54,42 @@ export interface BatchResult {
 
 type BatchFn = (ctx: MutationContext, args: never) => Promise<Result<unknown, MutationError>>;
 
+/**
+ * Batch's update_props mirrors the standalone tool: `patches` for bulk,
+ * `path` + `propPatch` for one node. Guarded here because batch
+ * dispatches past the MCP layer's arg validation — without this, a
+ * missing propPatch crashed with a raw `Object.entries` TypeError
+ * (sample app dogfood, 2026-06-11).
+ */
+const updatePropsBatch: BatchFn = (ctx, args) => {
+  const a = args as {
+    screenId: string;
+    path?: unknown;
+    propPatch?: Record<string, unknown>;
+    patches?: unknown;
+  };
+  if (Array.isArray(a.patches)) {
+    return updatePropsBulk(ctx, { screenId: a.screenId, patches: a.patches } as never);
+  }
+  if (a.path === undefined || a.propPatch === undefined) {
+    return Promise.resolve(
+      err(
+        badRequest(
+          "update_props: pass path + propPatch (single node) or patches: [{ path, propPatch }] (bulk).",
+        ),
+      ),
+    );
+  }
+  return updateProps(ctx, { screenId: a.screenId, path: a.path, propPatch: a.propPatch } as never);
+};
+
 export const BATCH_TOOLS: Record<string, BatchFn> = {
   add_screen: addScreen as BatchFn,
   add_board: addBoard as BatchFn,
   add_frame: addFrame as BatchFn,
   add_group: addGroup as BatchFn,
   add_node: addNode as BatchFn,
-  update_props: updateProps as BatchFn,
+  update_props: updatePropsBatch,
   override_snippet_props: overrideSnippetProps as BatchFn,
   remove_node: removeNode as BatchFn,
   move_node: moveNode as BatchFn,
@@ -264,11 +294,19 @@ export async function runBatch(
         results.push({ tool: call.tool, ok: false, error: r.error });
         break;
       }
-    } catch (err) {
+    } catch (thrown) {
+      // An impl threw instead of returning a Result — almost always
+      // malformed args (batch skips the MCP layer's schema validation).
+      // Name the tool and point at the schema instead of leaking a bare
+      // runtime error.
+      const detail = thrown instanceof Error ? thrown.message : String(thrown);
       results.push({
         tool: call.tool,
         ok: false,
-        error: { kind: "BadRequest", message: err instanceof Error ? err.message : String(err) },
+        error: {
+          kind: "BadRequest",
+          message: `batch ${call.tool}: invalid or missing args — match the standalone ${call.tool} tool's schema (${detail})`,
+        },
       });
       break;
     }

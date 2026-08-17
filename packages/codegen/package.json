@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Velloo codegen — design JSON → idiomatic shadcn JSX + Tailwind v4 globals.css",
+  "description": "Velloo codegen \u2014 design JSON \u2192 idiomatic shadcn JSX + Tailwind v4 globals.css",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -17,6 +17,9 @@
     "typescript": "6.0.3"
   },
   "devDependencies": {
-    "@types/diff": "8.0.0"
+    "@types/diff": "8.0.0",
+    "@types/react": "19.2.14",
+    "@velloo/provider-none": "workspace:*",
+    "@velloo/shadcn-snapshot": "workspace:*"
   }
 }

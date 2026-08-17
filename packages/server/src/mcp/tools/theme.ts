@@ -15,6 +15,7 @@ import {
   matchVibe,
   PRESET_NAMES,
   scoreThemeContrast,
+  scoreThemeContrastBoth,
   setCustomCss,
   setFonts,
   setToken,
@@ -43,16 +44,36 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "set_token",
     {
       description:
-        'Set a single theme token at a dot-path (e.g. "colors.primary.DEFAULT"). The full theme is schema-validated after the patch.',
+        'Set theme tokens at dot-paths (e.g. "colors.primary.DEFAULT", "colorsDark.background"). Single: path + value. Bulk: tokens: { "<path>": <value>, … } applied in order. The full theme is schema-validated after each patch. Returns the applied paths — call get_theme when you need the full tree.',
       inputSchema: {
-        path: z.string(),
-        value: z.union([z.string(), z.number()]),
+        path: z.string().optional(),
+        value: z.union([z.string(), z.number()]).optional(),
+        tokens: z
+          .record(z.string(), z.union([z.string(), z.number()]))
+          .optional()
+          .describe("Bulk mode — mutually exclusive with path/value"),
         theme: z.string().optional().describe('Named theme to edit; default "default"'),
       },
     },
     async (args) => {
-      const r = await setToken(ctx, args.path, args.value, args.theme);
-      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
+      const entries: Array<[string, string | number]> = args.tokens
+        ? Object.entries(args.tokens)
+        : args.path !== undefined && args.value !== undefined
+          ? [[args.path, args.value]]
+          : [];
+      if (entries.length === 0) {
+        return themeErrorResult({
+          kind: "BadRequest",
+          message: "set_token: pass path + value, or tokens: { <path>: <value>, … }.",
+        });
+      }
+      const applied: string[] = [];
+      for (const [path, value] of entries) {
+        const r = await setToken(ctx, path, value, args.theme);
+        if (!r.ok) return themeErrorResult(r.error);
+        applied.push(path);
+      }
+      return jsonResult({ applied, theme: args.theme ?? "default" });
     },
   );
 
@@ -226,11 +247,18 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "score_theme_contrast",
     {
       description:
-        "Score WCAG contrast ratios for the active theme's salient color pairs (foreground/background, primary/primary-foreground, …). Returns ratio + tier (AAA / AA / AAlarge / Fail). Use after a derive/preset/match-vibe to confirm accessibility before shipping.",
-      inputSchema: {},
+        'Score WCAG contrast ratios for the active theme\'s salient color pairs (foreground/background, primary/primary-foreground, …) in BOTH light and dark palettes — each result carries mode: "light" | "dark". Returns ratio + tier (AAA / AA / AAlarge / Fail). Pass mode to score one palette only. Use after a derive/preset/match-vibe or any dark-token tuning to confirm accessibility before shipping.',
+      inputSchema: {
+        mode: z
+          .enum(["light", "dark"])
+          .optional()
+          .describe("Score only this palette; default both"),
+      },
     },
-    async () => {
-      const results = scoreThemeContrast(ctx.folder.theme);
+    async (args) => {
+      const results = args.mode
+        ? scoreThemeContrast(ctx.folder.theme, args.mode)
+        : scoreThemeContrastBoth(ctx.folder.theme);
       const fails = results.filter((r) => r.tier === "Fail").length;
       const passes = results.length - fails;
       return jsonResult({ summary: { total: results.length, passes, fails }, results });

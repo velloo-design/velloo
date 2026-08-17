@@ -7,8 +7,25 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "types": ["bun"]
+    "types": ["bun", "react"],
+    "jsx": "react-jsx"
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../result" }, { "path": "../schema" }, { "path": "../renderer" }]
+  "references": [
+    {
+      "path": "../result"
+    },
+    {
+      "path": "../schema"
+    },
+    {
+      "path": "../renderer"
+    },
+    {
+      "path": "../provider-none"
+    },
+    {
+      "path": "../shadcn-snapshot"
+    }
+  ]
 }

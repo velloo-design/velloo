@@ -1,5 +1,5 @@
 import type { ComponentProvider, Manifest } from "@velloo/provider";
-import { isComponentNode, type Node, type Screen } from "@velloo/schema";
+import { isComponentNode, type Node, pascalizeIconName, type Screen } from "@velloo/schema";
 import { providerForScreen } from "../extensions/registry.ts";
 import type { MutationContext } from "./context.ts";
 import { nearestRefs } from "./errors.ts";
@@ -71,7 +71,18 @@ export async function propWarnings(
       warnings.push(`${ref}: unknown prop "${key}"${near ? ` — closest known: ${near}` : ""}`);
       continue;
     }
-    if (prop.control === "enum" && prop.enumValues && typeof value === "string") {
+    if (prop.control === "icon" && prop.enumValues && typeof value === "string") {
+      // Icon names resolve PascalCase or kebab-case (normalized at render
+      // time) — warn only when neither form matches a lucide export,
+      // because the canvas then silently falls back to a "?" glyph.
+      const names = prop.enumValues.map(String);
+      if (!names.includes(value) && !names.includes(pascalizeIconName(value))) {
+        const near = nearestRefs(pascalizeIconName(value), names, 3).join(", ");
+        warnings.push(
+          `${ref}: "${key}" = ${JSON.stringify(value)} doesn't match any lucide icon — renders as the fallback "?"${near ? `; closest: ${near}` : ""}`,
+        );
+      }
+    } else if (prop.control === "enum" && prop.enumValues && typeof value === "string") {
       if (!prop.enumValues.map(String).includes(value)) {
         warnings.push(
           `${ref}: "${key}" = ${JSON.stringify(value)} is not one of [${prop.enumValues.join(", ")}]`,

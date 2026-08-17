@@ -76,26 +76,45 @@ export function substituteSnippetParams(
   return { value: walk(value), missing };
 }
 
+/** Depth-first search for a `$id`-bearing component node inside a body. */
+function findNodeById(root: Node, id: string): Node | undefined {
+  if (!isComponentNode(root)) return undefined;
+  if (root.$id === id) return root;
+  for (const child of root.children ?? []) {
+    const hit = findNodeById(child, id);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 /**
  * Apply per-instance interior prop patches (`SnippetInstance.$overrides`)
- * to a resolved body. Paths address the substituted tree; a path that no
- * longer resolves (definition changed since the override was written)
- * is skipped silently — stale overrides degrade to "no effect".
+ * to a resolved body. Keys address the substituted tree either as dotted
+ * index paths ("0.2") or as "@id" references to `$id`-bearing body nodes
+ * — ids survive definition restructures, so prefer them when the body
+ * declares ids. A key that no longer resolves (definition changed since
+ * the override was written) is skipped silently — stale overrides
+ * degrade to "no effect".
  */
 export function applySnippetOverrides(
   body: Node,
   overrides: Record<string, { props: Record<string, unknown> }>,
 ): Node {
   const clone = structuredClone(body);
-  for (const [relPath, patch] of Object.entries(overrides)) {
-    const segments = relPath === "" ? [] : relPath.split(".").map(Number);
-    let target: Node | undefined = clone;
-    for (const i of segments) {
-      if (!target || !isComponentNode(target) || !target.children) {
-        target = undefined;
-        break;
+  for (const [key, patch] of Object.entries(overrides)) {
+    let target: Node | undefined;
+    if (key.startsWith("@")) {
+      target = findNodeById(clone, key.slice(1));
+    } else {
+      const segments = key === "" ? [] : key.split(".").map(Number);
+      target = clone;
+      for (const i of segments) {
+        if (!target || !isComponentNode(target) || !target.children) {
+          target = undefined;
+          break;
+        }
+        target = target.children[i];
       }
-      target = target.children[i];
     }
     if (!target || !isComponentNode(target)) continue;
     const props = { ...(target.props ?? {}) };

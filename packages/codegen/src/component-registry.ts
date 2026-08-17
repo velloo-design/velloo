@@ -9,6 +9,8 @@
  *    or will after `pnpm add`).
  */
 
+import { pascalizeIconName } from "@velloo/schema";
+
 export type LoweredEntry = {
   kind: "lowered";
   /**
@@ -79,25 +81,194 @@ const PLACEHOLDER_AVATAR_SIZE_CLASS: Record<string, string> = {
   xl: "size-20 text-lg",
 };
 
+// Keep in sync with packages/provider-none/src/components.tsx.
+const STACK_ALIGN_CLASS: Record<string, string> = {
+  start: "items-start",
+  center: "items-center",
+  end: "items-end",
+  stretch: "items-stretch",
+};
+const STACK_JUSTIFY_CLASS: Record<string, string> = {
+  start: "justify-start",
+  center: "justify-center",
+  end: "justify-end",
+  between: "justify-between",
+  around: "justify-around",
+};
+const CONTAINER_WIDTH_CLASS: Record<string, string> = {
+  sm: "max-w-screen-sm",
+  md: "max-w-screen-md",
+  lg: "max-w-screen-lg",
+  xl: "max-w-screen-xl",
+  full: "max-w-full",
+};
+
 const shadcn = (jsxName: string, importFile: string): ShadcnEntry => ({
   kind: "shadcn",
   jsxName,
   importFile,
 });
 
+/**
+ * Icon's `name` prop → lucide JSX identifier. PascalCase passes through,
+ * kebab/snake/space-separated names normalize ("arrow-right" →
+ * "ArrowRight"), anything that still isn't a valid identifier falls back
+ * to HelpCircle. Single source for the registry resolve AND emit-code's
+ * iconsUsed metadata so the two can't drift.
+ */
+export function resolveLucideJsxName(name: unknown): string {
+  const raw = typeof name === "string" ? name : "";
+  const pascal = pascalizeIconName(raw);
+  return /^[A-Z][A-Za-z0-9]*$/.test(pascal) ? pascal : "HelpCircle";
+}
+
+/**
+ * shadcn source file → exported component ids. Keep in sync with
+ * packages/shadcn-snapshot/src/registry.ts — the contract test in
+ * __tests__/registry-contract.test.ts asserts every snapshot component
+ * resolves here, so palette growth can't silently break emit_code again.
+ */
+const SHADCN_FILE_EXPORTS: Record<string, string[]> = {
+  accordion: ["Accordion", "AccordionContent", "AccordionItem", "AccordionTrigger"],
+  alert: ["Alert", "AlertDescription", "AlertTitle"],
+  "alert-dialog": [
+    "AlertDialog",
+    "AlertDialogAction",
+    "AlertDialogCancel",
+    "AlertDialogContent",
+    "AlertDialogDescription",
+    "AlertDialogFooter",
+    "AlertDialogHeader",
+    "AlertDialogTitle",
+    "AlertDialogTrigger",
+  ],
+  avatar: ["Avatar", "AvatarFallback", "AvatarImage"],
+  badge: ["Badge"],
+  breadcrumb: [
+    "Breadcrumb",
+    "BreadcrumbEllipsis",
+    "BreadcrumbItem",
+    "BreadcrumbLink",
+    "BreadcrumbList",
+    "BreadcrumbPage",
+    "BreadcrumbSeparator",
+  ],
+  button: ["Button"],
+  calendar: ["Calendar"],
+  card: [
+    "Card",
+    "CardAction",
+    "CardContent",
+    "CardDescription",
+    "CardFooter",
+    "CardHeader",
+    "CardTitle",
+  ],
+  carousel: ["Carousel", "CarouselContent", "CarouselItem", "CarouselNext", "CarouselPrevious"],
+  chart: [
+    "Chart",
+    "ChartContainer",
+    "ChartLegend",
+    "ChartLegendContent",
+    "ChartTooltip",
+    "ChartTooltipContent",
+  ],
+  checkbox: ["Checkbox"],
+  collapsible: ["Collapsible", "CollapsibleContent", "CollapsibleTrigger"],
+  dialog: [
+    "Dialog",
+    "DialogClose",
+    "DialogContent",
+    "DialogDescription",
+    "DialogFooter",
+    "DialogHeader",
+    "DialogTitle",
+    "DialogTrigger",
+  ],
+  "dropdown-menu": [
+    "DropdownMenu",
+    "DropdownMenuCheckboxItem",
+    "DropdownMenuContent",
+    "DropdownMenuGroup",
+    "DropdownMenuItem",
+    "DropdownMenuLabel",
+    "DropdownMenuRadioGroup",
+    "DropdownMenuRadioItem",
+    "DropdownMenuSeparator",
+    "DropdownMenuShortcut",
+    "DropdownMenuSub",
+    "DropdownMenuSubContent",
+    "DropdownMenuSubTrigger",
+    "DropdownMenuTrigger",
+  ],
+  input: ["Input"],
+  label: ["Label"],
+  pagination: [
+    "Pagination",
+    "PaginationContent",
+    "PaginationEllipsis",
+    "PaginationItem",
+    "PaginationLink",
+    "PaginationNext",
+    "PaginationPrevious",
+  ],
+  popover: ["Popover", "PopoverAnchor", "PopoverContent", "PopoverTrigger"],
+  progress: ["Progress"],
+  "radio-group": ["RadioGroup", "RadioGroupItem"],
+  "scroll-area": ["ScrollArea", "ScrollBar"],
+  select: [
+    "Select",
+    "SelectContent",
+    "SelectGroup",
+    "SelectItem",
+    "SelectLabel",
+    "SelectSeparator",
+    "SelectTrigger",
+    "SelectValue",
+  ],
+  separator: ["Separator"],
+  sheet: [
+    "Sheet",
+    "SheetClose",
+    "SheetContent",
+    "SheetDescription",
+    "SheetFooter",
+    "SheetHeader",
+    "SheetTitle",
+    "SheetTrigger",
+  ],
+  skeleton: ["Skeleton"],
+  slider: ["Slider"],
+  sonner: ["Toaster"],
+  switch: ["Switch"],
+  table: [
+    "Table",
+    "TableBody",
+    "TableCaption",
+    "TableCell",
+    "TableFooter",
+    "TableHead",
+    "TableHeader",
+    "TableRow",
+  ],
+  tabs: ["Tabs", "TabsContent", "TabsList", "TabsTrigger"],
+  textarea: ["Textarea"],
+  toggle: ["Toggle"],
+  "toggle-group": ["ToggleGroup", "ToggleGroupItem"],
+  tooltip: ["Tooltip", "TooltipContent", "TooltipProvider", "TooltipTrigger"],
+};
+
+function shadcnEntries(): Record<string, ShadcnEntry> {
+  const out: Record<string, ShadcnEntry> = {};
+  for (const [file, ids] of Object.entries(SHADCN_FILE_EXPORTS)) {
+    for (const id of ids) out[id] = shadcn(id, file);
+  }
+  return out;
+}
+
 /** Several shadcn components live in the same source file (Card + its parts). */
 export const REGISTRY: Record<string, RegistryEntry> = {
-  Button: shadcn("Button", "button"),
-  Badge: shadcn("Badge", "badge"),
-  Card: shadcn("Card", "card"),
-  CardContent: shadcn("CardContent", "card"),
-  CardDescription: shadcn("CardDescription", "card"),
-  CardFooter: shadcn("CardFooter", "card"),
-  CardHeader: shadcn("CardHeader", "card"),
-  CardTitle: shadcn("CardTitle", "card"),
-  Input: shadcn("Input", "input"),
-  Label: shadcn("Label", "label"),
-  Separator: shadcn("Separator", "separator"),
+  ...shadcnEntries(),
 
   // Velloo-owned composition helpers with real runtime logic (gradient
   // presets, focal cropping, divider label slots). Too structural to
@@ -117,6 +288,26 @@ export const REGISTRY: Record<string, RegistryEntry> = {
     kind: "lowered",
     lower() {
       return { tag: "div", extraClasses: "" };
+    },
+  },
+  // Provider-none layout primitives — lower to plain HTML with the same
+  // classes packages/provider-none/src/components.tsx applies at runtime.
+  Stack: {
+    kind: "lowered",
+    lower(props) {
+      const direction = props.direction === "row" ? "flex-row" : "flex-col";
+      const gap = typeof props.gap === "number" ? props.gap : 4;
+      const align = STACK_ALIGN_CLASS[String(props.align)] ?? "";
+      const justify = STACK_JUSTIFY_CLASS[String(props.justify)] ?? "";
+      const classes = ["flex", direction, `gap-${gap}`, align, justify].filter(Boolean).join(" ");
+      return { tag: "div", extraClasses: classes };
+    },
+  },
+  Container: {
+    kind: "lowered",
+    lower(props) {
+      const width = CONTAINER_WIDTH_CLASS[String(props.size ?? "md")] ?? CONTAINER_WIDTH_CLASS.md;
+      return { tag: "div", extraClasses: `mx-auto w-full px-4 ${width}` };
     },
   },
   Heading: {
@@ -140,9 +331,7 @@ export const REGISTRY: Record<string, RegistryEntry> = {
     kind: "dynamic",
     importFrom: "lucide-react",
     resolve(props) {
-      const raw = typeof props.name === "string" ? props.name : "";
-      const jsxName = /^[A-Z][A-Za-z0-9]*$/.test(raw) ? raw : "HelpCircle";
-      return { jsxName, extraClasses: "" };
+      return { jsxName: resolveLucideJsxName(props.name), extraClasses: "" };
     },
   },
   Placeholder: {
@@ -184,4 +373,6 @@ export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Text: new Set(["variant"]),
   Icon: new Set(["name"]),
   Placeholder: new Set(["kind", "label", "aspect", "size"]),
+  Stack: new Set(["direction", "gap", "align", "justify"]),
+  Container: new Set(["size"]),
 };

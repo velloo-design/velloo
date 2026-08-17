@@ -104,8 +104,9 @@ const SnippetInstanceSchema: z.ZodType<SnippetInstance> = z.object({
   args: z.record(z.string(), z.unknown()).optional(),
   $overrides: z
     .record(
-      z.string().regex(/^$|^\d+(\.\d+)*$/, {
-        message: 'override key must be a dotted path like "0.2" (or "" for the body root)',
+      z.string().regex(/^$|^\d+(\.\d+)*$|^@[a-zA-Z][a-zA-Z0-9_-]*$/, {
+        message:
+          'override key must be a dotted index path like "0.2", an "@id" of a node inside the body, or "" for the body root',
       }),
       z.object({ props: z.record(z.string(), z.unknown()) }),
     )
@@ -116,9 +117,54 @@ const ParamRefSchema: z.ZodType<ParamRef> = z.object({
   $param: z.string().min(1),
 });
 
-export const NodeSchema: z.ZodType<Node> = z.lazy(() =>
-  z.union([ComponentNodeSchema, SnippetInstanceSchema, ParamRefSchema]),
-);
+/**
+ * Key-routed parse instead of `z.union`: a malformed node yields the
+ * issues of the *one* branch its `$`-key selects (with a full path),
+ * not a three-branch union explosion. The MCP layer surfaces these
+ * issues verbatim to agents, so error shape is part of the tool UX.
+ */
+export const NodeSchema: z.ZodType<Node> = z
+  .unknown()
+  .transform((val, ctx): Node => {
+    if (val === null || typeof val !== "object" || Array.isArray(val)) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          'node must be an object with one of "$ref" (component), "$snippet" (instance), or "$param" (param ref)',
+      });
+      return z.NEVER;
+    }
+    const v = val as Record<string, unknown>;
+    const branch =
+      typeof v.$ref === "string"
+        ? ComponentNodeSchema
+        : typeof v.$snippet === "string"
+          ? SnippetInstanceSchema
+          : typeof v.$param === "string"
+            ? ParamRefSchema
+            : null;
+    if (!branch) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          'node needs exactly one of "$ref" (component), "$snippet" (snippet instance), or "$param" (param ref, snippet bodies only)',
+      });
+      return z.NEVER;
+    }
+    const parsed = branch.safeParse(val);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ ...issue });
+      }
+      return z.NEVER;
+    }
+    return parsed.data;
+  })
+  .describe(
+    'Node tree. Component: {"$ref":"Button","$id?":"cta","props?":{"className":"...","children":"text"},"children?":[Node]}. ' +
+      'Snippet instance: {"$snippet":"<id>","$id?":"...","args?":{...},"$extraClassName?":"...","$overrides?":{"<innerPath|@id>":{"props":{...}}}}. ' +
+      'Param ref (snippet bodies only): {"$param":"<name>"}.',
+  ) as unknown as z.ZodType<Node>;
 
 export { ComponentNodeSchema, ParamRefSchema, SnippetInstanceSchema };
 

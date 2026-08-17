@@ -73,6 +73,9 @@
       },
       "devDependencies": {
         "@types/diff": "8.0.0",
+        "@types/react": "19.2.14",
+        "@velloo/provider-none": "workspace:*",
+        "@velloo/shadcn-snapshot": "workspace:*",
       },
     },
     "packages/provider": {

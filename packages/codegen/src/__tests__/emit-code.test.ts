@@ -80,16 +80,20 @@ describe("emitCode", () => {
           $ref: "Card",
           children: [
             { $ref: "Icon", props: { name: "Sparkles", className: "size-4" } },
-            // Non-PascalCase names fall back to HelpCircle — the fallback
-            // appears in the JSX, so it must appear in iconsUsed too.
+            // kebab-case names normalize to the PascalCase lucide export.
             { $ref: "Icon", props: { name: "arrow-right" } },
+            // Names that can't normalize to a JSX identifier fall back to
+            // HelpCircle — the fallback appears in the JSX, so it must
+            // appear in iconsUsed too.
+            { $ref: "Icon", props: { name: "123 not an icon!" } },
           ],
         }),
       ),
     );
     expect(result.jsx).toContain(`<Sparkles className="size-4" />`);
+    expect(result.jsx).toContain(`<ArrowRight />`);
     expect(result.jsx).toContain(`<HelpCircle />`);
-    expect(result.iconsUsed).toEqual(["HelpCircle", "Sparkles"]);
+    expect(result.iconsUsed).toEqual(["ArrowRight", "HelpCircle", "Sparkles"]);
   });
 
   test("emits snippet instances with args and carries each snippet's own IR", async () => {
