@@ -11,6 +11,11 @@ import {
 } from "./custom-css.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
 import type { ThemeError } from "./errors.ts";
+import {
+  type ImportThemeCssResult,
+  importThemeCss as importThemeCssImpl,
+  type ThemeTokenChange,
+} from "./import-css.ts";
 import { type MatchImageResult, matchImage as matchImageImpl } from "./match-image.ts";
 import {
   type MatchVibeOpts,
@@ -176,6 +181,18 @@ export async function matchImage(
   });
 }
 
+export async function importThemeCss(
+  ctx: ThemeContext,
+  css: string,
+  opts: { themeName?: string; apply?: boolean } = {},
+): Promise<Result<ImportThemeCssResult, ThemeError>> {
+  return withThemeLock(async () => {
+    const r = await importThemeCssImpl(ctx.folder, css, opts);
+    if (r.ok && r.value.applied) broadcastThemeChanged(ctx);
+    return r;
+  });
+}
+
 export {
   type ContrastResult,
   type ContrastTier,
@@ -187,4 +204,5 @@ export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
 export type { MatchImageResult } from "./match-image.ts";
 export type { MatchVibeOpts, MatchVibeResult } from "./match-vibe.ts";
+export type { ImportThemeCssResult, ThemeTokenChange };
 export { PRESET_NAMES, PRESETS };

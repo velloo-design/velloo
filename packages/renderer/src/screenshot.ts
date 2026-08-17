@@ -94,6 +94,43 @@ export async function captureScreenshot(
   }
 }
 
+export interface UrlScreenshotOptions {
+  url: string;
+  viewport: Viewport;
+  deviceScaleFactor?: number;
+  fullPage?: boolean;
+  /** Bounded wait for network quiet before capture, ms. Default 8000. */
+  settleTimeoutMs?: number;
+}
+
+/**
+ * Screenshot a live URL (typically the host app on localhost) — the
+ * code-to-design counterpart of `captureScreenshot`. Animations and caret
+ * are frozen so the capture diffs cleanly against a Velloo render.
+ */
+export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<Buffer> {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext({
+      viewport: { width: opts.viewport.w, height: opts.viewport.h },
+      deviceScaleFactor: opts.deviceScaleFactor ?? 1,
+    });
+    const page = await context.newPage();
+    await page.goto(opts.url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    await page
+      .waitForLoadState("networkidle", { timeout: opts.settleTimeoutMs ?? 8000 })
+      .catch(() => {});
+    return await page.screenshot({
+      fullPage: opts.fullPage ?? true,
+      animations: "disabled",
+      caret: "hide",
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
 async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | null> {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();

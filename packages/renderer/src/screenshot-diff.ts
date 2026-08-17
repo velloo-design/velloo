@@ -191,6 +191,23 @@ export function cropPng(png: Buffer, region: DiffRegion, pad = 24): Buffer {
   return PNG.sync.write(out);
 }
 
+/**
+ * Compose two PNGs side by side on a white background with a gutter —
+ * pure pngjs, no browser pass, so the comparison artifact is deterministic
+ * and cheap. Left/right semantics are the caller's contract.
+ */
+export function sideBySidePng(left: Buffer, right: Buffer, gutter = 12): Buffer {
+  const a = PNG.sync.read(left);
+  const b = PNG.sync.read(right);
+  const width = a.width + gutter + b.width;
+  const height = Math.max(a.height, b.height);
+  const out = new PNG({ width, height });
+  out.data.fill(255);
+  PNG.bitblt(a, out, 0, 0, a.width, a.height, 0, 0);
+  PNG.bitblt(b, out, 0, 0, b.width, b.height, a.width + gutter, 0);
+  return PNG.sync.write(out);
+}
+
 /** Union bounding box of a region list. */
 export function unionRegion(regions: DiffRegion[]): DiffRegion {
   const minX = Math.min(...regions.map((r) => r.x));

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { PNG } from "pngjs";
-import { cropPng, diffPngs, unionRegion } from "../screenshot-diff.ts";
+import { cropPng, diffPngs, sideBySidePng, unionRegion } from "../screenshot-diff.ts";
 
 /** Solid-color PNG with optional painted rectangles. */
 function synth(
@@ -88,5 +88,22 @@ describe("cropPng / unionRegion", () => {
         { x: 100, y: 50, w: 30, h: 10 },
       ]),
     ).toEqual({ x: 10, y: 10, w: 120, h: 50 });
+  });
+});
+
+describe("sideBySidePng", () => {
+  test("composes left+right with gutter at union height", () => {
+    const left = synth(100, 80, [{ x: 0, y: 0, w: 10, h: 10, rgb: [200, 0, 0] }]);
+    const right = synth(120, 140, [{ x: 0, y: 0, w: 10, h: 10, rgb: [0, 0, 200] }]);
+    const out = PNG.sync.read(sideBySidePng(left, right, 12));
+    expect(out.width).toBe(100 + 12 + 120);
+    expect(out.height).toBe(140);
+    // Left pixel lands at origin; right pixel lands past left width + gutter.
+    expect(out.data[0]).toBe(200);
+    const rightStart = (0 * out.width + 112) * 4;
+    expect(out.data[rightStart + 2]).toBe(200);
+    // Gutter column is white.
+    const gutterIdx = (0 * out.width + 105) * 4;
+    expect(out.data[gutterIdx]).toBe(255);
   });
 });

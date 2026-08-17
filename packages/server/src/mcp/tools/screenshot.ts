@@ -2,12 +2,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type CaptureNodeRect,
   captureScreenshot,
+  captureUrlScreenshot,
   cropPng,
   type DiffRegion,
   diffPngs,
   renderScreen,
   screenshotBuffer,
   screenshotCompareBuffer,
+  sideBySidePng,
   unionRegion,
 } from "@velloo/renderer";
 import { isComponentNode, nodeId, type Screen, type Viewport } from "@velloo/schema";
@@ -296,6 +298,94 @@ export function registerScreenshotTool(
       return {
         content: [{ type: "image", data: buf.toString("base64"), mimeType: "image/png" }],
       };
+    },
+  );
+
+  mcp.registerTool(
+    "compare_to_url",
+    {
+      description:
+        "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), the diff regions mapped to this screen's nodes, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; use the per-region node refs to find what's off. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small.",
+      inputSchema: {
+        screenId: z.string(),
+        url: z.string().describe("Live URL to compare against, e.g. http://localhost:3000/pricing"),
+        w: z.number().int().positive().optional(),
+        h: z.number().int().positive().optional(),
+        mode: z.enum(["light", "dark"]).optional(),
+        fullPage: z.boolean().optional(),
+        scale: z.number().min(0.25).max(1).optional().describe("Default 0.5"),
+        theme: z.string().optional().describe("Named theme to render with"),
+        image: z
+          .boolean()
+          .optional()
+          .describe("Include the side-by-side PNG (default true; false = metrics only)"),
+      },
+    },
+    async ({ screenId, url, w, h, mode, fullPage, scale, theme, image }) => {
+      const screen = ctx.folder.screens.get(screenId);
+      if (!screen) return errorResult(`Screen not found: ${screenId}`);
+
+      const defaults = defaultViewport(ctx.folder);
+      const viewport: Viewport = { w: w ?? defaults.w, h: h ?? defaults.h };
+      const scaleFactor = scale ?? 0.5;
+
+      try {
+        const snapshotCss = await jit.build();
+        const { html } = await renderScreen(screen, themeByName(ctx.folder, theme), {
+          viewport,
+          snapshotCss,
+          registry: registryForScreen(ctx, screen),
+          snippets: ctx.folder.snippets,
+          customCss: ctx.folder.customCss,
+          baseHref: assetOrigin,
+          dark: mode === "dark",
+        });
+        const [velloo, urlPng] = await Promise.all([
+          captureScreenshot({
+            html,
+            viewport,
+            fullPage: fullPage ?? true,
+            deviceScaleFactor: scaleFactor,
+          }),
+          captureUrlScreenshot({
+            url,
+            viewport,
+            fullPage: fullPage ?? true,
+            deviceScaleFactor: scaleFactor,
+          }),
+        ]);
+
+        const result = diffPngs(urlPng, velloo.png);
+        const regions = result.regions.map((r) => ({
+          ...r,
+          node: regionNode(r, velloo.nodeRects, scaleFactor, screen),
+        }));
+        const summary = {
+          similarity: Number((1 - result.changedRatio).toFixed(4)),
+          changedRatio: Number(result.changedRatio.toFixed(4)),
+          /** velloo render height minus URL capture height, image px. */
+          heightDelta: result.heightDelta,
+          regions,
+        };
+
+        const content: McpResult["content"] = [{ type: "text", text: JSON.stringify(summary) }];
+        if (image !== false) {
+          const side = sideBySidePng(urlPng, velloo.png);
+          content.push({ type: "image", data: side.toString("base64"), mimeType: "image/png" });
+        }
+        return { content };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/.test(msg)) {
+          return errorResult(playwrightMissingMessage(msg));
+        }
+        if (/net::|ERR_CONNECTION|Timeout.*exceeded|goto/.test(msg)) {
+          return errorResult(
+            `compare_to_url: could not load ${url} — is the app's dev server running? Underlying error: ${msg}`,
+          );
+        }
+        return errorResult(`compare_to_url failed: ${msg}`);
+      }
     },
   );
 

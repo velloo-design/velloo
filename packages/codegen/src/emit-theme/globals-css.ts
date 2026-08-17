@@ -3,9 +3,10 @@ import type { ColorPair, Colors, Theme } from "@velloo/schema";
 /**
  * Map theme color slots to shadcn's --color-* CSS variable convention.
  * Mirrors @velloo/renderer's `theme-to-css.ts` so what the canvas shows is
- * exactly what the user gets after export.
+ * exactly what the user gets after export. Exported so `import-theme` parses
+ * exactly the vocabulary this module emits (round-trip symmetry).
  */
-const COLOR_SLOTS: Array<{ key: keyof Colors; pair: boolean }> = [
+export const COLOR_SLOTS: Array<{ key: keyof Colors; pair: boolean }> = [
   { key: "background", pair: false },
   { key: "foreground", pair: false },
   { key: "primary", pair: true },

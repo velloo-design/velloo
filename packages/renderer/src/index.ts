@@ -24,11 +24,13 @@ export {
   type CaptureNodeRect,
   type CaptureResult,
   captureScreenshot,
+  captureUrlScreenshot,
   type ScreenshotCompareOptions,
   type ScreenshotOptions,
   screenshot,
   screenshotBuffer,
   screenshotCompareBuffer,
+  type UrlScreenshotOptions,
 } from "./screenshot.ts";
 export {
   cropPng,
@@ -36,6 +38,7 @@ export {
   type DiffRegion,
   type DiffResult,
   diffPngs,
+  sideBySidePng,
   unionRegion,
 } from "./screenshot-diff.ts";
 export { themeToCss } from "./theme-to-css.ts";

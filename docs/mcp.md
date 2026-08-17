@@ -127,6 +127,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `match_vibe` | `description, useAi?: boolean` | Maps a vibe description ("playful", "corporate", "forest") to a seed color via a curated table, then derives + applies a palette. Set `useAi: true` to ask Claude Haiku for a seed color when `ANTHROPIC_API_KEY` is set |
 | `match_image` | `imagePath` | Extracts a palette from an image (vibrant + muted + dark/light variants) and applies a derived theme. Path is relative to `assets/` or absolute |
 | `score_theme_contrast` | — | Score WCAG contrast ratios for the active theme's salient color pairs. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset / match-vibe to confirm accessibility before shipping |
+| `import_theme` | `css?` OR `cssPath?`, `theme?`, `apply?` | Code-to-design: seed the theme from a host app's stylesheet. Parses shadcn-convention `:root`/`.dark` custom props (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars (var() indirection resolved), plus `--radius` and `--font-*` roles. Undeclared slots keep their current values. Dry-run by default — returns `changes: [{ token, from, to }]`; `apply: true` persists |
 
 ### Visualization
 
@@ -134,6 +135,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 |---|---|---|
 | `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1, path?, theme?, diff?, resetBaseline?` — `path` captures a single node; `theme` renders with a named theme; `diff: true` compares to the previous same-params capture (tiered result: text-only on zero change, highlight crop + changed-node paths on small change, full image on large) | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
 | `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?, scale?` | Render a snippet in isolation (no host screen) and return a PNG. Defaults to a 480×640 viewport. Useful for iterating on snippet visuals before stamping |
+| `compare_to_url` | `screenId, url, w?, h?, mode?, fullPage?, scale?, theme?, image?` | Code-to-design fidelity check: render the screen and screenshot a live URL (the app page being ported) at the same viewport, then pixel-diff. Returns `{ similarity, changedRatio, heightDelta, regions }` with each region mapped to the screen node under it, plus a side-by-side PNG (URL left, Velloo right; `image: false` for metrics only). `scale` defaults 0.5 |
 
 ### Codegen and export
 

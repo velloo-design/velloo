@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Result } from "@velloo/result";
 import { z } from "zod";
@@ -7,6 +9,7 @@ import {
   applyPreset,
   derivePaletteFromColor,
   getCustomCss,
+  importThemeCss,
   listThemes,
   matchImage,
   matchVibe,
@@ -157,6 +160,56 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       },
     },
     async (args) => toMcp(await matchVibe(ctx, args.description, { useAi: args.useAi })),
+  );
+
+  mcp.registerTool(
+    "import_theme",
+    {
+      description:
+        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` (absolute, or relative to the design folder) to the app's globals.css. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
+      inputSchema: {
+        css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
+        cssPath: z
+          .string()
+          .optional()
+          .describe("Path to the stylesheet — absolute, or relative to the design folder"),
+        theme: z.string().optional().describe('Named theme to merge into; default "default"'),
+        apply: z.boolean().optional().describe("Persist the merge (default false = dry-run)"),
+      },
+    },
+    async (args) => {
+      let css = args.css;
+      if (css === undefined) {
+        if (args.cssPath === undefined) {
+          return themeErrorResult({
+            kind: "BadRequest",
+            message: "pass either `css` text or a `cssPath`",
+          });
+        }
+        const path = isAbsolute(args.cssPath) ? args.cssPath : join(ctx.folder.root, args.cssPath);
+        try {
+          css = await readFile(path, "utf8");
+        } catch (e) {
+          return themeErrorResult({
+            kind: "BadRequest",
+            message: `could not read ${path}: ${e instanceof Error ? e.message : String(e)}`,
+          });
+        }
+      }
+      const r = await importThemeCss(ctx, css, {
+        ...(args.theme !== undefined ? { themeName: args.theme } : {}),
+        ...(args.apply !== undefined ? { apply: args.apply } : {}),
+      });
+      if (!r.ok) return themeErrorResult(r.error);
+      const { changes, warnings, applied } = r.value;
+      return jsonResult({
+        applied,
+        changeCount: changes.length,
+        changes,
+        warnings,
+        ...(applied ? {} : { note: "dry-run — pass apply: true to persist these changes" }),
+      });
+    },
   );
 
   mcp.registerTool(
