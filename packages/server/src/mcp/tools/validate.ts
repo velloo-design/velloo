@@ -34,7 +34,7 @@ interface ClassReport {
 }
 
 function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
 export function registerValidateTools(mcp: McpServer, ctx: MutationContext): void {

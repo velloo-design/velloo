@@ -39,6 +39,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
   const screen = useCanvas((s) => s.screens[frame.screen]);
+  const boardTheme = useCanvas((s) => s.boards[boardId]?.theme);
   const screenVersion = useCanvas((s) => s.screenVersion);
   const themeVersion = useCanvas((s) => s.themeVersion);
   const selection = useCanvas((s) => s.selection);
@@ -224,7 +225,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
             <iframe
               ref={iframeRef}
               title={`${screen.name} (${frame.id})`}
-              src={`${renderUrl(frame.screen, w, h)}&mode=${designMode}&v=${screenVersion}.${themeVersion}`}
+              src={`${renderUrl(frame.screen, w, h, boardTheme)}&mode=${designMode}&v=${screenVersion}.${themeVersion}`}
               width={w}
               height={h}
               className="velloo-frame-iframe border rounded-md bg-white"

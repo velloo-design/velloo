@@ -53,6 +53,7 @@ function makeFolder(screens: Screen[], snippets: Snippet[]): DesignFolder {
     theme: blankTheme(),
     history: new HistoryManager(),
     customCss: "",
+    themes: new Map(),
     screens: new Map(screens.map((s) => [s.id, s])),
     boards: new Map(),
     snippets: new Map(snippets.map((s) => [s.id, s])),

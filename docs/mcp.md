@@ -116,8 +116,10 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Notes |
 |---|---|---|
-| `set_token` | `path, value` | Mutates one token at a dot-path (`colors.primary.DEFAULT`). The full theme is schema-validated after the patch |
-| `set_fonts` | `fonts: [{ role, family, fallback?, google? }]` — each role becomes `--font-<role>` + a `font-<role>` utility; `google` loads the family in design mode and emits an @import in globals.css |
+| `set_token` | `path, value, theme?` | Mutates one token at a dot-path (`colors.primary.DEFAULT`). The full theme is schema-validated after the patch |
+| `add_theme` | `name, from?, overwrite?` — clone a named theme to `theme/<name>.json`; boards pin it via `update_board { patch: { theme } }`, renders/screenshots via their `theme` param |
+| `list_themes` | — | named themes + which boards use each |
+| `set_fonts` | `fonts: [{ role, family, fallback?, google? }], theme?` — each role becomes `--font-<role>` + a `font-<role>` utility; `google` loads the family in design mode and emits an @import in globals.css |
 | `custom_css` | `css?` — read (omit css) or replace `theme/custom.css`; injected into every render and appended to emitted globals.css |
 | `apply_preset` | `presetName` | Switches the active theme to a named preset. Ships with `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum` |
 | `derive_palette_from_color` | `seedColor, name?` | Generates an OKLCH-based palette from a seed (`#hex`, `oklch()`, `rgb()`, …). Foreground/background contrast is auto-adjusted to WCAG AA |
@@ -129,7 +131,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Returns |
 |---|---|---|
-| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1, path?` — `path` (array or "@id") captures a single node | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
+| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1, path?, theme?` — `path` captures a single node; `theme` renders with a named theme | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
 | `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?, scale?` | Render a snippet in isolation (no host screen) and return a PNG. Defaults to a 480×640 viewport. Useful for iterating on snippet visuals before stamping |
 
 ### Codegen and export

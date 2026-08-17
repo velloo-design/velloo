@@ -3,9 +3,11 @@ import type { Result } from "@velloo/result";
 import { z } from "zod";
 import type { ThemeError } from "../../theme/errors.ts";
 import {
+  addTheme,
   applyPreset,
   derivePaletteFromColor,
   getCustomCss,
+  listThemes,
   matchImage,
   matchVibe,
   PRESET_NAMES,
@@ -22,7 +24,7 @@ type McpResult = {
 };
 
 function jsonResult(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
 function themeErrorResult(error: ThemeError): McpResult {
@@ -42,10 +44,11 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       inputSchema: {
         path: z.string(),
         value: z.union([z.string(), z.number()]),
+        theme: z.string().optional().describe('Named theme to edit; default "default"'),
       },
     },
     async (args) => {
-      const r = await setToken(ctx, args.path, args.value);
+      const r = await setToken(ctx, args.path, args.value, args.theme);
       return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
     },
   );
@@ -54,7 +57,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "set_fonts",
     {
       description:
-        'Declare font roles for the design folder. Each role becomes a --font-<role> token and a matching Tailwind utility: role "display" → class font-display. Pass google to load the family from Google Fonts in design mode (axis spec like "wght@400..900", or true for regular weights). Typography is the single biggest personality lever — declare a display face early, before composing screens.',
+        'Declare font roles: role "display" → token --font-display → class font-display. `google` loads from Google Fonts (axis spec like "wght@400..900", or true). Declare a display face before composing — typography is the biggest personality lever.',
       inputSchema: {
         fonts: z
           .array(
@@ -71,10 +74,11 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
             }),
           )
           .min(1),
+        theme: z.string().optional().describe('Named theme to edit; default "default"'),
       },
     },
     async (args) => {
-      const r = await setFonts(ctx, args.fonts);
+      const r = await setFonts(ctx, args.fonts, args.theme);
       return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
     },
   );
@@ -83,7 +87,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "custom_css",
     {
       description:
-        "Read or replace the folder's escape-hatch stylesheet (theme/custom.css): keyframes, grain/noise textures, clip-paths, selection styling — anything Tailwind utilities can't express. Injected into every rendered screen after theme variables and appended to emitted globals.css. Pass css to replace; omit it to read the current contents. Replaces the whole file — read first when editing incrementally.",
+        "Read (omit css) or replace theme/custom.css — keyframes, grain, clip-paths, anything utilities can't express. Injected into every render and appended to emitted globals.css. Replaces the whole file: read first when editing.",
       inputSchema: {
         css: z.string().optional(),
       },
@@ -92,6 +96,29 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       if (args.css === undefined) return jsonResult(getCustomCss(ctx));
       return toMcp(await setCustomCss(ctx, args.css));
     },
+  );
+
+  mcp.registerTool(
+    "add_theme",
+    {
+      description:
+        "Create a named theme (theme/<name>.json) by cloning an existing one. Boards pick it up via update_board { patch: { theme: <name> } }; renders and screenshots accept theme: <name>. Edit it afterwards with set_token / set_fonts + their theme param.",
+      inputSchema: {
+        name: z.string().describe("Lowercase kebab, not 'default'"),
+        from: z.string().optional().describe("Source theme to clone; default 'default'"),
+        overwrite: z.boolean().optional(),
+      },
+    },
+    async (args) => toMcp(await addTheme(ctx, args.name, args.from, args.overwrite ?? false)),
+  );
+
+  mcp.registerTool(
+    "list_themes",
+    {
+      description: "List named themes and which boards use each.",
+      inputSchema: {},
+    },
+    async () => jsonResult(listThemes(ctx)),
   );
 
   mcp.registerTool(

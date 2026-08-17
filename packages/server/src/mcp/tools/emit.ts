@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { type CodegenError, emitCode, emitSnippet, emitTheme } from "@velloo/codegen";
 import { z } from "zod";
-import type { DesignFolder } from "../../design-folder.ts";
+import { type DesignFolder, themeByName } from "../../design-folder.ts";
 
 type McpResult = {
   content: { type: "text"; text: string }[];
@@ -10,7 +10,7 @@ type McpResult = {
 };
 
 function jsonResult(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
 function codegenErrorResult(error: CodegenError | { kind: string }): McpResult {
@@ -81,11 +81,12 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
         outputDir: z.string(),
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
+        theme: z.string().optional().describe("Named theme to emit; default 'default'"),
       },
     },
     async (args) => {
       const out = resolve(ctx.folder.root, args.outputDir);
-      const result = await emitTheme(ctx.folder.theme, {
+      const result = await emitTheme(themeByName(ctx.folder, args.theme), {
         outputDir: out,
         apply: args.apply ?? false,
         cssOnly: args.cssOnly,

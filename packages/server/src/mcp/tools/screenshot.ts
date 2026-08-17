@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo/renderer";
 import type { Screen, Viewport } from "@velloo/schema";
 import { z } from "zod";
+import { themeByName } from "../../design-folder.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { registryForScreen, resolve as resolveLocator } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
@@ -39,7 +40,7 @@ export function registerScreenshotTool(
     "screenshot",
     {
       description:
-        'Render a screen headless via Playwright and return the PNG as image content. mode: "light" (default), "dark", or "compare". w/h default to the desktop viewport preset; the screen renders responsively at that size. Defaults fullPage: true. Pass scale (0.25–1, e.g. 0.5) for a smaller PNG when checking layout rather than pixel detail — it keeps your context lean. Pass path (path array or "@id") to capture just that element instead of the whole page.',
+        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). w/h default to the desktop preset; fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -51,9 +52,10 @@ export function registerScreenshotTool(
           .union([z.array(z.number().int().nonnegative()), z.string()])
           .optional()
           .describe('Capture only this node — path array or "@id" (not with mode: "compare")'),
+        theme: z.string().optional().describe("Named theme to render with (boards pin one)"),
       },
     },
-    async ({ screenId, w, h, mode, fullPage, scale, path }) => {
+    async ({ screenId, w, h, mode, fullPage, scale, path, theme }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
 
@@ -76,7 +78,7 @@ export function registerScreenshotTool(
         const screenRegistry = registryForScreen(ctx, screen);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
-            renderScreen(screen, ctx.folder.theme, {
+            renderScreen(screen, themeByName(ctx.folder, theme), {
               viewport,
               snapshotCss,
               registry: screenRegistry,
@@ -85,7 +87,7 @@ export function registerScreenshotTool(
               baseHref: assetOrigin,
               dark: false,
             }),
-            renderScreen(screen, ctx.folder.theme, {
+            renderScreen(screen, themeByName(ctx.folder, theme), {
               viewport,
               snapshotCss,
               registry: screenRegistry,
@@ -102,7 +104,7 @@ export function registerScreenshotTool(
             ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
-          const { html } = await renderScreen(screen, ctx.folder.theme, {
+          const { html } = await renderScreen(screen, themeByName(ctx.folder, theme), {
             viewport,
             snapshotCss,
             registry: screenRegistry,
@@ -149,9 +151,10 @@ export function registerScreenshotTool(
           .optional(),
         mode: z.enum(["light", "dark", "compare"]).optional(),
         scale: z.number().min(0.25).max(1).optional(),
+        theme: z.string().optional().describe("Named theme to render with"),
       },
     },
-    async ({ snippetId, args, extraClassName, viewport, mode, scale }) => {
+    async ({ snippetId, args, extraClassName, viewport, mode, scale, theme }) => {
       const snippet = ctx.folder.snippets.get(snippetId);
       if (!snippet) return errorResult(`Snippet not found: ${snippetId}`);
 
@@ -179,7 +182,7 @@ export function registerScreenshotTool(
         const screenRegistry = registryForScreen(ctx, syntheticScreen);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
-            renderScreen(syntheticScreen, ctx.folder.theme, {
+            renderScreen(syntheticScreen, themeByName(ctx.folder, theme), {
               viewport: vp,
               snapshotCss,
               registry: screenRegistry,
@@ -188,7 +191,7 @@ export function registerScreenshotTool(
               baseHref: assetOrigin,
               dark: false,
             }),
-            renderScreen(syntheticScreen, ctx.folder.theme, {
+            renderScreen(syntheticScreen, themeByName(ctx.folder, theme), {
               viewport: vp,
               snapshotCss,
               registry: screenRegistry,
@@ -205,7 +208,7 @@ export function registerScreenshotTool(
             ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
-          const { html } = await renderScreen(syntheticScreen, ctx.folder.theme, {
+          const { html } = await renderScreen(syntheticScreen, themeByName(ctx.folder, theme), {
             viewport: vp,
             snapshotCss,
             registry: screenRegistry,

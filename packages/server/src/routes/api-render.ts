@@ -1,6 +1,7 @@
 import { renderScreen, resolveSnippetBodyForEdit, UnknownComponentError } from "@velloo/renderer";
 import type { Node, Screen, Viewport } from "@velloo/schema";
 import { Hono } from "hono";
+import { themeByName } from "../design-folder.ts";
 import { buildShowcaseTree } from "../library/showcases.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { registryForScreen } from "../mutations/lookup.ts";
@@ -75,7 +76,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
-      const { html } = await renderScreen(screen, f.theme, {
+      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, snippet),
@@ -138,7 +139,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
-      const { html } = await renderScreen(screen, f.theme, {
+      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, snippet),
@@ -212,7 +213,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
       const snapshotCss = await jit.build();
       // Component previews render against the folder default library —
       // showcases live in the default-provider's surface today.
-      const { html } = await renderScreen(screen, f.theme, {
+      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, screen),
@@ -243,7 +244,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
-      const { html } = await renderScreen(screen, f.theme, {
+      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, screen),

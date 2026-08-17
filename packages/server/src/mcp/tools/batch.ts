@@ -101,7 +101,7 @@ export function registerBatchTool(mcp: McpServer, ctx: MutationContext): void {
       };
       return {
         ...(failed ? { isError: true as const } : {}),
-        content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
     },
   );

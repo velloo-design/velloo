@@ -24,7 +24,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     async (args) => {
       const result = await inspect(ctx, args);
       if (result.ok) {
-        return { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify(result.value) }] };
       }
       return {
         isError: true,
@@ -52,7 +52,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     async (args) => {
       const result = await findNodes(ctx, args);
       if (result.ok) {
-        return { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify(result.value) }] };
       }
       return {
         isError: true,
@@ -65,7 +65,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     "audit",
     {
       description:
-        "Dark-mode audit for a screen (screenId) or a snippet body (snippetId) — pass exactly one. Flags every color-bearing class that won't theme-flip. Structural utilities (border-b, ring-0, shadow-none, text-xl, bg-transparent, text-current) are exempt by design; set `data-accent` (any truthy value) on a node's props to exempt it entirely. Returns coverage (0..1) + per-node problems with semantic-token suggestions. Auditing the snippet catches bad patterns at definition time rather than at N instantiation sites.",
+        "Dark-mode audit for a screen (screenId) or snippet body (snippetId) — exactly one. Flags color classes that won't theme-flip; structural utilities exempt; set data-accent on a node to exempt it. Returns coverage + per-node problems with token suggestions.",
       inputSchema: {
         screenId: z.string().optional(),
         snippetId: z.string().optional(),
@@ -91,7 +91,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
           ? await darkModeAudit(ctx, { screenId })
           : await auditSnippet(ctx, { snippetId: snippetId as string });
       if (result.ok) {
-        return { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify(result.value) }] };
       }
       return {
         isError: true,

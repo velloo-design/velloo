@@ -1,7 +1,7 @@
 import { err, type Result } from "@velloo/result";
 import { type Theme, ThemeSchema } from "@velloo/schema";
-import type { DesignFolder } from "../design-folder.ts";
-import { persistTheme } from "../mutations/persist.ts";
+import { type DesignFolder, themeByName } from "../design-folder.ts";
+import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError } from "./errors.ts";
 
 /**
@@ -34,9 +34,11 @@ const DEFAULT_FALLBACK: Record<string, string> = {
 export async function setFonts(
   folder: DesignFolder,
   fonts: FontSpec[],
+  themeName = "default",
 ): Promise<Result<Theme, ThemeError>> {
-  const fontFamily: Record<string, string> = { ...(folder.theme.typography.fontFamily ?? {}) };
-  const googleFonts = [...(folder.theme.typography.googleFonts ?? [])];
+  const base = themeByName(folder, themeName);
+  const fontFamily: Record<string, string> = { ...(base.typography.fontFamily ?? {}) };
+  const googleFonts = [...(base.typography.googleFonts ?? [])];
 
   for (const spec of fonts) {
     if (!/^[a-z][a-z0-9-]*$/.test(spec.role)) {
@@ -61,13 +63,13 @@ export async function setFonts(
   }
 
   const next: Theme = {
-    ...folder.theme,
-    typography: { ...folder.theme.typography, fontFamily, googleFonts },
+    ...base,
+    typography: { ...base.typography, fontFamily, googleFonts },
   };
   const parsed = ThemeSchema.safeParse(next);
   if (!parsed.success) {
     return err(invalidThemePath(parsed.error.issues[0]?.message ?? "invalid theme"));
   }
-  const persisted = await persistTheme(folder, parsed.data);
+  const persisted = await persistNamedTheme(folder, themeName, parsed.data);
   return { ok: true, value: persisted };
 }

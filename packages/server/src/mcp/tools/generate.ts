@@ -10,7 +10,7 @@ type McpResult = {
 };
 
 function ok(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 function fail(value: unknown): McpResult {
   return { isError: true, content: [{ type: "text", text: JSON.stringify(value) }] };

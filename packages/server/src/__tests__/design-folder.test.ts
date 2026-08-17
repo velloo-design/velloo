@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadDesignFolder, reloadScreen, reloadTheme } from "../design-folder.ts";
+import { loadDesignFolder, reloadScreen, reloadTheme, themeByName } from "../design-folder.ts";
 
 const config = {
   schemaVersion: 1,
@@ -114,5 +114,28 @@ describe("reloadTheme", () => {
     await writeJson(join(tmp, "theme", "default.json"), { ...theme, name: "edited" });
     await reloadTheme(folder);
     expect(folder.theme.name).toBe("edited");
+  });
+});
+
+describe("named themes", () => {
+  test("theme/*.json load into folder.themes with default aliased", async () => {
+    await writeJson(join(tmp, "theme", "midnight.json"), { ...theme, name: "midnight" });
+    const folder = await loadDesignFolder(tmp);
+    expect([...folder.themes.keys()].sort()).toEqual(["default", "midnight"]);
+    expect(folder.themes.get("default")).toBe(folder.theme);
+    expect(themeByName(folder, "midnight").name).toBe("midnight");
+  });
+
+  test("themeByName falls back to default for unknown/absent names", async () => {
+    const folder = await loadDesignFolder(tmp);
+    expect(themeByName(folder, undefined)).toBe(folder.theme);
+    expect(themeByName(folder, "ghost")).toBe(folder.theme);
+  });
+
+  test("reloadTheme refreshes the named map", async () => {
+    const folder = await loadDesignFolder(tmp);
+    await writeJson(join(tmp, "theme", "neon.json"), { ...theme, name: "neon" });
+    await reloadTheme(folder);
+    expect(themeByName(folder, "neon").name).toBe("neon");
   });
 });

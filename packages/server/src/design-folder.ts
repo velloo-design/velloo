@@ -30,6 +30,12 @@ export interface DesignFolder {
    * absent. Injected into every rendered document after the theme vars.
    */
   customCss: string;
+  /**
+   * Every named theme in `theme/*.json`, keyed by filename stem.
+   * Always contains "default" (=== `theme`). Boards pick one via
+   * `board.theme`; renders fall back to the default.
+   */
+  themes: Map<string, Theme>;
   screens: Map<string, Screen>;
   /**
    * Boards keyed by id. A folder has many boards — one per flow ("welcome",
@@ -167,6 +173,12 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   const annotations = await loadAnnotations(root, screens.keys());
   const notes = await loadBoardNotes(root, boards.keys());
   const customCss = await readCustomCss(root);
+  const themes = await loadDir(
+    join(root, "theme"),
+    (raw) => ThemeSchema.parse(raw),
+    snippetIdFromFilename,
+  );
+  themes.set("default", theme);
 
   return {
     root,
@@ -174,6 +186,7 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
     theme,
     history: new HistoryManager(),
     customCss,
+    themes,
     screens,
     boards,
     snippets,
@@ -223,7 +236,19 @@ export async function reloadTheme(folder: DesignFolder): Promise<Theme> {
   const theme = ThemeSchema.parse(raw);
   folder.theme = theme;
   folder.customCss = await readCustomCss(folder.root);
+  folder.themes = await loadDir(
+    join(folder.root, "theme"),
+    (r) => ThemeSchema.parse(r),
+    snippetIdFromFilename,
+  );
+  folder.themes.set("default", theme);
   return theme;
+}
+
+/** Resolve a named theme; absent/unknown names fall back to the default. */
+export function themeByName(folder: DesignFolder, name?: string | null): Theme {
+  if (!name) return folder.theme;
+  return folder.themes.get(name) ?? folder.theme;
 }
 
 async function readCustomCss(root: string): Promise<string> {

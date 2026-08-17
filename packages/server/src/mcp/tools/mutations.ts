@@ -39,7 +39,7 @@ type McpResult = {
 };
 
 function jsonResult(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
 function mutationErrorResult(error: MutationError): McpResult {
@@ -86,26 +86,26 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_node",
     {
       description:
-        'Insert a new node into a screen tree under parentPath. parentPath accepts a path array OR an "@id" reference. Pass `id` for a stable anchor. children may carry full subtrees so a feature card lands in one call.',
+        'Insert a node under parentPath ("@id" or path array). Pass `id` for a stable anchor. children carries full subtrees — build a whole card in one call.',
       inputSchema: {
         screenId: z.string(),
         parentPath: PathSchema,
         componentRef: z.string(),
         id: NodeIdInputSchema.optional(),
         props: z.record(z.string(), z.unknown()).optional(),
-        children: z.array(z.unknown()).optional(),
+        children: z.array(NodeSchema).optional(),
         index: z.number().int().nonnegative().optional(),
       },
     },
     async (args) =>
-      toMcpWithWarnings(await addNode(ctx, args as never), async () => {
-        const screen = ctx.folder.screens.get(args.screenId as string);
+      toMcpWithWarnings(await addNode(ctx, args), async () => {
+        const screen = ctx.folder.screens.get(args.screenId);
         if (!screen) return [];
-        const inserted = {
+        const inserted: Node = {
           $ref: args.componentRef,
           ...(args.props ? { props: args.props } : {}),
           ...(args.children ? { children: args.children } : {}),
-        } as Node;
+        };
         return propWarningsForTree(ctx, screen, inserted);
       }),
   );
@@ -114,7 +114,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_props",
     {
       description:
-        "Shallow-merge a prop patch into the node at path. Use null to remove a key. className is a prop like any other — set it here to restyle a node. To patch many nodes in one atomic write (single history entry + broadcast), pass `patches: [{ path, propPatch }]` instead of path/propPatch.",
+        "Shallow-merge propPatch into the node at path (null removes a key; className restyles). For many nodes in one atomic write, pass `patches: [{ path, propPatch }]` instead.",
       inputSchema: {
         screenId: z.string(),
         path: PathSchema.optional(),
@@ -272,10 +272,14 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "update_board",
     {
-      description: "Update a board's metadata (name only today).",
+      description:
+        "Update a board's metadata. patch.theme names a theme (stem of theme/<name>.json) the board's frames render with — the per-board look; null clears back to the folder default.",
       inputSchema: {
         boardId: z.string(),
-        patch: z.object({ name: z.string().optional() }),
+        patch: z.object({
+          name: z.string().optional(),
+          theme: z.string().nullable().optional(),
+        }),
       },
     },
     async (args) => toMcp(await updateBoard(ctx, args)),

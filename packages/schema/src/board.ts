@@ -27,6 +27,13 @@ export type BoardGroup = z.infer<typeof BoardGroupSchema>;
 export const BoardSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  /**
+   * Named theme (stem of `theme/<name>.json`) the canvas applies when
+   * rendering this board's frames. Absent = the folder default. Lets
+   * candidate boards carry their own palette/typography side by side —
+   *
+   */
+  theme: z.string().min(1).optional(),
   frames: z.array(FrameSchema).default([]),
   groups: z.array(BoardGroupSchema).default([]),
 });

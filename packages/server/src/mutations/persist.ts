@@ -98,6 +98,24 @@ export async function persistTheme(folder: DesignFolder, theme: Theme): Promise<
   folder.history.push({ kind: "theme", theme: folder.theme });
   await writeJsonAtomic(join(folder.root, "theme", "default.json"), validated);
   folder.theme = validated;
+  folder.themes.set("default", validated);
+  return validated;
+}
+
+/**
+ * Persist a named theme (`theme/<name>.json`). "default" routes through
+ * persistTheme so undo history keeps covering the primary theme; named
+ * themes skip history (board-scoped looks, edited deliberately).
+ */
+export async function persistNamedTheme(
+  folder: DesignFolder,
+  name: string,
+  theme: Theme,
+): Promise<Theme> {
+  if (name === "default") return persistTheme(folder, theme);
+  const validated = ThemeSchema.parse(theme);
+  await writeJsonAtomic(join(folder.root, "theme", `${name}.json`), validated);
+  folder.themes.set(name, validated);
   return validated;
 }
 

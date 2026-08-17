@@ -65,10 +65,18 @@ async function serveStatic(req: Request): Promise<Response | null> {
  * `font-<role>` utilities compile. Values are overridden at render time
  * by themeToCss's :root vars; the JIT only needs the token to exist.
  */
-function fontThemeBlock(theme: DesignFolder["theme"]): string {
-  const fonts = theme.typography.fontFamily;
-  if (!fonts || Object.keys(fonts).length === 0) return "";
-  const lines = Object.entries(fonts).map(([role, stack]) => `  --font-${role}: ${stack};`);
+function fontThemeBlock(folder: DesignFolder): string {
+  // Merge roles across every named theme so font-<role> utilities
+  // compile for whichever theme a board renders with. Values are
+  // overridden per render by themeToCss's :root vars.
+  const merged: Record<string, string> = {};
+  for (const theme of folder.themes.values()) {
+    for (const [role, stack] of Object.entries(theme.typography.fontFamily ?? {})) {
+      merged[role] = stack;
+    }
+  }
+  if (Object.keys(merged).length === 0) return "";
+  const lines = Object.entries(merged).map(([role, stack]) => `  --font-${role}: ${stack};`);
   return `@theme {\n${lines.join("\n")}\n}`;
 }
 
@@ -109,7 +117,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     Object.values(providers),
     join(folder.root, "screens"),
     undefined,
-    () => fontThemeBlock(folder.theme),
+    () => fontThemeBlock(folder),
   );
   const broadcast = (e: WatchEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {

@@ -15,7 +15,7 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
 
 function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
 interface ComponentSummary {

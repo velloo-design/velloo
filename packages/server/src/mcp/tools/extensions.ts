@@ -19,14 +19,14 @@ const ExtensionPropArg = z.object({
 });
 
 function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
 function errorResult(value: unknown): {
   isError: true;
   content: { type: "text"; text: string }[];
 } {
-  return { isError: true, content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+  return { isError: true, content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
 /**

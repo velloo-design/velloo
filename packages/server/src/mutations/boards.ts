@@ -50,7 +50,11 @@ export async function addBoard(
 
 export interface UpdateBoardArgs {
   boardId: string;
-  patch: { name?: string };
+  patch: {
+    name?: string;
+    /** Named theme for the board's frames; null clears back to default. */
+    theme?: string | null;
+  };
 }
 
 export interface UpdateBoardResult {
@@ -65,6 +69,10 @@ export async function updateBoard(
     const board = yield* $(getBoard(ctx, args.boardId));
     const next: Board = { ...board };
     if (args.patch.name !== undefined) next.name = args.patch.name;
+    if (args.patch.theme !== undefined) {
+      if (args.patch.theme === null) delete next.theme;
+      else next.theme = args.patch.theme;
+    }
     await persistBoard(ctx.folder, args.boardId, next);
     ctx.broadcast({ type: "board-changed", boardId: args.boardId });
     return { board: next };

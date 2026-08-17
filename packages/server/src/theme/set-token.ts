@@ -1,7 +1,7 @@
 import { err, ok, type Result, tryCatchAsync } from "@velloo/result";
 import { type Theme, ThemeSchema } from "@velloo/schema";
-import type { DesignFolder } from "../design-folder.ts";
-import { persistTheme } from "../mutations/persist.ts";
+import { type DesignFolder, themeByName } from "../design-folder.ts";
+import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError } from "./errors.ts";
 
 /**
@@ -13,6 +13,7 @@ export async function setToken(
   folder: DesignFolder,
   path: string,
   value: string | number,
+  themeName = "default",
 ): Promise<Result<Theme, ThemeError>> {
   if (!path) return err(invalidThemePath("path is required"));
   const segments = path.split(".");
@@ -21,7 +22,10 @@ export async function setToken(
   }
 
   // Deep-clone the current theme so we don't mutate the cached object.
-  const next = JSON.parse(JSON.stringify(folder.theme)) as Record<string, unknown>;
+  const next = JSON.parse(JSON.stringify(themeByName(folder, themeName))) as Record<
+    string,
+    unknown
+  >;
   let cursor: Record<string, unknown> = next;
   for (let i = 0; i < segments.length - 1; i++) {
     const k = segments[i] as string;
@@ -47,7 +51,7 @@ export async function setToken(
   }
 
   const persisted = await tryCatchAsync(
-    () => persistTheme(folder, parsed.data),
+    () => persistNamedTheme(folder, themeName, parsed.data),
     (e) =>
       invalidThemePath(
         `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme: ${

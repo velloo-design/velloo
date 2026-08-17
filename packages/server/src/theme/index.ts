@@ -1,7 +1,7 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
-import type { DesignFolder } from "../design-folder.ts";
-import { persistTheme } from "../mutations/persist.ts";
+import { type DesignFolder, themeByName } from "../design-folder.ts";
+import { persistNamedTheme, persistTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import {
@@ -43,9 +43,10 @@ export async function setToken(
   ctx: ThemeContext,
   path: string,
   value: string | number,
+  themeName?: string,
 ): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(async () => {
-    const r = await setTokenImpl(ctx.folder, path, value);
+    const r = await setTokenImpl(ctx.folder, path, value, themeName);
     if (r.ok) broadcastThemeChanged(ctx);
     return r;
   });
@@ -54,12 +55,59 @@ export async function setToken(
 export async function setFonts(
   ctx: ThemeContext,
   fonts: FontSpec[],
+  themeName?: string,
 ): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(async () => {
-    const r = await setFontsImpl(ctx.folder, fonts);
+    const r = await setFontsImpl(ctx.folder, fonts, themeName);
     if (r.ok) broadcastThemeChanged(ctx);
     return r;
   });
+}
+
+/** Create theme/<name>.json by cloning another theme (default if omitted). */
+export async function addTheme(
+  ctx: ThemeContext,
+  name: string,
+  from?: string,
+  overwrite = false,
+): Promise<Result<{ name: string; theme: Theme }, ThemeError>> {
+  return withThemeLock(async () => {
+    if (!/^[a-z][a-z0-9-]*$/.test(name) || name === "default") {
+      return {
+        ok: false as const,
+        error: {
+          kind: "InvalidThemePath" as const,
+          reason: `theme name "${name}" must be lowercase kebab (and not "default")`,
+        },
+      };
+    }
+    if (!overwrite && ctx.folder.themes.has(name)) {
+      return {
+        ok: false as const,
+        error: {
+          kind: "InvalidThemePath" as const,
+          reason: `theme "${name}" already exists (pass overwrite: true to replace)`,
+        },
+      };
+    }
+    const source = themeByName(ctx.folder, from);
+    const cloned: Theme = JSON.parse(JSON.stringify({ ...source, name }));
+    const persisted = await persistNamedTheme(ctx.folder, name, cloned);
+    broadcastThemeChanged(ctx);
+    return { ok: true as const, value: { name, theme: persisted } };
+  });
+}
+
+export function listThemes(ctx: ThemeContext): {
+  themes: { name: string; usedByBoards: string[] }[];
+} {
+  const themes = [...ctx.folder.themes.keys()].sort().map((name) => ({
+    name,
+    usedByBoards: [...ctx.folder.boards.values()]
+      .filter((b) => (b.theme ?? "default") === name)
+      .map((b) => b.id),
+  }));
+  return { themes };
 }
 
 export async function setCustomCss(

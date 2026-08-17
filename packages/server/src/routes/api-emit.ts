@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { emitCode, emitTheme } from "@velloo/codegen";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { DesignFolder } from "../design-folder.ts";
+import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { screenNotFound } from "../mutations/errors.ts";
 import { codegenToHttp, mutationToHttp } from "./error-http.ts";
 
@@ -15,6 +15,7 @@ const EmitThemeBody = z.object({
   outputDir: z.string().min(1),
   apply: z.boolean().optional(),
   cssOnly: z.boolean().optional(),
+  theme: z.string().optional(),
 });
 
 export function createEmitRouter(folderFor: () => DesignFolder): Hono {
@@ -67,7 +68,7 @@ export function createEmitRouter(folderFor: () => DesignFolder): Hono {
     const args = parsed.data;
     const folder = folderFor();
     const out = resolve(folder.root, args.outputDir);
-    const result = await emitTheme(folder.theme, {
+    const result = await emitTheme(themeByName(folder, args.theme), {
       outputDir: out,
       apply: args.apply ?? false,
       cssOnly: args.cssOnly,

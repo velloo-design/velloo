@@ -28,7 +28,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     "upload_asset",
     {
       description:
-        'Write an image (or any binary) into the design folder\'s assets/ directory and get back the URL to use as an Image src. data is base64 (no data: prefix). The agent can author SVG art directly and upload it — <Image src="/assets/hero.svg" /> renders SVGs fine — so imagery never has to fall back to stock placeholders. Max 5MB.',
+        "Write base64 data into assets/ and get the /assets/<name> URL for <Image src>. Author SVG art directly and upload it — never fall back to stock placeholders for intentional imagery. Max 5MB.",
       inputSchema: {
         filename: z.string().describe('e.g. "hero-grain.svg", "cover.png"'),
         data: z.string().describe("base64-encoded file contents"),
@@ -72,7 +72,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
         url: `/assets/${safe}`,
         bytes: bytes.length,
       };
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] } as McpResult;
+      return { content: [{ type: "text", text: JSON.stringify(result) }] } as McpResult;
     },
   );
 }

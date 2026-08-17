@@ -18,7 +18,7 @@ type McpResult = {
 
 function toMcp<T>(result: Result<T, MutationError>): McpResult {
   return result.ok
-    ? { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] }
+    ? { content: [{ type: "text", text: JSON.stringify(result.value) }] }
     : { isError: true, content: [{ type: "text", text: JSON.stringify(result.error) }] };
 }
 
@@ -34,7 +34,7 @@ export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
     "add_note",
     {
       description:
-        "Add a sticky note to a board at board coordinates (same space as frame x/y — place notes above or beside frames, not on top of them). body is markdown-lite: bold, italics, line breaks, emoji.",
+        "Add a sticky note at board coordinates (same space as frame x/y; place beside frames, not on them). body is markdown-lite.",
       inputSchema: {
         boardId: z.string(),
         x: z.number(),
