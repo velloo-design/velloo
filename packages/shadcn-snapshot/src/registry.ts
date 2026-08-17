@@ -151,6 +151,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./components/ui/tooltip.tsx";
+import { Box } from "./components/velloo/box.tsx";
 import { Divider } from "./components/velloo/divider.tsx";
 import { Gradient } from "./components/velloo/gradient.tsx";
 import { Heading } from "./components/velloo/heading.tsx";
@@ -183,6 +184,7 @@ export const registry: Record<string, ComponentType<any>> = {
   AvatarFallback,
   AvatarImage,
   Badge,
+  Box,
   Breadcrumb,
   BreadcrumbEllipsis,
   BreadcrumbItem,

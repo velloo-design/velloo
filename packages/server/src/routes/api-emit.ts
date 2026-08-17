@@ -71,6 +71,7 @@ export function createEmitRouter(folderFor: () => DesignFolder): Hono {
       outputDir: out,
       apply: args.apply ?? false,
       cssOnly: args.cssOnly,
+      customCss: folder.customCss,
     });
     return c.json({ files: result.files });
   });

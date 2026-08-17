@@ -50,14 +50,21 @@ export type Colors = z.infer<typeof ColorsSchema>;
  * breaking validation.
  */
 export const TypographySchema = z.object({
-  fontFamily: z
-    .object({
-      sans: z.string().min(1).optional(),
-      mono: z.string().min(1).optional(),
-      serif: z.string().min(1).optional(),
-    })
-    .partial()
-    .optional(),
+  /**
+   * Font stacks keyed by role. `sans` / `mono` / `serif` are the
+   * conventional roles, but any key works — `display: '"Unbounded",
+   * sans-serif'` becomes `--font-display`, which Tailwind v4 turns into
+   * a `font-display` utility. Roles are the lever for typographic
+   * personality: declare one per voice, not one per screen.
+   */
+  fontFamily: z.record(z.string(), z.string().min(1)).optional(),
+  /**
+   * Google Fonts css2 family specs to load in design mode and emit as
+   * an @import in generated globals.css. Full spec syntax, e.g.
+   * "Unbounded:wght@400..900" or "Fraunces:ital,wght@0,300..900".
+   * Set via the `set_fonts` MCP tool rather than by hand.
+   */
+  googleFonts: z.array(z.string().min(1)).optional(),
   fontSize: z.record(z.string(), NumOrCssLen).optional(),
   fontWeight: z.record(z.string(), NumOrCssLen).optional(),
   lineHeight: z.record(z.string(), NumOrCssLen).optional(),

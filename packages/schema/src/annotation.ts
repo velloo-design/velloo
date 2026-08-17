@@ -51,6 +51,13 @@ export const AnnotationSchema = z.object({
   body: z.string(),
   /** Persisted collapsed state. Optional — undefined means "use canvas default". */
   collapsed: z.boolean().optional(),
+  /**
+   * Who wrote it. Absent = "user" (pre-existing annotations predate the
+   * field). Agents may create annotations (questions pinned to a node,
+   * review remarks) but may only edit/remove their own — user-authored
+   * annotations remain the protected designer→agent channel.
+   */
+  author: z.enum(["user", "agent"]).optional(),
 });
 export type Annotation = z.infer<typeof AnnotationSchema>;
 

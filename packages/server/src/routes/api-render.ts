@@ -80,6 +80,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
         snapshotCss,
         registry: registryForScreen(ctx, snippet),
         snippets: f.snippets,
+        customCss: f.customCss,
         dark,
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
@@ -142,6 +143,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
         snapshotCss,
         registry: registryForScreen(ctx, snippet),
         snippets: f.snippets,
+        customCss: f.customCss,
         dark,
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
@@ -215,6 +217,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
         snapshotCss,
         registry: registryForScreen(ctx, screen),
         snippets: f.snippets,
+        customCss: f.customCss,
         dark,
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
@@ -245,6 +248,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
         snapshotCss,
         registry: registryForScreen(ctx, screen),
         snippets: f.snippets,
+        customCss: f.customCss,
         dark,
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });

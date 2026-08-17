@@ -111,8 +111,14 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   Layer: shadcn("Layer", "velloo/layer"),
   SVG: shadcn("SVG", "velloo/svg"),
 
-  // Velloo-owned typography primitives — lower to plain HTML so the user's
-  // shadcn install is enough.
+  // Velloo-owned layout/typography primitives — lower to plain HTML so
+  // the user's shadcn install is enough.
+  Box: {
+    kind: "lowered",
+    lower() {
+      return { tag: "div", extraClasses: "" };
+    },
+  },
   Heading: {
     kind: "lowered",
     lower(props) {

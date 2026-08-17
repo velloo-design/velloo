@@ -24,6 +24,12 @@ export interface DesignFolder {
   theme: Theme;
   /** Per-folder undo/redo stacks — see history.ts. */
   history: HistoryManager;
+  /**
+   * Contents of `theme/custom.css` — the folder's escape-hatch CSS for
+   * keyframes, textures, clip-paths. Empty string when the file is
+   * absent. Injected into every rendered document after the theme vars.
+   */
+  customCss: string;
   screens: Map<string, Screen>;
   /**
    * Boards keyed by id. A folder has many boards — one per flow ("welcome",
@@ -160,12 +166,14 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   );
   const annotations = await loadAnnotations(root, screens.keys());
   const notes = await loadBoardNotes(root, boards.keys());
+  const customCss = await readCustomCss(root);
 
   return {
     root,
     config,
     theme,
     history: new HistoryManager(),
+    customCss,
     screens,
     boards,
     snippets,
@@ -214,7 +222,17 @@ export async function reloadTheme(folder: DesignFolder): Promise<Theme> {
   const raw = await readJson(join(folder.root, "theme", "default.json"));
   const theme = ThemeSchema.parse(raw);
   folder.theme = theme;
+  folder.customCss = await readCustomCss(folder.root);
   return theme;
+}
+
+async function readCustomCss(root: string): Promise<string> {
+  try {
+    return await readFile(join(root, "theme", "custom.css"), "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return "";
+    throw err;
+  }
 }
 
 /** Reload one snippet from disk and update the cache in place. */

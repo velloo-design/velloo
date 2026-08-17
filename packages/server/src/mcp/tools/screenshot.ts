@@ -3,7 +3,7 @@ import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo
 import type { Screen, Viewport } from "@velloo/schema";
 import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
-import { registryForScreen } from "../../mutations/lookup.ts";
+import { registryForScreen, resolve as resolveLocator } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 
 type McpResult = {
@@ -33,12 +33,13 @@ export function registerScreenshotTool(
   mcp: McpServer,
   ctx: MutationContext,
   jit: TailwindJit,
+  assetOrigin?: string,
 ): void {
   mcp.registerTool(
     "screenshot",
     {
       description:
-        'Render a screen headless via Playwright and return the PNG as image content. mode: "light" (default), "dark", or "compare". w/h default to the desktop viewport preset; the screen renders responsively at that size. Defaults fullPage: true. Pass scale (0.25–1, e.g. 0.5) for a smaller PNG when checking layout rather than pixel detail — it keeps your context lean.',
+        'Render a screen headless via Playwright and return the PNG as image content. mode: "light" (default), "dark", or "compare". w/h default to the desktop viewport preset; the screen renders responsively at that size. Defaults fullPage: true. Pass scale (0.25–1, e.g. 0.5) for a smaller PNG when checking layout rather than pixel detail — it keeps your context lean. Pass path (path array or "@id") to capture just that element instead of the whole page.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -46,11 +47,25 @@ export function registerScreenshotTool(
         mode: z.enum(["light", "dark", "compare"]).optional(),
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional(),
+        path: z
+          .union([z.array(z.number().int().nonnegative()), z.string()])
+          .optional()
+          .describe('Capture only this node — path array or "@id" (not with mode: "compare")'),
       },
     },
-    async ({ screenId, w, h, mode, fullPage, scale }) => {
+    async ({ screenId, w, h, mode, fullPage, scale, path }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
+
+      let clipSelector: string | undefined;
+      if (path !== undefined) {
+        if (mode === "compare") {
+          return errorResult('screenshot: path cannot be combined with mode: "compare"');
+        }
+        const resolved = resolveLocator(screen.tree, path, screenId);
+        if (!resolved.ok) return errorResult(JSON.stringify(resolved.error));
+        clipSelector = `[data-node-path="${resolved.value.join(".")}"]`;
+      }
 
       const defaults = defaultViewport(ctx.folder);
       const viewport: Viewport = { w: w ?? defaults.w, h: h ?? defaults.h };
@@ -66,6 +81,8 @@ export function registerScreenshotTool(
               snapshotCss,
               registry: screenRegistry,
               snippets: ctx.folder.snippets,
+              customCss: ctx.folder.customCss,
+              baseHref: assetOrigin,
               dark: false,
             }),
             renderScreen(screen, ctx.folder.theme, {
@@ -73,6 +90,8 @@ export function registerScreenshotTool(
               snapshotCss,
               registry: screenRegistry,
               snippets: ctx.folder.snippets,
+              customCss: ctx.folder.customCss,
+              baseHref: assetOrigin,
               dark: true,
             }),
           ]);
@@ -88,6 +107,8 @@ export function registerScreenshotTool(
             snapshotCss,
             registry: screenRegistry,
             snippets: ctx.folder.snippets,
+            customCss: ctx.folder.customCss,
+            baseHref: assetOrigin,
             dark: mode === "dark",
           });
           buf = await screenshotBuffer({
@@ -95,6 +116,7 @@ export function registerScreenshotTool(
             viewport,
             fullPage: fullPage ?? true,
             ...(scale ? { deviceScaleFactor: scale } : {}),
+            ...(clipSelector ? { clipSelector } : {}),
           });
         }
       } catch (err) {
@@ -162,6 +184,8 @@ export function registerScreenshotTool(
               snapshotCss,
               registry: screenRegistry,
               snippets: ctx.folder.snippets,
+              customCss: ctx.folder.customCss,
+              baseHref: assetOrigin,
               dark: false,
             }),
             renderScreen(syntheticScreen, ctx.folder.theme, {
@@ -169,6 +193,8 @@ export function registerScreenshotTool(
               snapshotCss,
               registry: screenRegistry,
               snippets: ctx.folder.snippets,
+              customCss: ctx.folder.customCss,
+              baseHref: assetOrigin,
               dark: true,
             }),
           ]);
@@ -184,6 +210,8 @@ export function registerScreenshotTool(
             snapshotCss,
             registry: screenRegistry,
             snippets: ctx.folder.snippets,
+            customCss: ctx.folder.customCss,
+            baseHref: assetOrigin,
             dark: mode === "dark",
           });
           buf = await screenshotBuffer({

@@ -41,13 +41,11 @@ export function createGenerateRouter(folder: () => DesignFolder): Hono {
   r.post("/image", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as {
       prompt?: string;
-      filename?: string;
       aspect?: "1:1" | "4:3" | "3:4" | "16:9" | "21:9";
       width?: number;
     };
     if (!body.prompt) return c.json({ error: { kind: "EmptyPrompt" } }, 400);
     const res = await generateImage(folder(), body.prompt, {
-      filename: body.filename,
       aspect: body.aspect,
       width: body.width,
     });

@@ -31,6 +31,7 @@ function ctxOf(): MutationContext {
       radius: {},
     } as Theme,
     history: new HistoryManager(),
+    customCss: "",
     screens: new Map([[screen.id, screen]]),
     boards: new Map(),
     snippets: new Map(),

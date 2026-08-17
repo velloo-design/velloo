@@ -46,6 +46,10 @@ export interface RenderOptions {
   snippets?: Map<string, Snippet>;
   /** Render with the dark color block active. */
   dark?: boolean;
+  /** Folder-scoped custom CSS (theme/custom.css) — injected last. */
+  customCss?: string;
+  /** Origin for root-relative asset URLs in out-of-origin renders. */
+  baseHref?: string;
 }
 
 /**
@@ -73,6 +77,9 @@ export async function renderScreen(
     bodyHtml,
     snapshotCss: options.snapshotCss,
     themeCss,
+    customCss: options.customCss,
+    googleFonts: theme.typography.googleFonts,
+    baseHref: options.baseHref,
     title: screen.name,
     dark: options.dark,
   });

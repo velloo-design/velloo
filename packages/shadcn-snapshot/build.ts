@@ -21,6 +21,7 @@ import {
   type SourceFile,
   SyntaxKind,
 } from "ts-morph";
+import { COMPONENT_EXAMPLES } from "./src/examples.ts";
 import type { ComponentDescriptor, ControlType, Manifest, PropDescriptor } from "./src/manifest.ts";
 import { registry } from "./src/registry.ts";
 
@@ -268,7 +269,8 @@ async function buildManifest(): Promise<void> {
       }
     }
 
-    components.push({ id, category, source, props });
+    const example = COMPONENT_EXAMPLES[id];
+    components.push({ id, category, source, props, ...(example ? { example } : {}) });
   }
 
   await mkdir(distDir, { recursive: true });

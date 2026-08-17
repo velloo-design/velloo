@@ -59,7 +59,7 @@ export function classifyWatchPath(filename: string | null): WatchEvent | null {
       if (!stem.includes(".")) return { type: "board-changed", boardId: stem };
     }
   }
-  if (parts[0] === "theme" && parts[1] && parts[1].endsWith(".json")) {
+  if (parts[0] === "theme" && parts[1] && /\.(json|css)$/.test(parts[1])) {
     return { type: "theme-changed" };
   }
   if (parts[0] === "snippets" && parts[1] && parts[1].endsWith(".json")) {

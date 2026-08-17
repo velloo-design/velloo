@@ -34,6 +34,13 @@ export class TailwindJit {
     providers: ComponentProvider[] | ComponentProvider,
     private readonly pagesDir: string,
     snippetsDir?: string,
+    /**
+     * Extra entry CSS appended after the providers' (e.g. an @theme
+     * block with the folder theme's --font-<role> tokens so
+     * `font-display` style utilities compile). Re-read on every
+     * invalidate, so theme edits take effect without a restart.
+     */
+    private readonly extraEntryCss?: () => string,
   ) {
     this.providers = Array.isArray(providers) ? providers : [providers];
     if (this.providers.length === 0) {
@@ -42,9 +49,14 @@ export class TailwindJit {
     this.snippetsDir = snippetsDir ?? join(pagesDir, "..", "snippets");
   }
 
-  /** Drop the cached CSS so the next build() rescans the page + snippet folders. */
+  /**
+   * Drop the cached CSS so the next build() rescans the page + snippet
+   * folders. Also drops the compiler: the entry CSS embeds theme font
+   * tokens, and a stale compiler would never learn a new font role.
+   */
   invalidate(): void {
     this.cached = null;
+    this.compilerPromise = null;
   }
 
   async build(): Promise<string> {
@@ -76,9 +88,10 @@ export class TailwindJit {
       throw new Error("TailwindJit: providers is empty, cannot build entry CSS.");
     }
     const primaryBase = dirname(primary.styleEntryPath);
+    const extra = this.extraEntryCss?.() ?? "";
     if (this.providers.length === 1) {
       const css = await readFile(primary.styleEntryPath, "utf8");
-      return { css, base: primaryBase };
+      return { css: extra ? `${css}\n\n${extra}` : css, base: primaryBase };
     }
     const sources = await Promise.all(
       this.providers.map(async (p) => {
@@ -86,7 +99,8 @@ export class TailwindJit {
         return `/* === provider: ${p.id} (${p.version}) === */\n${css}`;
       }),
     );
-    return { css: sources.join("\n\n"), base: primaryBase };
+    const merged = sources.join("\n\n");
+    return { css: extra ? `${merged}\n\n${extra}` : merged, base: primaryBase };
   }
 
   private getCompiler(): Promise<Compiler> {

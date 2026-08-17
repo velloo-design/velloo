@@ -13,6 +13,11 @@ export interface ScreenshotOptions {
    * clip to the viewport rectangle.
    */
   fullPage?: boolean;
+  /**
+   * Capture only the first element matching this CSS selector (e.g.
+   * `[data-node-path="0.2"]`) instead of the page. Errors if absent.
+   */
+  clipSelector?: string;
 }
 
 /**
@@ -47,6 +52,17 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
     // QA loop is blind to imagery. Offline/slow assets just time out
     // and the capture proceeds.
     await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+    if (opts.clipSelector) {
+      const locator = page.locator(opts.clipSelector).first();
+      if ((await locator.count()) === 0) {
+        throw new Error(`screenshot: no element matches selector ${opts.clipSelector}`);
+      }
+      if (opts.outPath) {
+        await locator.screenshot({ path: opts.outPath });
+        return null;
+      }
+      return await locator.screenshot();
+    }
     const fullPage = opts.fullPage ?? true;
     if (opts.outPath) {
       await page.screenshot({ path: opts.outPath, fullPage });

@@ -89,6 +89,7 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
         outputDir: out,
         apply: args.apply ?? false,
         cssOnly: args.cssOnly,
+        customCss: ctx.folder.customCss,
       });
       return jsonResult({ files: result.files });
     },

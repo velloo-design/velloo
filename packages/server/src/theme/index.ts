@@ -4,6 +4,11 @@ import type { DesignFolder } from "../design-folder.ts";
 import { persistTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
+import {
+  type CustomCssResult,
+  getCustomCss as getCustomCssImpl,
+  setCustomCss as setCustomCssImpl,
+} from "./custom-css.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
 import type { ThemeError } from "./errors.ts";
 import { type MatchImageResult, matchImage as matchImageImpl } from "./match-image.ts";
@@ -13,6 +18,7 @@ import {
   matchVibe as matchVibeImpl,
 } from "./match-vibe.ts";
 import { PRESET_NAMES, PRESETS } from "./presets.ts";
+import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import { setToken as setTokenImpl } from "./set-token.ts";
 
 export interface ThemeContext {
@@ -44,6 +50,34 @@ export async function setToken(
     return r;
   });
 }
+
+export async function setFonts(
+  ctx: ThemeContext,
+  fonts: FontSpec[],
+): Promise<Result<Theme, ThemeError>> {
+  return withThemeLock(async () => {
+    const r = await setFontsImpl(ctx.folder, fonts);
+    if (r.ok) broadcastThemeChanged(ctx);
+    return r;
+  });
+}
+
+export async function setCustomCss(
+  ctx: ThemeContext,
+  css: string,
+): Promise<Result<CustomCssResult, ThemeError>> {
+  return withThemeLock(async () => {
+    const r = await setCustomCssImpl(ctx.folder, css);
+    if (r.ok) broadcastThemeChanged(ctx);
+    return r;
+  });
+}
+
+export function getCustomCss(ctx: ThemeContext): CustomCssResult {
+  return getCustomCssImpl(ctx.folder);
+}
+
+export type { CustomCssResult, FontSpec };
 
 export async function applyPreset(
   ctx: ThemeContext,

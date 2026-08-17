@@ -31,15 +31,11 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 | Tool | Args |
 |---|---|
 | `add_node` | `screenId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
-| `update_props` | `screenId, path, propPatch` |
-| `update_props_bulk` | `screenId, patches: [{path, propPatch}]` — atomic bulk variant; single persist + broadcast + history entry |
+| `update_props` | `screenId, path?, propPatch?` OR `patches: [{ path, propPatch }]` — shallow prop merge (null removes a key; className is a prop like any other). `patches` applies many nodes in one atomic write. Successful calls may carry advisory `propWarnings` |
 | `move_node` | `screenId, fromPath, toParent, toIndex?` |
 | `remove_node` | `screenId, path` |
 | `inspect` | `screenId, path` — returns SSR'd HTML, resolved className list, `$ref`, and resolved props for the node |
-| `inspect_dark_diff` | `screenId` — audit color classes for dark-mode awareness. Scores **only color-bearing classes**; structural utilities (`border-b`, `ring-0`, `shadow-none`, `text-xl`, `bg-transparent`, `text-current`) are exempt by design. Set `data-accent` (any truthy value) on a node's props to exempt it entirely. Returns coverage 0..1, per-node `raw[]` classes that won't theme-flip, and `suggestions{}` for obvious semantic-token replacements. Treat the score as a triage signal, not a gate |
-| `inspect_dark_diff_snippet` | `snippetId` — same audit scoped to a snippet body. Catches bad raw-color patterns at definition time, before stamping |
-| `apply_classes` | `screenId, path, classes` — Tailwind class edit on a node |
-| `apply_classes_bulk` | `screenId, patches: [{path, classes}]` — atomic bulk apply_classes; useful for sweeping a screen through a styling change |
+| `audit` | `screenId?` OR `snippetId?` (exactly one) — dark-mode audit; coverage + per-node problems with token suggestions |
 | `set_node_id` | `screenId, path, id` — assign / rename / clear (`id: null`) a node's stable `$id` anchor. Per-screen uniqueness is enforced; collisions return `IdConflict` |
 | `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms |
 
@@ -70,6 +66,15 @@ Board-level sticky notes in board coordinates (the same space as frame `x`/`y`).
 | `add_note` | `boardId, x, y, width?, body` — markdown-lite body |
 | `update_note` | `boardId, noteId, patch: { x?, y?, width?, body? }` |
 | `remove_note` | `boardId, noteId` |
+| `add_annotation` | `screenId, path, body, collapsed?` — pin agent-authored markdown to a node (author: "agent") |
+| `remove_annotation` | `screenId, annotationId` — agent-authored only; user annotations are read-only to agents |
+
+### Assets & batching
+
+| Tool | Args |
+|---|---|
+| `upload_asset` | `filename, data (base64), overwrite?` — writes into `assets/`, served at `/assets/<name>`; the agent authors SVG/raster art itself (max 5MB) |
+| `batch` | `calls: [{ tool, args }]` — sequential multi-mutation envelope; stops at first error, NOT transactional |
 
 ### Frame / group lifecycle
 
@@ -112,6 +117,8 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | Tool | Args | Notes |
 |---|---|---|
 | `set_token` | `path, value` | Mutates one token at a dot-path (`colors.primary.DEFAULT`). The full theme is schema-validated after the patch |
+| `set_fonts` | `fonts: [{ role, family, fallback?, google? }]` — each role becomes `--font-<role>` + a `font-<role>` utility; `google` loads the family in design mode and emits an @import in globals.css |
+| `custom_css` | `css?` — read (omit css) or replace `theme/custom.css`; injected into every render and appended to emitted globals.css |
 | `apply_preset` | `presetName` | Switches the active theme to a named preset. Ships with `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum` |
 | `derive_palette_from_color` | `seedColor, name?` | Generates an OKLCH-based palette from a seed (`#hex`, `oklch()`, `rgb()`, …). Foreground/background contrast is auto-adjusted to WCAG AA |
 | `match_vibe` | `description, useAi?: boolean` | Maps a vibe description ("playful", "corporate", "forest") to a seed color via a curated table, then derives + applies a palette. Set `useAi: true` to ask Claude Haiku for a seed color when `ANTHROPIC_API_KEY` is set |
@@ -122,7 +129,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Returns |
 |---|---|---|
-| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1` | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
+| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1, path?` — `path` (array or "@id") captures a single node | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
 | `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?, scale?` | Render a snippet in isolation (no host screen) and return a PNG. Defaults to a 480×640 viewport. Useful for iterating on snippet visuals before stamping |
 
 ### Codegen and export
@@ -138,7 +145,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | Tool | Args | Notes |
 |---|---|---|
 | `generate_svg` | `prompt, filename?, viewBox?, color?` | Generate inline SVG via Claude Haiku. Returns `{ content, viewBox, assetPath, node: { $ref: "SVG", props: { … } } }` — drop `node` straight into `add_node`. Set `filename` to also persist under `assets/`. Requires `ANTHROPIC_API_KEY` |
-| `generate_image` | `prompt, filename?, aspect?, width?` | Default: Picsum URL seeded by prompt hash (deterministic, no API key). With `FAL_KEY` + `filename`, calls fal.ai flux-schnell and writes the binary to `assets/<filename>.png`. Returns `{ src, alt, aspect, node: { $ref: "Image", props: { … } } }` |
+| `generate_image` | `prompt, aspect?, width?` — stable Picsum placeholder seeded by prompt + Claude alt text. For intentional imagery author art yourself and store via `upload_asset` |
 
 ## Path addressing
 

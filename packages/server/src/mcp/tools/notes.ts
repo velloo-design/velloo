@@ -2,9 +2,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Result } from "@velloo/result";
 import { z } from "zod";
 import {
+  addAnnotation,
   addNote,
   type MutationContext,
   type MutationError,
+  removeAnnotation,
   removeNote,
   updateNote,
 } from "../../mutations/index.ts";
@@ -72,5 +74,61 @@ export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
       },
     },
     async (args) => toMcp(await removeNote(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "add_annotation",
+    {
+      description:
+        'Pin a markdown annotation to a specific node (questions for the designer, review remarks). The canvas draws a connector to the node in every frame showing it. Created with author: "agent" — you may remove your own annotations later, but user-authored ones are read-only to you.',
+      inputSchema: {
+        screenId: z.string(),
+        path: z
+          .union([z.array(z.number().int().nonnegative()), z.string()])
+          .describe('Target node — path array or "@id"'),
+        body: z.string(),
+        collapsed: z.boolean().optional(),
+      },
+    },
+    async ({ screenId, path, body, collapsed }) =>
+      toMcp(
+        await addAnnotation(ctx, {
+          screenId,
+          target: { locator: path },
+          body,
+          collapsed,
+          author: "agent",
+        }),
+      ),
+  );
+
+  mcp.registerTool(
+    "remove_annotation",
+    {
+      description:
+        "Remove an agent-authored annotation. Refuses user-authored ones — those are the designer's channel to you; act on them, don't delete them.",
+      inputSchema: {
+        screenId: z.string(),
+        annotationId: z.string(),
+      },
+    },
+    async ({ screenId, annotationId }) => {
+      const existing = ctx.folder.annotations.get(screenId)?.find((a) => a.id === annotationId);
+      if (existing && existing.author !== "agent") {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                kind: "BadRequest",
+                message: `Annotation ${annotationId} is user-authored — agents may only remove their own.`,
+              }),
+            },
+          ],
+        };
+      }
+      return toMcp(await removeAnnotation(ctx, { screenId, annotationId }));
+    },
   );
 }

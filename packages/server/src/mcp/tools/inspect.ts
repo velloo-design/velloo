@@ -62,37 +62,34 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
   );
 
   mcp.registerTool(
-    "inspect_dark_diff",
+    "audit",
     {
       description:
-        "Audit a screen for dark-mode awareness. Flags every color-bearing class that won't theme-flip. Structural utilities (border-b, ring-0, shadow-none, text-xl, bg-transparent, text-current) are exempt by design. Set `data-accent` (any truthy value) on a node's props to exempt it entirely. Returns coverage (0..1) + per-node problems with semantic-token suggestions.",
+        "Dark-mode audit for a screen (screenId) or a snippet body (snippetId) — pass exactly one. Flags every color-bearing class that won't theme-flip. Structural utilities (border-b, ring-0, shadow-none, text-xl, bg-transparent, text-current) are exempt by design; set `data-accent` (any truthy value) on a node's props to exempt it entirely. Returns coverage (0..1) + per-node problems with semantic-token suggestions. Auditing the snippet catches bad patterns at definition time rather than at N instantiation sites.",
       inputSchema: {
-        screenId: z.string(),
+        screenId: z.string().optional(),
+        snippetId: z.string().optional(),
       },
     },
-    async (args) => {
-      const result = await darkModeAudit(ctx, args);
-      if (result.ok) {
-        return { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] };
+    async ({ screenId, snippetId }) => {
+      if ((screenId === undefined) === (snippetId === undefined)) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                kind: "BadRequest",
+                message: "audit: pass exactly one of screenId or snippetId.",
+              }),
+            },
+          ],
+        };
       }
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify(result.error) }],
-      };
-    },
-  );
-
-  mcp.registerTool(
-    "inspect_dark_diff_snippet",
-    {
-      description:
-        "Run the dark-mode audit against a snippet body. Catches bad raw-color patterns at definition time rather than at N instantiation sites.",
-      inputSchema: {
-        snippetId: z.string(),
-      },
-    },
-    async (args) => {
-      const result = await auditSnippet(ctx, args);
+      const result =
+        screenId !== undefined
+          ? await darkModeAudit(ctx, { screenId })
+          : await auditSnippet(ctx, { snippetId: snippetId as string });
       if (result.ok) {
         return { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] };
       }

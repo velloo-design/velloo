@@ -52,8 +52,12 @@ export function themeToCss(theme: Theme): string {
 
   const fontFamily = theme.typography.fontFamily;
   if (fontFamily) {
-    emit("--font-sans", fontFamily.sans, lines);
-    emit("--font-mono", fontFamily.mono, lines);
+    // Every role becomes a --font-<role> token; Tailwind v4 then owns
+    // the matching `font-<role>` utility (compiled by the JIT, which
+    // mirrors these tokens into its @theme — see tailwind-jit.ts).
+    for (const [role, stack] of Object.entries(fontFamily)) {
+      emit(`--font-${role}`, stack, lines);
+    }
   }
 
   // Radius: a single --radius pulled from radius.md (or radius.lg / .sm as fallback).

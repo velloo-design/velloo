@@ -5,10 +5,13 @@ import type { ThemeError } from "../../theme/errors.ts";
 import {
   applyPreset,
   derivePaletteFromColor,
+  getCustomCss,
   matchImage,
   matchVibe,
   PRESET_NAMES,
   scoreThemeContrast,
+  setCustomCss,
+  setFonts,
   setToken,
   type ThemeContext,
 } from "../../theme/index.ts";
@@ -44,6 +47,50 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     async (args) => {
       const r = await setToken(ctx, args.path, args.value);
       return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
+    },
+  );
+
+  mcp.registerTool(
+    "set_fonts",
+    {
+      description:
+        'Declare font roles for the design folder. Each role becomes a --font-<role> token and a matching Tailwind utility: role "display" → class font-display. Pass google to load the family from Google Fonts in design mode (axis spec like "wght@400..900", or true for regular weights). Typography is the single biggest personality lever — declare a display face early, before composing screens.',
+      inputSchema: {
+        fonts: z
+          .array(
+            z.object({
+              role: z
+                .string()
+                .describe('Token role, e.g. "display", "sans", "mono" — any utility-safe name'),
+              family: z.string().describe('Family name, e.g. "Unbounded"'),
+              fallback: z.string().optional().describe("CSS stack tail; sensible default per role"),
+              google: z
+                .union([z.string(), z.literal(true)])
+                .optional()
+                .describe('Google Fonts axis spec ("wght@400..900") or true for a plain load'),
+            }),
+          )
+          .min(1),
+      },
+    },
+    async (args) => {
+      const r = await setFonts(ctx, args.fonts);
+      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
+    },
+  );
+
+  mcp.registerTool(
+    "custom_css",
+    {
+      description:
+        "Read or replace the folder's escape-hatch stylesheet (theme/custom.css): keyframes, grain/noise textures, clip-paths, selection styling — anything Tailwind utilities can't express. Injected into every rendered screen after theme variables and appended to emitted globals.css. Pass css to replace; omit it to read the current contents. Replaces the whole file — read first when editing incrementally.",
+      inputSchema: {
+        css: z.string().optional(),
+      },
+    },
+    async (args) => {
+      if (args.css === undefined) return jsonResult(getCustomCss(ctx));
+      return toMcp(await setCustomCss(ctx, args.css));
     },
   );
 

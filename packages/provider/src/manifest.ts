@@ -32,6 +32,13 @@ export interface ComponentDescriptor {
   source: "shadcn" | "velloo" | (string & {});
   props: PropDescriptor[];
   designModeNotes?: string;
+  /**
+   * Canonical props for one working instance — the fastest way for an
+   * agent to use an unfamiliar component correctly (prop names tell
+   * you *what* exists; the example shows *shapes*, e.g. Chart's
+   * `data: [{ x, y }]`).
+   */
+  example?: Record<string, unknown>;
 }
 
 export type Manifest = ComponentDescriptor[];

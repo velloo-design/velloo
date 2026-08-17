@@ -60,6 +60,30 @@ async function serveStatic(req: Request): Promise<Response | null> {
   return new Response(file, { headers: { "Content-Type": type } });
 }
 
+/**
+ * Mirror the folder theme's font roles into a Tailwind @theme block so
+ * `font-<role>` utilities compile. Values are overridden at render time
+ * by themeToCss's :root vars; the JIT only needs the token to exist.
+ */
+function fontThemeBlock(theme: DesignFolder["theme"]): string {
+  const fonts = theme.typography.fontFamily;
+  if (!fonts || Object.keys(fonts).length === 0) return "";
+  const lines = Object.entries(fonts).map(([role, stack]) => `  --font-${role}: ${stack};`);
+  return `@theme {\n${lines.join("\n")}\n}`;
+}
+
+/** Serve the design folder's assets/ directory at /assets/*. */
+async function serveFolderAsset(req: Request, folderRoot: string): Promise<Response | null> {
+  const url = new URL(req.url);
+  if (!url.pathname.startsWith("/assets/")) return null;
+  const fsPath = join(folderRoot, decodeURIComponent(url.pathname));
+  if (!fsPath.startsWith(join(folderRoot, "assets"))) return null;
+  const file = Bun.file(fsPath);
+  if (!(await file.exists())) return null;
+  const type = MIME[extname(fsPath)] ?? "application/octet-stream";
+  return new Response(file, { headers: { "Content-Type": type } });
+}
+
 async function serveSpaFallback(): Promise<Response> {
   const indexPath = join(canvasDistPath, "index.html");
   const file = Bun.file(indexPath);
@@ -81,7 +105,12 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   folder.config = migrateConfig(folder.config);
   const { providers, defaultProvider } = await resolveProviders(folder.config, folder.root);
   const broadcaster = new Broadcaster();
-  const jit = new TailwindJit(Object.values(providers), join(folder.root, "screens"));
+  const jit = new TailwindJit(
+    Object.values(providers),
+    join(folder.root, "screens"),
+    undefined,
+    () => fontThemeBlock(folder.theme),
+  );
   const broadcast = (e: WatchEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
       jit.invalidate();
@@ -141,6 +170,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         return app.fetch(req);
       }
 
+      const assetResponse = await serveFolderAsset(req, folder.root);
+      if (assetResponse) return assetResponse;
+
       const staticResponse = await serveStatic(req);
       if (staticResponse) return staticResponse;
 
@@ -168,6 +200,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     port: opts.mcpPort ?? 7301,
     host: opts.host ?? "127.0.0.1",
     jit,
+    assetOrigin: `http://${opts.host ?? "127.0.0.1"}:${server.port}/`,
   });
 
   return {

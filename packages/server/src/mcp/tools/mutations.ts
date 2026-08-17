@@ -9,8 +9,6 @@ import {
   addNode,
   addScreen,
   addSnippet,
-  applyClasses,
-  applyClassesBulk,
   instantiateSnippet,
   type MutationContext,
   type MutationError,
@@ -115,21 +113,57 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "update_props",
     {
-      description: "Shallow-merge a prop patch into the node at path. Use null to remove a key.",
+      description:
+        "Shallow-merge a prop patch into the node at path. Use null to remove a key. className is a prop like any other — set it here to restyle a node. To patch many nodes in one atomic write (single history entry + broadcast), pass `patches: [{ path, propPatch }]` instead of path/propPatch.",
       inputSchema: {
         screenId: z.string(),
-        path: PathSchema,
-        propPatch: z.record(z.string(), z.unknown()),
+        path: PathSchema.optional(),
+        propPatch: z.record(z.string(), z.unknown()).optional(),
+        patches: z
+          .array(z.object({ path: PathSchema, propPatch: z.record(z.string(), z.unknown()) }))
+          .min(1)
+          .optional()
+          .describe("Bulk mode — mutually exclusive with path/propPatch"),
       },
     },
-    async (args) =>
-      toMcpWithWarnings(await updateProps(ctx, args), async (value) => {
+    async (args) => {
+      if (args.patches) {
+        if (args.path !== undefined || args.propPatch !== undefined) {
+          return mutationErrorResult({
+            kind: "BadRequest",
+            message: "update_props: pass either path+propPatch or patches, not both.",
+          });
+        }
+        const bulkArgs = { screenId: args.screenId, patches: args.patches };
+        return toMcpWithWarnings(await updatePropsBulk(ctx, bulkArgs), async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          if (!screen) return [];
+          const all: string[] = [];
+          for (const patch of bulkArgs.patches) {
+            if (!Array.isArray(patch.path)) continue;
+            const node = pathAt(screen.tree, patch.path);
+            if (node && isComponentNode(node)) {
+              all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch)));
+            }
+          }
+          return all;
+        });
+      }
+      if (args.path === undefined || args.propPatch === undefined) {
+        return mutationErrorResult({
+          kind: "BadRequest",
+          message: "update_props: path and propPatch are required (or pass patches).",
+        });
+      }
+      const single = { screenId: args.screenId, path: args.path, propPatch: args.propPatch };
+      return toMcpWithWarnings(await updateProps(ctx, single), async (value) => {
         const screen = ctx.folder.screens.get(args.screenId);
         if (!screen) return [];
         const node = pathAt(screen.tree, value.path);
         if (!node || !isComponentNode(node)) return [];
-        return propWarnings(ctx, screen, node.$ref, args.propPatch);
-      }),
+        return propWarnings(ctx, screen, node.$ref, single.propPatch);
+      });
+    },
   );
 
   mcp.registerTool(
@@ -159,50 +193,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => toMcp(await moveNode(ctx, args)),
   );
 
-  mcp.registerTool(
-    "apply_classes",
-    {
-      description: "Replace the className prop on a node with the given Tailwind class string.",
-      inputSchema: {
-        screenId: z.string(),
-        path: PathSchema,
-        classes: z.string(),
-      },
-    },
-    async (args) => toMcp(await applyClasses(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "apply_classes_bulk",
-    {
-      description:
-        "Atomic bulk apply_classes — restyle many nodes in one call. Single persist + broadcast + history entry.",
-      inputSchema: {
-        screenId: z.string(),
-        patches: z.array(z.object({ path: PathSchema, classes: z.string() })).min(1),
-      },
-    },
-    async (args) => toMcp(await applyClassesBulk(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "update_props_bulk",
-    {
-      description: "Atomic bulk update_props — patch props on many nodes in one call.",
-      inputSchema: {
-        screenId: z.string(),
-        patches: z
-          .array(
-            z.object({
-              path: PathSchema,
-              propPatch: z.record(z.string(), z.unknown()),
-            }),
-          )
-          .min(1),
-      },
-    },
-    async (args) => toMcp(await updatePropsBulk(ctx, args)),
-  );
+  // apply_classes / apply_classes_bulk / update_props_bulk were folded
+  // into update_props (className is just a prop; `patches` covers bulk).
+  // The server mutations remain for the canvas HTTP surface.
 
   mcp.registerTool(
     "set_node_id",

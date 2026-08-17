@@ -19,6 +19,8 @@ export interface EmitThemeOptions {
    * the globs matching their structure.
    */
   contentGlobs?: readonly string[];
+  /** Folder custom.css contents — appended verbatim to globals.css. */
+  customCss?: string;
 }
 
 export interface EmitThemeFile {
@@ -37,7 +39,7 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
   const files: EmitThemeFile[] = [];
 
   const cssPath = join(options.outputDir, "app", "globals.css");
-  const cssRaw = emitGlobalsCss(theme);
+  const cssRaw = emitGlobalsCss(theme, { customCss: options.customCss });
   // Biome's CSS parser doesn't recognize @theme; format errors are warnings.
   // Keep the raw if formatting fails — the output is still valid Tailwind v4.
   const cssFormatted = await formatCss(cssPath, cssRaw);
