@@ -185,6 +185,7 @@ export async function emitCode(
       componentsAlias,
       snippetsAlias: options.snippetsAlias,
       snippetPascalById,
+      snippets: options.snippets,
       extensions: extensionsMap,
       indent: (d: number) => "  ".repeat(d),
     };
@@ -252,6 +253,7 @@ export async function emitSnippet(
       componentsAlias,
       snippetsAlias: options.snippetsAlias,
       snippetPascalById,
+      snippets: options.snippets,
       snippetParamNames: paramNames,
       extensions: extensionsMap,
       indent: (d: number) => "  ".repeat(d),

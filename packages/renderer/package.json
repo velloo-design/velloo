@@ -11,10 +11,13 @@
   "dependencies": {
     "@velloo/provider": "workspace:*",
     "@velloo/schema": "workspace:*",
+    "pixelmatch": "7.2.0",
+    "pngjs": "7.0.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
+    "@types/pngjs": "6.0.5",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@velloo/shadcn-snapshot": "workspace:*",

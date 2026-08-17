@@ -1,5 +1,15 @@
 import { err, ok, type Result } from "@velloo/result";
-import { isComponentNode, isParamRef, isSnippetInstance, type Node } from "@velloo/schema";
+import {
+  applySnippetExtraClassName,
+  applySnippetOverrides,
+  isComponentNode,
+  isParamRef,
+  isSnippetInstance,
+  type Node,
+  resolveSnippetArgs,
+  type Snippet,
+  substituteSnippetParams,
+} from "@velloo/schema";
 import { LOWERED_CONSUMED_PROPS, REGISTRY } from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
@@ -13,6 +23,8 @@ export interface EmitContext {
   snippetsAlias?: string;
   /** PascalCase names for each snippet id. Used to emit `<FeatureCard />` from `$snippet: "feature-card"`. */
   snippetPascalById?: Map<string, string>;
+  /** Snippet definitions — required to inline instances carrying `$overrides`. */
+  snippets?: Map<string, Snippet>;
   /** Set when emitting *inside* a snippet body: `$param` nodes become `{name}`. */
   snippetParamNames?: Set<string>;
   /**
@@ -56,6 +68,26 @@ function renderSnippetInstance(
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
+  // Instances carrying interior overrides can't emit as the shared
+  // component — a React component has one body. Inline the resolved
+  // subtree instead: honest JSX for exactly what this instance renders.
+  if (node.$overrides && Object.keys(node.$overrides).length > 0) {
+    const snippet = ctx.snippets?.get(node.$snippet);
+    if (!snippet) return err(unknownComponent(`@${node.$snippet}`));
+    const { args, missing } = resolveSnippetArgs(snippet, node.args ?? {});
+    if (missing.length > 0) return err(unknownComponent(`$param:${missing[0]}`));
+    const substituted = substituteSnippetParams(snippet.tree, args);
+    if (substituted.missing.length > 0) {
+      return err(unknownComponent(`$param:${substituted.missing[0]}`));
+    }
+    let body = applySnippetOverrides(substituted.value as Node, node.$overrides);
+    const extra = node.$extraClassName?.trim();
+    if (extra) body = applySnippetExtraClassName(body, extra);
+    // Body values are concrete now — emit outside any snippet-param scope.
+    const inlineCtx: EmitContext = { ...ctx, snippetParamNames: undefined };
+    return renderNode(body, inlineCtx, depth);
+  }
+
   const pascal = ctx.snippetPascalById?.get(node.$snippet);
   if (!pascal) {
     return err(unknownComponent(`@${node.$snippet}`));

@@ -13,6 +13,7 @@ import {
   type MutationContext,
   type MutationError,
   moveNode,
+  overrideSnippetProps,
   removeBoard,
   removeFrame,
   removeGroup,
@@ -164,6 +165,21 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         return propWarnings(ctx, screen, node.$ref, single.propPatch);
       });
     },
+  );
+
+  mcp.registerTool(
+    "override_snippet_props",
+    {
+      description:
+        'Patch props on one node INSIDE a snippet instance\'s body — the one-off escape hatch ("this instance\'s badge is red") without forking the snippet. path locates the instance; innerPath is a dotted index path into its body ("" = body root, "0.2" = third child of first child — read the snippet definition to find it). Merges into the instance\'s $overrides; null values remove keys; an empty result clears the override. emit_code inlines overridden instances instead of emitting the shared component.',
+      inputSchema: {
+        screenId: z.string(),
+        path: PathSchema,
+        innerPath: z.string().describe('Dotted index path into the resolved body; "" for the root'),
+        propPatch: z.record(z.string(), z.unknown()),
+      },
+    },
+    async (args) => toMcp(await overrideSnippetProps(ctx, args)),
   );
 
   mcp.registerTool(

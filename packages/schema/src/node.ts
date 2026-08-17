@@ -43,6 +43,16 @@ export type SnippetInstance = {
    */
   $extraClassName?: string;
   args?: Record<string, unknown>;
+  /**
+   * Per-instance interior prop patches, keyed by dotted path into the
+   * *resolved* snippet body ("" = root, "0.2" = third child of root's
+   * first child). Each patch shallow-merges over the body node's props
+   * at render time. The escape hatch for "this one instance needs its
+   * badge red" without forking the snippet — instances carrying
+   * overrides are inlined (not emitted as the shared component) by
+   * emit_code, since a shared React component can't express them.
+   */
+  $overrides?: Record<string, { props: Record<string, unknown> }>;
 };
 
 export type ParamRef = {
@@ -92,6 +102,14 @@ const SnippetInstanceSchema: z.ZodType<SnippetInstance> = z.object({
   $id: NodeIdSchema.optional(),
   $extraClassName: z.string().optional(),
   args: z.record(z.string(), z.unknown()).optional(),
+  $overrides: z
+    .record(
+      z.string().regex(/^$|^\d+(\.\d+)*$/, {
+        message: 'override key must be a dotted path like "0.2" (or "" for the body root)',
+      }),
+      z.object({ props: z.record(z.string(), z.unknown()) }),
+    )
+    .optional(),
 });
 
 const ParamRefSchema: z.ZodType<ParamRef> = z.object({

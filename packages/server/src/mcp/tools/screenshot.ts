@@ -1,10 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo/renderer";
-import type { Screen, Viewport } from "@velloo/schema";
+import {
+  type CaptureNodeRect,
+  captureScreenshot,
+  cropPng,
+  type DiffRegion,
+  diffPngs,
+  renderScreen,
+  screenshotBuffer,
+  screenshotCompareBuffer,
+  unionRegion,
+} from "@velloo/renderer";
+import { isComponentNode, nodeId, type Screen, type Viewport } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { registryForScreen, resolve as resolveLocator } from "../../mutations/lookup.ts";
+import { pathAt } from "../../path.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 
 type McpResult = {
@@ -30,17 +41,70 @@ function defaultViewport(folder: {
   return { w: pick.w, h: pick.h };
 }
 
+interface Baseline {
+  png: Buffer;
+  rects: CaptureNodeRect[];
+}
+
+const BASELINE_CAP = 20;
+
+/** Region → deepest node mapping. Rects are CSS px; regions are image px. */
+function regionNode(
+  region: DiffRegion,
+  rects: CaptureNodeRect[],
+  scaleFactor: number,
+  screen: Screen,
+): { path: number[]; ref?: string; id?: string } | null {
+  const area = region.w * region.h;
+  const candidates = rects
+    .map((r) => ({
+      path: r.path,
+      x: r.x * scaleFactor,
+      y: r.y * scaleFactor,
+      w: r.w * scaleFactor,
+      h: r.h * scaleFactor,
+    }))
+    .filter((r) => {
+      const ix = Math.max(0, Math.min(r.x + r.w, region.x + region.w) - Math.max(r.x, region.x));
+      const iy = Math.max(0, Math.min(r.y + r.h, region.y + region.h) - Math.max(r.y, region.y));
+      return ix * iy >= area * 0.5;
+    })
+    .sort((a, b) => a.w * a.h - b.w * b.h);
+  const best = candidates[0];
+  if (!best) return null;
+  const path = best.path === "" ? [] : best.path.split(".").map(Number);
+  const node = pathAt(screen.tree, path);
+  if (!node) return { path };
+  return {
+    path,
+    ...(isComponentNode(node) ? { ref: node.$ref } : {}),
+    ...(nodeId(node) ? { id: nodeId(node) } : {}),
+  };
+}
+
 export function registerScreenshotTool(
   mcp: McpServer,
   ctx: MutationContext,
   jit: TailwindJit,
   assetOrigin?: string,
 ): void {
+  // Diff baselines per render-parameter key, LRU-capped. Deliberately
+  // in-memory only: a restart means components/themes may have changed
+  // underneath, and a stale baseline produces confusing phantom diffs.
+  const baselines = new Map<string, Baseline>();
+  function rememberBaseline(key: string, value: Baseline): void {
+    baselines.delete(key);
+    baselines.set(key, value);
+    if (baselines.size > BASELINE_CAP) {
+      const oldest = baselines.keys().next().value;
+      if (oldest !== undefined) baselines.delete(oldest);
+    }
+  }
   mcp.registerTool(
     "screenshot",
     {
       description:
-        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). w/h default to the desktop preset; fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme.',
+        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). w/h default to the desktop preset; fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -53,11 +117,17 @@ export function registerScreenshotTool(
           .optional()
           .describe('Capture only this node — path array or "@id" (not with mode: "compare")'),
         theme: z.string().optional().describe("Named theme to render with (boards pin one)"),
+        diff: z.boolean().optional().describe("Compare against the previous same-params capture"),
+        resetBaseline: z.boolean().optional(),
       },
     },
-    async ({ screenId, w, h, mode, fullPage, scale, path, theme }) => {
+    async ({ screenId, w, h, mode, fullPage, scale, path, theme, diff, resetBaseline }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
+
+      if (diff && (mode === "compare" || path !== undefined)) {
+        return errorResult('screenshot: diff cannot combine with mode: "compare" or path');
+      }
 
       let clipSelector: string | undefined;
       if (path !== undefined) {
@@ -71,6 +141,101 @@ export function registerScreenshotTool(
 
       const defaults = defaultViewport(ctx.folder);
       const viewport: Viewport = { w: w ?? defaults.w, h: h ?? defaults.h };
+
+      if (diff) {
+        try {
+          const snapshotCss = await jit.build();
+          const { html } = await renderScreen(screen, themeByName(ctx.folder, theme), {
+            viewport,
+            snapshotCss,
+            registry: registryForScreen(ctx, screen),
+            snippets: ctx.folder.snippets,
+            customCss: ctx.folder.customCss,
+            baseHref: assetOrigin,
+            dark: mode === "dark",
+          });
+          const capture = await captureScreenshot({
+            html,
+            viewport,
+            fullPage: fullPage ?? true,
+            ...(scale ? { deviceScaleFactor: scale } : {}),
+          });
+          const key = JSON.stringify({
+            screenId,
+            w: viewport.w,
+            h: viewport.h,
+            mode,
+            theme,
+            fullPage: fullPage ?? true,
+            scale: scale ?? 1,
+          });
+          const baseline = baselines.get(key);
+          rememberBaseline(key, { png: capture.png, rects: capture.nodeRects });
+
+          if (!baseline || resetBaseline) {
+            return {
+              content: [
+                { type: "text", text: JSON.stringify({ diff: { baseline: "established" } }) },
+                { type: "image", data: capture.png.toString("base64"), mimeType: "image/png" },
+              ],
+            };
+          }
+
+          const result = diffPngs(baseline.png, capture.png);
+          const scaleFactor = scale ?? 1;
+          const regions = result.regions.map((r) => ({
+            ...r,
+            node: regionNode(r, capture.nodeRects, scaleFactor, screen),
+          }));
+          const summary = {
+            diff: {
+              changedRatio: Number(result.changedRatio.toFixed(4)),
+              changedPixels: result.changedPixels,
+              heightDelta: result.heightDelta,
+              regions,
+              baseline: "updated",
+            },
+          };
+
+          if (result.changedPixels === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({ diff: { changedRatio: 0, note: "no visual change" } }),
+                },
+              ],
+            };
+          }
+          if (result.changedRatio < 0.4 && regions.length > 0) {
+            const crop = cropPng(result.diffPng, unionRegion(result.regions));
+            return {
+              content: [
+                { type: "text", text: JSON.stringify(summary) },
+                { type: "image", data: crop.toString("base64"), mimeType: "image/png" },
+              ],
+            };
+          }
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ...summary,
+                  note: "changes too widespread for an overlay — new capture follows",
+                }),
+              },
+              { type: "image", data: capture.png.toString("base64"), mimeType: "image/png" },
+            ],
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/.test(msg)) {
+            return errorResult(playwrightMissingMessage(msg));
+          }
+          return errorResult(`screenshot diff failed: ${msg}`);
+        }
+      }
 
       let buf: Buffer;
       try {

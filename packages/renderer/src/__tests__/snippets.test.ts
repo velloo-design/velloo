@@ -139,6 +139,34 @@ describe("snippet resolution", () => {
     expect(plain.bodyHtml).toContain("ring-zinc-800");
   });
 
+  test("$overrides patch interior nodes of one instance only", async () => {
+    const tip: Snippet = {
+      id: "tip",
+      name: "Tip",
+      params: [],
+      tree: {
+        $ref: "Card",
+        children: [{ $ref: "Badge", props: { variant: "secondary", children: "info" } }],
+      },
+    };
+    const snippets = new Map([[tip.id, tip]]);
+    const screen = screenWith({
+      $ref: "Card",
+      children: [
+        { $snippet: "tip" },
+        {
+          $snippet: "tip",
+          $overrides: { "0": { props: { variant: "destructive", children: "ALERT" } } },
+        },
+      ],
+    });
+    const out = await renderScreen(screen, theme, { ...opts, snippets });
+    expect(out.bodyHtml).toContain("ALERT");
+    expect(out.bodyHtml).toContain("info");
+    expect(out.bodyHtml).toContain('data-variant="destructive"');
+    expect(out.bodyHtml).toContain('data-variant="secondary"');
+  });
+
   test("$if with eq branches on enum param equality", async () => {
     const tile: Snippet = {
       id: "stat",

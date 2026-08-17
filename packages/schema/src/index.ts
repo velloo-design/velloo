@@ -42,6 +42,12 @@ export {
 } from "./node.ts";
 export { type Screen, ScreenSchema } from "./screen.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";
+export {
+  applySnippetExtraClassName,
+  applySnippetOverrides,
+  resolveSnippetArgs,
+  substituteSnippetParams,
+} from "./snippet-resolve.ts";
 export { type ColorPair, type Colors, ColorsSchema, type Theme, ThemeSchema } from "./theme.ts";
 export {
   collectIds,

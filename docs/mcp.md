@@ -32,10 +32,11 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 |---|---|
 | `add_node` | `screenId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
 | `update_props` | `screenId, path?, propPatch?` OR `patches: [{ path, propPatch }]` — shallow prop merge (null removes a key; className is a prop like any other). `patches` applies many nodes in one atomic write. Successful calls may carry advisory `propWarnings` |
+| `override_snippet_props` | `screenId, path, innerPath, propPatch` — patch props on one node *inside* a snippet instance's body (path = instance locator; innerPath = dotted index into the body, "" for root). Persists as `$overrides` on the instance; applied after param substitution at render; emit_code inlines overridden instances |
 | `move_node` | `screenId, fromPath, toParent, toIndex?` |
 | `remove_node` | `screenId, path` |
 | `inspect` | `screenId, path` — returns SSR'd HTML, resolved className list, `$ref`, and resolved props for the node |
-| `audit` | `screenId?` OR `snippetId?` (exactly one) — dark-mode audit; coverage + per-node problems with token suggestions |
+| `audit` | `screenId?` OR `snippetId?` (exactly one), `theme?` — dark-mode audit; coverage + per-node problems with token suggestions. With a named theme that has no `colorsDark`, the result flags coverage as informational |
 | `set_node_id` | `screenId, path, id` — assign / rename / clear (`id: null`) a node's stable `$id` anchor. Per-screen uniqueness is enforced; collisions return `IdConflict` |
 | `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms |
 
@@ -74,7 +75,7 @@ Board-level sticky notes in board coordinates (the same space as frame `x`/`y`).
 | Tool | Args |
 |---|---|
 | `upload_asset` | `filename, data (base64), overwrite?` — writes into `assets/`, served at `/assets/<name>`; the agent authors SVG/raster art itself (max 5MB) |
-| `batch` | `calls: [{ tool, args }]` — sequential multi-mutation envelope; stops at first error, NOT transactional |
+| `batch` | `calls: [{ tool, args }], atomic?` — multi-mutation envelope. Atomic by default: first error rolls back every touched resource (disk + memory + undo history) and reports `rolledBack: true`. `atomic: false` keeps completed work |
 
 ### Frame / group lifecycle
 
@@ -131,7 +132,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args | Returns |
 |---|---|---|
-| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1, path?, theme?` — `path` captures a single node; `theme` renders with a named theme | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
+| `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1, path?, theme?, diff?, resetBaseline?` — `path` captures a single node; `theme` renders with a named theme; `diff: true` compares to the previous same-params capture (tiered result: text-only on zero change, highlight crop + changed-node paths on small change, full image on large) | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
 | `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?, scale?` | Render a snippet in isolation (no host screen) and return a PNG. Defaults to a 480×640 viewport. Useful for iterating on snippet visuals before stamping |
 
 ### Codegen and export

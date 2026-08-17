@@ -1,12 +1,16 @@
 import type { ComponentRegistry } from "@velloo/provider";
 import {
+  applySnippetExtraClassName,
+  applySnippetOverrides,
   type ComponentNode,
   isComponentNode,
   isParamRef,
   isSnippetInstance,
   type Node,
+  resolveSnippetArgs,
   type Snippet,
   type SnippetInstance,
+  substituteSnippetParams,
 } from "@velloo/schema";
 import { createElement, Fragment, type ReactElement, type ReactNode } from "react";
 
@@ -65,52 +69,6 @@ export interface BuildTreeOptions {
 }
 
 /**
- * Recursively rewrite snippet body values:
- *
- * - `{ $param: "name" }` → `args.name` (the param's value, of any JSON type).
- * - `{ $if: "name", then: <a>, else: <b> }` → `<a>` if `args.name` is truthy,
- *   else `<b>`. Recurses into both branches first so nested $param/$if work.
- * - `{ $if: "name", eq: <v>, then: <a>, else: <b> }` → equality branch, so
- *   enum params can drive per-value styling (`eq: "up"` → green, else red).
- *
- * Walks props as well as children — agents commonly inject string params
- * into `props.children` and toggle class strings with `$if`.
- */
-function substituteParams(
-  value: unknown,
-  args: Record<string, unknown>,
-  snippetId: string,
-): unknown {
-  if (value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map((v) => substituteParams(v, args, snippetId));
-  if (typeof (value as { $param?: unknown }).$param === "string") {
-    const name = (value as { $param: string }).$param;
-    if (!(name in args)) throw new SnippetParamError(snippetId, name);
-    return args[name];
-  }
-  if (typeof (value as { $if?: unknown }).$if === "string") {
-    const v = value as { $if: string; eq?: unknown; then?: unknown; else?: unknown };
-    if (!(v.$if in args)) throw new SnippetParamError(snippetId, v.$if);
-    const matched = "eq" in v ? args[v.$if] === v.eq : isTruthy(args[v.$if]);
-    const branch = matched ? v.then : v.else;
-    return substituteParams(branch, args, snippetId);
-  }
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) {
-    out[k] = substituteParams(v, args, snippetId);
-  }
-  return out;
-}
-
-function isTruthy(v: unknown): boolean {
-  if (v === undefined || v === null) return false;
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
-  if (typeof v === "string") return v !== "";
-  return true;
-}
-
-/**
  * Materialize a snippet instance: resolve args (declared params, defaults
  * for missing optional ones, error on missing required), then substitute
  * `$param` placeholders throughout the body. If the instance carries
@@ -118,45 +76,19 @@ function isTruthy(v: unknown): boolean {
  * one-off instances can layer styling without forking the snippet.
  */
 function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet): Node {
-  const resolvedArgs: Record<string, unknown> = {};
-  const passed = instance.args ?? {};
-  for (const param of snippet.params) {
-    if (param.name in passed) {
-      resolvedArgs[param.name] = passed[param.name];
-    } else if (param.default !== undefined) {
-      resolvedArgs[param.name] = param.default;
-    } else {
-      throw new SnippetParamError(snippet.id, param.name);
-    }
+  const { args, missing } = resolveSnippetArgs(snippet, instance.args ?? {});
+  if (missing.length > 0) throw new SnippetParamError(snippet.id, missing[0] as string);
+  const substituted = substituteSnippetParams(snippet.tree, args);
+  if (substituted.missing.length > 0) {
+    throw new SnippetParamError(snippet.id, substituted.missing[0] as string);
   }
-  const body = substituteParams(snippet.tree, resolvedArgs, snippet.id) as Node;
+  let body = substituted.value as Node;
+  if (instance.$overrides) {
+    body = applySnippetOverrides(body, instance.$overrides);
+  }
   const extra = instance.$extraClassName?.trim();
   if (!extra) return body;
-  return applyExtraClassName(body, extra);
-}
-
-/**
- * Push an extra className onto a resolved snippet body's root node. If the
- * root is itself a snippet instance (snippet of a snippet), forward the
- * extra to that instance's `$extraClassName` — the nested resolution will
- * cascade it down. Param refs and arg roots without a `props` shape can't
- * carry a className; in that case we ignore (returning the body unchanged
- * preserves the user's input rather than throwing).
- */
-function applyExtraClassName(node: Node, extra: string): Node {
-  if (isParamRef(node)) return node;
-  if (isSnippetInstance(node)) {
-    const existing = node.$extraClassName ? `${node.$extraClassName} ${extra}` : extra;
-    return { ...node, $extraClassName: existing };
-  }
-  if (!isComponentNode(node)) return node;
-  const existingClass =
-    typeof node.props?.className === "string" ? (node.props.className as string) : "";
-  const merged = existingClass ? `${existingClass} ${extra}` : extra;
-  return {
-    ...node,
-    props: { ...(node.props ?? {}), className: merged },
-  };
+  return applySnippetExtraClassName(body, extra);
 }
 
 /**
@@ -251,7 +183,7 @@ export function resolveSnippetBodyForEdit(
   }
   if (!isComponentNode(body)) return body;
   const nextProps = body.props
-    ? (substituteParams(body.props, paramDefaults, snippetId) as Record<string, unknown>)
+    ? (substituteSnippetParams(body.props, paramDefaults).value as Record<string, unknown>)
     : undefined;
   const nextChildren = body.children?.map((c) =>
     resolveSnippetBodyForEdit(c, paramDefaults, snippetId),

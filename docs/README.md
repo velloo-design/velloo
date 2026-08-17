@@ -4,7 +4,7 @@ Working spec for **Velloo** — a local, code-shaped canvas for solo devs who wa
 
 The premise: a solo developer (and small teams without designers) can prototype and iterate on UI fastest by talking to an AI agent — *if* the agent has a fast, visual, code-shaped surface to work against. Existing tools fall on the wrong side of that:
 
-- **Figma / Penpot / Paper** produce vector-perfect designs that the agent then translates to code. That translation is lossy and takes iterations to converge.
+- **Figma / Penpot / Paper** produce pixel-perfect designs disconnected from the codebase — agent-writable now (2026), but the agent still translates the design to code. That translation is lossy and takes iterations to converge.
 - **v0 / Bolt / Lovable** skip design and go straight to code, hallucinating components and ignoring whatever design system you have.
 - **Storybook** is per-component, not a place to compose pages or organize a customer flow.
 
@@ -24,6 +24,7 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 - [mcp.md](./mcp.md) — MCP tool surface for agents
 - [roadmap.md](./roadmap.md) — Roadmap philosophy and the next ~8 weeks of sprints
 - [decisions.md](./decisions.md) — Pivot log and design rationale
+- [comparison/](./comparison/) — Dated per-tool competitive comparisons; the README there carries the consensus-gap rollup
 
 ## One-line pitch
 

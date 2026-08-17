@@ -37,6 +37,63 @@ export async function screenshotBuffer(opts: Omit<ScreenshotOptions, "outPath">)
   return buf;
 }
 
+export interface CaptureNodeRect {
+  /** data-node-path attribute value (dotted; "" = root). */
+  path: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface CaptureResult {
+  png: Buffer;
+  /** Bounding rects in CSS pixels (multiply by deviceScaleFactor for image px). */
+  nodeRects: CaptureNodeRect[];
+}
+
+/**
+ * Screenshot plus every node's bounding rect — the capture mode the
+ * diff pipeline needs (rects let pixel regions map back to tree nodes).
+ * Animations/caret are frozen so motion (marquees, glow pulses) doesn't
+ * register as phantom diffs.
+ */
+export async function captureScreenshot(
+  opts: Omit<ScreenshotOptions, "outPath" | "clipSelector">,
+): Promise<CaptureResult> {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext({
+      viewport: { width: opts.viewport.w, height: opts.viewport.h },
+      deviceScaleFactor: opts.deviceScaleFactor ?? 1,
+    });
+    const page = await context.newPage();
+    await page.setContent(opts.html, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+    const nodeRects = await page.$$eval("[data-node-path]", (els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          path: (el as HTMLElement).dataset.nodePath ?? "",
+          x: r.left,
+          y: r.top,
+          w: r.width,
+          h: r.height,
+        };
+      }),
+    );
+    const png = await page.screenshot({
+      fullPage: opts.fullPage ?? true,
+      animations: "disabled",
+      caret: "hide",
+    });
+    return { png, nodeRects };
+  } finally {
+    await browser.close();
+  }
+}
+
 async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | null> {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();

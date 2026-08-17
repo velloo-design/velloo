@@ -72,6 +72,16 @@ export class HistoryManager {
     return { undo: this.undoStack.length, redo: this.redoStack.length };
   }
 
+  /**
+   * Discard undo entries above `undoDepth` — used by transactional
+   * batch rollback so reverted mutations don't pollute the user's undo.
+   * (Redo cleared by those pushes is not restored; same loss any write
+   * causes today.)
+   */
+  truncateUndoTo(undoDepth: number): void {
+    while (this.undoStack.length > undoDepth) this.undoStack.pop();
+  }
+
   clear(): void {
     this.undoStack.length = 0;
     this.redoStack.length = 0;

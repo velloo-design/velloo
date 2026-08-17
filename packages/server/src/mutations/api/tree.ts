@@ -10,6 +10,11 @@ import { withScreenLock } from "../context.ts";
 import type { MutationError } from "../errors.ts";
 import { type MoveNodeArgs, type MoveNodeResult, moveNode as moveNodeImpl } from "../move-node.ts";
 import {
+  type OverrideSnippetPropsArgs,
+  type OverrideSnippetPropsResult,
+  overrideSnippetProps as overrideSnippetPropsImpl,
+} from "../override-snippet-props.ts";
+import {
   type RemoveNodeArgs,
   type RemoveNodeResult,
   removeNode as removeNodeImpl,
@@ -95,3 +100,11 @@ export type {
   UpdatePropsBulkResult,
   UpdatePropsResult,
 };
+
+export function overrideSnippetProps(
+  ctx: MutationContext,
+  args: OverrideSnippetPropsArgs,
+): Promise<Result<OverrideSnippetPropsResult, MutationError>> {
+  return withScreenLock(args.screenId, () => overrideSnippetPropsImpl(ctx, args));
+}
+export type { OverrideSnippetPropsArgs, OverrideSnippetPropsResult };

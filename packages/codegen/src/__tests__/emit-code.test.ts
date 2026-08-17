@@ -162,6 +162,39 @@ describe("emitCode", () => {
     );
   });
 
+  test("instances with $overrides inline the resolved body instead of the component", async () => {
+    const tip: Snippet = {
+      id: "tip-card",
+      name: "tip card",
+      params: [{ name: "title", type: "string", default: "Tip" }],
+      tree: {
+        $ref: "Card",
+        children: [
+          { $ref: "CardTitle", props: { children: { $param: "title" } } },
+          { $ref: "Badge", props: { variant: "secondary", children: "info" } },
+        ],
+      },
+    };
+    const screen = screenOf({
+      $ref: "Card",
+      children: [
+        { $snippet: "tip-card", args: { title: "Plain" } },
+        {
+          $snippet: "tip-card",
+          args: { title: "Special" },
+          $overrides: { "1": { props: { variant: "destructive" } } },
+        },
+      ],
+    });
+    const result = unwrap(await emitCode(screen, { snippets: new Map([[tip.id, tip]]) }));
+    // Un-overridden instance stays a component reference…
+    expect(result.jsx).toContain('<TipCard title="Plain" />');
+    // …the overridden one inlines with the patch applied and args substituted.
+    expect(result.jsx).toContain("<CardTitle>Special</CardTitle>");
+    expect(result.jsx).toContain('<Badge variant="destructive">info</Badge>');
+    expect(result.jsx).not.toContain('<TipCard title="Special"');
+  });
+
   test("emits velloo composition helpers verbatim (the sample screens use them)", async () => {
     const result = unwrap(
       await emitCode(

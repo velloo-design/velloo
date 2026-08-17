@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { themeByName } from "../../design-folder.ts";
 import {
   auditSnippet,
   darkModeAudit,
@@ -65,13 +66,14 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     "audit",
     {
       description:
-        "Dark-mode audit for a screen (screenId) or snippet body (snippetId) — exactly one. Flags color classes that won't theme-flip; structural utilities exempt; set data-accent on a node to exempt it. Returns coverage + per-node problems with token suggestions.",
+        "Dark-mode audit for a screen (screenId) or snippet body (snippetId) — exactly one. Flags color classes that won't theme-flip; structural utilities exempt; set data-accent on a node to exempt it. Returns coverage + per-node problems with token suggestions. Pass theme to evaluate against a named theme — when that theme declares no colorsDark block, the result says so and coverage is informational.",
       inputSchema: {
         screenId: z.string().optional(),
         snippetId: z.string().optional(),
+        theme: z.string().optional().describe("Named theme context (boards pin one)"),
       },
     },
-    async ({ screenId, snippetId }) => {
+    async ({ screenId, snippetId, theme }) => {
       if ((screenId === undefined) === (snippetId === undefined)) {
         return {
           isError: true,
@@ -91,7 +93,20 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
           ? await darkModeAudit(ctx, { screenId })
           : await auditSnippet(ctx, { snippetId: snippetId as string });
       if (result.ok) {
-        return { content: [{ type: "text", text: JSON.stringify(result.value) }] };
+        const resolved = themeByName(ctx.folder, theme);
+        const hasDarkVariant = resolved.colorsDark !== undefined;
+        const themeInfo = {
+          theme: theme ?? "default",
+          hasDarkVariant,
+          ...(hasDarkVariant
+            ? {}
+            : {
+                note: `theme "${theme ?? "default"}" declares no colorsDark block — semantic tokens render identically in both modes, so dark-mode coverage here is informational only`,
+              }),
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ...result.value, themeInfo }) }],
+        };
       }
       return {
         isError: true,
