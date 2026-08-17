@@ -1,7 +1,14 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { renderScreen, screenshot } from "@velloo/renderer";
-import { ConfigSchema, ScreenSchema, ThemeSchema, type Viewport } from "@velloo/schema";
+import {
+  ConfigSchema,
+  ScreenSchema,
+  type Snippet,
+  SnippetSchema,
+  ThemeSchema,
+  type Viewport,
+} from "@velloo/schema";
 import { migrateConfig, resolveProviders, TailwindJit, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
@@ -60,10 +67,22 @@ export default defineCommand({
       : defaultProvider;
     const jit = new TailwindJit(Object.values(providers), join(folder, "screens"));
     const snapshotCss = await jit.build();
+
+    const snippets = new Map<string, Snippet>();
+    const snippetFiles = (await readdir(join(folder, "snippets")).catch(() => [])).filter((f) =>
+      f.endsWith(".json"),
+    );
+    for (const file of snippetFiles) {
+      const raw = await readFile(join(folder, "snippets", file), "utf8").then(JSON.parse);
+      const snippet = SnippetSchema.parse(raw);
+      snippets.set(snippet.id, snippet);
+    }
+
     const { html } = await renderScreen(screen, theme, {
       viewport,
       snapshotCss,
       registry: screenProvider.registry,
+      snippets,
     });
     const ext = extname(outPath).toLowerCase();
 

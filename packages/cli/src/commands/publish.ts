@@ -13,6 +13,7 @@ import {
 } from "@velloo/schema";
 import { migrateConfig, resolveProviders, TailwindJit } from "@velloo/server";
 import { defineCommand } from "citty";
+import { loadCredential } from "../cloud-credentials.ts";
 import { fail } from "../fail.ts";
 
 interface CreatedLink {
@@ -37,14 +38,26 @@ function gitCommitSha(folder: string): string | null {
   }
 }
 
+const escapeHtml = (s: string) =>
+  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
 function galleryIndex(title: string, screens: Screen[], viewport: Viewport): string {
   const cards = screens
     .map(
       (s) => `
-      <a class="card" href="${s.id}.html">
-        <span class="name">${s.name}</span>
-        <span class="id">${s.id}.html · ${viewport.w}×${viewport.h}</span>
-      </a>`,
+    <a class="card" href="${s.id}.html" data-screen="${s.id}">
+      <span class="preview" style="aspect-ratio:${viewport.w}/${viewport.h}">
+        <iframe src="${s.id}.html" loading="lazy" tabindex="-1"
+                style="width:${viewport.w}px;height:${viewport.h}px"></iframe>
+      </span>
+      <span class="meta">
+        <span class="name">${escapeHtml(s.name)}</span>
+        <span class="actions">
+          <span class="id">${viewport.w}×${viewport.h}</span>
+          <button class="fullscreen" data-screen="${s.id}" title="Full screen">⛶</button>
+        </span>
+      </span>
+    </a>`,
     )
     .join("\n");
   return `<!doctype html>
@@ -52,26 +65,105 @@ function galleryIndex(title: string, screens: Screen[], viewport: Viewport): str
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
+<title>${escapeHtml(title)}</title>
 <style>
+  * { box-sizing: border-box; }
   body { margin: 0; padding: 48px 24px; font: 15px/1.5 system-ui, sans-serif; background: #fafafa; color: #18181b; }
-  main { max-width: 720px; margin: 0 auto; }
+  main { max-width: 1080px; margin: 0 auto; }
   h1 { font-size: 22px; margin: 0 0 4px; }
-  p { color: #71717a; margin: 0 0 28px; }
-  .card { display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
-          padding: 14px 18px; margin-bottom: 10px; background: #fff; border: 1px solid #e4e4e7;
-          border-radius: 10px; text-decoration: none; color: inherit; }
-  .card:hover { border-color: #a1a1aa; }
-  .name { font-weight: 600; }
-  .id { color: #71717a; font-size: 13px; }
+  .sub { color: #71717a; margin: 0 0 28px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+  .card { display: block; background: #fff; border: 1px solid #e4e4e7; border-radius: 12px;
+          overflow: hidden; text-decoration: none; color: inherit; }
+  .card:hover { border-color: #a1a1aa; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .preview { display: block; position: relative; overflow: hidden; background: #fff;
+             border-bottom: 1px solid #f0f0f2; }
+  .preview iframe { border: 0; position: absolute; top: 0; left: 0;
+                    transform-origin: top left; pointer-events: none; }
+  .meta { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; }
+  .name { font-weight: 600; font-size: 14px; }
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .id { color: #71717a; font-size: 12px; }
+  .fullscreen { border: 1px solid #e4e4e7; background: #fff; border-radius: 6px; padding: 2px 8px;
+                font-size: 14px; cursor: pointer; color: #52525b; }
+  .fullscreen:hover { border-color: #a1a1aa; color: #18181b; }
+  #overlay { position: fixed; inset: 0; background: #fafafa; z-index: 9999; display: flex; flex-direction: column; }
+  #overlay[hidden] { display: none; }
+  #overlay-bar { display: flex; justify-content: space-between; align-items: center;
+                 padding: 10px 16px; border-bottom: 1px solid #e4e4e7; background: #fff; }
+  #overlay-title { font-weight: 600; font-size: 14px; }
+  #overlay-close { border: 1px solid #e4e4e7; background: #fff; border-radius: 8px; width: 32px; height: 32px;
+                   font-size: 16px; cursor: pointer; color: #52525b; line-height: 1; }
+  #overlay-close:hover { border-color: #a1a1aa; color: #18181b; }
+  #overlay iframe { flex: 1; border: 0; width: 100%; background: #fff; }
 </style>
 </head>
 <body>
 <main>
-  <h1>${title}</h1>
-  <p>${screens.length} screen${screens.length === 1 ? "" : "s"}</p>
+  <h1>${escapeHtml(title)}</h1>
+  <p class="sub">${screens.length} screen${screens.length === 1 ? "" : "s"} · click a card to view full screen</p>
+  <div class="grid">
 ${cards}
+  </div>
 </main>
+<div id="overlay" hidden>
+  <div id="overlay-bar">
+    <span id="overlay-title"></span>
+    <button id="overlay-close" aria-label="Close (Esc)">✕</button>
+  </div>
+  <iframe id="overlay-frame" title="Screen preview"></iframe>
+</div>
+<script>
+(() => {
+  const names = ${JSON.stringify(Object.fromEntries(screens.map((s) => [s.id, s.name])))};
+  const overlay = document.getElementById("overlay");
+  const frame = document.getElementById("overlay-frame");
+  const overlayTitle = document.getElementById("overlay-title");
+
+  const open = (id) => {
+    if (!(id in names)) return;
+    frame.src = id + ".html";
+    overlayTitle.textContent = names[id];
+    overlay.hidden = false;
+    document.body.style.overflow = "hidden";
+    if (location.hash !== "#" + id) history.pushState(null, "", "#" + id);
+  };
+  const close = () => {
+    if (overlay.hidden) return;
+    overlay.hidden = true;
+    frame.src = "about:blank";
+    document.body.style.overflow = "";
+    if (location.hash) history.pushState(null, "", location.pathname + location.search);
+  };
+
+  for (const card of document.querySelectorAll("[data-screen]")) {
+    card.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      open(card.dataset.screen);
+    });
+  }
+  document.getElementById("overlay-close").addEventListener("click", close);
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  window.addEventListener("popstate", () => {
+    const id = location.hash.slice(1);
+    if (id in names) open(id); else close();
+  });
+
+  // Scale each preview iframe to its card's width.
+  const fit = () => {
+    for (const p of document.querySelectorAll(".preview")) {
+      const iframe = p.querySelector("iframe");
+      p.style.height = "";
+      iframe.style.transform = "scale(" + p.clientWidth / ${viewport.w} + ")";
+    }
+  };
+  window.addEventListener("resize", fit);
+  fit();
+
+  if (location.hash) open(location.hash.slice(1));
+})();
+</script>
 </body>
 </html>
 `;
@@ -117,12 +209,10 @@ export default defineCommand({
       /\/+$/,
       "",
     );
-    const token = args.token ?? process.env.VELLOO_CLOUD_TOKEN;
+    const token =
+      args.token ?? process.env.VELLOO_CLOUD_TOKEN ?? (await loadCredential(baseUrl))?.token;
     if (!token) {
-      fail(
-        "publish",
-        'no access token. Pass --token or set VELLOO_CLOUD_TOKEN. In dev: curl -s <cloud>/v1/dev/login -d \'{"email":"you@dev.local"}\'',
-      );
+      fail("publish", "not logged in. Run `velloo login` (or pass --token / VELLOO_CLOUD_TOKEN).");
     }
     const visibility = args.visibility ?? "public";
     if (visibility !== "public" && visibility !== "private") {
