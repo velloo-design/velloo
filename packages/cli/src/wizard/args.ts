@@ -67,7 +67,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     throw new Error(`--source=in-repo requires --app-path=<path-to-your-app>.`);
   }
   return {
-    folder: resolve(args.folder ?? "design"),
+    folder: resolve(args.folder ?? "velloo"),
     library,
     source,
     appPath: args.appPath ? resolve(args.appPath) : undefined,

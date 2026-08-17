@@ -9,6 +9,13 @@ import { emitTailwindConfig } from "./tailwind-config.ts";
 export interface EmitThemeOptions {
   /** Directory to write into (or diff against). e.g. ../my-app */
   outputDir: string;
+  /**
+   * Where globals.css lands, relative to `outputDir`. Defaults to the
+   * Next.js convention `app/globals.css`. Vite/Astro hosts usually want
+   * `globals.css` or `src/index.css` — pass it here rather than being
+   * surprised by an `app/` segment.
+   */
+  cssPath?: string;
   /** Skip emitting tailwind.config.ts when true. Default false. */
   cssOnly?: boolean;
   /** Whether to actually write files. Default false → returns diffs only. */
@@ -38,7 +45,7 @@ export interface EmitThemeResult {
 export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promise<EmitThemeResult> {
   const files: EmitThemeFile[] = [];
 
-  const cssPath = join(options.outputDir, "app", "globals.css");
+  const cssPath = join(options.outputDir, options.cssPath ?? "app/globals.css");
   const cssRaw = emitGlobalsCss(theme, { customCss: options.customCss });
   // Biome's CSS parser doesn't recognize @theme; format errors are warnings.
   // Keep the raw if formatting fails — the output is still valid Tailwind v4.

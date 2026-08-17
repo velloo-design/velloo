@@ -12,12 +12,12 @@ describe("shouldRunWizard", () => {
 });
 
 describe("answersFromArgs", () => {
-  test("defaults: shadcn-react, binary source, sample content, design folder", () => {
+  test("defaults: shadcn-react, binary source, sample content, velloo folder", () => {
     const a = answersFromArgs({});
     expect(a.library).toBe("shadcn-react");
     expect(a.source).toBe("binary");
     expect(a.initialContent).toBe("sample");
-    expect(a.folder).toBe(resolve("design"));
+    expect(a.folder).toBe(resolve("velloo"));
     expect(a.componentsRelative).toBe("src/components/ui");
     expect(a.appPath).toBeUndefined();
     expect(a.themeColor).toBeUndefined();

@@ -214,10 +214,13 @@ function printSummary(
   }
   console.log("");
   console.log(pc.bold("  Next steps"));
-  console.log(`    1. ${pc.cyan(`velloo run ${folder}`)}`);
-  console.log(`    2. ${pc.cyan("http://localhost:7300")}     ${pc.dim("(canvas)")}`);
   console.log(
-    `    3. ${pc.cyan("http://localhost:7301/mcp")} ${pc.dim("(MCP server — point your AI agent here)")}`,
+    `    1. ${pc.cyan(`velloo connect ${folder}`)} ${pc.dim("(wire your AI agent's MCP config + skill)")}`,
+  );
+  console.log(`    2. ${pc.cyan(`velloo run ${folder}`)}`);
+  console.log(`    3. ${pc.cyan("http://localhost:7300")}     ${pc.dim("(canvas)")}`);
+  console.log(
+    `    4. ${pc.cyan("http://localhost:7301/mcp")} ${pc.dim("(MCP server — your agent connects here)")}`,
   );
   console.log("");
   console.log(pc.dim("  Open README.md in the design folder for the full guide."));
@@ -283,7 +286,7 @@ export default defineCommand({
     if (shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY))) {
       printLogo();
       const result = await runInteractive({
-        folder: resolve(cliArgs.folder ?? "design"),
+        folder: resolve(cliArgs.folder ?? "velloo"),
       });
       if (!result) {
         // The wizard already printed its cancellation notice.

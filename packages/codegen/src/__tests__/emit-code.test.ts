@@ -250,6 +250,28 @@ describe("emitCode", () => {
     expect(result.jsx).toContain(`<Image src="assets/hero.png" aspect="16/9" />`);
     expect(result.jsx).toContain(`<Divider variant="gradient" label="OR" />`);
     expect(result.componentsUsed).toEqual(["Card", "Divider", "Gradient", "Image", "Layer", "SVG"]);
+    // Only Card is an installable shadcn primitive; the velloo composition
+    // helpers (Gradient/Image/Layer/SVG/Divider) need no `shadcn add`.
+    expect(result.componentsToInstall).toEqual(["card"]);
+  });
+
+  test("componentsToInstall lists kebab shadcn add targets, deduped, excluding helpers", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Card",
+          children: [
+            { $ref: "CardHeader", children: [{ $ref: "CardTitle", props: { children: "Hi" } }] },
+            { $ref: "Button", props: { children: "Go" } },
+            { $ref: "Badge", props: { children: "New" } },
+            // Velloo helpers + a lucide icon — never installable.
+            { $ref: "Box", children: [{ $ref: "Icon", props: { name: "Sparkles" } }] },
+          ],
+        }),
+      ),
+    );
+    // Card + CardHeader + CardTitle collapse to one "card" target.
+    expect(result.componentsToInstall).toEqual(["badge", "button", "card"]);
   });
 
   test("emits registered extensions as JSX with their declared id", async () => {

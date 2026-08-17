@@ -32,7 +32,7 @@ import {
   type Screen,
   type Snippet,
 } from "@velloo/schema";
-import { resolveLucideJsxName } from "../component-registry.ts";
+import { resolveLucideJsxName, shadcnInstallTargets } from "../component-registry.ts";
 import type { CodegenError } from "../errors.ts";
 import { ImportSet } from "./imports.ts";
 import { emitTree } from "./tree-to-jsx.ts";
@@ -71,6 +71,12 @@ export interface EmitCodeResult {
    */
   classesUsed: string[];
   /**
+   * shadcn primitives (transitively) used that need installing in the
+   * user's app — kebab names ready for `npx shadcn@latest add <names>`.
+   * Velloo helpers and lucide icons are excluded (no install needed).
+   */
+  componentsToInstall: string[];
+  /**
    * Non-fatal emit caveats — things that couldn't be expressed faithfully
    * in JSX and need agent attention (e.g. a dynamic Icon name baked to its
    * fallback). Empty when the screen body emits cleanly; per-snippet
@@ -87,6 +93,8 @@ export interface EmitSnippetIR {
   params: { name: string; type: string; default?: string }[];
   /** JSX body of the snippet, same shape as a screen's `jsx`. */
   jsx: string;
+  /** shadcn primitives used in this snippet body needing install (see EmitCodeResult). */
+  componentsToInstall: string[];
   /** Non-fatal emit caveats for this snippet body (see EmitCodeResult.warnings). */
   warnings: string[];
 }
@@ -225,6 +233,7 @@ export async function emitCode(
       iconsUsed: [...meta.icons].sort(),
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
+      componentsToInstall: shadcnInstallTargets(meta.components),
       warnings: [...new Set(warnings)],
     };
   });
@@ -271,6 +280,7 @@ export async function emitSnippet(
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(snippet.tree, ctx));
+    const meta = collectMetadata(snippet.tree, options.snippets);
     return {
       id: snippet.id,
       componentName,
@@ -280,6 +290,7 @@ export async function emitSnippet(
         ...(p.default !== undefined ? { default: String(p.default) } : {}),
       })),
       jsx: body,
+      componentsToInstall: shadcnInstallTargets(meta.components),
       warnings: [...new Set(warnings)],
     };
   });

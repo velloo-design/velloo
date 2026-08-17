@@ -106,11 +106,15 @@ export function registerScreenshotTool(
     "screenshot",
     {
       description:
-        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). w/h default to the desktop preset; fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing.',
+        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
         h: z.number().int().positive().optional(),
+        viewport: z
+          .object({ w: z.number().int().positive(), h: z.number().int().positive() })
+          .optional()
+          .describe("Alternative to flat w/h; explicit w/h win if both are given"),
         mode: z.enum(["light", "dark", "compare"]).optional(),
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional(),
@@ -123,9 +127,23 @@ export function registerScreenshotTool(
         resetBaseline: z.boolean().optional(),
       },
     },
-    async ({ screenId, w, h, mode, fullPage, scale, path, theme, diff, resetBaseline }) => {
+    async ({
+      screenId,
+      w,
+      h,
+      viewport: vp,
+      mode,
+      fullPage,
+      scale,
+      path,
+      theme,
+      diff,
+      resetBaseline,
+    }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
+      w ??= vp?.w;
+      h ??= vp?.h;
 
       if (diff && (mode === "compare" || path !== undefined)) {
         return errorResult('screenshot: diff cannot combine with mode: "compare" or path');
@@ -311,6 +329,10 @@ export function registerScreenshotTool(
         url: z.string().describe("Live URL to compare against, e.g. http://localhost:3000/pricing"),
         w: z.number().int().positive().optional(),
         h: z.number().int().positive().optional(),
+        viewport: z
+          .object({ w: z.number().int().positive(), h: z.number().int().positive() })
+          .optional()
+          .describe("Alternative to flat w/h; explicit w/h win if both are given"),
         mode: z.enum(["light", "dark"]).optional(),
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional().describe("Default 0.5"),
@@ -321,12 +343,12 @@ export function registerScreenshotTool(
           .describe("Include the side-by-side PNG (default true; false = metrics only)"),
       },
     },
-    async ({ screenId, url, w, h, mode, fullPage, scale, theme, image }) => {
+    async ({ screenId, url, w, h, viewport: vp, mode, fullPage, scale, theme, image }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
 
       const defaults = defaultViewport(ctx.folder);
-      const viewport: Viewport = { w: w ?? defaults.w, h: h ?? defaults.h };
+      const viewport: Viewport = { w: w ?? vp?.w ?? defaults.w, h: h ?? vp?.h ?? defaults.h };
       const scaleFactor = scale ?? 0.5;
 
       try {

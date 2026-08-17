@@ -367,6 +367,24 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   },
 };
 
+/**
+ * Of the component refs used, the shadcn primitives that need installing in
+ * the user's app — deduped kebab source-file names ready for
+ * `npx shadcn@latest add <names>`. Velloo helpers (lowered to plain HTML,
+ * or the `velloo/*` composition helpers) and lucide icons need no install,
+ * so they're excluded.
+ */
+export function shadcnInstallTargets(refs: Iterable<string>): string[] {
+  const out = new Set<string>();
+  for (const ref of refs) {
+    const entry = REGISTRY[ref];
+    if (entry?.kind === "shadcn" && !entry.importFile.startsWith("velloo/")) {
+      out.add(entry.importFile);
+    }
+  }
+  return [...out].sort();
+}
+
 /** Props that the snapshot's lowered primitives consume — strip from output. */
 export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Heading: new Set(["level"]),

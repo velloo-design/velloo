@@ -76,9 +76,13 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
     "emit_theme",
     {
       description:
-        "Generate Tailwind v4 globals.css (and optional tailwind.config.ts) from the active theme. Defaults to dry-run; this one *is* a direct artifact (no agent translation needed).",
+        'Generate Tailwind v4 globals.css (and optional tailwind.config.ts) from the active theme. Defaults to dry-run; this one *is* a direct artifact (no agent translation needed). globals.css lands at `<outputDir>/<cssPath>`; cssPath defaults to the Next.js `app/globals.css` — pass `cssPath: "globals.css"` (or `src/index.css`) for Vite/Astro.',
       inputSchema: {
         outputDir: z.string(),
+        cssPath: z
+          .string()
+          .optional()
+          .describe('globals.css location relative to outputDir; default "app/globals.css"'),
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
         theme: z.string().optional().describe("Named theme to emit; default 'default'"),
@@ -88,6 +92,7 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       const out = resolve(ctx.folder.root, args.outputDir);
       const result = await emitTheme(themeByName(ctx.folder, args.theme), {
         outputDir: out,
+        ...(args.cssPath ? { cssPath: args.cssPath } : {}),
         apply: args.apply ?? false,
         cssOnly: args.cssOnly,
         customCss: ctx.folder.customCss,

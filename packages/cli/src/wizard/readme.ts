@@ -2,11 +2,11 @@ import type { WizardAnswers } from "./answers.ts";
 import type { InstallPlan } from "./install.ts";
 
 /**
- * Render the per-folder README dropped at `./design/README.md` during
- * init. Tailored to the chosen library so the agent's first
- * `list_components` description has provider-correct context, and the
- * human's `cd design` lands on a guide that matches the install they
- * actually picked.
+ * Render the per-folder README dropped at `<folder>/README.md` during
+ * init (the folder defaults to `velloo/`). Tailored to the chosen library
+ * so the agent's first `list_components` description has provider-correct
+ * context, and the human's `cd <folder>` lands on a guide that matches the
+ * install they actually picked.
  */
 export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): string {
   const lines: string[] = [];
