@@ -1,7 +1,13 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
-import type { Node, Snippet, SnippetParam } from "@velloo/schema";
+import {
+  applySnippetOverrides,
+  isComponentNode,
+  type Node,
+  type Snippet,
+  type SnippetParam,
+} from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
-import { type MutationError, snippetCycle } from "./errors.ts";
+import { invalidPath, type MutationError, snippetCycle } from "./errors.ts";
 import { getSnippet } from "./lookup.ts";
 import { persistSnippet } from "./persist.ts";
 import { detectSnippetCycle } from "./snippet-cycle.ts";
@@ -13,7 +19,38 @@ export interface UpdateSnippetArgs {
     name?: string;
     params?: SnippetParam[];
     tree?: Node;
+    /**
+     * Patch the props of one node *inside* the snippet body without
+     * resending the whole tree — the definition-level counterpart of
+     * `override_snippet_props`. The change is shared by every instance.
+     * `innerPath`: "@id" of a body node (preferred), a dotted index path
+     * ("0.2"), or "" for the body root. `null` values in `propPatch` remove
+     * keys. Applied on top of `tree` when both are present.
+     */
+    innerPatch?: { innerPath: string; propPatch: Record<string, unknown> };
   };
+}
+
+function findNodeById(root: Node, id: string): Node | undefined {
+  if (!isComponentNode(root)) return undefined;
+  if (root.$id === id) return root;
+  for (const child of root.children ?? []) {
+    const hit = findNodeById(child, id);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/** True if `innerPath` addresses a component node inside `body`. */
+function innerPathResolves(body: Node, innerPath: string): boolean {
+  if (innerPath.startsWith("@")) return findNodeById(body, innerPath.slice(1)) !== undefined;
+  const segments = innerPath === "" ? [] : innerPath.split(".").map(Number);
+  let cursor: Node | undefined = body;
+  for (const i of segments) {
+    if (!cursor || !isComponentNode(cursor) || !cursor.children) return false;
+    cursor = cursor.children[i];
+  }
+  return cursor !== undefined && isComponentNode(cursor);
 }
 
 export interface UpdateSnippetResult {
@@ -31,11 +68,41 @@ export async function updateSnippet(
 ): Promise<Result<UpdateSnippetResult, MutationError>> {
   return DoAsync<UpdateSnippetResult, MutationError>(async function* () {
     const prev = yield* $(getSnippet(ctx, args.snippetId));
+    const { innerPatch } = args.patch;
+
+    // The body the patch operates on: a full replacement if given, else the
+    // existing one. `innerPatch` then patches a single node inside it.
+    let tree = args.patch.tree ?? prev.tree;
+    if (innerPatch !== undefined) {
+      if (!/^$|^\d+(\.\d+)*$|^@[a-zA-Z][a-zA-Z0-9_-]*$/.test(innerPatch.innerPath)) {
+        return yield* $(
+          err(
+            invalidPath(
+              `innerPath must be a dotted index path like "0.2", an "@id" of a body node, or "" for the root`,
+            ),
+          ),
+        );
+      }
+      if (!innerPathResolves(tree, innerPatch.innerPath)) {
+        return yield* $(
+          err(
+            invalidPath(
+              `innerPath "${innerPatch.innerPath}" doesn't resolve to a component inside snippet "${args.snippetId}"`,
+            ),
+          ),
+        );
+      }
+      tree = applySnippetOverrides(tree, {
+        [innerPatch.innerPath]: { props: innerPatch.propPatch },
+      });
+    }
+
+    const treeChanged = args.patch.tree !== undefined || innerPatch !== undefined;
     const next: Snippet = {
       ...prev,
       ...(args.patch.name !== undefined ? { name: args.patch.name } : {}),
       ...(args.patch.params !== undefined ? { params: args.patch.params } : {}),
-      ...(args.patch.tree !== undefined ? { tree: args.patch.tree } : {}),
+      ...(treeChanged ? { tree } : {}),
     };
 
     if (args.patch.tree !== undefined) {

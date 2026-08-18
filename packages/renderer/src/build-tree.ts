@@ -134,8 +134,12 @@ export function buildTree(
   }
 
   if (!isComponentNode(node)) {
-    // Unreachable: schema union is exhausted above.
-    throw new Error(`buildTree: unknown node shape: ${JSON.stringify(node)}`);
+    // Reached only for a malformed value sitting in a node position — a raw
+    // string/number/object where a node was expected. Node positions render
+    // nodes only; pass scalars as prop values, not as children.
+    throw new Error(
+      `buildTree: expected a component, snippet instance, or node param in a node position but got ${JSON.stringify(node)}`,
+    );
   }
 
   const Component = opts.registry[node.$ref];
@@ -146,8 +150,14 @@ export function buildTree(
 
   let children: ReactNode;
   if (Array.isArray(node.children) && node.children.length > 0) {
-    children = node.children.map((child, i) =>
-      buildTree(child, opts, [...path, i], stack, lockedPath),
+    // A `type:"node"` snippet param can resolve to *multiple* nodes — the
+    // caller passes an array of nodes into the slot. Substitution leaves
+    // that array in place (see substituteSnippetParams), so expand it into
+    // sibling elements here: a node slot accepts either one node or a list.
+    children = node.children.flatMap((child, i) =>
+      Array.isArray(child)
+        ? (child as Node[]).map((c, j) => buildTree(c, opts, [...path, i, j], stack, lockedPath))
+        : buildTree(child, opts, [...path, i], stack, lockedPath),
     );
   } else if (childrenProp !== undefined) {
     children = childrenProp as ReactNode;

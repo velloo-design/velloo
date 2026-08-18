@@ -323,7 +323,7 @@ export function registerScreenshotTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), the diff regions mapped to this screen's nodes, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; use the per-region node refs to find what's off. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small.",
+        "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), the diff regions mapped to this screen's nodes, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; use the per-region node refs to find what's off. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small. `mode: \"dark\"` renders the Velloo side dark AND best-effort drives the target page dark (prefers-color-scheme + `.dark`/`data-theme` on <html> + `localStorage.theme`) so dark fidelity checks against the app's real dark theme; an app with a bespoke theme toggle may not flip — eyeball the side-by-side.",
       inputSchema: {
         screenId: z.string(),
         url: z.string().describe("Live URL to compare against, e.g. http://localhost:3000/pricing"),
@@ -374,6 +374,7 @@ export function registerScreenshotTool(
             viewport,
             fullPage: fullPage ?? true,
             deviceScaleFactor: scaleFactor,
+            dark: mode === "dark",
           }),
         ]);
 

@@ -451,13 +451,24 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet",
     {
       description:
-        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast.",
+        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast. To tweak ONE node's props inside the body without resending the whole tree, pass `innerPatch` (the definition-level counterpart of override_snippet_props — the change is shared by all instances); pass `tree` only for a full body replacement.",
       inputSchema: {
         snippetId: z.string(),
         patch: z.object({
           name: z.string().optional(),
           params: z.array(SnippetParamSchema).optional(),
           tree: NodeSchema.optional(),
+          innerPatch: z
+            .object({
+              innerPath: z
+                .string()
+                .describe(
+                  '"@id" of a body node (preferred), dotted index path ("0.2"), or "" for root',
+                ),
+              propPatch: z.record(z.string(), z.unknown()),
+            })
+            .optional()
+            .describe("Patch one body node's props in place; null values remove keys"),
         }),
       },
     },

@@ -3,7 +3,7 @@ import type { Locator } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
-import { getComponentNode, getScreen, resolve } from "./lookup.ts";
+import { getComponentNode, getScreen, resolveWithSnippetHint } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
 
 export interface UpdatePropsArgs {
@@ -25,7 +25,7 @@ export async function updateProps(
   return DoAsync<UpdatePropsResult, MutationError>(async function* () {
     const screen = yield* $(getScreen(ctx, screenId));
     const next = cloneScreen(screen);
-    const resolved = yield* $(resolve(next.tree, path, screenId));
+    const resolved = yield* $(resolveWithSnippetHint(ctx, next.tree, path, screenId));
     const node = yield* $(getComponentNode(next.tree, resolved, screenId));
 
     const merged: Record<string, unknown> = { ...(node.props ?? {}) };

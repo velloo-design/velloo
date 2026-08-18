@@ -108,7 +108,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | Tool | Args | Notes |
 |---|---|---|
 | `add_snippet` | `id?, name, params, tree` | `tree` may contain `$param` placeholder nodes and `$if` branches |
-| `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, or `tree`; all screens referencing the snippet rebroadcast |
+| `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, `tree`, or `innerPatch` (`{ innerPath, propPatch }` — patch one body node's props in place, the definition-level counterpart of `override_snippet_props`; shared by all instances, no full-tree resend). All screens referencing the snippet rebroadcast |
 | `remove_snippet` | `snippetId` | Refuses if any screen instantiates it; returns the referencing screenIds so the agent can clean up first |
 | `instantiate_snippet` | `screenId, parentPath, snippetId, args, id?, extraClassName?, index?` | Adds a `$snippet` node — opaque from outside. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root |
 | `update_snippet_args` | `screenId, path, argPatch?, extraClassName?` | Patch an instance's `args` map (`null` removes a key); also patches the instance's `extraClassName` override (`null` clears) |
@@ -135,7 +135,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 |---|---|---|
 | `screenshot` | `screenId, w?, h?, mode?: "light" \| "dark" \| "compare", fullPage?: boolean, scale?: 0.25–1, path?, theme?, diff?, resetBaseline?` — `path` captures a single node; `theme` renders with a named theme; `diff: true` compares to the previous same-params capture (tiered result: text-only on zero change, highlight crop + changed-node paths on small change, full image on large) | Base64 PNG via Playwright. `compare` renders light + dark side-by-side in one image. Defaults `fullPage: true` so tall screens aren't clipped. `w`/`h` default to the desktop viewport preset; the screen's tree renders responsively at that size |
 | `render_snippet` | `snippetId, args?, extraClassName?, viewport?, mode?, scale?` | Render a snippet in isolation (no host screen) and return a PNG. Defaults to a 480×640 viewport. Useful for iterating on snippet visuals before stamping |
-| `compare_to_url` | `screenId, url, w?, h?, mode?, fullPage?, scale?, theme?, image?` | Code-to-design fidelity check: render the screen and screenshot a live URL (the app page being ported) at the same viewport, then pixel-diff. Returns `{ similarity, changedRatio, heightDelta, regions }` with each region mapped to the screen node under it, plus a side-by-side PNG (URL left, Velloo right; `image: false` for metrics only). `scale` defaults 0.5 |
+| `compare_to_url` | `screenId, url, w?, h?, mode?, fullPage?, scale?, theme?, image?` | Code-to-design fidelity check: render the screen and screenshot a live URL (the app page being ported) at the same viewport, then pixel-diff. Returns `{ similarity, changedRatio, heightDelta, regions }` with each region mapped to the screen node under it, plus a side-by-side PNG (URL left, Velloo right; `image: false` for metrics only). `scale` defaults 0.5. `mode: "dark"` renders the Velloo side dark **and** best-effort drives the target page dark (prefers-color-scheme + `.dark`/`data-theme` on `<html>` + `localStorage.theme`) so dark fidelity checks against the app's real dark theme |
 
 ### Codegen and export
 

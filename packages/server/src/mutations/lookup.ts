@@ -5,6 +5,7 @@ import {
   type ComponentNode,
   type Extension,
   isComponentNode,
+  isSnippetInstance,
   type Node,
   type Screen,
   type Snippet,
@@ -76,6 +77,75 @@ export function resolve(
   if (path !== null) return ok(path);
   if (isIdLocator(locator)) return err(idNotFound(screenId, locator.slice(1)));
   return err(invalidPath(`No node at path ${JSON.stringify(locator)}`, locator as number[]));
+}
+
+/** True if any component node inside `node`'s subtree carries `$id === id`. */
+function subtreeHasId(node: Node, id: string): boolean {
+  if (!isComponentNode(node)) return false;
+  if (node.$id === id) return true;
+  return (node.children ?? []).some((c) => subtreeHasId(c, id));
+}
+
+/**
+ * Scan a screen tree for a snippet instance whose *definition* declares a
+ * node with `$id === id`. Snippet instances are opaque to `@id` resolution
+ * (see `path.ts` findById) — an id that lives inside a shared body never
+ * resolves at the top level — so this lets a failed lookup point the agent
+ * at the right tool. Returns the addressable instance locator + snippet id.
+ */
+function findInstanceExposingId(
+  ctx: MutationContext,
+  root: Node,
+  id: string,
+): { instanceLocator: string; snippetId: string } | null {
+  let hit: { instanceLocator: string; snippetId: string } | null = null;
+  function walk(node: Node, path: number[]): void {
+    if (hit) return;
+    if (isSnippetInstance(node)) {
+      const def = ctx.folder.snippets.get(node.$snippet);
+      if (def && subtreeHasId(def.tree, id)) {
+        hit = {
+          instanceLocator: node.$id ? `@${node.$id}` : JSON.stringify(path),
+          snippetId: node.$snippet,
+        };
+      }
+      return; // opaque — never descend into a body
+    }
+    if (!isComponentNode(node)) return;
+    const kids = node.children ?? [];
+    for (let i = 0; i < kids.length && !hit; i++) {
+      const child = kids[i];
+      if (child) walk(child, [...path, i]);
+    }
+  }
+  walk(root, []);
+  return hit;
+}
+
+/**
+ * Like `resolve`, but when an `@id` misses, check whether the id names a
+ * node *inside* a snippet instance's body and, if so, attach a hint to the
+ * `IdNotFound` pointing at `override_snippet_props` (per-instance) and
+ * `update_snippet` (all instances). Use this from prop-editing mutations so
+ * "edit one row inside a shared instance" is discoverable instead of dead-ending.
+ */
+export function resolveWithSnippetHint(
+  ctx: MutationContext,
+  root: Node,
+  locator: Locator,
+  screenId: string,
+): Result<number[], MutationError> {
+  const r = resolve(root, locator, screenId);
+  if (r.ok || r.error.kind !== "IdNotFound") return r;
+  const found = findInstanceExposingId(ctx, root, r.error.id);
+  if (!found) return r;
+  const hint =
+    `"${r.error.id}" isn't a top-level node, but a node with that id lives inside snippet instance ` +
+    `${found.instanceLocator} (snippet "${found.snippetId}"), which is opaque to @id addressing. ` +
+    `To change its props for just this instance: override_snippet_props { path: "${found.instanceLocator}", ` +
+    `innerPath: "@${r.error.id}", propPatch: {…} }. To change it across all instances, edit the snippet ` +
+    `body with update_snippet.`;
+  return err(idNotFound(screenId, r.error.id, hint));
 }
 
 export function getNode(

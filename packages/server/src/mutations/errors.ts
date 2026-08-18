@@ -27,7 +27,7 @@ export type MutationError =
   | { kind: "SnippetCycle"; snippetId: string; viaPath: string[] }
   | { kind: "SnippetInUse"; snippetId: string; screenIds: string[] }
   | { kind: "SnippetIdConflict"; snippetId: string }
-  | { kind: "IdNotFound"; screenId: string; id: string }
+  | { kind: "IdNotFound"; screenId: string; id: string; hint?: string }
   | { kind: "IdConflict"; screenId: string; id: string; paths: number[][] }
   | {
       kind: "AnnotationConflict";
@@ -160,10 +160,11 @@ export const snippetIdConflict = (snippetId: string): MutationError => ({
   kind: "SnippetIdConflict",
   snippetId,
 });
-export const idNotFound = (screenId: string, id: string): MutationError => ({
+export const idNotFound = (screenId: string, id: string, hint?: string): MutationError => ({
   kind: "IdNotFound",
   screenId,
   id,
+  ...(hint !== undefined ? { hint } : {}),
 });
 export const idConflict = (screenId: string, id: string, paths: number[][]): MutationError => ({
   kind: "IdConflict",

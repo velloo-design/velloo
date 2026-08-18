@@ -505,6 +505,28 @@ describe("renderScreen", () => {
     expect(bodyHtml).toContain('data-slot="chart"');
   });
 
+  test("Chart renders a real echarts SVG with a multi-series legend + theme colors", async () => {
+    const screen = screenWith({
+      $ref: "Chart",
+      props: {
+        kind: "bar",
+        categories: ["Mon", "Tue", "Wed"],
+        series: [
+          { name: "Revenue", data: [1200, 1900, 800] },
+          { name: "Refunds", data: [200, 400, 150] },
+        ],
+        yLabel: "USD",
+        tickFormat: "compact",
+      },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain('data-slot="chart"');
+    expect(bodyHtml).toContain("<svg");
+    // Theme token, not a baked hex — so the chart flips under dark mode.
+    expect(bodyHtml).toContain("var(--color-primary)");
+    expect(bodyHtml).toContain("Revenue");
+  });
+
   test("iframe runtime forwards Cmd/Ctrl+wheel as parentZoom", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html } = await renderScreen(screen, sampleTheme, opts);

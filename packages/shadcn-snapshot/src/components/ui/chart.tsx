@@ -1,13 +1,18 @@
-// Velloo-flavored Chart. shadcn's `chart` is a recharts wrapper +
-// CSS-vars-based theming. Design mode just needs a styled chart shape
-// designers can drop into a dashboard. We render small static SVG bar
-// / line / area charts directly so the snapshot stays light (no
-// recharts dependency in the embedded snapshot).
+// Velloo-flavored Chart. shadcn's `chart` is a recharts wrapper that needs a
+// measured DOM (ResponsiveContainer), so it renders nothing under the
+// renderer's static SSR. We render a realistic preview server-side via
+// echarts' headless SSR-to-SVG mode (see chart-option.ts) — bar/line/area/
+// pie/scatter, multi-series, axis labels + tick formatting — from one
+// normalized schema. Colors are theme tokens, so previews theme-flip.
 //
-// The agent's emitted code uses the real shadcn Chart (which imports
-// recharts) — this is design-only.
+// `emit_code` targets the app's actual chart lib (recharts, the app's own
+// Chart, …) via a codegen adapter — preview engine and emit target are
+// decoupled.
 import type * as React from "react";
 import { cn } from "../../lib/utils.ts";
+import { renderChartSvg } from "./chart-option.ts";
+
+export type { ChartColor, ChartKind, ChartSpec, TickFormat } from "./chart-option.ts";
 
 export interface ChartContainerProps extends React.ComponentProps<"div"> {
   config?: Record<string, { label?: string; color?: string }>;
@@ -33,108 +38,70 @@ export function ChartContainer({
   );
 }
 
+// Declared inline (not `extends ChartSpec`) so build.ts's manifest extraction
+// — which reads an interface's *own* members — surfaces every prop to agents.
 export interface ChartProps {
   className?: string;
-  /**
-   * Series of `{ x, y }` points. For Bar/Line, `y` drives the value.
-   * For Bar charts a label per bar comes from `x`.
-   */
-  data: { x: string | number; y: number }[];
-  kind?: "bar" | "line" | "area";
-  /** Color override; defaults to `bg-primary`. Pass `accent` etc. */
+  kind?: "bar" | "line" | "area" | "pie" | "scatter";
+  /** Single-series convenience: a list of `{ x label, y value }` points. */
+  data?: { x: string | number; y: number }[];
+  /** Multi-series: shared categories + named series. Takes precedence over `data`. */
+  categories?: (string | number)[];
+  series?: { name?: string; data: number[] }[];
+  /** Axis titles. */
+  xLabel?: string;
+  yLabel?: string;
+  /** Y-axis tick formatting. */
+  tickFormat?: "number" | "compact" | "currency" | "percent";
+  /** Accent for single-series charts; multi-series cycles a fixed palette. */
   color?: "primary" | "accent" | "muted";
+  /** Force the legend on/off; defaults on for multi-series, off otherwise. */
+  legend?: boolean;
 }
 
-const COLOR_BG: Record<NonNullable<ChartProps["color"]>, string> = {
-  primary: "fill-primary stroke-primary",
-  accent: "fill-accent stroke-accent",
-  muted: "fill-muted-foreground stroke-muted-foreground",
-};
-
 /**
- * Tiny SVG bar/line/area chart. Width 320 × height 120 by default —
- * the parent wraps it via aspect-video for responsive sizing. The
- * chart auto-fits its data on Y; X is evenly spaced.
+ * Dashboard-grade chart preview. Renders server-side via echarts SSR→SVG
+ * (chart-option.ts) so it shows real geometry + axes in the static render
+ * path, and the SVG is injected as-is (no scripts/foreignObject). Empty
+ * `data`/`series` degrades to a sized blank slot.
  */
-export function Chart({ className, data, kind = "bar", color = "primary" }: ChartProps) {
-  if (!Array.isArray(data) || data.length === 0) {
-    return <div data-slot="chart" className={cn("h-32 w-full", className)} />;
+export function Chart({
+  className,
+  kind,
+  data,
+  series,
+  categories,
+  xLabel,
+  yLabel,
+  tickFormat,
+  color,
+  legend,
+  ...rest
+}: ChartProps & React.ComponentProps<"div">) {
+  const hasData =
+    (Array.isArray(series) && series.length > 0) || (Array.isArray(data) && data.length > 0);
+  if (!hasData) {
+    return <div data-slot="chart" className={cn("aspect-video w-full", className)} {...rest} />;
   }
-  const W = 320;
-  const H = 120;
-  const pad = 12;
-  const innerW = W - pad * 2;
-  const innerH = H - pad * 2;
-  const ys = data.map((d) => d.y);
-  const max = Math.max(...ys, 1);
-  const min = Math.min(...ys, 0);
-  const range = Math.max(max - min, 1);
-  const step = innerW / Math.max(data.length - 1, 1);
-  const colorClass = COLOR_BG[color];
-
-  if (kind === "bar") {
-    const barW = innerW / data.length - 4;
-    return (
-      // biome-ignore lint/a11y/noSvgWithoutTitle: chart visualisation; designs add their own title alongside
-      <svg data-slot="chart" viewBox={`0 0 ${W} ${H}`} className={cn("h-32 w-full", className)}>
-        {data.map((d, i) => {
-          const h = ((d.y - min) / range) * innerH;
-          const x = pad + i * (innerW / data.length) + 2;
-          const y = H - pad - h;
-          return (
-            <rect
-              // biome-ignore lint/suspicious/noArrayIndexKey: index disambiguates duplicate x values
-              key={`${d.x}-${i}`}
-              x={x}
-              y={y}
-              width={barW}
-              height={h}
-              rx={2}
-              className={colorClass}
-            />
-          );
-        })}
-      </svg>
-    );
-  }
-
-  const points = data.map((d, i) => {
-    const x = pad + i * step;
-    const h = ((d.y - min) / range) * innerH;
-    const y = H - pad - h;
-    return `${x},${y}`;
+  const svg = renderChartSvg({
+    kind,
+    data,
+    series,
+    categories,
+    xLabel,
+    yLabel,
+    tickFormat,
+    color,
+    legend,
   });
-
-  if (kind === "area") {
-    const polygon = [`${pad},${H - pad}`, ...points, `${W - pad},${H - pad}`].join(" ");
-    return (
-      // biome-ignore lint/a11y/noSvgWithoutTitle: chart visualisation; designs add their own title alongside
-      <svg data-slot="chart" viewBox={`0 0 ${W} ${H}`} className={cn("h-32 w-full", className)}>
-        <polygon points={polygon} className={cn(colorClass, "opacity-25 stroke-none")} />
-        <polyline
-          points={points.join(" ")}
-          className={cn(colorClass, "fill-none")}
-          strokeWidth={2}
-        />
-      </svg>
-    );
-  }
-
-  // line
   return (
-    // biome-ignore lint/a11y/noSvgWithoutTitle: chart visualisation; designs add their own title alongside
-    <svg data-slot="chart" viewBox={`0 0 ${W} ${H}`} className={cn("h-32 w-full", className)}>
-      <polyline points={points.join(" ")} className={cn(colorClass, "fill-none")} strokeWidth={2} />
-      {data.map((d, i) => {
-        const x = pad + i * step;
-        const h = ((d.y - min) / range) * innerH;
-        const y = H - pad - h;
-        return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: index disambiguates duplicate x values
-          <circle key={`${d.x}-${i}`} cx={x} cy={y} r={3} className={colorClass} />
-        );
-      })}
-    </svg>
+    <div
+      data-slot="chart"
+      className={cn("aspect-video w-full", className)}
+      {...rest}
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: server-generated static echarts SVG (no scripts/foreignObject); see chart-option.ts
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   );
 }
 

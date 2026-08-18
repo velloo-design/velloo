@@ -164,6 +164,16 @@ export interface UrlScreenshotOptions {
   fullPage?: boolean;
   /** Bounded wait for network quiet before capture, ms. Default 8000. */
   settleTimeoutMs?: number;
+  /**
+   * Drive the target page into dark mode before capture so a Velloo dark
+   * render diffs against the app's actual dark theme (not its light default).
+   * Best-effort across the common toggles: emulates `prefers-color-scheme:
+   * dark`, seeds `localStorage.theme = "dark"` before any script runs (covers
+   * next-themes' default), and after load adds the `.dark` class +
+   * `data-theme="dark"` to `<html>` (covers class-strategy Tailwind). An app
+   * with a bespoke theme mechanism may not flip — verify the capture.
+   */
+  dark?: boolean;
 }
 
 /**
@@ -177,9 +187,31 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
     const context = await browser.newContext({
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
+      ...(opts.dark ? { colorScheme: "dark" as const } : {}),
     });
+    if (opts.dark) {
+      // Seed before any page script runs so localStorage-driven togglers
+      // (next-themes &c.) read "dark" on first paint instead of flashing light.
+      await context.addInitScript(() => {
+        try {
+          localStorage.setItem("theme", "dark");
+        } catch {}
+      });
+    }
     const page = await context.newPage();
     await page.goto(opts.url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    if (opts.dark) {
+      // Class-strategy Tailwind (shadcn's default) keys off `.dark` on the
+      // root; some apps read `data-theme`. Set both — harmless if unused.
+      await page
+        .evaluate(() => {
+          const el = document.documentElement;
+          el.classList.add("dark");
+          el.setAttribute("data-theme", "dark");
+          el.style.colorScheme = "dark";
+        })
+        .catch(() => {});
+    }
     await page
       .waitForLoadState("networkidle", { timeout: opts.settleTimeoutMs ?? 8000 })
       .catch(() => {});

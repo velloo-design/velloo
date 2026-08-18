@@ -268,6 +268,50 @@ describe("snippet resolution", () => {
     expect(bodyHtml).toContain("border-2");
   });
 
+  test("a node param accepts an array of nodes and renders them as siblings", async () => {
+    const bar: Snippet = {
+      id: "actions-bar",
+      name: "Actions Bar",
+      params: [{ name: "actions", type: "node" }],
+      tree: {
+        $ref: "Box",
+        children: [
+          { $ref: "Heading", props: { level: 3, children: "Title" } },
+          { $param: "actions" },
+        ],
+      },
+    };
+    const snippets = new Map([[bar.id, bar]]);
+    const screen = screenWith({
+      $snippet: "actions-bar",
+      args: {
+        actions: [
+          { $ref: "Text", props: { children: "Save" } },
+          { $ref: "Badge", props: { children: "Cancel" } },
+        ],
+      },
+    });
+    const { bodyHtml } = await renderScreen(screen, theme, { ...opts, snippets });
+    expect(bodyHtml).toContain("Save");
+    expect(bodyHtml).toContain("Cancel");
+  });
+
+  test("a node param still accepts a single node", async () => {
+    const slot: Snippet = {
+      id: "slotted",
+      name: "Slotted",
+      params: [{ name: "body", type: "node" }],
+      tree: { $ref: "Box", children: [{ $param: "body" }] },
+    };
+    const snippets = new Map([[slot.id, slot]]);
+    const screen = screenWith({
+      $snippet: "slotted",
+      args: { body: { $ref: "Text", props: { children: "Just one" } } },
+    });
+    const { bodyHtml } = await renderScreen(screen, theme, { ...opts, snippets });
+    expect(bodyHtml).toContain("Just one");
+  });
+
   test("inner DOM in a resolved snippet inherits the instance's data-node-path", () => {
     const snippets = new Map([[featureCard.id, featureCard]]);
     const screen = screenWith({

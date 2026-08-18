@@ -7,14 +7,21 @@
 export const COMPONENT_EXAMPLES: Record<string, Record<string, unknown>> = {
   Box: { className: "flex flex-col gap-6 px-8 py-12" },
   Chart: {
+    // Single series: `data: [{ x, y }]`. Multi-series: `categories` +
+    // `series: [{ name, data: number[] }]` (legend auto-on). `kind`:
+    // bar | line | area | pie | scatter. `tickFormat`: number | compact |
+    // currency | percent. `xLabel`/`yLabel` add axis titles. `color`
+    // (single-series): primary | accent | muted — theme tokens, so charts
+    // flip under dark mode.
     kind: "bar",
-    data: [
-      { x: "Mon", y: 12 },
-      { x: "Tue", y: 19 },
-      { x: "Wed", y: 8 },
+    categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    series: [
+      { name: "Revenue", data: [4200, 5800, 5100, 7300, 6400] },
+      { name: "Refunds", data: [400, 600, 350, 720, 500] },
     ],
-    color: "primary",
-    className: "h-48 w-full",
+    yLabel: "USD",
+    tickFormat: "compact",
+    className: "h-64 w-full",
   },
   Image: {
     src: "/assets/hero.png",
