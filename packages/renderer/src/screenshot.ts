@@ -2,13 +2,20 @@ import { existsSync } from "node:fs";
 import type { Viewport } from "@velloo/schema";
 import type { Browser } from "playwright-core";
 
-/** The command that installs the headless browser screenshots need. */
-export const CHROMIUM_INSTALL_CMD = "bunx playwright install chromium";
+/**
+ * The command that installs the headless browser screenshots need. Pinned to
+ * the same version as the `playwright` / `playwright-core` devDeps in this
+ * package's package.json: an unpinned `bunx playwright install` resolves the
+ * latest CLI and downloads a Chromium revision that the pinned runtime then
+ * refuses to launch. Bump both together.
+ */
+export const CHROMIUM_INSTALL_CMD = "bunx playwright@1.59.1 install chromium";
 
 const INSTALL_HINT =
   "Velloo screenshots need a headless browser. Install it once with:\n" +
   `  ${CHROMIUM_INSTALL_CMD}\n` +
-  "(The browser is an on-demand extra — the canvas itself never needs it.)";
+  "Then just retry the tool — the browser is picked up on the next call, no server restart needed. " +
+  "(It's an on-demand extra; the canvas itself never needs it.)";
 
 /**
  * Thrown when the headless browser is unavailable — either `playwright-core`
@@ -60,7 +67,18 @@ async function launchBrowser(): Promise<Browser> {
     if (/Executable doesn't exist|playwright install|browserType\.launch/i.test(msg)) {
       throw new BrowserMissingError();
     }
-    throw e;
+    // Any other launch failure (missing system libs, version skew, sandbox):
+    // Playwright dumps ~40 lines of browser log. Collapse it to a one-line
+    // summary + the install hint as the most likely fix — agents (and humans)
+    // get something actionable instead of a wall of stderr.
+    const firstLine =
+      msg
+        .split("\n")
+        .find((l) => l.trim() !== "")
+        ?.trim() ?? msg;
+    throw new BrowserMissingError(
+      `Chromium failed to launch: ${firstLine}\nIf the browser isn't installed, run:\n  ${CHROMIUM_INSTALL_CMD}\nThen retry — no server restart needed.`,
+    );
   }
 }
 
@@ -134,6 +152,17 @@ export async function captureScreenshot(
     const page = await context.newPage();
     await page.setContent(opts.html, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+    // Webfonts (Google Fonts <link>) load lazily — without waiting for them a
+    // capture can freeze the Inter fallback before a declared font-<role> face
+    // applies. Bounded so a slow/offline font can't stall the shot.
+    await page
+      .evaluate(() =>
+        Promise.race([
+          (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready,
+          new Promise((r) => setTimeout(r, 2000)),
+        ]),
+      )
+      .catch(() => {});
     const nodeRects = await page.$$eval("[data-node-path]", (els) =>
       els.map((el) => {
         const r = el.getBoundingClientRect();
@@ -157,6 +186,30 @@ export async function captureScreenshot(
   }
 }
 
+/** A cookie to seed before navigating — Playwright's `addCookies` shape, trimmed. */
+export interface UrlCookie {
+  name: string;
+  value: string;
+  /** Either `url` OR `domain`+`path` is required (Playwright's rule). */
+  url?: string;
+  domain?: string;
+  path?: string;
+}
+
+export interface UrlCaptureResult {
+  png: Buffer;
+  /** Where the page actually landed after redirects — compare to the requested URL. */
+  finalUrl: string;
+  /** A password field is present — a strong signal the capture hit a login wall. */
+  authWall: boolean;
+  /**
+   * Non-null when the capture doesn't look like a real page render — a dev
+   * error overlay, an error page, or a blank document. The diff is then
+   * against a broken target, not the design, so similarity is meaningless.
+   */
+  pageError: string | null;
+}
+
 export interface UrlScreenshotOptions {
   url: string;
   viewport: Viewport;
@@ -164,6 +217,16 @@ export interface UrlScreenshotOptions {
   fullPage?: boolean;
   /** Bounded wait for network quiet before capture, ms. Default 8000. */
   settleTimeoutMs?: number;
+  /**
+   * Inject an authenticated session so auth-gated pages capture the real page
+   * instead of a login redirect. `storageStatePath` points at a Playwright
+   * storage-state JSON (cookies + origin localStorage in one file — the robust
+   * path; produce it once with `playwright codegen`/a login script). `cookies`
+   * and `localStorage` are simpler one-offs layered on top.
+   */
+  storageStatePath?: string;
+  cookies?: UrlCookie[];
+  localStorage?: Record<string, string>;
   /**
    * Drive the target page into dark mode before capture so a Velloo dark
    * render diffs against the app's actual dark theme (not its light default).
@@ -181,14 +244,25 @@ export interface UrlScreenshotOptions {
  * code-to-design counterpart of `captureScreenshot`. Animations and caret
  * are frozen so the capture diffs cleanly against a Velloo render.
  */
-export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<Buffer> {
+export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<UrlCaptureResult> {
   const browser = await launchBrowser();
   try {
     const context = await browser.newContext({
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
       ...(opts.dark ? { colorScheme: "dark" as const } : {}),
+      ...(opts.storageStatePath ? { storageState: opts.storageStatePath } : {}),
     });
+    if (opts.cookies && opts.cookies.length > 0) {
+      await context.addCookies(opts.cookies);
+    }
+    if (opts.localStorage && Object.keys(opts.localStorage).length > 0) {
+      await context.addInitScript((entries: Array<[string, string]>) => {
+        try {
+          for (const [k, v] of entries) localStorage.setItem(k, v);
+        } catch {}
+      }, Object.entries(opts.localStorage));
+    }
     if (opts.dark) {
       // Seed before any page script runs so localStorage-driven togglers
       // (next-themes &c.) read "dark" on first paint instead of flashing light.
@@ -215,13 +289,77 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
     await page
       .waitForLoadState("networkidle", { timeout: opts.settleTimeoutMs ?? 8000 })
       .catch(() => {});
-    return await page.screenshot({
+    // Read the landed URL + auth signal before the screenshot so the caller can
+    // tell a faithful capture from one that bounced to a login page.
+    const finalUrl = page.url();
+    const authWall = await page
+      .locator('input[type="password"]')
+      .count()
+      .then((n) => n > 0)
+      .catch(() => false);
+    // A broken target — dev error overlay, error page, blank doc — would
+    // otherwise pixel-diff against the design and report a confident-but-bogus
+    // low similarity blamed on the design. Detect it so the caller can say so.
+    const pageError = await page
+      .evaluate(() => {
+        if (
+          document.querySelector(
+            "nextjs-portal, [data-nextjs-dialog], #__next-build-error, vite-error-overlay",
+          )
+        ) {
+          return "the target app is showing a dev error overlay — it's throwing, so the diff isn't about your design";
+        }
+        const txt = (document.body?.innerText ?? "").trim();
+        if (txt.length === 0) return "the target captured as a blank page (no visible text)";
+        const m = txt.match(
+          /Unhandled Runtime Error|Application error: a (?:client|server)-side exception|Internal Server Error|This page (?:could not be|isn't) found|Failed to compile|\b(?:Type|Syntax|Reference)Error:/i,
+        );
+        return m ? `the target looks like an error page ("${m[0]}")` : null;
+      })
+      .catch(() => null);
+    const png = await page.screenshot({
       fullPage: opts.fullPage ?? true,
       animations: "disabled",
       caret: "hide",
     });
+    return { png, finalUrl, authWall, pageError };
   } finally {
     await browser.close();
+  }
+}
+
+const LOGIN_PATH =
+  /\/(login|signin|sign-in|auth|authenticate|account\/login|users\/sign_in)(\/|$)/i;
+
+/**
+ * Did a URL capture land where it was asked to? Compares origin + pathname
+ * (trailing slash, query, and hash ignored) and flags login-looking URLs on
+ * both ends. The code-to-design compare loop is blind without this: an
+ * auth-gated page that redirects to `/login` would otherwise image-diff
+ * against the login screen and report a confident — and meaningless —
+ * similarity. `requestedLooksLikeLogin` lets the caller avoid false alarms
+ * when the user is deliberately porting a login page (a password field is
+ * then expected, not an auth wall).
+ */
+export function classifyCapture(
+  requested: string,
+  finalUrl: string,
+): { redirected: boolean; finalLooksLikeLogin: boolean; requestedLooksLikeLogin: boolean } {
+  try {
+    const norm = (u: URL) => u.origin + u.pathname.replace(/\/+$/, "");
+    const reqUrl = new URL(requested);
+    const finUrl = new URL(finalUrl);
+    return {
+      redirected: norm(reqUrl) !== norm(finUrl),
+      finalLooksLikeLogin: LOGIN_PATH.test(finUrl.pathname),
+      requestedLooksLikeLogin: LOGIN_PATH.test(reqUrl.pathname),
+    };
+  } catch {
+    return {
+      redirected: requested !== finalUrl,
+      finalLooksLikeLogin: LOGIN_PATH.test(finalUrl),
+      requestedLooksLikeLogin: LOGIN_PATH.test(requested),
+    };
   }
 }
 

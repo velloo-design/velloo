@@ -48,8 +48,14 @@ export function buildDocument(opts: DocumentOptions): string {
   const runtime = includeRuntime ? `<script>${IFRAME_RUNTIME}</script>` : "";
   const fontLinks =
     googleFonts && googleFonts.length > 0
-      ? `\n    <link rel="preconnect" href="https://fonts.googleapis.com" />\n    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?${googleFonts
-          .map((f) => `family=${encodeURIComponent(f).replace(/%3A/g, ":")}`)
+      ? // Entries are already in css2 `family=` value syntax (spaces as `+`,
+        // axis after `:`, e.g. "Cal+Sans" or "Inter:wght@400..700"). Emit them
+        // verbatim — `encodeURIComponent` would turn `+`/`@`/`,` into `%2B`/
+        // `%40`/`%2C`, which css2 reads as literal characters, so Google can't
+        // find the family and the font silently never loads. Only a stray
+        // literal space needs folding to `+` (mirrors emit-theme/globals-css).
+        `\n    <link rel="preconnect" href="https://fonts.googleapis.com" />\n    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?${googleFonts
+          .map((f) => `family=${f.replace(/ /g, "+")}`)
           .join("&")}&display=swap" />`
       : "";
   const customStyle =

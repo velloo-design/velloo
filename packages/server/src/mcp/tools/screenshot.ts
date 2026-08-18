@@ -1,8 +1,11 @@
+import { isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type CaptureNodeRect,
+  CHROMIUM_INSTALL_CMD,
   captureScreenshot,
   captureUrlScreenshot,
+  classifyCapture,
   cropPng,
   type DiffRegion,
   diffPngs,
@@ -10,6 +13,7 @@ import {
   screenshotBuffer,
   screenshotCompareBuffer,
   sideBySidePng,
+  type UrlCookie,
   unionRegion,
 } from "@velloo/renderer";
 import { isComponentNode, nodeId, type Screen, type Viewport } from "@velloo/schema";
@@ -30,7 +34,22 @@ function errorResult(text: string): McpResult {
 }
 
 function playwrightMissingMessage(msg: string): string {
-  return `screenshot: Playwright is not installed. Run \`bunx playwright install chromium\`. Underlying error: ${msg}`;
+  return `screenshot: Playwright is not installed. Run \`${CHROMIUM_INSTALL_CMD}\`, then retry — no server restart needed. Underlying error: ${msg}`;
+}
+
+/**
+ * A friendly one-line message for a browser/Playwright failure, or null if
+ * `err` isn't one. `BrowserMissingError` already carries an actionable message
+ * (missing install or a collapsed launch-crash summary) — surface it verbatim
+ * rather than dumping the raw multi-line browser log.
+ */
+function browserErrorMessage(err: unknown): string | null {
+  if (err instanceof Error && err.name === "BrowserMissingError") return err.message;
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/i.test(msg)) {
+    return playwrightMissingMessage(msg.split("\n")[0] ?? msg);
+  }
+  return null;
 }
 
 function defaultViewport(folder: {
@@ -249,10 +268,9 @@ export function registerScreenshotTool(
             ],
           };
         } catch (err) {
+          const bm = browserErrorMessage(err);
+          if (bm) return errorResult(bm);
           const msg = err instanceof Error ? err.message : String(err);
-          if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/.test(msg)) {
-            return errorResult(playwrightMissingMessage(msg));
-          }
           return errorResult(`screenshot diff failed: ${msg}`);
         }
       }
@@ -307,10 +325,9 @@ export function registerScreenshotTool(
           });
         }
       } catch (err) {
+        const bm = browserErrorMessage(err);
+        if (bm) return errorResult(bm);
         const msg = err instanceof Error ? err.message : String(err);
-        if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/.test(msg)) {
-          return errorResult(playwrightMissingMessage(msg));
-        }
         return errorResult(`screenshot failed: ${msg}`);
       }
       return {
@@ -323,7 +340,7 @@ export function registerScreenshotTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), the diff regions mapped to this screen's nodes, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; use the per-region node refs to find what's off. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small. `mode: \"dark\"` renders the Velloo side dark AND best-effort drives the target page dark (prefers-color-scheme + `.dark`/`data-theme` on <html> + `localStorage.theme`) so dark fidelity checks against the app's real dark theme; an app with a bespoke theme toggle may not flip — eyeball the side-by-side.",
+        "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), the diff regions mapped to this screen's nodes, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; use the per-region node refs to find what's off. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small. `mode: \"dark\"` renders the Velloo side dark AND best-effort drives the target page dark (prefers-color-scheme + `.dark`/`data-theme` on <html> + `localStorage.theme`) so dark fidelity checks against the app's real dark theme; an app with a bespoke theme toggle may not flip — eyeball the side-by-side. **When the capture isn't your page**, the result carries `unverified: true` and the similarity is meaningless — do NOT trust it or iterate against it. Causes: `redirected`/`authWall` (the URL bounced to a login page — pass `storageStatePath`, a Playwright storage-state JSON with the logged-in session, or `cookies`/`localStorage` to reach the real page), or `pageError` (the target app is throwing a dev error overlay / rendered blank — fix the app's dev server first). If you can't get a real capture, leave the screen unverified rather than tuning it to a page you never actually saw.",
       inputSchema: {
         screenId: z.string(),
         url: z.string().describe("Live URL to compare against, e.g. http://localhost:3000/pricing"),
@@ -337,13 +354,49 @@ export function registerScreenshotTool(
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional().describe("Default 0.5"),
         theme: z.string().optional().describe("Named theme to render with"),
+        storageStatePath: z
+          .string()
+          .optional()
+          .describe(
+            "Path to a Playwright storage-state JSON (logged-in cookies + localStorage) — absolute, or relative to the design folder. The robust way past auth gates.",
+          ),
+        cookies: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string(),
+              url: z.string().optional(),
+              domain: z.string().optional(),
+              path: z.string().optional(),
+            }),
+          )
+          .optional()
+          .describe("Session cookies to seed before navigating (each needs url OR domain+path)"),
+        localStorage: z
+          .record(z.string(), z.string())
+          .optional()
+          .describe("localStorage entries seeded before any page script runs (e.g. a JWT)"),
         image: z
           .boolean()
           .optional()
           .describe("Include the side-by-side PNG (default true; false = metrics only)"),
       },
     },
-    async ({ screenId, url, w, h, viewport: vp, mode, fullPage, scale, theme, image }) => {
+    async ({
+      screenId,
+      url,
+      w,
+      h,
+      viewport: vp,
+      mode,
+      fullPage,
+      scale,
+      theme,
+      storageStatePath,
+      cookies,
+      localStorage,
+      image,
+    }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
 
@@ -362,7 +415,13 @@ export function registerScreenshotTool(
           baseHref: assetOrigin,
           dark: mode === "dark",
         });
-        const [velloo, urlPng] = await Promise.all([
+        const resolvedStorageState =
+          storageStatePath === undefined
+            ? undefined
+            : isAbsolute(storageStatePath)
+              ? storageStatePath
+              : join(ctx.folder.root, storageStatePath);
+        const [velloo, urlCapture] = await Promise.all([
           captureScreenshot({
             html,
             viewport,
@@ -375,33 +434,61 @@ export function registerScreenshotTool(
             fullPage: fullPage ?? true,
             deviceScaleFactor: scaleFactor,
             dark: mode === "dark",
+            ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
+            ...(cookies ? { cookies: cookies as UrlCookie[] } : {}),
+            ...(localStorage ? { localStorage } : {}),
           }),
         ]);
 
-        const result = diffPngs(urlPng, velloo.png);
+        const result = diffPngs(urlCapture.png, velloo.png);
         const regions = result.regions.map((r) => ({
           ...r,
           node: regionNode(r, velloo.nodeRects, scaleFactor, screen),
         }));
+        // An auth wall counts only when the requested page isn't itself a login
+        // page (porting a login screen legitimately has a password field).
+        const cls = classifyCapture(url, urlCapture.finalUrl);
+        const authWall = urlCapture.authWall && !cls.requestedLooksLikeLogin;
+        const unverified = cls.redirected || authWall || urlCapture.pageError !== null;
+        // Why the capture can't be trusted, most-specific first.
+        const reason = cls.redirected
+          ? `it redirected to ${urlCapture.finalUrl}`
+          : urlCapture.pageError !== null
+            ? urlCapture.pageError
+            : "it shows a login form";
         const summary = {
           similarity: Number((1 - result.changedRatio).toFixed(4)),
           changedRatio: Number(result.changedRatio.toFixed(4)),
           /** velloo render height minus URL capture height, image px. */
           heightDelta: result.heightDelta,
           regions,
+          ...(unverified
+            ? {
+                unverified: true,
+                ...(cls.redirected
+                  ? { redirected: { requested: url, final: urlCapture.finalUrl } }
+                  : {}),
+                ...(authWall ? { authWall: true } : {}),
+                ...(urlCapture.pageError !== null ? { pageError: urlCapture.pageError } : {}),
+                warning:
+                  `the capture is NOT a faithful view of your page — ${reason}. ` +
+                  "similarity is meaningless here (you're diffing against the wrong thing). " +
+                  "For an auth wall, pass storageStatePath/cookies/localStorage; for a broken target, fix the app's dev server first. " +
+                  "Either way, don't tune the design to this capture — leave the screen unverified.",
+              }
+            : {}),
         };
 
         const content: McpResult["content"] = [{ type: "text", text: JSON.stringify(summary) }];
         if (image !== false) {
-          const side = sideBySidePng(urlPng, velloo.png);
+          const side = sideBySidePng(urlCapture.png, velloo.png);
           content.push({ type: "image", data: side.toString("base64"), mimeType: "image/png" });
         }
         return { content };
       } catch (err) {
+        const bm = browserErrorMessage(err);
+        if (bm) return errorResult(bm);
         const msg = err instanceof Error ? err.message : String(err);
-        if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/.test(msg)) {
-          return errorResult(playwrightMissingMessage(msg));
-        }
         if (/net::|ERR_CONNECTION|Timeout.*exceeded|goto/.test(msg)) {
           return errorResult(
             `compare_to_url: could not load ${url} — is the app's dev server running? Underlying error: ${msg}`,
@@ -503,10 +590,9 @@ export function registerScreenshotTool(
           });
         }
       } catch (err) {
+        const bm = browserErrorMessage(err);
+        if (bm) return errorResult(bm);
         const msg = err instanceof Error ? err.message : String(err);
-        if (/Cannot find package 'playwright'|MODULE_NOT_FOUND|chromium/.test(msg)) {
-          return errorResult(playwrightMissingMessage(msg));
-        }
         return errorResult(`render_snippet failed: ${msg}`);
       }
       return {

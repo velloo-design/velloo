@@ -308,4 +308,56 @@ describe("emitCode", () => {
       expect(strayParam.error).toEqual({ kind: "UnknownComponent", ref: "$param:title" });
     }
   });
+
+  test("inline rich text: mixed string + node children prop emits real JSX", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Box",
+          props: {
+            children: [
+              "You get ",
+              { $ref: "Box", props: { className: "text-primary", children: "the math right" } },
+            ],
+          },
+        }),
+      ),
+    );
+    // Text run as a string expression (exact spacing preserved); node child as
+    // a real element — never a literal `{"$ref":…}` object.
+    expect(result.jsx).toContain('{"You get "}');
+    expect(result.jsx).toContain('<div className="text-primary">the math right</div>');
+    expect(result.jsx).not.toContain("$ref");
+    expect(result.classesUsed).toContain("text-primary");
+  });
+
+  test("a single node-valued children prop emits the nested element", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Box",
+          props: { children: { $ref: "Badge", props: { children: "New" } } },
+        }),
+      ),
+    );
+    expect(result.jsx).toBe(`<div>
+  <Badge>New</Badge>
+</div>`);
+  });
+
+  test('Box as="span" lowers to <span> and consumes the as prop', async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({ $ref: "Box", props: { as: "span", className: "font-bold", children: "hi" } }),
+      ),
+    );
+    expect(result.jsx).toBe('<span className="font-bold">hi</span>');
+  });
+
+  test("an unsafe Box as= falls back to <div>", async () => {
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Box", props: { as: "Whatever", children: "hi" } })),
+    );
+    expect(result.jsx).toBe("<div>hi</div>");
+  });
 });

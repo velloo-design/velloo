@@ -18,6 +18,14 @@ import { COLOR_SLOTS } from "../emit-theme/globals-css.ts";
 export interface ParsedThemeCss {
   colors: Partial<Colors>;
   colorsDark: Partial<Colors>;
+  /**
+   * Numeric color scales + extra semantic roles the app declares beyond the
+   * semantic slots — `primary-600`, `success-500`, `danger`. Keyed by Tailwind
+   * color name; values normalized to CSS colors. `paletteDark` carries `.dark`
+   * overrides. Always present (possibly empty), mirroring `colors`.
+   */
+  palette: Record<string, string>;
+  paletteDark: Record<string, string>;
   /** Resolved `--radius` value, if declared. */
   radius?: string;
   /** `--font-<role>` stacks (sans/mono/display/…), sizing roles excluded. */
@@ -29,6 +37,41 @@ const HSL_TRIPLET = /^-?[0-9.]+(?:deg)?\s+-?[0-9.]+%\s+-?[0-9.]+%(?:\s*\/\s*[0-9
 
 /** Sizing/weight roles that share the `--font-` prefix but aren't families. */
 const NON_FAMILY_FONT_ROLE = /^(size|weight|leading|tracking)(-|$)/;
+
+/** Tailwind numeric scale step suffix (`-600`, `-50`, …). */
+const SCALE_STEP = /-(?:50|100|200|300|400|500|600|700|800|900|950)$/;
+/** Extra semantic color roles a host app commonly defines beyond shadcn's slots. */
+const EXTRA_ROLE = /^(success|warning|danger|error|info|positive|negative)(-foreground)?$/;
+
+/**
+ * A var that should be captured as a raw palette entry: a numeric scale step
+ * of any role (`primary-600`) or an extra semantic role (`success`). Returns
+ * the Tailwind color name (sans `--`/`color-` prefix) or null. The semantic
+ * slots themselves (`--primary`, `--background`) are handled by extractColors
+ * and deliberately excluded here.
+ */
+function paletteName(rawKey: string): string | null {
+  const name = rawKey.startsWith("color-") ? rawKey.slice(6) : rawKey;
+  if (SCALE_STEP.test(name) || EXTRA_ROLE.test(name)) return name;
+  return null;
+}
+
+/**
+ * Conservative color sniff: app scale vars are virtually always hex / rgb /
+ * hsl / oklch / a raw HSL triplet. Bare named colors are rare for scales and
+ * hard to enumerate, so we skip them — better to miss an obscure one than to
+ * slurp a non-color var (`--shadow-500`) into the palette.
+ */
+function isColorish(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if (HSL_TRIPLET.test(v)) return true;
+  return (
+    /^#[0-9a-f]{3,8}$/.test(v) ||
+    /^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\(/.test(v) ||
+    v === "transparent" ||
+    v === "currentcolor"
+  );
+}
 
 function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -167,6 +210,28 @@ function extractColors(
   return colors as Partial<Colors>;
 }
 
+/**
+ * Pull numeric scales + extra roles out of `declScope`, resolving `var()` refs
+ * against `resolveScopes`. Only color-valued vars survive (see `isColorish`).
+ */
+function extractPalette(
+  declScope: Map<string, string>,
+  resolveScopes: Array<Map<string, string>>,
+): Record<string, string> {
+  const palette: Record<string, string> = {};
+  for (const [rawKey, raw] of declScope) {
+    const name = paletteName(rawKey);
+    if (name === null) continue;
+    // `--color-primary-600` wins over `--primary-600` when both are declared.
+    if (rawKey.startsWith("color-") || !declScope.has(`color-${rawKey}`)) {
+      const resolved = resolveVars(raw, resolveScopes);
+      if (resolved === null || resolved === "" || !isColorish(resolved)) continue;
+      palette[name] = normalizeColor(resolved);
+    }
+  }
+  return palette;
+}
+
 export function parseThemeCss(css: string): ParsedThemeCss {
   const warnings: string[] = [];
   const stripped = stripComments(css);
@@ -186,7 +251,10 @@ export function parseThemeCss(css: string): ParsedThemeCss {
   const colorsDark =
     darkVars.size > 0 ? extractColors(darkVars, [darkVars, rootVars], "dark", warnings) : {};
 
-  const result: ParsedThemeCss = { colors, colorsDark, warnings };
+  const palette = extractPalette(rootVars, [rootVars]);
+  const paletteDark = darkVars.size > 0 ? extractPalette(darkVars, [darkVars, rootVars]) : {};
+
+  const result: ParsedThemeCss = { colors, colorsDark, palette, paletteDark, warnings };
 
   const radiusRaw = rootVars.get("radius");
   if (radiusRaw !== undefined) {

@@ -28,11 +28,14 @@ export {
   captureScreenshot,
   captureUrlScreenshot,
   chromiumExecutable,
+  classifyCapture,
   type ScreenshotCompareOptions,
   type ScreenshotOptions,
   screenshot,
   screenshotBuffer,
   screenshotCompareBuffer,
+  type UrlCaptureResult,
+  type UrlCookie,
   type UrlScreenshotOptions,
 } from "./screenshot.ts";
 export {

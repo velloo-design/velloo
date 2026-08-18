@@ -32,6 +32,14 @@ function fgOf(value: ColorPair | undefined): string | undefined {
   return undefined;
 }
 
+/** Raw scale/role passthrough: `primary-600` → `--color-primary-600`. */
+function appendPalette(palette: Record<string, string> | undefined, lines: string[]): void {
+  if (!palette) return;
+  for (const [name, value] of Object.entries(palette)) {
+    lines.push(`  --color-${name}: ${value};`);
+  }
+}
+
 function appendColorBlock(colors: Partial<Colors>, lines: string[]): void {
   for (const { key, pair } of COLOR_SLOTS) {
     const value = colors[key];
@@ -94,6 +102,7 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
   }
 
   appendColorBlock(theme.colors, lines);
+  appendPalette(theme.palette, lines);
 
   lines.push(`}`);
   lines.push("");
@@ -103,11 +112,12 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
   // can hook it up to any framework's dark-mode toggle (Tailwind v4 darkVariant
   // defaults to `prefers-color-scheme`; most apps swap to a class-based variant
   // via `@custom-variant dark (&:is(.dark *))` in their globals.css).
-  if (theme.colorsDark) {
+  if (theme.colorsDark || theme.paletteDark) {
     lines.push(`@custom-variant dark (&:is(.dark *));`);
     lines.push("");
     lines.push(`.dark {`);
-    appendColorBlock(theme.colorsDark, lines);
+    appendColorBlock(theme.colorsDark ?? {}, lines);
+    appendPalette(theme.paletteDark, lines);
     lines.push(`}`);
     lines.push("");
   }

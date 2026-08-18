@@ -286,8 +286,12 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   // the user's shadcn install is enough.
   Box: {
     kind: "lowered",
-    lower() {
-      return { tag: "div", extraClasses: "" };
+    lower(props) {
+      // `as` swaps the element (span/strong/a/…) so inline runs render inline;
+      // restrict to a lowercase HTML tag name and fall back to div otherwise.
+      const as = props.as;
+      const tag = typeof as === "string" && /^[a-z][a-z0-9]*$/.test(as) ? as : "div";
+      return { tag, extraClasses: "" };
     },
   },
   // Provider-none layout primitives — lower to plain HTML with the same
@@ -406,6 +410,7 @@ export function helpersToMaterialize(refs: Iterable<string>): string[] {
 
 /** Props that the snapshot's lowered primitives consume — strip from output. */
 export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
+  Box: new Set(["as"]),
   Heading: new Set(["level"]),
   Text: new Set(["variant"]),
   Icon: new Set(["name"]),

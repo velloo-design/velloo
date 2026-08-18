@@ -551,4 +551,88 @@ describe("themeToCss", () => {
     const css = themeToCss(t);
     expect(css).not.toContain("fuchsia");
   });
+
+  test("emits palette scales/roles as --color-* vars (root + dark)", () => {
+    const t: Theme = {
+      ...sampleTheme,
+      palette: { "primary-600": "#4f46e5", "success-500": "#22c55e" },
+      paletteDark: { "primary-600": "#818cf8" },
+    };
+    const css = themeToCss(t);
+    expect(css).toContain("--color-primary-600: #4f46e5;");
+    expect(css).toContain("--color-success-500: #22c55e;");
+    expect(css).toMatch(/\.dark \{[^}]*--color-primary-600: #818cf8;/s);
+  });
+});
+
+describe("inline rich text (node-valued children prop)", () => {
+  test("mixed string + node children prop render inline, not as a crash", async () => {
+    const screen = screenWith({
+      $ref: "Heading",
+      props: {
+        level: 1,
+        children: [
+          "You get ",
+          { $ref: "Text", props: { className: "text-primary", children: "the math right" } },
+        ],
+      },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("You get");
+    expect(bodyHtml).toContain("the math right");
+    expect(bodyHtml).toContain("text-primary");
+  });
+
+  test("a single node-valued children prop renders the element", async () => {
+    const screen = screenWith({
+      $ref: "Text",
+      props: { children: { $ref: "Badge", props: { children: "New" } } },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("New");
+  });
+
+  test("a plain string children prop still renders as text", async () => {
+    const screen = screenWith({ $ref: "Text", props: { children: "just text" } });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("just text");
+  });
+});
+
+describe("google fonts injection", () => {
+  test("emits a correctly-encoded css2 link (no %2B / %40 corruption)", async () => {
+    const themed: Theme = {
+      ...sampleTheme,
+      typography: {
+        ...sampleTheme.typography,
+        fontFamily: { ...sampleTheme.typography.fontFamily, heading: '"Cal Sans", sans-serif' },
+        googleFonts: ["Cal+Sans", "Inter:wght@400..700"],
+      },
+    };
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, themed, opts);
+    expect(html).toContain(
+      "https://fonts.googleapis.com/css2?family=Cal+Sans&family=Inter:wght@400..700&display=swap",
+    );
+    // The old encodeURIComponent path corrupted spaces (+ -> %2B) and axis
+    // specs (@ -> %40), so Google never resolved the family.
+    expect(html).not.toContain("%2B");
+    expect(html).not.toContain("%40");
+  });
+});
+
+describe("Box as= polymorphic tag", () => {
+  test('as="span" renders an inline span, not a div', async () => {
+    const screen = screenWith({ $ref: "Box", props: { as: "span", children: "inline run" } });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("<span");
+    expect(bodyHtml).toContain("inline run");
+  });
+
+  test("an unsafe/component-style as falls back to div", async () => {
+    const screen = screenWith({ $ref: "Box", props: { as: "Script", children: "x" } });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("<div");
+    expect(bodyHtml.toLowerCase()).not.toContain("<script");
+  });
 });

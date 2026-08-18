@@ -199,3 +199,63 @@ describe("parseThemeCss edge cases", () => {
     });
   });
 });
+
+describe("parseThemeCss palette (numeric scales + extra roles)", () => {
+  test("captures scale steps + extra roles; ignores non-scale and non-color vars", () => {
+    const css = `:root {
+  --background: #fff; --foreground: #111; --primary: #4f46e5;
+  --primary-300: #a5b4fc;
+  --primary-600: #4f46e5;
+  --success-500: #22c55e;
+  --danger: #ef4444;
+  --danger-foreground: #fff;
+  --chart-1: 12 76% 61%;
+  --radius: 0.5rem;
+  --font-sans: Inter, sans-serif;
+  --spacing-600: 24px;
+}`;
+    const parsed = parseThemeCss(css);
+    expect(parsed.palette).toEqual({
+      "primary-300": "#a5b4fc",
+      "primary-600": "#4f46e5",
+      "success-500": "#22c55e",
+      danger: "#ef4444",
+      "danger-foreground": "#fff",
+    });
+    // chart-1 (non-scale step), radius/font (non-color), spacing-600 (non-color) excluded.
+    expect(parsed.palette["chart-1"]).toBeUndefined();
+    expect(parsed.palette["spacing-600"]).toBeUndefined();
+  });
+
+  test("raw HSL triplet scale values normalize to hsl(); --color- prefix works", () => {
+    const css = `:root {
+  --background: #fff; --foreground: #111; --primary: #333;
+  --color-primary-600: 222 47% 11%;
+}`;
+    const parsed = parseThemeCss(css);
+    expect(parsed.palette["primary-600"]).toBe("hsl(222 47% 11%)");
+  });
+
+  test(".dark scale overrides land in paletteDark, overrides-only", () => {
+    const css = `:root {
+  --background: #fff; --foreground: #111; --primary: #333;
+  --primary-600: #4f46e5;
+  --success-500: #22c55e;
+}
+.dark {
+  --primary-600: #818cf8;
+}`;
+    const parsed = parseThemeCss(css);
+    expect(parsed.palette["primary-600"]).toBe("#4f46e5");
+    expect(parsed.paletteDark).toEqual({ "primary-600": "#818cf8" });
+  });
+
+  test("emitGlobalsCss round-trips palette + paletteDark", () => {
+    const theme = buildTheme();
+    theme.palette = { "primary-600": "#4f46e5", "success-500": "#22c55e" };
+    theme.paletteDark = { "primary-600": "#818cf8" };
+    const parsed = parseThemeCss(emitGlobalsCss(theme));
+    expect(parsed.palette).toEqual(theme.palette);
+    expect(parsed.paletteDark).toEqual(theme.paletteDark);
+  });
+});

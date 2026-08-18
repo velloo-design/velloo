@@ -287,7 +287,11 @@ function renderComponent(
     typeof effectiveChild === "object" &&
     typeof (effectiveChild as { $if?: unknown }).$if === "string";
   const hasOtherChild =
-    effectiveChild !== undefined && !hasStringChild && !isChildParamRef && !isChildIf;
+    effectiveChild !== undefined &&
+    !hasStringChild &&
+    !isChildParamRef &&
+    !isChildIf &&
+    !(Array.isArray(effectiveChild) && effectiveChild.length === 0);
 
   if (!hasNodeChildren && !hasStringChild && !hasOtherChild && !isChildParamRef && !isChildIf) {
     return ok(`${pad}<${openTag}${attrs} />`);
@@ -325,6 +329,33 @@ function renderComponent(
       );
     }
     return ok(`${pad}<${openTag}${attrs}>{${expr}}</${closeTag}>`);
+  }
+
+  // Inline rich text: a `children` prop holding node(s), optionally interleaved
+  // with text runs — "You get <Text>the math right</Text>". Text runs emit as
+  // JS string expressions (`{"You get "}`) so explicit spacing survives JSX's
+  // whitespace collapsing across newlines.
+  if (Array.isArray(effectiveChild)) {
+    const parts: string[] = [];
+    for (const item of effectiveChild) {
+      if (isComponentNode(item) || isSnippetInstance(item) || isParamRef(item)) {
+        const childR = renderNode(item as Node, ctx, depth + 1);
+        if (!childR.ok) return childR;
+        parts.push(childR.value);
+      } else if (typeof item === "string" || typeof item === "number") {
+        parts.push(`${childPad}{${JSON.stringify(String(item))}}`);
+      } else {
+        parts.push(`${childPad}{${JSON.stringify(item)}}`);
+      }
+    }
+    return ok(`${pad}<${openTag}${attrs}>\n${parts.join("\n")}\n${pad}</${closeTag}>`);
+  }
+
+  // A single node-shaped `children` prop value (`children: {$ref:"Icon",…}`).
+  if (isComponentNode(effectiveChild as Node) || isSnippetInstance(effectiveChild as Node)) {
+    const childR = renderNode(effectiveChild as Node, ctx, depth + 1);
+    if (!childR.ok) return childR;
+    return ok(`${pad}<${openTag}${attrs}>\n${childR.value}\n${pad}</${closeTag}>`);
   }
 
   if (hasStringChild) {

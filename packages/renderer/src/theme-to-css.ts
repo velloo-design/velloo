@@ -27,6 +27,14 @@ function emit(varName: string, value: string | number | undefined, lines: string
   }
 }
 
+/** Raw scale/role passthrough: `primary-600` → `--color-primary-600`. */
+function emitPalette(palette: Record<string, string> | undefined, lines: string[]): void {
+  if (!palette) return;
+  for (const [name, value] of Object.entries(palette)) {
+    lines.push(`  --color-${name}: ${value};`);
+  }
+}
+
 function emitColorBlock(colors: Partial<Colors>, lines: string[]): void {
   for (const [token, target] of Object.entries(COLOR_TOKEN_MAP)) {
     const value = colors[token as keyof Colors];
@@ -49,6 +57,7 @@ function emitColorBlock(colors: Partial<Colors>, lines: string[]): void {
 export function themeToCss(theme: Theme): string {
   const lines: string[] = [":root {"];
   emitColorBlock(theme.colors, lines);
+  emitPalette(theme.palette, lines);
 
   const fontFamily = theme.typography.fontFamily;
   if (fontFamily) {
@@ -71,10 +80,11 @@ export function themeToCss(theme: Theme): string {
 
   // Dark-mode overrides — gated on a `.dark` ancestor so the canvas can flip
   // a single class to preview both modes without re-rendering.
-  if (theme.colorsDark) {
+  if (theme.colorsDark || theme.paletteDark) {
     lines.push("");
     lines.push(".dark {");
-    emitColorBlock(theme.colorsDark, lines);
+    emitColorBlock(theme.colorsDark ?? {}, lines);
+    emitPalette(theme.paletteDark, lines);
     lines.push("}");
   }
 

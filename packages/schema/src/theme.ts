@@ -44,6 +44,26 @@ export const ColorsSchema = z.object({
 export type Colors = z.infer<typeof ColorsSchema>;
 
 /**
+ * Numeric color scales + extra semantic roles captured verbatim from a host
+ * app — `primary-600`, `success-500`, `danger`, `border-primary-300`. Keyed by
+ * the Tailwind color name (no `--color-` prefix), values are CSS colors.
+ * Emitted as `--color-<name>` so `bg-<name>` / `text-<name>` / `border-<name>`
+ * resolve literally during a code-to-design port, instead of silently falling
+ * back to the default palette.
+ *
+ * Distinct from `colors`: those are the semantic single-token slots that
+ * theme-flip and drive the component snapshot; `palette` is a raw passthrough
+ * for an app's own scale so verbatim classes render. Keys are constrained to a
+ * CSS-safe ident so they can't inject into the emitted stylesheet.
+ */
+const PaletteSchema = z.record(
+  z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/),
+  z.string().min(1),
+);
+
+export type Palette = z.infer<typeof PaletteSchema>;
+
+/**
  * Structured typography slots — what Velloo's codegen + renderer actually
  * read. Each sub-shape is .passthrough()-equivalent (extra keys allowed)
  * via z.record at the leaf, so callers can add custom sizes without
@@ -99,6 +119,11 @@ export const ThemeSchema = z.object({
    *  When present, emit_theme writes a `.dark { ... }` block and the canvas
    *  can preview both modes. Tokens missing here fall back to `colors`. */
   colorsDark: ColorsSchema.partial().optional(),
+  /** Numeric scales + extra roles captured from a host app (see PaletteSchema).
+   *  Light values; dark overrides go in `paletteDark`. Optional — themes
+   *  without an imported app palette omit it. */
+  palette: PaletteSchema.optional(),
+  paletteDark: PaletteSchema.optional(),
   typography: TypographySchema,
   spacing: LooseTokenGroupSchema,
   radius: RadiusSchema,

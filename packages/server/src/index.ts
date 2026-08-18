@@ -61,22 +61,31 @@ async function serveStatic(req: Request): Promise<Response | null> {
 }
 
 /**
- * Mirror the folder theme's font roles into a Tailwind @theme block so
- * `font-<role>` utilities compile. Values are overridden at render time
- * by themeToCss's :root vars; the JIT only needs the token to exist.
+ * Mirror the folder themes' font roles and raw color palette into a Tailwind
+ * @theme block so `font-<role>` and scale/role color utilities (`bg-primary-600`,
+ * `text-success-500`) compile. Values are overridden at render time by
+ * themeToCss's :root vars; the JIT only needs the token to exist so the
+ * utility is generated when a className references it.
  */
-function fontThemeBlock(folder: DesignFolder): string {
-  // Merge roles across every named theme so font-<role> utilities
-  // compile for whichever theme a board renders with. Values are
-  // overridden per render by themeToCss's :root vars.
-  const merged: Record<string, string> = {};
+function extraThemeBlock(folder: DesignFolder): string {
+  // Merge across every named theme so utilities compile for whichever theme a
+  // board renders with — values are overridden per render by themeToCss.
+  const fonts: Record<string, string> = {};
+  const palette: Record<string, string> = {};
   for (const theme of folder.themes.values()) {
     for (const [role, stack] of Object.entries(theme.typography.fontFamily ?? {})) {
-      merged[role] = stack;
+      fonts[role] = stack;
     }
+    for (const [name, value] of Object.entries(theme.palette ?? {})) palette[name] = value;
+    // A name defined only in dark still needs its utility generated; the light
+    // value is a placeholder the render-time :root/.dark vars override.
+    for (const [name, value] of Object.entries(theme.paletteDark ?? {})) palette[name] ??= value;
   }
-  if (Object.keys(merged).length === 0) return "";
-  const lines = Object.entries(merged).map(([role, stack]) => `  --font-${role}: ${stack};`);
+  const lines = [
+    ...Object.entries(fonts).map(([role, stack]) => `  --font-${role}: ${stack};`),
+    ...Object.entries(palette).map(([name, value]) => `  --color-${name}: ${value};`),
+  ];
+  if (lines.length === 0) return "";
   return `@theme {\n${lines.join("\n")}\n}`;
 }
 
@@ -117,7 +126,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     Object.values(providers),
     join(folder.root, "screens"),
     undefined,
-    () => fontThemeBlock(folder),
+    () => extraThemeBlock(folder),
   );
   const broadcast = (e: WatchEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {

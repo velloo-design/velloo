@@ -82,6 +82,27 @@ describe("propWarnings", () => {
     expect(w).toEqual([]);
   });
 
+  test("flags a removed lucide brand glyph with an SVG/Image hint, not a bogus match", async () => {
+    const w = await propWarnings(ctxOf(), screen, "Icon", { name: "Github" });
+    expect(w.length).toBe(1);
+    expect(w[0]).toContain('doesn\'t match any lucide icon — renders as the fallback "?"');
+    expect(w[0]).toContain("brand glyphs");
+    expect(w[0]).toContain("SVG");
+    // Brand names skip the misleading nearest-match suggestion.
+    expect(w[0]).not.toContain("closest:");
+  });
+
+  test("a plain typo'd icon name still suggests the closest real icon", async () => {
+    const w = await propWarnings(ctxOf(), screen, "Icon", { name: "ArrowRiht" });
+    expect(w.length).toBe(1);
+    expect(w[0]).toContain("closest:");
+  });
+
+  test("a valid lucide name (either case) produces no warning", async () => {
+    expect(await propWarnings(ctxOf(), screen, "Icon", { name: "ArrowRight" })).toEqual([]);
+    expect(await propWarnings(ctxOf(), screen, "Icon", { name: "arrow-right" })).toEqual([]);
+  });
+
   test("tree walk prefixes warnings with the node path", async () => {
     const w = await propWarningsForTree(ctxOf(), screen, {
       $ref: "Card",

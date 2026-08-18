@@ -57,6 +57,8 @@ export async function importThemeCss(
   const foundAny =
     Object.keys(parsed.colors).length > 0 ||
     Object.keys(parsed.colorsDark).length > 0 ||
+    Object.keys(parsed.palette).length > 0 ||
+    Object.keys(parsed.paletteDark).length > 0 ||
     parsed.radius !== undefined ||
     parsed.fontFamily !== undefined;
   if (!foundAny) {
@@ -91,6 +93,20 @@ export async function importThemeCss(
       for (const [token, to] of pairEntries(`colorsDark.${slot}`, value as ColorPair)) {
         record(token, to);
       }
+    }
+  }
+  if (Object.keys(parsed.palette).length > 0) {
+    next.palette = { ...(next.palette ?? {}) };
+    for (const [name, value] of Object.entries(parsed.palette)) {
+      (next.palette as Record<string, string>)[name] = value;
+      record(`palette.${name}`, value);
+    }
+  }
+  if (Object.keys(parsed.paletteDark).length > 0) {
+    next.paletteDark = { ...(next.paletteDark ?? {}) };
+    for (const [name, value] of Object.entries(parsed.paletteDark)) {
+      (next.paletteDark as Record<string, string>)[name] = value;
+      record(`paletteDark.${name}`, value);
     }
   }
   if (parsed.radius !== undefined) {

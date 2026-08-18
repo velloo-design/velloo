@@ -13,7 +13,7 @@ import {
   type SnippetInstance,
   substituteSnippetParams,
 } from "@velloo/schema";
-import { createElement, Fragment, type ReactElement, type ReactNode } from "react";
+import { cloneElement, createElement, Fragment, type ReactElement, type ReactNode } from "react";
 
 export class UnknownComponentError extends Error {
   constructor(public readonly ref: string) {
@@ -160,7 +160,7 @@ export function buildTree(
         : buildTree(child, opts, [...path, i], stack, lockedPath),
     );
   } else if (childrenProp !== undefined) {
-    children = childrenProp as ReactNode;
+    children = resolvePropChildren(childrenProp, opts, path, stack, lockedPath);
   }
 
   return createElement(
@@ -168,6 +168,46 @@ export function buildTree(
     { ...restProps, "data-node-path": dataNodePath, key: dataNodePath || "root" },
     children,
   );
+}
+
+/** A raw JSON value that is itself a node (component / snippet instance / param ref). */
+function isNodeLike(v: unknown): v is Node {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    !Array.isArray(v) &&
+    (isComponentNode(v as Node) || isSnippetInstance(v as Node) || isParamRef(v as Node))
+  );
+}
+
+/**
+ * Resolve a `children` *prop* value into renderable React content. Scalars
+ * (string / number) pass through; node-shaped values — and arrays mixing the
+ * two — are built into elements so inline rich text renders, e.g.
+ * `children: ["You get ", {$ref:"Text", props:{className:"…", children:"the math right"}}]`
+ * instead of crashing React with a raw object child. Inline nodes anchor to
+ * the parent's path so a click selects the parent: like snippet-body nodes,
+ * they're presentational content, not independently addressable.
+ */
+function resolvePropChildren(
+  value: unknown,
+  opts: BuildTreeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+): ReactNode {
+  if (isNodeLike(value)) {
+    return buildTree(value, opts, path, stack, lockedPath);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item, i) => {
+      if (!isNodeLike(item)) return item as ReactNode;
+      const el = buildTree(item, opts, path, stack, lockedPath);
+      // biome-ignore lint/suspicious/noArrayIndexKey: inline children are positional content runs with no stable identity; index is the natural key
+      return cloneElement(el, { key: `inline-${i}` });
+    });
+  }
+  return value as ReactNode;
 }
 
 /**

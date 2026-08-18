@@ -22,6 +22,30 @@ import { nearestRefs } from "./errors.ts";
  */
 const UNIVERSAL_PROPS = new Set(["className", "children", "id", "style", "title", "role"]);
 
+/**
+ * Brand glyphs lucide removed (they live in `lucide-static`/`simple-icons`
+ * now). These are exactly the names people reach for, so a generic "closest
+ * match" suggestion (GitGraph for Github) misleads — point at the real fix.
+ */
+const REMOVED_BRAND_ICONS = new Set([
+  "Github",
+  "Gitlab",
+  "Twitter",
+  "Facebook",
+  "Linkedin",
+  "Instagram",
+  "Youtube",
+  "Twitch",
+  "Slack",
+  "Figma",
+  "Chrome",
+  "Codepen",
+  "Dribbble",
+  "Trello",
+  "Framer",
+  "Discord",
+]);
+
 const manifestCache = new WeakMap<ComponentProvider, Promise<Manifest>>();
 
 function manifestFor(provider: ComponentProvider): Promise<Manifest> {
@@ -76,10 +100,20 @@ export async function propWarnings(
       // time) — warn only when neither form matches a lucide export,
       // because the canvas then silently falls back to a "?" glyph.
       const names = prop.enumValues.map(String);
-      if (!names.includes(value) && !names.includes(pascalizeIconName(value))) {
-        const near = nearestRefs(pascalizeIconName(value), names, 3).join(", ");
+      const pascal = pascalizeIconName(value);
+      if (!names.includes(value) && !names.includes(pascal)) {
+        // Brand glyph removed from lucide → point at SVG/Image, not a bogus
+        // "closest match"; otherwise suggest the nearest real icon names.
+        let suffix: string;
+        if (REMOVED_BRAND_ICONS.has(pascal)) {
+          suffix =
+            " — lucide dropped brand glyphs; use the `SVG` component (or `Image`) for a logo";
+        } else {
+          const near = nearestRefs(pascal, names, 3).join(", ");
+          suffix = near ? `; closest: ${near}` : "";
+        }
         warnings.push(
-          `${ref}: "${key}" = ${JSON.stringify(value)} doesn't match any lucide icon — renders as the fallback "?"${near ? `; closest: ${near}` : ""}`,
+          `${ref}: "${key}" = ${JSON.stringify(value)} doesn't match any lucide icon — renders as the fallback "?"${suffix}`,
         );
       }
     } else if (prop.control === "enum" && prop.enumValues && typeof value === "string") {

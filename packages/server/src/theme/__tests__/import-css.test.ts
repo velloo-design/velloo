@@ -144,4 +144,33 @@ describe("importThemeCss", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.kind).toBe("BadRequest");
   });
+
+  test("numeric scales + extra roles merge into palette and persist", async () => {
+    const css = `:root {
+  --primary-600: #4f46e5;
+  --success-500: #22c55e;
+  --danger: #ef4444;
+}
+.dark { --primary-600: #818cf8; }`;
+    const r = unwrap(await importThemeCss(ctx, css, { apply: true }));
+    expect(r.applied).toBe(true);
+    const tokens = r.changes.map((c) => c.token);
+    expect(tokens).toContain("palette.primary-600");
+    expect(tokens).toContain("palette.success-500");
+    expect(tokens).toContain("paletteDark.primary-600");
+
+    const onDisk = await diskTheme();
+    expect(onDisk.palette).toEqual({
+      "primary-600": "#4f46e5",
+      "success-500": "#22c55e",
+      danger: "#ef4444",
+    });
+    expect(onDisk.paletteDark).toEqual({ "primary-600": "#818cf8" });
+  });
+
+  test("a palette-only stylesheet imports (foundAny includes palette)", async () => {
+    const r = await importThemeCss(ctx, `:root { --brand-700: #0ea5e9; }`);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.changes.map((c) => c.token)).toContain("palette.brand-700");
+  });
 });
