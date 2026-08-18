@@ -40,6 +40,14 @@ export interface WizardAnswers {
    * The init positional arg, or the current directory when omitted.
    */
   appRoot: string;
+  /**
+   * Absolute path the scan reads from — `appRoot` for most apps, but a nested
+   * UI folder (e.g. `web/frontend`) when the app lives in a subfolder, picked
+   * by `--scan-dir` or auto-discovery. Velloo still installs at `appRoot`;
+   * only route detection + theme import use this. Equals `appRoot` off the
+   * scan flow.
+   */
+  scanRoot: string;
   /** Absolute path to the design folder being created (under `appRoot`). */
   folder: string;
   library: LibraryId;

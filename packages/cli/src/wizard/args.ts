@@ -19,6 +19,8 @@ export interface InitCliArgs {
   connect?: boolean;
   /** `scratch` | `scan`. */
   start?: string;
+  /** Subfolder (relative to the app root) to scan when the UI isn't at the root. */
+  scanDir?: string;
   library?: string;
   componentsDir?: string;
   initialContent?: string;
@@ -85,6 +87,9 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
 
   return {
     appRoot,
+    // Default to the app root; the scan flow finalizes this in init.ts (which
+    // can run async --scan-dir / auto-discovery — answersFromArgs stays pure).
+    scanRoot: appRoot,
     folder,
     library,
     source,

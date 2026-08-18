@@ -35,7 +35,13 @@ import { buildSampleBoards, buildSampleScreens } from "../scaffold/sample-page.t
 import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
 import { buildPresetTheme, presetById } from "../scaffold/theme-presets.ts";
 import { detectHost } from "../scan/detect.ts";
-import { buildBoardFromScan, buildScreensFromScan, scanAppRoutes } from "../scan/index.ts";
+import {
+  buildBoardFromScan,
+  buildScreensFromScan,
+  resolveScanRoot,
+  scanAppRoutes,
+} from "../scan/index.ts";
+import { dirExists } from "../scan/walk.ts";
 import type { WizardAnswers } from "../wizard/answers.ts";
 import { answersFromArgs, type InitCliArgs, shouldRunWizard } from "../wizard/args.ts";
 import { type InstallPlan, planInstall } from "../wizard/install.ts";
@@ -95,7 +101,7 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
     // screens the user picked; non-interactive scan uses every detected route.
     // The library only affects the placeholder tree's Badge (shadcn) vs Text
     // (no-lib) choice.
-    const routes = answers.selectedRoutes ?? (await scanAppRoutes(answers.appRoot)).routes;
+    const routes = answers.selectedRoutes ?? (await scanAppRoutes(answers.scanRoot)).routes;
     if (routes.length === 0) {
       // Don't abort init — fall back to a blank board. init prints why.
       return blankScaffold(theme);
@@ -275,6 +281,10 @@ function buildHandoffPrompt(answers: WizardAnswers, screens: Screen[]): string {
     "Build a Velloo design that mirrors this app — reproduce each page's UI as a Velloo screen.",
     `Velloo lives in \`${designDir}/\`. If it isn't running, start it with \`velloo run ${designDir}\` (canvas :7300, MCP :7301), then do everything through the velloo MCP tools — they own the design, so don't edit files under \`${designDir}/\` by hand.`,
   ];
+  const uiRel = relative(answers.appRoot, answers.scanRoot);
+  if (uiRel && !uiRel.startsWith("..")) {
+    lines.push(`This app's UI lives in \`${uiRel}/\` — run its dev server from there.`);
+  }
   if (screens.length > 0) {
     lines.push(
       `Build only these ${screens.length} screens (each already has a placeholder screen + a board frame), from the project's shadcn components:`,
@@ -365,7 +375,7 @@ async function printAgentHandoff(
       },
       { value: "skip", label: "No — I'll run it later" },
     ],
-    initialValue: "skip",
+    initialValue: "launch",
   });
   if (isCancel(action) || action === "skip") return;
 
@@ -514,6 +524,11 @@ export default defineCommand({
       type: "string",
       description: "scratch | scan (scan detects routes + theme from your app)",
     },
+    scanDir: {
+      type: "string",
+      description:
+        "Subfolder to scan when your UI isn't at the root (e.g. web/frontend). Auto-detected if omitted.",
+    },
     library: {
       type: "string",
       description:
@@ -537,6 +552,11 @@ export default defineCommand({
     const appRoot = resolve(cliArgs.folder ?? ".");
     const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
     let allowNonEmpty = cliArgs.force;
+
+    // An explicit --scan-dir that doesn't exist is a typo, not a degrade-to-blank.
+    if (cliArgs.scanDir && !(await dirExists(resolve(appRoot, cliArgs.scanDir)))) {
+      fail("init", `--scan-dir "${cliArgs.scanDir}" doesn't exist under ${appRoot}.`);
+    }
 
     // Already a Velloo design here? Don't re-run the whole scaffold wizard —
     // offer the actions that make sense on an existing folder.
@@ -580,7 +600,7 @@ export default defineCommand({
       printLogo();
       console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
       console.log("");
-      const result = await runInteractive({ appRoot });
+      const result = await runInteractive({ appRoot, scanDir: cliArgs.scanDir });
       if (!result) {
         // The wizard already printed its cancellation notice.
         process.exit(1);
@@ -596,9 +616,15 @@ export default defineCommand({
     }
 
     // Non-interactive scan still wants the host detection (the wizard fills it
-    // for the interactive path).
+    // for the interactive path) — and the scan root resolution (--scan-dir or
+    // auto-discovery of a nested UI folder) the wizard would otherwise do.
     if (answers.initialContent === "scan" && !answers.detected) {
-      answers.detected = detectHost(answers.appRoot);
+      const { scanRoot, relToApp } = await resolveScanRoot(answers.appRoot, cliArgs.scanDir);
+      answers.scanRoot = scanRoot;
+      if (relToApp && relToApp !== ".") {
+        console.log(pc.dim(`  Scanning UI in ${relToApp} (app root has no package.json).`));
+      }
+      answers.detected = detectHost(scanRoot);
     }
 
     const folder = answers.folder;

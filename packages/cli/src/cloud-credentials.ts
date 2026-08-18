@@ -35,6 +35,29 @@ export async function loadCredential(cloudUrl: string): Promise<CloudCredential 
 export async function saveCredential(cloudUrl: string, cred: CloudCredential): Promise<string> {
   const all = await readAll();
   all.clouds[normalizeCloudUrl(cloudUrl)] = cred;
+  return writeAll(all);
+}
+
+/** Drop the saved credential for one cloud. Returns false if none was stored. */
+export async function deleteCredential(cloudUrl: string): Promise<boolean> {
+  const all = await readAll();
+  const key = normalizeCloudUrl(cloudUrl);
+  if (!(key in all.clouds)) return false;
+  delete all.clouds[key];
+  await writeAll(all);
+  return true;
+}
+
+/** Drop every saved credential. Returns how many clouds were cleared. */
+export async function clearCredentials(): Promise<number> {
+  const all = await readAll();
+  const count = Object.keys(all.clouds).length;
+  if (count === 0) return 0;
+  await writeAll({ version: 1, clouds: {} });
+  return count;
+}
+
+async function writeAll(all: CredentialsFile): Promise<string> {
   const path = credentialsPath();
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(all, null, 2)}\n`, { mode: 0o600 });

@@ -1,9 +1,9 @@
 import { resolve } from "node:path";
-import { cancel, isCancel, multiselect, note, select, spinner, text } from "@clack/prompts";
+import { cancel, groupMultiselect, isCancel, note, select, spinner, text } from "@clack/prompts";
 import pc from "picocolors";
 import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
 import { detectHost } from "../scan/detect.ts";
-import { scanAppRoutes } from "../scan/index.ts";
+import { resolveScanRoot, scanAppRoutes } from "../scan/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 
@@ -33,17 +33,14 @@ function describeDetected(d: ReturnType<typeof detectHost>): string {
   return lines.join("\n");
 }
 
-// Sentinel for the picker's "Select all" row. Route ids are slugs derived
-// from paths, so this can never collide with a real screen id.
-const SELECT_ALL = "__all__";
-
 /**
  * Scan the host app's routes and let the user choose which to scaffold into
- * screens + board frames. "Select all" sits first and is pre-checked
- * alongside every screen, so just pressing Enter builds them all (matching
- * the non-interactive path); uncheck it to prune individual screens. Returns
- * the chosen routes ([] when none are detected or the user picks none → init
- * falls back to a blank board) or null when the user cancels.
+ * screens + board frames. Every screen is pre-checked, so just pressing Enter
+ * builds them all (matching the non-interactive path). The "All screens" group
+ * header is a real select-all/none: toggling it (space) checks or unchecks
+ * every screen at once; individual screens can still be unchecked to prune.
+ * Returns the chosen routes ([] when none are detected or the user unchecks
+ * everything → init falls back to a blank board) or null when the user cancels.
  */
 async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
   const spin = spinner();
@@ -56,24 +53,21 @@ async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
   );
   if (routes.length === 0) return [];
 
-  const picked = await multiselect<string>({
+  // A single selectable group: its header toggles all screens (the group key
+  // never appears in the result — only the per-screen ids do).
+  const picked = await groupMultiselect<string>({
     message: "Which screens should I build boards for?",
-    options: [
-      { value: SELECT_ALL, label: "Select all", hint: "uncheck to pick screens below" },
-      ...routes.map((r) => ({ value: r.id, label: r.name, hint: r.routePath })),
-    ],
-    initialValues: [SELECT_ALL, ...routes.map((r) => r.id)],
+    options: {
+      "All screens": routes.map((r) => ({ value: r.id, label: r.name, hint: r.routePath })),
+    },
+    initialValues: routes.map((r) => r.id),
+    selectableGroups: true,
     required: false,
   });
   if (isAborted(picked)) return null;
 
   const chosen = new Set(picked);
-  const subset = routes.filter((r) => chosen.has(r.id));
-  // "Select all" alone (no per-screen picks) means everything — the quick path.
-  // Once any screen is explicitly chosen, honor that subset and ignore the
-  // sentinel, so unchecking a few routes does what it looks like.
-  if (subset.length === 0 && chosen.has(SELECT_ALL)) return routes;
-  return subset;
+  return routes.filter((r) => chosen.has(r.id));
 }
 
 /**
@@ -81,7 +75,10 @@ async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
  * Velloo installs); the flow asks scratch-vs-scan first, then only the
  * questions that choice needs.
  */
-export async function runInteractive(ctx: { appRoot: string }): Promise<WizardAnswers | null> {
+export async function runInteractive(ctx: {
+  appRoot: string;
+  scanDir?: string;
+}): Promise<WizardAnswers | null> {
   const folderInput = await text({
     message: "Where should the design folder live?",
     placeholder: "velloo",
@@ -113,12 +110,20 @@ export async function runInteractive(ctx: { appRoot: string }): Promise<WizardAn
   if (isAborted(start)) return abort();
 
   if (start === "scan") {
-    const detected = detectHost(ctx.appRoot);
+    const { scanRoot, relToApp, autoDiscovered } = await resolveScanRoot(ctx.appRoot, ctx.scanDir);
+    if (relToApp && relToApp !== ".") {
+      note(
+        `Your app root has no package.json — scanning ${pc.cyan(relToApp)} instead.`,
+        autoDiscovered ? "Found your UI" : "Scanning subfolder",
+      );
+    }
+    const detected = detectHost(scanRoot);
     note(describeDetected(detected), "Detected in your app");
-    const selectedRoutes = await pickScreens(ctx.appRoot);
+    const selectedRoutes = await pickScreens(scanRoot);
     if (selectedRoutes === null) return abort();
     return {
       appRoot: ctx.appRoot,
+      scanRoot,
       folder,
       // Scan renders against the bundled snapshot and imports the host theme;
       // it never writes into the app.
@@ -201,6 +206,7 @@ export async function runInteractive(ctx: { appRoot: string }): Promise<WizardAn
 
   return {
     appRoot: ctx.appRoot,
+    scanRoot: ctx.appRoot,
     folder,
     library,
     source,

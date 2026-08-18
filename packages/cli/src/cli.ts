@@ -11,6 +11,7 @@ const main = defineCommand({
   subCommands: {
     init: () => import("./commands/init.ts").then((m) => m.default),
     login: () => import("./commands/login.ts").then((m) => m.default),
+    logout: () => import("./commands/logout.ts").then((m) => m.default),
     connect: () => import("./commands/connect.ts").then((m) => m.default),
     run: () => import("./commands/run.ts").then((m) => m.default),
     render: () => import("./commands/render.ts").then((m) => m.default),
