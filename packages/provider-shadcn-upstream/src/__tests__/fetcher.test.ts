@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchShadcn, LIB_UTILS_CONTENT, verifyCache } from "../fetcher.ts";
+import {
+  fetchShadcn,
+  LIB_UTILS_CONTENT,
+  SHADCN_REGISTRY_VERSION,
+  verifyCache,
+} from "../fetcher.ts";
 import { generateManifest, writeManifest } from "../manifest.ts";
 
 /**
@@ -108,9 +113,9 @@ describe("fetchShadcn", () => {
     expect(utils).toBe(LIB_UTILS_CONTENT);
     expect(utils).toContain("twMerge");
 
-    // Lockfile records the registry + per-file SHA256 + npm deps.
+    // Lockfile records the pinned registry version + per-file SHA256 + npm deps.
     const lock = result.lock;
-    expect(lock.version).toMatch(/^\d{4}\.\d{2}\.\d{2}-\d{4}$/);
+    expect(lock.version).toBe(SHADCN_REGISTRY_VERSION);
     expect(lock.style).toBe("new-york");
     expect(lock.components.button?.dependencies).toEqual(["@radix-ui/react-slot"]);
     expect(lock.components.button?.files[0]?.path).toBe("ui/button.tsx");

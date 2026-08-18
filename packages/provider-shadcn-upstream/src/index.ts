@@ -13,6 +13,7 @@ export {
   type FetchResult,
   fetchShadcn,
   LIB_UTILS_CONTENT,
+  SHADCN_REGISTRY_VERSION,
   type ShadcnRegistryItem,
   verifyCache,
 } from "./fetcher.ts";

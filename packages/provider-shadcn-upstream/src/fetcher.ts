@@ -1,7 +1,18 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { SHADCN_COMPONENT_IDS } from "./components.ts";
-import { dateStampVersion, hashContent, type ShadcnUpstreamLock } from "./lock.ts";
+import { hashContent, type ShadcnUpstreamLock } from "./lock.ts";
+
+/**
+ * Pinned shadcn registry version. The public registry has no versioned
+ * endpoint, so reproducibility rests on three things: this stable version
+ * label (recorded in the lock instead of a fetch timestamp), the per-file
+ * SHA256 checksums the lock carries, and the fetcher throwing on any missing
+ * /renamed component — so a registry-shape change surfaces loudly rather than
+ * silently drifting. Bump deliberately, in lockstep with the vendored
+ * snapshot.
+ */
+export const SHADCN_REGISTRY_VERSION = "2026.05.22";
 
 /**
  * Shape of shadcn's registry response per component. Documented at
@@ -36,6 +47,8 @@ export interface FetchOptions {
   style?: string;
   /** Override base URL for testing (defaults to the public shadcn registry). */
   registryBase?: string;
+  /** Override the pinned version recorded in the lock (defaults to SHADCN_REGISTRY_VERSION). */
+  version?: string;
   /**
    * Custom fetch implementation. Tests inject a mock; production
    * defaults to `globalThis.fetch`.
@@ -127,7 +140,7 @@ export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
   };
 
   const lock: ShadcnUpstreamLock = {
-    version: dateStampVersion(fetchedAt),
+    version: opts.version ?? SHADCN_REGISTRY_VERSION,
     fetchedAt: fetchedAt.toISOString(),
     registry: `${registryBase}/${style}`,
     style,

@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
  * picking up upstream changes.
  */
 export interface ShadcnUpstreamLock {
-  /** Human-readable version stamp — date the cache was fetched. */
+  /** Pinned registry version (see SHADCN_REGISTRY_VERSION), not a fetch timestamp. */
   version: string;
   /** Full ISO timestamp of the fetch operation. */
   fetchedAt: string;
