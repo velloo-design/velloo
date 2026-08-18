@@ -1,6 +1,12 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
-import { renderScreen, screenshot } from "@velloo/renderer";
+import { confirm, isCancel } from "@clack/prompts";
+import {
+  BrowserMissingError,
+  CHROMIUM_INSTALL_CMD,
+  renderScreen,
+  screenshot,
+} from "@velloo/renderer";
 import {
   ConfigSchema,
   ScreenSchema,
@@ -93,7 +99,7 @@ export default defineCommand({
     }
 
     if (ext === ".png") {
-      await screenshot({ html, viewport, outPath });
+      await captureWithBrowserSetup(() => screenshot({ html, viewport, outPath }));
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }
@@ -101,3 +107,31 @@ export default defineCommand({
     fail("render", `unsupported output extension ${JSON.stringify(ext)}. Use .html or .png.`);
   },
 });
+
+/**
+ * Run a screenshot; if the headless browser is missing, offer to install it
+ * (interactive shells only) and retry once. Non-interactive shells get the
+ * actionable hint and a non-zero exit so CI fails loudly rather than hanging
+ * on a prompt.
+ */
+async function captureWithBrowserSetup(capture: () => Promise<unknown>): Promise<void> {
+  try {
+    await capture();
+    return;
+  } catch (e) {
+    if (!(e instanceof BrowserMissingError)) throw e;
+    if (!process.stdin.isTTY) fail("render", e.message);
+    const proceed = await confirm({
+      message: `Chromium isn't installed. Run \`${CHROMIUM_INSTALL_CMD}\` now? (~150MB, one-time)`,
+      initialValue: true,
+    });
+    if (isCancel(proceed) || !proceed) fail("render", e.message);
+    const code = await Bun.spawn(["bunx", "playwright", "install", "chromium"], {
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "inherit",
+    }).exited;
+    if (code !== 0) fail("render", "chromium install failed — see the output above.");
+  }
+  await capture();
+}

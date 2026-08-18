@@ -1,4 +1,68 @@
+import { existsSync } from "node:fs";
 import type { Viewport } from "@velloo/schema";
+import type { Browser } from "playwright-core";
+
+/** The command that installs the headless browser screenshots need. */
+export const CHROMIUM_INSTALL_CMD = "bunx playwright install chromium";
+
+const INSTALL_HINT =
+  "Velloo screenshots need a headless browser. Install it once with:\n" +
+  `  ${CHROMIUM_INSTALL_CMD}\n` +
+  "(The browser is an on-demand extra — the canvas itself never needs it.)";
+
+/**
+ * Thrown when the headless browser is unavailable — either `playwright-core`
+ * is missing or its Chromium binary hasn't been installed. Callers with a TTY
+ * (the CLI) can catch this, offer to run `CHROMIUM_INSTALL_CMD`, and retry;
+ * agent-facing callers (MCP) surface `.message` as the actionable hint.
+ */
+export class BrowserMissingError extends Error {
+  constructor(message = INSTALL_HINT) {
+    super(message);
+    this.name = "BrowserMissingError";
+  }
+}
+
+/**
+ * Absolute path to the installed Chromium, or null if its binary hasn't been
+ * downloaded yet (or `playwright-core` is absent). A non-launching probe —
+ * cheap enough for `velloo init` to report screenshot readiness without
+ * opening a browser.
+ */
+export async function chromiumExecutable(): Promise<string | null> {
+  try {
+    const { chromium } = await import("playwright-core");
+    const path = chromium.executablePath();
+    return path && existsSync(path) ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Launch headless Chromium via `playwright-core`. We depend on
+ * `playwright-core` (no bundled-browser postinstall) instead of `playwright`
+ * so installing the CLI stays light; the browser is fetched on demand into
+ * the shared Playwright cache and reused here. Both the missing-package and
+ * missing-browser failures collapse into one actionable hint.
+ */
+async function launchBrowser(): Promise<Browser> {
+  let chromium: typeof import("playwright-core").chromium;
+  try {
+    ({ chromium } = await import("playwright-core"));
+  } catch {
+    throw new BrowserMissingError();
+  }
+  try {
+    return await chromium.launch();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/Executable doesn't exist|playwright install|browserType\.launch/i.test(msg)) {
+      throw new BrowserMissingError();
+    }
+    throw e;
+  }
+}
 
 export interface ScreenshotOptions {
   html: string;
@@ -61,8 +125,7 @@ export interface CaptureResult {
 export async function captureScreenshot(
   opts: Omit<ScreenshotOptions, "outPath" | "clipSelector">,
 ): Promise<CaptureResult> {
-  const { chromium } = await import("playwright");
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
@@ -109,8 +172,7 @@ export interface UrlScreenshotOptions {
  * are frozen so the capture diffs cleanly against a Velloo render.
  */
 export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<Buffer> {
-  const { chromium } = await import("playwright");
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
@@ -132,8 +194,7 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
 }
 
 async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | null> {
-  const { chromium } = await import("playwright");
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
@@ -189,13 +250,12 @@ export interface ScreenshotCompareOptions {
  * eyeballing two separate PNGs.
  */
 export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): Promise<Buffer> {
-  const { chromium } = await import("playwright");
   const labelLeft = opts.leftLabel ?? "light";
   const labelRight = opts.rightLabel ?? "dark";
   const w = opts.viewport.w;
   const h = opts.viewport.h;
   const wrapper = buildCompareWrapper(opts.leftHtml, opts.rightHtml, w, h, labelLeft, labelRight);
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({
       // Width = 2 panels + 1px gutter + horizontal padding; arbitrary tall

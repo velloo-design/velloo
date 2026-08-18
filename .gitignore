@@ -3,6 +3,7 @@ dist
 dist-types
 build
 *.tsbuildinfo
+*.tgz
 
 .DS_Store
 .env

@@ -21,10 +21,13 @@ export {
 } from "./iframe-protocol.ts";
 export { type RenderResult, renderBody, renderScreen } from "./render-to-html.ts";
 export {
+  BrowserMissingError,
   type CaptureNodeRect,
   type CaptureResult,
+  CHROMIUM_INSTALL_CMD,
   captureScreenshot,
   captureUrlScreenshot,
+  chromiumExecutable,
   type ScreenshotCompareOptions,
   type ScreenshotOptions,
   screenshot,

@@ -24,6 +24,7 @@ interface CreatedLink {
 interface UploadResult {
   files: number;
   bytes: number;
+  url: string;
 }
 
 function gitCommitSha(folder: string): string | null {
@@ -317,11 +318,14 @@ export default defineCommand({
     }
     const upload = (await uploadRes.json()) as UploadResult;
 
+    // The cloud returns the canonical share URL — absolute (the share domain) in
+    // prod, or relative in dev, which we join with the API base.
+    const shareLink = upload.url.startsWith("http") ? upload.url : `${baseUrl}${upload.url}`;
     const key = link.accessToken ? `?k=${link.accessToken}` : "";
     console.log(
       `velloo publish: ${upload.files} files, ${Math.round(upload.bytes / 1024)} KB${commitSha ? `, commit ${commitSha.slice(0, 7)}` : ""}`,
     );
-    console.log(`  ${baseUrl}/s/${link.slug}/${key}`);
+    console.log(`  ${shareLink}${key}`);
     if (renderedBytes === 0) fail("publish", "rendered zero bytes — something is wrong");
   },
 });

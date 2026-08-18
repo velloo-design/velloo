@@ -1,6 +1,6 @@
 {
   "name": "@velloo/cli",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "Velloo CLI",
@@ -9,6 +9,9 @@
   },
   "exports": {
     ".": "./src/cli.ts"
+  },
+  "scripts": {
+    "build": "bun run build.ts"
   },
   "dependencies": {
     "@clack/prompts": "1.4.0",

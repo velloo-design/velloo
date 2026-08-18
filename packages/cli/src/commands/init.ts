@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { confirm, isCancel } from "@clack/prompts";
+import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   type Annotation,
   type Board,
@@ -227,6 +229,50 @@ function printSummary(
   console.log("");
 }
 
+/**
+ * Tell the user where the headless browser is (and isn't) needed, and — when
+ * it's missing and we have a TTY — offer to install it up front so the agent's
+ * first `screenshot` call doesn't stall on a download.
+ */
+async function printScreenshotReadiness(interactive: boolean): Promise<void> {
+  const installed = (await chromiumExecutable()) !== null;
+  console.log(pc.bold("  Screenshots"));
+  console.log(
+    pc.dim("    Your agent's `screenshot` tool and `velloo render --to=png` use a headless"),
+  );
+  console.log(pc.dim("    browser. The canvas, editing, and `velloo publish` don't need it."));
+
+  if (installed) {
+    console.log(`    ${pc.green("✓")} ${pc.dim("Browser installed — screenshots are ready.")}`);
+    console.log("");
+    return;
+  }
+
+  if (interactive) {
+    const proceed = await confirm({
+      message: "Install the screenshot browser now? (~150MB, one-time)",
+      initialValue: false,
+    });
+    if (!isCancel(proceed) && proceed) {
+      const code = await Bun.spawn(["bunx", "playwright", "install", "chromium"], {
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "inherit",
+      }).exited;
+      console.log(
+        code === 0
+          ? `    ${pc.green("✓")} ${pc.dim("Browser installed.")}`
+          : pc.dim(`    Install didn't finish — run it later: ${pc.cyan(CHROMIUM_INSTALL_CMD)}`),
+      );
+      console.log("");
+      return;
+    }
+  }
+
+  console.log(pc.dim(`    Add it anytime with:  ${pc.cyan(CHROMIUM_INSTALL_CMD)}`));
+  console.log("");
+}
+
 export default defineCommand({
   meta: {
     name: "init",
@@ -329,5 +375,6 @@ export default defineCommand({
     // "scaffolded" — keeps the existing CLI test passing.
     console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
     printSummary(folder, scaffold, plan, answers);
+    await printScreenshotReadiness(Boolean(process.stdin.isTTY) && !cliArgs.nonInteractive);
   },
 });
