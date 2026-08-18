@@ -46,4 +46,10 @@ const binDir = Bun.spawnSync(["bun", "pm", "bin", "-g"], { cwd: repoRoot })
   .stdout.toString()
   .trim();
 console.log(`\n\x1b[32m✓ velloo ${version} installed globally\x1b[0m → ${join(binDir, "velloo")}`);
+const prodUrl = process.env.VELLOO_BUILD_CLOUD_URL;
+if (prodUrl) {
+  console.log(
+    `  Cloud default baked to \x1b[36m${prodUrl}\x1b[0m — run \`bun run cli:install\` to revert to local.`,
+  );
+}
 console.log(`  Make sure ${binDir} is on your PATH, then run:  velloo --help`);

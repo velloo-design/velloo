@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { confirm, isCancel, multiselect, select } from "@clack/prompts";
+import { confirm, isCancel, select } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   type Annotation,
@@ -21,8 +21,9 @@ import { createServer, type ServerHandle, writeJsonAtomic, writeText } from "@ve
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { type ConnectResult, connect, PROJECT_AGENT_IDS } from "../connect/index.ts";
+import { type ConnectResult, connect, PROJECT_AGENT_IDS, pickAgents } from "../connect/index.ts";
 import { fail } from "../fail.ts";
+import { hasDesignConfig } from "../folder.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
 import {
@@ -422,18 +423,8 @@ async function wireAgents(
   if (!enabled) return undefined;
   let agents: string[] = PROJECT_AGENT_IDS;
   if (interactive) {
-    const picked = await multiselect<string>({
-      message: "Wire the velloo MCP into your agents?",
-      options: [
-        { value: "claude-code", label: "Claude Code", hint: "project .mcp.json" },
-        { value: "cursor", label: "Cursor", hint: "project .cursor/mcp.json" },
-        { value: "claude-code-global", label: "Claude Code (global)", hint: "~/.claude.json" },
-        { value: "cursor-global", label: "Cursor (global)", hint: "~/.cursor/mcp.json" },
-      ],
-      initialValues: ["claude-code", "cursor"],
-      required: false,
-    });
-    if (isCancel(picked)) return undefined;
+    const picked = await pickAgents();
+    if (picked === null) return undefined;
     agents = picked;
   }
   if (agents.length === 0) return undefined;
@@ -545,6 +536,44 @@ export default defineCommand({
     const cliArgs = args as InitCliArgs;
     const appRoot = resolve(cliArgs.folder ?? ".");
     const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
+    let allowNonEmpty = cliArgs.force;
+
+    // Already a Velloo design here? Don't re-run the whole scaffold wizard —
+    // offer the actions that make sense on an existing folder.
+    if (interactive && !cliArgs.force) {
+      const existing = resolve(appRoot, cliArgs.designFolder ?? "velloo");
+      if (await hasDesignConfig(existing)) {
+        const action = await select<"connect" | "overwrite" | "cancel">({
+          message: `A Velloo design already exists at ${relative(process.cwd(), existing) || existing}. What would you like to do?`,
+          options: [
+            {
+              value: "connect",
+              label: "Connect agents",
+              hint: "wire the MCP into Claude Code / Cursor",
+            },
+            {
+              value: "overwrite",
+              label: "Re-scaffold (overwrite)",
+              hint: "replaces the existing design",
+            },
+            { value: "cancel", label: "Cancel" },
+          ],
+          initialValue: "connect",
+        });
+        if (isCancel(action) || action === "cancel") {
+          console.log(pc.dim("  Nothing changed."));
+          return;
+        }
+        if (action === "connect") {
+          const connected = await wireAgents(existing, true, true);
+          printWired(connected);
+          printNextSteps(existing, connected);
+          return;
+        }
+        allowNonEmpty = true; // overwrite → fall through to the normal wizard
+      }
+    }
+
     let answers: WizardAnswers;
 
     if (interactive) {
@@ -573,7 +602,7 @@ export default defineCommand({
     }
 
     const folder = answers.folder;
-    if (!cliArgs.force && !(await isEmptyOrMissing(folder))) {
+    if (!allowNonEmpty && !(await isEmptyOrMissing(folder))) {
       fail(
         "init",
         `design folder is not empty: ${folder}\n  Pick an empty path, or pass --force to scaffold over it.`,

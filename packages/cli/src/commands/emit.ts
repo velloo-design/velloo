@@ -6,6 +6,7 @@ import { ScreenSchema } from "@velloo/schema";
 import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
+import { pickScreen, resolveDesignFolder } from "../folder.ts";
 
 export default defineCommand({
   meta: {
@@ -15,8 +16,12 @@ export default defineCommand({
   args: {
     screen: {
       type: "positional",
-      required: true,
-      description: "Path to a screen JSON file (e.g. design/screens/welcome.json)",
+      required: false,
+      description: "Screen id, or a path to a screen JSON. Omit to pick interactively.",
+    },
+    folder: {
+      type: "string",
+      description: "Design folder (default: ./velloo)",
     },
     to: {
       type: "string",
@@ -30,7 +35,19 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const screenPath = resolve(args.screen);
+    const interactive = Boolean(process.stdin.isTTY);
+    const screenArg = args.screen;
+    const looksLikePath = !!screenArg && (screenArg.includes("/") || screenArg.endsWith(".json"));
+    const screenPath = looksLikePath
+      ? resolve(screenArg)
+      : (
+          await pickScreen(
+            await resolveDesignFolder(args.folder, "emit"),
+            screenArg,
+            interactive,
+            "emit",
+          )
+        ).path;
     const screenJson = JSON.parse(await readFile(screenPath, "utf8"));
     const screen = ScreenSchema.parse(screenJson);
 

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { defineCommand } from "citty";
+import { defaultCloudUrl } from "../cloud.ts";
 import { normalizeCloudUrl, saveCredential } from "../cloud-credentials.ts";
 import { fail } from "../fail.ts";
 
@@ -32,13 +33,11 @@ export default defineCommand({
   args: {
     url: {
       type: "string",
-      description: "velloo-cloud base URL (default: $VELLOO_CLOUD_URL or http://localhost:7400)",
+      description: "velloo-cloud base URL (default: $VELLOO_CLOUD_URL or the built-in default)",
     },
   },
   async run({ args }) {
-    const cloudUrl = normalizeCloudUrl(
-      args.url ?? process.env.VELLOO_CLOUD_URL ?? "http://localhost:7400",
-    );
+    const cloudUrl = args.url ? normalizeCloudUrl(args.url) : defaultCloudUrl();
 
     const configRes = await fetch(`${cloudUrl}/v1/auth/config`).catch(() => null);
     if (!configRes?.ok) {

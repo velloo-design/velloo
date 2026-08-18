@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join } from "node:path";
 import { renderScreen } from "@velloo/renderer";
 import {
   ConfigSchema,
@@ -13,8 +13,10 @@ import {
 } from "@velloo/schema";
 import { migrateConfig, resolveProviders, TailwindJit } from "@velloo/server";
 import { defineCommand } from "citty";
+import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { fail } from "../fail.ts";
+import { resolveDesignFolder } from "../folder.ts";
 
 interface CreatedLink {
   slug: string;
@@ -178,12 +180,12 @@ export default defineCommand({
   args: {
     folder: {
       type: "positional",
-      required: true,
-      description: "Path to the design folder (e.g. ./design)",
+      required: false,
+      description: "Design folder (default: ./velloo)",
     },
     url: {
       type: "string",
-      description: "velloo-cloud base URL (default: $VELLOO_CLOUD_URL or http://localhost:7400)",
+      description: "velloo-cloud base URL (default: $VELLOO_CLOUD_URL or the built-in default)",
     },
     token: {
       type: "string",
@@ -205,11 +207,8 @@ export default defineCommand({
     h: { type: "string", description: "Viewport height in px (default: 900)" },
   },
   async run({ args }) {
-    const folder = isAbsolute(args.folder) ? args.folder : resolve(args.folder);
-    const baseUrl = (args.url ?? process.env.VELLOO_CLOUD_URL ?? "http://localhost:7400").replace(
-      /\/+$/,
-      "",
-    );
+    const folder = await resolveDesignFolder(args.folder, "publish");
+    const baseUrl = args.url ? args.url.replace(/\/+$/, "") : defaultCloudUrl();
     const token =
       args.token ?? process.env.VELLOO_CLOUD_TOKEN ?? (await loadCredential(baseUrl))?.token;
     if (!token) {

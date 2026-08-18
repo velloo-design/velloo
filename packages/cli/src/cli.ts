@@ -17,7 +17,6 @@ const main = defineCommand({
     publish: () => import("./commands/publish.ts").then((m) => m.default),
     emit: () => import("./commands/emit.ts").then((m) => m.default),
     "theme:export": () => import("./commands/theme-export.ts").then((m) => m.default),
-    upgrade: () => import("./commands/upgrade.ts").then((m) => m.default),
   },
 });
 

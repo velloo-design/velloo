@@ -146,12 +146,18 @@ const externalizeThirdParty = {
   },
 };
 
+// `cli:prod` sets VELLOO_BUILD_CLOUD_URL so the installed binary defaults to the
+// hosted cloud (see src/cloud.ts). Unset → the binary defaults to localhost.
+const prodCloudUrl = process.env.VELLOO_BUILD_CLOUD_URL;
+if (prodCloudUrl) step(`baking default cloud URL → ${prodCloudUrl}`);
+
 const result = await Bun.build({
   entrypoints: [entry],
   outdir: distDir,
   target: "bun",
   format: "esm",
   plugins: [externalizeThirdParty],
+  define: prodCloudUrl ? { __VELLOO_DEFAULT_CLOUD_URL__: JSON.stringify(prodCloudUrl) } : {},
 });
 if (!result.success) {
   for (const log of result.logs) console.error(log);

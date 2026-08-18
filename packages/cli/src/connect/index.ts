@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
-import { AGENTS } from "./agents.ts";
+import { isCancel, multiselect } from "@clack/prompts";
+import { AGENTS, PROJECT_AGENT_IDS } from "./agents.ts";
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import { installSkill, type SkillResult } from "./skill.ts";
@@ -10,6 +11,24 @@ export type { WriteResult } from "./write-config.ts";
 
 /** Default velloo MCP endpoint — matches `velloo run`'s default port. */
 export const DEFAULT_MCP_URL = "http://127.0.0.1:7301/mcp";
+
+/**
+ * Interactive agent checklist (project scope preselected). Shared by `velloo
+ * connect` and the init wizard. Returns the chosen ids, or null on cancel.
+ */
+export async function pickAgents(): Promise<string[] | null> {
+  const picked = await multiselect<string>({
+    message: "Wire the velloo MCP into which agents?",
+    options: Object.values(AGENTS).map((a) => ({
+      value: a.id,
+      label: a.label,
+      hint: a.path(".", "~"),
+    })),
+    initialValues: PROJECT_AGENT_IDS,
+    required: false,
+  });
+  return isCancel(picked) ? null : picked;
+}
 
 export interface ConnectOptions {
   designFolder: string;

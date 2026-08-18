@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { colorizeDiff, emitTheme } from "@velloo/codegen";
 import { ThemeSchema } from "@velloo/schema";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
+import { resolveDesignFolder } from "../folder.ts";
 import { detectHost } from "../scan/detect.ts";
 
 /**
@@ -45,9 +46,13 @@ export default defineCommand({
       required: true,
       description: "Target app directory (writes <to>/app/globals.css and <to>/tailwind.config.ts)",
     },
+    folder: {
+      type: "string",
+      description: "Design folder to read the theme from (default: ./velloo)",
+    },
     theme: {
       type: "string",
-      description: "Path to theme JSON (default: ./theme/default.json under cwd)",
+      description: "Path to theme JSON (default: <folder>/theme/default.json)",
     },
     apply: {
       type: "boolean",
@@ -63,7 +68,9 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const themePath = args.theme ? resolve(args.theme) : resolve("theme", "default.json");
+    const themePath = args.theme
+      ? resolve(args.theme)
+      : join(await resolveDesignFolder(args.folder, "theme:export"), "theme", "default.json");
     const outDir = isAbsolute(args.to) ? args.to : resolve(args.to);
 
     // Guard against emitting v4 into a v3 app (won't compile, clobbers config).

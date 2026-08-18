@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
-import { confirm, isCancel } from "@clack/prompts";
+import { confirm, isCancel, select } from "@clack/prompts";
 import {
   BrowserMissingError,
   CHROMIUM_INSTALL_CMD,
@@ -18,6 +18,7 @@ import {
 import { migrateConfig, resolveProviders, TailwindJit, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
+import { pickScreen, resolveDesignFolder } from "../folder.ts";
 
 export default defineCommand({
   meta: {
@@ -27,29 +28,39 @@ export default defineCommand({
   args: {
     screen: {
       type: "positional",
-      required: true,
-      description: "Path to a screen JSON file (e.g. design/screens/welcome.json)",
+      required: false,
+      description: "Screen id, or a path to a screen JSON. Omit to pick interactively.",
     },
-    w: {
+    folder: {
       type: "string",
-      description: "Viewport width in px (default: 1440)",
-    },
-    h: {
-      type: "string",
-      description: "Viewport height in px (default: 900)",
+      description: "Design folder (default: ./velloo)",
     },
     to: {
       type: "string",
-      required: true,
-      description: "Output path. Extension drives format: .html | .png",
+      description:
+        "Output path; extension picks the format (.html | .png). Default: ./<screen>.html",
     },
+    w: { type: "string", description: "Viewport width in px (default: 1440)" },
+    h: { type: "string", description: "Viewport height in px (default: 900)" },
   },
   async run({ args }) {
-    const screenPath = resolve(args.screen);
-    const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
+    const interactive = Boolean(process.stdin.isTTY);
 
-    // Layout assumption: <folder>/screens/<screen>.json, <folder>/theme/default.json
-    const folder = dirname(dirname(screenPath));
+    // A path-shaped arg (e.g. design/screens/x.json) keeps working and pins the
+    // folder; otherwise resolve the folder (default ./velloo) and pick a screen.
+    const screenArg = args.screen;
+    const looksLikePath = !!screenArg && (screenArg.includes("/") || screenArg.endsWith(".json"));
+
+    let folder: string;
+    let screenPath: string;
+    if (looksLikePath && screenArg) {
+      screenPath = resolve(screenArg);
+      folder = args.folder ? resolve(args.folder) : dirname(dirname(screenPath));
+    } else {
+      folder = await resolveDesignFolder(args.folder, "render");
+      screenPath = (await pickScreen(folder, screenArg, interactive, "render")).path;
+    }
+
     const themePath = resolve(folder, "theme", "default.json");
     const configPath = resolve(folder, ".design", "config.json");
 
@@ -67,13 +78,6 @@ export default defineCommand({
       h: args.h ? Number(args.h) : 900,
     };
 
-    const { providers, defaultProvider } = await resolveProviders(config, folder);
-    const screenProvider = screen.library
-      ? (providers[screen.library] ?? defaultProvider)
-      : defaultProvider;
-    const jit = new TailwindJit(Object.values(providers), join(folder, "screens"));
-    const snapshotCss = await jit.build();
-
     const snippets = new Map<string, Snippet>();
     const snippetFiles = (await readdir(join(folder, "snippets")).catch(() => [])).filter((f) =>
       f.endsWith(".json"),
@@ -84,27 +88,54 @@ export default defineCommand({
       snippets.set(snippet.id, snippet);
     }
 
+    const { providers, defaultProvider } = await resolveProviders(config, folder);
+    const screenProvider = screen.library
+      ? (providers[screen.library] ?? defaultProvider)
+      : defaultProvider;
+    const jit = new TailwindJit(Object.values(providers), join(folder, "screens"));
+    const snapshotCss = await jit.build();
     const { html } = await renderScreen(screen, theme, {
       viewport,
       snapshotCss,
       registry: screenProvider.registry,
       snippets,
     });
-    const ext = extname(outPath).toLowerCase();
 
-    if (ext === ".html") {
+    // Output: explicit --to wins; otherwise interactively choose the format and
+    // write ./<screen>.<ext> (HTML needs no browser, so it's the non-TTY default).
+    let outPath: string;
+    if (args.to) {
+      outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
+    } else {
+      let ext = "html";
+      if (interactive) {
+        const fmt = await select<"html" | "png">({
+          message: "Output format?",
+          options: [
+            { value: "html", label: "HTML", hint: "no browser needed" },
+            { value: "png", label: "PNG", hint: "screenshot (needs a headless browser)" },
+          ],
+        });
+        if (isCancel(fmt)) fail("render", "cancelled.");
+        ext = fmt;
+      }
+      outPath = resolve(`${screen.id}.${ext}`);
+    }
+    const out = extname(outPath).toLowerCase();
+
+    if (out === ".html") {
       await writeText(outPath, html);
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }
 
-    if (ext === ".png") {
+    if (out === ".png") {
       await captureWithBrowserSetup(() => screenshot({ html, viewport, outPath }));
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }
 
-    fail("render", `unsupported output extension ${JSON.stringify(ext)}. Use .html or .png.`);
+    fail("render", `unsupported output extension ${JSON.stringify(out)}. Use .html or .png.`);
   },
 });
 

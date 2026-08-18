@@ -1,8 +1,15 @@
 import { resolve } from "node:path";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { AGENT_IDS, connect, DEFAULT_MCP_URL, PROJECT_AGENT_IDS } from "../connect/index.ts";
+import {
+  AGENT_IDS,
+  connect,
+  DEFAULT_MCP_URL,
+  PROJECT_AGENT_IDS,
+  pickAgents,
+} from "../connect/index.ts";
 import { fail } from "../fail.ts";
+import { resolveDesignFolder } from "../folder.ts";
 
 export default defineCommand({
   meta: {
@@ -10,7 +17,11 @@ export default defineCommand({
     description: "Wire the velloo MCP server into your AI coding agent's config",
   },
   args: {
-    folder: { type: "positional", required: true, description: "Design folder" },
+    folder: {
+      type: "positional",
+      required: false,
+      description: "Design folder (default: ./velloo)",
+    },
     agent: {
       type: "string",
       description: `Comma-separated agents: ${AGENT_IDS.join(", ")} (default ${PROJECT_AGENT_IDS.join(",")})`,
@@ -31,13 +42,31 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agents = (args.agent ?? PROJECT_AGENT_IDS.join(","))
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const folder = await resolveDesignFolder(args.folder, "connect");
+    const interactive = Boolean(process.stdin.isTTY);
+
+    // Explicit --agent wins; otherwise ask interactively (init's checklist),
+    // falling back to the project defaults when there's no TTY.
+    let agents: string[];
+    if (args.agent) {
+      agents = args.agent
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else if (interactive) {
+      const picked = await pickAgents();
+      if (picked === null) fail("connect", "cancelled.");
+      if (picked.length === 0) {
+        console.log(pc.dim("No agents selected — nothing wired."));
+        return;
+      }
+      agents = picked;
+    } else {
+      agents = PROJECT_AGENT_IDS;
+    }
 
     const result = await connect({
-      designFolder: resolve(args.folder),
+      designFolder: folder,
       agents,
       projectRoot: args.projectRoot ? resolve(args.projectRoot) : undefined,
       mcpUrl: args.mcpUrl,
@@ -68,7 +97,7 @@ export default defineCommand({
     console.log("");
     console.log(pc.bold("  Next"));
     console.log(
-      `    1. ${pc.cyan(`velloo run ${args.folder}`)} ${pc.dim("— starts the MCP server velloo points at")}`,
+      `    1. ${pc.cyan(`velloo run${args.folder ? ` ${args.folder}` : ""}`)} ${pc.dim("— starts the MCP server velloo points at")}`,
     );
     console.log(`    2. Restart your agent so it loads the new MCP config.`);
     console.log("");

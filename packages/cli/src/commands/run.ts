@@ -1,7 +1,7 @@
-import { resolve } from "node:path";
 import { createServer } from "@velloo/server";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
+import { resolveDesignFolder } from "../folder.ts";
 
 export default defineCommand({
   meta: {
@@ -9,7 +9,11 @@ export default defineCommand({
     description: "Start the canvas server pointed at a design folder",
   },
   args: {
-    folder: { type: "positional", required: true, description: "Design folder" },
+    folder: {
+      type: "positional",
+      required: false,
+      description: "Design folder (default: ./velloo)",
+    },
     port: {
       type: "string",
       description: "Port for the canvas server (default 7300)",
@@ -24,7 +28,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = resolve(args.folder);
+    const folder = await resolveDesignFolder(args.folder, "run");
     const port = args.port ? Number(args.port) : 7300;
     if (!Number.isFinite(port) || port <= 0) {
       fail("run", `invalid --port ${JSON.stringify(args.port)}`);
