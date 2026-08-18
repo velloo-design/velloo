@@ -15,7 +15,13 @@ export interface ScannedRoute {
   sourceFile: string;
 }
 
-export type Framework = "next-app" | "next-pages" | "vite" | "astro" | "unknown";
+export type Framework =
+  | "next-app"
+  | "next-pages"
+  | "tanstack-router"
+  | "vite"
+  | "astro"
+  | "unknown";
 
 export interface ScanResult {
   framework: Framework;

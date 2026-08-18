@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir } from "node:fs/promises";
-import { relative, resolve } from "node:path";
-import { confirm, isCancel, multiselect } from "@clack/prompts";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, relative, resolve } from "node:path";
+import { confirm, isCancel, multiselect, select } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   type Annotation,
@@ -89,15 +90,17 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
   }
 
   if (answers.initialContent === "scan") {
-    // One screen per detected route. The library only affects the
-    // placeholder tree's Badge (shadcn) vs Text (no-lib) choice.
-    const result = await scanAppRoutes(answers.appRoot);
-    if (result.routes.length === 0) {
+    // One screen per chosen route. The interactive wizard pre-filters to the
+    // screens the user picked; non-interactive scan uses every detected route.
+    // The library only affects the placeholder tree's Badge (shadcn) vs Text
+    // (no-lib) choice.
+    const routes = answers.selectedRoutes ?? (await scanAppRoutes(answers.appRoot)).routes;
+    if (routes.length === 0) {
       // Don't abort init — fall back to a blank board. init prints why.
       return blankScaffold(theme);
     }
     const hasBadge = answers.library !== "none";
-    const screens = buildScreensFromScan({ routes: result.routes, hasBadge });
+    const screens = buildScreensFromScan({ routes, hasBadge });
     const board = buildBoardFromScan({ screens });
     return { theme, screens, boards: [board], snippets: [], annotations: [], notes: [] };
   }
@@ -258,26 +261,91 @@ function printNextSteps(folder: string, connected: ConnectResult | undefined): v
  * tool. Init can't screenshot the app itself (it isn't running yet), so the
  * agent — which has the velloo MCP tools and a shell — does the work.
  */
-function buildHandoffPrompt(answers: WizardAnswers): string {
-  return [
-    `Build out my Velloo design at ${answers.folder} to mirror my real app at ${answers.appRoot}.`,
-    `First run \`velloo run ${answers.folder}\` (canvas :7300, MCP :7301) if it isn't already, then use the velloo MCP tools.`,
-    "- For each route/page in my app, create a Velloo screen that reproduces that page's UI from the project's shadcn components.",
+function buildHandoffPrompt(answers: WizardAnswers, screens: Screen[]): string {
+  // The agent runs at the app root (its MCP config + skill are wired there),
+  // so the app is "this project" and the design folder is just `velloo`. The
+  // design is managed entirely through the MCP tools — never edited by hand —
+  // so the folder only appears in the `velloo run` command that points the
+  // server at it. Keep it relative; fall back to absolute only if it sits
+  // outside the app root.
+  const rel = relative(answers.appRoot, answers.folder);
+  const designDir = rel && !rel.startsWith("..") ? rel : answers.folder;
+  const lines = [
+    "Build a Velloo design that mirrors this app — reproduce each page's UI as a Velloo screen.",
+    `Velloo lives in \`${designDir}/\`. If it isn't running, start it with \`velloo run ${designDir}\` (canvas :7300, MCP :7301), then do everything through the velloo MCP tools — they own the design, so don't edit files under \`${designDir}/\` by hand.`,
+  ];
+  if (screens.length > 0) {
+    lines.push(
+      `Build only these ${screens.length} screens (each already has a placeholder screen + a board frame), from the project's shadcn components:`,
+    );
+    for (const s of screens) lines.push(`  - ${s.name || s.id}`);
+  } else {
+    lines.push(
+      "- For each route/page in the app, create a Velloo screen that reproduces that page's UI from the project's shadcn components.",
+    );
+  }
+  lines.push(
     "- Lay the screens out on boards with both mobile and desktop frames.",
     "- Extract repeated UI (nav, headers, cards, footers) into reusable snippets.",
-    "- Start my app's dev server and use the velloo `screenshot` tool to compare each screen against the real page; iterate until they match.",
+    "- Start the app's dev server and use the velloo `screenshot` tool to compare each screen against the real page; iterate until they match.",
     "- Keep semantic theme tokens (bg-background, text-foreground, …).",
-  ].join("\n");
+  );
+  return lines.join("\n");
+}
+
+/**
+ * The user's terminal editor: `$VISUAL` / `$EDITOR` (honoring args like
+ * `code --wait`) when its binary resolves on PATH, else the first of
+ * nano/vim/vi that's installed.
+ */
+function detectEditor(): string[] {
+  const env = (process.env.VISUAL || process.env.EDITOR || "").trim();
+  if (env) {
+    const parts = env.split(/\s+/);
+    if (parts[0] && Bun.which(parts[0])) return parts;
+  }
+  for (const cand of ["nano", "vim", "vi"]) {
+    if (Bun.which(cand)) return [cand];
+  }
+  return ["vi"];
+}
+
+/**
+ * Open the handoff prompt in the user's editor and return what they saved
+ * (trimmed). Returns null if no editor could be launched. Claude Code has no
+ * prefill-without-submit flag, so editing here is how the user shapes the
+ * prompt before it's sent.
+ */
+async function editPrompt(prompt: string): Promise<string | null> {
+  const file = join(tmpdir(), `velloo-handoff-${process.pid}-${Date.now()}.md`);
+  await writeFile(file, prompt, "utf8");
+  const editor = detectEditor();
+  try {
+    await Bun.spawn([...editor, file], {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    }).exited;
+    return (await readFile(file, "utf8")).trim();
+  } catch {
+    return null;
+  } finally {
+    await rm(file, { force: true });
+  }
 }
 
 /**
  * Print the agent handoff (scan only) and — interactively, when `claude` is on
  * PATH — offer to start velloo and launch claude straight into the task.
  */
-async function printAgentHandoff(answers: WizardAnswers, interactive: boolean): Promise<void> {
+async function printAgentHandoff(
+  answers: WizardAnswers,
+  screens: Screen[],
+  interactive: boolean,
+): Promise<void> {
   if (answers.initialContent !== "scan") return;
 
-  const prompt = buildHandoffPrompt(answers);
+  const prompt = buildHandoffPrompt(answers, screens);
   console.log(pc.bold("  Finish setup with your agent"));
   console.log(pc.dim("    Paste this to your AI agent to recreate your app as a Velloo design:"));
   console.log("");
@@ -285,11 +353,34 @@ async function printAgentHandoff(answers: WizardAnswers, interactive: boolean): 
   console.log("");
 
   if (!interactive || !Bun.which("claude")) return;
-  const launch = await confirm({
+  const action = await select<"launch" | "edit" | "skip">({
     message: "Start velloo and launch Claude to do this now?",
-    initialValue: false,
+    options: [
+      { value: "launch", label: "Yes — launch Claude with this prompt" },
+      {
+        value: "edit",
+        label: "Edit the prompt first",
+        hint: `opens ${detectEditor()[0] ?? "your editor"}`,
+      },
+      { value: "skip", label: "No — I'll run it later" },
+    ],
+    initialValue: "skip",
   });
-  if (isCancel(launch) || !launch) return;
+  if (isCancel(action) || action === "skip") return;
+
+  let finalPrompt = prompt;
+  if (action === "edit") {
+    const edited = await editPrompt(prompt);
+    if (edited === null) {
+      console.error("  Couldn't open an editor. Set $EDITOR and retry, or copy the prompt above.");
+      return;
+    }
+    if (edited === "") {
+      console.log(pc.dim("  Prompt was emptied — nothing launched."));
+      return;
+    }
+    finalPrompt = edited;
+  }
 
   // Claude needs the MCP server up to find the velloo tools — start it first.
   let handle: ServerHandle;
@@ -310,8 +401,11 @@ async function printAgentHandoff(answers: WizardAnswers, interactive: boolean): 
   console.log(
     pc.dim(`  velloo running — canvas ${handle.url}, MCP ${handle.mcpUrl}. Launching claude…`),
   );
-  await Bun.spawn(["claude", prompt], { stdout: "inherit", stderr: "inherit", stdin: "inherit" })
-    .exited;
+  await Bun.spawn(["claude", finalPrompt], {
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "inherit",
+  }).exited;
   await handle.close();
 }
 
@@ -522,7 +616,7 @@ export default defineCommand({
     const connected = await wireAgents(folder, interactive, cliArgs.connect !== false);
     printWired(connected);
     await printScreenshotReadiness(interactive);
-    await printAgentHandoff(answers, interactive);
+    await printAgentHandoff(answers, scaffold.screens, interactive);
     printNextSteps(folder, connected);
   },
 });

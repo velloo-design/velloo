@@ -136,6 +136,73 @@ async function scanGenericPagesDir(dir: string): Promise<ScannedRoute[]> {
   return dedupe(out);
 }
 
+/** Map one TanStack path segment: `$id` → `[id]`, splat `$` → `[splat]`. */
+function tanstackSegment(seg: string): string {
+  if (seg === "$") return "[splat]";
+  if (seg.startsWith("$")) return `[${seg.slice(1)}]`;
+  return seg;
+}
+
+/**
+ * Walk a TanStack Router file-based routes dir (`src/routes`). Unlike the
+ * generic walker, this understands the conventions so layouts and grouping
+ * don't leak into the screen list:
+ *   - `__root.*` and `route.*` (layout files) are not pages → skipped.
+ *   - pathless layout segments (`_authenticated`) and route groups
+ *     (`(auth)`) drop out of the URL.
+ *   - `index` collapses to its parent path.
+ *   - `$param` → `[param]` (and bare `$` splat → `[splat]`), reusing the
+ *     same id/name logic as the bracketed Next.js dynamic segments.
+ *   - both directory (`a/b.tsx`) and flat-dotted (`a.b.tsx`) nesting map to
+ *     the same path; `.lazy` siblings and `routeTree.gen.*` are ignored.
+ */
+async function scanTanstackRouter(dir: string): Promise<ScannedRoute[]> {
+  const out: ScannedRoute[] = [];
+  for await (const file of walkFiles(dir)) {
+    if (!hasExt(file)) continue;
+    let stem = stripExt(relative(dir, file));
+    if (stem.endsWith(".lazy")) stem = stem.slice(0, -".lazy".length);
+    if (stem === "routeTree" || stem.endsWith(".gen")) continue;
+
+    // TanStack treats both `/` and `.` as nesting separators.
+    const raw = stem.split(/[/.]/).filter((s) => s.length > 0);
+    const leaf = raw[raw.length - 1];
+    if (!leaf) continue;
+    // Layout / root files and `-`-prefixed (route-excluded) files aren't pages.
+    if (leaf === "__root" || leaf === "route" || leaf.startsWith("_")) continue;
+    if (raw.some((s) => s.startsWith("-"))) continue;
+
+    const segments: string[] = [];
+    for (const seg of raw) {
+      if (seg === "index" || seg === "route") continue; // index collapses to parent
+      if (seg.startsWith("_")) continue; // pathless layout
+      if (/^\(.*\)$/.test(seg)) continue; // route group
+      segments.push(tanstackSegment(seg));
+    }
+    const routePath = segments.length === 0 ? "/" : `/${segments.join("/")}`;
+    out.push({
+      id: idFromRoutePath(routePath),
+      name: nameFromRoutePath(routePath),
+      routePath,
+      sourceFile: file,
+    });
+  }
+  return dedupe(out);
+}
+
+/** Honor a `tsr.config.json` `routesDirectory` override, if present. */
+async function tanstackRoutesDir(appRoot: string): Promise<string | null> {
+  try {
+    const cfg = JSON.parse(await readFile(join(appRoot, "tsr.config.json"), "utf8")) as {
+      routesDirectory?: unknown;
+    };
+    if (typeof cfg.routesDirectory === "string") return join(appRoot, cfg.routesDirectory);
+  } catch {
+    // No config (or unreadable) — fall back to the conventional locations.
+  }
+  return null;
+}
+
 /**
  * Keep the first route per id — duplicates surface when both a
  * Next.js app dir and pages dir have the same route, or when a route
@@ -182,6 +249,15 @@ async function detectFramework(appRoot: string): Promise<Framework> {
     return "next-app";
   }
   if ("astro" in deps) return "astro";
+  // TanStack Router rides on Vite, so check it first — its file conventions
+  // (layouts, route groups, pathless segments) need dedicated parsing.
+  if (
+    "@tanstack/react-router" in deps ||
+    "@tanstack/react-start" in deps ||
+    "@tanstack/router-plugin" in deps
+  ) {
+    return "tanstack-router";
+  }
   if ("vite" in deps) return "vite";
   return "unknown";
 }
@@ -215,6 +291,18 @@ export async function scanAppRoutes(appRoot: string): Promise<ScanResult> {
     for (const dir of candidates) {
       if (await dirExists(dir)) {
         return { framework, routes: await scanGenericPagesDir(dir), routesRoot: dir };
+      }
+    }
+  }
+  if (framework === "tanstack-router") {
+    const candidates = [
+      await tanstackRoutesDir(appRoot),
+      join(appRoot, "src", "routes"),
+      join(appRoot, "routes"),
+    ];
+    for (const dir of candidates) {
+      if (dir && (await dirExists(dir))) {
+        return { framework, routes: await scanTanstackRouter(dir), routesRoot: dir };
       }
     }
   }

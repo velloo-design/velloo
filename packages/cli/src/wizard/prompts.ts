@@ -1,8 +1,10 @@
 import { resolve } from "node:path";
-import { cancel, isCancel, note, select, text } from "@clack/prompts";
+import { cancel, isCancel, multiselect, note, select, spinner, text } from "@clack/prompts";
 import pc from "picocolors";
 import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
 import { detectHost } from "../scan/detect.ts";
+import { scanAppRoutes } from "../scan/index.ts";
+import type { ScannedRoute } from "../scan/types.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 
 function isAborted(value: unknown): value is symbol {
@@ -29,6 +31,49 @@ function describeDetected(d: ReturnType<typeof detectHost>): string {
     `theme css: ${d.globalsCssPath ?? "not found — will use a preset"}`,
   ];
   return lines.join("\n");
+}
+
+// Sentinel for the picker's "Select all" row. Route ids are slugs derived
+// from paths, so this can never collide with a real screen id.
+const SELECT_ALL = "__all__";
+
+/**
+ * Scan the host app's routes and let the user choose which to scaffold into
+ * screens + board frames. "Select all" sits first and is pre-checked
+ * alongside every screen, so just pressing Enter builds them all (matching
+ * the non-interactive path); uncheck it to prune individual screens. Returns
+ * the chosen routes ([] when none are detected or the user picks none → init
+ * falls back to a blank board) or null when the user cancels.
+ */
+async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
+  const spin = spinner();
+  spin.start("Scanning your app's routes");
+  const { routes } = await scanAppRoutes(appRoot);
+  spin.stop(
+    routes.length > 0
+      ? `Found ${routes.length} screen${routes.length === 1 ? "" : "s"}`
+      : "No routes detected — starting with a blank board",
+  );
+  if (routes.length === 0) return [];
+
+  const picked = await multiselect<string>({
+    message: "Which screens should I build boards for?",
+    options: [
+      { value: SELECT_ALL, label: "Select all", hint: "uncheck to pick screens below" },
+      ...routes.map((r) => ({ value: r.id, label: r.name, hint: r.routePath })),
+    ],
+    initialValues: [SELECT_ALL, ...routes.map((r) => r.id)],
+    required: false,
+  });
+  if (isAborted(picked)) return null;
+
+  const chosen = new Set(picked);
+  const subset = routes.filter((r) => chosen.has(r.id));
+  // "Select all" alone (no per-screen picks) means everything — the quick path.
+  // Once any screen is explicitly chosen, honor that subset and ignore the
+  // sentinel, so unchecking a few routes does what it looks like.
+  if (subset.length === 0 && chosen.has(SELECT_ALL)) return routes;
+  return subset;
 }
 
 /**
@@ -70,6 +115,8 @@ export async function runInteractive(ctx: { appRoot: string }): Promise<WizardAn
   if (start === "scan") {
     const detected = detectHost(ctx.appRoot);
     note(describeDetected(detected), "Detected in your app");
+    const selectedRoutes = await pickScreens(ctx.appRoot);
+    if (selectedRoutes === null) return abort();
     return {
       appRoot: ctx.appRoot,
       folder,
@@ -80,6 +127,7 @@ export async function runInteractive(ctx: { appRoot: string }): Promise<WizardAn
       componentsRelative: "src/components/ui",
       initialContent: "scan",
       detected,
+      selectedRoutes,
     };
   }
 

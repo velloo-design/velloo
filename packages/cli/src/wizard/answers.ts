@@ -4,6 +4,8 @@
  * `--flag` in non-interactive mode.
  */
 
+import type { ScannedRoute } from "../scan/types.ts";
+
 export type LibraryId = "shadcn-react" | "shadcn-upstream" | "none" | "mui";
 
 /**
@@ -53,4 +55,11 @@ export interface WizardAnswers {
   themePreset?: string;
   /** Host detection result (populated when `initialContent === "scan"`). */
   detected?: DetectedHost;
+  /**
+   * Scanned routes the user chose to scaffold into screens + board frames
+   * (scan flow). The interactive wizard populates this from the screen
+   * picker. When undefined (non-interactive scan), `buildScaffold` scans
+   * and uses every detected route.
+   */
+  selectedRoutes?: ScannedRoute[];
 }
