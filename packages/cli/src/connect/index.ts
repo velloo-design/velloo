@@ -1,10 +1,11 @@
+import { homedir } from "node:os";
 import { AGENTS } from "./agents.ts";
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import { installSkill, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 
-export { AGENT_IDS, AGENTS } from "./agents.ts";
+export { AGENT_IDS, AGENTS, PROJECT_AGENT_IDS } from "./agents.ts";
 export type { WriteResult } from "./write-config.ts";
 
 /** Default velloo MCP endpoint — matches `velloo run`'s default port. */
@@ -19,6 +20,8 @@ export interface ConnectOptions {
   mcpUrl?: string;
   /** Install the Claude Code skill (only acts when claude-code is targeted). */
   installSkill?: boolean;
+  /** Home dir for global-scope agent configs. Defaults to os.homedir(); injectable for tests. */
+  homeDir?: string;
 }
 
 export interface ConnectResult {
@@ -35,6 +38,7 @@ export interface ConnectResult {
 /** Wire the velloo MCP server into one or more AI coding agents' configs. */
 export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   const mcpUrl = opts.mcpUrl ?? DEFAULT_MCP_URL;
+  const homeDir = opts.homeDir ?? homedir();
   const projectRoot = await resolveProjectRoot(opts.designFolder, opts.projectRoot);
 
   const configs: WriteResult[] = [];
@@ -45,17 +49,18 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
       unknownAgents.push(id);
       continue;
     }
-    configs.push(await writeAgentConfig(projectRoot, agent, mcpUrl));
+    configs.push(await writeAgentConfig(projectRoot, agent, mcpUrl, homeDir));
   }
 
-  // Per-agent guidance: the Claude skill for claude-code, a project rule
-  // for cursor. Both are gated on installSkill (the "wire guidance too" flag).
+  // Per-agent guidance: the Claude skill for the claude-code family, a project
+  // rule for the cursor family. Both are gated on installSkill (the "wire
+  // guidance too" flag) and keyed on family so global targets count too.
+  const hasFamily = (family: "claude-code" | "cursor") =>
+    opts.agents.some((id) => AGENTS[id]?.family === family);
   const skill =
-    opts.installSkill && opts.agents.includes("claude-code")
-      ? await installSkill(projectRoot)
-      : undefined;
+    opts.installSkill && hasFamily("claude-code") ? await installSkill(projectRoot) : undefined;
   const cursorRules =
-    opts.installSkill && opts.agents.includes("cursor")
+    opts.installSkill && hasFamily("cursor")
       ? await installCursorRules(projectRoot, opts.designFolder)
       : undefined;
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
-import { confirm, isCancel } from "@clack/prompts";
+import { confirm, isCancel, multiselect } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   type Annotation,
@@ -16,11 +16,11 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
-import { writeJsonAtomic, writeText } from "@velloo/server";
+import { createServer, type ServerHandle, writeJsonAtomic, writeText } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { AGENT_IDS, type ConnectResult, connect } from "../connect/index.ts";
+import { type ConnectResult, connect, PROJECT_AGENT_IDS } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
@@ -183,7 +183,6 @@ function printSummary(
   plan: InstallPlan,
   answers: WizardAnswers,
   importedFrom: string | undefined,
-  connected: ConnectResult | undefined,
 ): void {
   const boardLabels = scaffold.boards.map((b) => b.name).join(" + ");
   const themeLabel = importedFrom
@@ -197,6 +196,10 @@ function printSummary(
     console.log(
       `  ${pc.bold(boardLabels)} — ${scaffold.screens.length} screens across ${scaffold.boards.length} board${scaffold.boards.length === 1 ? "" : "s"}.`,
     );
+    const names = scaffold.screens.map((s) => s.name || s.id);
+    const shown = names.slice(0, 8);
+    const more = names.length - shown.length;
+    console.log(pc.dim(`    ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`));
     if (answers.initialContent === "sample") {
       console.log(pc.dim("  Pulse — a sample team-analytics product, ready to remix."));
     }
@@ -216,17 +219,21 @@ function printSummary(
       ),
     );
   }
-  if (connected && connected.configs.length > 0) {
-    const wired = connected.configs.map((c) => c.agent).join(" + ");
-    console.log("");
-    console.log(pc.bold("  Agents wired"));
-    console.log(
-      `    ${pc.green("✓")} ${wired} ${pc.dim(`(MCP config under ${connected.projectRoot})`)}`,
-    );
-    if (connected.skill?.installed) console.log(pc.dim("    + Claude Code skill"));
-    if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
-  }
+}
 
+function printWired(connected: ConnectResult | undefined): void {
+  if (!connected || connected.configs.length === 0) return;
+  const wired = connected.configs.map((c) => c.agent).join(" + ");
+  console.log("");
+  console.log(pc.bold("  Agents wired"));
+  console.log(
+    `    ${pc.green("✓")} ${wired} ${pc.dim(`(MCP config under ${connected.projectRoot})`)}`,
+  );
+  if (connected.skill?.installed) console.log(pc.dim("    + Claude Code skill"));
+  if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
+}
+
+function printNextSteps(folder: string, connected: ConnectResult | undefined): void {
   console.log("");
   console.log(pc.bold("  Next steps"));
   let n = 1;
@@ -245,70 +252,101 @@ function printSummary(
 }
 
 /**
- * Build the copy-paste prompt that gets the user's agent to finish setting up
- * "their actual UI" — install real shadcn (upstream) and/or screenshot the
- * running app route-by-route and rebuild each scanned screen to match. Init
- * can't screenshot the app itself (it isn't running yet), so the agent — which
- * has the velloo MCP `screenshot` tool and a shell — does the reconstruction.
+ * Build the copy-paste prompt that gets the user's agent to recreate their app
+ * as a Velloo design: a screen per page, boards with mobile + desktop frames,
+ * reusable snippets, all verified against the running app via the `screenshot`
+ * tool. Init can't screenshot the app itself (it isn't running yet), so the
+ * agent — which has the velloo MCP tools and a shell — does the work.
  */
-function buildHandoffPrompt(answers: WizardAnswers, plan: InstallPlan): string {
-  const steps: string[] = [];
-  steps.push(`Finish setting up my Velloo design at ${answers.folder} so it matches my real app.`);
-  steps.push(
-    `First run \`velloo run ${answers.folder}\` (canvas :7300, MCP :7301) if it isn't already.`,
-  );
-  if (plan.pendingUpstream) {
-    steps.push(
-      `1. Add real vanilla shadcn into my app at ${plan.pendingUpstream.relative} ` +
-        `(\`npx shadcn@latest init\` then \`add\` the components I use), so the components are real source.`,
-    );
-  }
-  if (answers.initialContent === "scan") {
-    steps.push(
-      `${plan.pendingUpstream ? "2" : "1"}. Start my app's dev server, then for each screen under ` +
-        `${answers.folder}/screens open the matching route, take a screenshot, and rebuild the ` +
-        `Velloo screen to match the real UI. Use the velloo MCP \`screenshot\` tool to compare and iterate.`,
-    );
-  }
-  steps.push(
-    "Keep semantic theme tokens, and verify each screen with `screenshot` before moving on.",
-  );
-  return steps.join("\n");
+function buildHandoffPrompt(answers: WizardAnswers): string {
+  return [
+    `Build out my Velloo design at ${answers.folder} to mirror my real app at ${answers.appRoot}.`,
+    `First run \`velloo run ${answers.folder}\` (canvas :7300, MCP :7301) if it isn't already, then use the velloo MCP tools.`,
+    "- For each route/page in my app, create a Velloo screen that reproduces that page's UI from the project's shadcn components.",
+    "- Lay the screens out on boards with both mobile and desktop frames.",
+    "- Extract repeated UI (nav, headers, cards, footers) into reusable snippets.",
+    "- Start my app's dev server and use the velloo `screenshot` tool to compare each screen against the real page; iterate until they match.",
+    "- Keep semantic theme tokens (bg-background, text-foreground, …).",
+  ].join("\n");
 }
 
 /**
- * Print the agent handoff and — interactively, when `claude` is on PATH —
- * offer to launch it straight into the task.
+ * Print the agent handoff (scan only) and — interactively, when `claude` is on
+ * PATH — offer to start velloo and launch claude straight into the task.
  */
-async function printAgentHandoff(
-  answers: WizardAnswers,
-  plan: InstallPlan,
-  interactive: boolean,
-): Promise<void> {
-  if (answers.initialContent !== "scan" && !plan.pendingUpstream) return;
+async function printAgentHandoff(answers: WizardAnswers, interactive: boolean): Promise<void> {
+  if (answers.initialContent !== "scan") return;
 
-  const prompt = buildHandoffPrompt(answers, plan);
+  const prompt = buildHandoffPrompt(answers);
   console.log(pc.bold("  Finish setup with your agent"));
-  console.log(pc.dim("    Paste this to your AI agent to build out your actual UI:"));
+  console.log(pc.dim("    Paste this to your AI agent to recreate your app as a Velloo design:"));
   console.log("");
   for (const line of prompt.split("\n")) console.log(pc.cyan(`    ${line}`));
   console.log("");
 
-  if (interactive && Bun.which("claude")) {
-    const launch = await confirm({
-      message: "Launch Claude now to finish setup?",
-      initialValue: false,
+  if (!interactive || !Bun.which("claude")) return;
+  const launch = await confirm({
+    message: "Start velloo and launch Claude to do this now?",
+    initialValue: false,
+  });
+  if (isCancel(launch) || !launch) return;
+
+  // Claude needs the MCP server up to find the velloo tools — start it first.
+  let handle: ServerHandle;
+  try {
+    handle = await createServer({
+      folder: answers.folder,
+      port: 7300,
+      mcpPort: 7301,
+      host: "127.0.0.1",
     });
-    if (!isCancel(launch) && launch) {
-      console.log(
-        pc.dim("  Launching claude… (make sure `velloo run` is going in another terminal)"),
-      );
-      await Bun.spawn(["claude", prompt], {
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "inherit",
-      }).exited;
-    }
+  } catch (err) {
+    console.error(
+      `  Couldn't start velloo (${(err as Error).message}). ` +
+        `Run \`velloo run ${answers.folder}\` yourself, then paste the prompt above.`,
+    );
+    return;
+  }
+  console.log(
+    pc.dim(`  velloo running — canvas ${handle.url}, MCP ${handle.mcpUrl}. Launching claude…`),
+  );
+  await Bun.spawn(["claude", prompt], { stdout: "inherit", stderr: "inherit", stdin: "inherit" })
+    .exited;
+  await handle.close();
+}
+
+/**
+ * Wire the velloo MCP into the user's agents. Interactively, ask which
+ * (checkboxes, project Claude Code + Cursor pre-selected, global opt-in);
+ * non-interactively, wire the project agents. Returns undefined when skipped.
+ */
+async function wireAgents(
+  folder: string,
+  interactive: boolean,
+  enabled: boolean,
+): Promise<ConnectResult | undefined> {
+  if (!enabled) return undefined;
+  let agents: string[] = PROJECT_AGENT_IDS;
+  if (interactive) {
+    const picked = await multiselect<string>({
+      message: "Wire the velloo MCP into your agents?",
+      options: [
+        { value: "claude-code", label: "Claude Code", hint: "project .mcp.json" },
+        { value: "cursor", label: "Cursor", hint: "project .cursor/mcp.json" },
+        { value: "claude-code-global", label: "Claude Code (global)", hint: "~/.claude.json" },
+        { value: "cursor-global", label: "Cursor (global)", hint: "~/.cursor/mcp.json" },
+      ],
+      initialValues: ["claude-code", "cursor"],
+      required: false,
+    });
+    if (isCancel(picked)) return undefined;
+    agents = picked;
+  }
+  if (agents.length === 0) return undefined;
+  try {
+    return await connect({ designFolder: folder, agents, installSkill: true });
+  } catch {
+    return undefined;
   }
 }
 
@@ -477,19 +515,14 @@ export default defineCommand({
       );
     }
 
-    // Auto-wire the MCP config + guidance for Claude Code and Cursor so the
-    // user's agent can drive the design immediately. Non-fatal on failure.
-    let connected: ConnectResult | undefined;
-    if (cliArgs.connect !== false) {
-      try {
-        connected = await connect({ designFolder: folder, agents: AGENT_IDS, installSkill: true });
-      } catch {
-        connected = undefined;
-      }
-    }
+    printSummary(folder, scaffold, plan, answers, importedFrom);
 
-    printSummary(folder, scaffold, plan, answers, importedFrom, connected);
+    // Ask which agents to wire (interactive) or wire the project defaults, then
+    // check the screenshot browser, then hand off to the agent for scans.
+    const connected = await wireAgents(folder, interactive, cliArgs.connect !== false);
+    printWired(connected);
     await printScreenshotReadiness(interactive);
-    await printAgentHandoff(answers, plan, interactive);
+    await printAgentHandoff(answers, interactive);
+    printNextSteps(folder, connected);
   },
 });

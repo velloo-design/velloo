@@ -92,6 +92,22 @@ describe("connect", () => {
     expect(r.configs).toEqual([]);
   });
 
+  test("global agents write under the injected home dir", async () => {
+    const fakeHome = join(tmp, "home");
+    await mkdir(fakeHome, { recursive: true });
+    const r = await connect({
+      designFolder: design,
+      agents: ["claude-code-global", "cursor-global"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    expect(r.configs.map((c) => c.path).sort()).toEqual(
+      [join(fakeHome, ".claude.json"), join(fakeHome, ".cursor", "mcp.json")].sort(),
+    );
+    const cfg = JSON.parse(await readFile(join(fakeHome, ".claude.json"), "utf8"));
+    expect(cfg.mcpServers.velloo).toEqual({ type: "http", url: MCP });
+  });
+
   test("installs the Claude Code skill when requested", async () => {
     const r = await connect({ designFolder: design, agents: ["claude-code"], installSkill: true });
     expect(r.skill?.installed).toBe(true);

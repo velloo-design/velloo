@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type { AgentTarget } from "./agents.ts";
 
 export interface WriteResult {
@@ -18,8 +18,9 @@ export async function writeAgentConfig(
   projectRoot: string,
   agent: AgentTarget,
   mcpUrl: string,
+  homeDir: string,
 ): Promise<WriteResult> {
-  const path = join(projectRoot, agent.relPath);
+  const path = agent.path(projectRoot, homeDir);
 
   let existing: Record<string, unknown> = {};
   let action: "created" | "updated" = "created";

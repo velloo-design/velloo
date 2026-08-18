@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -5,9 +6,15 @@ import { fileURLToPath } from "node:url";
 import * as ts from "typescript";
 
 const here = dirname(fileURLToPath(import.meta.url));
-/** Stub biome.json living next to this file — controls the rules applied to
- * emitted code, regardless of the host repo's own biome.json. */
-const BIOME_CONFIG_PATH = join(here, "..", "biome.codegen.json");
+/** Stub biome.json controlling the rules applied to emitted code, regardless
+ * of the host repo's own biome.json. Resolves from source (next to this
+ * package) and from the bundled CLI (`<dist>/pkgs/codegen/biome.codegen.json`). */
+function resolveBiomeConfig(): string {
+  const dev = join(here, "..", "biome.codegen.json");
+  const bundled = join(here, "pkgs", "codegen", "biome.codegen.json");
+  return existsSync(bundled) ? bundled : dev;
+}
+const BIOME_CONFIG_PATH = resolveBiomeConfig();
 
 export interface FormatError {
   stage: "format" | "lint" | "parse";

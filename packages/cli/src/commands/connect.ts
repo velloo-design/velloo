@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { AGENT_IDS, connect, DEFAULT_MCP_URL } from "../connect/index.ts";
+import { AGENT_IDS, connect, DEFAULT_MCP_URL, PROJECT_AGENT_IDS } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 
 export default defineCommand({
@@ -13,7 +13,7 @@ export default defineCommand({
     folder: { type: "positional", required: true, description: "Design folder" },
     agent: {
       type: "string",
-      description: `Comma-separated agents: ${AGENT_IDS.join(", ")} (default ${AGENT_IDS.join(",")})`,
+      description: `Comma-separated agents: ${AGENT_IDS.join(", ")} (default ${PROJECT_AGENT_IDS.join(",")})`,
     },
     projectRoot: {
       type: "string",
@@ -31,7 +31,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agents = (args.agent ?? AGENT_IDS.join(","))
+    const agents = (args.agent ?? PROJECT_AGENT_IDS.join(","))
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);

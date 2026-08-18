@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pkg from "../package.json" with { type: "json" };
@@ -6,8 +7,26 @@ import pkg from "../package.json" with { type: "json" };
 export const snapshotVersion: string = (pkg as { snapshotVersion: string }).snapshotVersion;
 
 const here = dirname(fileURLToPath(import.meta.url));
-const srcDir = join(here, "..", "src");
-const distDir = join(here, "..", "dist");
+
+/**
+ * Package root holding `src/` (the component sources + Tailwind entry CSS) and
+ * `dist/manifest.json`. Resolves from source (`here` = this `src/` dir) and
+ * from the bundled CLI, where `build.ts` copies these assets to
+ * `<dist>/pkgs/shadcn-snapshot` next to `cli.js`.
+ */
+function resolveRoot(): string {
+  const dev = join(here, "..");
+  const candidates = [
+    process.env.VELLOO_SNAPSHOT_ROOT,
+    join(here, "pkgs", "shadcn-snapshot"),
+    dev,
+  ].filter((p): p is string => Boolean(p));
+  return candidates.find((r) => existsSync(join(r, "src", "tailwind-entry.css"))) ?? dev;
+}
+
+const root = resolveRoot();
+const srcDir = join(root, "src");
+const distDir = join(root, "dist");
 
 /**
  * Absolute path to the Tailwind entry CSS shipped with the snapshot. The

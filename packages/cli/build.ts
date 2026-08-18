@@ -173,6 +173,28 @@ cpSync(canvasDist, join(distDir, "canvas"), { recursive: true });
 step("copying skills → dist/skills");
 cpSync(join(repoRoot, "skills"), join(distDir, "skills"), { recursive: true });
 
+// 4c. Ship the on-disk runtime assets that bundled @velloo/* packages read
+//     relative to their source — the Tailwind entry CSS + component sources the
+//     JIT scans, the snapshot manifest, and codegen's biome config. Each
+//     package's path module resolves `<dist>/pkgs/<name>` when bundled.
+step("copying package assets → dist/pkgs");
+const PKG_ASSETS: { pkg: string; paths: string[] }[] = [
+  { pkg: "shadcn-snapshot", paths: ["src", join("dist", "manifest.json")] },
+  { pkg: "provider-none", paths: ["src"] },
+  { pkg: "codegen", paths: ["biome.codegen.json"] },
+];
+// Don't ship test files — they'd be discovered by `bun test` from the copy
+// and run from the wrong location (and they aren't runtime assets).
+const notATest = (src: string): boolean =>
+  !/(^|[/\\])__tests__([/\\]|$)/.test(src) && !/\.test\.[cm]?[jt]sx?$/.test(src);
+for (const { pkg, paths } of PKG_ASSETS) {
+  for (const rel of paths) {
+    const from = join(repoRoot, "packages", pkg, rel);
+    if (!existsSync(from)) throw new Error(`missing package asset: ${from}`);
+    cpSync(from, join(distDir, "pkgs", pkg, rel), { recursive: true, filter: notATest });
+  }
+}
+
 // 5. Generate the publishable manifest, pinned to exact installed versions.
 step("writing dist/package.json");
 const dependencies: Record<string, string> = {};
@@ -189,7 +211,7 @@ const manifest = {
   description: "Velloo — code-shaped design canvas for solo devs",
   bin: { velloo: "./cli.js" },
   engines: { bun: ">=1.3.0" },
-  files: ["cli.js", "canvas", "skills"],
+  files: ["cli.js", "canvas", "skills", "pkgs"],
   dependencies,
   ...(Object.keys(optionalDependencies).length ? { optionalDependencies } : {}),
 };

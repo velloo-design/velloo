@@ -14,7 +14,9 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "test": "bun test",
-    "velloo": "bun packages/cli/src/cli.ts"
+    "velloo": "bun packages/cli/src/cli.ts",
+    "cli:build": "bun packages/cli/build.ts",
+    "cli:install": "bun scripts/cli-install.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
