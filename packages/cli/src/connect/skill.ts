@@ -1,13 +1,26 @@
+import { existsSync } from "node:fs";
 import { access, copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Repo-root skills/velloo-design/SKILL.md, resolved relative to this file
-// (packages/cli/src/connect/). One source of truth: the same file the
-// published skills repo would carry.
-const SKILL_SRC = fileURLToPath(
-  new URL("../../../../skills/velloo-design/SKILL.md", import.meta.url),
-);
+const here = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Locate the velloo-design skill source. Works from source
+ * (`packages/cli/src/connect/` → repo-root `skills/`) and from the bundled
+ * binary, where `build.ts` copies the skill to `<dist>/skills/`.
+ */
+function resolveSkillSrc(): string {
+  const dev = join(here, "..", "..", "..", "..", "skills", "velloo-design", "SKILL.md");
+  const candidates = [
+    process.env.VELLOO_SKILL_SRC,
+    join(here, "skills", "velloo-design", "SKILL.md"),
+    dev,
+  ].filter((p): p is string => Boolean(p));
+  return candidates.find((p) => existsSync(p)) ?? dev;
+}
+
+const SKILL_SRC = resolveSkillSrc();
 
 export interface SkillResult {
   installed: boolean;

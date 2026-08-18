@@ -1,4 +1,5 @@
 import { AGENTS } from "./agents.ts";
+import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import { installSkill, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
@@ -25,6 +26,8 @@ export interface ConnectResult {
   mcpUrl: string;
   configs: WriteResult[];
   skill?: SkillResult;
+  /** Cursor project rule, installed when cursor is a target. */
+  cursorRules?: CursorRulesResult;
   /** Requested agent ids that aren't recognized. */
   unknownAgents: string[];
 }
@@ -45,12 +48,16 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
     configs.push(await writeAgentConfig(projectRoot, agent, mcpUrl));
   }
 
-  // The skill is Claude Code-specific — only install it when that agent
-  // is in the target set.
+  // Per-agent guidance: the Claude skill for claude-code, a project rule
+  // for cursor. Both are gated on installSkill (the "wire guidance too" flag).
   const skill =
     opts.installSkill && opts.agents.includes("claude-code")
       ? await installSkill(projectRoot)
       : undefined;
+  const cursorRules =
+    opts.installSkill && opts.agents.includes("cursor")
+      ? await installCursorRules(projectRoot, opts.designFolder)
+      : undefined;
 
-  return { projectRoot, mcpUrl, configs, skill, unknownAgents };
+  return { projectRoot, mcpUrl, configs, skill, cursorRules, unknownAgents };
 }

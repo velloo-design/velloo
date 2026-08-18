@@ -15,6 +15,8 @@ export interface InitCliArgs {
   designFolder?: string;
   force?: boolean;
   nonInteractive?: boolean;
+  /** Wire MCP config + guidance for Claude Code + Cursor (default true). */
+  connect?: boolean;
   /** `scratch` | `scan`. */
   start?: string;
   library?: string;

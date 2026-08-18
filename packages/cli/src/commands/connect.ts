@@ -13,7 +13,7 @@ export default defineCommand({
     folder: { type: "positional", required: true, description: "Design folder" },
     agent: {
       type: "string",
-      description: `Comma-separated agents: ${AGENT_IDS.join(", ")} (default claude-code)`,
+      description: `Comma-separated agents: ${AGENT_IDS.join(", ")} (default ${AGENT_IDS.join(",")})`,
     },
     projectRoot: {
       type: "string",
@@ -31,7 +31,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agents = (args.agent ?? "claude-code")
+    const agents = (args.agent ?? AGENT_IDS.join(","))
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
@@ -61,6 +61,9 @@ export default defineCommand({
       console.log(`    skill    ${pc.cyan(result.skill.path)}`);
     } else if (result.skill && !result.skill.installed) {
       console.log(pc.dim(`    skill skipped (${result.skill.reason})`));
+    }
+    if (result.cursorRules?.installed && result.cursorRules.path) {
+      console.log(`    rule     ${pc.cyan(result.cursorRules.path)}`);
     }
     console.log("");
     console.log(pc.bold("  Next"));

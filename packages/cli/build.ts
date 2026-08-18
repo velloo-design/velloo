@@ -169,6 +169,10 @@ chmodSync(cliJs, 0o755);
 step("copying canvas → dist/canvas");
 cpSync(canvasDist, join(distDir, "canvas"), { recursive: true });
 
+// 4b. Ship the agent skills next to the binary (skill.ts resolves `<here>/skills`).
+step("copying skills → dist/skills");
+cpSync(join(repoRoot, "skills"), join(distDir, "skills"), { recursive: true });
+
 // 5. Generate the publishable manifest, pinned to exact installed versions.
 step("writing dist/package.json");
 const dependencies: Record<string, string> = {};
@@ -185,7 +189,7 @@ const manifest = {
   description: "Velloo — code-shaped design canvas for solo devs",
   bin: { velloo: "./cli.js" },
   engines: { bun: ">=1.3.0" },
-  files: ["cli.js", "canvas"],
+  files: ["cli.js", "canvas", "skills"],
   dependencies,
   ...(Object.keys(optionalDependencies).length ? { optionalDependencies } : {}),
 };
