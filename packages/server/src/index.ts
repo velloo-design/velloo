@@ -235,4 +235,5 @@ export {
   resolveProviders,
 } from "./providers.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";
+export { derivePalette } from "./theme/derive-palette.ts";
 export type { WatchEvent } from "./watcher.ts";

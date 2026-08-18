@@ -1,34 +1,38 @@
 import { resolve } from "node:path";
+import { isValidPreset } from "../scaffold/theme-presets.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 
 /**
  * Pure flag → answers logic for `velloo init`'s non-interactive mode.
  * Lives apart from the clack-driven wizard so the branching is
- * unit-testable without a TTY.
+ * unit-testable without a TTY. Host detection (for scan) is deferred to
+ * `init.ts` so this stays a pure function of its inputs.
  */
 export interface InitCliArgs {
+  /** Positional: the app root where Velloo installs (default: cwd). */
   folder?: string;
+  /** Design folder, relative to the app root (default: `velloo`). */
+  designFolder?: string;
   force?: boolean;
   nonInteractive?: boolean;
+  /** `scratch` | `scan`. */
+  start?: string;
   library?: string;
-  source?: string;
-  appPath?: string;
   componentsDir?: string;
   initialContent?: string;
-  themeColor?: string;
-  themeVibe?: string;
+  themePreset?: string;
 }
 
 export function isValidLibraryId(v: string): v is LibraryId {
   return v === "shadcn-react" || v === "shadcn-upstream" || v === "none" || v === "mui";
 }
 
-export function isValidSource(v: string): v is LibrarySource {
-  return v === "binary" || v === "in-repo" || v === "cache";
-}
-
 export function isValidContent(v: string): v is InitialContent {
   return v === "sample" || v === "blank" || v === "scan";
+}
+
+export function isValidStart(v: string): v is "scratch" | "scan" {
+  return v === "scratch" || v === "scan";
 }
 
 /**
@@ -51,29 +55,39 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
       `unknown --library ${JSON.stringify(args.library)}. Valid: shadcn-upstream | shadcn-react | none | mui.`,
     );
   }
-  if (args.source && !isValidSource(args.source)) {
-    throw new Error(
-      `unknown --source ${JSON.stringify(args.source)}. Valid: binary | in-repo | cache.`,
-    );
+  if (args.start && !isValidStart(args.start)) {
+    throw new Error(`unknown --start ${JSON.stringify(args.start)}. Valid: scratch | scan.`);
   }
   if (args.initialContent && !isValidContent(args.initialContent)) {
     throw new Error(
       `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan.`,
     );
   }
-  const library: LibraryId = (args.library as LibraryId | undefined) ?? "shadcn-react";
-  const source: LibrarySource = (args.source as LibrarySource | undefined) ?? "binary";
-  if (source === "in-repo" && !args.appPath) {
-    throw new Error(`--source=in-repo requires --app-path=<path-to-your-app>.`);
+  const themePreset = args.themePreset?.trim() || undefined;
+  if (themePreset && !isValidPreset(themePreset)) {
+    throw new Error(`unknown --theme-preset ${JSON.stringify(args.themePreset)}.`);
   }
+
+  const appRoot = resolve(args.folder ?? ".");
+  const folder = resolve(appRoot, args.designFolder ?? "velloo");
+  const library: LibraryId = (args.library as LibraryId | undefined) ?? "shadcn-react";
+
+  const scan = args.start === "scan" || args.initialContent === "scan";
+  const initialContent: InitialContent = scan
+    ? "scan"
+    : ((args.initialContent as InitialContent | undefined) ?? "sample");
+
+  // Upstream components live in the app (written post-init); everything else
+  // renders from the bundled snapshot. Init writes nothing to the app.
+  const source: LibrarySource = library === "shadcn-upstream" ? "in-repo" : "binary";
+
   return {
-    folder: resolve(args.folder ?? "velloo"),
+    appRoot,
+    folder,
     library,
     source,
-    appPath: args.appPath ? resolve(args.appPath) : undefined,
     componentsRelative: args.componentsDir ?? "src/components/ui",
-    initialContent: (args.initialContent as InitialContent | undefined) ?? "sample",
-    themeColor: args.themeColor && args.themeColor.trim() !== "" ? args.themeColor : undefined,
-    themeVibe: args.themeVibe && args.themeVibe.trim() !== "" ? args.themeVibe : undefined,
+    initialContent,
+    themePreset,
   };
 }

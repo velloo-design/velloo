@@ -32,12 +32,14 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("|---|---|");
   lines.push(`| Library | ${plan.summary.name} |`);
   lines.push(`| Components | ${plan.summary.location} |`);
-  if (answers.source === "in-repo" && answers.appPath) {
-    lines.push(`| App path | ${answers.appPath} |`);
-  }
-  lines.push(
-    `| Initial content | ${answers.initialContent === "sample" ? "Pulse sample" : "blank"} |`,
-  );
+  lines.push(`| App root | ${answers.appRoot} |`);
+  const contentLabel =
+    answers.initialContent === "sample"
+      ? "Pulse sample"
+      : answers.initialContent === "scan"
+        ? "scanned from your app"
+        : "blank";
+  lines.push(`| Initial content | ${contentLabel} |`);
   lines.push("");
   lines.push("## Layout");
   lines.push("");
@@ -51,31 +53,18 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("```");
   lines.push("");
 
-  if (answers.source === "in-repo") {
-    lines.push("## Working with your app");
+  if (plan.pendingUpstream) {
+    lines.push("## Bringing shadcn into your app");
     lines.push("");
-    lines.push("The shadcn snapshot was installed into your app at");
-    lines.push(`\`${plan.summary.location}\`. You can:`);
-    lines.push("");
-    lines.push('- `import { Button } from "@/components/ui/button"` from your app code');
-    lines.push("  exactly like vanilla shadcn — the snapshot files are real source.");
-    lines.push("- Run `npx shadcn add <component>` later on the same folder to pull in");
-    lines.push("  more upstream components; Velloo's renderer doesn't read them yet, but");
-    lines.push("  your app does.");
-    lines.push("- Run `velloo theme:export ../<app>` to land `tailwind.config.ts` and");
-    lines.push("  `globals.css` into your app from the design folder's theme.");
-    lines.push("");
-  } else if (answers.source === "cache") {
-    lines.push("## Cached install");
-    lines.push("");
-    lines.push("The snapshot was installed under `~/.velloo/` — keyed to this design");
-    lines.push("folder's project id. It's isolated from any host app. When you're");
-    lines.push("ready to land the design into a real codebase, run");
-    lines.push("`velloo theme:export <app>` to copy the theme over, and use `emit_code`");
-    lines.push("(via MCP) to translate each screen into your app's conventions.");
+    lines.push("Init did not write anything into your app. The canvas renders against");
+    lines.push("the bundled shadcn snapshot; when you're ready to land real vanilla");
+    lines.push(`shadcn into your app at \`${plan.pendingUpstream.relative}\`, ask your AI`);
+    lines.push("agent (it was wired up during init) to finish setup — or run");
+    lines.push("`npx shadcn@latest add <component>` yourself. Then");
+    lines.push("`velloo theme:export <app>` aligns the theme.");
     lines.push("");
   } else {
-    lines.push("## Bundled install");
+    lines.push("## Bundled components");
     lines.push("");
     lines.push("The shadcn snapshot lives inside the velloo binary. No files were");
     lines.push("written to your app. When you're ready to bring shadcn into your");

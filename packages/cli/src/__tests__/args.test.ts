@@ -12,54 +12,58 @@ describe("shouldRunWizard", () => {
 });
 
 describe("answersFromArgs", () => {
-  test("defaults: shadcn-react, binary source, sample content, velloo folder", () => {
+  test("defaults: cwd app root, velloo design folder, shadcn-react binary, sample", () => {
     const a = answersFromArgs({});
     expect(a.library).toBe("shadcn-react");
     expect(a.source).toBe("binary");
     expect(a.initialContent).toBe("sample");
-    expect(a.folder).toBe(resolve("velloo"));
+    expect(a.appRoot).toBe(resolve("."));
+    expect(a.folder).toBe(resolve(".", "velloo"));
     expect(a.componentsRelative).toBe("src/components/ui");
-    expect(a.appPath).toBeUndefined();
-    expect(a.themeColor).toBeUndefined();
-    expect(a.themeVibe).toBeUndefined();
+    expect(a.themePreset).toBeUndefined();
+    expect(a.detected).toBeUndefined();
+  });
+
+  test("positional is the app root; design folder defaults under it", () => {
+    const a = answersFromArgs({ folder: "../apps/web" });
+    expect(a.appRoot).toBe(resolve("../apps/web"));
+    expect(a.folder).toBe(resolve("../apps/web", "velloo"));
   });
 
   test("unknown flag values fail loudly instead of silently scaffolding defaults", () => {
     expect(() => answersFromArgs({ library: "bootstrap" })).toThrow(/unknown --library/);
-    expect(() => answersFromArgs({ source: "ftp" })).toThrow(/unknown --source/);
+    expect(() => answersFromArgs({ start: "fresh" })).toThrow(/unknown --start/);
     expect(() => answersFromArgs({ initialContent: "kitchen" })).toThrow(
       /unknown --initial-content/,
     );
+    expect(() => answersFromArgs({ themePreset: "neon" })).toThrow(/unknown --theme-preset/);
   });
 
-  test("valid flags pass through, paths resolved to absolute", () => {
+  test("upstream library derives in-repo source; subfolder + preset pass through", () => {
     const a = answersFromArgs({
-      folder: "my-designs",
+      folder: ".",
+      designFolder: "design",
       library: "shadcn-upstream",
-      source: "in-repo",
-      appPath: "../apps/web",
       componentsDir: "lib/ui",
       initialContent: "blank",
-      themeColor: "#7C3AED",
-      themeVibe: "calm",
+      themePreset: "violet",
     });
     expect(a.library).toBe("shadcn-upstream");
     expect(a.source).toBe("in-repo");
-    expect(a.folder).toBe(resolve("my-designs"));
-    expect(a.appPath).toBe(resolve("../apps/web"));
+    expect(a.folder).toBe(resolve(".", "design"));
     expect(a.componentsRelative).toBe("lib/ui");
     expect(a.initialContent).toBe("blank");
-    expect(a.themeColor).toBe("#7C3AED");
-    expect(a.themeVibe).toBe("calm");
+    expect(a.themePreset).toBe("violet");
   });
 
-  test("in-repo source without --app-path throws the guidance error", () => {
-    expect(() => answersFromArgs({ source: "in-repo" })).toThrow(/--app-path/);
+  test("--start=scan sets scan content; non-upstream stays binary", () => {
+    const a = answersFromArgs({ start: "scan" });
+    expect(a.initialContent).toBe("scan");
+    expect(a.source).toBe("binary");
   });
 
-  test("blank theme flags are treated as unset", () => {
-    const a = answersFromArgs({ themeColor: "  ", themeVibe: "" });
-    expect(a.themeColor).toBeUndefined();
-    expect(a.themeVibe).toBeUndefined();
+  test("blank theme preset is treated as unset", () => {
+    const a = answersFromArgs({ themePreset: "   " });
+    expect(a.themePreset).toBeUndefined();
   });
 });

@@ -1,12 +1,10 @@
 import { resolve } from "node:path";
-import { cancel, isCancel, select, text } from "@clack/prompts";
+import { cancel, isCancel, note, select, text } from "@clack/prompts";
+import pc from "picocolors";
+import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
+import { detectHost } from "../scan/detect.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 
-/**
- * Bail out of the wizard if the user hit Esc/Ctrl-C on any prompt.
- * Returns `true` when the prompt was cancelled; callers should exit
- * after printing a cancellation notice.
- */
 function isAborted(value: unknown): value is symbol {
   return isCancel(value);
 }
@@ -16,25 +14,74 @@ function abort(): null {
   return null;
 }
 
+/** A true-color terminal swatch (two blocks) for a hex color. */
+function swatch(hex: string): string {
+  const m = hex.replace("#", "").match(/.{2}/g);
+  if (!m || m.length < 3) return "  ";
+  const [r, g, b] = m.map((h) => Number.parseInt(h, 16));
+  return `\x1b[48;2;${r};${g};${b}m  \x1b[0m`;
+}
+
+function describeDetected(d: ReturnType<typeof detectHost>): string {
+  const lines = [
+    `shadcn:    ${d.shadcn ? `yes${d.shadcnStyle ? ` (${d.shadcnStyle})` : ""}` : "not detected"}`,
+    `Tailwind:  ${d.tailwindMajor ? `v${d.tailwindMajor}` : "not detected"}`,
+    `theme css: ${d.globalsCssPath ?? "not found — will use a preset"}`,
+  ];
+  return lines.join("\n");
+}
+
 /**
- * Interactive prompts for `velloo init`. Walked sequentially so each
- * step can branch on previous answers (e.g. the "where do components
- * live" question only fires for shadcn).
+ * Interactive prompts for `velloo init`. `appRoot` is the user's app (where
+ * Velloo installs); the flow asks scratch-vs-scan first, then only the
+ * questions that choice needs.
  */
-export async function runInteractive(defaults: { folder: string }): Promise<WizardAnswers | null> {
-  const folder = await text({
+export async function runInteractive(ctx: { appRoot: string }): Promise<WizardAnswers | null> {
+  const folderInput = await text({
     message: "Where should the design folder live?",
-    placeholder: defaults.folder,
-    defaultValue: defaults.folder,
+    placeholder: "velloo",
+    defaultValue: "velloo",
     validate(value) {
-      // Empty input is intentional — clack applies `defaultValue` after
-      // validate runs, so rejecting "" here breaks "press Enter to accept
-      // the placeholder". Only flag whitespace-only input.
       if (value && value.trim() === "") return "Path can't be empty.";
       return undefined;
     },
   });
-  if (isAborted(folder)) return abort();
+  if (isAborted(folderInput)) return abort();
+  const folder = resolve(ctx.appRoot, folderInput || "velloo");
+
+  const start = await select<"scratch" | "scan">({
+    message: "How do you want to start?",
+    options: [
+      {
+        value: "scratch",
+        label: "Start from scratch",
+        hint: "Pick a component library + a sample or blank board",
+      },
+      {
+        value: "scan",
+        label: "Scan what I have",
+        hint: "Detect your routes + theme and build a starting board",
+      },
+    ],
+    initialValue: "scratch",
+  });
+  if (isAborted(start)) return abort();
+
+  if (start === "scan") {
+    const detected = detectHost(ctx.appRoot);
+    note(describeDetected(detected), "Detected in your app");
+    return {
+      appRoot: ctx.appRoot,
+      folder,
+      // Scan renders against the bundled snapshot and imports the host theme;
+      // it never writes into the app.
+      library: "shadcn-react",
+      source: "binary",
+      componentsRelative: "src/components/ui",
+      initialContent: "scan",
+      detected,
+    };
+  }
 
   const library = await select<LibraryId>({
     message: "Component library",
@@ -42,71 +89,29 @@ export async function runInteractive(defaults: { folder: string }): Promise<Wiza
       {
         value: "shadcn-upstream",
         label: "shadcn (upstream)",
-        hint: "Fetch from shadcn-ui at a pinned version. Recommended.",
+        hint: "Vanilla shadcn added to your app. Recommended.",
       },
       {
         value: "shadcn-react",
-        label: "shadcn (bundled)",
-        hint: "Vendored snapshot — back-compat for legacy folders",
+        label: "shadcn (vendored snapshot)",
+        hint: "Bundled with velloo — shadcn is NOT downloaded.",
       },
       {
         value: "none",
         label: "No library",
-        hint: "Box / Stack / Text primitives — Sprint X+2",
+        hint: "Box / Stack / Text primitives.",
       },
-      // "mui" stays out of the list until the provider ships (Sprint
-      // X+2.1) — the factory throws "not yet vendored", so offering it
-      // here walks the user through every prompt and then fails init.
     ],
     initialValue: "shadcn-upstream",
   });
   if (isAborted(library)) return abort();
 
-  let source: LibrarySource = "cache";
-  if (library === "shadcn-react" || library === "shadcn-upstream") {
-    const picked = await select<LibrarySource>({
-      message: "Where should the components live?",
-      options: [
-        {
-          value: "in-repo",
-          label: "In your app",
-          hint: "<app>/src/components/ui — shared with your app code",
-        },
-        {
-          value: "cache",
-          label: "Velloo cache",
-          hint: "~/.velloo/<projectId>/ — isolated from any app",
-        },
-        {
-          value: "binary",
-          label: "Bundled with velloo",
-          hint: "No on-disk copy. The classic Pulse default.",
-        },
-      ],
-      // Cache is the safe default: in-repo writes 140+ files into the
-      // user's app the moment they press Enter through the wizard, and
-      // the copy then drifts from the bundled components.
-      initialValue: "cache",
-    });
-    if (isAborted(picked)) return abort();
-    source = picked;
-  }
-
-  let appPath: string | undefined;
+  // Source is derived from the library: upstream lives in the app (written
+  // post-init), everything else renders from the bundled snapshot.
+  let source: LibrarySource = "binary";
   let componentsRelative = "src/components/ui";
-  if (source === "in-repo") {
-    const ap = await text({
-      message: "Path to your app (the directory with package.json)",
-      placeholder: "../apps/web",
-      defaultValue: "../apps/web",
-      validate(value) {
-        if (value && value.trim() === "") return "Path can't be empty.";
-        return undefined;
-      },
-    });
-    if (isAborted(ap)) return abort();
-    appPath = ap;
-
+  if (library === "shadcn-upstream") {
+    source = "in-repo";
     const cr = await text({
       message: "Components subfolder inside your app",
       placeholder: "src/components/ui",
@@ -116,49 +121,43 @@ export async function runInteractive(defaults: { folder: string }): Promise<Wiza
     if (cr) componentsRelative = cr;
   }
 
-  const initialContent = await select<InitialContent>({
+  const initialContent = await select<Exclude<InitialContent, "scan">>({
     message: "Initial design",
     options: [
-      { value: "sample", label: "Pulse sample", hint: "7 screens, 3 boards" },
       {
-        value: "scan",
-        label: "Scan my app",
-        hint: "one screen per route — Next.js / Vite / Astro detected",
+        value: "sample",
+        label: library === "none" ? "Welcome sample" : "Pulse sample",
+        hint: library === "none" ? "A small primitives demo" : "7 screens, 3 boards",
       },
-      { value: "blank", label: "Blank", hint: "Empty folder, no screens" },
+      { value: "blank", label: "Blank", hint: "Empty board, no screens" },
     ],
     initialValue: "sample",
   });
   if (isAborted(initialContent)) return abort();
 
-  const themeColor = await text({
-    message: "Theme color (hex) — leave blank to skip",
-    placeholder: "#7C3AED",
-    defaultValue: "",
-  });
-  if (isAborted(themeColor)) return abort();
+  let themePreset: string | undefined;
+  if (library === "shadcn-upstream" || library === "shadcn-react") {
+    const preset = await select<string>({
+      message: "Theme preset",
+      options: THEME_PRESETS.map((p) => ({
+        value: p.id,
+        label: `${swatch(p.seed)} ${p.label}`,
+      })),
+      initialValue: "indigo",
+    });
+    if (isAborted(preset)) return abort();
+    themePreset = typeof preset === "string" ? preset : undefined;
+  }
 
-  const themeVibe = await select<string>({
-    message: "Theme vibe — leave at 'skip' for the default Pulse indigo",
-    options: [
-      { value: "", label: "Skip" },
-      { value: "calm", label: "Calm" },
-      { value: "playful", label: "Playful" },
-      { value: "professional", label: "Professional" },
-      { value: "energetic", label: "Energetic" },
-    ],
-    initialValue: "",
-  });
-  if (isAborted(themeVibe)) return abort();
+  note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");
 
   return {
-    folder: resolve(folder),
+    appRoot: ctx.appRoot,
+    folder,
     library,
     source,
-    appPath: appPath ? resolve(appPath) : undefined,
     componentsRelative,
     initialContent,
-    themeColor: typeof themeColor === "string" && themeColor.trim() !== "" ? themeColor : undefined,
-    themeVibe: typeof themeVibe === "string" && themeVibe !== "" ? themeVibe : undefined,
+    themePreset,
   };
 }

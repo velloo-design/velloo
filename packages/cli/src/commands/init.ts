@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { confirm, isCancel } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
@@ -22,7 +22,7 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import { fail } from "../fail.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
-import { buildDefaultTheme } from "../scaffold/default-theme.ts";
+import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
 import {
   buildNoLibBoards,
   buildNoLibScreens,
@@ -30,10 +30,12 @@ import {
 } from "../scaffold/nolib-sample.ts";
 import { buildSampleBoards, buildSampleScreens } from "../scaffold/sample-page.ts";
 import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
+import { buildPresetTheme, presetById } from "../scaffold/theme-presets.ts";
+import { detectHost } from "../scan/detect.ts";
 import { buildBoardFromScan, buildScreensFromScan, scanAppRoutes } from "../scan/index.ts";
 import type { WizardAnswers } from "../wizard/answers.ts";
 import { answersFromArgs, type InitCliArgs, shouldRunWizard } from "../wizard/args.ts";
-import { executeInstall, type InstallPlan } from "../wizard/install.ts";
+import { type InstallPlan, planInstall } from "../wizard/install.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
 import { renderDesignReadme } from "../wizard/readme.ts";
@@ -57,61 +59,54 @@ interface Scaffold {
   notes: { boardId: string; entries: CanvasNote[] }[];
 }
 
-async function buildScaffold(answers: WizardAnswers): Promise<Scaffold> {
-  if (answers.initialContent === "blank") {
-    const board: Board = {
-      id: "main",
-      name: "Main",
-      frames: [],
-      groups: [],
-    };
-    return {
-      // Pulse's token tree is the base palette, but only the sample
-      // scaffold should carry its name — blank folders get "default".
-      theme: { ...buildDefaultTheme(), name: "default" },
-      screens: [],
-      boards: [board],
-      snippets: [],
-      annotations: [],
-      notes: [],
-    };
+function blankScaffold(theme: Theme): Scaffold {
+  return {
+    theme,
+    screens: [],
+    boards: [{ id: "main", name: "Main", frames: [], groups: [] }],
+    snippets: [],
+    annotations: [],
+    notes: [],
+  };
+}
+
+/**
+ * The scaffold's theme: for scan we import the host app's globals.css so the
+ * canvas renders in their brand; everything else uses the chosen preset.
+ */
+function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFrom?: string } {
+  if (answers.initialContent === "scan" && answers.detected?.globalsCssPath) {
+    const imported = importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset);
+    if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
   }
+  return { theme: buildPresetTheme(answers.themePreset) };
+}
+
+async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaffold> {
+  if (answers.initialContent === "blank") {
+    return blankScaffold(theme);
+  }
+
   if (answers.initialContent === "scan") {
-    // Scan-my-app mode generates one screen per detected route. The
-    // active provider only matters for the placeholder tree's choice
-    // of Badge (shadcn) vs Text (no-lib).
-    if (!answers.appPath) {
-      throw new Error(
-        "--initial-content=scan requires an --app-path (the directory containing package.json).",
-      );
-    }
-    const result = await scanAppRoutes(answers.appPath);
+    // One screen per detected route. The library only affects the
+    // placeholder tree's Badge (shadcn) vs Text (no-lib) choice.
+    const result = await scanAppRoutes(answers.appRoot);
     if (result.routes.length === 0) {
-      throw new Error(
-        `velloo: no routes detected under ${result.routesRoot}. ` +
-          `Velloo looks for Next.js (app/ or pages/), Vite (src/routes/ or src/pages/), and Astro (src/pages/). ` +
-          `Either point --app-path at the right folder, or re-run with --initial-content=sample.`,
-      );
+      // Don't abort init — fall back to a blank board. init prints why.
+      return blankScaffold(theme);
     }
     const hasBadge = answers.library !== "none";
     const screens = buildScreensFromScan({ routes: result.routes, hasBadge });
     const board = buildBoardFromScan({ screens });
-    return {
-      theme: { ...buildDefaultTheme(), name: "default" },
-      screens,
-      boards: [board],
-      snippets: [],
-      annotations: [],
-      notes: [],
-    };
+    return { theme, screens, boards: [board], snippets: [], annotations: [], notes: [] };
   }
+
   // No-library Pulse doesn't exist (Avatar / Tabs / Accordion / Chart
   // have no no-lib equivalents). Ship a smaller two-screen welcome
   // sample that demonstrates the primitive set instead.
   if (answers.library === "none") {
-    // The no-lib welcome sample isn't Pulse either — same name reset.
     return {
-      theme: { ...buildDefaultTheme(), name: "default" },
+      theme,
       screens: buildNoLibScreens(),
       boards: buildNoLibBoards(),
       snippets: buildNoLibSnippets(),
@@ -119,8 +114,9 @@ async function buildScaffold(answers: WizardAnswers): Promise<Scaffold> {
       notes: [],
     };
   }
+
   return {
-    theme: buildDefaultTheme(),
+    theme,
     screens: buildSampleScreens(),
     boards: buildSampleBoards(),
     snippets: buildSampleSnippets(),
@@ -185,14 +181,12 @@ function printSummary(
   scaffold: Scaffold,
   plan: InstallPlan,
   answers: WizardAnswers,
+  importedFrom: string | undefined,
 ): void {
   const boardLabels = scaffold.boards.map((b) => b.name).join(" + ");
-  const sourceLabel =
-    answers.source === "binary"
-      ? "bundled with velloo"
-      : answers.source === "in-repo"
-        ? `installed in your app at ${plan.summary.location}`
-        : `cached at ${plan.summary.location}`;
+  const themeLabel = importedFrom
+    ? `imported from ${relative(answers.appRoot, importedFrom) || importedFrom}`
+    : (presetById(answers.themePreset)?.label ?? "Indigo (Pulse default)");
 
   console.log("");
   console.log(pc.green(`✓ Done. Scaffolded ${folder}.`));
@@ -205,14 +199,20 @@ function printSummary(
       console.log(pc.dim("  Pulse — a sample team-analytics product, ready to remix."));
     }
   } else {
-    console.log(pc.dim("  Blank folder — no screens yet."));
+    console.log(pc.dim("  Blank board — no screens yet."));
   }
   console.log("");
   console.log(pc.bold("  Your setup"));
+  console.log(`    App root    ${answers.appRoot}`);
+  console.log(`    Design      ${folder}`);
   console.log(`    Library     ${plan.summary.name}`);
-  console.log(`    Components  ${sourceLabel}`);
-  if (answers.source === "in-repo" && answers.appPath) {
-    console.log(`    App path    ${answers.appPath}`);
+  console.log(`    Theme       ${themeLabel}`);
+  if (plan.pendingUpstream) {
+    console.log(
+      pc.dim(
+        `    (real shadcn lands in ${plan.pendingUpstream.relative} when your agent finishes setup — nothing was written to your app)`,
+      ),
+    );
   }
   console.log("");
   console.log(pc.bold("  Next steps"));
@@ -282,58 +282,55 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Target folder for the new design (created if missing)",
+      description: "Your app root — where Velloo installs (default: current directory)",
+    },
+    designFolder: {
+      type: "string",
+      description: "Design folder, relative to the app root (default: velloo)",
     },
     force: {
       type: "boolean",
       default: false,
-      description: "Allow scaffolding into a non-empty folder",
+      description: "Allow scaffolding into a non-empty design folder",
     },
     nonInteractive: {
       type: "boolean",
       default: false,
       description: "Skip the wizard and use defaults / flags",
     },
+    start: {
+      type: "string",
+      description: "scratch | scan (scan detects routes + theme from your app)",
+    },
     library: {
       type: "string",
       description:
-        "Component library: shadcn-upstream (recommended) | shadcn-react | none | mui (default shadcn-react)",
-    },
-    source: {
-      type: "string",
-      description: "Where components live: binary | in-repo | cache (default binary)",
-    },
-    appPath: {
-      type: "string",
-      description: "Path to your app's root (required when --source=in-repo)",
+        "Component library: shadcn-upstream | shadcn-react | none | mui (default shadcn-react)",
     },
     componentsDir: {
       type: "string",
-      description: "Subfolder inside the app for component sources (default src/components/ui)",
+      description: "Upstream components subfolder inside your app (default src/components/ui)",
     },
     initialContent: {
       type: "string",
-      description:
-        "Initial content: sample | blank | scan (one screen per detected route; default sample)",
+      description: "Initial content: sample | blank (default sample). Use --start=scan to scan.",
     },
-    themeColor: {
+    themePreset: {
       type: "string",
-      description: "Hex color for the theme primary",
-    },
-    themeVibe: {
-      type: "string",
-      description: "Vibe keyword (calm | playful | professional | energetic)",
+      description: "Theme preset: indigo | violet | blue | emerald | rose | orange | amber | zinc",
     },
   },
   async run({ args }) {
     const cliArgs = args as InitCliArgs;
+    const appRoot = resolve(cliArgs.folder ?? ".");
+    const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
     let answers: WizardAnswers;
 
-    if (shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY))) {
+    if (interactive) {
       printLogo();
-      const result = await runInteractive({
-        folder: resolve(cliArgs.folder ?? "velloo"),
-      });
+      console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
+      console.log("");
+      const result = await runInteractive({ appRoot });
       if (!result) {
         // The wizard already printed its cancellation notice.
         process.exit(1);
@@ -345,27 +342,35 @@ export default defineCommand({
       } catch (err) {
         fail("init", (err as Error).message);
       }
+      console.log(`velloo: app root ${answers.appRoot}`);
+    }
+
+    // Non-interactive scan still wants the host detection (the wizard fills it
+    // for the interactive path).
+    if (answers.initialContent === "scan" && !answers.detected) {
+      answers.detected = detectHost(answers.appRoot);
     }
 
     const folder = answers.folder;
     if (!cliArgs.force && !(await isEmptyOrMissing(folder))) {
       fail(
         "init",
-        `target folder is not empty: ${folder}\n  Pick an empty path, or pass --force to scaffold over it.`,
+        `design folder is not empty: ${folder}\n  Pick an empty path, or pass --force to scaffold over it.`,
       );
     }
 
     const projectId = randomUUID();
     let plan: InstallPlan;
     try {
-      plan = await executeInstall(answers, projectId);
+      plan = planInstall(answers);
     } catch (err) {
       fail("init", (err as Error).message);
     }
 
+    const { theme, importedFrom } = resolveTheme(answers);
     let scaffold: Scaffold;
     try {
-      scaffold = await buildScaffold(answers);
+      scaffold = await buildScaffold(answers, theme);
     } catch (err) {
       fail("init", (err as Error).message);
     }
@@ -374,7 +379,15 @@ export default defineCommand({
     // Echo for non-interactive callers that grep the output for
     // "scaffolded" — keeps the existing CLI test passing.
     console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
-    printSummary(folder, scaffold, plan, answers);
-    await printScreenshotReadiness(Boolean(process.stdin.isTTY) && !cliArgs.nonInteractive);
+    if (importedFrom) {
+      console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
+    }
+    if (answers.initialContent === "scan" && scaffold.screens.length === 0) {
+      console.log(
+        pc.dim("  No routes detected — started you with a blank board instead of a scan."),
+      );
+    }
+    printSummary(folder, scaffold, plan, answers, importedFrom);
+    await printScreenshotReadiness(interactive);
   },
 });
