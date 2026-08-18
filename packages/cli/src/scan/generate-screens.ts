@@ -6,19 +6,21 @@ import type { ScannedRoute } from "./types.ts";
  * carrying the route path + a "designed by you" prompt — meant as a
  * starting point for the agent to fill in, not as a finished design.
  *
- * Uses `Card` + `Heading` + `Text` + `Badge` — all four components
- * exist in both the shadcn provider and the no-library provider's
- * registry (Badge is the one with no no-lib equivalent; we substitute
- * a plain string-in-Text when needed at call time below).
+ * Uses only `Box` + `Heading` + `Text` + `Card` (+ `Badge`) — every ref here
+ * is in both the shadcn provider and the no-library provider's registry, so a
+ * scanned folder renders under either. Layout is plain flex on `Box` rather
+ * than `Container`/`Stack` (which exist only in the no-lib provider). `Badge`
+ * has no no-lib equivalent, so we substitute a Text node when `hasBadge` is
+ * false.
  */
 function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["tree"] {
   return {
-    $ref: "Container",
-    props: { size: "lg", className: "py-16" },
+    $ref: "Box",
+    props: { className: "mx-auto w-full max-w-4xl px-6 py-16" },
     children: [
       {
-        $ref: "Stack",
-        props: { gap: 6, align: "center", className: "text-center" },
+        $ref: "Box",
+        props: { className: "flex flex-col items-center gap-6 text-center" },
         children: [
           hasBadge
             ? {
@@ -47,8 +49,8 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
             props: { className: "mt-4 w-full max-w-2xl text-left" },
             children: [
               {
-                $ref: "Stack",
-                props: { gap: 2 },
+                $ref: "Box",
+                props: { className: "flex flex-col gap-2 p-6" },
                 children: [
                   {
                     $ref: "Text",

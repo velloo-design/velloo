@@ -27,11 +27,21 @@ function run(cmd: string[]): void {
 // 1. Build the self-contained bundle (canvas + cli + skills + tarball).
 run(["bun", join(repoRoot, "packages", "cli", "build.ts")]);
 
-// 2. Install the freshly packed tarball globally, replacing any prior version.
+// 2. Drop any prior global install first. `bun add -g <tarball-path>` appends a
+//    duplicate `velloo` dependency to the global package.json each run (keyed by
+//    path, not name), so reinstalls accumulate noisy duplicate-key warnings.
+//    Best-effort — a missing prior install is fine.
+Bun.spawnSync(["bun", "remove", "-g", "velloo"], {
+  cwd: repoRoot,
+  stdout: "ignore",
+  stderr: "ignore",
+});
+
+// 3. Install the freshly packed tarball globally.
 const tgz = join(repoRoot, `velloo-${version}.tgz`);
 run(["bun", "install", "-g", tgz]);
 
-// 3. Report where it landed + a PATH hint.
+// 4. Report where it landed + a PATH hint.
 const binDir = Bun.spawnSync(["bun", "pm", "bin", "-g"], { cwd: repoRoot })
   .stdout.toString()
   .trim();
