@@ -100,8 +100,8 @@ export interface EmitSnippetIR {
   id: string;
   /** PascalCase name the agent should use when materializing as a component. */
   componentName: string;
-  /** Typed parameters the snippet declares (name + type, defaults preserved). */
-  params: { name: string; type: string; default?: string }[];
+  /** Typed parameters the snippet declares (name + type, defaults preserved). `optional` → emit `name?` (omittable slot/prop). */
+  params: { name: string; type: string; default?: string; optional?: boolean }[];
   /** JSX body of the snippet, same shape as a screen's `jsx`. */
   jsx: string;
   /** shadcn primitives used in this snippet body needing install (see EmitCodeResult). */
@@ -302,6 +302,7 @@ export async function emitSnippet(
         name: p.name,
         type: p.type,
         ...(p.default !== undefined ? { default: String(p.default) } : {}),
+        ...(p.optional ? { optional: true } : {}),
       })),
       jsx: body,
       componentsToInstall: shadcnInstallTargets(meta.components),

@@ -61,6 +61,37 @@ describe("snippet resolution", () => {
     );
   });
 
+  test("an omitted optional node slot renders nothing (no error, no placeholder)", async () => {
+    const header: Snippet = {
+      id: "page-header",
+      name: "Page Header",
+      params: [
+        { name: "title", type: "string" },
+        { name: "action", type: "node", optional: true },
+      ],
+      tree: {
+        $ref: "Box",
+        children: [
+          { $ref: "Heading", props: { level: 1, children: { $param: "title" } } },
+          { $param: "action" },
+        ],
+      },
+    };
+    const snippets = new Map([[header.id, header]]);
+    const screen = screenWith({ $snippet: "page-header", args: { title: "Dashboard" } });
+    // Renders without throwing even though `action` was omitted.
+    const { bodyHtml } = await renderScreen(screen, theme, { ...opts, snippets });
+    expect(bodyHtml).toContain("Dashboard");
+
+    // Supplying it still fills the slot.
+    const withAction = screenWith({
+      $snippet: "page-header",
+      args: { title: "Dashboard", action: { $ref: "Button", props: { children: "New" } } },
+    });
+    const filled = await renderScreen(withAction, theme, { ...opts, snippets });
+    expect(filled.bodyHtml).toContain("New");
+  });
+
   test("unknown snippet throws UnknownSnippetError", async () => {
     const screen = screenWith({ $snippet: "no-such-snippet" });
     await expect(renderScreen(screen, theme, opts)).rejects.toBeInstanceOf(UnknownSnippetError);

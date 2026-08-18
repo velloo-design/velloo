@@ -28,6 +28,14 @@ export const SnippetParamSchema = z
     name: z.string().min(1),
     type: z.enum(["string", "number", "boolean", "node", "icon", "color", "enum"]),
     default: z.unknown().optional(),
+    /**
+     * When true, the param may be omitted at instantiation with no `default`:
+     * it resolves to nothing (an omitted `node` slot renders/emits nothing; an
+     * omitted prop is absent) instead of erroring. Use it for optional slots —
+     * a header `action`, a card `badge` — so callers don't pass a throwaway
+     * placeholder. Distinct from `default`, which supplies a concrete value.
+     */
+    optional: z.boolean().optional(),
     /** Allowed values for `type: "enum"`. */
     enum: z.array(z.string()).optional(),
     /** Numeric constraints for `type: "number"`. */

@@ -142,6 +142,37 @@ describe("emitCode", () => {
     expect([...snippetIdsReferenced(screen)]).toEqual(["feature-card"]);
   });
 
+  test("an optional node slot is marked optional in the IR and omitted instances drop it", async () => {
+    const header: Snippet = {
+      id: "page-header",
+      name: "page header",
+      params: [
+        { name: "title", type: "string" },
+        { name: "action", type: "node", optional: true },
+      ],
+      tree: {
+        $ref: "Box",
+        children: [
+          { $ref: "Heading", props: { level: 1, children: { $param: "title" } } },
+          { $param: "action" },
+        ],
+      },
+    };
+    const screen = screenOf({
+      $ref: "Box",
+      children: [{ $snippet: "page-header", args: { title: "Dashboard" } }],
+    });
+    const result = unwrap(await emitCode(screen, { snippets: new Map([[header.id, header]]) }));
+    const ir = result.snippetsUsed[0];
+    expect(ir?.params).toEqual([
+      { name: "title", type: "string" },
+      { name: "action", type: "node", optional: true },
+    ]);
+    // The body still emits the slot as {action} — a `name?: ReactNode` prop
+    // renders nothing when the instance omits it.
+    expect(ir?.jsx).toContain("{action}");
+  });
+
   test("warns when a dynamic icon-name param bakes to the fallback, but a node param stays a slot", async () => {
     const row: Snippet = {
       id: "issue-row",

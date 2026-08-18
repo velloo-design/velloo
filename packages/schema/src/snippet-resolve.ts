@@ -9,6 +9,16 @@ import type { Snippet } from "./snippet.ts";
  * CodegenError).
  */
 
+/**
+ * An optional param supplied no value and no default — resolves to "nothing".
+ * A node slot bearing it is dropped (renders/emits nothing); a prop bearing it
+ * is omitted. Internal sentinel: never appears in a persisted tree.
+ */
+export const OMITTED: unique symbol = Symbol("velloo.omitted-optional-param");
+
+/** Substitution result for an OMITTED value — pruned from arrays and prop objects. */
+const DROP: unique symbol = Symbol("velloo.drop");
+
 /** Resolve declared params against passed args, applying defaults. */
 export function resolveSnippetArgs(
   snippet: Snippet,
@@ -21,6 +31,8 @@ export function resolveSnippetArgs(
       args[param.name] = passed[param.name];
     } else if (param.default !== undefined) {
       args[param.name] = param.default;
+    } else if (param.optional) {
+      args[param.name] = OMITTED;
     } else {
       missing.push(param.name);
     }
@@ -29,7 +41,7 @@ export function resolveSnippetArgs(
 }
 
 function isTruthy(v: unknown): boolean {
-  if (v === undefined || v === null) return false;
+  if (v === undefined || v === null || v === OMITTED) return false;
   if (typeof v === "boolean") return v;
   if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
   if (typeof v === "string") return v !== "";
@@ -67,7 +79,10 @@ export function substituteSnippetParams(
   const invalid: InvalidParamPlacement[] = [];
   function walk(v: unknown, inNodePosition: boolean): unknown {
     if (v === null || typeof v !== "object") return v;
-    if (Array.isArray(v)) return v.map((item) => walk(item, inNodePosition));
+    if (Array.isArray(v)) {
+      // Prune DROP holes so an omitted optional `node` slot leaves no gap.
+      return v.map((item) => walk(item, inNodePosition)).filter((item) => item !== DROP);
+    }
     if (typeof (v as { $param?: unknown }).$param === "string") {
       const name = (v as { $param: string }).$param;
       if (!(name in args)) {
@@ -75,6 +90,8 @@ export function substituteSnippetParams(
         return undefined;
       }
       const resolved = args[name];
+      // An omitted optional param resolves to nothing — never a mis-wire.
+      if (resolved === OMITTED) return DROP;
       if (inNodePosition && (resolved === null || typeof resolved !== "object")) {
         invalid.push({ param: name, valueType: resolved === null ? "null" : typeof resolved });
         return undefined;
@@ -94,7 +111,9 @@ export function substituteSnippetParams(
     const isComponentNodeObj = typeof (v as { $ref?: unknown }).$ref === "string";
     const out: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(v)) {
-      out[k] = walk(val, isComponentNodeObj && k === "children");
+      const w = walk(val, isComponentNodeObj && k === "children");
+      // A prop resolving to an omitted optional param is left off entirely.
+      if (w !== DROP) out[k] = w;
     }
     return out;
   }

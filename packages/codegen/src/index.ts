@@ -16,3 +16,8 @@ export {
 export type { CodegenError } from "./errors.ts";
 export type { FormatError, FormatResult } from "./format.ts";
 export { type ParsedThemeCss, parseThemeCss } from "./import-theme/parse-css.ts";
+export {
+  type ContainerConfig,
+  containerClasses,
+  parseTailwindContainer,
+} from "./import-theme/parse-tailwind-config.ts";

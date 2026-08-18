@@ -2,13 +2,16 @@ import pc from "picocolors";
 
 /**
  * Compact figlet-style velloo wordmark printed at the top of the
- * interactive wizard. Uses only basic ASCII (figlet "slant") so every
- * monospace font renders it identically — earlier block/box-drawing
- * variants stuttered in fonts where `█` and `╗` had mismatched widths.
+ * interactive wizard. The letterforms use only basic ASCII (figlet
+ * "slant") so every monospace font renders them identically — earlier
+ * block/box-drawing variants stuttered in fonts where `█` and `╗` had
+ * mismatched widths. The two sparkle glyphs sit in trailing whitespace
+ * with nothing after them, so even a font that renders them double-width
+ * can't push the letters out of alignment.
  */
 const ASCII = String.raw`
-                ____
-    _   _____  / / /___  ____
+                ____             ✦
+    _   _____  / / /___  ____   ✧
    | | / / _ \/ / / __ \/ __ \
    | |/ /  __/ / / /_/ / /_/ /
    |___/\___/_/_/\____/\____/

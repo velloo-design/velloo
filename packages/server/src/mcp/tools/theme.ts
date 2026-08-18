@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { containerClasses, parseTailwindContainer } from "@velloo/codegen";
 import type { Result } from "@velloo/result";
 import { z } from "zod";
 import type { ThemeError } from "../../theme/errors.ts";
@@ -37,6 +38,62 @@ function themeErrorResult(error: ThemeError): McpResult {
 
 function toMcp<T>(result: Result<T, ThemeError>): McpResult {
   return result.ok ? jsonResult(result.value) : themeErrorResult(result.error);
+}
+
+const TW_CONFIG_NAMES = [
+  "tailwind.config.ts",
+  "tailwind.config.js",
+  "tailwind.config.mjs",
+  "tailwind.config.cjs",
+];
+
+/**
+ * Locate the host app's tailwind config: an explicit path, else walk up from
+ * the imported stylesheet's directory (globals.css usually sits a level or two
+ * below the config). Bounded; returns the source text or null.
+ */
+async function readTailwindConfig(
+  explicitPath: string | undefined,
+  cssResolvedPath: string | undefined,
+  folderRoot: string,
+): Promise<string | null> {
+  if (explicitPath) {
+    const p = isAbsolute(explicitPath) ? explicitPath : join(folderRoot, explicitPath);
+    return readFile(p, "utf8").catch(() => null);
+  }
+  if (!cssResolvedPath) return null;
+  let dir = dirname(cssResolvedPath);
+  for (let i = 0; i < 5; i++) {
+    for (const name of TW_CONFIG_NAMES) {
+      const hit = await readFile(join(dir, name), "utf8").catch(() => null);
+      if (hit !== null) return hit;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Container config is JS, not CSS, and Velloo has no container theme concept —
+ * so surface it as advisory guidance (the equivalent classes), never applied.
+ */
+async function detectContainer(
+  explicitPath: string | undefined,
+  cssResolvedPath: string | undefined,
+  folderRoot: string,
+): Promise<{ detected: unknown; suggestedClasses: string; note: string } | null> {
+  const src = await readTailwindConfig(explicitPath, cssResolvedPath, folderRoot);
+  if (src === null) return null;
+  const detected = parseTailwindContainer(src);
+  if (!detected) return null;
+  const suggestedClasses = containerClasses(detected);
+  return {
+    detected,
+    suggestedClasses,
+    note: "the app's Tailwind `container` config isn't a Velloo theme concept, so it wasn't applied — wrap page content in a `Box` with `suggestedClasses` (or use the `Container` component) to match it.",
+  };
 }
 
 export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
@@ -187,7 +244,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "import_theme",
     {
       description:
-        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. **Also captures numeric color scales + extra roles** (`--primary-600`, `--success-500`, `--danger`) into the theme's `palette`, so verbatim app classes like `bg-primary-600` / `text-success-500` / `border-primary-300` resolve literally on the canvas instead of silently falling back to the default palette — apply this BEFORE porting screens so copied classes render. Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` (absolute, or relative to the design folder) to the app's globals.css. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
+        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. **Also captures numeric color scales + extra roles** (`--primary-600`, `--success-500`, `--danger`) into the theme's `palette`, so verbatim app classes like `bg-primary-600` / `text-success-500` / `border-primary-300` resolve literally on the canvas instead of silently falling back to the default palette — apply this BEFORE porting screens so copied classes render. Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` (absolute, or relative to the design folder) to the app's globals.css. When given a `cssPath`, it also reads the nearby tailwind.config (or an explicit `tailwindConfigPath`) and reports the app's `container` settings as `container.suggestedClasses` — Velloo has no container theme concept, so wrap page content in a `Box` with those classes (or use `Container`) instead of reverse-engineering them. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
       inputSchema: {
         css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
         cssPath: z
@@ -196,10 +253,17 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
           .describe("Path to the stylesheet — absolute, or relative to the design folder"),
         theme: z.string().optional().describe('Named theme to merge into; default "default"'),
         apply: z.boolean().optional().describe("Persist the merge (default false = dry-run)"),
+        tailwindConfigPath: z
+          .string()
+          .optional()
+          .describe(
+            "Path to the app's tailwind.config (absolute, or relative to the design folder). Auto-detected near `cssPath` when omitted; used only to report the app's `container` settings as guidance.",
+          ),
       },
     },
     async (args) => {
       let css = args.css;
+      let cssResolvedPath: string | undefined;
       if (css === undefined) {
         if (args.cssPath === undefined) {
           return themeErrorResult({
@@ -207,13 +271,15 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
             message: "pass either `css` text or a `cssPath`",
           });
         }
-        const path = isAbsolute(args.cssPath) ? args.cssPath : join(ctx.folder.root, args.cssPath);
+        cssResolvedPath = isAbsolute(args.cssPath)
+          ? args.cssPath
+          : join(ctx.folder.root, args.cssPath);
         try {
-          css = await readFile(path, "utf8");
+          css = await readFile(cssResolvedPath, "utf8");
         } catch (e) {
           return themeErrorResult({
             kind: "BadRequest",
-            message: `could not read ${path}: ${e instanceof Error ? e.message : String(e)}`,
+            message: `could not read ${cssResolvedPath}: ${e instanceof Error ? e.message : String(e)}`,
           });
         }
       }
@@ -223,11 +289,17 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       });
       if (!r.ok) return themeErrorResult(r.error);
       const { changes, warnings, applied } = r.value;
+      const container = await detectContainer(
+        args.tailwindConfigPath,
+        cssResolvedPath,
+        ctx.folder.root,
+      );
       return jsonResult({
         applied,
         changeCount: changes.length,
         changes,
         warnings,
+        ...(container ? { container } : {}),
         ...(applied ? {} : { note: "dry-run — pass apply: true to persist these changes" }),
       });
     },

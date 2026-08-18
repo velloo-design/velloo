@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { substituteSnippetParams } from "../index.ts";
+import { resolveSnippetArgs, type Snippet, substituteSnippetParams } from "../index.ts";
+
+function snippetWith(params: Snippet["params"]): Snippet {
+  return { id: "s", name: "S", params, tree: { $ref: "Box" } };
+}
 
 describe("substituteSnippetParams — param placement", () => {
   test("a node param fills a children slot", () => {
@@ -50,5 +54,71 @@ describe("substituteSnippetParams — param placement", () => {
       { on: true, label: "text" },
     );
     expect(r.invalid).toEqual([{ param: "label", valueType: "string" }]);
+  });
+});
+
+describe("optional params (omitted → nothing)", () => {
+  test("an omitted optional param is not reported missing", () => {
+    const snippet = snippetWith([{ name: "badge", type: "node", optional: true }]);
+    const { args, missing } = resolveSnippetArgs(snippet, {});
+    expect(missing).toEqual([]);
+    expect("badge" in args).toBe(true);
+  });
+
+  test("a non-optional param with no default is still missing", () => {
+    const snippet = snippetWith([{ name: "badge", type: "node" }]);
+    expect(resolveSnippetArgs(snippet, {}).missing).toEqual(["badge"]);
+  });
+
+  test("an omitted optional node slot is pruned from a children array (no gap, not invalid)", () => {
+    const snippet = snippetWith([{ name: "badge", type: "node", optional: true }]);
+    const { args } = resolveSnippetArgs(snippet, {});
+    const r = substituteSnippetParams(
+      {
+        $ref: "Box",
+        children: [{ $ref: "Heading", props: { children: "Title" } }, { $param: "badge" }],
+      },
+      args,
+    );
+    expect(r.invalid).toEqual([]);
+    expect(r.missing).toEqual([]);
+    expect(r.value).toEqual({
+      $ref: "Box",
+      children: [{ $ref: "Heading", props: { children: "Title" } }],
+    });
+  });
+
+  test("an omitted optional prop is left off the props object", () => {
+    const snippet = snippetWith([{ name: "action", type: "node", optional: true }]);
+    const { args } = resolveSnippetArgs(snippet, {});
+    const r = substituteSnippetParams(
+      { $ref: "Box", props: { id: "header", action: { $param: "action" } } },
+      args,
+    );
+    expect(r.value).toEqual({ $ref: "Box", props: { id: "header" } });
+  });
+
+  test("a supplied optional param still fills its slot", () => {
+    const snippet = snippetWith([{ name: "badge", type: "node", optional: true }]);
+    const badge = { $ref: "Badge", props: { children: "New" } };
+    const { args } = resolveSnippetArgs(snippet, { badge });
+    const r = substituteSnippetParams({ $ref: "Box", children: [{ $param: "badge" }] }, args);
+    expect(r.value).toEqual({ $ref: "Box", children: [badge] });
+  });
+
+  test("an omitted optional param reads falsy under $if", () => {
+    const snippet = snippetWith([
+      { name: "featured", type: "boolean", optional: true },
+      { name: "badge", type: "node", optional: true },
+    ]);
+    const { args } = resolveSnippetArgs(snippet, {});
+    const r = substituteSnippetParams(
+      {
+        $ref: "Box",
+        children: [{ $if: "featured", then: { $param: "badge" }, else: { $ref: "Box" } }],
+      },
+      args,
+    );
+    expect(r.value).toEqual({ $ref: "Box", children: [{ $ref: "Box" }] });
   });
 });
