@@ -259,6 +259,7 @@ async function buildManifest(): Promise<void> {
 
     // Icon.name is a free-form string at the type level, but we want the
     // inspector to surface a typeahead picker over the live lucide set.
+    let designModeNotes: string | undefined;
     if (id === "Icon") {
       for (const p of props) {
         if (p.name === "name") {
@@ -267,10 +268,20 @@ async function buildManifest(): Promise<void> {
           if (!p.defaultValue) p.defaultValue = "Heart";
         }
       }
+      designModeNotes =
+        "`name` accepts any lucide-react icon, PascalCase (ArrowRight) or kebab-case (arrow-right); full list at lucide.dev (the enumValues here are sampled). " +
+        "`size` sets width/height in px, but a Tailwind sizing class in `className` (e.g. `size-4`) wins via CSS — pass one or the other, not both expecting `size` to apply.";
     }
 
     const example = COMPONENT_EXAMPLES[id];
-    components.push({ id, category, source, props, ...(example ? { example } : {}) });
+    components.push({
+      id,
+      category,
+      source,
+      props,
+      ...(designModeNotes ? { designModeNotes } : {}),
+      ...(example ? { example } : {}),
+    });
   }
 
   await mkdir(distDir, { recursive: true });

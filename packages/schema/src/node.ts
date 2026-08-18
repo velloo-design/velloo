@@ -106,7 +106,7 @@ const SnippetInstanceSchema: z.ZodType<SnippetInstance> = z.object({
     .record(
       z.string().regex(/^$|^\d+(\.\d+)*$|^@[a-zA-Z][a-zA-Z0-9_-]*$/, {
         message:
-          'override key must be a dotted index path like "0.2", an "@id" of a node inside the body, or "" for the body root',
+          'override key must be a dotted index path like "0.2", an "@id" reference with a literal leading @ (e.g. "@row-active" to target the body node whose $id is "row-active"), or "" for the body root',
       }),
       z.object({ props: z.record(z.string(), z.unknown()) }),
     )
@@ -162,9 +162,16 @@ export const NodeSchema: z.ZodType<Node> = z
   })
   .describe(
     'Node tree. Component: {"$ref":"Button","$id?":"cta","props?":{"className":"...","children":"text"},"children?":[Node]}. ' +
-      'Snippet instance: {"$snippet":"<id>","$id?":"...","args?":{...},"$extraClassName?":"...","$overrides?":{"<innerPath|@id>":{"props":{...}}}}. ' +
+      'Snippet instance: {"$snippet":"<id>","$id?":"...","args?":{...},"$extraClassName?":"...","$overrides?":{"@row-active":{"props":{"className":"bg-accent"}}}}. ' +
       'Param ref (snippet bodies only): {"$param":"<name>"}.',
-  ) as unknown as z.ZodType<Node>;
+  )
+  // `z.unknown()` emits a JSON Schema with no `type`, so strict MCP clients
+  // can't tell `tree`/`children` params are objects and serialize them as
+  // strings — the server then rejects a valid `{"$ref":"Box"}`. The runtime
+  // transform above still does the real validation; this only annotates the
+  // emitted schema so clients send objects. Keep it as `additionalProperties:
+  // true` (any object) rather than the full union — minimal and permissive.
+  .meta({ type: "object", additionalProperties: true }) as unknown as z.ZodType<Node>;
 
 export { ComponentNodeSchema, ParamRefSchema, SnippetInstanceSchema };
 

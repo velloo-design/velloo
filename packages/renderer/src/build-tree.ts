@@ -3,6 +3,7 @@ import {
   applySnippetExtraClassName,
   applySnippetOverrides,
   type ComponentNode,
+  type InvalidParamPlacement,
   isComponentNode,
   isParamRef,
   isSnippetInstance,
@@ -81,6 +82,16 @@ function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet): Node {
   const substituted = substituteSnippetParams(snippet.tree, args);
   if (substituted.missing.length > 0) {
     throw new SnippetParamError(snippet.id, substituted.missing[0] as string);
+  }
+  if (substituted.invalid.length > 0) {
+    const bad = substituted.invalid[0] as InvalidParamPlacement;
+    throw new SnippetParamError(
+      snippet.id,
+      bad.param,
+      `Snippet "${snippet.id}": param "${bad.param}" resolved to a ${bad.valueType} but sits in a \`children\` array, where only nodes render. ` +
+        `Pass a scalar param as a prop value, e.g. {"$ref":"Heading","props":{"children":{"$param":"${bad.param}"}}}. ` +
+        `Only \`type:"node"\` params belong directly in children.`,
+    );
   }
   let body = substituted.value as Node;
   if (instance.$overrides) {

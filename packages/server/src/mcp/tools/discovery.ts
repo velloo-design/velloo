@@ -31,6 +31,31 @@ function shortClass(cls: string, max = 40): string {
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
 }
 
+/**
+ * `full` mode returns whole descriptors, but a few props enumerate huge
+ * value sets — `Icon.name` is ~4k lucide names (~68 KB), ~700× the rest of
+ * the descriptor. Send a sample plus a remaining-count so the agent learns
+ * the prop is free-form without paying for the whole list (the descriptor's
+ * `example` shows a real value to copy).
+ */
+const MAX_ENUM_VALUES = 40;
+
+function trimLargeEnums<T extends { props: { enumValues?: (string | number)[] }[] }>(entry: T): T {
+  if (!entry.props.some((p) => p.enumValues && p.enumValues.length > MAX_ENUM_VALUES)) {
+    return entry;
+  }
+  const props = entry.props.map((p) =>
+    p.enumValues && p.enumValues.length > MAX_ENUM_VALUES
+      ? {
+          ...p,
+          enumValues: p.enumValues.slice(0, MAX_ENUM_VALUES),
+          enumValuesTruncated: p.enumValues.length - MAX_ENUM_VALUES,
+        }
+      : p,
+  );
+  return { ...entry, props };
+}
+
 interface OutlineNode {
   ref?: string;
   snippet?: string;
@@ -199,7 +224,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         : all;
       const out =
         (mode ?? "summary") === "full"
-          ? filtered
+          ? filtered.map(trimLargeEnums)
           : filtered.map((c) => {
               const summary = toSummary(c);
               // Carry the kind + importPath through the summary view so the

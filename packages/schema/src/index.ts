@@ -46,6 +46,7 @@ export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } fr
 export {
   applySnippetExtraClassName,
   applySnippetOverrides,
+  type InvalidParamPlacement,
   resolveSnippetArgs,
   substituteSnippetParams,
 } from "./snippet-resolve.ts";

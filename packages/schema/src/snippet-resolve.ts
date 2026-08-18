@@ -36,6 +36,13 @@ function isTruthy(v: unknown): boolean {
   return true;
 }
 
+/** A `$param` that substituted to a scalar where a child node was expected. */
+export interface InvalidParamPlacement {
+  param: string;
+  /** typeof the resolved value (or "null") — for a precise error message. */
+  valueType: string;
+}
+
 /**
  * Recursively rewrite snippet body values:
  * - `{ $param: "name" }` → `args.name`
@@ -43,22 +50,36 @@ function isTruthy(v: unknown): boolean {
  * - `{ $if: "name", eq, then, else }` → branch by strict equality
  * Unknown param names are collected in `missing` (the offending
  * substitution resolves to undefined) rather than thrown.
+ *
+ * `invalid` collects scalar params dropped into a *node* position — a
+ * component node's own `children` array, where only subtrees render. This
+ * is the classic mis-wire (a `string` param used as a child instead of as
+ * a prop value); flagging it lets the renderer name the param and point at
+ * the fix instead of failing opaquely deep in React. A `children` *prop*
+ * value (`props.children`) is plain content, not a node position, so a
+ * scalar param there is correct and never flagged.
  */
 export function substituteSnippetParams(
   value: unknown,
   args: Record<string, unknown>,
-): { value: unknown; missing: string[] } {
+): { value: unknown; missing: string[]; invalid: InvalidParamPlacement[] } {
   const missing: string[] = [];
-  function walk(v: unknown): unknown {
+  const invalid: InvalidParamPlacement[] = [];
+  function walk(v: unknown, inNodePosition: boolean): unknown {
     if (v === null || typeof v !== "object") return v;
-    if (Array.isArray(v)) return v.map(walk);
+    if (Array.isArray(v)) return v.map((item) => walk(item, inNodePosition));
     if (typeof (v as { $param?: unknown }).$param === "string") {
       const name = (v as { $param: string }).$param;
       if (!(name in args)) {
         missing.push(name);
         return undefined;
       }
-      return args[name];
+      const resolved = args[name];
+      if (inNodePosition && (resolved === null || typeof resolved !== "object")) {
+        invalid.push({ param: name, valueType: resolved === null ? "null" : typeof resolved });
+        return undefined;
+      }
+      return resolved;
     }
     if (typeof (v as { $if?: unknown }).$if === "string") {
       const cond = v as { $if: string; eq?: unknown; then?: unknown; else?: unknown };
@@ -67,13 +88,17 @@ export function substituteSnippetParams(
         return undefined;
       }
       const matched = "eq" in cond ? args[cond.$if] === cond.eq : isTruthy(args[cond.$if]);
-      return walk(matched ? cond.then : cond.else);
+      return walk(matched ? cond.then : cond.else, inNodePosition);
     }
+    // Only a component node's own `children` array carries node positions.
+    const isComponentNodeObj = typeof (v as { $ref?: unknown }).$ref === "string";
     const out: Record<string, unknown> = {};
-    for (const [k, val] of Object.entries(v)) out[k] = walk(val);
+    for (const [k, val] of Object.entries(v)) {
+      out[k] = walk(val, isComponentNodeObj && k === "children");
+    }
     return out;
   }
-  return { value: walk(value), missing };
+  return { value: walk(value, false), missing, invalid };
 }
 
 /** Depth-first search for a `$id`-bearing component node inside a body. */

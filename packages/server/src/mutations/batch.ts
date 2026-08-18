@@ -9,7 +9,7 @@ import { addNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
 import { addFrame, addGroup, updateFrame } from "./api/frames.ts";
 import { addScreen } from "./api/screens.ts";
-import { addSnippet, instantiateSnippet } from "./api/snippets.ts";
+import { addSnippet, instantiateSnippet, removeSnippet, updateSnippet } from "./api/snippets.ts";
 import {
   addNode,
   moveNode,
@@ -95,6 +95,8 @@ export const BATCH_TOOLS: Record<string, BatchFn> = {
   move_node: moveNode as BatchFn,
   set_node_id: setNodeId as BatchFn,
   add_snippet: addSnippet as BatchFn,
+  update_snippet: updateSnippet as BatchFn,
+  remove_snippet: removeSnippet as BatchFn,
   instantiate_snippet: instantiateSnippet as BatchFn,
   update_frame: updateFrame as BatchFn,
   add_note: addNote as BatchFn,
@@ -194,6 +196,9 @@ function touchedResources(call: BatchCall): Array<{ kind: ResourceKind; id: stri
         return [{ kind: "snippet", id: snippetIdFromTreeId(screenId) }];
       return [{ kind: "screen", id: screenId }];
     }
+    case "update_snippet":
+    case "remove_snippet":
+      return [{ kind: "snippet", id: a.snippetId as string }];
     case "add_frame":
     case "add_group":
     case "update_frame":

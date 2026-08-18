@@ -136,4 +136,57 @@ describe("runBatch", () => {
     expect(result.completed).toBe(1);
     expect(folder.screens.has("kept")).toBe(true);
   });
+
+  test("snippet edits run inside a batch", async () => {
+    await mkdir(join(tmp, "snippets"), { recursive: true });
+    const result = await runBatch(ctx, [
+      {
+        tool: "add_snippet",
+        args: {
+          id: "row",
+          name: "Row",
+          params: [],
+          tree: { $ref: "Box", props: { className: "p-1" } },
+        },
+      },
+      {
+        tool: "update_snippet",
+        args: { snippetId: "row", patch: { tree: { $ref: "Box", props: { className: "p-2" } } } },
+      },
+    ]);
+    expect(result.completed).toBe(2);
+    expect(result.rolledBack).toBe(false);
+    const tree = folder.snippets.get("row")?.tree as unknown as { props: { className: string } };
+    expect(tree.props.className).toBe("p-2");
+  });
+
+  test("rollback restores a snippet edited earlier in the batch", async () => {
+    await mkdir(join(tmp, "snippets"), { recursive: true });
+    await runBatch(ctx, [
+      {
+        tool: "add_snippet",
+        args: {
+          id: "card",
+          name: "Card",
+          params: [],
+          tree: { $ref: "Box", props: { className: "a" } },
+        },
+      },
+    ]);
+    const before = JSON.stringify(folder.snippets.get("card"));
+
+    const result = await runBatch(ctx, [
+      {
+        tool: "update_snippet",
+        args: { snippetId: "card", patch: { tree: { $ref: "Box", props: { className: "b" } } } },
+      },
+      // Fails: unknown screen — should roll the snippet edit back.
+      { tool: "add_node", args: { screenId: "ghost", parentPath: [], componentRef: "Badge" } },
+    ]);
+
+    expect(result.rolledBack).toBe(true);
+    expect(JSON.stringify(folder.snippets.get("card"))).toBe(before);
+    const onDisk = await Bun.file(join(tmp, "snippets", "card.json")).text();
+    expect(JSON.stringify(JSON.parse(onDisk))).toBe(before);
+  });
 });

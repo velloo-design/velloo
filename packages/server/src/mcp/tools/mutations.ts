@@ -436,7 +436,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_snippet",
     {
       description:
-        'Create a reusable subtree. `params` declares typed inputs; placeholders inside the body are `{ "$param": "name" }` nodes that get substituted at render time.',
+        'Create a reusable subtree. `params` declares typed inputs; placeholders inside the body are `{ "$param": "name" }` refs substituted at render time. Placement depends on the param type: a `node` param fills a child slot (put `{"$param":"slot"}` directly in a `children` array); a scalar param (string/number/boolean/icon/color/enum) fills a prop value (put `{"$param":"title"}` as a prop, e.g. `{"$ref":"Heading","props":{"children":{"$param":"title"}}}`). A scalar `$param` placed directly in a `children` array is an error — it renders as nothing.',
       inputSchema: {
         name: z.string(),
         id: z.string().optional(),

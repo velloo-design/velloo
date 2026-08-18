@@ -48,10 +48,16 @@ them; this skill is the workflow on top.
 
 ### Snippet params — pick the right type
 
-- `string` / `number` / `boolean` / `enum` → emit as `{param}` holes; the caller
-  fills them.
-- `node` → a slot the caller fills with a subtree. **Use this for anything that
-  varies per instance, including an icon that changes by data** (status, priority).
+In the snippet **body** you write `{"$param":"name"}` refs (not literal `{name}` —
+that renders as text). *Where* the ref goes depends on the type:
+
+- `string` / `number` / `boolean` / `enum` → a **scalar**. Put the ref in a **prop
+  value**, e.g. `{"$ref":"Heading","props":{"children":{"$param":"title"}}}`. A scalar
+  ref dropped straight into a `children` array errors (it resolves to nothing).
+  `emit_code` later turns these into `{param}` holes in the generated JSX.
+- `node` → a slot the caller fills with a subtree. Put the ref **in a `children`
+  array**. **Use this for anything that varies per instance, including an icon that
+  changes by data** (status, priority).
 - `icon` → ONE icon chosen at design time. It bakes into the emitted JSX as a
   literal `<Sparkles/>`. Do **not** use an `icon` param for a per-instance icon:
   a lucide name must be a literal JSX tag, so every instance would collapse to the
