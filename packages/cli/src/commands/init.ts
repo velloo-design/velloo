@@ -148,10 +148,18 @@ async function writeScaffold(
   answers: WizardAnswers,
   projectId: string,
 ): Promise<void> {
+  // Point the live-island bundler at the host app. `scanRoot` is the React
+  // app root (the app itself, even when nested under a monorepo `appRoot`);
+  // store it relative to the design folder, which is how the bundler resolves
+  // it (`resolve(folderRoot, hostApp.root)`). Aliases are left to the
+  // bundler's `{ "@/*": "*" }` default — reading the host tsconfig per the
+  // codebase stance is fragile; apps with a non-root `@` alias edit it once.
+  const hostAppRoot = relative(folder, answers.scanRoot);
   const config = buildDefaultConfig({
     library: plan.library,
     projectId,
     defaultScreen: defaultScreenForScaffold(scaffold),
+    ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
   });
   ConfigSchema.parse(config);
   ThemeSchema.parse(scaffold.theme);

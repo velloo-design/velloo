@@ -1,4 +1,4 @@
-import type { Config, Library } from "@velloo/schema";
+import type { Config, HostApp, Library } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { TOOL_VERSION } from "../version.ts";
 
@@ -15,6 +15,12 @@ interface DefaultConfigOpts {
    * leave it optional so existing folders don't need rewriting.
    */
   projectId?: string;
+  /**
+   * Host app location for the live-island bundler — set at init so
+   * `render:"live"` extensions resolve against the user's app (their real
+   * recharts &c.) without a manual config edit. See `HostApp`.
+   */
+  hostApp?: HostApp;
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
@@ -39,5 +45,6 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ...(opts.defaultScreen ? { defaultScreen: opts.defaultScreen } : {}),
     ...(opts.defaultBoard ? { defaultBoard: opts.defaultBoard } : {}),
     ...(opts.projectId ? { projectId: opts.projectId } : {}),
+    ...(opts.hostApp ? { hostApp: opts.hostApp } : {}),
   };
 }

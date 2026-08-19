@@ -4,6 +4,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { containerClasses, parseTailwindContainer } from "@velloo/codegen";
 import type { Result } from "@velloo/result";
 import { z } from "zod";
+import type { DesignFolder } from "../../design-folder.ts";
+import { chartLibsInDeps } from "../../theme/chart-libs.ts";
 import type { ThemeError } from "../../theme/errors.ts";
 import {
   addTheme,
@@ -71,6 +73,63 @@ async function readTailwindConfig(
     dir = parent;
   }
   return null;
+}
+
+/**
+ * Find + read the host app's package.json: prefer the configured
+ * `hostApp.root`, else walk up from the imported stylesheet (globals.css sits
+ * inside the app). Bounded; returns the parsed JSON or null.
+ */
+async function readHostPackageJson(
+  folder: DesignFolder,
+  cssResolvedPath: string | undefined,
+): Promise<Record<string, unknown> | null> {
+  const candidates: string[] = [];
+  const hostRoot = folder.config.hostApp?.root;
+  if (hostRoot) {
+    candidates.push(
+      isAbsolute(hostRoot)
+        ? join(hostRoot, "package.json")
+        : join(folder.root, hostRoot, "package.json"),
+    );
+  }
+  if (cssResolvedPath) {
+    let dir = dirname(cssResolvedPath);
+    for (let i = 0; i < 6; i++) {
+      candidates.push(join(dir, "package.json"));
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  for (const p of candidates) {
+    const txt = await readFile(p, "utf8").catch(() => null);
+    if (txt === null) continue;
+    try {
+      return JSON.parse(txt) as Record<string, unknown>;
+    } catch {
+      // Malformed package.json — skip and try the next candidate.
+    }
+  }
+  return null;
+}
+
+/**
+ * Client chart libraries the host app depends on — the signal that the agent
+ * should register the app's own chart components as `render:"live"` extensions
+ * (the built-in echarts Chart won't pixel-match recharts/visx/etc.).
+ */
+async function detectChartLibs(
+  folder: DesignFolder,
+  cssResolvedPath: string | undefined,
+): Promise<string[]> {
+  const pkg = await readHostPackageJson(folder, cssResolvedPath);
+  if (!pkg) return [];
+  const deps = {
+    ...((pkg.dependencies as Record<string, unknown> | undefined) ?? {}),
+    ...((pkg.devDependencies as Record<string, unknown> | undefined) ?? {}),
+  };
+  return chartLibsInDeps(deps);
 }
 
 /**
@@ -279,12 +338,20 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         cssResolvedPath,
         ctx.folder.root,
       );
+      const detectedChartLibs = await detectChartLibs(ctx.folder, cssResolvedPath);
       return jsonResult({
         applied,
         changeCount: changes.length,
         changes,
         warnings,
         ...(container ? { container } : {}),
+        ...(detectedChartLibs.length > 0
+          ? {
+              detectedChartLibs,
+              chartHint:
+                'this app uses a client chart library — register its chart components as render:"live" extensions (add_extension) so the canvas preview AND emitted code use the app\'s real charts; the built-in Chart previews via echarts and will not pixel-match.',
+            }
+          : {}),
         ...(applied ? {} : { note: "dry-run — pass apply: true to persist these changes" }),
       });
     },

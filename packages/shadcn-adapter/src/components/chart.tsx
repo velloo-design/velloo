@@ -5,11 +5,12 @@
 // pie/scatter, multi-series, axis labels + tick formatting — from one
 // normalized schema. Colors are theme tokens, so previews theme-flip.
 //
-// `emit_code` targets the app's actual chart lib (recharts, the app's own
-// Chart, …) via a codegen adapter — preview engine and emit target are
-// decoupled. This built-in `Chart` always previews via echarts; to preview
-// the app's *own* chart component (its exact recharts) pixel-faithfully,
-// register it as a `render:"live"` extension (live islands).
+// This built-in `Chart` always previews via echarts, and `emit_code` emits it
+// as a `Chart` component (the preview engine — NOT the app's chart lib). To
+// get the app's *own* chart (its exact recharts) — pixel-faithful in the
+// canvas AND emitted as a real import — register that component as a
+// `render:"live"` extension instead (live islands):
+// extensions emit a real `import` from their declared `importPath`.
 import type * as React from "react";
 import { cn } from "../lib/utils.ts";
 import { renderChartSvg } from "./chart-option.ts";

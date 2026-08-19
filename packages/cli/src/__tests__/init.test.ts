@@ -115,6 +115,17 @@ describe("velloo init", () => {
     expect(readme).toContain("shadcn");
   }, 30_000);
 
+  test("persists hostApp.root pointing from the design folder to the app root", async () => {
+    const { exitCode } = await runInit(tmp, ["--initial-content=blank"]);
+    expect(exitCode).toBe(0);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(designDir(tmp), ".design/config.json"), "utf8")),
+    );
+    // Design folder is <appRoot>/velloo, so the host app root is one level up;
+    // the live-island bundler resolves this against the design folder root.
+    expect(config.hostApp?.root).toBe("..");
+  }, 30_000);
+
   test("blank initial content produces an empty board and zero screens", async () => {
     const { exitCode } = await runInit(tmp, ["--initial-content=blank"]);
     expect(exitCode).toBe(0);
