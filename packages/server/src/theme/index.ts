@@ -155,7 +155,7 @@ export async function derivePaletteFromColor(
 export async function importThemeCss(
   ctx: ThemeContext,
   css: string,
-  opts: { themeName?: string; apply?: boolean } = {},
+  opts: { themeName?: string; apply?: boolean; tailwindConfig?: string } = {},
 ): Promise<Result<ImportThemeCssResult, ThemeError>> {
   return withThemeLock(async () => {
     const r = await importThemeCssImpl(ctx.folder, css, opts);

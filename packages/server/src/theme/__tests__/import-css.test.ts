@@ -53,6 +53,27 @@ const HOST_APP_CSS = `
 }
 `;
 
+const HOST_TW_CONFIG = `
+import type { Config } from "tailwindcss";
+export default {
+  theme: {
+    container: { center: true, padding: "1.5rem", screens: { "2xl": "1320px" } },
+    extend: {
+      colors: {
+        paprika: "#E2571E",
+        teal: "#0FA3A3",
+        brand: { 500: "#123456" },
+      },
+      boxShadow: {
+        card: "0 2px 8px rgba(0,0,0,0.06)",
+        lift: "0 12px 32px rgba(0,0,0,0.12)",
+      },
+      fontFamily: { display: ["Fraunces", "serif"] },
+    },
+  },
+} satisfies Config;
+`;
+
 let tmp: string;
 let folder: DesignFolder;
 let ctx: ThemeContext;
@@ -129,6 +150,50 @@ describe("importThemeCss", () => {
       DEFAULT: "oklch(0.205 0 0)",
       foreground: "oklch(0.985 0 0)",
     });
+  });
+
+  test("ingests tailwind.config theme.extend into palette / shadows / font roles", async () => {
+    const r = unwrap(
+      await importThemeCss(ctx, HOST_APP_CSS, { apply: true, tailwindConfig: HOST_TW_CONFIG }),
+    );
+    const onDisk = await diskTheme();
+    expect(onDisk.palette?.paprika).toBe("#E2571E");
+    expect(onDisk.palette?.teal).toBe("#0FA3A3");
+    expect(onDisk.palette?.["brand-500"]).toBe("#123456");
+    expect(onDisk.shadows?.card).toBe("0 2px 8px rgba(0,0,0,0.06)");
+    expect(onDisk.shadows?.lift).toBe("0 12px 32px rgba(0,0,0,0.12)");
+    expect(onDisk.typography.fontFamily?.display).toBe("Fraunces, serif");
+    // Container is applied as a real theme concept (not just reported).
+    expect(onDisk.container).toEqual({ center: true, padding: "1.5rem", maxWidth: "1320px" });
+    const tokens = r.changes.map((c) => c.token);
+    expect(tokens).toContain("palette.paprika");
+    expect(tokens).toContain("shadows.card");
+    expect(tokens).toContain("typography.fontFamily.display");
+    expect(tokens).toContain("container.padding");
+  });
+
+  test("ingests keyframes + animation shorthands from tailwind.config", async () => {
+    const cfg = `export default { theme: { extend: {
+      keyframes: { fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } } },
+      animation: { "fade-in": "fadeIn 0.3s ease-out" },
+    } } };`;
+    const r = unwrap(await importThemeCss(ctx, HOST_APP_CSS, { apply: true, tailwindConfig: cfg }));
+    const onDisk = await diskTheme();
+    expect(onDisk.keyframes?.fadeIn).toEqual({ "0%": { opacity: "0" }, "100%": { opacity: "1" } });
+    expect(onDisk.animation?.["fade-in"]).toBe("fadeIn 0.3s ease-out");
+    const tokens = r.changes.map((c) => c.token);
+    expect(tokens).toContain("keyframes.fadeIn");
+    expect(tokens).toContain("animation.fade-in");
+  });
+
+  test("a CSS-derived palette value wins over the same name in tailwind.config", async () => {
+    const css = `${HOST_APP_CSS}\n:root { --teal: #00e5e5; }`;
+    unwrap(await importThemeCss(ctx, css, { apply: true, tailwindConfig: HOST_TW_CONFIG }));
+    const onDisk = await diskTheme();
+    // The stylesheet's resolved --teal wins; the config literal does not clobber it.
+    expect(onDisk.palette?.teal).toBe("#00e5e5");
+    // Names only in the config still come through.
+    expect(onDisk.palette?.paprika).toBe("#E2571E");
   });
 
   test("unchanged tokens don't report as changes", async () => {

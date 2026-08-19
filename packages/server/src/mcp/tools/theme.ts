@@ -133,15 +133,13 @@ async function detectChartLibs(
 }
 
 /**
- * Container config is JS, not CSS, and Velloo has no container theme concept —
- * so surface it as advisory guidance (the equivalent classes), never applied.
+ * Report the detected container alongside the equivalent utility classes.
+ * The config is also applied to the theme (importThemeCss) — this is the
+ * agent-facing echo of what landed, plus a wrap-it-yourself fallback.
  */
-async function detectContainer(
-  explicitPath: string | undefined,
-  cssResolvedPath: string | undefined,
-  folderRoot: string,
-): Promise<{ detected: unknown; suggestedClasses: string; note: string } | null> {
-  const src = await readTailwindConfig(explicitPath, cssResolvedPath, folderRoot);
+function detectContainer(
+  src: string | null,
+): { detected: unknown; suggestedClasses: string; note: string } | null {
   if (src === null) return null;
   const detected = parseTailwindContainer(src);
   if (!detected) return null;
@@ -149,7 +147,7 @@ async function detectContainer(
   return {
     detected,
     suggestedClasses,
-    note: "the app's Tailwind `container` config isn't a Velloo theme concept, so it wasn't applied — wrap page content in a `Box` with `suggestedClasses` (or use the `Container` component) to match it.",
+    note: 'applied to the theme — `class="container"` now centers/pads/caps to match the app. `suggestedClasses` are the equivalent utilities if you\'d rather wrap content in a `Box` explicitly.',
   };
 }
 
@@ -288,7 +286,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "import_theme",
     {
       description:
-        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. **Also captures every non-semantic color var** — numeric scales (`--primary-600`), extra roles (`--success-500`, `--danger`), AND bare brand names (`--paprika`, `--ink`, `--teal`) — into the theme's `palette`, so verbatim app classes like `bg-primary-600` / `text-success-500` / `bg-ink` resolve literally on the canvas instead of silently falling back to the default palette — apply this BEFORE porting screens so copied classes render. (`palette.*` entries are raw passthroughs that don't theme-flip, unlike the semantic `colors.*` slots; tweak them by hand with `set_token palette.<name>`.) Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` (absolute, or relative to the design folder) to the app's globals.css. When given a `cssPath`, it also reads the nearby tailwind.config (or an explicit `tailwindConfigPath`) and reports the app's `container` settings as `container.suggestedClasses` — Velloo has no container theme concept, so wrap page content in a `Box` with those classes (or use `Container`) instead of reverse-engineering them. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
+        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. **Also captures every non-semantic color var** — numeric scales (`--primary-600`), extra roles (`--success-500`, `--danger`), AND bare brand names (`--paprika`, `--ink`, `--teal`) — into the theme's `palette`, so verbatim app classes like `bg-primary-600` / `text-success-500` / `bg-ink` resolve literally on the canvas instead of silently falling back to the default palette — apply this BEFORE porting screens so copied classes render. (`palette.*` entries are raw passthroughs that don't theme-flip, unlike the semantic `colors.*` slots; tweak them by hand with `set_token palette.<name>`.) Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` (absolute, or relative to the design folder) to the app's globals.css. When given a `cssPath`, it also reads the nearby tailwind.config (or an explicit `tailwindConfigPath`) and ingests its `theme.extend` — **brand `colors` → `palette` (so `bg-paprika` resolves), `boxShadow` → `shadows` (`shadow-card`), `fontFamily` → font roles (`font-display`), and `keyframes` + `animation` → `--animate-*` (so `animate-fade-in` resolves)** — the tokens an app keeps in JS config rather than the stylesheet. CSS-derived values win over the config literal for the same name. It also applies the app's `container` config (center/padding/max-width) so `class=\"container\"` matches the app, and reports the equivalent `container.suggestedClasses` if you'd rather wrap content explicitly. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
       inputSchema: {
         css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
         cssPath: z
@@ -301,7 +299,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
           .string()
           .optional()
           .describe(
-            "Path to the app's tailwind.config (absolute, or relative to the design folder). Auto-detected near `cssPath` when omitted; used only to report the app's `container` settings as guidance.",
+            "Path to the app's tailwind.config (absolute, or relative to the design folder). Auto-detected near `cssPath` when omitted; its `theme.extend` (colors, boxShadow, fontFamily) is ingested and its `container` reported as guidance.",
           ),
       },
     },
@@ -327,17 +325,21 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
           });
         }
       }
-      const r = await importThemeCss(ctx, css, {
-        ...(args.theme !== undefined ? { themeName: args.theme } : {}),
-        ...(args.apply !== undefined ? { apply: args.apply } : {}),
-      });
-      if (!r.ok) return themeErrorResult(r.error);
-      const { changes, warnings, applied } = r.value;
-      const container = await detectContainer(
+      // Read the host tailwind.config once: its theme.extend feeds the merge
+      // (brand colors / shadows / fonts) and its container feeds the guidance.
+      const tailwindConfig = await readTailwindConfig(
         args.tailwindConfigPath,
         cssResolvedPath,
         ctx.folder.root,
       );
+      const r = await importThemeCss(ctx, css, {
+        ...(args.theme !== undefined ? { themeName: args.theme } : {}),
+        ...(args.apply !== undefined ? { apply: args.apply } : {}),
+        ...(tailwindConfig !== null ? { tailwindConfig } : {}),
+      });
+      if (!r.ok) return themeErrorResult(r.error);
+      const { changes, warnings, applied } = r.value;
+      const container = detectContainer(tailwindConfig);
       const detectedChartLibs = await detectChartLibs(ctx.folder, cssResolvedPath);
       return jsonResult({
         applied,

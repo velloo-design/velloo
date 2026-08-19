@@ -60,6 +60,54 @@ describe("emitTheme", () => {
     expect(tsOut).toContain("satisfies Config");
   }, 30_000);
 
+  test("emits --shadow-* vars from theme.shadows", async () => {
+    const theme: Theme = {
+      ...buildDefaultTheme(),
+      shadows: { card: "0 2px 8px rgba(0,0,0,0.06)", lift: "0 12px 32px rgba(0,0,0,0.12)" },
+    };
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-shadow-${Date.now()}`),
+      apply: false,
+    });
+    const css = result.files[0]?.contents ?? "";
+    // emitTheme post-formats the CSS (it normalizes rgba() spacing), so match
+    // the formatting-stable parts rather than the raw token text.
+    expect(css).toMatch(/--shadow-card:\s*0 2px 8px/);
+    expect(css).toMatch(/--shadow-lift:\s*0 12px 32px/);
+  });
+
+  test("emits @keyframes + --animate-* from theme.keyframes/animation", async () => {
+    const theme: Theme = {
+      ...buildDefaultTheme(),
+      keyframes: { fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } } },
+      animation: { "fade-in": "fadeIn 0.3s ease-out" },
+    };
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-kf-${Date.now()}`),
+      apply: false,
+    });
+    const css = result.files[0]?.contents ?? "";
+    expect(css).toMatch(/--animate-fade-in:\s*fadeIn 0\.3s ease-out/);
+    expect(css).toContain("@keyframes fadeIn");
+    expect(css).toMatch(/opacity:\s*0/);
+  });
+
+  test("emits @utility container from theme.container", async () => {
+    const theme: Theme = {
+      ...buildDefaultTheme(),
+      container: { center: true, padding: "1.5rem", maxWidth: "1320px" },
+    };
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-container-${Date.now()}`),
+      apply: false,
+    });
+    const css = result.files[0]?.contents ?? "";
+    expect(css).toContain("@utility container");
+    expect(css).toMatch(/margin-inline:\s*auto/);
+    expect(css).toMatch(/padding-inline:\s*1\.5rem/);
+    expect(css).toMatch(/max-width:\s*1320px/);
+  });
+
   test("cssOnly skips tailwind.config.ts", async () => {
     const outDir = join(tmpdir(), `velloo-theme-css-${Date.now()}`);
     const result = await emitTheme(buildDefaultTheme(), {

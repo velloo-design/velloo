@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { containerClasses, parseTailwindContainer } from "../import-theme/parse-tailwind-config.ts";
+import {
+  containerClasses,
+  parseTailwindContainer,
+  parseThemeExtend,
+} from "../import-theme/parse-tailwind-config.ts";
 
 describe("parseTailwindContainer", () => {
   test("extracts the classic shadcn container (center + padding + screens cap)", () => {
@@ -47,5 +51,98 @@ export default {
       parseTailwindContainer(`theme: { extend: {} } // container: { center: true }`),
     ).toBeNull();
     expect(parseTailwindContainer(`/* container: { center: true } */ theme: {}`)).toBeNull();
+  });
+});
+
+describe("parseThemeExtend", () => {
+  test("extracts colors (flat + one-level scale), boxShadow, and fontFamily", () => {
+    const cfg = `
+import { fontFamily } from "tailwindcss/defaultTheme";
+export default {
+  theme: {
+    container: { center: true },
+    extend: {
+      colors: {
+        paprika: "#E2571E",
+        teal: "#0FA3A3",
+        brand: { 500: "#123456", 600: "#0d2840" },
+      },
+      boxShadow: {
+        card: "0 2px 8px rgba(0,0,0,0.06)",
+        lift: "0 12px 32px rgba(0,0,0,0.12)",
+      },
+      fontFamily: {
+        display: ["Fraunces", "serif"],
+        body: "Hanken Grotesk, sans-serif",
+      },
+    },
+  },
+};`;
+    expect(parseThemeExtend(cfg)).toEqual({
+      colors: {
+        paprika: "#E2571E",
+        teal: "#0FA3A3",
+        "brand-500": "#123456",
+        "brand-600": "#0d2840",
+      },
+      boxShadow: {
+        card: "0 2px 8px rgba(0,0,0,0.06)",
+        lift: "0 12px 32px rgba(0,0,0,0.12)",
+      },
+      fontFamily: { display: "Fraunces, serif", body: "Hanken Grotesk, sans-serif" },
+    });
+  });
+
+  test("skips non-literal values (require/function refs) without aborting the parse", () => {
+    const cfg = `theme: { extend: {
+      colors: {
+        ok: "#fff",
+        viaRequire: require("./palette").accent,
+        fn: ({ opacityValue }) => \`rgba(0,0,0,\${opacityValue})\`,
+      },
+    } }`;
+    expect(parseThemeExtend(cfg)).toEqual({ colors: { ok: "#fff" } });
+  });
+
+  test("extracts keyframes (nested, case-preserving) and animation shorthands", () => {
+    const cfg = `theme: { extend: {
+      keyframes: {
+        fadeIn: { "0%": { opacity: "0", transform: "translateY(8px)" }, "100%": { opacity: "1", transform: "none" } },
+        pulse: { "0%, 100%": { opacity: "1" }, "50%": { opacity: ".5" } },
+      },
+      animation: {
+        "fade-in": "fadeIn 0.3s ease-out",
+        pulse: "pulse 2s infinite",
+      },
+    } }`;
+    const ext = parseThemeExtend(cfg);
+    expect(ext?.keyframes).toEqual({
+      // Name case is preserved so the animation shorthand still resolves it.
+      fadeIn: {
+        "0%": { opacity: "0", transform: "translateY(8px)" },
+        "100%": { opacity: "1", transform: "none" },
+      },
+      pulse: { "0%, 100%": { opacity: "1" }, "50%": { opacity: ".5" } },
+    });
+    expect(ext?.animation).toEqual({
+      "fade-in": "fadeIn 0.3s ease-out",
+      pulse: "pulse 2s infinite",
+    });
+  });
+
+  test("camelCase keyframe declarations kebab-case; injection-y values are dropped", () => {
+    const cfg = `theme: { extend: { keyframes: {
+      slide: { from: { backgroundPosition: "0 0" }, to: { backgroundPosition: "40px 0", evil: "red } html { display:none" } },
+    } } }`;
+    const ext = parseThemeExtend(cfg);
+    expect(ext?.keyframes?.slide).toEqual({
+      from: { "background-position": "0 0" },
+      to: { "background-position": "40px 0" },
+    });
+  });
+
+  test("returns null when there's no extend block (or it has nothing readable)", () => {
+    expect(parseThemeExtend(`theme: { container: { center: true } }`)).toBeNull();
+    expect(parseThemeExtend(`theme: { extend: { spacing: { 18: "4.5rem" } } }`)).toBeNull();
   });
 });

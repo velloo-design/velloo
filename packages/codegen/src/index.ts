@@ -6,6 +6,7 @@ export {
   emitCode,
   emitSnippet,
 } from "./emit-code/index.ts";
+export { keyframesToCss } from "./emit-theme/globals-css.ts";
 export {
   type EmitThemeFile,
   type EmitThemeOptions,
@@ -19,4 +20,6 @@ export {
   type ContainerConfig,
   containerClasses,
   parseTailwindContainer,
+  parseThemeExtend,
+  type ThemeExtend,
 } from "./import-theme/parse-tailwind-config.ts";

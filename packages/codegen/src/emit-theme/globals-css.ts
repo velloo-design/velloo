@@ -40,6 +40,44 @@ function appendPalette(palette: Record<string, string> | undefined, lines: strin
   }
 }
 
+/** Named box-shadows: `card` → `--shadow-card`, surfaced as `shadow-card`. */
+function appendShadows(shadows: Theme["shadows"], lines: string[]): void {
+  if (!shadows) return;
+  for (const [name, value] of Object.entries(shadows)) {
+    if (typeof value === "string" || typeof value === "number") {
+      lines.push(`  --shadow-${name}: ${value};`);
+    }
+  }
+}
+
+/**
+ * Render captured `@keyframes` to CSS text — one block per name. Tailwind v4
+ * resolves `--animate-<name>` against keyframes defined inside `@theme`, so
+ * this is emitted there (and into the JIT's `@theme` for canvas compilation).
+ */
+export function keyframesToCss(keyframes: Theme["keyframes"], indent = ""): string {
+  if (!keyframes) return "";
+  const blocks: string[] = [];
+  for (const [name, steps] of Object.entries(keyframes)) {
+    const stepLines = Object.entries(steps).map(([selector, decls]) => {
+      const body = Object.entries(decls)
+        .map(([prop, value]) => `${prop}: ${value}`)
+        .join("; ");
+      return `${indent}  ${selector} { ${body}; }`;
+    });
+    blocks.push(`${indent}@keyframes ${name} {\n${stepLines.join("\n")}\n${indent}}`);
+  }
+  return blocks.join("\n");
+}
+
+/** `--animate-<name>` lines for the animation shorthands (drive `animate-<name>`). */
+function appendAnimations(animation: Theme["animation"], lines: string[]): void {
+  if (!animation) return;
+  for (const [name, value] of Object.entries(animation)) {
+    lines.push(`  --animate-${name}: ${value};`);
+  }
+}
+
 function appendColorBlock(colors: Partial<Colors>, lines: string[]): void {
   for (const { key, pair } of COLOR_SLOTS) {
     const value = colors[key];
@@ -103,6 +141,11 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
 
   appendColorBlock(theme.colors, lines);
   appendPalette(theme.palette, lines);
+  appendShadows(theme.shadows, lines);
+  appendAnimations(theme.animation, lines);
+  // Keyframes live inside @theme so Tailwind v4 emits them on `animate-*` use.
+  const keyframesCss = keyframesToCss(theme.keyframes, "  ");
+  if (keyframesCss) lines.push(keyframesCss);
 
   lines.push(`}`);
   lines.push("");
@@ -133,6 +176,19 @@ export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): stri
   lines.push(`  }`);
   lines.push(`}`);
   lines.push("");
+
+  // Container override. Tailwind v4 dropped the `center`/`padding` config, so a
+  // custom `@utility container` is the supported way to restore them.
+  const container = theme.container;
+  if (container && (container.center || container.padding || container.maxWidth)) {
+    lines.push(`@utility container {`);
+    lines.push(`  width: 100%;`);
+    if (container.center) lines.push(`  margin-inline: auto;`);
+    if (container.padding) lines.push(`  padding-inline: ${container.padding};`);
+    if (container.maxWidth) lines.push(`  max-width: ${container.maxWidth};`);
+    lines.push(`}`);
+    lines.push("");
+  }
 
   if (opts.customCss && opts.customCss.trim() !== "") {
     lines.push(`/* === velloo theme/custom.css === */`);

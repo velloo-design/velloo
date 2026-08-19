@@ -112,6 +112,23 @@ export const RadiusSchema = z
 
 export type Radius = z.infer<typeof RadiusSchema>;
 
+/**
+ * The host app's Tailwind `container` settings, captured so `class="container"`
+ * centers / pads / caps the same way it does in the app. Tailwind's stock
+ * `.container` does none of this (v4 dropped the `center`/`padding` options), so
+ * a code-to-design port's gutters drift until these are honored. Emitted as a
+ * `.container` override (render) / `@utility container` (codegen).
+ */
+export const ContainerSchema = z.object({
+  center: z.boolean().optional(),
+  /** Horizontal padding, e.g. "1.5rem". */
+  padding: z.string().min(1).optional(),
+  /** Largest max-width cap, e.g. "1320px". */
+  maxWidth: z.string().min(1).optional(),
+});
+
+export type Container = z.infer<typeof ContainerSchema>;
+
 export const ThemeSchema = z.object({
   name: z.string().min(1),
   colors: ColorsSchema,
@@ -128,6 +145,18 @@ export const ThemeSchema = z.object({
   spacing: LooseTokenGroupSchema,
   radius: RadiusSchema,
   shadows: LooseTokenGroupSchema.optional(),
+  /** Host app's Tailwind container config — see ContainerSchema. */
+  container: ContainerSchema.optional(),
+  /**
+   * `@keyframes` captured from a host app's `tailwind.config`:
+   * name → selector ("0%" / "from") → CSS declarations. Paired with
+   * `animation` so the app's `animate-<name>` utilities render on the canvas.
+   */
+  keyframes: z
+    .record(z.string(), z.record(z.string(), z.record(z.string(), z.string())))
+    .optional(),
+  /** Animation shorthands keyed by utility name → `--animate-<name>` (e.g. `"fade-in": "fadeIn .3s ease-out"`). */
+  animation: z.record(z.string(), z.string()).optional(),
 });
 
 export type Theme = z.infer<typeof ThemeSchema>;

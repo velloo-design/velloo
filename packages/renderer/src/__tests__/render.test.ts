@@ -82,6 +82,25 @@ describe("renderScreen", () => {
     expect(bodyHtml).toContain("Continue");
   });
 
+  test("themeToCss emits --shadow-* vars from theme.shadows", () => {
+    const css = themeToCss({
+      ...sampleTheme,
+      shadows: { card: "0 2px 8px rgba(0,0,0,0.06)" },
+    });
+    expect(css).toContain("--shadow-card: 0 2px 8px rgba(0,0,0,0.06);");
+  });
+
+  test("themeToCss emits a .container override from theme.container", () => {
+    const css = themeToCss({
+      ...sampleTheme,
+      container: { center: true, padding: "1.5rem", maxWidth: "1320px" },
+    });
+    expect(css).toContain(".container {");
+    expect(css).toContain("margin-inline: auto;");
+    expect(css).toContain("padding-inline: 1.5rem;");
+    expect(css).toContain("max-width: 1320px;");
+  });
+
   test("inlines the supplied snapshot CSS and theme overrides", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html, themeCss } = await renderScreen(screen, sampleTheme, opts);

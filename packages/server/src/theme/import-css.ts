@@ -1,4 +1,10 @@
-import { parseThemeCss } from "@velloo/codegen";
+import {
+  type ContainerConfig,
+  parseTailwindContainer,
+  parseThemeCss,
+  parseThemeExtend,
+  type ThemeExtend,
+} from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
 import { type ColorPair, type Theme, ThemeSchema } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
@@ -51,16 +57,27 @@ function tokenAt(theme: Theme, path: string): string | null {
 export async function importThemeCss(
   folder: DesignFolder,
   css: string,
-  opts: { themeName?: string; apply?: boolean } = {},
+  opts: { themeName?: string; apply?: boolean; tailwindConfig?: string } = {},
 ): Promise<Result<ImportThemeCssResult, ThemeError>> {
   const parsed = parseThemeCss(css);
+  // The host tailwind.config's theme.extend carries tokens that never reach the
+  // stylesheet — brand colors, named shadows, font stacks defined in JS. Pull
+  // them so "uses your real library" holds without manual re-registration.
+  const extend: ThemeExtend | null = opts.tailwindConfig
+    ? parseThemeExtend(opts.tailwindConfig)
+    : null;
+  const container: ContainerConfig | null = opts.tailwindConfig
+    ? parseTailwindContainer(opts.tailwindConfig)
+    : null;
   const foundAny =
     Object.keys(parsed.colors).length > 0 ||
     Object.keys(parsed.colorsDark).length > 0 ||
     Object.keys(parsed.palette).length > 0 ||
     Object.keys(parsed.paletteDark).length > 0 ||
     parsed.radius !== undefined ||
-    parsed.fontFamily !== undefined;
+    parsed.fontFamily !== undefined ||
+    extend !== null ||
+    container !== null;
   if (!foundAny) {
     return err(
       themeBadRequest(
@@ -121,6 +138,57 @@ export async function importThemeCss(
     for (const [role, stack] of Object.entries(parsed.fontFamily)) {
       record(`typography.fontFamily.${role}`, stack);
     }
+  }
+
+  // tailwind.config theme.extend → existing theme homes. CSS-derived values win
+  // (they're the resolved tokens the app actually ships), so a name already set
+  // from the stylesheet isn't overwritten by the config's literal.
+  if (extend) {
+    if (extend.colors) {
+      next.palette = { ...(next.palette ?? {}) };
+      for (const [name, value] of Object.entries(extend.colors)) {
+        if (name in (next.palette as Record<string, string>)) continue;
+        (next.palette as Record<string, string>)[name] = value;
+        record(`palette.${name}`, value);
+      }
+    }
+    if (extend.fontFamily) {
+      const fontFamily = { ...(next.typography.fontFamily ?? {}) };
+      for (const [role, stack] of Object.entries(extend.fontFamily)) {
+        if (role in fontFamily) continue;
+        fontFamily[role] = stack;
+        record(`typography.fontFamily.${role}`, stack);
+      }
+      next.typography = { ...next.typography, fontFamily };
+    }
+    if (extend.boxShadow) {
+      next.shadows = { ...(next.shadows ?? {}) } as Record<string, string>;
+      for (const [name, value] of Object.entries(extend.boxShadow)) {
+        (next.shadows as Record<string, string>)[name] = value;
+        record(`shadows.${name}`, value);
+      }
+    }
+    if (extend.keyframes) {
+      next.keyframes = { ...(next.keyframes ?? {}), ...extend.keyframes };
+      for (const [name, steps] of Object.entries(extend.keyframes)) {
+        record(`keyframes.${name}`, Object.keys(steps).join(", "));
+      }
+    }
+    if (extend.animation) {
+      next.animation = { ...(next.animation ?? {}), ...extend.animation };
+      for (const [name, value] of Object.entries(extend.animation)) {
+        record(`animation.${name}`, value);
+      }
+    }
+  }
+
+  // Container: apply as a real theme concept (so `class="container"` matches the
+  // app) instead of only reporting it as guidance.
+  if (container) {
+    next.container = { ...(next.container ?? {}), ...container };
+    if (container.center !== undefined) record("container.center", String(container.center));
+    if (container.padding !== undefined) record("container.padding", container.padding);
+    if (container.maxWidth !== undefined) record("container.maxWidth", container.maxWidth);
   }
 
   const validated = ThemeSchema.safeParse(next);

@@ -35,6 +35,32 @@ function emitPalette(palette: Record<string, string> | undefined, lines: string[
   }
 }
 
+/** Named box-shadows: `card` → `--shadow-card` (Tailwind v4 → `shadow-card`). */
+function emitShadows(shadows: Theme["shadows"], lines: string[]): void {
+  if (!shadows) return;
+  for (const [name, value] of Object.entries(shadows)) {
+    if (typeof value === "string" || typeof value === "number") {
+      lines.push(`  --shadow-${name}: ${value};`);
+    }
+  }
+}
+
+/**
+ * Override `.container` to match the host app's config. Injected after the
+ * snapshot CSS (see document.ts), so this wins over Tailwind's stock
+ * `.container` — `class="container"` then centers / pads / caps as the app does.
+ */
+function emitContainer(container: Theme["container"], lines: string[]): void {
+  if (!container) return;
+  const decls = ["  width: 100%;"];
+  if (container.center) decls.push("  margin-inline: auto;");
+  if (container.padding) {
+    decls.push(`  padding-inline: ${container.padding};`);
+  }
+  if (container.maxWidth) decls.push(`  max-width: ${container.maxWidth};`);
+  lines.push("", ".container {", ...decls, "}");
+}
+
 function emitColorBlock(colors: Partial<Colors>, lines: string[]): void {
   for (const [token, target] of Object.entries(COLOR_TOKEN_MAP)) {
     const value = colors[token as keyof Colors];
@@ -58,6 +84,7 @@ export function themeToCss(theme: Theme): string {
   const lines: string[] = [":root {"];
   emitColorBlock(theme.colors, lines);
   emitPalette(theme.palette, lines);
+  emitShadows(theme.shadows, lines);
 
   const fontFamily = theme.typography.fontFamily;
   if (fontFamily) {
@@ -87,6 +114,8 @@ export function themeToCss(theme: Theme): string {
     emitPalette(theme.paletteDark, lines);
     lines.push("}");
   }
+
+  emitContainer(theme.container, lines);
 
   return lines.join("\n");
 }
