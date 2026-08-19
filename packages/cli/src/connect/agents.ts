@@ -6,6 +6,14 @@
  */
 import { join } from "node:path";
 
+/**
+ * How velloo connects: `stdio` (the agent spawns `velloo mcp` itself — the
+ * default) or `http` (the agent dials a running server's URL).
+ */
+export type McpConnection =
+  | { transport: "stdio"; command: string; args: string[] }
+  | { transport: "http"; url: string };
+
 export interface AgentTarget {
   id: string;
   label: string;
@@ -15,13 +23,17 @@ export interface AgentTarget {
   /** Resolve the config file path (under the project root, or the home dir for global). */
   path(projectRoot: string, homeDir: string): string;
   /** The velloo server entry, in this agent's expected shape. */
-  entry(mcpUrl: string): Record<string, unknown>;
+  entry(conn: McpConnection): Record<string, unknown>;
 }
 
-// Claude Code wants an explicit transport type for remote servers; Cursor
-// infers HTTP/SSE from the presence of `url`.
-const claudeEntry = (mcpUrl: string): Record<string, unknown> => ({ type: "http", url: mcpUrl });
-const cursorEntry = (mcpUrl: string): Record<string, unknown> => ({ url: mcpUrl });
+// stdio takes the canonical { command, args } shape for both agents. For HTTP,
+// Claude Code wants an explicit transport `type`; Cursor infers it from `url`.
+const claudeEntry = (conn: McpConnection): Record<string, unknown> =>
+  conn.transport === "http"
+    ? { type: "http", url: conn.url }
+    : { command: conn.command, args: conn.args };
+const cursorEntry = (conn: McpConnection): Record<string, unknown> =>
+  conn.transport === "http" ? { url: conn.url } : { command: conn.command, args: conn.args };
 
 export const AGENTS: Record<string, AgentTarget> = {
   "claude-code": {

@@ -227,12 +227,11 @@ The `extensions` map (Sprint Y) holds user-declared custom components — agent-
 └─────────────────────────────────────────────────────┘
 ```
 
-Two ports started by `velloo run`:
+One **persistent canvas daemon per folder**, with two thin clients attaching to it ( Binds `:7300` if free, else any free port; records `{ pid, canvasUrl, mcpUrl, ports }` in `.design/cache/runtime.json`. Persistent — it outlives any session and self-exits after 5 min idle (no canvas tabs and no agents).
+- **`velloo run`** ensures the daemon (spawning a detached one if needed), opens the browser, and exits. `velloo stop` / `velloo status` manage daemons.
+- **`velloo mcp`** is the agent-facing entry — **stdio by default**: it ensures the daemon and *proxies* the agent's stdin/stdout JSON-RPC to the daemon's HTTP MCP. So N agents for a folder share one daemon (one writer, one canvas URL). `--http` prints the daemon's `StreamableHTTPServerTransport` URL for clients that dial instead of spawning.
 
-- **:7300** Canvas (HTML/JS UI). The board renders frames as iframes; each iframe mounts a screen at the frame's current size, using components from the embedded shadcn snapshot. WebSocket for live updates.
-- **:7301** MCP server (HTTP, streamable). Same backend the canvas writes through.
-
-Both interfaces drive the same tool surface — agent edits and human edits are operationally identical. No "agent mode" vs "user mode" code paths.
+Every client drives the same tool surface — agent edits and human edits are operationally identical. No "agent mode" vs "user mode" code paths.
 
 ## Component sourcing
 

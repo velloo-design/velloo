@@ -17,13 +17,15 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
-import { createServer, type ServerHandle, writeJsonAtomic, writeText } from "@velloo/server";
+import { writeJsonAtomic, writeText } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { type ConnectResult, connect, PROJECT_AGENT_IDS, pickAgents } from "../connect/index.ts";
+import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
+import { openUrl } from "../open-url.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
 import {
@@ -262,9 +264,11 @@ function printNextSteps(folder: string, connected: ConnectResult | undefined): v
     );
   }
   console.log(
-    `    ${n++}. ${pc.cyan(`velloo run ${folder}`)} ${pc.dim("(canvas :7300, MCP :7301)")}`,
+    `    ${n++}. Restart your AI agent so it loads the new MCP config ${pc.dim("— it starts velloo itself")}.`,
   );
-  console.log(`    ${n++}. Restart your AI agent so it loads the new MCP config.`);
+  console.log(
+    `    ${n++}. ${pc.cyan(`velloo run ${folder}`)} ${pc.dim("(optional — open the canvas at :7300)")}`,
+  );
   console.log("");
   console.log(pc.dim("  Open README.md in the design folder for the full guide."));
   console.log("");
@@ -288,7 +292,7 @@ function buildHandoffPrompt(answers: WizardAnswers, screens: Screen[]): string {
   const designDir = rel && !rel.startsWith("..") ? rel : answers.folder;
   const lines = [
     "Build a Velloo design that mirrors this app — reproduce each page's UI as a Velloo screen.",
-    `Velloo lives in \`${designDir}/\`. If it isn't running, start it with \`velloo run ${designDir}\` (canvas :7300, MCP :7301), then do everything through the velloo MCP tools — they own the design, so don't edit files under \`${designDir}/\` by hand.`,
+    `Velloo lives in \`${designDir}/\`. You have the velloo MCP tools (wired during setup) — do everything through them; they own the design, so don't edit files under \`${designDir}/\` by hand. To watch the canvas, run \`velloo run ${designDir}\` (opens http://localhost:7300).`,
   ];
   const uiRel = relative(answers.appRoot, answers.scanRoot);
   if (uiRel && !uiRel.startsWith("..")) {
@@ -402,31 +406,27 @@ async function printAgentHandoff(
     finalPrompt = edited;
   }
 
-  // Claude needs the MCP server up to find the velloo tools — start it first.
-  let handle: ServerHandle;
+  // Start the persistent canvas so the user can watch; Claude attaches its own
+  // `velloo mcp` (wired during init) to the same daemon. The canvas stays up
+  // after Claude exits (auto-stops after 5 min idle).
+  let canvasUrl: string;
   try {
-    handle = await createServer({
-      folder: answers.folder,
-      port: 7300,
-      mcpPort: 7301,
-      host: "127.0.0.1",
-    });
+    const rec = await ensureDaemon(answers.folder);
+    canvasUrl = rec.canvasUrl;
   } catch (err) {
     console.error(
-      `  Couldn't start velloo (${(err as Error).message}). ` +
+      `  Couldn't start the canvas (${(err as Error).message}). ` +
         `Run \`velloo run ${answers.folder}\` yourself, then paste the prompt above.`,
     );
     return;
   }
-  console.log(
-    pc.dim(`  velloo running — canvas ${handle.url}, MCP ${handle.mcpUrl}. Launching claude…`),
-  );
+  console.log(pc.dim(`  velloo canvas at ${canvasUrl}. Launching claude…`));
+  await openUrl(canvasUrl);
   await Bun.spawn(["claude", finalPrompt], {
     stdout: "inherit",
     stderr: "inherit",
     stdin: "inherit",
   }).exited;
-  await handle.close();
 }
 
 /**

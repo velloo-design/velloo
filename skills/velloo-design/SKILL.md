@@ -20,9 +20,11 @@ implement.
 
 ## Connect
 
-The MCP server runs as part of `velloo run` (default `http://127.0.0.1:7301/mcp`).
-If the velloo tools aren't available, tell the user to run `velloo run <design-folder>`
-and `velloo connect <design-folder>`, then restart you. Once connected, the
+You start the velloo MCP server yourself — it's wired into your MCP config as
+`velloo mcp`, so the tools are available once the config is loaded; there's
+nothing to run first. If the velloo tools aren't available, tell the user to run
+`velloo connect <design-folder>` and restart you. To see the canvas, run
+`velloo run <design-folder>` (opens http://localhost:7300). Once connected, the
 server's `initialize` instructions are the authoritative tool reference — read
 them; this skill is the workflow on top.
 

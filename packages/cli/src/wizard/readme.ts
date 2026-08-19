@@ -22,9 +22,9 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("velloo run .");
   lines.push("```");
   lines.push("");
-  lines.push("Open http://localhost:7300 for the canvas. The MCP server lives");
-  lines.push("at http://localhost:7301/mcp — point your AI agent there to drive");
-  lines.push("the design via tool calls.");
+  lines.push("Open http://localhost:7300 for the canvas. Your AI agent drives the");
+  lines.push("design over MCP — wire it once with `velloo connect`, and it starts");
+  lines.push("the velloo MCP server itself (no separate server to run).");
   lines.push("");
   lines.push("## Your setup");
   lines.push("");

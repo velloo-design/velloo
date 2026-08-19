@@ -28,9 +28,11 @@ alwaysApply: false
 Velloo is a local, code-shaped design canvas exposed over MCP. The design folder
 for this project is \`${designRel}\`.
 
-- The MCP server runs as part of \`velloo run ${designRel}\` (default
-  http://127.0.0.1:7301/mcp). If the velloo tools aren't available, ask the user
-  to run \`velloo run\` and restart Cursor.
+- Cursor starts the velloo MCP server itself (wired as \`velloo mcp\`), so the
+  tools are available once the MCP config is loaded — nothing to start first. If
+  they're missing, ask the user to run \`velloo connect ${designRel}\` and
+  restart Cursor. To watch the canvas, run \`velloo run ${designRel}\`
+  (http://127.0.0.1:7300).
 - You are the designer: compose screens from the project's shadcn components via
   the velloo MCP tools, verify visually with \`screenshot\`, then \`emit_code\` to
   turn a design into real code in this project's conventions.

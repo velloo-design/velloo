@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
+import { relative } from "node:path";
 import { isCancel, multiselect } from "@clack/prompts";
-import { AGENTS, PROJECT_AGENT_IDS } from "./agents.ts";
+import { AGENTS, type McpConnection, PROJECT_AGENT_IDS } from "./agents.ts";
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import { installSkill, type SkillResult } from "./skill.ts";
@@ -9,7 +10,7 @@ import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 export { AGENT_IDS, AGENTS, PROJECT_AGENT_IDS } from "./agents.ts";
 export type { WriteResult } from "./write-config.ts";
 
-/** Default velloo MCP endpoint — matches `velloo run`'s default port. */
+/** Default velloo MCP endpoint for `--http` connections — matches `velloo mcp --http`. */
 export const DEFAULT_MCP_URL = "http://127.0.0.1:7301/mcp";
 
 /**
@@ -36,6 +37,9 @@ export interface ConnectOptions {
   agents: string[];
   /** Override the auto-detected config write location. */
   projectRoot?: string;
+  /** MCP transport to wire. Default "stdio" — the agent spawns `velloo mcp`. */
+  transport?: "stdio" | "http";
+  /** HTTP endpoint, only used when transport is "http". Default DEFAULT_MCP_URL. */
   mcpUrl?: string;
   /** Install the Claude Code skill (only acts when claude-code is targeted). */
   installSkill?: boolean;
@@ -45,7 +49,7 @@ export interface ConnectOptions {
 
 export interface ConnectResult {
   projectRoot: string;
-  mcpUrl: string;
+  transport: "stdio" | "http";
   configs: WriteResult[];
   skill?: SkillResult;
   /** Cursor project rule, installed when cursor is a target. */
@@ -56,9 +60,22 @@ export interface ConnectResult {
 
 /** Wire the velloo MCP server into one or more AI coding agents' configs. */
 export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
-  const mcpUrl = opts.mcpUrl ?? DEFAULT_MCP_URL;
+  const transport = opts.transport ?? "stdio";
   const homeDir = opts.homeDir ?? homedir();
   const projectRoot = await resolveProjectRoot(opts.designFolder, opts.projectRoot);
+
+  // stdio: project-scoped configs pin the folder relative to the project root
+  // (the cwd the agent spawns `velloo mcp` from); global configs omit it so a
+  // single entry resolves the folder per-project from the cwd.
+  const designRel = relative(projectRoot, opts.designFolder) || ".";
+  const connectionFor = (scope: "project" | "global"): McpConnection => {
+    if (transport === "http") return { transport: "http", url: opts.mcpUrl ?? DEFAULT_MCP_URL };
+    return {
+      transport: "stdio",
+      command: "velloo",
+      args: scope === "project" ? ["mcp", designRel] : ["mcp"],
+    };
+  };
 
   const configs: WriteResult[] = [];
   const unknownAgents: string[] = [];
@@ -68,7 +85,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
       unknownAgents.push(id);
       continue;
     }
-    configs.push(await writeAgentConfig(projectRoot, agent, mcpUrl, homeDir));
+    configs.push(await writeAgentConfig(projectRoot, agent, connectionFor(agent.scope), homeDir));
   }
 
   // Per-agent guidance: the Claude skill for the claude-code family, a project
@@ -83,5 +100,5 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
       ? await installCursorRules(projectRoot, opts.designFolder)
       : undefined;
 
-  return { projectRoot, mcpUrl, configs, skill, cursorRules, unknownAgents };
+  return { projectRoot, transport, configs, skill, cursorRules, unknownAgents };
 }

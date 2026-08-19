@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AgentTarget } from "./agents.ts";
+import type { AgentTarget, McpConnection } from "./agents.ts";
 
 export interface WriteResult {
   agent: string;
@@ -17,7 +17,7 @@ export interface WriteResult {
 export async function writeAgentConfig(
   projectRoot: string,
   agent: AgentTarget,
-  mcpUrl: string,
+  conn: McpConnection,
   homeDir: string,
 ): Promise<WriteResult> {
   const path = agent.path(projectRoot, homeDir);
@@ -38,7 +38,7 @@ export async function writeAgentConfig(
 
   const merged = {
     ...existing,
-    mcpServers: { ...servers, velloo: agent.entry(mcpUrl) },
+    mcpServers: { ...servers, velloo: agent.entry(conn) },
   };
 
   await mkdir(dirname(path), { recursive: true });

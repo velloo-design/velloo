@@ -18,20 +18,44 @@ afterEach(async () => {
 });
 
 const MCP = "http://127.0.0.1:7301/mcp";
+// design = tmp/design, projectRoot falls back to tmp (no package.json), so the
+// folder is wired relative to the project root.
+const STDIO = { command: "velloo", args: ["mcp", "design"] };
 
 describe("connect", () => {
-  test("writes a Claude Code .mcp.json with http transport", async () => {
+  test("writes a Claude Code .mcp.json with a stdio command by default", async () => {
     const r = await connect({ designFolder: design, agents: ["claude-code"], installSkill: false });
     expect(r.unknownAgents).toEqual([]);
+    expect(r.transport).toBe("stdio");
     expect(r.configs[0]?.action).toBe("created");
     const cfg = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
-    expect(cfg.mcpServers.velloo).toEqual({ type: "http", url: MCP });
+    expect(cfg.mcpServers.velloo).toEqual(STDIO);
   });
 
-  test("writes a Cursor .cursor/mcp.json with a url entry", async () => {
+  test("writes a Cursor .cursor/mcp.json with a stdio command by default", async () => {
     await connect({ designFolder: design, agents: ["cursor"], installSkill: false });
     const cfg = JSON.parse(await readFile(join(tmp, ".cursor", "mcp.json"), "utf8"));
-    expect(cfg.mcpServers.velloo).toEqual({ url: MCP });
+    expect(cfg.mcpServers.velloo).toEqual(STDIO);
+  });
+
+  test("--http wires the HTTP transport (Claude needs type, Cursor a bare url)", async () => {
+    await connect({
+      designFolder: design,
+      agents: ["claude-code"],
+      transport: "http",
+      installSkill: false,
+    });
+    const claude = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
+    expect(claude.mcpServers.velloo).toEqual({ type: "http", url: MCP });
+
+    await connect({
+      designFolder: design,
+      agents: ["cursor"],
+      transport: "http",
+      installSkill: false,
+    });
+    const cursor = JSON.parse(await readFile(join(tmp, ".cursor", "mcp.json"), "utf8"));
+    expect(cursor.mcpServers.velloo).toEqual({ url: MCP });
   });
 
   test("is idempotent and preserves other servers + top-level keys", async () => {
@@ -47,7 +71,7 @@ describe("connect", () => {
     const cfg = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
     // velloo added, the other server and the unrelated key survive.
     expect(cfg.mcpServers.other).toEqual({ command: "x" });
-    expect(cfg.mcpServers.velloo).toEqual({ type: "http", url: MCP });
+    expect(cfg.mcpServers.velloo).toEqual(STDIO);
     expect(cfg.someOtherSetting).toBe(true);
 
     // Re-running doesn't duplicate or drift.
@@ -56,10 +80,11 @@ describe("connect", () => {
     expect(Object.keys(again.mcpServers).sort()).toEqual(["other", "velloo"]);
   });
 
-  test("honors a custom mcpUrl", async () => {
+  test("honors a custom mcpUrl with --http", async () => {
     await connect({
       designFolder: design,
       agents: ["claude-code"],
+      transport: "http",
       mcpUrl: "http://127.0.0.1:9000/mcp",
       installSkill: false,
     });
@@ -104,8 +129,10 @@ describe("connect", () => {
     expect(r.configs.map((c) => c.path).sort()).toEqual(
       [join(fakeHome, ".claude.json"), join(fakeHome, ".cursor", "mcp.json")].sort(),
     );
+    // Global configs omit the folder arg — `velloo mcp` resolves it per-project
+    // from the cwd, since one global entry serves every project.
     const cfg = JSON.parse(await readFile(join(fakeHome, ".claude.json"), "utf8"));
-    expect(cfg.mcpServers.velloo).toEqual({ type: "http", url: MCP });
+    expect(cfg.mcpServers.velloo).toEqual({ command: "velloo", args: ["mcp"] });
   });
 
   test("installs the Claude Code skill when requested", async () => {

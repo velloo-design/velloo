@@ -6,6 +6,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import type { CloudAuth } from "../cloud.ts";
@@ -42,6 +43,8 @@ export interface McpServerOptions {
 export interface McpServerHandle {
   url: string;
   port: number;
+  /** Count of live MCP sessions — feeds the daemon's idle-shutdown check. */
+  sessions(): number;
   close(): Promise<void>;
 }
 
@@ -110,11 +113,21 @@ const INSTRUCTION_PARTS = [
 const FEEDBACK_INSTRUCTION =
   "**Sending product feedback**: this folder opted into the `send_feedback` tool. Reach for it when you hit friction with **Velloo itself** — a confusing instruction, a missing capability, a tool that misbehaved, a bug — or when the user asks to send feedback. ALWAYS show the user the exact `body` and get their go-ahead before calling; never send unprompted, even when you originated the idea. Fire sparingly — one report per distinct issue, never repeated. NEVER include the user's design content, code, or file/repo paths; describe the issue in your own words. This is feedback about Velloo, not about the design.";
 
-/** The instructions string, with the feedback paragraph included only when opted in. */
-export function buildInstructions(feedbackEnabled: boolean): string {
-  const parts = feedbackEnabled
-    ? [...INSTRUCTION_PARTS, "", FEEDBACK_INSTRUCTION]
-    : INSTRUCTION_PARTS;
+/**
+ * The instructions string. `canvasUrl` (when the MCP boots alongside a canvas)
+ * is surfaced so the agent can hand the user a URL to watch — important under
+ * the stdio transport, where the canvas binds an ephemeral port the user can't
+ * predict. The feedback paragraph is appended only when opted in.
+ */
+export function buildInstructions(feedbackEnabled: boolean, canvasUrl?: string): string {
+  const parts = [...INSTRUCTION_PARTS];
+  if (canvasUrl) {
+    parts.push(
+      "",
+      `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can open it and watch your edits render in real time. (They can also open a canvas any time with \`velloo run\`.)`,
+    );
+  }
+  if (feedbackEnabled) parts.push("", FEEDBACK_INSTRUCTION);
   return parts.join("\n");
 }
 
@@ -161,7 +174,7 @@ function buildMcpServer(
   const mcp = withStrictToolArgs(
     new McpServer(
       { name: "velloo", version: "0.1.0" },
-      { instructions: buildInstructions(feedbackEnabled) },
+      { instructions: buildInstructions(feedbackEnabled, assetOrigin?.replace(/\/+$/, "")) },
     ),
   );
   registerDiscoveryTools(mcp, ctx);
@@ -292,6 +305,7 @@ export async function createMcpServer(
   return {
     url: `http://${opts.host}:${boundPort}/mcp`,
     port: boundPort,
+    sessions: () => sessions.size,
     async close() {
       // Close all sessions first, then the listener.
       for (const session of sessions.values()) {
@@ -300,6 +314,39 @@ export async function createMcpServer(
       }
       sessions.clear();
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+    },
+  };
+}
+
+export interface StdioMcpServerOptions {
+  jit: TailwindJit;
+  bundler: LiveBundler;
+  /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
+  assetOrigin?: string;
+  cloud?: CloudAuth;
+}
+
+export interface StdioMcpServerHandle {
+  close(): Promise<void>;
+}
+
+/**
+ * MCP over stdio: the agent spawns `velloo mcp` and talks to this process's
+ * stdin/stdout. One server, one session — there's no multiplexing on a pipe,
+ * unlike the HTTP transport. Nothing else may write to stdout or the JSON-RPC
+ * stream corrupts; all diagnostics go to stderr.
+ */
+export async function createStdioMcpServer(
+  ctx: MutationContext,
+  opts: StdioMcpServerOptions,
+): Promise<StdioMcpServerHandle> {
+  const server = buildMcpServer(ctx, opts.jit, opts.bundler, opts.assetOrigin, opts.cloud);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  return {
+    async close() {
+      await transport.close().catch(() => undefined);
+      await server.close().catch(() => undefined);
     },
   };
 }

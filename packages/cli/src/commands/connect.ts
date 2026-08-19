@@ -31,9 +31,14 @@ export default defineCommand({
       description:
         "Where to write the config (default: nearest package.json above the design folder, else its parent)",
     },
+    http: {
+      type: "boolean",
+      default: false,
+      description: "Wire the HTTP transport (agent dials a running server) instead of stdio",
+    },
     mcpUrl: {
       type: "string",
-      description: `MCP server URL (default ${DEFAULT_MCP_URL})`,
+      description: `MCP server URL for --http (default ${DEFAULT_MCP_URL})`,
     },
     skill: {
       type: "boolean",
@@ -69,6 +74,7 @@ export default defineCommand({
       designFolder: folder,
       agents,
       projectRoot: args.projectRoot ? resolve(args.projectRoot) : undefined,
+      transport: args.http ? "http" : "stdio",
       mcpUrl: args.mcpUrl,
       installSkill: args.skill,
     });
@@ -94,12 +100,22 @@ export default defineCommand({
     if (result.cursorRules?.installed && result.cursorRules.path) {
       console.log(`    rule     ${pc.cyan(result.cursorRules.path)}`);
     }
+    const folderArg = args.folder ? ` ${args.folder}` : "";
     console.log("");
     console.log(pc.bold("  Next"));
-    console.log(
-      `    1. ${pc.cyan(`velloo run${args.folder ? ` ${args.folder}` : ""}`)} ${pc.dim("— starts the MCP server velloo points at")}`,
-    );
-    console.log(`    2. Restart your agent so it loads the new MCP config.`);
+    if (result.transport === "http") {
+      console.log(
+        `    1. ${pc.cyan(`velloo mcp --http${folderArg}`)} ${pc.dim("— starts the MCP server your agent dials")}`,
+      );
+      console.log(`    2. Restart your agent so it loads the new MCP config.`);
+    } else {
+      console.log(
+        `    1. Restart your agent so it loads the new MCP config ${pc.dim("— it starts velloo itself")}.`,
+      );
+      console.log(
+        `    2. ${pc.cyan(`velloo run${folderArg}`)} ${pc.dim("— optional: open the canvas to watch")}`,
+      );
+    }
     console.log("");
   },
 });

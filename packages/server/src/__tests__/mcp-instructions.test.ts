@@ -17,4 +17,14 @@ describe("buildInstructions", () => {
     // It must still carry the base guidance.
     expect(text).toContain("Velloo design folder");
   });
+
+  test("surfaces the live canvas URL when one is given (stdio binds an ephemeral port)", () => {
+    const text = buildInstructions(false, "http://127.0.0.1:54321");
+    expect(text).toContain("http://127.0.0.1:54321");
+    expect(text).toContain("give the user this URL");
+  });
+
+  test("omits the canvas-URL line when no URL is given", () => {
+    expect(buildInstructions(false)).not.toContain("give the user this URL");
+  });
 });

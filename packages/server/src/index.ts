@@ -17,18 +17,31 @@ import {
   reloadTheme,
 } from "./design-folder.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
-import { createMcpServer } from "./mcp/server.ts";
+import {
+  createMcpServer,
+  createStdioMcpServer,
+  type McpServerHandle,
+  type StdioMcpServerHandle,
+} from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { migrateConfig, resolveProviders } from "./providers.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
 import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
 
+/**
+ * How (and whether) to attach an MCP server. Omit for a canvas-only server
+ * (`velloo run`). `http` listens on its own port; `stdio` binds this process's
+ * stdin/stdout, so the process must be agent-spawned and keep stdout clean.
+ */
+export type McpTransportOptions = { transport: "http"; port?: number } | { transport: "stdio" };
+
 export interface ServerOptions {
   folder: string;
+  /** Canvas port. Default 7300; pass 0 for an OS-assigned free port. */
   port?: number;
   host?: string;
-  /** MCP server port. Default 7301. */
-  mcpPort?: number;
+  /** Attach an MCP server to this process. Omit for canvas only. */
+  mcp?: McpTransportOptions;
   /**
    * velloo-cloud credentials, resolved by the CLI from
    * `~/.velloo/credentials.json`. Enables the opt-in `send_feedback` tool.
@@ -38,9 +51,12 @@ export interface ServerOptions {
 
 export interface ServerHandle {
   url: string;
-  mcpUrl: string;
   port: number;
-  mcpPort: number;
+  /** Present only when an HTTP MCP transport was attached. */
+  mcpUrl?: string;
+  mcpPort?: number;
+  /** Live client counts (canvas WS + MCP sessions) for idle-shutdown decisions. */
+  connections(): { canvas: number; mcp: number };
   close(): Promise<void>;
 }
 
@@ -246,34 +262,47 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   });
 
   const port = server.port ?? opts.port ?? 7300;
+  const assetOrigin = `http://${opts.host ?? "127.0.0.1"}:${port}/`;
 
-  // MCP server on a separate port (defaults to 7301).
-  const mcp = await createMcpServer(ctx, {
-    port: opts.mcpPort ?? 7301,
-    host: opts.host ?? "127.0.0.1",
-    jit,
-    bundler,
-    assetOrigin: `http://${opts.host ?? "127.0.0.1"}:${server.port}/`,
-    cloud: opts.cloud,
-  });
+  // MCP is optional and transport-pluggable. `velloo run` omits it (canvas
+  // only); `velloo mcp` attaches stdio (default) or HTTP. Either way the MCP
+  // reuses this ctx/jit/bundler, so screenshots resolve /assets against the
+  // canvas above.
+  let httpMcp: McpServerHandle | undefined;
+  let stdioMcp: StdioMcpServerHandle | undefined;
+  if (opts.mcp?.transport === "http") {
+    httpMcp = await createMcpServer(ctx, {
+      port: opts.mcp.port ?? 7301,
+      host: opts.host ?? "127.0.0.1",
+      jit,
+      bundler,
+      assetOrigin,
+      cloud: opts.cloud,
+    });
+  } else if (opts.mcp?.transport === "stdio") {
+    stdioMcp = await createStdioMcpServer(ctx, { jit, bundler, assetOrigin, cloud: opts.cloud });
+  }
 
   return {
     url: `http://${server.hostname}:${port}`,
-    mcpUrl: mcp.url,
     port,
-    mcpPort: mcp.port,
+    mcpUrl: httpMcp?.url,
+    mcpPort: httpMcp?.port,
+    connections: () => ({ canvas: broadcaster.size(), mcp: httpMcp?.sessions() ?? 0 }),
     async close() {
       watcher?.close();
-      await mcp.close();
+      await httpMcp?.close();
+      await stdioMcp?.close();
       server.stop(true);
     },
   };
 }
 
-// Re-export key types and helpers for downstream consumers.
 export type { CloudAuth } from "./cloud.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+// Re-export key types and helpers for downstream consumers.
+export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";
 export {
   createServerProviderLoader,
   DEFAULT_LEGACY_LIBRARY_ID,

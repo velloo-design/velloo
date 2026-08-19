@@ -30,7 +30,11 @@ export function createApp(
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
 
-  app.get("/api/health", (c) => c.json({ ok: true }));
+  // Identity, not just liveness: `ensureDaemon` confirms a process answering
+  // on a port is *our* daemon for *this* folder before attaching to it.
+  app.get("/api/health", (c) =>
+    c.json({ ok: true, app: "velloo", root: ctxFor().folder.root, pid: process.pid }),
+  );
   app.route("/api/design", createDesignRouter(ctxFor));
   app.route("/api/screen", createScreenRouter(folder));
   app.route("/api/board", createBoardRouter(folder));

@@ -12,7 +12,7 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 
 ## What Velloo is
 
-- A **local CLI** that serves a canvas at `localhost:7300` and an MCP server at `localhost:7301`.
+- A **local CLI** that serves a canvas at `localhost:7300` (`velloo run`) and an MCP server your agent spawns itself over stdio (`velloo mcp`, wired by `velloo connect`; `--http` exposes it on `localhost:7301` instead).
 - A **canvas** that looks like Figma: many boards, each an infinite canvas with frames pointing at screens. The Pulse sample (shipped by `velloo init`) has a Marketing board (landing / pricing / signup), an App board (dashboard / insights / settings), and a Playground board hosting a Showcase screen that renders every shipping component.
 - An **MCP surface** that exposes the design to your AI agent (Claude Code, Cursor, Codex) — ~55 tools, one per structural operation. Includes structural discovery + mutation, snippet management, theme synthesis (palette derivation, vibe matching, image extraction, contrast scoring), dark-mode audits, screenshots, codegen IR for screens + snippets, theme export, and Tailwind class validation.
 - A **design folder** in your repo: pure JSON for screens, boards (one per file under `boards/`), theme, snippets, annotations, and board notes. Components are embedded in the Velloo binary (no `components/*.tsx` in the design folder).

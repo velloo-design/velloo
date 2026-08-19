@@ -1,14 +1,14 @@
-import { createServer } from "@velloo/server";
 import { defineCommand } from "citty";
-import { defaultCloudUrl } from "../cloud.ts";
-import { loadCredential } from "../cloud-credentials.ts";
+import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
+import { openUrl } from "../open-url.ts";
 
 export default defineCommand({
   meta: {
     name: "run",
-    description: "Start the canvas server pointed at a design folder",
+    description:
+      "Open the canvas for a design folder (starts a persistent canvas if none is running)",
   },
   args: {
     folder: {
@@ -18,54 +18,42 @@ export default defineCommand({
     },
     port: {
       type: "string",
-      description: "Port for the canvas server (default 7300)",
-    },
-    "mcp-port": {
-      type: "string",
-      description: "Port for the MCP server (default 7301)",
+      description: "Preferred canvas port when starting fresh (default 7300, else a free port)",
     },
     host: {
       type: "string",
       description: "Bind hostname (default 127.0.0.1)",
     },
+    open: {
+      type: "boolean",
+      default: true,
+      description: "Open the canvas in your browser (use --no-open to skip)",
+    },
   },
   async run({ args }) {
     const folder = await resolveDesignFolder(args.folder, "run");
-    const port = args.port ? Number(args.port) : 7300;
-    if (!Number.isFinite(port) || port <= 0) {
+    const preferredPort = args.port ? Number(args.port) : undefined;
+    if (preferredPort !== undefined && (!Number.isFinite(preferredPort) || preferredPort < 0)) {
       fail("run", `invalid --port ${JSON.stringify(args.port)}`);
     }
-    const mcpPort = args["mcp-port"] ? Number(args["mcp-port"]) : 7301;
-    if (!Number.isFinite(mcpPort) || mcpPort <= 0) {
-      fail("run", `invalid --mcp-port ${JSON.stringify(args["mcp-port"])}`);
+
+    // Attach to the folder's persistent canvas daemon, spawning a detached one
+    // if none is alive. It outlives this command (and any agent session) and
+    // auto-stops after 5 min idle.
+    let rec: Awaited<ReturnType<typeof ensureDaemon>>;
+    try {
+      rec = await ensureDaemon(folder, { preferredPort, host: args.host });
+    } catch (err) {
+      fail("run", (err as Error).message);
     }
 
-    // The server reads no credentials itself — resolve them here (respecting
-    // the server→cli dependency direction) and thread them in. Read once at
-    // startup: logging in while the server runs needs a restart. A missing
-    // token is fine; the opt-in feedback tool reports it when invoked.
-    const cloudUrl = defaultCloudUrl();
-    const cred = await loadCredential(cloudUrl);
+    const folderArg = args.folder ? ` ${args.folder}` : "";
+    console.log(`velloo: canvas at ${rec.canvasUrl}`);
+    console.log(
+      `velloo: it keeps running in the background — stop it with \`velloo stop${folderArg}\` (auto-stops after 5 min idle)`,
+    );
 
-    const handle = await createServer({
-      folder,
-      port,
-      mcpPort,
-      host: args.host ?? "127.0.0.1",
-      cloud: { url: cloudUrl, token: cred?.token },
-    });
-    console.log(`velloo: canvas at ${handle.url}`);
-    console.log(`velloo: MCP server at ${handle.mcpUrl} (point your AI agent here)`);
-    console.log("(Ctrl-C to stop)");
-
-    const shutdown = async () => {
-      await handle.close();
-      process.exit(0);
-    };
-    process.on("SIGINT", shutdown);
-    process.on("SIGTERM", shutdown);
-
-    // Keep the process alive.
-    await new Promise<void>(() => {});
+    if (args.open !== false) await openUrl(rec.canvasUrl);
+    // Return to the shell; the daemon stays up.
   },
 });
