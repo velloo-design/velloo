@@ -137,4 +137,16 @@ describe("locator + findById", () => {
   test("resolveLocator returns null on unknown id", () => {
     expect(resolveLocator(treeWithIds, "@missing")).toBeNull();
   });
+
+  test("resolveLocator tolerates a JSON-stringified path array", () => {
+    // Agents constructing batch args as JSON commonly pass the array as a
+    // string; "[]" for the root is the easy trip the dogfood flagged.
+    expect(resolveLocator(treeWithIds, "[]")).toEqual([]);
+    expect(resolveLocator(treeWithIds, " [] ")).toEqual([]);
+    expect(resolveLocator(treeWithIds, "[1, 0]")).toEqual([1, 0]);
+    // A bogus stringified path still misses, like its array form.
+    expect(resolveLocator(treeWithIds, "[99]")).toBeNull();
+    // An @id string that isn't a JSON array is untouched.
+    expect(resolveLocator(treeWithIds, "@title")).toEqual([0]);
+  });
 });

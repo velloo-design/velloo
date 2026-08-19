@@ -201,7 +201,7 @@ describe("parseThemeCss edge cases", () => {
 });
 
 describe("parseThemeCss palette (numeric scales + extra roles)", () => {
-  test("captures scale steps + extra roles; ignores non-scale and non-color vars", () => {
+  test("captures scales, roles, and chart vars; ignores semantic slots and non-color vars", () => {
     const css = `:root {
   --background: #fff; --foreground: #111; --primary: #4f46e5;
   --primary-300: #a5b4fc;
@@ -221,10 +221,29 @@ describe("parseThemeCss palette (numeric scales + extra roles)", () => {
       "success-500": "#22c55e",
       danger: "#ef4444",
       "danger-foreground": "#fff",
+      // A non-scale color var (chart-1) is now captured too — its HSL triplet normalizes.
+      "chart-1": "hsl(12 76% 61%)",
     });
-    // chart-1 (non-scale step), radius/font (non-color), spacing-600 (non-color) excluded.
-    expect(parsed.palette["chart-1"]).toBeUndefined();
+    // Semantic slots stay out of palette (extractColors owns them); non-color vars drop.
+    expect(parsed.palette.primary).toBeUndefined();
+    expect(parsed.palette.background).toBeUndefined();
+    expect(parsed.palette.radius).toBeUndefined();
     expect(parsed.palette["spacing-600"]).toBeUndefined();
+  });
+
+  test("captures bare brand color names (--paprika, --ink, --teal) into palette", () => {
+    const css = `:root {
+  --background: #fff; --foreground: #111; --primary: #333;
+  --paprika: 13 78% 51%;
+  --ink: #1a1a1a;
+  --teal: hsl(180 50% 40%);
+}`;
+    const parsed = parseThemeCss(css);
+    expect(parsed.palette).toEqual({
+      paprika: "hsl(13 78% 51%)",
+      ink: "#1a1a1a",
+      teal: "hsl(180 50% 40%)",
+    });
   });
 
   test("raw HSL triplet scale values normalize to hsl(); --color- prefix works", () => {

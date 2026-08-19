@@ -82,7 +82,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_node",
     {
       description:
-        'Insert a node under parentPath ("@id" or path array). Pass `id` for a stable anchor. children carries full subtrees — build a whole card in one call.',
+        'Insert a node under parentPath ("@id" or path array). `componentRef` is required — this roots the new node at a library/extension component (its `children` may themselves include `{$snippet}` instances). To append a *snippet instance* directly under an existing parent (no wrapper component), use `instantiate_snippet` instead — it takes the same parentPath and is batchable, so stamp many in one `batch`. Pass `id` for a stable anchor. children carries full subtrees — build a whole card in one call.',
       inputSchema: {
         screenId: z.string(),
         parentPath: PathSchema,

@@ -19,10 +19,11 @@ export interface ParsedThemeCss {
   colors: Partial<Colors>;
   colorsDark: Partial<Colors>;
   /**
-   * Numeric color scales + extra semantic roles the app declares beyond the
-   * semantic slots — `primary-600`, `success-500`, `danger`. Keyed by Tailwind
-   * color name; values normalized to CSS colors. `paletteDark` carries `.dark`
-   * overrides. Always present (possibly empty), mirroring `colors`.
+   * Every non-semantic color var the app declares — numeric scales
+   * (`primary-600`), extra roles (`success-500`, `danger`), and bare brand
+   * names (`paprika`, `ink`) alike. Keyed by Tailwind color name; values
+   * normalized to CSS colors. `paletteDark` carries `.dark` overrides. Always
+   * present (possibly empty), mirroring `colors`.
    */
   palette: Record<string, string>;
   paletteDark: Record<string, string>;
@@ -38,22 +39,27 @@ const HSL_TRIPLET = /^-?[0-9.]+(?:deg)?\s+-?[0-9.]+%\s+-?[0-9.]+%(?:\s*\/\s*[0-9
 /** Sizing/weight roles that share the `--font-` prefix but aren't families. */
 const NON_FAMILY_FONT_ROLE = /^(size|weight|leading|tracking)(-|$)/;
 
-/** Tailwind numeric scale step suffix (`-600`, `-50`, …). */
-const SCALE_STEP = /-(?:50|100|200|300|400|500|600|700|800|900|950)$/;
-/** Extra semantic color roles a host app commonly defines beyond shadcn's slots. */
-const EXTRA_ROLE = /^(success|warning|danger|error|info|positive|negative)(-foreground)?$/;
+/** A valid palette key — kebab-case identifier, matching the schema's PaletteSchema. */
+const PALETTE_KEY = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+/** Semantic slots extractColors owns (plus their `-foreground` pairs) — kept out of palette. */
+const SEMANTIC_SLOTS = new Set<string>(
+  COLOR_SLOTS.flatMap(({ key, pair }) =>
+    pair ? [key as string, `${key as string}-foreground`] : [key as string],
+  ),
+);
 
 /**
- * A var that should be captured as a raw palette entry: a numeric scale step
- * of any role (`primary-600`) or an extra semantic role (`success`). Returns
- * the Tailwind color name (sans `--`/`color-` prefix) or null. The semantic
- * slots themselves (`--primary`, `--background`) are handled by extractColors
- * and deliberately excluded here.
+ * The Tailwind color name (sans `--`/`color-` prefix) a var should be captured
+ * under as a raw palette entry, or null to skip. Captures any kebab-case color
+ * var — numeric scales (`primary-600`), extra roles (`success`), and bare brand
+ * names (`paprika`, `ink`) alike — EXCEPT the semantic slots (`--primary`,
+ * `--background`, …), which extractColors owns. Non-color values (`--radius`,
+ * `--font-*`) are dropped downstream by `isColorish`.
  */
 function paletteName(rawKey: string): string | null {
   const name = rawKey.startsWith("color-") ? rawKey.slice(6) : rawKey;
-  if (SCALE_STEP.test(name) || EXTRA_ROLE.test(name)) return name;
-  return null;
+  if (SEMANTIC_SLOTS.has(name)) return null;
+  return PALETTE_KEY.test(name) ? name : null;
 }
 
 /**

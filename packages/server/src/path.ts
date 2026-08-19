@@ -103,12 +103,27 @@ export function findById(root: Node, id: string): number[] | null {
  * by the caller via `isIdLocator(locator)`.
  */
 export function resolveLocator(root: Node, locator: Locator): number[] | null {
-  if (Array.isArray(locator)) {
-    // Validate that the path resolves (so the result is "addressable").
-    return pathAt(root, locator) === null ? null : locator;
+  let loc = locator;
+  // Tolerate a JSON-stringified path array ("[]" for the root, "[0,2]" for a
+  // child) — agents constructing batch args as JSON routinely pass the array
+  // as a string, and "[]" for the root is an easy trip. (`@id` strings start
+  // with "@", never "[", so they're untouched.)
+  if (typeof loc === "string" && loc.trim().startsWith("[") && loc.trim().endsWith("]")) {
+    try {
+      const parsed: unknown = JSON.parse(loc.trim());
+      if (Array.isArray(parsed) && parsed.every((n) => Number.isInteger(n) && n >= 0)) {
+        loc = parsed as number[];
+      }
+    } catch {
+      // Not a JSON array — fall through and let it miss as before.
+    }
   }
-  if (isIdLocator(locator)) {
-    return findById(root, locator.slice(1));
+  if (Array.isArray(loc)) {
+    // Validate that the path resolves (so the result is "addressable").
+    return pathAt(root, loc) === null ? null : loc;
+  }
+  if (isIdLocator(loc)) {
+    return findById(root, loc.slice(1));
   }
   return null;
 }

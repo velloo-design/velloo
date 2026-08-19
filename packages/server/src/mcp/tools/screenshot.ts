@@ -105,6 +105,49 @@ function regionNode(
   };
 }
 
+/** Tallest extent of any measured node, in CSS px — the screen's rendered content height. */
+function contentHeightFromRects(rects: CaptureNodeRect[]): number {
+  let max = 0;
+  for (const r of rects) max = Math.max(max, r.y + r.h);
+  return Math.round(max);
+}
+
+interface FrameOverflow {
+  board: string;
+  frame: string;
+  label?: string;
+  frameHeight: number;
+  overflowBy: number;
+}
+
+/**
+ * Board frames pointing at `screenId` whose fixed height is shorter than the
+ * screen's rendered content — i.e. the board view clips them below the fold.
+ * `screenshot`/`compare_to_url` render the full natural height (`fullPage`), so
+ * this is the only signal an agent gets that a placement needs resizing.
+ */
+function framesShorterThan(
+  ctx: MutationContext,
+  screenId: string,
+  contentHeight: number,
+): FrameOverflow[] {
+  const out: FrameOverflow[] = [];
+  for (const board of ctx.folder.boards.values()) {
+    for (const frame of board.frames) {
+      if (frame.screen === screenId && frame.h < contentHeight) {
+        out.push({
+          board: board.id,
+          frame: frame.id,
+          ...(frame.label ? { label: frame.label } : {}),
+          frameHeight: frame.h,
+          overflowBy: contentHeight - frame.h,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 export function registerScreenshotTool(
   mcp: McpServer,
   ctx: MutationContext,
@@ -139,7 +182,7 @@ export function registerScreenshotTool(
     "screenshot",
     {
       description:
-        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing.',
+        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame whose fixed height clips this screen below the fold, so you know which placements to resize.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -291,6 +334,7 @@ export function registerScreenshotTool(
       }
 
       let buf: Buffer;
+      let contentText: string | null = null;
       try {
         const snapshotCss = await jit.build();
         const screenRegistry = registryForScreen(ctx, screen);
@@ -334,13 +378,33 @@ export function registerScreenshotTool(
             liveBundleUrl: liveUrl(),
             dark: mode === "dark",
           });
-          buf = await screenshotBuffer({
-            html,
-            viewport,
-            fullPage: fullPage ?? true,
-            ...(scale ? { deviceScaleFactor: scale } : {}),
-            ...(clipSelector ? { clipSelector } : {}),
-          });
+          if (clipSelector) {
+            buf = await screenshotBuffer({
+              html,
+              viewport,
+              fullPage: fullPage ?? true,
+              ...(scale ? { deviceScaleFactor: scale } : {}),
+              clipSelector,
+            });
+          } else {
+            // captureScreenshot also measures node rects, so we can report the
+            // screen's true content height + any frame it overflows — the only
+            // signal that a fixed-size board frame is clipping below the fold.
+            const capture = await captureScreenshot({
+              html,
+              viewport,
+              fullPage: fullPage ?? true,
+              ...(scale ? { deviceScaleFactor: scale } : {}),
+            });
+            buf = capture.png;
+            const contentHeight = contentHeightFromRects(capture.nodeRects);
+            const shortFrames = framesShorterThan(ctx, screenId, contentHeight);
+            contentText = JSON.stringify({
+              contentHeight,
+              viewport: { w: viewport.w, h: viewport.h },
+              ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+            });
+          }
         }
       } catch (err) {
         const bm = browserErrorMessage(err);
@@ -348,9 +412,10 @@ export function registerScreenshotTool(
         const msg = err instanceof Error ? err.message : String(err);
         return errorResult(`screenshot failed: ${msg}`);
       }
-      return {
-        content: [{ type: "image", data: buf.toString("base64"), mimeType: "image/png" }],
-      };
+      const content: McpResult["content"] = [];
+      if (contentText) content.push({ type: "text", text: contentText });
+      content.push({ type: "image", data: buf.toString("base64"), mimeType: "image/png" });
+      return { content };
     },
   );
 
@@ -431,6 +496,10 @@ export function registerScreenshotTool(
           snippets: ctx.folder.snippets,
           customCss: ctx.folder.customCss,
           baseHref: assetOrigin,
+          // Mount live-island extensions (real host charts &c.) on the Velloo
+          // side too — without this the fidelity diff is against static
+          // placeholders, which `screenshot`/`render_snippet` already avoid.
+          liveBundleUrl: liveUrl(),
           dark: mode === "dark",
         });
         const resolvedStorageState =
@@ -474,11 +543,16 @@ export function registerScreenshotTool(
           : urlCapture.pageError !== null
             ? urlCapture.pageError
             : "it shows a login form";
+        const contentHeight = contentHeightFromRects(velloo.nodeRects);
+        const shortFrames = framesShorterThan(ctx, screenId, contentHeight);
         const summary = {
           similarity: Number((1 - result.changedRatio).toFixed(4)),
           changedRatio: Number(result.changedRatio.toFixed(4)),
           /** velloo render height minus URL capture height, image px. */
           heightDelta: result.heightDelta,
+          /** Velloo render's full content height in CSS px (frame-independent). */
+          contentHeight,
+          ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
           regions,
           ...(unverified
             ? {
