@@ -41,6 +41,13 @@ export class TailwindJit {
      * invalidate, so theme edits take effect without a restart.
      */
     private readonly extraEntryCss?: () => string,
+    /**
+     * Extra source dirs to scan for classes — the live-island host
+     * component dirs, so utilities used inside a `render:"live"` component
+     * compile. Re-read on every build (after invalidate), so registering a
+     * live extension brings its classes in without a restart.
+     */
+    private readonly extraSourceDirs?: () => string[],
   ) {
     this.providers = Array.isArray(providers) ? providers : [providers];
     if (this.providers.length === 0) {
@@ -63,9 +70,11 @@ export class TailwindJit {
     if (this.cached !== null) return this.cached;
     const compiler = await this.getCompiler();
     const dedupedDirs = Array.from(new Set(this.providers.map((p) => p.componentsDir)));
+    const hostDirs = Array.from(new Set(this.extraSourceDirs?.() ?? []));
     const scanner = new Scanner({
       sources: [
         ...dedupedDirs.map((base) => ({ base, pattern: "**/*.tsx", negated: false })),
+        ...hostDirs.map((base) => ({ base, pattern: "**/*.tsx", negated: false })),
         { base: this.pagesDir, pattern: "**/*.json", negated: false },
         { base: this.snippetsDir, pattern: "**/*.json", negated: false },
       ],

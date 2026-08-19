@@ -73,6 +73,25 @@ describe("renderScreen", () => {
     expect(html).toContain(themeCss);
   });
 
+  test("omits the live-island runtime when no liveBundleUrl is set", async () => {
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, sampleTheme, opts);
+    expect(html).not.toContain("data-live-node");
+    expect(html).not.toContain("__velloo_live");
+  });
+
+  test("injects the live-island runtime + interpolated bundle URL when set", async () => {
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, sampleTheme, {
+      ...opts,
+      liveBundleUrl: "/api/live/bundle.js?v=3",
+    });
+    expect(html).toContain("window.__velloo_live");
+    // The placeholder token is replaced with the JSON-quoted URL.
+    expect(html).toContain('"/api/live/bundle.js?v=3"');
+    expect(html).not.toContain("__VELLOO_LIVE_BUNDLE_URL__");
+  });
+
   test("throws UnknownComponentError on bad $ref", async () => {
     const screen = screenWith({ $ref: "Definitely-Not-A-Component", props: {} });
     await expect(renderScreen(screen, sampleTheme, opts)).rejects.toBeInstanceOf(

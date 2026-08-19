@@ -1,6 +1,7 @@
 import type { ComponentProvider, ComponentRegistry } from "@velloo/provider";
 import type { Extension, Screen, Snippet } from "@velloo/schema";
 import { createElement } from "react";
+import { LiveIslandMarker } from "./live-marker.tsx";
 import { ExtensionPlaceholder } from "./placeholder.tsx";
 
 /**
@@ -20,10 +21,12 @@ export function providerForScreen(
 }
 
 /**
- * Build a registry of extension placeholder components, one per
- * declared extension. Each entry is a React component that closes
- * over its `Extension` descriptor and renders the canvas-mode
- * placeholder card.
+ * Build a registry of extension components, one per declared extension.
+ * Each entry closes over its `Extension` descriptor and renders either
+ * the static placeholder card (default) or — for `render:"live"` — a
+ * live-island marker the client runtime mounts the real host component
+ * into. Both render the same placeholder as their SSR skeleton, so the
+ * server-rendered output is identical until the client takes over.
  *
  * Returned as a `ComponentRegistry` so it merges cleanly with a
  * provider's own registry via `{ ...provider.registry, ...buildExtensionRegistry(...) }`.
@@ -34,8 +37,9 @@ export function providerForScreen(
 export function buildExtensionRegistry(extensions: Record<string, Extension>): ComponentRegistry {
   const out: ComponentRegistry = {};
   for (const [id, extension] of Object.entries(extensions)) {
+    const Component = extension.render === "live" ? LiveIslandMarker : ExtensionPlaceholder;
     out[id] = (resolvedProps: Record<string, unknown>) =>
-      createElement(ExtensionPlaceholder, {
+      createElement(Component, {
         id,
         extension,
         resolvedProps,

@@ -19,6 +19,8 @@ import {
 import { isComponentNode, nodeId, type Screen, type Viewport } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import type { LiveBundler } from "../../live/component-bundler.ts";
+import { liveExtensions } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { registryForScreen, resolve as resolveLocator } from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
@@ -107,8 +109,20 @@ export function registerScreenshotTool(
   mcp: McpServer,
   ctx: MutationContext,
   jit: TailwindJit,
+  bundler: LiveBundler,
   assetOrigin?: string,
 ): void {
+  /**
+   * Root-relative live-island bundle URL (served by the canvas server at
+   * `assetOrigin`), or undefined when the folder has no `render:"live"`
+   * extensions. Re-evaluated per render so a fresh bundle version is
+   * picked up after a host edit.
+   */
+  const liveUrl = (): string | undefined =>
+    Object.keys(liveExtensions(ctx.folder.config.extensions)).length > 0
+      ? `/api/live/bundle.js?v=${bundler.version}`
+      : undefined;
+
   // Diff baselines per render-parameter key, LRU-capped. Deliberately
   // in-memory only: a restart means components/themes may have changed
   // underneath, and a stale baseline produces confusing phantom diffs.
@@ -191,6 +205,7 @@ export function registerScreenshotTool(
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,
+            liveBundleUrl: liveUrl(),
             dark: mode === "dark",
           });
           const capture = await captureScreenshot({
@@ -288,6 +303,7 @@ export function registerScreenshotTool(
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
+              liveBundleUrl: liveUrl(),
               dark: false,
             }),
             renderScreen(screen, themeByName(ctx.folder, theme), {
@@ -297,6 +313,7 @@ export function registerScreenshotTool(
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
+              liveBundleUrl: liveUrl(),
               dark: true,
             }),
           ]);
@@ -314,6 +331,7 @@ export function registerScreenshotTool(
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,
+            liveBundleUrl: liveUrl(),
             dark: mode === "dark",
           });
           buf = await screenshotBuffer({
@@ -554,6 +572,7 @@ export function registerScreenshotTool(
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
+              liveBundleUrl: liveUrl(),
               dark: false,
             }),
             renderScreen(syntheticScreen, themeByName(ctx.folder, theme), {
@@ -563,6 +582,7 @@ export function registerScreenshotTool(
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
+              liveBundleUrl: liveUrl(),
               dark: true,
             }),
           ]);
@@ -580,6 +600,7 @@ export function registerScreenshotTool(
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,
+            liveBundleUrl: liveUrl(),
             dark: mode === "dark",
           });
           buf = await screenshotBuffer({

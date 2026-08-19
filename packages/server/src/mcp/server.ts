@@ -8,6 +8,7 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import type { LiveBundler } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { registerAssetTools } from "./tools/assets.ts";
@@ -27,6 +28,7 @@ export interface McpServerOptions {
   port: number;
   host: string;
   jit: TailwindJit;
+  bundler: LiveBundler;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
   assetOrigin?: string;
 }
@@ -56,7 +58,7 @@ const INSTRUCTIONS = [
   '**Think in ids, not paths.** Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), pass a stable id reference like `"@hero-cta"`. Assign ids at creation (`id: "hero-cta"` on `add_node` / `instantiate_snippet`) for every node you might touch again — sections, CTAs, anything findable. Number paths are positional and break when siblings move; treat them as an implementation detail you get from `find_nodes` when no id exists yet (`set_node_id` retrofits one).',
   "",
   "**Three customization layers** stack additively in every folder ( A folder registers N (`config.libraries`); each screen pins one via `screen.library`. Multi-library lets marketing boards use no-lib while app boards use shadcn in the same folder. Component ids resolve against the screen's library only.",
-  "  - **Extensions** add wholly new components the active library doesn't have — your app's custom `DataTable`, a brand `Hero`, a bespoke `PriceChart`. Register one with `add_extension` (it persists in `.design/config.json`); the canvas renders a placeholder card carrying the component id + props, and `emit_code` emits a real `import` from the extension's declared `importPath`. Extensions are folder-global and shadow library components with the same id. Use them for *additive customization*, NOT for compositions (snippets cover that).",
+  "  - **Extensions** add wholly new components the active library doesn't have — your app's custom `DataTable`, a brand `Hero`, a bespoke `PriceChart`. Register one with `add_extension` (it persists in `.design/config.json`); the canvas renders a placeholder card carrying the component id + props, and `emit_code` emits a real `import` from the extension's declared `importPath`. Extensions are folder-global and shadow library components with the same id. Use them for *additive customization*, NOT for compositions (snippets cover that). For a component whose look needs the real implementation (charts especially), register it with `render:\"live\"` — Velloo bundles the actual component from your app (e.g. your exact recharts) and mounts it in the canvas for a pixel-faithful preview, falling back to the placeholder on any failure. The built-in `Chart` node already previews via echarts without an extension.",
   "  - **Snippets** compose existing components (library + extension) into named subtrees with typed params. Use them for repeated structure (FeatureCard, NavRow, PricingTier).",
   "",
   '`list_components` returns both library entries and extensions in one call, each tagged with `kind: "library" | "extension"`. Filter with `kind` when you only want one type.',
@@ -81,7 +83,7 @@ const INSTRUCTIONS = [
   "",
   "Screens have one tree; viewport size is a property of each `frame` placement on a board, not of the screen. Different viewport renderings of the same screen → multiple frames pointing at the same screen (edits sync across all of them). Different layouts per breakpoint → separate screens with their own frames. **A frame's `w`/`h` is canvas layout only** — `screenshot` / `compare_to_url` ignore it and render at their *own* viewport (the explicit `w`/`h`/`viewport` arg, defaulting to the folder's Desktop preset). `screenshot` defaults to `fullPage: true` but the rendered HTML is bounded by the requested `viewport.h` — pass a taller viewport for long marketing screens, or extract sections into snippets.",
   "",
-  '**Make it distinctive.** Default shadcn + Inter + one indigo reads as template. The personality levers: (1) `set_fonts` — declare a display face (role: "display" → class `font-display`) before composing; Google Fonts load in design mode and emit into globals.css. (2) `custom_css` — keyframes, grain/noise textures, clip-paths, ::selection. (3) `upload_asset` — author your own SVG/raster art (hero shapes, textures, marks) and reference it as `<Image src="/assets/…">`; `generate_image` is only a stock-photo placeholder. (4) Theme tokens are yours: `derive_palette_from_color` / `set_token` an opinionated palette instead of living with the default. Big type, real art, confident color — then verify with screenshots.',
+  '**Make it distinctive.** Default shadcn + Inter + one indigo reads as template. The personality levers: (1) `set_fonts` — declare a display face (role: "display" → class `font-display`) before composing; Google Fonts load in design mode and emit into globals.css. (2) `custom_css` — keyframes, grain/noise textures, clip-paths, ::selection. (3) `upload_asset` — author your own SVG/raster art (hero shapes, textures, marks) and reference it as `<Image src="/assets/…">`. (4) Theme tokens are yours: `derive_palette_from_color` / `set_token` an opinionated palette instead of living with the default. Big type, real art, confident color — then verify with screenshots.',
   "",
   'Text content for `Heading`, `Text`, `Button`, `Badge`, `Label` goes in the `children` prop, not a `text` prop. `Heading.level` controls only the HTML tag + a baked size ladder (h1 = text-5xl bold, h6 = text-lg semibold); override with `className` if you want a different size — but the className must include an explicit `text-*` size to win (a className with only spacing/weight like `mb-1 font-semibold` leaves the ladder size in place; add `text-base` to actually shrink it). `Icon` takes a lucide-react name as its `name` prop — PascalCase ("ArrowRight") or kebab-case ("arrow-right") both resolve; a name that matches no lucide icon renders the fallback "?" glyph and the mutation result carries an advisory warning. For placeholder imagery (avatars, hero shots) use the `Placeholder` component instead of faking with gradient divs.',
   "",
@@ -124,7 +126,12 @@ function withStrictToolArgs(mcp: McpServer): McpServer {
   return mcp;
 }
 
-function buildMcpServer(ctx: MutationContext, jit: TailwindJit, assetOrigin?: string): McpServer {
+function buildMcpServer(
+  ctx: MutationContext,
+  jit: TailwindJit,
+  bundler: LiveBundler,
+  assetOrigin?: string,
+): McpServer {
   const mcp = withStrictToolArgs(
     new McpServer({ name: "velloo", version: "0.1.0" }, { instructions: INSTRUCTIONS }),
   );
@@ -133,7 +140,7 @@ function buildMcpServer(ctx: MutationContext, jit: TailwindJit, assetOrigin?: st
   registerInspectTool(mcp, ctx);
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
-  registerScreenshotTool(mcp, ctx, jit, assetOrigin);
+  registerScreenshotTool(mcp, ctx, jit, bundler, assetOrigin);
   registerValidateTools(mcp, ctx);
   registerGenerateTools(mcp, ctx);
   registerExtensionTools(mcp, ctx);
@@ -203,7 +210,7 @@ export async function createMcpServer(
               sessions.set(id, { transport, server });
             },
           });
-          const server = buildMcpServer(ctx, opts.jit, opts.assetOrigin);
+          const server = buildMcpServer(ctx, opts.jit, opts.bundler, opts.assetOrigin);
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
             void server.close().catch(() => undefined);

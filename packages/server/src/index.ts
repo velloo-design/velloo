@@ -14,6 +14,7 @@ import {
   reloadSnippet,
   reloadTheme,
 } from "./design-folder.ts";
+import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 import { createMcpServer } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { migrateConfig, resolveProviders } from "./providers.ts";
@@ -122,14 +123,27 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   folder.config = migrateConfig(folder.config);
   const { providers, defaultProvider } = await resolveProviders(folder.config, folder.root);
   const broadcaster = new Broadcaster();
+  const bundler = new LiveBundler(
+    folder.root,
+    () => folder.config.hostApp,
+    () => liveExtensions(folder.config.extensions),
+  );
   const jit = new TailwindJit(
     Object.values(providers),
     join(folder.root, "screens"),
     undefined,
     () => extraThemeBlock(folder),
+    () => bundler.hostSourceDirs(),
   );
   const broadcast = (e: WatchEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
+      jit.invalidate();
+    }
+    // A live extension was added/updated/removed — rebuild the bundle and
+    // bump its version so the iframe re-fetches, and rescan Tailwind so the
+    // new host component's utility classes compile.
+    if (e.type === "config-changed") {
+      bundler.invalidate();
       jit.invalidate();
     }
     broadcaster.broadcast(e);
@@ -141,7 +155,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     provider: defaultProvider,
     broadcast,
   };
-  const app = createApp(() => ctx, jit);
+  const app = createApp(() => ctx, jit, bundler);
 
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {
@@ -217,6 +231,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     port: opts.mcpPort ?? 7301,
     host: opts.host ?? "127.0.0.1",
     jit,
+    bundler,
     assetOrigin: `http://${opts.host ?? "127.0.0.1"}:${server.port}/`,
   });
 

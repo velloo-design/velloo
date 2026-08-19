@@ -58,6 +58,24 @@ export const CodegenConfigSchema = z.object({
 export type CodegenConfig = z.infer<typeof CodegenConfigSchema>;
 
 /**
+ * Where the host app lives, used by the live-island bundler to resolve
+ * a `render:"live"` extension's `importPath` (and its dependencies, e.g.
+ * the app's own recharts) into a browser bundle. `root` is absolute or
+ * resolved from the design folder root; absent ⇒ the bundler defaults to
+ * the design folder's parent (the `<appRoot>/velloo` layout `init`
+ * produces). `aliases` mirrors the host tsconfig path map (e.g.
+ * `{ "@/*": "src/*" }`); absent ⇒ `{ "@/*": "*" }`. Reading the host
+ * tsconfig per build is fragile (JSON5, `extends` chains), so it's
+ * persisted once at registration time.
+ */
+export const HostAppSchema = z.object({
+  root: z.string().min(1),
+  aliases: z.record(z.string().min(1), z.string().min(1)).optional(),
+});
+
+export type HostApp = z.infer<typeof HostAppSchema>;
+
+/**
  * Folder config. Multi-library: a folder registers N libraries by id
  * and pins one as the default; each screen optionally declares which
  * library it uses (`screen.library`), falling back to `defaultLibrary`.
@@ -105,6 +123,8 @@ export const ConfigSchema = z
     /** Board id the canvas should open on first load. Falls back to the first board. */
     defaultBoard: z.string().min(1).optional(),
     codegen: CodegenConfigSchema.optional(),
+    /** Host app location for the live-island bundler. See `HostAppSchema`. */
+    hostApp: HostAppSchema.optional(),
   })
   .refine(
     (c) => {

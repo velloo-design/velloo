@@ -559,6 +559,21 @@ describe("ExtensionSchema", () => {
     };
     expect(ExtensionSchema.safeParse(extension).success).toBe(true);
   });
+
+  test("accepts render: live / static", async () => {
+    const { ExtensionSchema } = await import("../extension.ts");
+    const base = { importPath: "@/components/chart", props: [] };
+    expect(ExtensionSchema.safeParse({ ...base, render: "live" }).success).toBe(true);
+    expect(ExtensionSchema.safeParse({ ...base, render: "static" }).success).toBe(true);
+    expect(ExtensionSchema.safeParse({ ...base, render: "nope" }).success).toBe(false);
+  });
+
+  test("render is absent on round-trip when omitted (back-compat)", async () => {
+    const { ExtensionSchema } = await import("../extension.ts");
+    const legacy = { importPath: "@/components/data-table", props: [] };
+    const parsed = ExtensionSchema.parse(JSON.parse(JSON.stringify(legacy)));
+    expect("render" in parsed).toBe(false);
+  });
 });
 
 describe("ThemeSchema", () => {

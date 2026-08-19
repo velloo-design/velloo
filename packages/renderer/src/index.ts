@@ -19,6 +19,7 @@ export {
   type ParentMessage,
   PROTOCOL_VERSION,
 } from "./iframe-protocol.ts";
+export { LIVE_RUNTIME } from "./live-runtime.ts";
 export { type RenderResult, renderBody, renderScreen } from "./render-to-html.ts";
 export {
   BrowserMissingError,

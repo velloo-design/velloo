@@ -50,6 +50,11 @@ export interface RenderOptions {
   customCss?: string;
   /** Origin for root-relative asset URLs in out-of-origin renders. */
   baseHref?: string;
+  /**
+   * Root-relative URL of the live-island bundle. Set only when the screen
+   * has `render:"live"` extension nodes; injects the client mount runtime.
+   */
+  liveBundleUrl?: string;
 }
 
 /**
@@ -82,6 +87,7 @@ export async function renderScreen(
     baseHref: options.baseHref,
     title: screen.name,
     dark: options.dark,
+    liveBundleUrl: options.liveBundleUrl,
   });
 
   return { html, bodyHtml, themeCss };

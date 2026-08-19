@@ -16,6 +16,8 @@ export {
   type CodegenConfig,
   type Config,
   ConfigSchema,
+  type HostApp,
+  HostAppSchema,
   type Library,
   LibrarySchema,
   type ViewportPreset,

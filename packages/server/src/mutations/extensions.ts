@@ -7,6 +7,7 @@ import {
   isComponentNode,
   type Node,
 } from "@velloo/schema";
+import { resolveLiveImportWarning } from "../live/component-bundler.ts";
 import type { MutationContext } from "./context.ts";
 import {
   extensionIdConflict,
@@ -58,6 +59,7 @@ export interface AddExtensionArgs {
   props: ExtensionPropDescriptor[];
   category?: "ui" | "typography";
   description?: string;
+  render?: "static" | "live";
 }
 
 export interface AddExtensionResult {
@@ -69,6 +71,11 @@ export interface AddExtensionResult {
    * decide whether to rename their extension. Empty when no shadow.
    */
   shadowedLibraryComponent?: string;
+  /**
+   * Set when `render:"live"` but the importPath can't be resolved from the
+   * host app — the canvas will show the placeholder until it's fixed.
+   */
+  liveResolveWarning?: string;
 }
 
 export async function addExtension(
@@ -98,6 +105,7 @@ export async function addExtension(
     description: args.description,
     props: args.props,
     origin: "agent",
+    render: args.render,
   });
 
   const shadowed = args.id in ctx.defaultProvider.registry ? args.id : undefined;
@@ -110,6 +118,14 @@ export async function addExtension(
   ctx.broadcast({ type: "config-changed" });
   const result: AddExtensionResult = { id: args.id, extension };
   if (shadowed) result.shadowedLibraryComponent = shadowed;
+  if (extension.render === "live") {
+    const warning = resolveLiveImportWarning(
+      ctx.folder.root,
+      ctx.folder.config.hostApp,
+      args.importPath,
+    );
+    if (warning) result.liveResolveWarning = warning;
+  }
   return ok(result);
 }
 
@@ -120,12 +136,15 @@ export interface UpdateExtensionArgs {
     props?: ExtensionPropDescriptor[];
     category?: "ui" | "typography";
     description?: string;
+    render?: "static" | "live";
   };
 }
 
 export interface UpdateExtensionResult {
   id: string;
   extension: Extension;
+  /** Set when the updated extension is `render:"live"` but won't resolve. */
+  liveResolveWarning?: string;
 }
 
 export async function updateExtension(
@@ -156,6 +175,7 @@ export async function updateExtension(
     ...(args.patch.props !== undefined ? { props: args.patch.props } : {}),
     ...(args.patch.category !== undefined ? { category: args.patch.category } : {}),
     ...(args.patch.description !== undefined ? { description: args.patch.description } : {}),
+    ...(args.patch.render !== undefined ? { render: args.patch.render } : {}),
   });
 
   const nextConfig = {
@@ -164,7 +184,16 @@ export async function updateExtension(
   };
   await persistConfig(ctx.folder, nextConfig);
   ctx.broadcast({ type: "config-changed" });
-  return ok({ id: args.id, extension: next });
+  const result: UpdateExtensionResult = { id: args.id, extension: next };
+  if (next.render === "live") {
+    const warning = resolveLiveImportWarning(
+      ctx.folder.root,
+      ctx.folder.config.hostApp,
+      next.importPath,
+    );
+    if (warning) result.liveResolveWarning = warning;
+  }
+  return ok(result);
 }
 
 export interface RemoveExtensionArgs {

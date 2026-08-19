@@ -1,5 +1,6 @@
 import type { Viewport } from "@velloo/schema";
 import { IFRAME_RUNTIME } from "./iframe-runtime.ts";
+import { LIVE_RUNTIME } from "./live-runtime.ts";
 
 export interface DocumentOptions {
   viewport: Viewport;
@@ -25,6 +26,12 @@ export interface DocumentOptions {
   includeRuntime?: boolean;
   /** Mount the dark-mode class on <html>. */
   dark?: boolean;
+  /**
+   * Root-relative URL of the live-island bundle (e.g.
+   * "/api/live/bundle.js?v=3"). Set only when the screen has live nodes;
+   * injects the client mount runtime that fills the SSR markers.
+   */
+  liveBundleUrl?: string;
 }
 
 /**
@@ -44,8 +51,12 @@ export function buildDocument(opts: DocumentOptions): string {
     title = "Velloo design",
     includeRuntime = true,
     dark,
+    liveBundleUrl,
   } = opts;
   const runtime = includeRuntime ? `<script>${IFRAME_RUNTIME}</script>` : "";
+  const live = liveBundleUrl
+    ? `<script>${LIVE_RUNTIME.replace("__VELLOO_LIVE_BUNDLE_URL__", JSON.stringify(liveBundleUrl))}</script>`
+    : "";
   const fontLinks =
     googleFonts && googleFonts.length > 0
       ? // Entries are already in css2 `family=` value syntax (spaces as `+`,
@@ -74,7 +85,7 @@ export function buildDocument(opts: DocumentOptions): string {
     <style>${snapshotCss}</style>
     <style>${themeCss}</style>${customStyle}
   </head>
-  <body ${antiAutofill}>${bodyHtml}${runtime}</body>
+  <body ${antiAutofill}>${bodyHtml}${runtime}${live}</body>
 </html>`;
 }
 

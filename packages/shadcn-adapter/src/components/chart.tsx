@@ -7,7 +7,9 @@
 //
 // `emit_code` targets the app's actual chart lib (recharts, the app's own
 // Chart, …) via a codegen adapter — preview engine and emit target are
-// decoupled.
+// decoupled. This built-in `Chart` always previews via echarts; to preview
+// the app's *own* chart component (its exact recharts) pixel-faithfully,
+// register it as a `render:"live"` extension (live islands).
 import type * as React from "react";
 import { cn } from "../lib/utils.ts";
 import { renderChartSvg } from "./chart-option.ts";

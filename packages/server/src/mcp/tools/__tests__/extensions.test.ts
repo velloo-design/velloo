@@ -122,6 +122,32 @@ describe("extension lifecycle", () => {
     expect(events.some((e) => e.type === "config-changed")).toBe(true);
   });
 
+  test("add_extension render:live persists the flag and warns on an unresolvable importPath", async () => {
+    const r = unwrap(
+      await addExtension(ctx, {
+        id: "PriceChart",
+        importPath: "@/components/charts/DoesNotExist",
+        props: [],
+        render: "live",
+      }),
+    );
+    expect(r.extension.render).toBe("live");
+    // The tmp folder has no host app with this component, so the agent gets a
+    // first-class warning rather than a silently-broken live preview.
+    expect(r.liveResolveWarning).toBeDefined();
+
+    const onDisk = ConfigSchema.parse(
+      JSON.parse(await readFile(join(tmp, ".design/config.json"), "utf8")),
+    );
+    expect(onDisk.extensions?.PriceChart?.render).toBe("live");
+  });
+
+  test("update_extension can flip render to live", async () => {
+    unwrap(await addExtension(ctx, { id: "Chart2", importPath: "@/c", props: [] }));
+    const r = unwrap(await updateExtension(ctx, { id: "Chart2", patch: { render: "live" } }));
+    expect(r.extension.render).toBe("live");
+  });
+
   test("add_extension returns shadowedLibraryComponent when the id matches a library component", async () => {
     const r = unwrap(
       await addExtension(ctx, {

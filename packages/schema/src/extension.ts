@@ -66,6 +66,19 @@ export const ExtensionSchema = z.object({
    * affects nothing in code.
    */
   origin: z.enum(["agent", "manual"]).optional(),
+  /**
+   * How the canvas previews this extension node.
+   *   "static" (default) — labelled placeholder card (Tier 1).
+   *   "live"             — the real component is bundled from the host
+   *                        app and client-mounted into a SSR marker
+   *                        ("live island"). Used for charts and other
+   *                        components whose visual fidelity needs the
+   *                        actual implementation. Falls back to the
+   *                        placeholder if the bundle/render fails.
+   * Optional, absent ⇒ "static". Never written when static so existing
+   * `config.json` files round-trip unchanged.
+   */
+  render: z.enum(["static", "live"]).optional(),
 });
 
 export type Extension = z.infer<typeof ExtensionSchema>;

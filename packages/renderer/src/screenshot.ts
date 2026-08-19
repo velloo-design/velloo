@@ -1,6 +1,24 @@
 import { existsSync } from "node:fs";
 import type { Viewport } from "@velloo/schema";
-import type { Browser } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
+
+/**
+ * When the doc carries live-island markers, wait for the client mount to
+ * settle (`window.__velloo_live_ready`) so the capture lands the real
+ * component's final frame, not the SSR skeleton. Bounded — a stuck bundle
+ * can't stall the shot. No-op when there are no live nodes (cheap string
+ * probe avoids a pointless wait on every plain screenshot).
+ */
+async function waitForLiveIslands(page: Page, html: string): Promise<void> {
+  if (!html.includes("data-live-node")) return;
+  await page
+    .waitForFunction(
+      () => (window as unknown as { __velloo_live_ready?: boolean }).__velloo_live_ready === true,
+      undefined,
+      { timeout: 3000 },
+    )
+    .catch(() => {});
+}
 
 /**
  * The command that installs the headless browser screenshots need. Pinned to
@@ -163,6 +181,7 @@ export async function captureScreenshot(
         ]),
       )
       .catch(() => {});
+    await waitForLiveIslands(page, opts.html);
     const nodeRects = await page.$$eval("[data-node-path]", (els) =>
       els.map((el) => {
         const r = el.getBoundingClientRect();
@@ -377,6 +396,7 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
     // QA loop is blind to imagery. Offline/slow assets just time out
     // and the capture proceeds.
     await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+    await waitForLiveIslands(page, opts.html);
     if (opts.clipSelector) {
       const locator = page.locator(opts.clipSelector).first();
       if ((await locator.count()) === 0) {

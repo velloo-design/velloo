@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { createApp } from "../app.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
+import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
 
@@ -83,6 +84,11 @@ beforeEach(async () => {
   await writeJson(join(tmp, "snippets/stat-card.json"), sampleSnippet);
   folder = await loadDesignFolder(tmp);
   jit = new TailwindJit(provider, join(folder.root, "screens"));
+  const bundler = new LiveBundler(
+    folder.root,
+    () => folder.config.hostApp,
+    () => liveExtensions(folder.config.extensions),
+  );
   const ctx: MutationContext = {
     folder,
     providers: { default: provider },
@@ -90,7 +96,7 @@ beforeEach(async () => {
     provider,
     broadcast: () => undefined,
   };
-  app = createApp(() => ctx, jit);
+  app = createApp(() => ctx, jit, bundler);
 });
 
 afterEach(async () => {
@@ -143,5 +149,16 @@ describe("/api/render/snippet-body/:id (editor route)", () => {
   test("404 for an unknown snippet id", async () => {
     const res = await app.fetch(new Request("http://localhost/api/render/snippet-body/no-such"));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("/api/live/bundle.js (live-island bundle)", () => {
+  test("serves a valid JS module (empty when no live extensions)", async () => {
+    const res = await app.fetch(new Request("http://localhost/api/live/bundle.js"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/javascript");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = await res.text();
+    expect(body).toContain("export const components");
   });
 });

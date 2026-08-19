@@ -3,6 +3,8 @@ import type { Node, Screen, Viewport } from "@velloo/schema";
 import { Hono } from "hono";
 import { themeByName } from "../design-folder.ts";
 import { buildShowcaseTree } from "../library/showcases.ts";
+import type { LiveBundler } from "../live/component-bundler.ts";
+import { liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { registryForScreen } from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
@@ -13,8 +15,22 @@ import type { TailwindJit } from "../styles/tailwind-jit.ts";
  * preset if missing. Used by the canvas to mount a screen inside each frame
  * iframe at the frame's current size.
  */
-export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJit): Hono {
+export function createRenderRouter(
+  ctxFor: () => MutationContext,
+  jit: TailwindJit,
+  bundler: LiveBundler,
+): Hono {
   const r = new Hono();
+
+  /**
+   * Root-relative live-island bundle URL, or undefined when the folder has
+   * no `render:"live"` extensions. Cache-busted by the bundler version so a
+   * host edit re-fetches. Folder-scoped, so it's the same for every screen.
+   */
+  const liveBundleUrl = (ctx: MutationContext): string | undefined =>
+    Object.keys(liveExtensions(ctx.folder.config.extensions)).length > 0
+      ? `/api/live/bundle.js?v=${bundler.version}`
+      : undefined;
 
   /**
    * Render a snippet in isolation as live HTML. Wraps the snippet in a
@@ -251,6 +267,7 @@ export function createRenderRouter(ctxFor: () => MutationContext, jit: TailwindJ
         snippets: f.snippets,
         customCss: f.customCss,
         dark,
+        liveBundleUrl: liveBundleUrl(ctx),
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
     } catch (err) {

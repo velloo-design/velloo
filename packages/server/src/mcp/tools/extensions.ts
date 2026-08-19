@@ -55,14 +55,16 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
         "",
         "**Props schema.** Each prop entry has `name`, `type` (free-form TS-shaped string for display), `optional`, and a `control` of `boolean | number | string | color | enum | icon`. For `control: \"enum\"`, also pass `enumValues: string[]`. `defaultValue` (string) is shown in the placeholder when the prop isn't set on a node. The schema mirrors a library component's manifest entry — the inspector renders the same controls for either.",
         "",
-        "**Canvas rendering.** The component shows up as a dashed-border placeholder card carrying the component id, the resolved prop values, and the importPath. It's not a real visual preview — Tier 2 (Sprint Y.2) will support real React previews. Today's placeholder is good enough to design layout against.",
+        "**Canvas rendering.** By default the component shows up as a dashed-border placeholder card carrying the component id, the resolved prop values, and the importPath — good enough to design layout against.",
+        "",
+        '**Live preview (`render: "live"`).** For components whose visual fidelity needs the real implementation — charts above all — pass `render: "live"`. Velloo bundles the actual component from your app (resolved from `importPath` against the host app + its `node_modules`, e.g. your exact recharts) and client-mounts it in the canvas, so the preview matches what your app ships. Requirements: the component must be browser-renderable (no server-only imports) and resolvable from the host app. The preview is visual-only (clicks select the node; no in-canvas tooltips), and any bundle/render failure falls back to the placeholder. The built-in `Chart` node already previews via echarts and needs no extension; use `render:"live"` for your own chart components.',
         "",
         '**Codegen.** `emit_code` writes `import { <id> } from "<importPath>"` exactly as supplied. Use the same alias your app actually uses (`@/components/data-table`, `~/components/PriceChart`, `@acme/charts`).',
         "",
         "**Shadowing.** An extension shadows a library component with the same id (your `Button` extension wins over shadcn's `Button` on every screen). The tool's response surfaces `shadowedLibraryComponent` when this happens so you can choose to rename if it was unintentional.",
         "",
-        "**Example.** Register a custom sortable table:",
-        '  add_extension({ id: "DataTable", importPath: "@/components/data-table", props: [{ name: "data", type: "any[]", optional: false, control: "string" }, { name: "sortable", type: "boolean | undefined", optional: true, control: "boolean" }], description: "Sortable, paginated table" })',
+        "**Example.** Register a custom live chart:",
+        '  add_extension({ id: "PriceChart", importPath: "@/components/charts/PriceChart", render: "live", props: [{ name: "data", type: "Point[]", optional: false, control: "string" }], description: "Recharts price chart" })',
       ].join("\n"),
       inputSchema: {
         id: z.string().min(1),
@@ -70,6 +72,12 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
         props: z.array(ExtensionPropArg),
         category: z.enum(["ui", "typography"]).optional(),
         description: z.string().optional(),
+        render: z
+          .enum(["static", "live"])
+          .optional()
+          .describe(
+            '"live" client-mounts the real component (charts); default "static" placeholder',
+          ),
       },
     },
     async (args) => {
@@ -96,6 +104,7 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
           props: z.array(ExtensionPropArg).optional(),
           category: z.enum(["ui", "typography"]).optional(),
           description: z.string().optional(),
+          render: z.enum(["static", "live"]).optional(),
         }),
       },
     },
