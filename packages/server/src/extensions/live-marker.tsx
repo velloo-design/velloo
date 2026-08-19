@@ -53,7 +53,11 @@ export function LiveIslandMarker({
   className,
   ...rest
 }: LiveMarkerProps): React.ReactElement {
-  const wrapperClassName = ["relative aspect-video w-full", className].filter(Boolean).join(" ");
+  // Default to a 16:9 box; `fit:"content"` opts out so a fixed-height chart
+  // (or an `absolute inset-0` overlay) drives its own height instead of
+  // fighting the aspect ratio.
+  const sizing = extension.fit === "content" ? "relative w-full" : "relative aspect-video w-full";
+  const wrapperClassName = [sizing, className].filter(Boolean).join(" ");
   return (
     <div
       data-live-node="true"

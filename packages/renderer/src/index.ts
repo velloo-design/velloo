@@ -30,6 +30,7 @@ export {
   captureUrlScreenshot,
   chromiumExecutable,
   classifyCapture,
+  isCaptureTimeout,
   type ScreenshotCompareOptions,
   type ScreenshotOptions,
   screenshot,

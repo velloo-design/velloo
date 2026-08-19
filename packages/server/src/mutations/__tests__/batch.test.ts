@@ -160,6 +160,21 @@ describe("runBatch", () => {
     expect(tree.props.className).toBe("p-2");
   });
 
+  test("add_snippet inside a batch defaults params when omitted", async () => {
+    await mkdir(join(tmp, "snippets"), { recursive: true });
+    // batch dispatches raw args (no Zod `.default([])`), so the mutation itself
+    // must default params — otherwise a params-less add_snippet would throw.
+    const result = await runBatch(ctx, [
+      {
+        tool: "add_snippet",
+        args: { id: "bare", name: "Bare", tree: { $ref: "Box", props: { className: "p-1" } } },
+      },
+    ]);
+    expect(result.completed).toBe(1);
+    expect(result.rolledBack).toBe(false);
+    expect(folder.snippets.get("bare")?.params).toEqual([]);
+  });
+
   test("rollback restores a snippet edited earlier in the batch", async () => {
     await mkdir(join(tmp, "snippets"), { recursive: true });
     await runBatch(ctx, [

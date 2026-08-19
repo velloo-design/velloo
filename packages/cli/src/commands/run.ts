@@ -1,5 +1,7 @@
 import { createServer } from "@velloo/server";
 import { defineCommand } from "citty";
+import { defaultCloudUrl } from "../cloud.ts";
+import { loadCredential } from "../cloud-credentials.ts";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
 
@@ -38,11 +40,19 @@ export default defineCommand({
       fail("run", `invalid --mcp-port ${JSON.stringify(args["mcp-port"])}`);
     }
 
+    // The server reads no credentials itself — resolve them here (respecting
+    // the server→cli dependency direction) and thread them in. Read once at
+    // startup: logging in while the server runs needs a restart. A missing
+    // token is fine; the opt-in feedback tool reports it when invoked.
+    const cloudUrl = defaultCloudUrl();
+    const cred = await loadCredential(cloudUrl);
+
     const handle = await createServer({
       folder,
       port,
       mcpPort,
       host: args.host ?? "127.0.0.1",
+      cloud: { url: cloudUrl, token: cred?.token },
     });
     console.log(`velloo: canvas at ${handle.url}`);
     console.log(`velloo: MCP server at ${handle.mcpUrl} (point your AI agent here)`);

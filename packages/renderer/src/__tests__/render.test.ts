@@ -45,6 +45,25 @@ describe("renderScreen", () => {
     expect(html).toContain('<meta name="viewport" content="width=800');
   });
 
+  test("renders an object `style` prop as an inline style attribute", async () => {
+    // Object `style` is a supported escape hatch for things that don't map to
+    // a utility class (here a dot-grid texture). React SSR hyphenates the keys.
+    const screen = screenWith({
+      $ref: "Box",
+      props: {
+        className: "absolute inset-0",
+        style: {
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.12) 1px, transparent 0)",
+          backgroundSize: "14px 14px",
+        },
+      },
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("background-image:radial-gradient(circle at 1px 1px");
+    expect(bodyHtml).toContain("background-size:14px 14px");
+  });
+
   test("renders a Card with nested Heading + Text + Button", async () => {
     const screen = screenWith({
       $ref: "Card",

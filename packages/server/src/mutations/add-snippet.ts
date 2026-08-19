@@ -9,7 +9,12 @@ export interface AddSnippetArgs {
   /** Display name. Id is slug(name) unless `id` provided. */
   name: string;
   id?: string;
-  params: SnippetParam[];
+  /**
+   * Declared params. Optional + defaulted here (not just via the standalone
+   * tool's Zod `.default([])`) so the `batch` path — which dispatches raw args
+   * and bypasses Zod defaults — accepts a params-less `add_snippet` too.
+   */
+  params?: SnippetParam[];
   tree: Node;
 }
 
@@ -43,7 +48,7 @@ export async function addSnippet(
   const snippet: Snippet = {
     id,
     name: args.name,
-    params: args.params,
+    params: args.params ?? [],
     tree: args.tree,
   };
 

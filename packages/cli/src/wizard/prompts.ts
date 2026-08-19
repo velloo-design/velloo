@@ -1,6 +1,18 @@
 import { resolve } from "node:path";
-import { cancel, groupMultiselect, isCancel, note, select, spinner, text } from "@clack/prompts";
+import {
+  cancel,
+  confirm,
+  groupMultiselect,
+  isCancel,
+  note,
+  select,
+  spinner,
+  text,
+} from "@clack/prompts";
 import pc from "picocolors";
+import { defaultCloudUrl } from "../cloud.ts";
+import { saveCredential } from "../cloud-credentials.ts";
+import { performDeviceLogin } from "../cloud-login.ts";
 import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
 import { detectHost } from "../scan/detect.ts";
 import { resolveScanRoot, scanAppRoutes } from "../scan/index.ts";
@@ -71,6 +83,64 @@ async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
 }
 
 /**
+ * Promote signing in ("Share for free"), then — only if the user signs in —
+ * offer the opt-in feedback tool. Sign-in is global (`~/.velloo`), independent
+ * of the folder being created. Returns `{ feedback }` to merge into the wizard
+ * answers (feedback omitted unless enabled), or `null` if the user cancels.
+ * A sign-in failure is soft: we note it and continue without feedback.
+ */
+async function promptShareAndFeedback(): Promise<{
+  feedback?: { enabled: boolean; contactOk: boolean };
+} | null> {
+  const wantShare = await confirm({
+    message: "Share your designs for free? Sign in to publish branded share links.",
+    initialValue: false,
+  });
+  if (isAborted(wantShare)) return null;
+  if (!wantShare) return {};
+
+  const cloudUrl = defaultCloudUrl();
+  const spin = spinner();
+  let signedIn = false;
+  try {
+    const cred = await performDeviceLogin(cloudUrl, ({ verificationUrl, userCode }) => {
+      note(
+        `Opening your browser to sign in.\nIf it doesn't open, visit:\n${pc.cyan(verificationUrl)}\nand enter the code: ${pc.bold(userCode)}`,
+        "Sign in",
+      );
+      spin.start("Waiting for you to finish signing in");
+    });
+    await saveCredential(cloudUrl, cred);
+    spin.stop(`Signed in as ${cred.email}`);
+    signedIn = true;
+  } catch (err) {
+    spin.stop("Sign-in skipped");
+    note(
+      `Couldn't sign in (${err instanceof Error ? err.message : String(err)}).\nYou can run ${pc.cyan("velloo login")} anytime later.`,
+      "Heads up",
+    );
+  }
+  if (!signedIn) return {};
+
+  const choice = await select<"yes" | "yes-contact" | "no">({
+    message: "Enable the feedback tool? Your agent can send Velloo product feedback to improve it.",
+    options: [
+      { value: "yes", label: "Yes", hint: "Agent can send product feedback" },
+      {
+        value: "yes-contact",
+        label: "Yes — and it's OK to contact me about it",
+        hint: "We may follow up by email",
+      },
+      { value: "no", label: "No", hint: "Don't enable feedback" },
+    ],
+    initialValue: "yes",
+  });
+  if (isAborted(choice)) return null;
+  if (choice === "no") return {};
+  return { feedback: { enabled: true, contactOk: choice === "yes-contact" } };
+}
+
+/**
  * Interactive prompts for `velloo init`. `appRoot` is the user's app (where
  * Velloo installs); the flow asks scratch-vs-scan first, then only the
  * questions that choice needs.
@@ -121,6 +191,8 @@ export async function runInteractive(ctx: {
     note(describeDetected(detected), "Detected in your app");
     const selectedRoutes = await pickScreens(scanRoot);
     if (selectedRoutes === null) return abort();
+    const share = await promptShareAndFeedback();
+    if (share === null) return abort();
     return {
       appRoot: ctx.appRoot,
       scanRoot,
@@ -133,6 +205,7 @@ export async function runInteractive(ctx: {
       initialContent: "scan",
       detected,
       selectedRoutes,
+      ...share,
     };
   }
 
@@ -202,6 +275,9 @@ export async function runInteractive(ctx: {
     themePreset = typeof preset === "string" ? preset : undefined;
   }
 
+  const share = await promptShareAndFeedback();
+  if (share === null) return abort();
+
   note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");
 
   return {
@@ -213,5 +289,6 @@ export async function runInteractive(ctx: {
     componentsRelative,
     initialContent,
     themePreset,
+    ...share,
   };
 }

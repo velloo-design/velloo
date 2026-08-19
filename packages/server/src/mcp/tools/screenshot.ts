@@ -9,6 +9,7 @@ import {
   cropPng,
   type DiffRegion,
   diffPngs,
+  isCaptureTimeout,
   renderScreen,
   screenshotBuffer,
   screenshotCompareBuffer,
@@ -45,6 +46,24 @@ function playwrightMissingMessage(msg: string): string {
  * (missing install or a collapsed launch-crash summary) — surface it verbatim
  * rather than dumping the raw multi-line browser log.
  */
+/**
+ * An actionable message for a capture *rasterize* stall (a `page.screenshot` /
+ * `setContent` timeout), or null. Scoped to those steps via the message text so
+ * a `goto` timeout in `compare_to_url` still falls through to its own
+ * dev-server hint instead of this generic render-stall one.
+ */
+function captureTimeoutMessage(err: unknown, op: string): string | null {
+  if (!isCaptureTimeout(err)) return null;
+  const msg = err instanceof Error ? err.message : "";
+  if (!/screenshot|setContent/i.test(msg)) return null;
+  return (
+    `${op} timed out rendering the page (capped at 20s). This is almost always a one-off render ` +
+    `stall — a cold web-font fetch or a first heavy paint — so retry; it usually clears. If it ` +
+    `persists, the page has expensive CSS (a large repeating background, heavy blur/shadow) or is ` +
+    `very tall: simplify the heavy styles, or capture a smaller region/viewport.`
+  );
+}
+
 function browserErrorMessage(err: unknown): string | null {
   if (err instanceof Error && err.name === "BrowserMissingError") return err.message;
   const msg = err instanceof Error ? err.message : String(err);
@@ -328,6 +347,8 @@ export function registerScreenshotTool(
         } catch (err) {
           const bm = browserErrorMessage(err);
           if (bm) return errorResult(bm);
+          const tm = captureTimeoutMessage(err, "screenshot diff");
+          if (tm) return errorResult(tm);
           const msg = err instanceof Error ? err.message : String(err);
           return errorResult(`screenshot diff failed: ${msg}`);
         }
@@ -409,6 +430,8 @@ export function registerScreenshotTool(
       } catch (err) {
         const bm = browserErrorMessage(err);
         if (bm) return errorResult(bm);
+        const tm = captureTimeoutMessage(err, "screenshot");
+        if (tm) return errorResult(tm);
         const msg = err instanceof Error ? err.message : String(err);
         return errorResult(`screenshot failed: ${msg}`);
       }
@@ -545,14 +568,33 @@ export function registerScreenshotTool(
             : "it shows a login form";
         const contentHeight = contentHeightFromRects(velloo.nodeRects);
         const shortFrames = framesShorterThan(ctx, screenId, contentHeight);
+        const similarity = Number((1 - result.changedRatio).toFixed(4));
+        const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
+        const heightDiffers = result.heightDelta !== 0;
+        // The headline pixel-diff over the union over-counts a length mismatch:
+        // on a tall single column, a few px of cumulative drift cascades and
+        // sinks `similarity` even when the content matches. Flag it when the
+        // overlap-only score is materially better so the agent trusts the
+        // structural match (and the per-region node refs) over the headline.
+        const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
         const summary = {
-          similarity: Number((1 - result.changedRatio).toFixed(4)),
+          similarity,
           changedRatio: Number(result.changedRatio.toFixed(4)),
+          /** Similarity over only the overlapping height — height delta normalized out. */
+          ...(heightDiffers ? { contentSimilarity } : {}),
           /** velloo render height minus URL capture height, image px. */
           heightDelta: result.heightDelta,
           /** Velloo render's full content height in CSS px (frame-independent). */
           contentHeight,
           ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+          ...(!unverified && heightDominated
+            ? {
+                note:
+                  `similarity is held down mostly by a ${Math.abs(result.heightDelta)}px height difference, not by content mismatch — ` +
+                  `over the overlapping height the match is ${contentSimilarity}. Small cumulative vertical drift cascades down a long ` +
+                  `single column and tanks the whole-page pixel diff; trust contentSimilarity and the per-region node refs here.`,
+              }
+            : {}),
           regions,
           ...(unverified
             ? {
@@ -580,6 +622,8 @@ export function registerScreenshotTool(
       } catch (err) {
         const bm = browserErrorMessage(err);
         if (bm) return errorResult(bm);
+        const tm = captureTimeoutMessage(err, "compare_to_url");
+        if (tm) return errorResult(tm);
         const msg = err instanceof Error ? err.message : String(err);
         if (/net::|ERR_CONNECTION|Timeout.*exceeded|goto/.test(msg)) {
           return errorResult(
@@ -687,6 +731,8 @@ export function registerScreenshotTool(
       } catch (err) {
         const bm = browserErrorMessage(err);
         if (bm) return errorResult(bm);
+        const tm = captureTimeoutMessage(err, "render_snippet");
+        if (tm) return errorResult(tm);
         const msg = err instanceof Error ? err.message : String(err);
         return errorResult(`render_snippet failed: ${msg}`);
       }

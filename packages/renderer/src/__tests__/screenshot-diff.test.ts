@@ -63,13 +63,24 @@ describe("diffPngs", () => {
     expect(d.regions.length).toBe(2);
   });
 
-  test("height growth pads and counts as change", () => {
+  test("height growth pads and counts as change, but content overlap is unchanged", () => {
     const before = synth(100, 100);
     const after = synth(100, 160);
     const d = diffPngs(before, after);
     expect(d.heightDelta).toBe(60);
     expect(d.changedPixels).toBeGreaterThan(0);
     expect(d.height).toBe(160);
+    // The overlapping top 100 rows are identical — the whole-page diff is pure
+    // height padding, so the normalized content score sees zero change.
+    expect(d.changedRatio).toBeGreaterThan(0);
+    expect(d.contentChangedRatio).toBe(0);
+  });
+
+  test("contentChangedRatio equals changedRatio when heights match", () => {
+    const before = synth(200, 100);
+    const after = synth(200, 100, [{ x: 64, y: 32, w: 48, h: 24, rgb: [200, 30, 30] }]);
+    const d = diffPngs(before, after);
+    expect(d.contentChangedRatio).toBe(d.changedRatio);
   });
 });
 

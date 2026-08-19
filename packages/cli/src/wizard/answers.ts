@@ -70,4 +70,10 @@ export interface WizardAnswers {
    * and uses every detected route.
    */
   selectedRoutes?: ScannedRoute[];
+  /**
+   * Cloud feedback opt-in, set by the interactive wizard only after the user
+   * signs in. `contactOk` records consent to be contacted about the feedback.
+   * Absent ⇒ feedback disabled (and always so on the non-interactive path).
+   */
+  feedback?: { enabled: boolean; contactOk: boolean };
 }

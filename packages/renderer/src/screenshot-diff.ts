@@ -22,6 +22,14 @@ export interface DiffResult {
   changedPixels: number;
   /** changedPixels / union area, 0..1. */
   changedRatio: number;
+  /**
+   * changedRatio over only the *overlapping* height (`min(a,b)`), excluding
+   * the added/removed bottom strip the height delta creates. On a tall
+   * single-column page a tiny cumulative vertical drift inflates `changedRatio`
+   * far past what the structural match deserves; this normalizes that out.
+   * Equals `changedRatio` when heights match.
+   */
+  contentChangedRatio: number;
   /** after.height - before.height (pre-padding), in pixels. */
   heightDelta: number;
   width: number;
@@ -168,9 +176,28 @@ export function diffPngs(before: Buffer, after: Buffer, options: DiffOptions = {
       ? []
       : clusterRegions(mask, width, height, options.cellSize ?? 16, options.maxRegions ?? 10);
 
+  // Height-normalized diff: re-run over just the overlapping rows. The padded
+  // buffers are top-aligned and row-major, so the first `contentHeight` rows
+  // are exactly the overlap — pixelmatch reads only that prefix when handed
+  // the shorter height. Skip the second pass when heights already match.
+  const contentHeight = Math.min(a.height, b.height);
+  const contentLen = width * contentHeight * 4;
+  const contentChangedPixels =
+    contentHeight === height
+      ? changedPixels
+      : pixelmatch(
+          pa.data.subarray(0, contentLen),
+          pb.data.subarray(0, contentLen),
+          undefined,
+          width,
+          contentHeight,
+          { threshold: options.threshold ?? 0.1, includeAA: false, alpha: 0.6 },
+        );
+
   return {
     changedPixels,
     changedRatio: changedPixels / (width * height),
+    contentChangedRatio: contentChangedPixels / (width * contentHeight),
     heightDelta: b.height - a.height,
     width,
     height,

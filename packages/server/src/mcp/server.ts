@@ -8,6 +8,7 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import type { CloudAuth } from "../cloud.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
@@ -16,6 +17,7 @@ import { registerBatchTool } from "./tools/batch.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
+import { registerFeedbackTool } from "./tools/feedback.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
@@ -30,6 +32,11 @@ export interface McpServerOptions {
   bundler: LiveBundler;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
   assetOrigin?: string;
+  /**
+   * velloo-cloud credentials, resolved by the CLI and threaded in. Enables
+   * the opt-in `send_feedback` tool. Absent ⇒ no cloud calls.
+   */
+  cloud?: CloudAuth;
 }
 
 export interface McpServerHandle {
@@ -43,12 +50,14 @@ interface Session {
   server: McpServer;
 }
 
-const INSTRUCTIONS = [
+const INSTRUCTION_PARTS = [
   'You are working on a Velloo design folder. Components come from a pinned shadcn snapshot plus velloo helpers (`Box` for layout, `Heading`/`Text`, `Image`, `Gradient`, `Layer`, `SVG`, `Divider`, `Placeholder`). Designs are static — click handlers, routing, and forms are no-op. Use `Box` (a plain div) for every flex/grid wrapper — and `Box as="span"` / `"strong"` / `"a"` to render an *inline* element (inline tags get their natural inline display, so inline runs do not stack vertically); reserve `Card` for actual card surfaces (it ships card chrome; only *image* cards clip to the rounded corners, so a bare Card lets an outside-the-box child — a `-top-3` "Most popular" badge — overflow instead of getting cut off).',
   "",
   'Before composing screens, call `list_components` (use mode: "summary" first — the full schema is large; full mode includes an `example` of working props per component — copy it, then adapt) and `get_theme` to understand the available palette and active tokens. Also `list_snippets` — reuse existing snippets before defining new ones. `list_boards` shows the boards in the folder; each board hosts frames pointing at screens. For an overview of an existing screen, use `get_screen mode: "outline"` (compact ref+id+classSnippet tree) before pulling the full JSON.',
   "",
   '**Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`, etc.) over raw Tailwind palette colors (`bg-zinc-900`, `text-white`, `text-emerald-400`). Semantic tokens auto-flip under `screenshot mode: "dark"` and survive theme changes; raw palette colors render identically in both modes. Use raw palette only for *intentional* accent colors that should NOT theme-flip.',
+  "",
+  '**An object `style` prop is supported** for CSS that no utility expresses cleanly — a `radial-gradient` dot-grid, a custom `backgroundSize`, a one-off `clipPath`: `{"$ref":"Box","props":{"style":{"backgroundImage":"radial-gradient(circle at 1px 1px, color-mix(in srgb, currentColor 12%, transparent) 1px, transparent 0)","backgroundSize":"14px 14px"}}}`. It renders inline and `emit_code` writes it as a `style={{…}}` JSX prop. Reach for utility/arbitrary classes first where they exist (they keep theme-awareness and read as idiomatic shadcn), but note only classes present *statically* in the design JSON compile to CSS — a class passed solely through a snippet *string param* won\'t paint, whereas `style` always does, so `style` is the reliable path for one-off literal CSS.',
   "",
   "`audit` is a **triage signal, not a gate**. It flags every color-bearing class that won't theme-flip — including ones you chose intentionally (brand gradients, status pill chrome, accent overlays). Read the per-node `problems[]` and decide; the coverage number is a guide, not a target. Structural utilities (`border-b`, `ring-0`, `shadow-none`, `text-xl`, `bg-transparent`, `text-current`) are already exempt. To exclude a deliberately non-flipping node entirely, set `data-accent: \"ok\"` (or any string) on its props — the audit skips data-accent nodes and they don't count toward the score. Use for brand marks, hero gradients, dark-tuned pills with explicit `dark:` variants, etc. Pass `snippetId` instead of `screenId` to audit a snippet body at definition time.",
   "",
@@ -75,7 +84,7 @@ const INSTRUCTIONS = [
   '  - Tweak one node in *one* snippet instance ("this card\'s badge is red") → `override_snippet_props` { path: instance, innerPath: "@id", propPatch }.',
   "  - Tweak one node across *all* instances of a snippet → `update_snippet` { patch: { innerPatch: { innerPath, propPatch } } } — no need to resend the body. Replace the whole body → `update_snippet` { patch: { tree } }. Change an instance's inputs (not the body) → `update_snippet_args`.",
   '  - A `type:"node"` param takes a single node OR an array of nodes (they render as siblings in the slot) — `actions: [btnA, btnB]` is fine.',
-  '  - The `children` *array* (`node.children`) is nodes-only. For **inline rich text** — a styled span mid-sentence, like a gradient word in a headline or a bold/linked run in a paragraph — put an array in the `children` *prop* mixing strings and nodes: `{"$ref":"Heading","props":{"children":["You get ",{"$ref":"Text","props":{"className":"text-primary","children":"the math right"}}]}}`. Text runs keep their exact spacing; inline nodes flow inline (they select as part of the parent, not separately). A plain string `children` is still the common case for non-styled text.',
+  '  - The `children` *array* (`node.children`) is for nodes; a bare string/number there auto-wraps into an inline `Box as="span"` (so `children:["Most popular"]` just works). For **inline rich text** — a styled span mid-sentence, like a gradient word in a headline or a bold/linked run in a paragraph — put an array in the `children` *prop* mixing strings and nodes: `{"$ref":"Heading","props":{"children":["You get ",{"$ref":"Text","props":{"className":"text-primary","children":"the math right"}}]}}`. Text runs keep their exact spacing; inline nodes flow inline (they select as part of the parent, not separately). A plain string `children` is still the common case for non-styled text.',
   "  - Resize a `Heading`/`Text` → pass a className that *includes* an explicit `text-*` size (the level/variant size only loses to a competing `text-*` class). Find a node's path you don't know → `find_nodes`; don't guess numeric paths.",
   '  - Check dark fidelity against a running app → `compare_to_url` mode:"dark" (drives the target page dark too).',
   "  - Compare against an auth-gated page → pass `storageStatePath` (a Playwright storage-state JSON with the logged-in session) to `compare_to_url`. If the result is `unverified` (it redirected to login / hit an auth wall) the similarity is meaningless — authenticate or leave the screen unverified; never tune a design to a page you never actually saw.",
@@ -91,7 +100,23 @@ const INSTRUCTIONS = [
   "**Code-to-design (porting an existing app)**: when asked to bring an existing app's pages onto the canvas, *re-express — don't clone*. The loop: (1) `import_theme` with the app's globals.css (`cssPath`; dry-run first, then `apply: true`) so palette/radius/fonts match before any composition — beyond the semantic slots, it captures every other custom color var into the theme `palette`: numeric scales (`--primary-600`), extra roles (`--success-500`, `--danger`), AND bare brand names (`--paprika`, `--ink`, `--teal`). The `palette.*` namespace is a raw passthrough — `palette.ink` makes `bg-ink`/`text-ink`/`border-ink` resolve literally on the canvas — distinct from the semantic `colors.*` slots that theme-flip in dark mode. So app classes like `bg-primary-600` / `text-success-500` / `bg-ink` render as-is instead of falling back. Add or tweak entries by hand with `set_token palette.<name>` (e.g. `set_token palette.ink \"#1a1a1a\"`); run `validate_classes` if unsure a class resolved. It also reports the app's Tailwind `container` config as `container.suggestedClasses` (centered/padded/capped layout doesn't transfer as a theme — wrap page content in a `Box` with those classes, or use `Container`). (2) Read the page's source in the host repo alongside `list_components`, then rebuild it as one screen — strip handlers/state/data-fetching, inline representative copy as literals, keep Tailwind classes verbatim (shadcn apps share Velloo's component vocabulary, so most refs map 1:1). (3) Component mapping is snippet-first, extension-second: a presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real; a complex app-specific component (DataTable, charts) becomes `add_extension` with its real importPath — placeholder on canvas, real import on emit, so capture → redesign → emit never loses component identity. (4) Verify with `compare_to_url` against the running app at the same viewport — 0.85+ similarity is a faithful structural port; use the per-region node refs to fix what's off, and don't chase 1.0 (fonts and imagery legitimately differ). **If the result is `unverified`, STOP — similarity is meaningless there**: either the URL redirected to a login page / hit an auth wall (pass `storageStatePath`/`cookies`/`localStorage` to reach the real page), or `pageError` says the target app is throwing/blank (fix its dev server — the low score is the app being broken, not your design). If you can't get a real capture, leave the screen flagged unverified and tell the user rather than iterating against a page you never saw (a guess will land far from reality). Data-heavy pages: capture the structure with fixture copy — designs are static by construction. Known canvas-vs-app gaps to expect: `dark:` variant classes are inert (Velloo dark mode swaps token values, not a class — replace `bg-white dark:bg-background` patterns with the semantic token), Radix `AvatarImage` renders only after client-side load so SSR captures show the fallback (re-express avatars as `Image`), the app's vendored shadcn may predate the snapshot (e.g. an older `CardTitle` baked in `text-2xl` — re-add drifted classes explicitly), and the headless render substitutes some emoji glyphs and doesn't fetch remote images (an `i.pravatar.cc` avatar shows an initials/fallback box) — both are expected, so don't chase the small `compare_to_url` dip they cause; use `upload_asset` + local `Image`/`Placeholder` for art you need pixel-faithful.",
   "",
   '**Designer annotations**: `list_annotations(screenId)` returns markdown notes the designer attached to specific nodes on a screen. Treat them as guidance for the current screen — addressable feedback like "this CTA should land harder" or "tighten the copy." Each annotation carries a `resolved` path (null when the targeted node has been removed — low-priority, the designer\'s note is stale). You can also pin your own with `add_annotation` (author: "agent") — questions for the designer, review remarks — and remove your own with `remove_annotation`; user-authored annotations are read-only to you. Board-level guidance that isn\'t node-specific goes in canvas notes (`add_note`).',
-].join("\n");
+];
+
+/**
+ * Appended only when this folder opted into feedback (so the agent never sees
+ * the tool, or guidance for it, otherwise). Mirrors the consent rules baked
+ * into the tool description.
+ */
+const FEEDBACK_INSTRUCTION =
+  "**Sending product feedback**: this folder opted into the `send_feedback` tool. Reach for it when you hit friction with **Velloo itself** — a confusing instruction, a missing capability, a tool that misbehaved, a bug — or when the user asks to send feedback. ALWAYS show the user the exact `body` and get their go-ahead before calling; never send unprompted, even when you originated the idea. Fire sparingly — one report per distinct issue, never repeated. NEVER include the user's design content, code, or file/repo paths; describe the issue in your own words. This is feedback about Velloo, not about the design.";
+
+/** The instructions string, with the feedback paragraph included only when opted in. */
+export function buildInstructions(feedbackEnabled: boolean): string {
+  const parts = feedbackEnabled
+    ? [...INSTRUCTION_PARTS, "", FEEDBACK_INSTRUCTION]
+    : INSTRUCTION_PARTS;
+  return parts.join("\n");
+}
 
 /**
  * The SDK wraps raw input shapes with a non-strict z.object, so a typo'd
@@ -130,9 +155,14 @@ function buildMcpServer(
   jit: TailwindJit,
   bundler: LiveBundler,
   assetOrigin?: string,
+  cloud?: CloudAuth,
 ): McpServer {
+  const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled);
   const mcp = withStrictToolArgs(
-    new McpServer({ name: "velloo", version: "0.1.0" }, { instructions: INSTRUCTIONS }),
+    new McpServer(
+      { name: "velloo", version: "0.1.0" },
+      { instructions: buildInstructions(feedbackEnabled) },
+    ),
   );
   registerDiscoveryTools(mcp, ctx);
   registerMutationTools(mcp, ctx);
@@ -145,6 +175,9 @@ function buildMcpServer(
   registerNoteTools(mcp, ctx);
   registerAssetTools(mcp, ctx);
   registerBatchTool(mcp, ctx);
+  // Opt-in, auth-gated. The token may be absent (logged out) — the tool then
+  // returns a "run velloo login" message rather than failing.
+  if (feedbackEnabled) registerFeedbackTool(mcp, ctx, cloud ?? { url: "" });
   return mcp;
 }
 
@@ -208,7 +241,7 @@ export async function createMcpServer(
               sessions.set(id, { transport, server });
             },
           });
-          const server = buildMcpServer(ctx, opts.jit, opts.bundler, opts.assetOrigin);
+          const server = buildMcpServer(ctx, opts.jit, opts.bundler, opts.assetOrigin, opts.cloud);
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
             void server.close().catch(() => undefined);

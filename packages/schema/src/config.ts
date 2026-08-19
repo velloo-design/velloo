@@ -125,6 +125,14 @@ export const ConfigSchema = z
     codegen: CodegenConfigSchema.optional(),
     /** Host app location for the live-island bundler. See `HostAppSchema`. */
     hostApp: HostAppSchema.optional(),
+    /**
+     * Opt-in product feedback. Set during interactive `init` (after the user
+     * signs in). When `enabled`, the server exposes the `send_feedback` MCP
+     * tool, which posts free-text feedback about Velloo to velloo-cloud.
+     * `contactOk` records consent to be contacted about that feedback. Absent
+     * ⇒ disabled (the default; the local tool stays account-free + offline).
+     */
+    feedback: z.object({ enabled: z.boolean(), contactOk: z.boolean().optional() }).optional(),
   })
   .refine(
     (c) => {

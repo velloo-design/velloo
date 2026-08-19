@@ -1,5 +1,5 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
-import type { Node, Snippet, SnippetInstance } from "@velloo/schema";
+import { type Node, resolveSnippetArgs, type Snippet, type SnippetInstance } from "@velloo/schema";
 import type { Locator } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
@@ -68,10 +68,10 @@ function validateArgs(
   passed: Record<string, unknown>,
 ): Result<void, MutationError> {
   const declared = new Set(snippet.params.map((p) => p.name));
-  const missing: string[] = [];
-  for (const p of snippet.params) {
-    if (!(p.name in passed) && p.default === undefined) missing.push(p.name);
-  }
+  // Reuse the renderer's canonical resolution so `optional` + `default`
+  // semantics match the `add_node` `$snippet` path exactly — one source of
+  // truth, instead of a second loop that drifts (it used to ignore `optional`).
+  const { missing } = resolveSnippetArgs(snippet, passed);
   const extras = Object.keys(passed).filter((k) => !declared.has(k));
   if (missing.length === 0 && extras.length === 0) return { ok: true, value: undefined };
   const parts: string[] = [];

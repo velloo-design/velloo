@@ -79,6 +79,20 @@ export const ExtensionSchema = z.object({
    * `config.json` files round-trip unchanged.
    */
   render: z.enum(["static", "live"]).optional(),
+  /**
+   * How a `render:"live"` island is sized on the canvas.
+   *   "aspect-video" (default) — wrapper locks a 16:9 box (`aspect-video
+   *                              w-full`); right for charts that fill their
+   *                              container via a responsive container.
+   *   "content"                — wrapper imposes no ratio (`w-full` only) and
+   *                              grows to the component's intrinsic height. Use
+   *                              for a fixed-height chart (a recharts
+   *                              `ResponsiveContainer height={300}`) or an
+   *                              `absolute inset-0` overlay that the 16:9 box
+   *                              would misalign.
+   * Optional, absent ⇒ "aspect-video". Only meaningful when render:"live".
+   */
+  fit: z.enum(["aspect-video", "content"]).optional(),
 });
 
 export type Extension = z.infer<typeof ExtensionSchema>;

@@ -78,6 +78,12 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
           .describe(
             '"live" client-mounts the real component (charts); default "static" placeholder',
           ),
+        fit: z
+          .enum(["aspect-video", "content"])
+          .optional()
+          .describe(
+            'live-island sizing: "aspect-video" (default) locks a 16:9 box; "content" lets a fixed-height chart (e.g. ResponsiveContainer height={300}) or an absolute-inset overlay drive its own height',
+          ),
       },
     },
     async (args) => {
@@ -105,6 +111,7 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
           category: z.enum(["ui", "typography"]).optional(),
           description: z.string().optional(),
           render: z.enum(["static", "live"]).optional(),
+          fit: z.enum(["aspect-video", "content"]).optional(),
         }),
       },
     },

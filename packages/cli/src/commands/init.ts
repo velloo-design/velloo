@@ -160,6 +160,7 @@ async function writeScaffold(
     projectId,
     defaultScreen: defaultScreenForScaffold(scaffold),
     ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
+    ...(answers.feedback ? { feedback: answers.feedback } : {}),
   });
   ConfigSchema.parse(config);
   ThemeSchema.parse(scaffold.theme);

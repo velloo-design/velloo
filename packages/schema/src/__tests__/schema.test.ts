@@ -34,6 +34,20 @@ describe("NodeSchema", () => {
     expect(NodeSchema.safeParse(tree).success).toBe(true);
   });
 
+  test("auto-wraps bare string/number children into inline Box spans", () => {
+    const parsed = NodeSchema.safeParse({
+      $ref: "Box",
+      children: ["Most popular", 42, { $ref: "Badge" }],
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect((parsed.data as { children: unknown[] }).children).toEqual([
+      { $ref: "Box", props: { as: "span", children: "Most popular" } },
+      { $ref: "Box", props: { as: "span", children: 42 } },
+      { $ref: "Badge" },
+    ]);
+  });
+
   test("rejects a node missing $ref", () => {
     expect(NodeSchema.safeParse({ props: {} }).success).toBe(false);
   });
@@ -279,6 +293,27 @@ describe("ConfigSchema", () => {
       viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
     expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  test("accepts and round-trips the optional feedback opt-in", () => {
+    const config = {
+      schemaVersion: 1,
+      toolVersion: "0.1.0",
+      library: {
+        id: "shadcn-react",
+        version: "2.3.4",
+        source: "binary",
+        componentsPath: "binary",
+      },
+      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+      feedback: { enabled: true, contactOk: true },
+    };
+    const parsed = ConfigSchema.safeParse(config);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.feedback).toEqual({ enabled: true, contactOk: true });
+
+    // contactOk is optional; enabled alone parses.
+    expect(ConfigSchema.safeParse({ ...config, feedback: { enabled: false } }).success).toBe(true);
   });
 
   test("accepts legacy embedded:shadcn source for backward compat", () => {

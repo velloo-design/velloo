@@ -88,12 +88,31 @@ export const NodeIdSchema = z
     message: "node id must match /^[a-zA-Z][a-zA-Z0-9_-]*$/",
   });
 
+/**
+ * A bare string/number in a `children` array is a common first-try shape
+ * ("just put the label here"). Rather than reject it — `children` renders
+ * nodes only — auto-wrap it into an inline `Box as="span"` so it renders as
+ * text without stacking. Wrapping (vs. allowing scalars through) keeps
+ * `children` typed `Node[]` for every downstream consumer. The styled-run
+ * idiom (a mixed array in the `children` *prop*) is still preferred for rich
+ * text; this just removes a needless failure.
+ */
+function wrapScalarChild(item: string | number | Node): Node {
+  if (typeof item === "string" || typeof item === "number") {
+    return { $ref: "Box", props: { as: "span", children: item } };
+  }
+  return item;
+}
+
 const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
   z.object({
     $ref: z.string().min(1),
     $id: NodeIdSchema.optional(),
     props: z.record(z.string(), z.unknown()).optional(),
-    children: z.array(NodeSchema).optional(),
+    children: z
+      .array(z.union([z.string(), z.number(), NodeSchema]))
+      .transform((items) => items.map(wrapScalarChild))
+      .optional(),
   }),
 );
 

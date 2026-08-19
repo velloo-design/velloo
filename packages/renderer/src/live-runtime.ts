@@ -28,12 +28,34 @@ export const LIVE_RUNTIME = `
     window.__velloo_live_ready = true;
     window.__velloo_live.ready = true;
   }
-  // Settle two frames after mounts so a measure-then-rerender lib (recharts'
-  // ResponsiveContainer) paints its final frame before a screenshot.
+  // Wait until the island subtrees stop mutating, then mark ready. Charts
+  // animate their SVG via JS (recharts/react-smooth), which the CSS freeze
+  // below can't stop — a fixed 2-frame wait would capture a mid-entry frame
+  // (a Pie tweening from radius 0 reads as *empty*). Quiescence-detection
+  // lands the real final frame instead, and also covers a measure-then-
+  // rerender lib (ResponsiveContainer). Bounded by DEADLINE_MS so a looping
+  // animation that never quiesces still flips ready.
   function settle() {
-    requestAnimationFrame(function () {
-      requestAnimationFrame(markReady);
+    var QUIET_MS = 250;
+    var DEADLINE_MS = 5000;
+    var start = Date.now();
+    var lastMutation = start;
+    var observer = new MutationObserver(function () {
+      lastMutation = Date.now();
     });
+    markers.forEach(function (m) {
+      observer.observe(m, { subtree: true, childList: true, attributes: true });
+    });
+    function tick() {
+      var now = Date.now();
+      if (now - lastMutation >= QUIET_MS || now - start >= DEADLINE_MS) {
+        observer.disconnect();
+        markReady();
+        return;
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
   }
 
   const markers = Array.prototype.slice.call(document.querySelectorAll('[data-live-node]'));

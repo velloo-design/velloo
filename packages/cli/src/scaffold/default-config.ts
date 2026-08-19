@@ -21,6 +21,11 @@ interface DefaultConfigOpts {
    * recharts &c.) without a manual config edit. See `HostApp`.
    */
   hostApp?: HostApp;
+  /**
+   * Opt-in product feedback, captured by the interactive wizard after the
+   * user signs in. Absent ⇒ feedback stays off (the default).
+   */
+  feedback?: { enabled: boolean; contactOk?: boolean };
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
@@ -46,5 +51,6 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ...(opts.defaultBoard ? { defaultBoard: opts.defaultBoard } : {}),
     ...(opts.projectId ? { projectId: opts.projectId } : {}),
     ...(opts.hostApp ? { hostApp: opts.hostApp } : {}),
+    ...(opts.feedback ? { feedback: opts.feedback } : {}),
   };
 }

@@ -53,6 +53,28 @@ describe("emitCode", () => {
     expect(text.jsx).not.toContain("variant=");
   });
 
+  test("preserves an object `style` prop as a JSX expression", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Box",
+          props: {
+            style: {
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.12) 1px, transparent 0)",
+              backgroundSize: "14px 14px",
+            },
+          },
+        }),
+      ),
+    );
+    expect(result.jsx).toContain("style={{");
+    expect(result.jsx).toContain(
+      '"radial-gradient(circle at 1px 1px, rgba(0,0,0,0.12) 1px, transparent 0)"',
+    );
+    expect(result.jsx).toContain('"backgroundSize":"14px 14px"');
+  });
+
   test("consolidates Tailwind classes deterministically", async () => {
     // Conflicting utilities inside one className: later wins.
     const button = unwrap(

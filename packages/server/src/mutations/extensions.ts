@@ -59,6 +59,7 @@ export interface AddExtensionArgs {
   category?: "ui" | "typography";
   description?: string;
   render?: "static" | "live";
+  fit?: "aspect-video" | "content";
 }
 
 export interface AddExtensionResult {
@@ -105,6 +106,7 @@ export async function addExtension(
     props: args.props,
     origin: "agent",
     render: args.render,
+    fit: args.fit,
   });
 
   const shadowed = args.id in ctx.defaultProvider.registry ? args.id : undefined;
@@ -136,6 +138,7 @@ export interface UpdateExtensionArgs {
     category?: "ui" | "typography";
     description?: string;
     render?: "static" | "live";
+    fit?: "aspect-video" | "content";
   };
 }
 
@@ -175,6 +178,7 @@ export async function updateExtension(
     ...(args.patch.category !== undefined ? { category: args.patch.category } : {}),
     ...(args.patch.description !== undefined ? { description: args.patch.description } : {}),
     ...(args.patch.render !== undefined ? { render: args.patch.render } : {}),
+    ...(args.patch.fit !== undefined ? { fit: args.patch.fit } : {}),
   });
 
   const nextConfig = {

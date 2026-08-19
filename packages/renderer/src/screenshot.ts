@@ -5,9 +5,12 @@ import type { Browser, Page } from "playwright-core";
 /**
  * When the doc carries live-island markers, wait for the client mount to
  * settle (`window.__velloo_live_ready`) so the capture lands the real
- * component's final frame, not the SSR skeleton. Bounded — a stuck bundle
- * can't stall the shot. No-op when there are no live nodes (cheap string
- * probe avoids a pointless wait on every plain screenshot).
+ * component's final frame, not the SSR skeleton. The runtime flips the flag
+ * once every island has mounted/fallen back AND its subtree stops mutating
+ * (chart entry animations finished) — so the ceiling here must clear that
+ * quiescence budget (LIVE_RUNTIME's DEADLINE_MS). Still bounded — a stuck
+ * bundle can't stall the shot. No-op when there are no live nodes (cheap
+ * string probe avoids a pointless wait on every plain screenshot).
  */
 async function waitForLiveIslands(page: Page, html: string): Promise<void> {
   if (!html.includes("data-live-node")) return;
@@ -15,7 +18,7 @@ async function waitForLiveIslands(page: Page, html: string): Promise<void> {
     .waitForFunction(
       () => (window as unknown as { __velloo_live_ready?: boolean }).__velloo_live_ready === true,
       undefined,
-      { timeout: 3000 },
+      { timeout: 6000 },
     )
     .catch(() => {});
 }
@@ -100,6 +103,25 @@ async function launchBrowser(): Promise<Browser> {
   }
 }
 
+/**
+ * Upper bound on a single rasterize / setContent step. Playwright defaults to
+ * 30s; we cap lower so a one-off render stall (a cold web-font fetch, a very
+ * expensive paint) fails fast with an actionable message and frees the browser
+ * process — instead of pinning it, and contending with the next capture, for
+ * the full default. Generous vs. a normal full-page shot (<2s); see
+ * `isCaptureTimeout` for the caller-facing message.
+ */
+const CAPTURE_TIMEOUT_MS = 20_000;
+
+/**
+ * True for a Playwright timeout thrown by a capture step. Lets MCP callers
+ * turn an opaque `TimeoutError` into an actionable hint rather than surfacing
+ * the raw "Timeout 20000ms exceeded" line.
+ */
+export function isCaptureTimeout(err: unknown): boolean {
+  return err instanceof Error && err.name === "TimeoutError";
+}
+
 export interface ScreenshotOptions {
   html: string;
   viewport: Viewport;
@@ -168,7 +190,10 @@ export async function captureScreenshot(
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
     });
     const page = await context.newPage();
-    await page.setContent(opts.html, { waitUntil: "domcontentloaded" });
+    await page.setContent(opts.html, {
+      waitUntil: "domcontentloaded",
+      timeout: CAPTURE_TIMEOUT_MS,
+    });
     await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
     // Webfonts (Google Fonts <link>) load lazily — without waiting for them a
     // capture can freeze the Inter fallback before a declared font-<role> face
@@ -198,6 +223,7 @@ export async function captureScreenshot(
       fullPage: opts.fullPage ?? true,
       animations: "disabled",
       caret: "hide",
+      timeout: CAPTURE_TIMEOUT_MS,
     });
     return { png, nodeRects };
   } finally {
@@ -340,6 +366,7 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
       fullPage: opts.fullPage ?? true,
       animations: "disabled",
       caret: "hide",
+      timeout: CAPTURE_TIMEOUT_MS,
     });
     return { png, finalUrl, authWall, pageError };
   } finally {
@@ -390,7 +417,10 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
     });
     const page = await context.newPage();
-    await page.setContent(opts.html, { waitUntil: "domcontentloaded" });
+    await page.setContent(opts.html, {
+      waitUntil: "domcontentloaded",
+      timeout: CAPTURE_TIMEOUT_MS,
+    });
     // Give network images a bounded chance to land — otherwise every
     // remote <img> screenshots as a blank box and the agent's visual
     // QA loop is blind to imagery. Offline/slow assets just time out
@@ -403,17 +433,17 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
         throw new Error(`screenshot: no element matches selector ${opts.clipSelector}`);
       }
       if (opts.outPath) {
-        await locator.screenshot({ path: opts.outPath });
+        await locator.screenshot({ path: opts.outPath, timeout: CAPTURE_TIMEOUT_MS });
         return null;
       }
-      return await locator.screenshot();
+      return await locator.screenshot({ timeout: CAPTURE_TIMEOUT_MS });
     }
     const fullPage = opts.fullPage ?? true;
     if (opts.outPath) {
-      await page.screenshot({ path: opts.outPath, fullPage });
+      await page.screenshot({ path: opts.outPath, fullPage, timeout: CAPTURE_TIMEOUT_MS });
       return null;
     }
-    const buf = await page.screenshot({ fullPage });
+    const buf = await page.screenshot({ fullPage, timeout: CAPTURE_TIMEOUT_MS });
     return buf;
   } finally {
     await browser.close();
@@ -454,7 +484,7 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
     });
     const page = await context.newPage();
-    await page.setContent(wrapper, { waitUntil: "domcontentloaded" });
+    await page.setContent(wrapper, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT_MS });
     // Wait until both iframes have measured + the wrapper sized itself.
     await page.waitForFunction(() => {
       const l = document.getElementById("L") as HTMLIFrameElement | null;
@@ -463,7 +493,7 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
     });
     // Bounded grace for network images (see screenshotInternal).
     await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
-    return await page.screenshot({ fullPage: true });
+    return await page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS });
   } finally {
     await browser.close();
   }

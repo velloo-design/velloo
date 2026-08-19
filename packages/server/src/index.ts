@@ -4,6 +4,7 @@ import { canvasDistPath } from "@velloo/canvas";
 import type { ServerWebSocket } from "bun";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
+import type { CloudAuth } from "./cloud.ts";
 import {
   type DesignFolder,
   loadDesignFolder,
@@ -27,6 +28,11 @@ export interface ServerOptions {
   host?: string;
   /** MCP server port. Default 7301. */
   mcpPort?: number;
+  /**
+   * velloo-cloud credentials, resolved by the CLI from
+   * `~/.velloo/credentials.json`. Enables the opt-in `send_feedback` tool.
+   */
+  cloud?: CloudAuth;
 }
 
 export interface ServerHandle {
@@ -233,6 +239,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     jit,
     bundler,
     assetOrigin: `http://${opts.host ?? "127.0.0.1"}:${server.port}/`,
+    cloud: opts.cloud,
   });
 
   return {
@@ -249,6 +256,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 }
 
 // Re-export key types and helpers for downstream consumers.
+export type { CloudAuth } from "./cloud.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
 export {
