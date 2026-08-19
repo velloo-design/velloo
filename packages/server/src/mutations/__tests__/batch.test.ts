@@ -204,4 +204,104 @@ describe("runBatch", () => {
     const onDisk = await Bun.file(join(tmp, "snippets", "card.json")).text();
     expect(JSON.stringify(JSON.parse(onDisk))).toBe(before);
   });
+
+  test("remove_frame inside a batch drops the placement, leaves the screen", async () => {
+    const setup = await runBatch(ctx, [
+      { tool: "add_board", args: { id: "b1", name: "Board" } },
+      { tool: "add_frame", args: { boardId: "b1", screenId: "landing", w: 800, h: 600, id: "f1" } },
+    ]);
+    expect(setup.completed).toBe(2);
+
+    const result = await runBatch(ctx, [
+      { tool: "remove_frame", args: { boardId: "b1", frameId: "f1" } },
+    ]);
+    expect(result.completed).toBe(1);
+    expect(result.rolledBack).toBe(false);
+    expect(folder.boards.get("b1")?.frames.length).toBe(0);
+    expect(folder.screens.has("landing")).toBe(true);
+  });
+
+  test("remove_screen inside a batch cascades frame removal", async () => {
+    const setup = await runBatch(ctx, [
+      { tool: "add_screen", args: { id: "promo", name: "Promo", tree: { $ref: "Card" } } },
+      { tool: "add_board", args: { id: "b1", name: "Board" } },
+      { tool: "add_frame", args: { boardId: "b1", screenId: "promo", w: 800, h: 600, id: "pf" } },
+    ]);
+    expect(setup.completed).toBe(3);
+
+    const result = await runBatch(ctx, [{ tool: "remove_screen", args: { screenId: "promo" } }]);
+    expect(result.completed).toBe(1);
+    expect(result.rolledBack).toBe(false);
+    expect(folder.screens.has("promo")).toBe(false);
+    expect(await Bun.file(join(tmp, "screens", "promo.json")).exists()).toBe(false);
+    // Cascade: the frame placing the removed screen is gone from the board.
+    expect(folder.boards.get("b1")?.frames.some((f) => f.id === "pf")).toBe(false);
+  });
+
+  test("rollback restores a removed screen, its cascaded frames, and annotations", async () => {
+    const setup = await runBatch(ctx, [
+      { tool: "add_screen", args: { id: "promo", name: "Promo", tree: { $ref: "Card" } } },
+      { tool: "add_board", args: { id: "b1", name: "Board" } },
+      { tool: "add_frame", args: { boardId: "b1", screenId: "promo", w: 800, h: 600, id: "pf" } },
+    ]);
+    expect(setup.completed).toBe(3);
+
+    // Seed an annotation sidecar on the screen we'll remove.
+    const annotation = { id: "a1", target: { locator: [] }, position: "auto" as const, body: "hi" };
+    folder.annotations.set("promo", [annotation]);
+    await writeJson(join(tmp, "screens", "promo.annotations.json"), [annotation]);
+
+    const screenBefore = JSON.stringify(folder.screens.get("promo"));
+    const boardBefore = JSON.stringify(folder.boards.get("b1"));
+
+    const result = await runBatch(ctx, [
+      { tool: "remove_screen", args: { screenId: "promo" } },
+      // Fails: unknown screen — the whole remove (screen + cascade) must roll back.
+      { tool: "add_node", args: { screenId: "ghost", parentPath: [], componentRef: "Badge" } },
+    ]);
+
+    expect(result.rolledBack).toBe(true);
+    // Screen restored in memory + on disk.
+    expect(JSON.stringify(folder.screens.get("promo"))).toBe(screenBefore);
+    expect(await Bun.file(join(tmp, "screens", "promo.json")).exists()).toBe(true);
+    // Cascaded frame restored on the board.
+    expect(JSON.stringify(folder.boards.get("b1"))).toBe(boardBefore);
+    // Annotations sidecar restored in memory + on disk.
+    expect(folder.annotations.get("promo")).toEqual([annotation]);
+    expect(await Bun.file(join(tmp, "screens", "promo.annotations.json")).exists()).toBe(true);
+  });
+
+  test("add_node in a batch accepts `propPatch` as an alias for `props`", async () => {
+    const result = await runBatch(ctx, [
+      {
+        tool: "add_node",
+        args: {
+          screenId: "landing",
+          parentPath: [],
+          componentRef: "Badge",
+          id: "tag",
+          propPatch: { className: "ml-2" },
+        },
+      },
+    ]);
+    expect(result.completed).toBe(1);
+    expect(result.rolledBack).toBe(false);
+    const tree = folder.screens.get("landing")?.tree as {
+      children?: Array<{ props?: { className?: string } }>;
+    };
+    expect(tree.children?.[0]?.props?.className).toBe("ml-2");
+  });
+
+  test("update_props in a batch accepts `props` as an alias for `propPatch`", async () => {
+    const result = await runBatch(ctx, [
+      {
+        tool: "update_props",
+        args: { screenId: "landing", path: [], props: { className: "p-8" } },
+      },
+    ]);
+    expect(result.completed).toBe(1);
+    expect(result.rolledBack).toBe(false);
+    const tree = folder.screens.get("landing")?.tree as { props?: { className?: string } };
+    expect(tree.props?.className).toBe("p-8");
+  });
 });

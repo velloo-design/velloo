@@ -89,21 +89,27 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         componentRef: z.string(),
         id: NodeIdInputSchema.optional(),
         props: z.record(z.string(), z.unknown()).optional(),
+        propPatch: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe("Alias for `props`, accepted so the key matches update_props."),
         children: z.array(NodeSchema).optional(),
         index: z.number().int().nonnegative().optional(),
       },
     },
-    async (args) =>
-      toMcpWithWarnings(await addNode(ctx, args), async () => {
+    async (args) => {
+      const props = args.props ?? args.propPatch;
+      return toMcpWithWarnings(await addNode(ctx, { ...args, props }), async () => {
         const screen = ctx.folder.screens.get(args.screenId);
         if (!screen) return [];
         const inserted: Node = {
           $ref: args.componentRef,
-          ...(args.props ? { props: args.props } : {}),
+          ...(props ? { props } : {}),
           ...(args.children ? { children: args.children } : {}),
         };
         return propWarningsForTree(ctx, screen, inserted);
-      }),
+      });
+    },
   );
 
   mcp.registerTool(
@@ -115,6 +121,10 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         screenId: z.string(),
         path: PathSchema.optional(),
         propPatch: z.record(z.string(), z.unknown()).optional(),
+        props: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe("Alias for `propPatch`, accepted so the key matches add_node."),
         patches: z
           .array(z.object({ path: PathSchema, propPatch: z.record(z.string(), z.unknown()) }))
           .min(1)
@@ -123,8 +133,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       },
     },
     async (args) => {
+      const propPatch = args.propPatch ?? args.props;
       if (args.patches) {
-        if (args.path !== undefined || args.propPatch !== undefined) {
+        if (args.path !== undefined || propPatch !== undefined) {
           return mutationErrorResult({
             kind: "BadRequest",
             message: "update_props: pass either path+propPatch or patches, not both.",
@@ -145,13 +156,13 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
           return all;
         });
       }
-      if (args.path === undefined || args.propPatch === undefined) {
+      if (args.path === undefined || propPatch === undefined) {
         return mutationErrorResult({
           kind: "BadRequest",
           message: "update_props: path and propPatch are required (or pass patches).",
         });
       }
-      const single = { screenId: args.screenId, path: args.path, propPatch: args.propPatch };
+      const single = { screenId: args.screenId, path: args.path, propPatch };
       return toMcpWithWarnings(await updateProps(ctx, single), async (value) => {
         const screen = ctx.folder.screens.get(args.screenId);
         if (!screen) return [];
@@ -484,7 +495,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "instantiate_snippet",
     {
       description:
-        "Add a `$snippet` instance to a screen tree under parentPath. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root.",
+        "Add a `$snippet` instance to a screen tree under parentPath. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` to patch interior body nodes for THIS instance only (the active nav item, a red badge) at placement — no follow-up `override_snippet_props` needed. Stamp a shared snippet on many screens, each with its own `overrides`.",
       inputSchema: {
         screenId: z.string(),
         parentPath: PathSchema,
@@ -492,6 +503,12 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         id: NodeIdInputSchema.optional(),
         args: z.record(z.string(), z.unknown()).optional(),
         extraClassName: z.string().optional(),
+        overrides: z
+          .record(z.string(), z.object({ props: z.record(z.string(), z.unknown()) }))
+          .optional()
+          .describe(
+            'Per-instance interior prop patches, keyed by body-node selector: "@id" (preferred), a dotted index path like "0.2", or "" for the body root. e.g. {"@nav-dashboard": {"props": {"className": "bg-accent"}}}. Same field override_snippet_props patches on an already-placed instance.',
+          ),
         index: z.number().int().nonnegative().optional(),
       },
     },

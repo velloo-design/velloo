@@ -22,6 +22,7 @@ import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import { liveExtensions } from "../../live/component-bundler.ts";
+import { updateFrame } from "../../mutations/api/frames.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { registryForScreen, resolve as resolveLocator } from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
@@ -167,6 +168,38 @@ function framesShorterThan(
   return out;
 }
 
+interface FittedFrame {
+  board: string;
+  frame: string;
+  from: number;
+  to: number;
+}
+
+/**
+ * Resize every clipping frame up to the rendered content height — the auto-fit
+ * counterpart of `framesShorterThanContent`. Lets `fitFrames: true` close the
+ * loop in one call instead of the agent reading the overflow list and firing
+ * `update_frame` per placement.
+ */
+async function fitFramesToContent(
+  ctx: MutationContext,
+  shortFrames: FrameOverflow[],
+  contentHeight: number,
+): Promise<FittedFrame[]> {
+  const fitted: FittedFrame[] = [];
+  for (const f of shortFrames) {
+    const r = await updateFrame(ctx, {
+      boardId: f.board,
+      frameId: f.frame,
+      patch: { h: contentHeight },
+    });
+    if (r.ok) {
+      fitted.push({ board: f.board, frame: f.frame, from: f.frameHeight, to: contentHeight });
+    }
+  }
+  return fitted;
+}
+
 export function registerScreenshotTool(
   mcp: McpServer,
   ctx: MutationContext,
@@ -201,7 +234,7 @@ export function registerScreenshotTool(
     "screenshot",
     {
       description:
-        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame whose fixed height clips this screen below the fold, so you know which placements to resize.',
+        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame whose fixed height clips this screen below the fold, so you know which placements to resize. fitFrames: true auto-resizes those clipping frames to the content height in the same call (returns `fittedFrames`) instead of just reporting them.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -220,6 +253,12 @@ export function registerScreenshotTool(
         theme: z.string().optional().describe("Named theme to render with (boards pin one)"),
         diff: z.boolean().optional().describe("Compare against the previous same-params capture"),
         resetBaseline: z.boolean().optional(),
+        fitFrames: z
+          .boolean()
+          .optional()
+          .describe(
+            "Resize any board frame that clips this screen up to its content height (returns `fittedFrames`). Default false — the capture stays read-only.",
+          ),
       },
     },
     async ({
@@ -234,6 +273,7 @@ export function registerScreenshotTool(
       theme,
       diff,
       resetBaseline,
+      fitFrames,
     }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
@@ -420,10 +460,18 @@ export function registerScreenshotTool(
             buf = capture.png;
             const contentHeight = contentHeightFromRects(capture.nodeRects);
             const shortFrames = framesShorterThan(ctx, screenId, contentHeight);
+            const fitted =
+              fitFrames && shortFrames.length
+                ? await fitFramesToContent(ctx, shortFrames, contentHeight)
+                : [];
             contentText = JSON.stringify({
               contentHeight,
               viewport: { w: viewport.w, h: viewport.h },
-              ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+              ...(fitted.length
+                ? { fittedFrames: fitted }
+                : shortFrames.length
+                  ? { framesShorterThanContent: shortFrames }
+                  : {}),
             });
           }
         }
@@ -446,7 +494,7 @@ export function registerScreenshotTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), the diff regions mapped to this screen's nodes, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; use the per-region node refs to find what's off. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small. `mode: \"dark\"` renders the Velloo side dark AND best-effort drives the target page dark (prefers-color-scheme + `.dark`/`data-theme` on <html> + `localStorage.theme`) so dark fidelity checks against the app's real dark theme; an app with a bespoke theme toggle may not flip — eyeball the side-by-side. **When the capture isn't your page**, the result carries `unverified: true` and the similarity is meaningless — do NOT trust it or iterate against it. Causes: `redirected`/`authWall` (the URL bounced to a login page — pass `storageStatePath`, a Playwright storage-state JSON with the logged-in session, or `cookies`/`localStorage` to reach the real page), or `pageError` (the target app is throwing a dev error overlay / rendered blank — fix the app's dev server first). If you can't get a real capture, leave the screen unverified rather than tuning it to a page you never actually saw.",
+        "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), the diff regions mapped to this screen's nodes, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; use the per-region node refs to find what's off. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small. `mode: \"dark\"` renders the Velloo side dark AND best-effort drives the target page dark (prefers-color-scheme + `.dark`/`data-theme` on <html> + `localStorage.theme`) so dark fidelity checks against the app's real dark theme; an app with a bespoke theme toggle may not flip — eyeball the side-by-side. **When the capture isn't your page**, the result carries `unverified: true` and the similarity is meaningless — do NOT trust it or iterate against it. Causes: `redirected`/`authWall` (the URL bounced to a login page — pass `storageStatePath`, a Playwright storage-state JSON with the logged-in session, or `cookies`/`localStorage` to reach the real page), or `pageError` (the target app is throwing a dev error overlay / rendered blank — fix the app's dev server first). One common false blank: a data-heavy page that paints a loading spinner before its async data arrives — bump `settleTimeoutMs` (default 8000) so the capture waits for it to settle. If you can't get a real capture, leave the screen unverified rather than tuning it to a page you never actually saw.",
       inputSchema: {
         screenId: z.string(),
         url: z.string().describe("Live URL to compare against, e.g. http://localhost:3000/pricing"),
@@ -482,10 +530,24 @@ export function registerScreenshotTool(
           .record(z.string(), z.string())
           .optional()
           .describe("localStorage entries seeded before any page script runs (e.g. a JWT)"),
+        settleTimeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Max ms to wait for network quiet before capturing (default 8000). Raise it for data-heavy pages that paint a loading spinner first, so the shot fires once async data/charts have settled instead of capturing the spinner (which reads as a blank/unverified page).",
+          ),
         image: z
           .boolean()
           .optional()
           .describe("Include the side-by-side PNG (default true; false = metrics only)"),
+        fitFrames: z
+          .boolean()
+          .optional()
+          .describe(
+            "Resize any board frame that clips this screen up to its content height (returns `fittedFrames`). Default false.",
+          ),
       },
     },
     async ({
@@ -501,7 +563,9 @@ export function registerScreenshotTool(
       storageStatePath,
       cookies,
       localStorage,
+      settleTimeoutMs,
       image,
+      fitFrames,
     }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
@@ -544,6 +608,7 @@ export function registerScreenshotTool(
             fullPage: fullPage ?? true,
             deviceScaleFactor: scaleFactor,
             dark: mode === "dark",
+            ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
             ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
             ...(cookies ? { cookies: cookies as UrlCookie[] } : {}),
             ...(localStorage ? { localStorage } : {}),
@@ -568,6 +633,12 @@ export function registerScreenshotTool(
             : "it shows a login form";
         const contentHeight = contentHeightFromRects(velloo.nodeRects);
         const shortFrames = framesShorterThan(ctx, screenId, contentHeight);
+        // Fit against the Velloo render's height — independent of whether the
+        // URL capture verified, so it's safe even on an unverified diff.
+        const fitted =
+          fitFrames && shortFrames.length
+            ? await fitFramesToContent(ctx, shortFrames, contentHeight)
+            : [];
         const similarity = Number((1 - result.changedRatio).toFixed(4));
         const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
         const heightDiffers = result.heightDelta !== 0;
@@ -586,7 +657,11 @@ export function registerScreenshotTool(
           heightDelta: result.heightDelta,
           /** Velloo render's full content height in CSS px (frame-independent). */
           contentHeight,
-          ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+          ...(fitted.length
+            ? { fittedFrames: fitted }
+            : shortFrames.length
+              ? { framesShorterThanContent: shortFrames }
+              : {}),
           ...(!unverified && heightDominated
             ? {
                 note:

@@ -108,6 +108,8 @@ export function containerClasses(c: ContainerConfig): string {
 export interface ThemeExtend {
   /** Flat color map; nested scales flatten to `name-step` (e.g. `brand-500`). */
   colors?: Record<string, string>;
+  /** Named spacing tokens, e.g. `{ "icon-rail": "3rem", header: "4rem" }` → `w-icon-rail`, `h-header`. */
+  spacing?: Record<string, string>;
   /** Named box-shadows, e.g. `{ card: "0 2px 8px ..." }`. */
   boxShadow?: Record<string, string>;
   /** Font stacks keyed by role; array values join to a comma list. */
@@ -301,6 +303,10 @@ export function parseThemeExtend(src: string): ThemeExtend | null {
   const out: ThemeExtend = {};
   const colors = parseColors(objectBody(extend, /\bcolors\s*:\s*\{/));
   if (colors) out.colors = colors;
+  // Named tokens (`icon-rail`, `header`) only — numeric steps (`18`) fail
+  // SAFE_KEY and are skipped; Tailwind's built-in numeric scale covers those.
+  const spacing = parseStringRecord(objectBody(extend, /\bspacing\s*:\s*\{/));
+  if (spacing) out.spacing = spacing;
   const boxShadow = parseStringRecord(objectBody(extend, /\bboxShadow\s*:\s*\{/));
   if (boxShadow) out.boxShadow = boxShadow;
   const fontFamily = parseFontFamily(objectBody(extend, /\bfontFamily\s*:\s*\{/));

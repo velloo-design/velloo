@@ -76,6 +76,25 @@ describe("emitTheme", () => {
     expect(css).toMatch(/--shadow-lift:\s*0 12px 32px/);
   });
 
+  test("emits --spacing-* for named tokens only, not the numeric scale", async () => {
+    const base = buildDefaultTheme();
+    const theme: Theme = {
+      ...base,
+      // base.spacing carries the numeric scale ({0:0,1:4,…}); add named tokens on top.
+      spacing: { ...base.spacing, "icon-rail": "3rem", header: "4rem" },
+    };
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-spacing-${Date.now()}`),
+      apply: false,
+    });
+    const css = result.files[0]?.contents ?? "";
+    expect(css).toMatch(/--spacing-icon-rail:\s*3rem/);
+    expect(css).toMatch(/--spacing-header:\s*4rem/);
+    // The built-in numeric scale must NOT be dumped (would shadow Tailwind, unitless).
+    expect(css).not.toContain("--spacing-0:");
+    expect(css).not.toContain("--spacing-1:");
+  });
+
   test("emits @keyframes + --animate-* from theme.keyframes/animation", async () => {
     const theme: Theme = {
       ...buildDefaultTheme(),

@@ -35,6 +35,18 @@ function emitPalette(palette: Record<string, string> | undefined, lines: string[
   }
 }
 
+/** Named spacing tokens: `icon-rail` → `--spacing-icon-rail` (Tailwind v4 → `w-icon-rail`). */
+function emitSpacing(spacing: Theme["spacing"], lines: string[]): void {
+  if (!spacing) return;
+  for (const [name, value] of Object.entries(spacing)) {
+    // Skip the numeric Tailwind scale (0/1/2/…) — built in; only named tokens need a var.
+    if (!Number.isNaN(Number(name))) continue;
+    if (typeof value === "string" || typeof value === "number") {
+      lines.push(`  --spacing-${name}: ${value};`);
+    }
+  }
+}
+
 /** Named box-shadows: `card` → `--shadow-card` (Tailwind v4 → `shadow-card`). */
 function emitShadows(shadows: Theme["shadows"], lines: string[]): void {
   if (!shadows) return;
@@ -84,6 +96,7 @@ export function themeToCss(theme: Theme): string {
   const lines: string[] = [":root {"];
   emitColorBlock(theme.colors, lines);
   emitPalette(theme.palette, lines);
+  emitSpacing(theme.spacing, lines);
   emitShadows(theme.shadows, lines);
 
   const fontFamily = theme.typography.fontFamily;

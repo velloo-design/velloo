@@ -152,6 +152,14 @@ export async function importThemeCss(
         record(`palette.${name}`, value);
       }
     }
+    if (extend.spacing) {
+      next.spacing = { ...next.spacing };
+      for (const [name, value] of Object.entries(extend.spacing)) {
+        if (name in (next.spacing as Record<string, string | number>)) continue;
+        (next.spacing as Record<string, string>)[name] = value;
+        record(`spacing.${name}`, value);
+      }
+    }
     if (extend.fontFamily) {
       const fontFamily = { ...(next.typography.fontFamily ?? {}) };
       for (const [role, stack] of Object.entries(extend.fontFamily)) {

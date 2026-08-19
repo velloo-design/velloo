@@ -64,6 +64,10 @@ export default {
         teal: "#0FA3A3",
         brand: { 500: "#123456" },
       },
+      spacing: {
+        "icon-rail": "3rem",
+        header: "4rem",
+      },
       boxShadow: {
         card: "0 2px 8px rgba(0,0,0,0.06)",
         lift: "0 12px 32px rgba(0,0,0,0.12)",
@@ -152,7 +156,7 @@ describe("importThemeCss", () => {
     });
   });
 
-  test("ingests tailwind.config theme.extend into palette / shadows / font roles", async () => {
+  test("ingests tailwind.config theme.extend into palette / spacing / shadows / font roles", async () => {
     const r = unwrap(
       await importThemeCss(ctx, HOST_APP_CSS, { apply: true, tailwindConfig: HOST_TW_CONFIG }),
     );
@@ -160,6 +164,8 @@ describe("importThemeCss", () => {
     expect(onDisk.palette?.paprika).toBe("#E2571E");
     expect(onDisk.palette?.teal).toBe("#0FA3A3");
     expect(onDisk.palette?.["brand-500"]).toBe("#123456");
+    expect(onDisk.spacing?.["icon-rail"]).toBe("3rem");
+    expect(onDisk.spacing?.header).toBe("4rem");
     expect(onDisk.shadows?.card).toBe("0 2px 8px rgba(0,0,0,0.06)");
     expect(onDisk.shadows?.lift).toBe("0 12px 32px rgba(0,0,0,0.12)");
     expect(onDisk.typography.fontFamily?.display).toBe("Fraunces, serif");
@@ -167,6 +173,7 @@ describe("importThemeCss", () => {
     expect(onDisk.container).toEqual({ center: true, padding: "1.5rem", maxWidth: "1320px" });
     const tokens = r.changes.map((c) => c.token);
     expect(tokens).toContain("palette.paprika");
+    expect(tokens).toContain("spacing.icon-rail");
     expect(tokens).toContain("shadows.card");
     expect(tokens).toContain("typography.fontFamily.display");
     expect(tokens).toContain("container.padding");

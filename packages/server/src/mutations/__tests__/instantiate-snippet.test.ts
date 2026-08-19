@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Theme } from "@velloo/schema";
+import type { Node, SnippetInstance, Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
+import { pathAt } from "../../path.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { addSnippet, instantiateSnippet, type MutationContext } from "../index.ts";
 
@@ -112,6 +113,50 @@ describe("instantiateSnippet", () => {
       parentPath: [],
       snippetId,
       args: {},
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  test("applies inline `overrides` to the placed instance, keyed by a body $id", async () => {
+    const added = await addSnippet(ctx, {
+      name: "Rail",
+      params: [],
+      tree: {
+        $ref: "Box",
+        children: [
+          { $ref: "Button", $id: "home", props: { children: "Home" } },
+          { $ref: "Button", $id: "settings", props: { children: "Settings" } },
+        ],
+      },
+    });
+    const snippetId = added.ok ? added.value.snippetId : "rail";
+
+    const r = await instantiateSnippet(ctx, {
+      screenId: "landing",
+      parentPath: [],
+      snippetId,
+      overrides: { "@home": { props: { className: "bg-accent" } } },
+    });
+    expect(r.ok).toBe(true);
+    const path = r.ok ? r.value.path : [];
+    const tree = folder.screens.get("landing")?.tree as Node | undefined;
+    const placed = tree ? (pathAt(tree, path) as SnippetInstance | undefined) : undefined;
+    expect(placed?.$overrides).toEqual({ "@home": { props: { className: "bg-accent" } } });
+  });
+
+  test("rejects an `overrides` key that doesn't resolve to a body node", async () => {
+    const added = await addSnippet(ctx, {
+      name: "Rail2",
+      params: [],
+      tree: { $ref: "Box", children: [{ $ref: "Button", $id: "home" }] },
+    });
+    const snippetId = added.ok ? added.value.snippetId : "rail2";
+
+    const r = await instantiateSnippet(ctx, {
+      screenId: "landing",
+      parentPath: [],
+      snippetId,
+      overrides: { "@nope": { props: { className: "x" } } },
     });
     expect(r.ok).toBe(false);
   });

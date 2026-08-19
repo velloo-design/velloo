@@ -1,14 +1,14 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { err, type Result } from "@velloo/result";
-import type { Board, CanvasNote, Screen, Snippet } from "@velloo/schema";
+import type { Annotation, Board, CanvasNote, Screen, Snippet } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { addNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
-import { addFrame, addGroup, updateFrame } from "./api/frames.ts";
-import { addScreen } from "./api/screens.ts";
+import { addFrame, addGroup, removeFrame, updateFrame } from "./api/frames.ts";
+import { addScreen, removeScreen } from "./api/screens.ts";
 import { addSnippet, instantiateSnippet, removeSnippet, updateSnippet } from "./api/snippets.ts";
 import {
   addNode,
@@ -66,12 +66,15 @@ const updatePropsBatch: BatchFn = (ctx, args) => {
     screenId: string;
     path?: unknown;
     propPatch?: Record<string, unknown>;
+    props?: Record<string, unknown>;
     patches?: unknown;
   };
   if (Array.isArray(a.patches)) {
     return updatePropsBulk(ctx, { screenId: a.screenId, patches: a.patches } as never);
   }
-  if (a.path === undefined || a.propPatch === undefined) {
+  // `props` is an accepted alias for `propPatch` (matches add_node's key).
+  const propPatch = a.propPatch ?? a.props;
+  if (a.path === undefined || propPatch === undefined) {
     return Promise.resolve(
       err(
         badRequest(
@@ -80,15 +83,26 @@ const updatePropsBatch: BatchFn = (ctx, args) => {
       ),
     );
   }
-  return updateProps(ctx, { screenId: a.screenId, path: a.path, propPatch: a.propPatch } as never);
+  return updateProps(ctx, { screenId: a.screenId, path: a.path, propPatch } as never);
+};
+
+/** add_node's `propPatch` is an accepted alias for `props` (matches update_props). */
+const addNodeBatch: BatchFn = (ctx, args) => {
+  const a = args as Record<string, unknown> & {
+    props?: Record<string, unknown>;
+    propPatch?: Record<string, unknown>;
+  };
+  return addNode(ctx, { ...a, props: a.props ?? a.propPatch } as never);
 };
 
 export const BATCH_TOOLS: Record<string, BatchFn> = {
   add_screen: addScreen as BatchFn,
+  remove_screen: removeScreen as BatchFn,
   add_board: addBoard as BatchFn,
   add_frame: addFrame as BatchFn,
+  remove_frame: removeFrame as BatchFn,
   add_group: addGroup as BatchFn,
-  add_node: addNode as BatchFn,
+  add_node: addNodeBatch,
   update_props: updatePropsBatch,
   override_snippet_props: overrideSnippetProps as BatchFn,
   remove_node: removeNode as BatchFn,
@@ -102,7 +116,7 @@ export const BATCH_TOOLS: Record<string, BatchFn> = {
   add_note: addNote as BatchFn,
 };
 
-type ResourceKind = "screen" | "board" | "snippet" | "notes";
+type ResourceKind = "screen" | "board" | "snippet" | "notes" | "annotations";
 type ResourceKey = `${ResourceKind}:${string}`;
 
 interface Snapshot {
@@ -122,6 +136,8 @@ function resourceFile(folder: DesignFolder, kind: ResourceKind, id: string): str
       return join(folder.root, "snippets", `${id}.json`);
     case "notes":
       return join(folder.root, "boards", `${id}.notes.json`);
+    case "annotations":
+      return join(folder.root, "screens", `${id}.annotations.json`);
   }
 }
 
@@ -135,6 +151,8 @@ function readResource(folder: DesignFolder, kind: ResourceKind, id: string): unk
       return folder.snippets.get(id);
     case "notes":
       return folder.notes.get(id);
+    case "annotations":
+      return folder.annotations.get(id);
   }
 }
 
@@ -157,6 +175,9 @@ function writeResourceMemory(
     case "notes":
       folder.notes.set(id, value as CanvasNote[]);
       return;
+    case "annotations":
+      folder.annotations.set(id, value as Annotation[]);
+      return;
   }
 }
 
@@ -176,11 +197,17 @@ function deleteResourceMemory(folder: DesignFolder, kind: ResourceKind, id: stri
     case "notes":
       folder.notes.delete(id);
       return;
+    case "annotations":
+      folder.annotations.delete(id);
+      return;
   }
 }
 
 /** Resources a call mutates that already exist before it runs. */
-function touchedResources(call: BatchCall): Array<{ kind: ResourceKind; id: string }> {
+function touchedResources(
+  ctx: MutationContext,
+  call: BatchCall,
+): Array<{ kind: ResourceKind; id: string }> {
   const a = call.args;
   switch (call.tool) {
     case "add_node":
@@ -196,12 +223,28 @@ function touchedResources(call: BatchCall): Array<{ kind: ResourceKind; id: stri
         return [{ kind: "snippet", id: snippetIdFromTreeId(screenId) }];
       return [{ kind: "screen", id: screenId }];
     }
+    case "remove_screen": {
+      // Removal cascades: it drops the screen, its annotations sidecar, and
+      // prunes referencing frames from every board — snapshot all of them so
+      // a later rollback restores the full pre-batch state.
+      const screenId = a.screenId as string;
+      const touched: Array<{ kind: ResourceKind; id: string }> = [
+        { kind: "screen", id: screenId },
+        { kind: "annotations", id: screenId },
+      ];
+      for (const [boardId, board] of ctx.folder.boards) {
+        if (board.frames.some((f) => f.screen === screenId))
+          touched.push({ kind: "board", id: boardId });
+      }
+      return touched;
+    }
     case "update_snippet":
     case "remove_snippet":
       return [{ kind: "snippet", id: a.snippetId as string }];
     case "add_frame":
     case "add_group":
     case "update_frame":
+    case "remove_frame":
       return [{ kind: "board", id: a.boardId as string }];
     case "add_note":
       return [{ kind: "notes", id: a.boardId as string }];
@@ -268,7 +311,12 @@ export async function runBatch(
         continue;
       }
       writeResourceMemory(ctx.folder, snap.kind, snap.id, structuredClone(snap.value));
-      if (snap.kind === "notes" && Array.isArray(snap.value) && snap.value.length === 0) {
+      // Sidecar files (notes, annotations) have no on-disk presence when empty.
+      if (
+        (snap.kind === "notes" || snap.kind === "annotations") &&
+        Array.isArray(snap.value) &&
+        snap.value.length === 0
+      ) {
         await rm(resourceFile(ctx.folder, snap.kind, snap.id), { force: true });
       } else {
         await writeJsonAtomic(resourceFile(ctx.folder, snap.kind, snap.id), snap.value);
@@ -288,7 +336,7 @@ export async function runBatch(
       });
       break;
     }
-    if (atomic) for (const res of touchedResources(call)) snapshot(res.kind, res.id);
+    if (atomic) for (const res of touchedResources(ctx, call)) snapshot(res.kind, res.id);
     try {
       const r = await fn(stagedCtx, call.args as never);
       if (r.ok) {

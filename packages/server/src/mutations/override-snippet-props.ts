@@ -47,7 +47,7 @@ function findNodeById(root: Node, id: string): Node | undefined {
   return undefined;
 }
 
-function innerPathResolves(body: Node, innerPath: string): boolean {
+export function innerPathResolves(body: Node, innerPath: string): boolean {
   if (innerPath.startsWith("@")) {
     return findNodeById(body, innerPath.slice(1)) !== undefined;
   }

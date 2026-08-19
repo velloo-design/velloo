@@ -1,5 +1,8 @@
 import pc from "picocolors";
 
+// ✦ ✧ — the two sparkle glyphs, injected via interpolation (see below).
+const [SPARKLE_HI, SPARKLE_LO] = ["✦", "✧"];
+
 /**
  * Compact figlet-style velloo wordmark printed at the top of the
  * interactive wizard. The letterforms use only basic ASCII (figlet
@@ -8,10 +11,19 @@ import pc from "picocolors";
  * mismatched widths. The two sparkle glyphs sit in trailing whitespace
  * with nothing after them, so even a font that renders them double-width
  * can't push the letters out of alignment.
+ *
+ * `String.raw` is required so the slant letterforms' `\` survive verbatim,
+ * but it also means any literal non-ASCII in the template is at the mercy
+ * of the bundler: Bun.build rewrites a literal glyph to its `\u`-escape
+ * source text, which String.raw then preserves *uninterpreted* — so the
+ * published binary would print the six characters of the escape (e.g.
+ * a backslash, `u`, then the hex code point) rather than the glyph. The
+ * sparkles therefore come in through `${}` substitutions (cooked, not
+ * raw), which keeps them correct after bundling.
  */
 const ASCII = String.raw`
-                ____             ✦
-    _   _____  / / /___  ____   ✧
+                ____             ${SPARKLE_HI}
+    _   _____  / / /___  ____   ${SPARKLE_LO}
    | | / / _ \/ / / __ \/ __ \
    | |/ /  __/ / / /_/ / /_/ /
    |___/\___/_/_/\____/\____/

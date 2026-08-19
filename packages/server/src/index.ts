@@ -96,6 +96,7 @@ function extraThemeBlock(folder: DesignFolder): string {
   // board renders with — values are overridden per render by themeToCss.
   const fonts: Record<string, string> = {};
   const palette: Record<string, string> = {};
+  const spacing: Record<string, string> = {};
   const shadows: Record<string, string> = {};
   const animation: Record<string, string> = {};
   const keyframes: Record<string, Record<string, Record<string, string>>> = {};
@@ -107,6 +108,13 @@ function extraThemeBlock(folder: DesignFolder): string {
     // A name defined only in dark still needs its utility generated; the light
     // value is a placeholder the render-time :root/.dark vars override.
     for (const [name, value] of Object.entries(theme.paletteDark ?? {})) palette[name] ??= value;
+    // Named spacing tokens (`--spacing-icon-rail`) make `w-icon-rail` / `h-header`
+    // / `p-sidebar` compile — Tailwind v4 derives every spacing utility from them.
+    // Skip the numeric scale (0/1/2/…): it's built in and would shadow it unitless.
+    for (const [name, value] of Object.entries(theme.spacing ?? {})) {
+      if (!Number.isNaN(Number(name))) continue;
+      if (typeof value === "string" || typeof value === "number") spacing[name] = String(value);
+    }
     for (const [name, value] of Object.entries(theme.shadows ?? {})) {
       if (typeof value === "string" || typeof value === "number") shadows[name] = String(value);
     }
@@ -116,6 +124,7 @@ function extraThemeBlock(folder: DesignFolder): string {
   const lines = [
     ...Object.entries(fonts).map(([role, stack]) => `  --font-${role}: ${stack};`),
     ...Object.entries(palette).map(([name, value]) => `  --color-${name}: ${value};`),
+    ...Object.entries(spacing).map(([name, value]) => `  --spacing-${name}: ${value};`),
     ...Object.entries(shadows).map(([name, value]) => `  --shadow-${name}: ${value};`),
     ...Object.entries(animation).map(([name, value]) => `  --animate-${name}: ${value};`),
   ];

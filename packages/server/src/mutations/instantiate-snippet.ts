@@ -5,6 +5,7 @@ import { cloneScreen } from "./clone.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError, snippetParamMismatch } from "./errors.ts";
 import { getComponentNode, getScreen, getSnippet, resolve } from "./lookup.ts";
+import { innerPathResolves } from "./override-snippet-props.ts";
 import { commitScreen } from "./persist.ts";
 
 export interface InstantiateSnippetArgs {
@@ -14,6 +15,14 @@ export interface InstantiateSnippetArgs {
   id?: string;
   args?: Record<string, unknown>;
   extraClassName?: string;
+  /**
+   * Per-instance interior prop patches, keyed by a body-node selector ("@id",
+   * a dotted index path, or "" for the root). Sets the active nav item / a
+   * red badge at placement time — the same `$overrides` field
+   * `override_snippet_props` patches on an already-placed instance, set in
+   * the one instantiate call instead of a follow-up.
+   */
+  overrides?: Record<string, { props: Record<string, unknown> }>;
   index?: number;
 }
 
@@ -28,6 +37,7 @@ export async function instantiateSnippet(
   return DoAsync<InstantiateSnippetResult, MutationError>(async function* () {
     const snippet = yield* $(getSnippet(ctx, args.snippetId));
     yield* $(validateArgs(snippet, args.args ?? {}));
+    yield* $(validateOverrides(snippet, args.overrides));
 
     const screen = yield* $(getScreen(ctx, args.screenId));
     const next = cloneScreen(screen);
@@ -54,6 +64,9 @@ export async function instantiateSnippet(
         ? { $extraClassName: args.extraClassName.trim() }
         : {}),
       ...(args.args && Object.keys(args.args).length > 0 ? { args: args.args } : {}),
+      ...(args.overrides && Object.keys(args.overrides).length > 0
+        ? { $overrides: args.overrides }
+        : {}),
     };
     parent.children.splice(idx, 0, node as Node);
 
@@ -80,5 +93,26 @@ function validateArgs(
   return {
     ok: false,
     error: snippetParamMismatch(snippet.id, parts.join("; "), { missing, extras }),
+  };
+}
+
+/**
+ * Every override key must address a real node in the snippet body — same
+ * resolution `override_snippet_props` enforces, so a typo'd "@id" fails loudly
+ * at placement instead of silently rendering the un-overridden body.
+ */
+function validateOverrides(
+  snippet: Snippet,
+  overrides: Record<string, { props: Record<string, unknown> }> | undefined,
+): Result<void, MutationError> {
+  if (!overrides) return { ok: true, value: undefined };
+  const bad = Object.keys(overrides).filter((key) => !innerPathResolves(snippet.tree, key));
+  if (bad.length === 0) return { ok: true, value: undefined };
+  return {
+    ok: false,
+    error: invalidPath(
+      `overrides target nodes not found in snippet "${snippet.id}": ${bad.join(", ")} — ` +
+        `each key must be the "@id" of a body node, a dotted index path like "0.2", or "" for the root`,
+    ),
   };
 }

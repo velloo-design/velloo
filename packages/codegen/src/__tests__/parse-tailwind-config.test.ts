@@ -141,6 +141,13 @@ export default {
     });
   });
 
+  test("named spacing tokens parse; numeric steps are skipped (Tailwind's scale covers those)", () => {
+    const ext = parseThemeExtend(
+      `theme: { extend: { spacing: { "icon-rail": "3rem", header: "4rem", 18: "4.5rem" } } }`,
+    );
+    expect(ext?.spacing).toEqual({ "icon-rail": "3rem", header: "4rem" });
+  });
+
   test("returns null when there's no extend block (or it has nothing readable)", () => {
     expect(parseThemeExtend(`theme: { container: { center: true } }`)).toBeNull();
     expect(parseThemeExtend(`theme: { extend: { spacing: { 18: "4.5rem" } } }`)).toBeNull();
