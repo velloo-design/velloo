@@ -78,10 +78,9 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("Velloo exposes ~55 MCP tools — discovery (`list_screens`, `list_components`,");
   lines.push("`list_snippets`, `get_theme`), tree mutations (`add_node`, `update_props`,");
   lines.push("`apply_classes`, `move_node`, …), snippets, theme operations (`set_token`,");
-  lines.push("`apply_preset`, `derive_palette_from_color`, `match_vibe`), inspection");
-  lines.push("(`inspect`, `inspect_dark_diff`, `screenshot`, `validate_classes`), code");
-  lines.push("emission (`emit_code`, `emit_snippet`, `emit_theme`), and an AI asset");
-  lines.push("generator (`generate_svg`).");
+  lines.push("`apply_preset`, `derive_palette_from_color`), inspection");
+  lines.push("(`inspect`, `inspect_dark_diff`, `screenshot`, `validate_classes`), and");
+  lines.push("code emission (`emit_code`, `emit_snippet`, `emit_theme`).");
   lines.push("");
   lines.push("Designs are static by construction — click handlers, routing, and forms");
   lines.push("are no-ops in the canvas. The agent reads the design and writes real");

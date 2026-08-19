@@ -124,9 +124,7 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `custom_css` | `css?` — read (omit css) or replace `theme/custom.css`; injected into every render and appended to emitted globals.css |
 | `apply_preset` | `presetName` | Switches the active theme to a named preset. Ships with `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum` |
 | `derive_palette_from_color` | `seedColor, name?` | Generates an OKLCH-based palette from a seed (`#hex`, `oklch()`, `rgb()`, …). Foreground/background contrast is auto-adjusted to WCAG AA |
-| `match_vibe` | `description, useAi?: boolean` | Maps a vibe description ("playful", "corporate", "forest") to a seed color via a curated table, then derives + applies a palette. Set `useAi: true` to ask Claude Haiku for a seed color when `ANTHROPIC_API_KEY` is set |
-| `match_image` | `imagePath` | Extracts a palette from an image (vibrant + muted + dark/light variants) and applies a derived theme. Path is relative to `assets/` or absolute |
-| `score_theme_contrast` | `mode?` | Score WCAG contrast ratios for the active theme's salient color pairs in both light and dark palettes (each result carries `mode`); pass `mode` to score one. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset / match-vibe to confirm accessibility before shipping |
+| `score_theme_contrast` | `mode?` | Score WCAG contrast ratios for the active theme's salient color pairs in both light and dark palettes (each result carries `mode`); pass `mode` to score one. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset to confirm accessibility before shipping |
 | `import_theme` | `css?` OR `cssPath?`, `theme?`, `apply?` | Code-to-design: seed the theme from a host app's stylesheet. Parses shadcn-convention `:root`/`.dark` custom props (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars (var() indirection resolved), plus `--radius` and `--font-*` roles. Undeclared slots keep their current values. Dry-run by default — returns `changes: [{ token, from, to }]`; `apply: true` persists |
 
 ### Visualization
@@ -144,12 +142,6 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `emit_code` | `screenId, componentsAlias?` — returns a structured JSX-shaped intermediate representation intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). `componentsAlias` overrides the per-folder default. **Not paste-ready output.** |
 | `emit_snippet` | `snippetId, componentsAlias?` — same idea, scoped to a single snippet. Returns PascalCase component name, typed params, JSX body |
 | `emit_theme` | `outputDir, apply?: boolean, cssOnly?: boolean` — generates Tailwind v4 `globals.css` (and optionally `tailwind.config.ts`). Defaults to dry-run; set `apply: true` to write. Direct user-facing artifact; agent does not need to transform it |
-
-### Generate (AI assets)
-
-| Tool | Args | Notes |
-|---|---|---|
-| `generate_svg` | `prompt, filename?, viewBox?, color?` | Generate inline SVG via Claude Haiku. Returns `{ content, viewBox, assetPath, node: { $ref: "SVG", props: { … } } }` — drop `node` straight into `add_node`. Set `filename` to also persist under `assets/`. Requires `ANTHROPIC_API_KEY` |
 
 ## Path addressing
 

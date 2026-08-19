@@ -7,7 +7,6 @@ import { ContrastReport } from "./ContrastReport.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion.tsx";
 import { Button } from "./ui/button.tsx";
-import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
 import { Label } from "./ui/label.tsx";
 
@@ -66,10 +65,8 @@ function readStoredSections(): string[] {
 }
 
 export function ThemePanel({ theme, presets }: Props) {
-  const [vibe, setVibe] = useState("");
   const [seed, setSeed] = useState("");
-  const [vibeUseAi, setVibeUseAi] = useState(false);
-  const [busy, setBusy] = useState<null | "vibe" | "derive">(null);
+  const [busy, setBusy] = useState<null | "derive">(null);
   const [status, setStatus] = useState<string | null>(null);
   const themeVersion = useCanvas((s) => s.themeVersion);
 
@@ -89,20 +86,6 @@ export function ThemePanel({ theme, presets }: Props) {
       setStatus(`palette derived from ${seed.trim()}`);
     } catch (err) {
       setStatus(`derive failed: ${(err as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const onMatchVibe = async () => {
-    if (!vibe.trim()) return;
-    setBusy("vibe");
-    setStatus(null);
-    try {
-      const r = await themeApi.matchVibe(vibe.trim(), vibeUseAi);
-      setStatus(`vibe matched: ${r.matched.description} (${r.matched.source})`);
-    } catch (err) {
-      setStatus(`match_vibe failed: ${(err as Error).message}`);
     } finally {
       setBusy(null);
     }
@@ -154,33 +137,6 @@ export function ThemePanel({ theme, presets }: Props) {
                     {busy === "derive" ? "…" : "Apply"}
                   </Button>
                 </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="theme-vibe" className="text-xs text-muted-foreground">
-                  match a vibe
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="theme-vibe"
-                    type="text"
-                    value={vibe}
-                    onChange={(e) => setVibe(e.target.value)}
-                    placeholder="playful, corporate, forest…"
-                    className="flex-1 text-xs"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onMatchVibe}
-                    disabled={busy !== null || !vibe.trim()}
-                  >
-                    {busy === "vibe" ? "…" : "Match"}
-                  </Button>
-                </div>
-                <Label className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-normal">
-                  <Checkbox checked={vibeUseAi} onCheckedChange={(c) => setVibeUseAi(Boolean(c))} />
-                  use Claude (requires ANTHROPIC_API_KEY)
-                </Label>
               </div>
               {status ? <div className="text-[10px] text-muted-foreground">{status}</div> : null}
             </div>

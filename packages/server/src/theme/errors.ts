@@ -8,8 +8,6 @@ export type ThemeError =
   | { kind: "InvalidColor"; reason: string; hint?: string }
   | { kind: "InvalidThemePath"; reason: string; hint?: string }
   | { kind: "UnknownPreset"; presetName: string; hint?: string }
-  | { kind: "ImageLoadFailed"; reason: string; hint?: string }
-  | { kind: "LlmUnavailable"; reason: string; hint?: string }
   | { kind: "BadRequest"; message: string; issues?: unknown };
 
 // Constructor helpers.
@@ -26,11 +24,6 @@ export const invalidThemePath = (reason: string, hint?: string): ThemeError => (
 export const unknownPreset = (presetName: string, hint?: string): ThemeError => ({
   kind: "UnknownPreset",
   presetName,
-  ...(hint !== undefined ? { hint } : {}),
-});
-export const imageLoadFailed = (reason: string, hint?: string): ThemeError => ({
-  kind: "ImageLoadFailed",
-  reason,
   ...(hint !== undefined ? { hint } : {}),
 });
 export const themeBadRequest = (message: string, issues?: unknown): ThemeError => ({

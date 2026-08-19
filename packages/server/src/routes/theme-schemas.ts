@@ -13,12 +13,3 @@ export const DeriveFromColorBody = z.object({
   seedColor: z.string().min(1),
   name: z.string().min(1).optional(),
 });
-
-export const MatchVibeBody = z.object({
-  description: z.string().min(1),
-  useAi: z.boolean().optional(),
-});
-
-export const MatchImageBody = z.object({
-  imagePath: z.string().min(1),
-});

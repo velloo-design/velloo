@@ -16,7 +16,6 @@ import { registerBatchTool } from "./tools/batch.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
-import { registerGenerateTools } from "./tools/generate.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
@@ -142,7 +141,6 @@ function buildMcpServer(
   registerEmitTools(mcp, ctx);
   registerScreenshotTool(mcp, ctx, jit, bundler, assetOrigin);
   registerValidateTools(mcp, ctx);
-  registerGenerateTools(mcp, ctx);
   registerExtensionTools(mcp, ctx);
   registerNoteTools(mcp, ctx);
   registerAssetTools(mcp, ctx);

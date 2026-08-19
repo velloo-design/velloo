@@ -6,13 +6,7 @@ import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
-import {
-  applyPreset,
-  derivePaletteFromColor,
-  matchVibe,
-  setToken,
-  type ThemeContext,
-} from "../index.ts";
+import { applyPreset, derivePaletteFromColor, setToken, type ThemeContext } from "../index.ts";
 
 const sampleConfig = {
   schemaVersion: 1,
@@ -112,22 +106,5 @@ describe("derivePaletteFromColor", () => {
     }
     const onDisk = await diskTheme();
     expect(onDisk.colors.primary).toEqual(primary as never);
-  });
-});
-
-describe("matchVibe", () => {
-  test("playful → warm seed, persisted", async () => {
-    const r = unwrap(await matchVibe(ctx, "playful and joyful"));
-    expect(r.matched.source).toBe("heuristic");
-    expect(r.matched.keywords).toContain("playful");
-    const onDisk = await diskTheme();
-    expect(typeof onDisk.colors.primary).toBe("object");
-  });
-
-  test("garbage description falls back gracefully", async () => {
-    const r = unwrap(await matchVibe(ctx, "blorflexicon"));
-    expect(r.matched.source).toBe("heuristic");
-    // Theme was still updated to something.
-    expect(r.theme.colors.primary).toBeDefined();
   });
 });

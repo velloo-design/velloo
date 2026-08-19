@@ -16,12 +16,6 @@ import {
   importThemeCss as importThemeCssImpl,
   type ThemeTokenChange,
 } from "./import-css.ts";
-import { type MatchImageResult, matchImage as matchImageImpl } from "./match-image.ts";
-import {
-  type MatchVibeOpts,
-  type MatchVibeResult,
-  matchVibe as matchVibeImpl,
-} from "./match-vibe.ts";
 import { PRESET_NAMES, PRESETS } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import { setToken as setTokenImpl } from "./set-token.ts";
@@ -158,29 +152,6 @@ export async function derivePaletteFromColor(
   );
 }
 
-export async function matchVibe(
-  ctx: ThemeContext,
-  description: string,
-  opts: MatchVibeOpts = {},
-): Promise<Result<MatchVibeResult, ThemeError>> {
-  return withThemeLock(async () => {
-    const r = await matchVibeImpl(ctx.folder, description, opts);
-    if (r.ok) broadcastThemeChanged(ctx);
-    return r;
-  });
-}
-
-export async function matchImage(
-  ctx: ThemeContext,
-  imagePath: string,
-): Promise<Result<MatchImageResult, ThemeError>> {
-  return withThemeLock(async () => {
-    const r = await matchImageImpl(ctx.folder, imagePath);
-    if (r.ok) broadcastThemeChanged(ctx);
-    return r;
-  });
-}
-
 export async function importThemeCss(
   ctx: ThemeContext,
   css: string,
@@ -203,7 +174,5 @@ export {
 } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
-export type { MatchImageResult } from "./match-image.ts";
-export type { MatchVibeOpts, MatchVibeResult } from "./match-vibe.ts";
 export type { ImportThemeCssResult, ThemeTokenChange };
 export { PRESET_NAMES, PRESETS };

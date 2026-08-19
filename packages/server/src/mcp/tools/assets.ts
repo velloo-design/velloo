@@ -9,7 +9,7 @@ type McpResult = {
   isError?: true;
 };
 
-/** Basename-only, no traversal, no leading dots — same contract as generate_svg. */
+/** Basename-only, no traversal, no leading dots. */
 function sanitizeFilename(filename: string): string {
   const base = filename.split(/[/\\]/).pop() ?? "asset";
   return (

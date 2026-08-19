@@ -14,10 +14,4 @@ export const theme = {
       name,
     });
   },
-  matchVibe(description: string, useAi = false) {
-    return postTheme<{ theme: Theme; matched: { description: string; source: string } }>(
-      "match_vibe",
-      { description, useAi },
-    );
-  },
 };

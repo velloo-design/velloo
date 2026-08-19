@@ -12,8 +12,6 @@ import {
   getCustomCss,
   importThemeCss,
   listThemes,
-  matchImage,
-  matchVibe,
   PRESET_NAMES,
   scoreThemeContrast,
   scoreThemeContrastBoth,
@@ -228,19 +226,6 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
   );
 
   mcp.registerTool(
-    "match_vibe",
-    {
-      description:
-        "Map a vibe description (e.g. 'playful', 'corporate', 'forest') to a seed color via a curated table, then derive and apply a palette. Pass useAi=true to ask Claude Haiku for a seed color when ANTHROPIC_API_KEY is configured — this may call an external LLM.",
-      inputSchema: {
-        description: z.string(),
-        useAi: z.boolean().optional(),
-      },
-    },
-    async (args) => toMcp(await matchVibe(ctx, args.description, { useAi: args.useAi })),
-  );
-
-  mcp.registerTool(
     "import_theme",
     {
       description:
@@ -306,20 +291,10 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
   );
 
   mcp.registerTool(
-    "match_image",
-    {
-      description:
-        "Extract a palette from an image (Vibrant + Muted + Dark/Light variants) and apply a derived theme. imagePath is relative to the design folder's assets/ (or absolute).",
-      inputSchema: { imagePath: z.string() },
-    },
-    async (args) => toMcp(await matchImage(ctx, args.imagePath)),
-  );
-
-  mcp.registerTool(
     "score_theme_contrast",
     {
       description:
-        'Score WCAG contrast ratios for the active theme\'s salient color pairs (foreground/background, primary/primary-foreground, …) in BOTH light and dark palettes — each result carries mode: "light" | "dark". Returns ratio + tier (AAA / AA / AAlarge / Fail). Pass mode to score one palette only. Use after a derive/preset/match-vibe or any dark-token tuning to confirm accessibility before shipping.',
+        'Score WCAG contrast ratios for the active theme\'s salient color pairs (foreground/background, primary/primary-foreground, …) in BOTH light and dark palettes — each result carries mode: "light" | "dark". Returns ratio + tier (AAA / AA / AAlarge / Fail). Pass mode to score one palette only. Use after a derive/preset or any dark-token tuning to confirm accessibility before shipping.',
       inputSchema: {
         mode: z
           .enum(["light", "dark"])

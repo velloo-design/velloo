@@ -95,6 +95,10 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  /* Suppress Chrome/Safari swipe-to-navigate (the back/forward arrow on
+   * horizontal overscroll) and rubber-band chaining — the workspace owns
+   * panning, so overscroll past it should do nothing. */
+  overscroll-behavior: none;
 }
 
 /*

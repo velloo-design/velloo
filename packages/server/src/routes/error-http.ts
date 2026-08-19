@@ -10,7 +10,7 @@ import type { ThemeError } from "../theme/errors.ts";
  * per-file switch + `never` guards gave, with one table per union
  * instead of three switch statements to keep in sync.
  */
-type ErrorStatus = 400 | 404 | 409 | 422 | 503;
+type ErrorStatus = 400 | 404 | 409 | 422;
 
 const MUTATION_STATUS: Record<MutationError["kind"], ErrorStatus> = {
   ScreenNotFound: 404,
@@ -51,8 +51,6 @@ const THEME_STATUS: Record<ThemeError["kind"], ErrorStatus> = {
   InvalidColor: 400,
   InvalidThemePath: 400,
   BadRequest: 400,
-  ImageLoadFailed: 422,
-  LlmUnavailable: 503,
 };
 
 const CODEGEN_STATUS: Record<CodegenError["kind"], ErrorStatus> = {

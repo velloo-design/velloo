@@ -19,7 +19,7 @@ my-product/
     │   ├── stat-card.json
     │   ├── feature-row.json
     │   └── sidebar-nav-row.json
-    ├── assets/                # imported images, SVGs (generate_svg writes here)
+    ├── assets/                # imported images, SVGs
     ├── screens/               # one file per screen, plus optional annotation sidecars
     │   ├── landing.json
     │   ├── pricing.json
@@ -338,7 +338,7 @@ Unified tokens (single source) → adapters per framework.
 - **Token tree:** colors, typography (font family, scale, line-height), spacing scale, radius, shadows.
 - **Shadcn adapter:** maps tokens to shadcn CSS-variable conventions (`--primary`, `--primary-foreground`, …).
 - **Color generation:** OKLCH lightness scales for accessibility — *not* HSL.
-- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_token`, `derive_palette_from_color`, `apply_preset`, `match_vibe`, `match_image`, `score_theme_contrast`).
+- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_token`, `derive_palette_from_color`, `apply_preset`, `score_theme_contrast`).
 - **Preset library** ships 12 curated presets — `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum`. Each is a complete token tree so `apply_preset` swaps wholesale.
 - **Contrast scoring** is built in: `score_theme_contrast` returns ratio + tier (`AAA` / `AA` / `AAlarge` / `Fail`) for every salient pair (`foreground/background`, `primary/primary-foreground`, etc.). The canvas's theme panel renders this inline.
 
@@ -361,15 +361,9 @@ Reference corpus (15–20 hand-curated `(screen.json, ideal page.tsx)` pairs) is
 
 Drift detection is cut for `emit_code` — there's no longer a "last emit" file in the user's app to drift from. It survives only as a guard for `emit_theme`, which still writes Tailwind config and globals directly. The `velloo theme:export` CLI uses the same diff path and colorizes output for terminal display.
 
-## AI asset generation
+## Assets
 
-`generate_svg` is an MCP tool that produces a ready-to-stamp `<SVG>` node from a natural-language prompt.
-
-- **`generate_svg`** posts the prompt to **Claude Haiku** (`claude-haiku-4-5`) with a constrained system prompt — inner SVG markup only, capped element count, no scripts/animations, `currentColor` by default so the result theme-flips. Output is cleaned (markdown fences stripped, full `<svg>` wrapper peeled), validated by a small allowlist of permitted tags, and returned either inline or persisted under `assets/`. Requires `ANTHROPIC_API_KEY`.
-
-For raster/owned imagery the agent authors the art itself and stores it with `upload_asset` — no third-party image API.
-
-The tool returns a `node:` shape (`{ $ref: "SVG", props: { … } }`) the agent can drop into an `add_node` call directly.
+Velloo ships no model-backed asset generation — there are no MCP tools that call an external API. The agent authors SVG/raster art itself and stores it with `upload_asset` (writes to `assets/`, returns a `/assets/<name>` URL for `<Image src>`). Velloo runs fully offline.
 
 ## Distribution
 
