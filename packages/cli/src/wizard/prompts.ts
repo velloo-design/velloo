@@ -102,23 +102,59 @@ async function promptShareAndFeedback(): Promise<{
   const cloudUrl = defaultCloudUrl();
   const spin = spinner();
   let signedIn = false;
+
+  const controller = new AbortController();
+  const hadRaw = process.stdin.isRaw ?? false;
+  if (process.stdin.isTTY && !hadRaw) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+  }
+  const onKey = (buf: Buffer) => {
+    if (buf[0] === 0x1b) controller.abort();
+  };
+  process.stdin.on("data", onKey);
+
   try {
-    const cred = await performDeviceLogin(cloudUrl, ({ verificationUrl, userCode }) => {
-      note(
-        `Opening your browser to sign in.\nIf it doesn't open, visit:\n${pc.cyan(verificationUrl)}\nand enter the code: ${pc.bold(userCode)}`,
-        "Sign in",
-      );
-      spin.start("Waiting for you to finish signing in");
-    });
+    const cred = await performDeviceLogin(
+      cloudUrl,
+      ({ verificationUrl, userCode }) => {
+        note(
+          `Opening your browser to sign in.\nIf it doesn't open, visit:\n${pc.cyan(verificationUrl)}\nand enter the code: ${pc.bold(userCode)}\n\n${pc.dim("Press Esc to skip and continue without signing in.")}`,
+          "Sign in",
+        );
+        spin.start("Waiting for sign-in  (Esc to skip)");
+      },
+      controller.signal,
+    );
     await saveCredential(cloudUrl, cred);
     spin.stop(`Signed in as ${cred.email}`);
     signedIn = true;
   } catch (err) {
-    spin.stop("Sign-in skipped");
-    note(
-      `Couldn't sign in (${err instanceof Error ? err.message : String(err)}).\nYou can run ${pc.cyan("velloo login")} anytime later.`,
-      "Heads up",
-    );
+    if (controller.signal.aborted) {
+      spin.stop("Sign-in skipped — continuing without it.");
+    } else {
+      spin.stop("Sign-in failed");
+      note(
+        `Couldn't sign in (${err instanceof Error ? err.message : String(err)}).\nYou can run ${pc.cyan("velloo login")} anytime later.`,
+        "Heads up",
+      );
+    }
+  } finally {
+    process.stdin.off("data", onKey);
+    // A user who gives up tends to tap Esc more than once. Swallow any input
+    // still buffered (or arriving in the next breath) so a stray Esc doesn't
+    // leak into clack's next prompt — clack reads Esc as "cancel", which would
+    // silently skip the agent-wiring (MCP setup) step.
+    if (controller.signal.aborted && process.stdin.isTTY) {
+      const drain = () => {};
+      process.stdin.on("data", drain);
+      await new Promise<void>((r) => setTimeout(r, 150));
+      process.stdin.off("data", drain);
+    }
+    if (process.stdin.isTTY && !hadRaw) {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+    }
   }
   if (!signedIn) return {};
 

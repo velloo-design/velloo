@@ -674,7 +674,16 @@ export function registerScreenshotTool(
 
       let buf: Buffer;
       try {
-        const snapshotCss = await jit.build();
+        // A preview's args / extraClassName live only in this in-memory screen,
+        // so the disk scan can't see them — feed their class tokens as extra
+        // JIT candidates, or an arbitrary value passed through a string param
+        // (`from-[hsl(…)]`) silently wouldn't paint in the preview.
+        const extraCandidates: string[] = [];
+        if (extraClassName) extraCandidates.push(...extraClassName.split(/\s+/));
+        for (const v of Object.values(args ?? {})) {
+          if (typeof v === "string") extraCandidates.push(...v.split(/\s+/));
+        }
+        const snapshotCss = await jit.build(extraCandidates.filter(Boolean));
         // render_snippet: a synthesized screen wraps the snippet instance
         // so registry resolution honors the snippet's library, not a stray
         // default. Wrap the synthetic screen with the snippet's library so

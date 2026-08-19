@@ -27,6 +27,7 @@ type Compiler = Awaited<ReturnType<typeof compile>>;
 export class TailwindJit {
   private compilerPromise: Promise<Compiler> | null = null;
   private cached: string | null = null;
+  private cachedCandidates: string[] | null = null;
   private readonly snippetsDir: string;
   private readonly providers: ComponentProvider[];
 
@@ -63,12 +64,33 @@ export class TailwindJit {
    */
   invalidate(): void {
     this.cached = null;
+    this.cachedCandidates = null;
     this.compilerPromise = null;
   }
 
-  async build(): Promise<string> {
-    if (this.cached !== null) return this.cached;
+  /**
+   * Compile the folder's CSS. `extraCandidates` are class names not present in
+   * any scanned file — notably a `render_snippet` preview's instance args /
+   * `extraClassName`, which live only in the in-memory synthesized screen, so
+   * the disk scan can't see them (and an arbitrary value like
+   * `from-[hsl(…)]` would silently not paint). They compile fresh and are not
+   * cached, so the shared cache stays the pure disk-scan result.
+   */
+  async build(extraCandidates?: string[]): Promise<string> {
+    const hasExtra = extraCandidates !== undefined && extraCandidates.length > 0;
+    if (!hasExtra && this.cached !== null) return this.cached;
     const compiler = await this.getCompiler();
+    const candidates = this.scanCandidates();
+    if (!hasExtra) {
+      this.cached = compiler.build(candidates);
+      return this.cached;
+    }
+    return compiler.build([...candidates, ...extraCandidates]);
+  }
+
+  /** Scan the providers' components + the page/snippet JSON for class candidates. */
+  private scanCandidates(): string[] {
+    if (this.cachedCandidates !== null) return this.cachedCandidates;
     const dedupedDirs = Array.from(new Set(this.providers.map((p) => p.componentsDir)));
     const hostDirs = Array.from(new Set(this.extraSourceDirs?.() ?? []));
     const scanner = new Scanner({
@@ -79,9 +101,8 @@ export class TailwindJit {
         { base: this.snippetsDir, pattern: "**/*.json", negated: false },
       ],
     });
-    const candidates = scanner.scan();
-    this.cached = compiler.build(candidates);
-    return this.cached;
+    this.cachedCandidates = scanner.scan();
+    return this.cachedCandidates;
   }
 
   /**

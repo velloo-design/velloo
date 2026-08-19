@@ -24,7 +24,22 @@ function openBrowser(url: string): void {
   }
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleepCancelable = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error("cancelled"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new Error("cancelled"));
+      },
+      { once: true },
+    );
+  });
 
 /**
  * Run the velloo-cloud OAuth device-authorization flow against `cloudUrl`:
@@ -41,6 +56,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function performDeviceLogin(
   cloudUrl: string,
   onPrompt: (info: { verificationUrl: string; userCode: string }) => void,
+  signal?: AbortSignal,
 ): Promise<DeviceLoginResult> {
   const configRes = await fetch(`${cloudUrl}/v1/auth/config`).catch(() => null);
   if (!configRes?.ok) throw new Error(`cannot reach ${cloudUrl} — is velloo-cloud up?`);
@@ -60,8 +76,9 @@ export async function performDeviceLogin(
   const deadline = Date.now() + device.expires_in * 1000;
   let intervalMs = Math.max(1, device.interval) * 1000;
   let accessToken: string | null = null;
+  const abortSignal = signal ?? new AbortController().signal;
   while (Date.now() < deadline) {
-    await sleep(intervalMs);
+    await sleepCancelable(intervalMs, abortSignal);
     const res = await fetch(`${issuer}/api/auth/device/token`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -70,6 +87,7 @@ export async function performDeviceLogin(
         device_code: device.device_code,
         client_id: clientId,
       }),
+      signal: abortSignal,
     });
     const body = (await res.json().catch(() => ({}))) as {
       access_token?: string;
