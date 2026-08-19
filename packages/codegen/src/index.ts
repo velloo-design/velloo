@@ -5,7 +5,6 @@ export {
   type EmitSnippetOptions,
   emitCode,
   emitSnippet,
-  snippetIdsReferenced,
 } from "./emit-code/index.ts";
 export {
   type EmitThemeFile,

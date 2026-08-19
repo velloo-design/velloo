@@ -20,16 +20,3 @@ function collectSnippets(node: Node, out: Set<string>): void {
     for (const child of node.children) collectSnippets(child, out);
   }
 }
-
-/** Map of snippetId → screenIds that reference it. */
-export function snippetUsageIndex(screens: Map<string, Screen>): Map<string, string[]> {
-  const out = new Map<string, string[]>();
-  for (const [screenId, screen] of screens) {
-    for (const id of snippetIdsReferencedBy(screen)) {
-      const list = out.get(id);
-      if (list) list.push(screenId);
-      else out.set(id, [screenId]);
-    }
-  }
-  return out;
-}

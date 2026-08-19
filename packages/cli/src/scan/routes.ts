@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import type { Framework, ScannedRoute, ScanResult } from "./types.ts";
-import { dirExists, fileExists, walkFiles } from "./walk.ts";
+import { dirExists, walkFiles } from "./walk.ts";
 
 const PAGE_EXTS = new Set([".tsx", ".ts", ".jsx", ".js"]);
 
@@ -336,5 +336,3 @@ export async function looksLikeReactApp(appRoot: string): Promise<boolean> {
   };
   return "react" in deps || "next" in deps || "astro" in deps;
 }
-
-export { fileExists };

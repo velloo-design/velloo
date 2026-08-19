@@ -19,7 +19,7 @@ my-product/
     │   ├── stat-card.json
     │   ├── feature-row.json
     │   └── sidebar-nav-row.json
-    ├── assets/                # imported images, SVGs (generate_image / generate_svg write here)
+    ├── assets/                # imported images, SVGs (generate_svg writes here)
     ├── screens/               # one file per screen, plus optional annotation sidecars
     │   ├── landing.json
     │   ├── pricing.json
@@ -361,14 +361,15 @@ Reference corpus (15–20 hand-curated `(screen.json, ideal page.tsx)` pairs) is
 
 Drift detection is cut for `emit_code` — there's no longer a "last emit" file in the user's app to drift from. It survives only as a guard for `emit_theme`, which still writes Tailwind config and globals directly. The `velloo theme:export` CLI uses the same diff path and colorizes output for terminal display.
 
-## AI asset generators
+## AI asset generation
 
-`generate_svg` and `generate_image` are MCP tools that produce ready-to-stamp `<SVG>` / `<Image>` nodes from natural-language prompts.
+`generate_svg` is an MCP tool that produces a ready-to-stamp `<SVG>` node from a natural-language prompt.
 
 - **`generate_svg`** posts the prompt to **Claude Haiku** (`claude-haiku-4-5`) with a constrained system prompt — inner SVG markup only, capped element count, no scripts/animations, `currentColor` by default so the result theme-flips. Output is cleaned (markdown fences stripped, full `<svg>` wrapper peeled), validated by a small allowlist of permitted tags, and returned either inline or persisted under `assets/`. Requires `ANTHROPIC_API_KEY`.
-- **`generate_image`** has two routes. Default: Claude suggests alt text for the prompt, and the URL is a Picsum placeholder seeded by the prompt hash — same prompt always returns the same image, easy to swap for a real photo later, no API key required. Upgrade: if `FAL_KEY` is set and `filename` is given, the tool calls **fal.ai flux-schnell** and writes the binary to `assets/<filename>.png`.
 
-Both tools return a `node:` shape (`{ $ref: "SVG" | "Image", props: { … } }`) the agent can drop into an `add_node` call directly.
+For raster/owned imagery the agent authors the art itself and stores it with `upload_asset` — no third-party image API.
+
+The tool returns a `node:` shape (`{ $ref: "SVG", props: { … } }`) the agent can drop into an `add_node` call directly.
 
 ## Distribution
 

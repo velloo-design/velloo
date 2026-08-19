@@ -90,7 +90,6 @@ export interface CanvasState {
   nodeRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>;
   annotationsVisible: boolean;
   editingMarkupId: string | null;
-  focusedAnnotationId: string | null;
   view: ViewMode;
   libraryItem: LibraryItemRef | null;
   /**
@@ -114,7 +113,6 @@ export interface CanvasState {
   refreshBoard(boardId: string): Promise<void>;
   selectScreen(screenId: string): Promise<void>;
   loadScreen(screenId: string): Promise<Screen | null>;
-  refreshCurrentScreen(): Promise<void>;
   refreshScreen(screenId: string): Promise<void>;
   setSelection(s: Selection | null): void;
   setHover(h: Selection | null): void;
@@ -130,7 +128,6 @@ export interface CanvasState {
   refreshNotes(): Promise<void>;
   setAnnotationsVisible(b: boolean): void;
   setEditingMarkupId(id: string | null): void;
-  setFocusedAnnotationId(id: string | null): void;
   setNodeRects(
     frameId: string,
     rects: { path: string; x: number; y: number; w: number; h: number }[],
@@ -166,9 +163,8 @@ export function selectedNode(screens: Record<string, Screen>, sel: Selection | n
 }
 
 /**
- * Single zustand slice for the canvas. Internally grouped by concern;
- * convenience hooks for the most common groupings live in
- * `store-hooks.ts`. Action sections:
+ * Single zustand slice for the canvas. Internally grouped by concern.
+ * Action sections:
  *
  *   1. Design / boards / screens — load + refresh from the server
  *   2. Theme — load + refresh
@@ -213,7 +209,6 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   nodeRects: {},
   annotationsVisible: true,
   editingMarkupId: null,
-  focusedAnnotationId: null,
   // ── state: library view ──────────────────────────────────────
   view: "boards",
   libraryItem: null,
@@ -355,12 +350,6 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     await get().refreshAnnotations();
   },
 
-  async refreshCurrentScreen() {
-    const id = get().currentScreenId;
-    if (!id) return;
-    await get().refreshScreen(id);
-  },
-
   async refreshScreen(screenId: string) {
     try {
       const screen = await fetchScreen(screenId);
@@ -404,10 +393,6 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setEditingMarkupId(editingMarkupId) {
     set({ editingMarkupId });
-  },
-
-  setFocusedAnnotationId(focusedAnnotationId) {
-    set({ focusedAnnotationId });
   },
 
   setNodeRects(frameId, rects) {

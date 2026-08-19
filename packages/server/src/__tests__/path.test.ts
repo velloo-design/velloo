@@ -4,7 +4,6 @@ import {
   coercePath,
   findById,
   isIdLocator,
-  locate,
   parentOf,
   pathAt,
   pathFromString,
@@ -137,17 +136,5 @@ describe("locator + findById", () => {
 
   test("resolveLocator returns null on unknown id", () => {
     expect(resolveLocator(treeWithIds, "@missing")).toBeNull();
-  });
-
-  test("locate combines resolve + pathAt and returns both", () => {
-    const r = locate(treeWithIds, "@title");
-    expect(r?.path).toEqual([0]);
-    expect((r?.node as { $ref: string }).$ref).toBe("Heading");
-
-    const r2 = locate(treeWithIds, [1, 1]);
-    expect(r2?.path).toEqual([1, 1]);
-    expect((r2?.node as { $snippet: string }).$snippet).toBe("feature-card");
-
-    expect(locate(treeWithIds, "@nope")).toBeNull();
   });
 });

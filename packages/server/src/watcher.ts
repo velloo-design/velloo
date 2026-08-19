@@ -1,5 +1,5 @@
 import { type FSWatcher, watch } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { join, sep } from "node:path";
 
 export type WatchEvent =
   | { type: "screen-changed"; screenId: string }
@@ -110,8 +110,4 @@ export function watchDesignFolder(
       pending.clear();
     },
   };
-}
-
-export function _relForTesting(root: string, abs: string): string {
-  return relative(root, abs);
 }

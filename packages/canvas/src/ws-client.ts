@@ -11,6 +11,25 @@ type ServerEvent =
   | { type: "config-changed" }
   | { type: "reload-error"; source: string; message: string };
 
+/**
+ * Validate a raw WebSocket frame at the trust boundary: it must be a JSON
+ * object carrying a string `type` discriminant before the dispatch below can
+ * safely narrow on it. Anything else (non-string data, malformed JSON, a
+ * payload without `type`) is dropped.
+ */
+function parseServerEvent(data: unknown): ServerEvent | null {
+  if (typeof data !== "string") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  if (typeof (parsed as { type?: unknown }).type !== "string") return null;
+  return parsed as ServerEvent;
+}
+
 export function connectWs(): () => void {
   let socket: WebSocket | null = null;
   let stopped = false;
@@ -28,12 +47,8 @@ export function connectWs(): () => void {
     };
 
     socket.onmessage = (ev) => {
-      let payload: ServerEvent;
-      try {
-        payload = JSON.parse(ev.data) as ServerEvent;
-      } catch {
-        return;
-      }
+      const payload = parseServerEvent(ev.data);
+      if (!payload) return;
       const {
         currentScreenId,
         currentBoardId,

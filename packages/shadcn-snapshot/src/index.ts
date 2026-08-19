@@ -5,7 +5,7 @@ import { registry } from "./registry.ts";
 export { type InstalledSnapshot, installSnapshot } from "./install.ts";
 export type { ComponentDescriptor, Manifest, PropDescriptor } from "./manifest.ts";
 export { componentsDir, entryCssPath, snapshotVersion } from "./paths.ts";
-export { type ComponentRef, isKnownComponent, registry } from "./registry.ts";
+export { registry } from "./registry.ts";
 
 /**
  * Prop manifest extracted from the vendored sources via ts-morph at build time.

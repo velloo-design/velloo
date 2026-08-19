@@ -33,8 +33,3 @@ export async function dirExists(path: string): Promise<boolean> {
   const s = await stat(path).catch(() => null);
   return s?.isDirectory() ?? false;
 }
-
-export async function fileExists(path: string): Promise<boolean> {
-  const s = await stat(path).catch(() => null);
-  return s?.isFile() ?? false;
-}

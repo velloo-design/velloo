@@ -128,7 +128,6 @@ export {
   type AddExtensionArgs,
   type AddExtensionResult,
   addExtension,
-  ensureKnownExtension,
   type RemoveExtensionArgs,
   type RemoveExtensionResult,
   removeExtension,

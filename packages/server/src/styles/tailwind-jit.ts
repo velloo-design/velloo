@@ -86,10 +86,11 @@ export class TailwindJit {
 
   /**
    * Merge each provider's entry CSS into one Tailwind input. Today every
-   * shipping provider uses the same `@theme` token names; the merge is
-   * effectively a `cat`. When a future provider ships divergent tokens
-   * (e.g. MUI mapping to a different palette shape) we'll need real
-   * conflict detection — left as a TODO with a soft-warn for now.
+   * shipping provider uses the same `@theme` token names, so the merge is
+   * effectively a `cat` (each block gets a provider-id comment header for
+   * traceability). When a future provider ships divergent tokens (e.g. MUI
+   * mapping to a different palette shape) we'll need real conflict detection
+   * — deferred until then; concatenation is last-wins for now.
    */
   private async mergedEntryCss(): Promise<{ css: string; base: string }> {
     const primary = this.providers[0];

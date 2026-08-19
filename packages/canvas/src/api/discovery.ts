@@ -46,17 +46,6 @@ export interface SnippetMeta {
   library?: string | null;
 }
 
-/** A manifest entry returned by /api/components after Sprint Y. */
-export interface ComponentManifestEntry {
-  id: string;
-  category: string;
-  source: string;
-  props: { name: string }[];
-  designModeNotes?: string;
-  kind?: "library" | "extension";
-  importPath?: string;
-}
-
 /**
  * GET + parse. Failures read the server's `{error: {...}}` envelope and
  * attach the typed payload, same as http.ts's POST helpers — one error

@@ -18,11 +18,6 @@ export {
   verifyCache,
 } from "./fetcher.ts";
 export { type InstallOptions, type InstallResult, installShadcnUpstream } from "./install.ts";
-export {
-  aggregateDependencies,
-  dateStampVersion,
-  hashContent,
-  type ShadcnUpstreamLock,
-} from "./lock.ts";
+export { aggregateDependencies, hashContent, type ShadcnUpstreamLock } from "./lock.ts";
 export { generateManifest, readManifest, writeManifest } from "./manifest.ts";
 export { type CreateUpstreamProviderOptions, createProvider } from "./provider.ts";

@@ -33,11 +33,6 @@ export const imageLoadFailed = (reason: string, hint?: string): ThemeError => ({
   reason,
   ...(hint !== undefined ? { hint } : {}),
 });
-export const llmUnavailable = (reason: string, hint?: string): ThemeError => ({
-  kind: "LlmUnavailable",
-  reason,
-  ...(hint !== undefined ? { hint } : {}),
-});
 export const themeBadRequest = (message: string, issues?: unknown): ThemeError => ({
   kind: "BadRequest",
   message,

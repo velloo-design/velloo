@@ -46,7 +46,3 @@ export const registry: ComponentRegistry = {
   Input,
   ...reusedHelpers(),
 };
-
-export function isKnownComponent(ref: string): boolean {
-  return ref in registry;
-}

@@ -14,7 +14,6 @@ import {
   extensionInUse,
   extensionNotFound,
   type MutationError,
-  unknownComponent,
 } from "./errors.ts";
 import { persistConfig } from "./persist.ts";
 
@@ -220,19 +219,4 @@ export async function removeExtension(
   await persistConfig(ctx.folder, nextConfig);
   ctx.broadcast({ type: "config-changed" });
   return ok({ id: args.id });
-}
-
-/**
- * Throw an `unknownComponent`-shaped error when `ref` doesn't exist as
- * either a library component or a registered extension. Used by
- * mutations that accept any `$ref` (the multi-library `ensureKnownComponent`
- * already handles this; exported separately for symmetry with library lookups).
- */
-export function ensureKnownExtension(
-  ctx: MutationContext,
-  ref: string,
-): Result<void, MutationError> {
-  const exts = ctx.folder.config.extensions ?? {};
-  if (ref in exts) return ok(undefined);
-  return err(unknownComponent(ref, Object.keys(exts)));
 }

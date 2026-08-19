@@ -150,7 +150,6 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | Tool | Args | Notes |
 |---|---|---|
 | `generate_svg` | `prompt, filename?, viewBox?, color?` | Generate inline SVG via Claude Haiku. Returns `{ content, viewBox, assetPath, node: { $ref: "SVG", props: { … } } }` — drop `node` straight into `add_node`. Set `filename` to also persist under `assets/`. Requires `ANTHROPIC_API_KEY` |
-| `generate_image` | `prompt, aspect?, width?` — stable Picsum placeholder seeded by prompt + Claude alt text. For intentional imagery author art yourself and store via `upload_asset` |
 
 ## Path addressing
 

@@ -7,7 +7,7 @@ import { registry } from "./registry.ts";
 
 export { Box, Button, Card, Container, Input, Stack } from "./components.tsx";
 export { NONE_MANIFEST } from "./manifest.ts";
-export { isKnownComponent, registry } from "./registry.ts";
+export { registry } from "./registry.ts";
 
 /**
  * Version of the no-library primitive set. Bumped on breaking changes

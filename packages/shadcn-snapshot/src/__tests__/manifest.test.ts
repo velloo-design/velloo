@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import {
-  componentsDir,
-  entryCssPath,
-  isKnownComponent,
-  loadManifest,
-  registry,
-  snapshotVersion,
-} from "../index.ts";
+import { componentsDir, entryCssPath, loadManifest, registry, snapshotVersion } from "../index.ts";
 
 describe("registry", () => {
   test("has the starter components", () => {
@@ -49,11 +42,6 @@ describe("registry", () => {
     for (const id of ["SVG", "Image", "Layer", "Divider", "Gradient"]) {
       expect(ids).toContain(id);
     }
-  });
-
-  test("isKnownComponent matches registry membership", () => {
-    expect(isKnownComponent("Button")).toBe(true);
-    expect(isKnownComponent("DefinitelyNotReal")).toBe(false);
   });
 });
 

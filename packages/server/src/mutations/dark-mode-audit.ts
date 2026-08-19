@@ -331,9 +331,6 @@ function auditClasses(className: string): AuditNodeOutcome {
   return { raw, suggestions, hasColor, allSemantic };
 }
 
-/** Test seam — exported for unit-testing the classifier directly. */
-export const _internals = { parseColorClass, auditClasses };
-
 /**
  * Walk an arbitrary tree (variant root or snippet body) and produce the
  * audit result. Snippet instances inside the tree are NOT descended into

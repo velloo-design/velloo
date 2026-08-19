@@ -311,20 +311,3 @@ export async function emitSnippet(
     };
   });
 }
-
-/** Walk a screen tree and collect snippet ids referenced. */
-export function snippetIdsReferenced(screen: Screen): Set<string> {
-  const out = new Set<string>();
-  walkForSnippets(screen.tree, out);
-  return out;
-}
-
-function walkForSnippets(node: Node, out: Set<string>): void {
-  if (isSnippetInstance(node)) {
-    out.add(node.$snippet);
-    return;
-  }
-  if (isComponentNode(node) && node.children) {
-    for (const child of node.children) walkForSnippets(child, out);
-  }
-}

@@ -161,4 +161,12 @@ describe("/api/live/bundle.js (live-island bundle)", () => {
     const body = await res.text();
     expect(body).toContain("export const components");
   });
+
+  test("sets a permissive CORS header so screenshot/compare can import it cross-origin", async () => {
+    // The screenshot path renders via Playwright setContent (opaque origin) and
+    // imports this module via <base href>; ES module imports are CORS-gated, so
+    // without the wildcard the live nodes silently fall back to placeholders.
+    const res = await app.fetch(new Request("http://localhost/api/live/bundle.js"));
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
 });

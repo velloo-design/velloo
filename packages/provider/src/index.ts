@@ -12,6 +12,5 @@ export {
   type ComponentProvider,
   type ComponentRegistry,
   type ProviderLoader,
-  providerHasComponent,
   UnknownProviderError,
 } from "./types.ts";

@@ -76,11 +76,6 @@ const NodeIdInputSchema = z
   .string()
   .regex(/^[a-zA-Z][a-zA-Z0-9_-]*$/)
   .describe("Stable id for the node (letters/digits/_/-, leading letter)");
-const ViewportSchema = z.object({
-  w: z.number().int().positive(),
-  h: z.number().int().positive(),
-});
-
 export function registerMutationTools(mcp: McpServer, ctx: MutationContext): void {
   // ── Tree mutations ─────────────────────────────────────────────────────
   mcp.registerTool(
@@ -517,7 +512,4 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     },
     async (args) => toMcp(await updateSnippetArgs(ctx, args)),
   );
-
-  // Suppress unused warning for ViewportSchema imported but currently unused.
-  void ViewportSchema;
 }

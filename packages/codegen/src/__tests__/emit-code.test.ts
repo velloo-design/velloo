@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { unwrap } from "@velloo/result";
 import type { Screen, Snippet } from "@velloo/schema";
-import { emitCode, snippetIdsReferenced } from "../emit-code/index.ts";
+import { emitCode } from "../emit-code/index.ts";
 
 function screenOf(tree: Screen["tree"]): Screen {
   return { id: "home", name: "Home", tree };
@@ -138,8 +138,6 @@ describe("emitCode", () => {
   <CardTitle>{title}</CardTitle>
 </Card>`,
     );
-
-    expect([...snippetIdsReferenced(screen)]).toEqual(["feature-card"]);
   });
 
   test("an optional node slot is marked optional in the IR and omitted instances drop it", async () => {

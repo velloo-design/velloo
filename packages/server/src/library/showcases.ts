@@ -500,7 +500,3 @@ export function buildShowcaseTree(
     props: { children: componentRef, ...(propOverrides ?? {}) },
   };
 }
-
-export function hasShowcase(componentRef: string): boolean {
-  return componentRef in SHOWCASES;
-}

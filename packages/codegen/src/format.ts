@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as ts from "typescript";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** Stub biome.json controlling the rules applied to emitted code, regardless
@@ -34,55 +33,6 @@ async function runBiome(args: string[]): Promise<{ exitCode: number; stderr: str
   await new Response(proc.stdout).text(); // drain
   const exitCode = await proc.exited;
   return { exitCode, stderr };
-}
-
-/**
- * Format an emitted .tsx string through Biome's CLI (format + lint), then
- * parse it with the TypeScript compiler API. Returns the final string plus a
- * list of any errors; callers decide whether to surface them.
- */
-export async function formatTsx(filePath: string, source: string): Promise<FormatResult> {
-  const errors: FormatError[] = [];
-  const tmp = await mkdtemp(join(tmpdir(), "velloo-codegen-"));
-  const onDisk = join(tmp, filePath.replace(/[/\\]/g, "_"));
-  await writeFile(onDisk, source, "utf8");
-
-  try {
-    // 1. Format in place.
-    const fmt = await runBiome(["format", "--write", `--config-path=${BIOME_CONFIG_PATH}`, onDisk]);
-    if (fmt.exitCode !== 0 && fmt.stderr) {
-      errors.push({ stage: "format", message: trimDiagnostics(fmt.stderr) });
-    }
-    // 2. Lint (read-only — don't autofix, since the safety net should *flag*).
-    const lint = await runBiome(["lint", `--config-path=${BIOME_CONFIG_PATH}`, onDisk]);
-    if (lint.exitCode !== 0 && lint.stderr) {
-      errors.push({ stage: "lint", message: trimDiagnostics(lint.stderr) });
-    }
-    const formatted = await readFile(onDisk, "utf8");
-
-    // 3. TS parse — last defense against the emitter writing garbage.
-    const sf = ts.createSourceFile(
-      filePath,
-      formatted,
-      ts.ScriptTarget.Latest,
-      false,
-      ts.ScriptKind.TSX,
-    );
-    const parseDiags =
-      (sf as unknown as { parseDiagnostics?: ts.Diagnostic[] }).parseDiagnostics ?? [];
-    for (const d of parseDiags) {
-      if (d.category === ts.DiagnosticCategory.Error) {
-        errors.push({
-          stage: "parse",
-          message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
-        });
-      }
-    }
-
-    return { output: formatted, errors };
-  } finally {
-    await rm(tmp, { recursive: true, force: true });
-  }
 }
 
 /** Format a CSS file. Biome formats CSS too; lint is mostly a no-op here. */

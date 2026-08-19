@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import type { HistoryEntry } from "../history.ts";
-import { withBoardLock, withScreenLock } from "../mutations/context.ts";
+import { withBoardLock, withScreenLock, withSnippetLock } from "../mutations/context.ts";
 import type { WatchEvent } from "../watcher.ts";
 
 type Reverted =
@@ -88,11 +88,13 @@ async function applyRevert(
     const back: HistoryEntry = { kind: "snippet", snippetId: entry.snippetId, snippet: current };
     if (pushOpposite === "redo") folder.history.pushRedo(back);
     else folder.history.pushUndoSilent(back);
-    if (entry.snippet === null) {
-      await deleteSnippet(folder, entry.snippetId);
-    } else {
-      await writeSnippet(folder, entry.snippetId, entry.snippet);
-    }
+    await withSnippetLock(entry.snippetId, async () => {
+      if (entry.snippet === null) {
+        await deleteSnippet(folder, entry.snippetId);
+      } else {
+        await writeSnippet(folder, entry.snippetId, entry.snippet);
+      }
+    });
     broadcast({ type: "snippet-changed", snippetId: entry.snippetId });
     return { kind: "snippet", snippetId: entry.snippetId };
   }

@@ -90,7 +90,7 @@ export class IframeChannel {
     this.port?.close();
     const channel = new MessageChannel();
     this.port = channel.port1;
-    this.port.onmessage = (ev: MessageEvent) => this.handleMessage(ev.data as ChildMessage);
+    this.port.onmessage = (ev: MessageEvent) => this.handleMessage(ev.data);
     w.postMessage({ type: INIT_MESSAGE_TYPE, version: PROTOCOL_VERSION }, "*", [channel.port2]);
     this.scheduleRetry();
   }
@@ -112,8 +112,10 @@ export class IframeChannel {
     }
   }
 
-  private handleMessage(msg: ChildMessage): void {
-    if (!msg || typeof msg !== "object") return;
+  private handleMessage(raw: unknown): void {
+    if (!raw || typeof raw !== "object") return;
+    if (typeof (raw as { type?: unknown }).type !== "string") return;
+    const msg = raw as ChildMessage;
     if (msg.type === "ready") {
       if (msg.version !== PROTOCOL_VERSION) {
         // Stale iframe doc (cached HTML from an older runtime). Keep

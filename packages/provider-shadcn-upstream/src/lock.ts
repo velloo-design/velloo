@@ -35,20 +35,6 @@ export function hashContent(content: string): string {
 }
 
 /**
- * Build a date-stamp version from a Date. The minute-granularity makes
- * back-to-back re-fetches produce distinct versions; consistent across
- * machines because we're using UTC.
- */
-export function dateStampVersion(at: Date): string {
-  const year = at.getUTCFullYear();
-  const month = String(at.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(at.getUTCDate()).padStart(2, "0");
-  const hour = String(at.getUTCHours()).padStart(2, "0");
-  const minute = String(at.getUTCMinutes()).padStart(2, "0");
-  return `${year}.${month}.${day}-${hour}${minute}`;
-}
-
-/**
  * Aggregate the npm packages the user's app would need to install to
  * use the fetched components. Walks every entry's `dependencies` field
  * and dedupes.

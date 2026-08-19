@@ -1,24 +1,27 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { DesignFolder } from "../design-folder.ts";
-import { generateImage } from "../generate/generate-image.ts";
 import { generateSvg } from "../generate/generate-svg.ts";
 
+const SvgRequestSchema = z.object({
+  prompt: z.string().min(1),
+  filename: z.string().optional(),
+  viewBox: z.string().optional(),
+  color: z.string().optional(),
+});
+
 /**
- * HTTP wrappers around the AI asset generators. Mirrors the MCP tools
- * so the canvas can wire a "Generate SVG…" button without going
- * through the MCP transport.
+ * HTTP wrapper around the SVG generator. Mirrors the MCP tool so the
+ * canvas can wire a "Generate SVG…" button without going through the
+ * MCP transport.
  */
 export function createGenerateRouter(folder: () => DesignFolder): Hono {
   const r = new Hono();
 
   r.post("/svg", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as {
-      prompt?: string;
-      filename?: string;
-      viewBox?: string;
-      color?: string;
-    };
-    if (!body.prompt) return c.json({ error: { kind: "EmptyPrompt" } }, 400);
+    const parsed = SvgRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: { kind: "EmptyPrompt" } }, 400);
+    const body = parsed.data;
     const res = await generateSvg(folder(), body.prompt, {
       filename: body.filename,
       viewBox: body.viewBox,
@@ -33,32 +36,6 @@ export function createGenerateRouter(folder: () => DesignFolder): Hono {
           content: res.value.content,
           viewBox: res.value.viewBox,
           ...(body.color ? { color: body.color } : {}),
-        },
-      },
-    });
-  });
-
-  r.post("/image", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as {
-      prompt?: string;
-      aspect?: "1:1" | "4:3" | "3:4" | "16:9" | "21:9";
-      width?: number;
-    };
-    if (!body.prompt) return c.json({ error: { kind: "EmptyPrompt" } }, 400);
-    const res = await generateImage(folder(), body.prompt, {
-      aspect: body.aspect,
-      width: body.width,
-    });
-    if (!res.ok) return c.json({ error: res.error }, 400);
-    return c.json({
-      ...res.value,
-      node: {
-        $ref: "Image",
-        props: {
-          src: res.value.src,
-          alt: res.value.alt,
-          aspect: res.value.aspect,
-          fill: true,
         },
       },
     });

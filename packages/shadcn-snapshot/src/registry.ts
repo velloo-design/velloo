@@ -307,9 +307,3 @@ export const registry: Record<string, ComponentType<any>> = {
   TooltipProvider,
   TooltipTrigger,
 };
-
-export type ComponentRef = keyof typeof registry;
-
-export function isKnownComponent(ref: string): boolean {
-  return ref in registry;
-}

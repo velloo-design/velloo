@@ -73,17 +73,3 @@ export function categoryForComponent(componentId: string): string | null {
   }
   return null;
 }
-
-/** Flat list of every component id that's surfaced in the library. */
-export function libraryComponentIds(): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const cat of LIBRARY_CATEGORIES) {
-    for (const id of cat.components) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      out.push(id);
-    }
-  }
-  return out;
-}

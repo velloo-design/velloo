@@ -62,8 +62,3 @@ export class UnknownProviderError extends Error {
     this.id = id;
   }
 }
-
-/** Helper for `registry`-using code: does the provider know this id? */
-export function providerHasComponent(provider: ComponentProvider, ref: string): boolean {
-  return ref in provider.registry;
-}

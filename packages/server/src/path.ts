@@ -112,15 +112,3 @@ export function resolveLocator(root: Node, locator: Locator): number[] | null {
   }
   return null;
 }
-
-/**
- * One-shot: resolve a locator AND fetch the node at that path. Returns
- * `{ path, node }` on success — agents and mutations often need both.
- */
-export function locate(root: Node, locator: Locator): { path: number[]; node: Node } | null {
-  const path = resolveLocator(root, locator);
-  if (path === null) return null;
-  const node = pathAt(root, path);
-  if (node === null) return null;
-  return { path, node };
-}

@@ -4,20 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Theme } from "@velloo/schema";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
-import { generateImage } from "../generate-image.ts";
 import { generateSvg } from "../generate-svg.ts";
 
 /**
- * Tests for the AI asset generators. The real LLM call is patched out
+ * Tests for the SVG asset generator. The real LLM call is patched out
  * with `globalThis.fetch` so the tests don't need ANTHROPIC_API_KEY
  * and don't make network calls. The contract we care about:
  *
  *   - generate_svg cleans LLM artifacts (markdown fences, <svg> wrap)
  *   - generate_svg writes to assets/ when filename given
  *   - generate_svg fails gracefully with no API key
- *   - generate_image returns a stable Picsum URL seeded by prompt
- *   - generate_image dimensions match the requested aspect
- *   - generate_image fallback alt-text works without API key
  */
 
 const sampleConfig = {
@@ -54,7 +50,6 @@ let tmp: string;
 let folder: DesignFolder;
 let prevFetch: typeof fetch;
 let prevKey: string | undefined;
-let prevFalKey: string | undefined;
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -71,15 +66,12 @@ beforeEach(async () => {
   folder = await loadDesignFolder(tmp);
   prevFetch = globalThis.fetch;
   prevKey = process.env.ANTHROPIC_API_KEY;
-  prevFalKey = process.env.FAL_KEY;
 });
 
 afterEach(async () => {
   globalThis.fetch = prevFetch;
   if (prevKey === undefined) delete process.env.ANTHROPIC_API_KEY;
   else process.env.ANTHROPIC_API_KEY = prevKey;
-  if (prevFalKey === undefined) delete process.env.FAL_KEY;
-  else process.env.FAL_KEY = prevFalKey;
   await rm(tmp, { recursive: true, force: true });
 });
 
@@ -168,87 +160,5 @@ describe("generateSvg", () => {
       expect(r.value.assetPath).not.toContain("..");
       expect(r.value.assetPath).toMatch(/^assets\//);
     }
-  });
-});
-
-describe("generateImage", () => {
-  test("empty prompt is rejected", async () => {
-    const r = await generateImage(folder, "");
-    expect(r.ok).toBe(false);
-  });
-
-  test("returns a Picsum URL seeded by the prompt hash", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const r1 = await generateImage(folder, "a sunset");
-    const r2 = await generateImage(folder, "a sunset");
-    expect(r1.ok).toBe(true);
-    expect(r2.ok).toBe(true);
-    if (r1.ok && r2.ok) {
-      // Same prompt → same seed → same URL.
-      expect(r1.value.src).toBe(r2.value.src);
-      expect(r1.value.src).toMatch(/^https:\/\/picsum\.photos\/seed\//);
-    }
-  });
-
-  test("different prompts produce different URLs", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const r1 = await generateImage(folder, "a sunset");
-    const r2 = await generateImage(folder, "a forest");
-    expect(r1.ok).toBe(true);
-    expect(r2.ok).toBe(true);
-    if (r1.ok && r2.ok) expect(r1.value.src).not.toBe(r2.value.src);
-  });
-
-  test("aspect 1:1 produces a square URL", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const r = await generateImage(folder, "test", { aspect: "1:1" });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.value.aspect).toBe("1/1");
-      expect(r.value.src).toMatch(/\/800\/800$/);
-    }
-  });
-
-  test("aspect 16:9 produces 1280x720 by default", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const r = await generateImage(folder, "test", { aspect: "16:9" });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.value.aspect).toBe("16/9");
-      expect(r.value.src).toMatch(/\/1280\/720$/);
-    }
-  });
-
-  test("width override scales height proportionally", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const r = await generateImage(folder, "test", { aspect: "16:9", width: 1920 });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.src).toMatch(/\/1920\/1080$/);
-  });
-
-  test("falls back to a prompt-derived alt text without API key", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const r = await generateImage(folder, "happy team celebrating launch");
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.value.alt.length).toBeGreaterThan(0);
-    }
-  });
-
-  test("uses Claude alt text when API key is present", async () => {
-    process.env.ANTHROPIC_API_KEY = "test-key";
-    stubAnthropic("Team celebrating product launch");
-    const r = await generateImage(folder, "happy team celebrating launch");
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.alt).toBe("Team celebrating product launch");
-  });
-
-  test("source is claude+picsum when not using fal", async () => {
-    // Clear the key so suggestAltText takes the offline fallback — with a
-    // real key in the environment this test would call the live API.
-    delete process.env.ANTHROPIC_API_KEY;
-    const r = await generateImage(folder, "test");
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.source).toBe("claude+picsum");
   });
 });

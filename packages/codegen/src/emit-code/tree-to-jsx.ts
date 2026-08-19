@@ -36,12 +36,6 @@ export interface EmitContext {
    */
   extensions?: Map<string, { importPath: string }>;
   /**
-   * Single-shot: when present, the next ComponentNode renderComponent call
-   * (the snippet body's root) splices `${holder.varName}` into its className.
-   * Cleared after first use so descendants don't re-merge it.
-   */
-  injectClassNameAtRoot?: { varName: string; used: boolean };
-  /**
    * Non-fatal emit caveats accumulated during the walk (e.g. an Icon whose
    * `name` is a dynamic param, which can't survive lowering — see
    * renderComponent). Surfaced on the emit result so the agent self-corrects
@@ -233,30 +227,13 @@ function renderComponent(
     closeTag = entry.jsxName;
   }
 
-  // Single-shot: at the root of a snippet body, splice the snippet's
-  // `className` prop variable into the rendered className so callers can
-  // override styling via instantiate_snippet({extraClassName: "..."}).
-  // Template-literal concat — no external `cn` import needed.
-  const injectVar =
-    ctx.injectClassNameAtRoot && !ctx.injectClassNameAtRoot.used
-      ? ctx.injectClassNameAtRoot.varName
-      : null;
-  if (ctx.injectClassNameAtRoot && !ctx.injectClassNameAtRoot.used) {
-    ctx.injectClassNameAtRoot.used = true;
-  }
-
   const attrParts: string[] = [];
   if (isClassNameExpr) {
     const cn = serializeProp("className", rawClassName, ctx.snippetParamNames);
     if (cn) attrParts.push(cn);
-  } else if (mergedClassName || injectVar) {
-    if (injectVar) {
-      const base = mergedClassName ?? "";
-      attrParts.push(`className={\`${base}${base ? " " : ""}\${${injectVar} ?? ""}\`}`);
-    } else if (mergedClassName) {
-      const cn = serializeProp("className", mergedClassName, ctx.snippetParamNames);
-      if (cn) attrParts.push(cn);
-    }
+  } else if (mergedClassName) {
+    const cn = serializeProp("className", mergedClassName, ctx.snippetParamNames);
+    if (cn) attrParts.push(cn);
   }
   for (const [name, value] of Object.entries(props)) {
     const serialized = serializeProp(name, value, ctx.snippetParamNames);
