@@ -179,10 +179,20 @@ async function writeScaffold(
     mkdir(`${folder}/snippets`, { recursive: true }),
   ]);
 
+  // `.design/cache/` is daemon runtime state (lockfiles, logs — recreated on
+  // demand) and `.velloo/` holds trace tapes; both are local and regenerated,
+  // so they're ignored rather than tracked. The cache dir no longer needs a
+  // committed `.gitkeep` — the daemon mkdirs it on startup.
+  const gitignore = [
+    "# Velloo runtime + debug artifacts — regenerated on demand, never commit.",
+    ".design/cache/",
+    ".velloo/",
+    "",
+  ].join("\n");
   const writes: Promise<unknown>[] = [
     writeJsonAtomic(`${folder}/.design/config.json`, config),
     writeJsonAtomic(`${folder}/theme/default.json`, scaffold.theme),
-    writeText(`${folder}/.design/cache/.gitkeep`, ""),
+    writeText(`${folder}/.gitignore`, gitignore),
     writeText(`${folder}/assets/.gitkeep`, ""),
     writeText(`${folder}/README.md`, renderDesignReadme(answers, plan)),
   ];

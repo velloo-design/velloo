@@ -83,6 +83,13 @@ describe("velloo init", () => {
     expect(snippetFiles.length).toBeGreaterThan(0);
     for (const f of snippetFiles)
       SnippetSchema.parse(JSON.parse(await readFile(join(design, "snippets", f), "utf8")));
+
+    // A .gitignore keeps daemon runtime state + trace tapes out of git.
+    const gitignore = await readFile(join(design, ".gitignore"), "utf8");
+    expect(gitignore).toContain(".design/cache/");
+    expect(gitignore).toContain(".velloo/");
+    // The old empty-dir placeholder is gone — the dir is ignored, not tracked.
+    expect(await Bun.file(join(design, ".design/cache/.gitkeep")).exists()).toBe(false);
   }, 30_000);
 
   test("--design-folder controls where the design lands under the app root", async () => {

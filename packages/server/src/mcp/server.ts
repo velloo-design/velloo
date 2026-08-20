@@ -25,6 +25,7 @@ import { registerNoteTools } from "./tools/notes.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
 import { registerThemeTools } from "./tools/theme.ts";
 import { registerValidateTools } from "./tools/validate.ts";
+import { createTraceRecorder, withCallRecording } from "./trace.ts";
 
 export interface McpServerOptions {
   port: number;
@@ -177,6 +178,10 @@ function buildMcpServer(
       { instructions: buildInstructions(feedbackEnabled, assetOrigin?.replace(/\/+$/, "")) },
     ),
   );
+  // Hidden, env-gated session tape (VELLOO_TRACE). Wrap before any tool
+  // registers so every handler is taped; no-op when the flag is unset.
+  const recorder = createTraceRecorder(ctx.folder.root);
+  if (recorder) withCallRecording(mcp, recorder);
   registerDiscoveryTools(mcp, ctx);
   registerMutationTools(mcp, ctx);
   registerInspectTool(mcp, ctx);

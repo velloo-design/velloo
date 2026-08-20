@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
+import { traceEnabled } from "./trace/env.ts";
 import { TOOL_VERSION } from "./version.ts";
 
 const main = defineCommand({
@@ -22,6 +23,9 @@ const main = defineCommand({
     publish: () => import("./commands/publish.ts").then((m) => m.default),
     emit: () => import("./commands/emit.ts").then((m) => m.default),
     "theme:export": () => import("./commands/theme-export.ts").then((m) => m.default),
+    ...(traceEnabled()
+      ? { trace: () => import("./commands/trace.ts").then((m) => m.default) }
+      : {}),
   },
 });
 

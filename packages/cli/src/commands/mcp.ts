@@ -1,8 +1,10 @@
+import { join } from "node:path";
 import { runStdioMcpProxy } from "@velloo/server";
 import { defineCommand } from "citty";
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
+import { traceEnabled } from "../trace/env.ts";
 
 export default defineCommand({
   meta: {
@@ -37,11 +39,28 @@ export default defineCommand({
     // Every `velloo mcp` (and `velloo run`) for a folder converges on one
     // persistent canvas daemon — one writer, one canvas URL shared by all
     // agents. We attach to it, spawning a detached one if none is alive.
+    let spawned = false;
     let rec: Awaited<ReturnType<typeof ensureDaemon>>;
     try {
-      rec = await ensureDaemon(folder, { preferredPort, host: args.host });
+      rec = await ensureDaemon(folder, {
+        preferredPort,
+        host: args.host,
+        onSpawn: () => {
+          spawned = true;
+        },
+      });
     } catch (err) {
       fail("mcp", (err as Error).message);
+    }
+
+    // Diagnostics to stderr only (stdout is the JSON-RPC stream). The recorder
+    // runs in the daemon, so it's only active when this command spawned it.
+    if (traceEnabled()) {
+      console.error(
+        spawned
+          ? `velloo: ⦿ trace recording ON — tapes → ${join(folder, ".velloo", "trace")} (view with \`velloo trace\`)`
+          : "velloo: VELLOO_TRACE is set, but attached to an already-running canvas — recording is only active if that daemon was started trace-enabled (`velloo stop` then reconnect to force a fresh one).",
+      );
     }
 
     if (args.http) {

@@ -1,8 +1,10 @@
+import { join } from "node:path";
 import { defineCommand } from "citty";
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
+import { traceEnabled } from "../trace/env.ts";
 
 export default defineCommand({
   meta: {
@@ -40,9 +42,16 @@ export default defineCommand({
     // Attach to the folder's persistent canvas daemon, spawning a detached one
     // if none is alive. It outlives this command (and any agent session) and
     // auto-stops after 5 min idle.
+    let spawned = false;
     let rec: Awaited<ReturnType<typeof ensureDaemon>>;
     try {
-      rec = await ensureDaemon(folder, { preferredPort, host: args.host });
+      rec = await ensureDaemon(folder, {
+        preferredPort,
+        host: args.host,
+        onSpawn: () => {
+          spawned = true;
+        },
+      });
     } catch (err) {
       fail("run", (err as Error).message);
     }
@@ -52,6 +61,21 @@ export default defineCommand({
     console.log(
       `velloo: it keeps running in the background — stop it with \`velloo stop${folderArg}\` (auto-stops after 5 min idle)`,
     );
+
+    // The recorder lives in the daemon and reads VELLOO_TRACE at spawn time, so
+    // it only takes effect on a daemon *this* command spawned — be explicit
+    // about which case happened rather than silently doing nothing.
+    if (traceEnabled()) {
+      if (spawned) {
+        console.log(
+          `velloo: ⦿ trace recording ON — agent MCP calls tape to ${join(folder, ".velloo", "trace")} (view with \`velloo trace\`)`,
+        );
+      } else {
+        console.log(
+          `velloo: VELLOO_TRACE is set, but a canvas was already running — recording is NOT active on it. Run \`velloo stop${folderArg}\`, then re-run to record. The agent must also connect through this same (trace-enabled) velloo.`,
+        );
+      }
+    }
 
     if (args.open !== false) await openUrl(rec.canvasUrl);
     // Return to the shell; the daemon stays up.

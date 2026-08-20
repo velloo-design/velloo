@@ -196,6 +196,12 @@ export interface EnsureOptions {
   /** Preferred canvas port when *spawning* a fresh daemon (ignored if one exists). */
   preferredPort?: number;
   host?: string;
+  /**
+   * Called when this call spawns a *fresh* daemon (vs. attaching to a live one).
+   * Lets a caller report whether daemon-time settings — e.g. the trace env var —
+   * actually took effect, since they only apply to a daemon this process spawns.
+   */
+  onSpawn?: () => void;
 }
 
 /**
@@ -226,6 +232,7 @@ export async function ensureDaemon(
         const again = await readLock(root);
         if (again && (await isLive(again)) && again.version === TOOL_VERSION) return again;
         spawnDetached(root, opts.preferredPort, host);
+        opts.onSpawn?.();
         return await waitForHealthy(root);
       } finally {
         releaseMutex(root);
