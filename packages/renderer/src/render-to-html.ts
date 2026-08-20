@@ -85,8 +85,9 @@ export async function renderScreen(
   });
   const pass = options.renderPass;
   const bodyHtml = renderToString(pass ? pass.wrap(element) : element);
-  // css() must be read AFTER renderToString — emotion fills its cache during render.
-  const adapterCss = pass ? pass.css() : undefined;
+  // css() runs AFTER renderToString and is handed the body so emotion can extract
+  // exactly the rules the rendered markup references.
+  const adapterCss = pass ? pass.css(bodyHtml) : undefined;
   const themeCss = themeToCss(theme);
 
   const html = buildDocument({

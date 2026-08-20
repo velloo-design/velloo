@@ -49,7 +49,7 @@ describe("createServerProviderLoader", () => {
     // No throw; the provider falls back to the snapshot's componentsDir.
   });
 
-  test("none and mui still resolve unchanged", async () => {
+  test("none and mui resolve to real adapters", async () => {
     const loader = createServerProviderLoader();
     const none = await loader({
       id: "none",
@@ -58,14 +58,14 @@ describe("createServerProviderLoader", () => {
       componentsPath: "binary",
     });
     expect(none.id).toBe("none");
-    // MUI is scaffold-only — calling its factory throws a helpful error.
-    await expect(
-      loader({
-        id: "mui",
-        version: "6.0.0",
-        source: "cache",
-        componentsPath: "~/.velloo/providers/mui",
-      }),
-    ).rejects.toThrow(/not yet vendored/);
+    // MUI is now a first-class adapter (framework-native migration), not a throw.
+    const mui = await loader({
+      id: "mui",
+      version: "6",
+      source: "cache",
+      componentsPath: "~/.velloo/providers/mui",
+    });
+    expect(mui.id).toBe("mui");
+    expect(Object.keys(mui.registry).length).toBeGreaterThan(0);
   });
 });

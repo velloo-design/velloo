@@ -702,7 +702,7 @@ describe("renderScreen adapter renderPass", () => {
     const pass = {
       wrap: (el: import("react").ReactElement) =>
         createElement("div", { "data-adapter-root": "true" }, el),
-      css: () => ".mui-abc{color:rebeccapurple}",
+      css: (_html: string) => ".mui-abc{color:rebeccapurple}",
     };
     const { html, bodyHtml } = await renderScreen(screen, sampleTheme, { ...opts, renderPass: pass });
     expect(bodyHtml).toContain('data-adapter-root="true"'); // wrapper applied

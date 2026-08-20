@@ -34,9 +34,9 @@ export function createServerProviderLoader(folderRoot?: string): ProviderLoader 
       return createShadcnProvider();
     },
     none: () => createNoLibProvider(),
-    // MUI is scaffold-only — calling its factory throws a helpful
-    // "not yet vendored" error. Registered here so `library.id = "mui"`
-    // doesn't get a generic UnknownProviderError.
+    // MUI is a first-class FrameworkAdapter (framework-native migration): real
+    // MUI components SSR'd in-process, sx styling, emotion render pass. See
+    // docs/framework-native.md.
     mui: () => createMuiProvider(),
     // Sprint Z: shadcn-upstream — components fetched from the official
     // registry, deposited at the user's chosen location, and the canvas

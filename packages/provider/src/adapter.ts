@@ -96,7 +96,8 @@ export interface InstallResult {
  */
 export interface RenderPass {
   wrap(element: ReactElement): ReactElement;
-  css(): string;
+  /** Critical CSS for this render — passed the SSR'd body HTML (emotion needs it). */
+  css(html: string): string;
 }
 
 // --- the adapter ---

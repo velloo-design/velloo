@@ -1,52 +1,49 @@
-import type { FrameworkAdapter } from "@velloo/provider";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { type FrameworkAdapter, type Manifest, SX_PROP } from "@velloo/provider";
+import { MUI_MANIFEST } from "./manifest.ts";
+import { makeRenderPass } from "./render-pass.ts";
+import { registry } from "./registry.ts";
 
 /**
- * MUI v6 provider — currently a **scaffold only**. The wizard and the
- * server's provider loader know about this id; the actual `@mui/material`
- * bundle, canvas-safe portal shims, and Pulse-MUI sample are deferred to
- * Sprint X+2.1.
+ * Material UI v6 provider — a first-class FrameworkAdapter (framework-native
+ * migration; see docs/framework-native.md). MUI ships as a velloo dependency
+ * (pre-bundle), so its components SSR in-process against the shared monorepo
+ * React; the adapter's emotion `renderPass` extracts the critical CSS. Styling
+ * is the `sx` prop (not Tailwind), and the theme projects velloo tokens onto a
+ * MUI `createTheme`.
  *
- * What's missing before this provider can be removed from the
- * deferred state:
- *
- *  1. Decide the bundling strategy. Either pre-build an ESM bundle of
- *     the MUI subset and ship it inside the velloo binary, or have the
- *     binary pull `@mui/material`@6 from npm at first init (slower
- *     onboarding, requires network). The plan recommends pre-bundle,
- *     and the install destination is `~/.velloo/providers/mui@6.0.0/`.
- *
- *  2. Author canvas-safe wrappers for the overlay components:
- *     `Dialog` / `Menu` / `Popover` / `Tooltip` / `Snackbar` swap
- *     `Portal` for an inline `<div>` and default `open` to true via
- *     `data-design-mode-open`. Mirror the pattern in
- *     `packages/shadcn-snapshot/src/components/canvas-portal.tsx`.
- *
- *  3. Author a `ThemeProvider` stub at iframe root. The stub takes
- *     Velloo's unified token tree (background, foreground, primary,
- *     primary-foreground, …) and produces a MUI `Theme` so `<Button
- *     color="primary">` etc. resolve to the design's colors. Defer
- *     `applyThemeTokens` until the provider interface gets the hook.
- *
- *  4. Build the manifest from MUI's `.d.ts` files (its types are
- *     well-documented, so this can be a one-time generator under
- *     `packages/provider-mui/build-manifest.ts`).
- *
- *  5. Port Pulse to MUI under `packages/cli/src/scaffold/pulse-mui/`.
- *     Each shadcn primitive maps to a MUI equivalent (`Card` → `Card`,
- *     `Button` → `Button` with `variant="contained"`, etc.). Same
- *     screens, MUI component IDs.
- *
- * See the Sprint X+1 sprint summary for
- * how this fits into the broader provider abstraction.
+ * Still landing in follow-on Phase-3 increments: canvas-safe overlay wrappers
+ * (Dialog/Menu/Popover/Snackbar), a `.d.ts`-driven manifest generator, install
+ * selection in `velloo init`, Pulse-MUI, and idiomatic `sx`/`createTheme` codegen.
  */
-export function createProvider(): FrameworkAdapter {
-  throw new Error(
-    [
-      "velloo: the MUI provider (`@velloo/provider-mui`) is scaffolded but not yet vendored.",
-      "Track this in docs/roadmap.md under Sprint X+2.1.",
-      "Re-run `velloo init` with --library=shadcn-react or --library=none for now.",
-    ].join("\n"),
+
+export const MUI_VERSION = "6" as const;
+const here = dirname(fileURLToPath(import.meta.url));
+
+/** Resolve the provider src (Tailwind entry + sources), from dev + the bundled CLI. */
+function resolveSrcDir(): string {
+  const dev = join(here, "..", "src");
+  const candidates = [process.env.VELLOO_MUI_SRC, join(here, "pkgs", "provider-mui", "src"), dev].filter(
+    (p): p is string => Boolean(p),
   );
+  return candidates.find((d) => existsSync(join(d, "tailwind-entry.css"))) ?? dev;
+}
+const srcDir = resolveSrcDir();
+
+export function createProvider(): FrameworkAdapter {
+  return {
+    id: "mui",
+    version: MUI_VERSION,
+    label: "Material UI v6",
+    componentsDir: srcDir,
+    styleEntryPath: join(srcDir, "tailwind-entry.css"),
+    registry,
+    loadManifest: async (): Promise<Manifest> => MUI_MANIFEST,
+    styleChannel: SX_PROP,
+    renderPass: (theme) => makeRenderPass(theme),
+  };
 }
 
 /** The id used in `Library.id` to select this provider. */
