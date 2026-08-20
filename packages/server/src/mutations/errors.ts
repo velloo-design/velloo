@@ -21,7 +21,7 @@ export type MutationError =
   | { kind: "FrameIdConflict"; boardId: string; frameId: string }
   | { kind: "GroupIdConflict"; boardId: string; groupId: string }
   /** Request body failed zod validation. */
-  | { kind: "BadRequest"; message: string; issues?: unknown }
+  | { kind: "BadRequest"; message: string; issues?: unknown; hint?: string }
   | { kind: "SnippetNotFound"; snippetId: string }
   | { kind: "SnippetParamMismatch"; snippetId: string; reason: string; details?: unknown }
   | { kind: "SnippetCycle"; snippetId: string; viaPath: string[] }
@@ -127,11 +127,55 @@ export const groupIdConflict = (boardId: string, groupId: string): MutationError
   boardId,
   groupId,
 });
-export const badRequest = (message: string, issues?: unknown): MutationError => ({
-  kind: "BadRequest",
-  message,
-  ...(issues !== undefined ? { issues } : {}),
-});
+export const badRequest = (message: string, issues?: unknown): MutationError => {
+  const hint = scalarChildrenHint(issues);
+  return {
+    kind: "BadRequest",
+    message,
+    ...(issues !== undefined ? { issues } : {}),
+    ...(hint !== undefined ? { hint } : {}),
+  };
+};
+
+/**
+ * Node-level `children` must be an array of nodes; scalar label text belongs
+ * in `props.children`. A bare scalar there (`children: "Save"`) is a common
+ * first-try shape that Zod rejects with a precise-but-unhelpful "expected
+ * array" — this turns that one failure shape into an actionable nudge.
+ *
+ * Matches only the scalar-as-`children` case: an `invalid_type` issue whose
+ * `expected` is `"array"` at a path ending in `children`. Unrelated array
+ * errors (and the auto-wrapped `children: ["Save"]` form, which validates)
+ * never match.
+ *
+ * The signal can surface two ways: top-level (the route schema's
+ * `z.array(NodeSchema)`) or buried in an `invalid_union`'s nested `errors`
+ * (the persist-time `NodeSchema` union, which a batch tree trips) — so the
+ * scan recurses into those nested issue lists.
+ */
+export function scalarChildrenHint(issues: unknown): string | undefined {
+  return hasScalarChildrenIssue(issues)
+    ? 'Node-level `children` must be an array of nodes. For scalar text, use `props.children` (e.g. props: { children: "Save" }) — or wrap it: children: ["Save"].'
+    : undefined;
+}
+
+function hasScalarChildrenIssue(issues: unknown): boolean {
+  if (!Array.isArray(issues)) return false;
+  return issues.some((issue) => {
+    if (typeof issue !== "object" || issue === null) return false;
+    const i = issue as { code?: unknown; expected?: unknown; path?: unknown; errors?: unknown };
+    if (
+      i.code === "invalid_type" &&
+      i.expected === "array" &&
+      Array.isArray(i.path) &&
+      i.path.at(-1) === "children"
+    ) {
+      return true;
+    }
+    // `invalid_union.errors` is an array of per-branch issue lists.
+    return Array.isArray(i.errors) && i.errors.some((branch) => hasScalarChildrenIssue(branch));
+  });
+}
 export const snippetNotFound = (snippetId: string): MutationError => ({
   kind: "SnippetNotFound",
   snippetId,

@@ -5,7 +5,10 @@ The `velloo` binary. Citty-based.
 ## Subcommands
 
 - **`velloo init <folder>`** — scaffold a new design folder (Pulse sample by default). Writes `.design/config.json`, `theme/default.json`, `screens/*.json`, `boards/*.json`, `snippets/*.json`.
-- **`velloo run <folder>`** — start the canvas at `:7300` + MCP at `:7301`. Loads the folder, starts the watcher.
+- **`velloo connect <folder>`** — wire the user's AI agent: write its MCP config (`velloo mcp` over stdio) + the per-tool guidance (Claude skill / Cursor rule).
+- **`velloo mcp <folder>`** — the MCP server itself, spoken over stdio (the agent starts this; `--http` exposes it on `:7301` instead). Attaches to the folder's canvas daemon, spawning one if needed.
+- **`velloo run <folder>`** — open the canvas for a folder, spawning a persistent per-folder daemon if none is running (prefers `:7300`, else a free port; prints the URL). Canvas-only — the MCP server is separate (see `velloo mcp`).
+- **`velloo stop <folder>`** — stop the folder's canvas daemon (it also auto-stops after 5 min idle).
 - **`velloo emit <folder>`** — print the agent IR for one screen (or write to a file).
 - **`velloo render <folder>`** — render a screen to HTML or PNG on stdout/disk.
 - **`velloo theme export <folder>`** — write `globals.css` + `tailwind.config.ts` into a target app folder, with a diff against existing files.

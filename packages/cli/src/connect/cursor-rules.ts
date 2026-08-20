@@ -31,8 +31,10 @@ for this project is \`${designRel}\`.
 - Cursor starts the velloo MCP server itself (wired as \`velloo mcp\`), so the
   tools are available once the MCP config is loaded — nothing to start first. If
   they're missing, ask the user to run \`velloo connect ${designRel}\` and
-  restart Cursor. To watch the canvas, run \`velloo run ${designRel}\`
-  (http://127.0.0.1:7300).
+  restart Cursor. To watch the canvas, run \`velloo run ${designRel}\` — it
+  prints the canvas URL (defaults to \`:7300\`, or a free port if that's taken,
+  so don't assume 7300). When a canvas is already up, the server's
+  \`initialize\` instructions hand you its live URL.
 - You are the designer: compose screens from the project's shadcn components via
   the velloo MCP tools, verify visually with \`screenshot\`, then \`emit_code\` to
   turn a design into real code in this project's conventions.

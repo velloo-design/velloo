@@ -24,9 +24,11 @@ You start the velloo MCP server yourself — it's wired into your MCP config as
 `velloo mcp`, so the tools are available once the config is loaded; there's
 nothing to run first. If the velloo tools aren't available, tell the user to run
 `velloo connect <design-folder>` and restart you. To see the canvas, run
-`velloo run <design-folder>` (opens http://localhost:7300). Once connected, the
-server's `initialize` instructions are the authoritative tool reference — read
-them; this skill is the workflow on top.
+`velloo run <design-folder>` — it prints and opens the canvas URL (defaults to
+`:7300`, but picks a free port if that's taken, so don't assume 7300). When a
+canvas is already running, the server's `initialize` instructions hand you its
+live URL — use that. Those instructions are also the authoritative tool
+reference — read them; this skill is the workflow on top.
 
 ## Design loop (composing screens)
 

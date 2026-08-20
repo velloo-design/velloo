@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Result } from "@velloo/result";
 import { isComponentNode, type Node, NodeSchema, SnippetParamSchema } from "@velloo/schema";
 import { z } from "zod";
+import { badRequest } from "../../mutations/errors.ts";
 import {
   addBoard,
   addFrame,
@@ -93,19 +94,30 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
           .record(z.string(), z.unknown())
           .optional()
           .describe("Alias for `props`, accepted so the key matches update_props."),
-        children: z.array(NodeSchema).optional(),
+        // A bare scalar (`children: "Save"`) is accepted past the SDK's arg
+        // check only so the handler can answer with the `props.children`
+        // nudge instead of the SDK's opaque "expected array" rejection.
+        children: z.union([z.array(NodeSchema), z.string(), z.number()]).optional(),
         index: z.number().int().nonnegative().optional(),
       },
     },
     async (args) => {
+      if (typeof args.children === "string" || typeof args.children === "number") {
+        return mutationErrorResult(
+          badRequest("add_node: `children` must be an array of nodes.", [
+            { code: "invalid_type", expected: "array", path: ["children"] },
+          ]),
+        );
+      }
       const props = args.props ?? args.propPatch;
-      return toMcpWithWarnings(await addNode(ctx, { ...args, props }), async () => {
+      const children = args.children;
+      return toMcpWithWarnings(await addNode(ctx, { ...args, props, children }), async () => {
         const screen = ctx.folder.screens.get(args.screenId);
         if (!screen) return [];
         const inserted: Node = {
           $ref: args.componentRef,
           ...(props ? { props } : {}),
-          ...(args.children ? { children: args.children } : {}),
+          ...(children ? { children } : {}),
         };
         return propWarningsForTree(ctx, screen, inserted);
       });

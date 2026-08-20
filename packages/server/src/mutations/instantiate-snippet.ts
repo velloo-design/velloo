@@ -4,8 +4,8 @@ import type { Locator } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError, snippetParamMismatch } from "./errors.ts";
+import { innerPathResolves } from "./inner-path.ts";
 import { getComponentNode, getScreen, getSnippet, resolve } from "./lookup.ts";
-import { innerPathResolves } from "./override-snippet-props.ts";
 import { commitScreen } from "./persist.ts";
 
 export interface InstantiateSnippetArgs {

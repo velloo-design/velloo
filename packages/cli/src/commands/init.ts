@@ -267,7 +267,7 @@ function printNextSteps(folder: string, connected: ConnectResult | undefined): v
     `    ${n++}. Restart your AI agent so it loads the new MCP config ${pc.dim("— it starts velloo itself")}.`,
   );
   console.log(
-    `    ${n++}. ${pc.cyan(`velloo run ${folder}`)} ${pc.dim("(optional — open the canvas at :7300)")}`,
+    `    ${n++}. ${pc.cyan(`velloo run ${folder}`)} ${pc.dim("(optional — open the canvas; it prints the URL)")}`,
   );
   console.log("");
   console.log(pc.dim("  Open README.md in the design folder for the full guide."));
@@ -292,7 +292,7 @@ function buildHandoffPrompt(answers: WizardAnswers, screens: Screen[]): string {
   const designDir = rel && !rel.startsWith("..") ? rel : answers.folder;
   const lines = [
     "Build a Velloo design that mirrors this app — reproduce each page's UI as a Velloo screen.",
-    `Velloo lives in \`${designDir}/\`. You have the velloo MCP tools (wired during setup) — do everything through them; they own the design, so don't edit files under \`${designDir}/\` by hand. To watch the canvas, run \`velloo run ${designDir}\` (opens http://localhost:7300).`,
+    `Velloo lives in \`${designDir}/\`. You have the velloo MCP tools (wired during setup) — do everything through them; they own the design, so don't edit files under \`${designDir}/\` by hand. To watch the canvas, run \`velloo run ${designDir}\` — it prints and opens the canvas URL (defaults to :7300, or a free port if that's taken).`,
   ];
   const uiRel = relative(answers.appRoot, answers.scanRoot);
   if (uiRel && !uiRel.startsWith("..")) {

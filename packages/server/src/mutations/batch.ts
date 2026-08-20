@@ -20,7 +20,7 @@ import {
   updatePropsBulk,
 } from "./api/tree.ts";
 import type { MutationContext } from "./context.ts";
-import { badRequest, type MutationError } from "./errors.ts";
+import { badRequest, type MutationError, scalarChildrenHint } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 
 /**
@@ -353,12 +353,16 @@ export async function runBatch(
       // Name the tool and point at the schema instead of leaking a bare
       // runtime error.
       const detail = thrown instanceof Error ? thrown.message : String(thrown);
+      // A thrown ZodError (e.g. the persist-time schema parse) carries
+      // `.issues` — surface the scalar-`children` nudge from a malformed tree.
+      const hint = scalarChildrenHint((thrown as { issues?: unknown })?.issues);
       results.push({
         tool: call.tool,
         ok: false,
         error: {
           kind: "BadRequest",
           message: `batch ${call.tool}: invalid or missing args — match the standalone ${call.tool} tool's schema (${detail})`,
+          ...(hint !== undefined ? { hint } : {}),
         },
       });
       break;

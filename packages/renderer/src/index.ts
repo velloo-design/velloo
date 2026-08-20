@@ -3,6 +3,7 @@ export {
   buildRoot,
   buildTree,
   ParamRefError,
+  resolveSnippetBody,
   resolveSnippetBodyForEdit,
   SnippetCycleError,
   SnippetParamError,

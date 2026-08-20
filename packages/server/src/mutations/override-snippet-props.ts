@@ -1,15 +1,11 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
-import {
-  isComponentNode,
-  isSnippetInstance,
-  type Node,
-  type SnippetInstance,
-} from "@velloo/schema";
+import { isSnippetInstance, type SnippetInstance } from "@velloo/schema";
 import type { Locator } from "../path.ts";
 import { pathAt } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError, snippetNotFound } from "./errors.ts";
+import { innerPathResolves } from "./inner-path.ts";
 import { getScreen, resolve } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
 
@@ -35,29 +31,6 @@ export interface OverrideSnippetPropsResult {
   innerPath: string;
   /** The instance's full override map after the patch. */
   overrides: Record<string, { props: Record<string, unknown> }>;
-}
-
-function findNodeById(root: Node, id: string): Node | undefined {
-  if (!isComponentNode(root)) return undefined;
-  if (root.$id === id) return root;
-  for (const child of root.children ?? []) {
-    const hit = findNodeById(child, id);
-    if (hit) return hit;
-  }
-  return undefined;
-}
-
-export function innerPathResolves(body: Node, innerPath: string): boolean {
-  if (innerPath.startsWith("@")) {
-    return findNodeById(body, innerPath.slice(1)) !== undefined;
-  }
-  const segments = innerPath === "" ? [] : innerPath.split(".").map(Number);
-  let cursor: Node | undefined = body;
-  for (const i of segments) {
-    if (!cursor || !isComponentNode(cursor) || !cursor.children) return false;
-    cursor = cursor.children[i];
-  }
-  return cursor !== undefined && isComponentNode(cursor);
 }
 
 export async function overrideSnippetProps(

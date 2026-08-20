@@ -76,7 +76,7 @@ export interface BuildTreeOptions {
  * `$extraClassName`, append it onto the resolved root's className so
  * one-off instances can layer styling without forking the snippet.
  */
-function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet): Node {
+export function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet): Node {
   const { args, missing } = resolveSnippetArgs(snippet, instance.args ?? {});
   if (missing.length > 0) throw new SnippetParamError(snippet.id, missing[0] as string);
   const substituted = substituteSnippetParams(snippet.tree, args);

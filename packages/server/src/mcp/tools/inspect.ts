@@ -16,10 +16,16 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     "inspect",
     {
       description:
-        "Return SSR'd HTML, resolved className list, $ref, and resolved props for the node at path. Use this instead of guessing the rendered output.",
+        "Return SSR'd HTML, resolved className list, $ref, and resolved props for the node at path. Use this instead of guessing the rendered output. When path resolves to a snippet instance, pass innerPath to inspect a node *inside* the resolved body (args, $overrides, and $extraClassName applied) — omit it to inspect the body root.",
       inputSchema: {
         screenId: z.string(),
         path: Locator,
+        innerPath: z
+          .string()
+          .optional()
+          .describe(
+            'For a snippet instance: a dotted index path like "0.2", an "@id" of a node in the body, or "" for the body root (the default). Ignored for plain components.',
+          ),
       },
     },
     async (args) => {

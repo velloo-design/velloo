@@ -35,10 +35,10 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 | `override_snippet_props` | `screenId, path, innerPath, propPatch` — patch props on one node *inside* a snippet instance's body (path = instance locator; innerPath = `"@id"` of a body node (preferred — survives restructures), dotted index, or "" for root). Persists as `$overrides` on the instance; applied after param substitution at render; emit_code inlines overridden instances |
 | `move_node` | `screenId, fromPath, toParent, toIndex?` |
 | `remove_node` | `screenId, path` |
-| `inspect` | `screenId, path` — returns SSR'd HTML, resolved className list, `$ref`, and resolved props for the node |
+| `inspect` | `screenId, path, innerPath?` — returns SSR'd HTML, resolved className list, `$ref`, and resolved props for the node. When `path` resolves to a snippet instance the body is rendered with its args / `$overrides` / `$extraClassName` applied; `innerPath` (`"@id"`, dotted index, or "" for the body root — the same scheme as `override_snippet_props`) drills into one body node. Omitting `innerPath` on an instance inspects the body root and returns a `note` on how to drill in |
 | `audit` | `screenId?` OR `snippetId?` (exactly one), `theme?` — dark-mode audit; coverage + per-node problems with token suggestions. With a named theme that has no `colorsDark`, the result flags coverage as informational |
 | `set_node_id` | `screenId, path, id` — assign / rename / clear (`id: null`) a node's stable `$id` anchor. Per-screen uniqueness is enforced; collisions return `IdConflict` |
-| `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms |
+| `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms. Theme-aware (knows the folder's `palette` + `custom_css`). A class that compiles but references a CSS var that the design system never declares stays `valid: true` and carries a `warning` — it paints a runtime fallback, not the intended token (e.g. an imported `palette` value left pointing at an undefined var) |
 
 ### Screen lifecycle
 
