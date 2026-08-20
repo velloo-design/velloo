@@ -72,7 +72,8 @@ describe("emitCode", () => {
     expect(result.jsx).toContain(
       '"radial-gradient(circle at 1px 1px, rgba(0,0,0,0.12) 1px, transparent 0)"',
     );
-    expect(result.jsx).toContain('"backgroundSize":"14px 14px"');
+    // Object props emit as idiomatic JS literals: bare identifier keys, spaced.
+    expect(result.jsx).toContain('backgroundSize: "14px 14px"');
   });
 
   test("consolidates Tailwind classes deterministically", async () => {

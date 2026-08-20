@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { emitCode, emitMuiTheme, moduleTarget } from "@velloo/codegen";
+import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-mui";
 import { renderScreen } from "@velloo/renderer";
+import { unwrap } from "@velloo/result";
 import type { Screen, Theme } from "@velloo/schema";
 
 /**
@@ -67,5 +70,44 @@ describe("MUI adapter SSR", () => {
   test("adapter declares the sx style channel (not Tailwind)", () => {
     expect(mui.styleChannel?.kind).toBe("sx");
     expect(mui.styleChannel?.needsTailwindJit).toBe(false);
+  });
+
+  test("emits MUI-native code from the provider's codegenModule + manifest", async () => {
+    // Mirrors what the emit_code tool's targetFor() builds for a MUI screen.
+    expect(mui.codegenModule).toBe("@mui/material");
+    const manifest = await mui.loadManifest();
+    const target = moduleTarget(
+      manifest.map((c) => c.id),
+      mui.codegenModule ?? "",
+    );
+    const sxScreen: Screen = {
+      ...screen,
+      tree: { $ref: "Card", props: { variant: "outlined", sx: { p: 3 } }, children: [] },
+    };
+    const result = unwrap(await emitCode(sxScreen, { target }));
+    expect(result.jsx).toBe(`<Card variant="outlined" sx={{ p: 3 }} />`);
+    // Real MUI ids are in the manifest, so they resolve to the module (not unknown).
+    expect(result.componentsUsed).toEqual(["Card"]);
+    // No shadcn install plan on a native framework.
+    expect(result.componentsToInstall).toEqual([]);
+  });
+
+  test("emit_theme produces a createTheme module from the SAME mapping as the render", async () => {
+    const adapter = mui as FrameworkAdapter;
+    expect(adapter.themeToNative).toBeDefined();
+    const native = adapter.themeToNative?.(theme);
+    const { files } = await emitMuiTheme(native, {
+      outputDir: "/tmp/velloo-mui-theme",
+      apply: false,
+    });
+    expect(files).toHaveLength(1);
+    const out = files[0]?.contents ?? "";
+    expect(out).toContain('import { createTheme } from "@mui/material/styles"');
+    expect(out).toContain("export const theme = createTheme(");
+    // Same tokens that reach the rendered components reach the artifact:
+    expect(out).toContain('main: "#4f46e5"'); // primary base → palette.primary.main
+    expect(out).toContain("borderRadius: 12"); // radius.md → shape.borderRadius
+    // Idiomatic JS literal (bare identifier keys), not JSON.
+    expect(out).not.toContain('"main":');
   });
 });

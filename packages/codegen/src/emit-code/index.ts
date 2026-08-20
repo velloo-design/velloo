@@ -39,6 +39,7 @@ import {
 } from "../component-registry.ts";
 import type { CodegenError } from "../errors.ts";
 import { ImportSet } from "./imports.ts";
+import type { CodegenTarget } from "./target.ts";
 import { emitTree } from "./tree-to-jsx.ts";
 
 /** Structured emit IR for a single screen. Pure data; no I/O happened. */
@@ -131,6 +132,13 @@ export interface EmitCodeOptions {
    * mapped to importPath-only records.
    */
   extensions?: Record<string, Extension>;
+  /**
+   * Framework target (MUI, …). When set, component ids resolve to the
+   * framework's native imports instead of the shadcn REGISTRY, and the
+   * shadcn-only `componentsToInstall` / `helpersToMaterialize` lists are
+   * suppressed (they don't apply to a non-shadcn framework). Absent ⇒ shadcn.
+   */
+  target?: CodegenTarget;
 }
 
 const DEFAULT_ALIAS = "@/components/ui";
@@ -216,6 +224,7 @@ export async function emitCode(
       snippetPascalById,
       snippets: options.snippets,
       extensions: extensionsMap,
+      target: options.target,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
@@ -234,11 +243,15 @@ export async function emitCode(
           componentsAlias,
           snippets: options.snippets,
           extensions: options.extensions,
+          target: options.target,
         }),
       );
       snippetIRs.push(snippetR);
     }
 
+    // A non-shadcn target (MUI) has no shadcn components to `npx shadcn add`
+    // and no velloo helpers to materialize — its components import natively.
+    const native = options.target !== undefined;
     return {
       screen: { id: screen.id, name: screen.name },
       jsx: body,
@@ -246,8 +259,8 @@ export async function emitCode(
       iconsUsed: [...meta.icons].sort(),
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
-      componentsToInstall: shadcnInstallTargets(meta.components),
-      helpersToMaterialize: helpersToMaterialize(meta.components),
+      componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
+      helpersToMaterialize: native ? [] : helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
     };
   });
@@ -259,6 +272,8 @@ export interface EmitSnippetOptions {
   snippets?: Map<string, Snippet>;
   /** Folder-global extensions (Sprint Y) — same shape as `EmitCodeOptions.extensions`. */
   extensions?: Record<string, Extension>;
+  /** Framework target — same shape + meaning as `EmitCodeOptions.target`. */
+  target?: CodegenTarget;
 }
 
 function buildExtensionsMap(
@@ -290,11 +305,13 @@ export async function emitSnippet(
       snippets: options.snippets,
       snippetParamNames: paramNames,
       extensions: extensionsMap,
+      target: options.target,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(snippet.tree, ctx));
     const meta = collectMetadata(snippet.tree, options.snippets);
+    const native = options.target !== undefined;
     return {
       id: snippet.id,
       componentName,
@@ -305,8 +322,8 @@ export async function emitSnippet(
         ...(p.optional ? { optional: true } : {}),
       })),
       jsx: body,
-      componentsToInstall: shadcnInstallTargets(meta.components),
-      helpersToMaterialize: helpersToMaterialize(meta.components),
+      componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
+      helpersToMaterialize: native ? [] : helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
     };
   });

@@ -1,8 +1,20 @@
 import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { type CodegenError, emitCode, emitSnippet, emitTheme } from "@velloo/codegen";
+import {
+  type CodegenError,
+  type CodegenTarget,
+  emitCode,
+  emitMuiTheme,
+  emitSnippet,
+  emitTheme,
+  moduleTarget,
+} from "@velloo/codegen";
+import type { FrameworkAdapter } from "@velloo/provider";
+import type { Screen, Snippet } from "@velloo/schema";
 import { z } from "zod";
-import { type DesignFolder, themeByName } from "../../design-folder.ts";
+import { themeByName } from "../../design-folder.ts";
+import type { MutationContext } from "../../mutations/index.ts";
+import { providerForScreen } from "../../mutations/lookup.ts";
 
 type McpResult = {
   content: { type: "text"; text: string }[];
@@ -17,16 +29,31 @@ function codegenErrorResult(error: CodegenError | { kind: string }): McpResult {
   return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
 }
 
-export interface EmitContext {
-  folder: DesignFolder;
+/**
+ * The codegen target for a screen/snippet's framework: when its provider
+ * declares a `codegenModule` (MUI ⇒ `@mui/material`), emit resolves that
+ * library's component ids to native imports from the module and skips shadcn
+ * lowering. shadcn/no-lib providers have no module ⇒ undefined ⇒ today's path.
+ */
+async function targetFor(
+  ctx: MutationContext,
+  thing: Pick<Screen, "library"> | Pick<Snippet, "library">,
+): Promise<CodegenTarget | undefined> {
+  const provider = providerForScreen(ctx, thing) as FrameworkAdapter;
+  if (!provider.codegenModule) return undefined;
+  const manifest = await provider.loadManifest();
+  return moduleTarget(
+    manifest.map((c) => c.id),
+    provider.codegenModule,
+  );
 }
 
-export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
+export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen: the JSX body (using library identifiers + verbatim Tailwind classes), the list of components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions.",
+        "Return agent-consumed IR for a screen: the JSX body (library identifiers + the screen framework's native styling — Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions (for MUI, components import from `@mui/material`).",
       inputSchema: {
         screenId: z.string(),
         componentsAlias: z.string().optional(),
@@ -37,10 +64,12 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       if (!screen)
         return codegenErrorResult({ kind: "ScreenNotFound", screenId: args.screenId } as never);
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
+      const target = await targetFor(ctx, screen);
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
+        ...(target ? { target } : {}),
       });
       if (!result.ok) return codegenErrorResult(result.error);
       return jsonResult(result.value);
@@ -62,10 +91,12 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
       if (!snippet)
         return codegenErrorResult({ kind: "SnippetNotFound", snippetId: args.snippetId } as never);
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
+      const target = await targetFor(ctx, snippet);
       const result = await emitSnippet(snippet, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
+        ...(target ? { target } : {}),
       });
       if (!result.ok) return codegenErrorResult(result.error);
       return jsonResult(result.value);
@@ -76,13 +107,19 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
     "emit_theme",
     {
       description:
-        'Generate Tailwind v4 globals.css (and optional tailwind.config.ts) from the active theme. Defaults to dry-run; this one *is* a direct artifact (no agent translation needed). globals.css lands at `<outputDir>/<cssPath>`; cssPath defaults to the Next.js `app/globals.css` — pass `cssPath: "globals.css"` (or `src/index.css`) for Vite/Astro.',
+        "Generate the active framework's theme artifact from the active theme. shadcn ⇒ Tailwind v4 globals.css (+ optional tailwind.config.ts) at `<outputDir>/<cssPath>` (cssPath default `app/globals.css`; pass `globals.css`/`src/index.css` for Vite/Astro). MUI ⇒ a `createTheme(...)` module at `<outputDir>/<themePath>` (default `theme.ts`). Defaults to dry-run; this *is* a direct artifact (no agent translation needed).",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z
           .string()
           .optional()
-          .describe('globals.css location relative to outputDir; default "app/globals.css"'),
+          .describe(
+            'shadcn: globals.css location relative to outputDir; default "app/globals.css"',
+          ),
+        themePath: z
+          .string()
+          .optional()
+          .describe('MUI: createTheme module location relative to outputDir; default "theme.ts"'),
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
         theme: z.string().optional().describe("Named theme to emit; default 'default'"),
@@ -90,7 +127,19 @@ export function registerEmitTools(mcp: McpServer, ctx: EmitContext): void {
     },
     async (args) => {
       const out = resolve(ctx.folder.root, args.outputDir);
-      const result = await emitTheme(themeByName(ctx.folder, args.theme), {
+      const theme = themeByName(ctx.folder, args.theme);
+      // A framework that projects a native theme (MUI ⇒ createTheme options)
+      // emits its native artifact instead of Tailwind globals.css.
+      const adapter = ctx.defaultProvider as FrameworkAdapter;
+      if (adapter.codegenModule && adapter.themeToNative) {
+        const result = await emitMuiTheme(adapter.themeToNative(theme), {
+          outputDir: out,
+          ...(args.themePath ? { themePath: args.themePath } : {}),
+          apply: args.apply ?? false,
+        });
+        return jsonResult({ files: result.files });
+      }
+      const result = await emitTheme(theme, {
         outputDir: out,
         ...(args.cssPath ? { cssPath: args.cssPath } : {}),
         apply: args.apply ?? false,

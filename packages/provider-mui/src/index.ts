@@ -5,6 +5,7 @@ import { type FrameworkAdapter, type Manifest, SX_PROP } from "@velloo/provider"
 import { MUI_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { makeRenderPass } from "./render-pass.ts";
+import { muiThemeOptions } from "./theme.ts";
 
 /**
  * Material UI v6 provider — a first-class FrameworkAdapter (framework-native
@@ -45,8 +46,12 @@ export function createProvider(): FrameworkAdapter {
     loadManifest: async (): Promise<Manifest> => MUI_MANIFEST,
     styleChannel: SX_PROP,
     renderPass: (theme) => makeRenderPass(theme),
+    codegenModule: "@mui/material",
+    themeToNative: (theme) => muiThemeOptions(theme),
   };
 }
 
 /** The id used in `Library.id` to select this provider. */
 export const MUI_PROVIDER_ID = "mui" as const;
+
+export { muiThemeFrom, muiThemeOptions } from "./theme.ts";

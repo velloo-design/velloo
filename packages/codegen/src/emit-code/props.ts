@@ -1,3 +1,5 @@
+import { jsLiteral } from "./js-literal.ts";
+
 /**
  * Serialize a single prop (name + value) to a JSX attribute string.
  * Returns null when the prop should be omitted entirely.
@@ -44,7 +46,9 @@ export function serializeProp(
     return `${name}={${value}}`;
   }
 
-  return `${name}={${JSON.stringify(value)}}`;
+  // Objects / arrays (sx, style, data props) emit as an idiomatic JS literal —
+  // `sx={{ p: 3, "&:hover": { ... } }}` — not JSON with quoted keys.
+  return `${name}={${jsLiteral(value)}}`;
 }
 
 interface IfExpr {

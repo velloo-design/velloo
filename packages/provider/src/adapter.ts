@@ -113,7 +113,24 @@ export interface FrameworkAdapter extends ComponentProvider {
   install?(ctx: InstallCtx): Promise<InstallResult>;
   /** A fresh server-side render pass bound to this theme (emotion/MUI). Absent ⇒ plain SSR. */
   renderPass?(theme: Theme): RenderPass;
-  // theme import/emit, canvasBundle, and emit (codegen) land in their phases.
+  /**
+   * The bare module its catalog components import from in emitted code — MUI's
+   * `@mui/material`, where every component is a named export. Present ⇒ codegen
+   * resolves this library's component ids to `{ Id } from "<codegenModule>"`
+   * and skips shadcn lowering. Absent ⇒ shadcn behavior (the `@/components/ui/*`
+   * REGISTRY). Per-component import overrides (e.g. icons) come later via
+   * `catalog().importPath`.
+   */
+  codegenModule?: string;
+  /**
+   * Project velloo's token tree onto this framework's native theme shape — for
+   * MUI, the `ThemeOptions` POJO passed to `createTheme`. Returned as `unknown`
+   * so the contract doesn't depend on any framework's types; codegen serializes
+   * it to the native theme artifact (`emitMuiTheme`). Absent ⇒ the Tailwind
+   * globals.css path. Pairs with `codegenModule` for MUI-like frameworks.
+   */
+  themeToNative?(theme: Theme): unknown;
+  // theme import (the JS createTheme reader) and canvasBundle land in their phases.
 }
 
 /** The active style channel for a provider — defaults to Tailwind className when unspecified. */

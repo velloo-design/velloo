@@ -15,6 +15,7 @@ import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
 import type { ImportSet } from "./imports.ts";
 import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
+import type { CodegenTarget } from "./target.ts";
 
 export interface EmitContext {
   imports: ImportSet;
@@ -35,6 +36,14 @@ export interface EmitContext {
    * so the agent's emit lands in the user's app at the path they declared.
    */
   extensions?: Map<string, { importPath: string }>;
+  /**
+   * Active framework target (e.g. MUI). When it resolves a `$ref`, the
+   * component emits as a bare import from the framework's module and skips the
+   * shadcn lowering — its `sx`/`style` object serializes as a normal prop.
+   * Absent ⇒ default shadcn behavior. Consulted *before* the REGISTRY so a MUI
+   * screen's `Card`/`Box` resolve to MUI, not the shadcn primitive of that id.
+   */
+  target?: CodegenTarget;
   /**
    * Non-fatal emit caveats accumulated during the walk (e.g. an Icon whose
    * `name` is a dynamic param, which can't survive lowering — see
@@ -138,24 +147,40 @@ function renderComponent(
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
-  // Built-in (library) component? Use the static registry entry which
-  // knows the lowering / cva variant / shadcn import path.
-  let entry = REGISTRY[node.$ref];
-  if (!entry) {
-    // Registered extension? Synthesize a shadcn-shaped registry entry so
-    // the rest of this function reads the importPath off it and uses the
-    // ref's own id as the JSX name. Extensions are always emitted as
-    // bare external imports with the user-supplied importPath.
-    const ext = ctx.extensions?.get(node.$ref);
-    if (ext) {
-      entry = {
-        kind: "shadcn",
-        jsxName: node.$ref,
-        importFile: ext.importPath,
-        // Mark so the import set uses `addBare` (verbatim path) rather
-        // than `add` (which prepends componentsAlias).
-        __bareImport: true,
-      } as (typeof REGISTRY)[string] & { __bareImport?: boolean };
+  type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean };
+  // A framework target (MUI) wins over the shadcn REGISTRY: a MUI screen's
+  // `Card`/`Box` must resolve to `@mui/material`, not the shadcn primitive of
+  // the same id. The component emits as a bare import + its `sx` object flows
+  // through the generic prop path (no Tailwind lowering, no className merge).
+  const native = ctx.target?.importFor(node.$ref) ?? null;
+  let entry: SyntheticEntry | undefined;
+  if (native) {
+    entry = {
+      kind: "shadcn",
+      jsxName: native.jsxName,
+      importFile: native.from,
+      __bareImport: true,
+    };
+  } else {
+    // Built-in (library) component? Use the static registry entry which
+    // knows the lowering / cva variant / shadcn import path.
+    entry = REGISTRY[node.$ref];
+    if (!entry) {
+      // Registered extension? Synthesize a shadcn-shaped registry entry so
+      // the rest of this function reads the importPath off it and uses the
+      // ref's own id as the JSX name. Extensions are always emitted as
+      // bare external imports with the user-supplied importPath.
+      const ext = ctx.extensions?.get(node.$ref);
+      if (ext) {
+        entry = {
+          kind: "shadcn",
+          jsxName: node.$ref,
+          importFile: ext.importPath,
+          // Mark so the import set uses `addBare` (verbatim path) rather
+          // than `add` (which prepends componentsAlias).
+          __bareImport: true,
+        };
+      }
     }
   }
   if (!entry) return err(unknownComponent(node.$ref));

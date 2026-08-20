@@ -1,4 +1,4 @@
-import { createTheme, type Theme as MuiTheme } from "@mui/material/styles";
+import { createTheme, type Theme as MuiTheme, type ThemeOptions } from "@mui/material/styles";
 import type { ColorPair, Theme as VellooTheme } from "@velloo/schema";
 
 /** A color slot is a CSS string or a { DEFAULT, foreground } pair — pull the base color. */
@@ -27,14 +27,16 @@ function radiusPx(theme: VellooTheme): number {
 }
 
 /**
- * Project velloo's unified token tree onto a MUI Theme (the adapter's
- * `themeToNative`). Used both to drive the canvas render pass and — later — to
- * emit a `createTheme(...)` artifact in codegen. velloo colors are arbitrary
- * CSS strings (oklch/hsl/hex); MUI's palette accepts any CSS color.
+ * Project velloo's unified token tree onto MUI `ThemeOptions` (the input POJO
+ * for `createTheme`) — the adapter's `themeToNative`. This is the SINGLE source
+ * of the velloo→MUI mapping: `muiThemeFrom` wraps it for the canvas render
+ * pass, and codegen serializes the same POJO to a `createTheme(...)` artifact,
+ * so the preview and the emitted theme never diverge. velloo colors are
+ * arbitrary CSS strings (oklch/hsl/hex); MUI's palette accepts any CSS color.
  */
-export function muiThemeFrom(theme: VellooTheme, dark = false): MuiTheme {
+export function muiThemeOptions(theme: VellooTheme, dark = false): ThemeOptions {
   const c = theme.colors;
-  return createTheme({
+  return {
     palette: {
       mode: dark ? "dark" : "light",
       primary: { main: base(c.primary, "#4f46e5"), contrastText: fg(c.primary, "#ffffff") },
@@ -48,5 +50,10 @@ export function muiThemeFrom(theme: VellooTheme, dark = false): MuiTheme {
     typography: {
       fontFamily: theme.typography.fontFamily?.sans ?? "system-ui, -apple-system, sans-serif",
     },
-  });
+  };
+}
+
+/** The MUI `Theme` for the render pass — `createTheme` over {@link muiThemeOptions}. */
+export function muiThemeFrom(theme: VellooTheme, dark = false): MuiTheme {
+  return createTheme(muiThemeOptions(theme, dark));
 }
