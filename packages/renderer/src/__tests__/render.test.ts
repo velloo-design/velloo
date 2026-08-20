@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Screen, Theme, Viewport } from "@velloo/schema";
 import { registry } from "@velloo/shadcn-snapshot";
+import { createElement } from "react";
 import { renderScreen, themeToCss, UnknownComponentError } from "../index.ts";
 
 // Synthetic CSS so the renderer test stays a pure function test — actual
@@ -691,5 +692,27 @@ describe("Box as= polymorphic tag", () => {
     const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
     expect(bodyHtml).toContain("<div");
     expect(bodyHtml.toLowerCase()).not.toContain("<script");
+  });
+});
+
+describe("renderScreen adapter renderPass", () => {
+  const screen = screenWith({ $ref: "Box", props: { children: "wrapped" } });
+
+  test("a render pass wraps the tree and injects its CSS", async () => {
+    const pass = {
+      wrap: (el: import("react").ReactElement) =>
+        createElement("div", { "data-adapter-root": "true" }, el),
+      css: () => ".mui-abc{color:rebeccapurple}",
+    };
+    const { html, bodyHtml } = await renderScreen(screen, sampleTheme, { ...opts, renderPass: pass });
+    expect(bodyHtml).toContain('data-adapter-root="true"'); // wrapper applied
+    expect(html).toContain(".mui-abc{color:rebeccapurple}"); // adapter CSS injected
+    expect(html).toContain("data-velloo-adapter"); // in its own tagged style block
+  });
+
+  test("no render pass → unchanged output (no adapter style block)", async () => {
+    const { html } = await renderScreen(screen, sampleTheme, opts);
+    expect(html).not.toContain("data-velloo-adapter");
+    expect(html).not.toContain("data-adapter-root");
   });
 });

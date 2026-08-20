@@ -1,3 +1,5 @@
+import type { Theme } from "@velloo/schema";
+import type { ReactElement } from "react";
 import type { ComponentProvider } from "./types.ts";
 import type { ComponentDescriptor } from "./manifest.ts";
 
@@ -83,6 +85,20 @@ export interface InstallResult {
   notes?: string;
 }
 
+// --- server-side render pass (for frameworks whose styles aren't Tailwind classes) ---
+
+/**
+ * A per-render pass an SSR framework supplies (MUI/emotion). `wrap` puts the
+ * React tree inside the framework's providers (emotion CacheProvider + MUI
+ * ThemeProvider) bound to a fresh per-render cache; `css` returns the critical
+ * CSS collected during that render (read after renderToString). Tailwind-class
+ * frameworks (shadcn/no-lib) omit this — the renderer's SSR path is unchanged.
+ */
+export interface RenderPass {
+  wrap(element: ReactElement): ReactElement;
+  css(): string;
+}
+
 // --- the adapter ---
 
 export interface FrameworkAdapter extends ComponentProvider {
@@ -94,7 +110,9 @@ export interface FrameworkAdapter extends ComponentProvider {
   installComponent?(id: string, ctx: InstallCtx): Promise<void>;
   /** Provision the framework for a folder (npm install / CLI / cache). */
   install?(ctx: InstallCtx): Promise<InstallResult>;
-  // theme import/emit, canvasBundle, emit (codegen), and scan land in their phases.
+  /** A fresh server-side render pass bound to this theme (emotion/MUI). Absent ⇒ plain SSR. */
+  renderPass?(theme: Theme): RenderPass;
+  // theme import/emit, canvasBundle, and emit (codegen) land in their phases.
 }
 
 /** The active style channel for a provider — defaults to Tailwind className when unspecified. */

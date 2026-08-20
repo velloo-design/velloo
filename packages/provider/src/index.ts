@@ -4,6 +4,7 @@ export {
   type InstallCtx,
   type InstallResult,
   type InstallTarget,
+  type RenderPass,
   type RenderStrategy,
   type StyleChannel,
   type StyleChannelKind,

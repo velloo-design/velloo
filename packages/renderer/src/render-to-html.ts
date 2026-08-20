@@ -1,4 +1,4 @@
-import type { ComponentRegistry } from "@velloo/provider";
+import type { ComponentRegistry, RenderPass } from "@velloo/provider";
 import {
   type Screen,
   ScreenSchema,
@@ -11,6 +11,10 @@ import { renderToString } from "react-dom/server";
 import { buildRoot } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
 import { themeToCss } from "./theme-to-css.ts";
+
+// The render-pass contract lives in @velloo/provider (the adapter owns it); re-exported
+// here for the existing renderer import sites.
+export type { RenderPass } from "@velloo/provider";
 
 export interface RenderResult {
   html: string;
@@ -55,6 +59,11 @@ export interface RenderOptions {
    * has `render:"live"` extension nodes; injects the client mount runtime.
    */
   liveBundleUrl?: string;
+  /**
+   * The active framework adapter's render pass (MUI/emotion). Absent for
+   * Tailwind-class frameworks (shadcn / no-lib) — the SSR path is unchanged.
+   */
+  renderPass?: RenderPass;
 }
 
 /**
@@ -74,7 +83,10 @@ export async function renderScreen(
     registry: options.registry,
     snippets: options.snippets,
   });
-  const bodyHtml = renderToString(element);
+  const pass = options.renderPass;
+  const bodyHtml = renderToString(pass ? pass.wrap(element) : element);
+  // css() must be read AFTER renderToString — emotion fills its cache during render.
+  const adapterCss = pass ? pass.css() : undefined;
   const themeCss = themeToCss(theme);
 
   const html = buildDocument({
@@ -82,6 +94,7 @@ export async function renderScreen(
     bodyHtml,
     snapshotCss: options.snapshotCss,
     themeCss,
+    adapterCss,
     customCss: options.customCss,
     googleFonts: theme.typography.googleFonts,
     baseHref: options.baseHref,

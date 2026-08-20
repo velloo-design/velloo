@@ -10,6 +10,12 @@ export interface DocumentOptions {
   /** Theme override CSS — ":root { --color-... }" rules. */
   themeCss: string;
   /**
+   * CSS contributed by the active framework adapter's render pass — e.g. the
+   * critical emotion CSS extracted while SSR-ing MUI. Layered above theme,
+   * below the user's custom.css. Empty for Tailwind-class frameworks.
+   */
+  adapterCss?: string;
+  /**
    * Folder-scoped escape-hatch CSS (theme/custom.css) — keyframes,
    * textures, clip-paths. Injected last so it can override anything.
    */
@@ -45,6 +51,7 @@ export function buildDocument(opts: DocumentOptions): string {
     bodyHtml,
     snapshotCss,
     themeCss,
+    adapterCss,
     customCss,
     googleFonts,
     baseHref,
@@ -69,6 +76,8 @@ export function buildDocument(opts: DocumentOptions): string {
           .map((f) => `family=${f.replace(/ /g, "+")}`)
           .join("&")}&display=swap" />`
       : "";
+  const adapterStyle =
+    adapterCss && adapterCss.trim() !== "" ? `\n    <style data-velloo-adapter>${adapterCss}</style>` : "";
   const customStyle =
     customCss && customCss.trim() !== "" ? `\n    <style>${customCss}</style>` : "";
   // Defeat password managers and form-fillers (LastPass / 1Password / Bitwarden
@@ -83,7 +92,7 @@ export function buildDocument(opts: DocumentOptions): string {
     <meta name="viewport" content="width=${viewport.w}, initial-scale=1" />
     <title>${escapeHtml(title)}</title>${fontLinks}
     <style>${snapshotCss}</style>
-    <style>${themeCss}</style>${customStyle}
+    <style>${themeCss}</style>${adapterStyle}${customStyle}
   </head>
   <body ${antiAutofill}>${bodyHtml}${runtime}${live}</body>
 </html>`;
