@@ -1,4 +1,17 @@
 export {
+  type CatalogEntry,
+  type FrameworkAdapter,
+  type InstallCtx,
+  type InstallResult,
+  type InstallTarget,
+  type RenderStrategy,
+  type StyleChannel,
+  type StyleChannelKind,
+  styleChannelOf,
+  SX_PROP,
+  TAILWIND_CLASSNAME,
+} from "./adapter.ts";
+export {
   createProviderLoader,
   type ProviderFactory,
 } from "./loader.ts";

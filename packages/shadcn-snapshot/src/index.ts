@@ -1,4 +1,4 @@
-import type { ComponentProvider, Manifest } from "@velloo/provider";
+import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@velloo/provider";
 import { componentsDir, entryCssPath, manifestPath, snapshotVersion } from "./paths.ts";
 import { registry } from "./registry.ts";
 
@@ -29,7 +29,7 @@ export async function loadManifest(): Promise<Manifest> {
  * follows the install location so user customizations contribute to
  * the compiled CSS.
  */
-export function createProvider(opts: { componentsDir?: string } = {}): ComponentProvider {
+export function createProvider(opts: { componentsDir?: string } = {}): FrameworkAdapter {
   return {
     id: "shadcn-react",
     version: snapshotVersion,
@@ -38,5 +38,6 @@ export function createProvider(opts: { componentsDir?: string } = {}): Component
     registry,
     loadManifest,
     label: `shadcn-react ${snapshotVersion}`,
+    styleChannel: TAILWIND_CLASSNAME,
   };
 }

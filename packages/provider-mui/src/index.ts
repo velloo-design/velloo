@@ -1,4 +1,4 @@
-import type { ComponentProvider } from "@velloo/provider";
+import type { FrameworkAdapter } from "@velloo/provider";
 
 /**
  * MUI v6 provider — currently a **scaffold only**. The wizard and the
@@ -39,7 +39,7 @@ import type { ComponentProvider } from "@velloo/provider";
  * See the Sprint X+1 sprint summary for
  * how this fits into the broader provider abstraction.
  */
-export function createProvider(): ComponentProvider {
+export function createProvider(): FrameworkAdapter {
   throw new Error(
     [
       "velloo: the MUI provider (`@velloo/provider-mui`) is scaffolded but not yet vendored.",

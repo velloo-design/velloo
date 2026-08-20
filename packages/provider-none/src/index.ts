@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ComponentProvider, Manifest } from "@velloo/provider";
+import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@velloo/provider";
 import { NONE_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 
@@ -46,7 +46,7 @@ export async function loadManifest(): Promise<Manifest> {
  * to the shadcn provider — the renderer / JIT / codegen / canvas don't
  * know which one is active; they just consume the contract.
  */
-export function createProvider(): ComponentProvider {
+export function createProvider(): FrameworkAdapter {
   return {
     id: "none",
     version: noLibVersion,
@@ -55,5 +55,6 @@ export function createProvider(): ComponentProvider {
     registry,
     loadManifest,
     label: `none ${noLibVersion}`,
+    styleChannel: TAILWIND_CLASSNAME,
   };
 }

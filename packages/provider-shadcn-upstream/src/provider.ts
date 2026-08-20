@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ComponentProvider, Manifest } from "@velloo/provider";
+import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@velloo/provider";
 import {
   componentsDir as snapshotComponentsDir,
   entryCssPath as snapshotEntryCssPath,
@@ -45,7 +45,7 @@ export interface CreateUpstreamProviderOptions {
   version?: string;
 }
 
-export function createProvider(opts: CreateUpstreamProviderOptions = {}): ComponentProvider {
+export function createProvider(opts: CreateUpstreamProviderOptions = {}): FrameworkAdapter {
   const cacheDir = opts.cacheDir;
   const componentsDir =
     cacheDir && existsSync(join(cacheDir, "ui")) ? join(cacheDir, "ui") : snapshotComponentsDir;
@@ -66,5 +66,6 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Compon
       return loadManifest();
     },
     label: `shadcn (upstream @ ${version})`,
+    styleChannel: TAILWIND_CLASSNAME,
   };
 }
