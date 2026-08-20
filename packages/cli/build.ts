@@ -116,6 +116,28 @@ function installedVersion(pkg: string): string {
   throw new Error(`cannot resolve installed version of "${pkg}" — is it installed?`);
 }
 
+/**
+ * The build stamp baked into the binary's `--version` (see src/version.ts):
+ * `<version> (<short-sha>[-dirty] · <build-date>)`. Derived from git at build
+ * time so a dogfooder's `--version` maps to an exact commit; degrades to just
+ * `<version> (<build-date>)` if git is unavailable (e.g. building off a tarball).
+ */
+function buildVersion(): string {
+  const git = (args: string[]): string | undefined => {
+    const p = Bun.spawnSync(["git", ...args], { cwd: repoRoot });
+    return p.success ? p.stdout.toString().trim() : undefined;
+  };
+  const sha = git(["rev-parse", "--short", "HEAD"]);
+  const status = git(["status", "--porcelain"]);
+  const dirty = status !== undefined && status !== "";
+  const now = new Date();
+  const pad = (n: number): string => `${n}`.padStart(2, "0");
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const ref = sha ? `${sha}${dirty ? "-dirty" : ""} · ${date}` : date;
+  return `${VERSION} (${ref})`;
+}
+const BUILD_VERSION = buildVersion();
+
 // 1. Clean.
 step("cleaning dist/");
 rmSync(distDir, { recursive: true, force: true });
@@ -157,7 +179,10 @@ const result = await Bun.build({
   target: "bun",
   format: "esm",
   plugins: [externalizeThirdParty],
-  define: prodCloudUrl ? { __VELLOO_DEFAULT_CLOUD_URL__: JSON.stringify(prodCloudUrl) } : {},
+  define: {
+    __VELLOO_BUILD_VERSION__: JSON.stringify(BUILD_VERSION),
+    ...(prodCloudUrl ? { __VELLOO_DEFAULT_CLOUD_URL__: JSON.stringify(prodCloudUrl) } : {}),
+  },
 });
 if (!result.success) {
   for (const log of result.logs) console.error(log);
@@ -233,7 +258,7 @@ const canvasFiles = readdirSync(join(distDir, "canvas")).length;
 console.log(
   [
     "",
-    `\x1b[32m✓ built velloo ${VERSION}\x1b[0m`,
+    `\x1b[32m✓ built velloo ${BUILD_VERSION}\x1b[0m`,
     `  bundle:   dist/cli.js (${bundleKb} KB)`,
     `  canvas:   dist/canvas/ (${canvasFiles} top-level entries)`,
     `  deps:     ${Object.keys(dependencies).length} runtime` +

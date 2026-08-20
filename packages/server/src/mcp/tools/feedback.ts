@@ -39,7 +39,7 @@ export function registerFeedbackTool(mcp: McpServer, ctx: MutationContext, cloud
         body: z
           .string()
           .min(1)
-          .max(4000)
+          .max(6000)
           .describe("The feedback in plain prose. No design content, code, or file/repo paths."),
       },
     },
