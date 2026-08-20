@@ -6,7 +6,7 @@ import { buildShowcaseTree } from "../library/showcases.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import { liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
-import { registryForScreen } from "../mutations/lookup.ts";
+import { registryForScreen, renderPassForScreen } from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -92,10 +92,12 @@ export function createRenderRouter(
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
-      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
+      const theme = themeByName(f, c.req.query("theme"));
+      const { html } = await renderScreen(screen, theme, {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, snippet),
+        renderPass: renderPassForScreen(ctx, snippet, theme),
         snippets: f.snippets,
         customCss: f.customCss,
         dark,
@@ -155,10 +157,12 @@ export function createRenderRouter(
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
-      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
+      const theme = themeByName(f, c.req.query("theme"));
+      const { html } = await renderScreen(screen, theme, {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, snippet),
+        renderPass: renderPassForScreen(ctx, snippet, theme),
         snippets: f.snippets,
         customCss: f.customCss,
         dark,
@@ -229,10 +233,12 @@ export function createRenderRouter(
       const snapshotCss = await jit.build();
       // Component previews render against the folder default library —
       // showcases live in the default-provider's surface today.
-      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
+      const theme = themeByName(f, c.req.query("theme"));
+      const { html } = await renderScreen(screen, theme, {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, screen),
+        renderPass: renderPassForScreen(ctx, screen, theme),
         snippets: f.snippets,
         customCss: f.customCss,
         dark,
@@ -260,10 +266,12 @@ export function createRenderRouter(
     try {
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
-      const { html } = await renderScreen(screen, themeByName(f, c.req.query("theme")), {
+      const theme = themeByName(f, c.req.query("theme"));
+      const { html } = await renderScreen(screen, theme, {
         viewport,
         snapshotCss,
         registry: registryForScreen(ctx, screen),
+        renderPass: renderPassForScreen(ctx, screen, theme),
         snippets: f.snippets,
         customCss: f.customCss,
         dark,

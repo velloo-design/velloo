@@ -1,4 +1,4 @@
-import type { ComponentProvider, ComponentRegistry } from "@velloo/provider";
+import type { ComponentProvider, ComponentRegistry, RenderPass } from "@velloo/provider";
 import { err, ok, type Result } from "@velloo/result";
 import {
   type Board,
@@ -9,10 +9,12 @@ import {
   type Node,
   type Screen,
   type Snippet,
+  type Theme,
 } from "@velloo/schema";
 import {
   providerForScreen as providerForScreenImpl,
   registryForScreen as registryForScreenImpl,
+  renderPassForScreen as renderPassForScreenImpl,
 } from "../extensions/registry.ts";
 import { isIdLocator, type Locator, pathAt, resolveLocator } from "../path.ts";
 import type { MutationContext } from "./context.ts";
@@ -241,6 +243,19 @@ export function registryForScreen(
   screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
 ): ComponentRegistry {
   return registryForScreenImpl(screen, ctx.providers, ctx.defaultProvider, getExtensions(ctx));
+}
+
+/**
+ * The screen's framework adapter render pass (MUI/emotion) bound to a theme, or
+ * undefined for Tailwind-class frameworks. Pass into `renderScreen` so a MUI
+ * screen's emotion CSS is captured into the document.
+ */
+export function renderPassForScreen(
+  ctx: MutationContext,
+  screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
+  theme: Theme,
+): RenderPass | undefined {
+  return renderPassForScreenImpl(screen, ctx.providers, ctx.defaultProvider, theme);
 }
 
 /**

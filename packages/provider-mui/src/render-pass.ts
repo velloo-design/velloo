@@ -22,7 +22,11 @@ export function makeRenderPass(theme: VellooTheme, dark = false): RenderPass {
   const muiTheme = muiThemeFrom(theme, dark);
   return {
     wrap: (element) =>
-      createElement(CacheProvider, { value: cache }, createElement(ThemeProvider, { theme: muiTheme }, element)),
+      createElement(
+        CacheProvider,
+        { value: cache },
+        createElement(ThemeProvider, { theme: muiTheme }, element),
+      ),
     css: (html) =>
       server
         .extractCriticalToChunks(html)

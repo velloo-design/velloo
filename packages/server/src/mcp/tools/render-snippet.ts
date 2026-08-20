@@ -5,7 +5,7 @@ import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { registryForScreen } from "../../mutations/lookup.ts";
+import { registryForScreen, renderPassForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
@@ -74,22 +74,26 @@ export function registerRenderSnippetTool(
         // ext placeholders still merge in.
         const syntheticScreen = { ...screen, library: snippet.library };
         const screenRegistry = registryForScreen(ctx, syntheticScreen);
+        const resolvedTheme = themeByName(ctx.folder, theme);
+        const screenPass = renderPassForScreen(ctx, syntheticScreen, resolvedTheme);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
-            renderScreen(syntheticScreen, themeByName(ctx.folder, theme), {
+            renderScreen(syntheticScreen, resolvedTheme, {
               viewport: vp,
               snapshotCss,
               registry: screenRegistry,
+              renderPass: screenPass,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
               liveBundleUrl: liveUrl(),
               dark: false,
             }),
-            renderScreen(syntheticScreen, themeByName(ctx.folder, theme), {
+            renderScreen(syntheticScreen, resolvedTheme, {
               viewport: vp,
               snapshotCss,
               registry: screenRegistry,
+              renderPass: screenPass,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
@@ -104,10 +108,11 @@ export function registerRenderSnippetTool(
             ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
-          const { html } = await renderScreen(syntheticScreen, themeByName(ctx.folder, theme), {
+          const { html } = await renderScreen(syntheticScreen, resolvedTheme, {
             viewport: vp,
             snapshotCss,
             registry: screenRegistry,
+            renderPass: screenPass,
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,

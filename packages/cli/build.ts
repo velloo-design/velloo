@@ -212,6 +212,7 @@ step("copying package assets → dist/pkgs");
 const PKG_ASSETS: { pkg: string; paths: string[] }[] = [
   { pkg: "shadcn-snapshot", paths: ["src", join("dist", "manifest.json")] },
   { pkg: "provider-none", paths: ["src"] },
+  { pkg: "provider-mui", paths: ["src"] },
   { pkg: "codegen", paths: ["biome.codegen.json"] },
 ];
 // Don't ship test files — they'd be discovered by `bun test` from the copy

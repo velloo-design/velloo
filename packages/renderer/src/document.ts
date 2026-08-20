@@ -77,7 +77,9 @@ export function buildDocument(opts: DocumentOptions): string {
           .join("&")}&display=swap" />`
       : "";
   const adapterStyle =
-    adapterCss && adapterCss.trim() !== "" ? `\n    <style data-velloo-adapter>${adapterCss}</style>` : "";
+    adapterCss && adapterCss.trim() !== ""
+      ? `\n    <style data-velloo-adapter>${adapterCss}</style>`
+      : "";
   const customStyle =
     customCss && customCss.trim() !== "" ? `\n    <style>${customCss}</style>` : "";
   // Defeat password managers and form-fillers (LastPass / 1Password / Bitwarden

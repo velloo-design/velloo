@@ -14,7 +14,11 @@ import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { registryForScreen, resolve as resolveLocator } from "../../mutations/lookup.ts";
+import {
+  registryForScreen,
+  renderPassForScreen,
+  resolve as resolveLocator,
+} from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import {
   PathSchema,
@@ -132,10 +136,12 @@ export function registerScreenshotCaptureTool(
       if (diff) {
         try {
           const snapshotCss = await jit.build();
-          const { html } = await renderScreen(screen, themeByName(ctx.folder, theme), {
+          const resolvedTheme = themeByName(ctx.folder, theme);
+          const { html } = await renderScreen(screen, resolvedTheme, {
             viewport,
             snapshotCss,
             registry: registryForScreen(ctx, screen),
+            renderPass: renderPassForScreen(ctx, screen, resolvedTheme),
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,
@@ -231,22 +237,26 @@ export function registerScreenshotCaptureTool(
       try {
         const snapshotCss = await jit.build();
         const screenRegistry = registryForScreen(ctx, screen);
+        const resolvedTheme = themeByName(ctx.folder, theme);
+        const screenPass = renderPassForScreen(ctx, screen, resolvedTheme);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
-            renderScreen(screen, themeByName(ctx.folder, theme), {
+            renderScreen(screen, resolvedTheme, {
               viewport,
               snapshotCss,
               registry: screenRegistry,
+              renderPass: screenPass,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
               liveBundleUrl: liveUrl(),
               dark: false,
             }),
-            renderScreen(screen, themeByName(ctx.folder, theme), {
+            renderScreen(screen, resolvedTheme, {
               viewport,
               snapshotCss,
               registry: screenRegistry,
+              renderPass: screenPass,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
@@ -261,10 +271,11 @@ export function registerScreenshotCaptureTool(
             ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
-          const { html } = await renderScreen(screen, themeByName(ctx.folder, theme), {
+          const { html } = await renderScreen(screen, resolvedTheme, {
             viewport,
             snapshotCss,
             registry: screenRegistry,
+            renderPass: screenPass,
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,

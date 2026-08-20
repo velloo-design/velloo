@@ -8,8 +8,8 @@ export {
   type RenderStrategy,
   type StyleChannel,
   type StyleChannelKind,
-  styleChannelOf,
   SX_PROP,
+  styleChannelOf,
   TAILWIND_CLASSNAME,
 } from "./adapter.ts";
 export {

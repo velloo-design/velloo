@@ -141,7 +141,10 @@ export async function bundleComponents(opts: {
     try {
       resolved.push({ id, path: resolveImport(importPath, hostRoot, aliases) });
     } catch (err) {
-      errors.push({ importPath, message: `${id}: ${err instanceof Error ? err.message : String(err)}` });
+      errors.push({
+        importPath,
+        message: `${id}: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
   }
   if (resolved.length === 0) return { code: EMPTY_MODULE, errors };
@@ -164,7 +167,8 @@ export async function bundleComponents(opts: {
   });
 
   if (!result.success) {
-    for (const log of result.logs) errors.push({ message: typeof log === "string" ? log : log.message });
+    for (const log of result.logs)
+      errors.push({ message: typeof log === "string" ? log : log.message });
     return { code: EMPTY_MODULE, errors };
   }
   const output = result.outputs[0];

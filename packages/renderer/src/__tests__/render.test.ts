@@ -704,7 +704,10 @@ describe("renderScreen adapter renderPass", () => {
         createElement("div", { "data-adapter-root": "true" }, el),
       css: (_html: string) => ".mui-abc{color:rebeccapurple}",
     };
-    const { html, bodyHtml } = await renderScreen(screen, sampleTheme, { ...opts, renderPass: pass });
+    const { html, bodyHtml } = await renderScreen(screen, sampleTheme, {
+      ...opts,
+      renderPass: pass,
+    });
     expect(bodyHtml).toContain('data-adapter-root="true"'); // wrapper applied
     expect(html).toContain(".mui-abc{color:rebeccapurple}"); // adapter CSS injected
     expect(html).toContain("data-velloo-adapter"); // in its own tagged style block

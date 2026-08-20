@@ -10,7 +10,8 @@ function base(slot: ColorPair | undefined, fallback: string): string {
 
 /** The `foreground` half of a pair (the on-color), or a fallback. */
 function fg(slot: ColorPair | undefined, fallback: string): string {
-  if (slot && typeof slot === "object" && typeof slot.foreground === "string") return slot.foreground;
+  if (slot && typeof slot === "object" && typeof slot.foreground === "string")
+    return slot.foreground;
   return fallback;
 }
 

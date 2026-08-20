@@ -24,6 +24,7 @@ import {
   type SetNodeIdResult,
   setNodeId as setNodeIdImpl,
 } from "../set-node-id.ts";
+import { type SetStyleArgs, setStyle as setStyleImpl } from "../set-style.ts";
 import {
   type UpdatePropsArgs,
   type UpdatePropsResult,
@@ -83,6 +84,12 @@ export function setNodeId(
 ): Promise<Result<SetNodeIdResult, MutationError>> {
   return withScreenLock(args.screenId, () => setNodeIdImpl(ctx, args));
 }
+export function setStyle(
+  ctx: MutationContext,
+  args: SetStyleArgs,
+): Promise<Result<UpdatePropsResult, MutationError>> {
+  return withScreenLock(args.screenId, () => setStyleImpl(ctx, args));
+}
 
 export type {
   AddNodeArgs,
@@ -95,6 +102,7 @@ export type {
   RemoveNodeResult,
   SetNodeIdArgs,
   SetNodeIdResult,
+  SetStyleArgs,
   UpdatePropsArgs,
   UpdatePropsBulkArgs,
   UpdatePropsBulkResult,

@@ -1,5 +1,10 @@
-import type { ComponentProvider, ComponentRegistry } from "@velloo/provider";
-import type { Extension, Screen, Snippet } from "@velloo/schema";
+import type {
+  ComponentProvider,
+  ComponentRegistry,
+  FrameworkAdapter,
+  RenderPass,
+} from "@velloo/provider";
+import type { Extension, Screen, Snippet, Theme } from "@velloo/schema";
 import { createElement } from "react";
 import { LiveIslandMarker } from "./live-marker.tsx";
 import { ExtensionPlaceholder } from "./placeholder.tsx";
@@ -66,4 +71,20 @@ export function registryForScreen(
   const base = providerForScreen(screen, providers, defaultProvider).registry;
   if (Object.keys(extensions).length === 0) return base;
   return { ...base, ...buildExtensionRegistry(extensions) };
+}
+
+/**
+ * The render pass for a screen's framework adapter (e.g. MUI's emotion pass),
+ * or undefined for Tailwind-class frameworks (shadcn / no-lib) whose SSR needs
+ * no wrapping. Threaded into `renderScreen` so a MUI screen's emotion CSS is
+ * extracted into the document.
+ */
+export function renderPassForScreen(
+  screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
+  providers: Record<string, ComponentProvider>,
+  defaultProvider: ComponentProvider,
+  theme: Theme,
+): RenderPass | undefined {
+  const provider = providerForScreen(screen, providers, defaultProvider) as FrameworkAdapter;
+  return provider.renderPass?.(theme);
 }

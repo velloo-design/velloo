@@ -1,7 +1,7 @@
 import type { Theme } from "@velloo/schema";
 import type { ReactElement } from "react";
-import type { ComponentProvider } from "./types.ts";
 import type { ComponentDescriptor } from "./manifest.ts";
+import type { ComponentProvider } from "./types.ts";
 
 /**
  * FrameworkAdapter — the grown-up `ComponentProvider`. Where `ComponentProvider` is "a registry +

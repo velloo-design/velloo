@@ -14,7 +14,7 @@ import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { registryForScreen } from "../../mutations/lookup.ts";
+import { registryForScreen, renderPassForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { resolveViewport, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
@@ -158,10 +158,12 @@ export function registerCompareToUrlTool(
 
       try {
         const snapshotCss = await jit.build();
-        const { html } = await renderScreen(screen, themeByName(ctx.folder, theme), {
+        const resolvedTheme = themeByName(ctx.folder, theme);
+        const { html } = await renderScreen(screen, resolvedTheme, {
           viewport,
           snapshotCss,
           registry: registryForScreen(ctx, screen),
+          renderPass: renderPassForScreen(ctx, screen, resolvedTheme),
           snippets: ctx.folder.snippets,
           customCss: ctx.folder.customCss,
           baseHref: assetOrigin,

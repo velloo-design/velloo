@@ -22,6 +22,7 @@ import {
   removeScreen,
   removeSnippet,
   setNodeId,
+  setStyle,
   updateBoard,
   updateFrame,
   updateFrames,
@@ -177,6 +178,36 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         if (!node || !isComponentNode(node)) return [];
         return propWarnings(ctx, screen, node.$ref, single.propPatch);
       });
+    },
+  );
+
+  mcp.registerTool(
+    "set_style",
+    {
+      description:
+        "Style a node through the screen's *native* channel — the framework adapter picks where the payload lands: a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object (no-framework). One verb across frameworks: pass a class string on a Tailwind folder, an object of properties on an sx/style folder. Objects merge shallowly (an inner `null` removes that key); `style: null` clears it entirely. A payload whose shape doesn't fit the channel is rejected with the expected shape. On a Tailwind folder this is equivalent to setting `className` via update_props.",
+      inputSchema: {
+        screenId: z.string(),
+        path: PathSchema,
+        style: jsonTolerant(z.union([z.string(), PatchRecordSchema, z.null()])).describe(
+          "className string (Tailwind) or property object (sx/style); null clears.",
+        ),
+      },
+    },
+    async (args) => {
+      return toMcpWithWarnings(
+        await setStyle(ctx, { screenId: args.screenId, path: args.path, style: args.style }),
+        async (value) => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          if (!screen) return [];
+          const node = pathAt(screen.tree, value.path);
+          if (!node || !isComponentNode(node)) return [];
+          // Surface prop warnings for object channels (sx keys), mirroring update_props.
+          return typeof args.style === "object" && args.style !== null
+            ? propWarnings(ctx, screen, node.$ref, args.style)
+            : [];
+        },
+      );
     },
   );
 

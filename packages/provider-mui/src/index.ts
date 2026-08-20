@@ -3,8 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type FrameworkAdapter, type Manifest, SX_PROP } from "@velloo/provider";
 import { MUI_MANIFEST } from "./manifest.ts";
-import { makeRenderPass } from "./render-pass.ts";
 import { registry } from "./registry.ts";
+import { makeRenderPass } from "./render-pass.ts";
 
 /**
  * Material UI v6 provider — a first-class FrameworkAdapter (framework-native
@@ -25,9 +25,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 /** Resolve the provider src (Tailwind entry + sources), from dev + the bundled CLI. */
 function resolveSrcDir(): string {
   const dev = join(here, "..", "src");
-  const candidates = [process.env.VELLOO_MUI_SRC, join(here, "pkgs", "provider-mui", "src"), dev].filter(
-    (p): p is string => Boolean(p),
-  );
+  const candidates = [
+    process.env.VELLOO_MUI_SRC,
+    join(here, "pkgs", "provider-mui", "src"),
+    dev,
+  ].filter((p): p is string => Boolean(p));
   return candidates.find((d) => existsSync(join(d, "tailwind-entry.css"))) ?? dev;
 }
 const srcDir = resolveSrcDir();
