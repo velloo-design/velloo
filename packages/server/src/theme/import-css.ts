@@ -1,8 +1,10 @@
 import {
   type ContainerConfig,
+  paletteName,
   parseTailwindContainer,
   parseThemeCss,
   parseThemeExtend,
+  resolveCssVars,
   type ThemeExtend,
 } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
@@ -89,6 +91,7 @@ export async function importThemeCss(
   const current = themeByName(folder, opts.themeName ?? "default");
   const next = JSON.parse(JSON.stringify(current)) as Theme;
 
+  const warnings = [...parsed.warnings];
   const changes: ThemeTokenChange[] = [];
   const record = (token: string, to: string): void => {
     const from = tokenAt(current, token);
@@ -147,9 +150,26 @@ export async function importThemeCss(
     if (extend.colors) {
       next.palette = { ...(next.palette ?? {}) };
       for (const [name, value] of Object.entries(extend.colors)) {
+        // A config color whose name collides with a semantic slot
+        // (`primary`, `primary-foreground`, …) must NOT become a palette
+        // passthrough — it would shadow the slot extractColors owns with an
+        // unrelated value (often `hsl(var(--…))` pointing at a var that
+        // doesn't exist in the canvas render context). paletteName drops
+        // those (and any non-kebab key) the same way the stylesheet path does.
+        if (paletteName(name) === null) continue;
         if (name in (next.palette as Record<string, string>)) continue;
-        (next.palette as Record<string, string>)[name] = value;
-        record(`palette.${name}`, value);
+        // Flatten `var(--x)` refs against the imported stylesheet's vars: the
+        // config carries unresolved refs, but the canvas paints concrete
+        // values. A ref we can't resolve here is dropped, not persisted dangling.
+        const resolved = value.includes("var(") ? resolveCssVars(value, parsed.rootVars) : value;
+        if (resolved === null || resolved === "") {
+          warnings.push(
+            `tailwind.config color "${name}" references a CSS var not declared in the imported stylesheet — skipped`,
+          );
+          continue;
+        }
+        (next.palette as Record<string, string>)[name] = resolved;
+        record(`palette.${name}`, resolved);
       }
     }
     if (extend.spacing) {
@@ -210,8 +230,8 @@ export async function importThemeCss(
   }
 
   if (!opts.apply) {
-    return ok({ theme: validated.data, changes, warnings: parsed.warnings, applied: false });
+    return ok({ theme: validated.data, changes, warnings, applied: false });
   }
   const persisted = await persistNamedTheme(folder, opts.themeName ?? "default", validated.data);
-  return ok({ theme: persisted, changes, warnings: parsed.warnings, applied: true });
+  return ok({ theme: persisted, changes, warnings, applied: true });
 }

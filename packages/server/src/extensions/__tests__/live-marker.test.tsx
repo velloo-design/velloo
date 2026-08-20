@@ -50,4 +50,17 @@ describe("buildExtensionRegistry live islands", () => {
     expect(html).toContain('data-live-node="true"');
     expect(html).toContain('data-live-props="{}"');
   });
+
+  test('fit:"content" marker carries data-live-fit so the runtime reserves its height', () => {
+    const html = render({ ...baseExtension, render: "live", fit: "content" }, { period: "30d" });
+    expect(html).toContain('data-live-fit="content"');
+    // No 16:9 lock; grows to the reserved content height instead.
+    expect(html).not.toContain("aspect-video");
+  });
+
+  test("default (aspect-video) marker omits data-live-fit and keeps the 16:9 lock", () => {
+    const html = render({ ...baseExtension, render: "live" }, { period: "30d" });
+    expect(html).not.toContain("data-live-fit");
+    expect(html).toContain("aspect-video");
+  });
 });

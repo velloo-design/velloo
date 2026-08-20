@@ -39,6 +39,7 @@ interface PwPage {
 }
 interface PwContext {
   newPage(): Promise<PwPage>;
+  close(): Promise<void>;
 }
 interface PwBrowser {
   newContext(opts: { viewport: { width: number; height: number } }): Promise<PwContext>;
@@ -66,14 +67,28 @@ const theme = {
   radius: { md: "0.5rem" },
 } as unknown as Theme;
 
+// Height the `fit:"content"` host component renders to. Larger than the SSR
+// skeleton so the reservation is observable: without the runtime fix the
+// out-of-flow mount can't grow the marker and it stays at the (short)
+// skeleton height.
+const CONTENT_HEIGHT = 300;
+
 const extensions: Record<string, Extension> = {
   RevenueChart: { importPath: "@/charts/RevenueChart", props: [], render: "live" },
+  // Mounts a fixed-height block out of flow; `fit:"content"` means the marker
+  // must reserve that height itself (the bug this guards).
+  TallChart: { importPath: "@/charts/TallChart", props: [], render: "live", fit: "content" },
 };
 const viewport = { w: 640, h: 400 };
 const screen: Screen = { id: "chart", name: "Chart", tree: { $ref: "RevenueChart", props: {} } };
 
 let tmp: string;
 let bundler: LiveBundler;
+// One shared Chromium for all browser-leg tests. Launching a fresh browser per
+// test wedges Playwright's CDP connection when the suite also runs heavy
+// synchronous render tests in the same bun process (the second launch hangs);
+// a single shared instance sidesteps that contention.
+let browser: PwBrowser | null = null;
 
 beforeAll(async () => {
   tmp = join(
@@ -105,14 +120,37 @@ export function RevenueChart() {
 `,
     "utf8",
   );
+  await writeFile(
+    join(hostRoot, "src", "charts", "TallChart.tsx"),
+    `import * as React from "react";
+export function TallChart() {
+  // A fixed-height block (no ResponsiveContainer self-measure needed to keep
+  // the test deterministic) — the point is that it mounts out of flow and the
+  // marker must reserve its ${CONTENT_HEIGHT}px height.
+  return React.createElement("div", {
+    "data-testid": "tall-chart",
+    style: { height: ${CONTENT_HEIGHT}, width: "100%", background: "#4f46e5" },
+  });
+}
+`,
+    "utf8",
+  );
   bundler = new LiveBundler(
     join(tmp, "velloo"),
     () => ({ root: hostRoot, aliases: { "@/*": "src/*" } }),
     () => liveExtensions(extensions),
   );
+  if (hasChromium) {
+    const pwPath = Bun.resolveSync("playwright-core", rendererDir);
+    const { chromium } = (await import(pwPath)) as {
+      chromium: { launch: () => Promise<PwBrowser> };
+    };
+    browser = await chromium.launch();
+  }
 });
 
 afterAll(async () => {
+  await browser?.close();
   await rm(tmp, { recursive: true, force: true });
 });
 
@@ -156,11 +194,7 @@ describe("live-island render path", () => {
           });
         },
       });
-      const pwPath = Bun.resolveSync("playwright-core", rendererDir);
-      const { chromium } = (await import(pwPath)) as {
-        chromium: { launch: () => Promise<PwBrowser> };
-      };
-      const browser = await chromium.launch();
+      if (!browser) throw new Error("shared browser not launched");
       try {
         const registry = buildExtensionRegistry(extensions);
         const { html } = await renderScreen(screen, theme, {
@@ -202,8 +236,88 @@ describe("live-island render path", () => {
         expect(info.svgInMount).toBe(1);
         expect(info.pathInMount).toBeGreaterThan(0);
         expect(info.skeletonHidden).toBe(true);
+        await context.close();
       } finally {
-        await browser.close();
+        server.stop(true);
+      }
+    },
+    30000,
+  );
+
+  test.skipIf(!hasChromium)(
+    'fit:"content" island reserves the real component height (out-of-flow mount drives the marker)',
+    async () => {
+      // Regression for the under-reservation bug: the chart mounts into an
+      // `absolute; inset:0` overlay (out of flow), so the marker can't grow to
+      // it on its own. The runtime measures the mounted content and pins the
+      // marker's min-height before ready flips — so the marker ends up ~300px,
+      // not the short skeleton height. (If it weren't reserved, the screenshot
+      // path would measure a stale, too-short rect and the page would capture
+      // shorter than the real app.)
+      const bundle = await bundler.build();
+      const server = Bun.serve({
+        port: 0,
+        fetch() {
+          return new Response(bundle.code, {
+            headers: {
+              "Content-Type": "text/javascript; charset=utf-8",
+              "Access-Control-Allow-Origin": "*",
+            },
+          });
+        },
+      });
+      if (!browser) throw new Error("shared browser not launched");
+      try {
+        const tallScreen: Screen = {
+          id: "tall",
+          name: "Tall",
+          tree: { $ref: "TallChart", props: {} },
+        };
+        const registry = buildExtensionRegistry(extensions);
+        const { html } = await renderScreen(tallScreen, theme, {
+          viewport,
+          snapshotCss: "",
+          registry,
+          liveBundleUrl: `http://127.0.0.1:${server.port}/api/live/bundle.js?v=${bundler.version}`,
+        });
+        const context = await browser.newContext({
+          viewport: { width: viewport.w, height: viewport.h },
+        });
+        const page = await context.newPage();
+        const pageErrors: string[] = [];
+        page.on("pageerror", (e) => pageErrors.push(String(e)));
+        await page.setContent(html, { waitUntil: "domcontentloaded" });
+        await page
+          .waitForFunction(
+            () =>
+              (window as unknown as { __velloo_live_ready?: boolean }).__velloo_live_ready === true,
+            undefined,
+            { timeout: 15000 },
+          )
+          .catch(() => {});
+        const info = await page.evaluate(() => {
+          const marker = document.querySelector("[data-live-fit='content']") as HTMLElement | null;
+          const mounted = document.querySelector(
+            "[data-live-mount] [data-testid='tall-chart']",
+          ) as HTMLElement | null;
+          return {
+            ready:
+              (window as unknown as { __velloo_live_ready?: boolean }).__velloo_live_ready === true,
+            markerHeight: marker ? Math.round(marker.getBoundingClientRect().height) : null,
+            markerMinHeight: marker ? marker.style.minHeight : null,
+            mountedHeight: mounted ? Math.round(mounted.getBoundingClientRect().height) : null,
+          };
+        });
+
+        expect(pageErrors).toEqual([]);
+        expect(info.ready).toBe(true);
+        expect(info.mountedHeight).toBe(CONTENT_HEIGHT);
+        // The marker reserved the real content height (a min-height was pinned)
+        // — it grew from the short skeleton to fit the 300px chart.
+        expect(info.markerMinHeight).toBe(`${CONTENT_HEIGHT}px`);
+        expect(info.markerHeight).toBeGreaterThanOrEqual(CONTENT_HEIGHT);
+        await context.close();
+      } finally {
         server.stop(true);
       }
     },

@@ -11,9 +11,22 @@
  * placeholder skeleton stays visible until a component commits and is
  * restored if it throws, so a failed island is "no worse than today".
  *
+ * Height reservation for `fit:"content"` markers: the real component mounts
+ * into an `absolute; inset:0` overlay (out of flow), so it can't drive the
+ * marker's height — left alone, a `fit:"content"` marker would only reserve
+ * the hidden skeleton's height and the chart would overflow its card (lower
+ * grid rows under-reserve deterministically). After each island settles we
+ * measure the rendered content and pin `minHeight` on the marker, BEFORE
+ * `markReady()` flips, so the screenshot's rect measurement reads the true
+ * height. `aspect-video` markers are left untouched — they intentionally
+ * lock 16:9.
+ *
  * `window.__velloo_live_ready` flips true once every island has mounted or
- * fallen back (with a hard timeout cap), and chart animation is frozen, so
- * the screenshot path can wait for a deterministic final frame.
+ * fallen back (with a hard timeout cap), chart animation is frozen, AND
+ * every marker's height is stable across consecutive frames — so the
+ * screenshot path can wait for a deterministic, fully-reflowed final frame
+ * (a multi-island grid no longer races the ready flag against a late
+ * reflow).
  *
  * Raw JS string — `__VELLOO_LIVE_BUNDLE_URL__` is replaced with a JSON
  * string literal at document-build time.
@@ -28,6 +41,38 @@ export const LIVE_RUNTIME = `
     window.__velloo_live_ready = true;
     window.__velloo_live.ready = true;
   }
+  // Measure the content the real component rendered into a marker's overlay
+  // mount and reserve it as the marker's height. Only for fit:"content"
+  // markers (aspect-video locks its own ratio). The mount is out of flow
+  // (absolute; inset:0), so without this the marker would only be as tall as
+  // the hidden skeleton — charts overflow their card and the page captures
+  // short.
+  //
+  // We measure the union of the mounted CHILDREN's boxes, not the overlay's
+  // own scrollHeight: an inset:0 overlay's client box is pinned to the
+  // marker's height, so its scrollHeight reads back the marker height (or the
+  // viewport) and would over-reserve. The children's intrinsic extent is the
+  // real chart height. No-op if it would shrink the marker (never reserve
+  // LESS than already laid out).
+  function reserveContentHeight(marker) {
+    if (marker.getAttribute('data-live-fit') !== 'content') return;
+    var mount = marker.querySelector('[data-live-mount]');
+    if (!mount) return;
+    var mountTop = mount.getBoundingClientRect().top;
+    var measured = 0;
+    var kids = mount.children;
+    for (var i = 0; i < kids.length; i++) {
+      var r = kids[i].getBoundingClientRect();
+      var bottom = r.bottom - mountTop;
+      if (bottom > measured) measured = bottom;
+    }
+    measured = Math.ceil(measured);
+    if (measured <= 0) return;
+    var current = marker.getBoundingClientRect().height;
+    if (measured <= current) return;
+    marker.style.minHeight = measured + 'px';
+  }
+
   // Wait until the island subtrees stop mutating, then mark ready. Charts
   // animate their SVG via JS (recharts/react-smooth), which the CSS freeze
   // below can't stop — a fixed 2-frame wait would capture a mid-entry frame
@@ -35,6 +80,15 @@ export const LIVE_RUNTIME = `
   // lands the real final frame instead, and also covers a measure-then-
   // rerender lib (ResponsiveContainer). Bounded by DEADLINE_MS so a looping
   // animation that never quiesces still flips ready.
+  //
+  // After quiescence we ALSO require marker heights to be stable across two
+  // consecutive animation frames before flipping ready. A multi-island grid
+  // reflows asynchronously (ResponsiveContainer self-measures post-mount,
+  // lower rows settle later); DOM-quiescence alone could flip ready while a
+  // marker is still resizing, so the screenshot would measure a stale rect.
+  // Re-reserving fit:"content" heights on each stability check also lets a
+  // late reflow grow the reservation. Still bounded by DEADLINE_MS so a
+  // never-quiescing loop can't hang the gate.
   function settle() {
     var QUIET_MS = 250;
     var DEADLINE_MS = 5000;
@@ -46,12 +100,36 @@ export const LIVE_RUNTIME = `
     markers.forEach(function (m) {
       observer.observe(m, { subtree: true, childList: true, attributes: true });
     });
+    function markerHeights() {
+      return markers.map(function (m) {
+        return Math.round(m.getBoundingClientRect().height);
+      });
+    }
+    function sameHeights(a, b) {
+      if (a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+    var prevHeights = null;
     function tick() {
       var now = Date.now();
-      if (now - lastMutation >= QUIET_MS || now - start >= DEADLINE_MS) {
-        observer.disconnect();
-        markReady();
-        return;
+      var deadlineHit = now - start >= DEADLINE_MS;
+      if (now - lastMutation >= QUIET_MS || deadlineHit) {
+        // DOM is quiet (or we hit the deadline). Reserve content height, then
+        // confirm the layout has actually stopped moving across two frames.
+        markers.forEach(reserveContentHeight);
+        var heights = markerHeights();
+        if (deadlineHit || (prevHeights !== null && sameHeights(prevHeights, heights))) {
+          observer.disconnect();
+          markReady();
+          return;
+        }
+        prevHeights = heights;
+      } else {
+        // A mutation reset the quiet window — restart the stability check.
+        prevHeights = null;
       }
       requestAnimationFrame(tick);
     }

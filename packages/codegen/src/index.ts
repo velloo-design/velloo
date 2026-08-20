@@ -15,7 +15,13 @@ export {
 } from "./emit-theme/index.ts";
 export type { CodegenError } from "./errors.ts";
 export type { FormatError, FormatResult } from "./format.ts";
-export { type ParsedThemeCss, parseThemeCss } from "./import-theme/parse-css.ts";
+export {
+  type ParsedThemeCss,
+  paletteName,
+  parseThemeCss,
+  resolveCssVars,
+  SEMANTIC_SLOTS,
+} from "./import-theme/parse-css.ts";
 export {
   type ContainerConfig,
   containerClasses,

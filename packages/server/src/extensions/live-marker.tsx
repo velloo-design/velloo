@@ -56,13 +56,19 @@ export function LiveIslandMarker({
   // Default to a 16:9 box; `fit:"content"` opts out so a fixed-height chart
   // (or an `absolute inset-0` overlay) drives its own height instead of
   // fighting the aspect ratio.
-  const sizing = extension.fit === "content" ? "relative w-full" : "relative aspect-video w-full";
+  const isContentFit = extension.fit === "content";
+  const sizing = isContentFit ? "relative w-full" : "relative aspect-video w-full";
   const wrapperClassName = [sizing, className].filter(Boolean).join(" ");
   return (
     <div
       data-live-node="true"
       data-live-ref={id}
       data-live-props={serializeProps(resolvedProps)}
+      // The client runtime reserves the real content's height onto this marker
+      // for `fit:"content"` islands — the mount is out of flow, so it can't
+      // drive height by itself. Marked here so the runtime measures only the
+      // markers that opted out of the 16:9 lock.
+      data-live-fit={isContentFit ? "content" : undefined}
       className={wrapperClassName}
       {...rest}
     >

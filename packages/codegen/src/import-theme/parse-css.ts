@@ -32,6 +32,13 @@ export interface ParsedThemeCss {
   /** `--font-<role>` stacks (sans/mono/display/…), sizing roles excluded. */
   fontFamily?: Record<string, string>;
   warnings: string[];
+  /**
+   * The raw `:root`/`@theme` custom-property map (var name → declared value),
+   * so callers that ingest tokens from *other* sources (a tailwind.config) can
+   * resolve `var(--x)` references against the same stylesheet. Internal —
+   * exposed for the importer, not part of the design-token surface.
+   */
+  rootVars: ReadonlyMap<string, string>;
 }
 
 const HSL_TRIPLET = /^-?[0-9.]+(?:deg)?\s+-?[0-9.]+%\s+-?[0-9.]+%(?:\s*\/\s*[0-9.]+%?)?$/;
@@ -42,7 +49,7 @@ const NON_FAMILY_FONT_ROLE = /^(size|weight|leading|tracking)(-|$)/;
 /** A valid palette key — kebab-case identifier, matching the schema's PaletteSchema. */
 const PALETTE_KEY = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 /** Semantic slots extractColors owns (plus their `-foreground` pairs) — kept out of palette. */
-const SEMANTIC_SLOTS = new Set<string>(
+export const SEMANTIC_SLOTS: ReadonlySet<string> = new Set<string>(
   COLOR_SLOTS.flatMap(({ key, pair }) =>
     pair ? [key as string, `${key as string}-foreground`] : [key as string],
   ),
@@ -55,8 +62,13 @@ const SEMANTIC_SLOTS = new Set<string>(
  * names (`paprika`, `ink`) alike — EXCEPT the semantic slots (`--primary`,
  * `--background`, …), which extractColors owns. Non-color values (`--radius`,
  * `--font-*`) are dropped downstream by `isColorish`.
+ *
+ * Exported so token sources outside the stylesheet (a tailwind.config's
+ * `theme.extend.colors`) apply the SAME semantic-slot exclusion before they
+ * land in `palette` — otherwise a config `primary-foreground` would shadow the
+ * semantic slot with an unrelated value. Pass the bare color name (no `--`).
  */
-function paletteName(rawKey: string): string | null {
+export function paletteName(rawKey: string): string | null {
   const name = rawKey.startsWith("color-") ? rawKey.slice(6) : rawKey;
   if (SEMANTIC_SLOTS.has(name)) return null;
   return PALETTE_KEY.test(name) ? name : null;
@@ -170,6 +182,17 @@ function resolveVars(value: string, scopes: Array<Map<string, string>>, depth = 
   return resolveVars(replaced.trim(), scopes, depth + 1);
 }
 
+/**
+ * Resolve every `var(--x)` / `var(--x, fallback)` in `value` against a single
+ * stylesheet var map, returning the concrete value — or null if a referenced
+ * var is undefined and has no fallback. For ingesting tailwind.config tokens
+ * (e.g. `hsl(var(--primary-foreground))`) whose vars live in the imported
+ * stylesheet, so they don't persist as dangling refs the canvas can't paint.
+ */
+export function resolveCssVars(value: string, vars: ReadonlyMap<string, string>): string | null {
+  return resolveVars(value, [vars as Map<string, string>]);
+}
+
 /** Wrap raw HSL triplets (`222.2 47.4% 11.2%`) into a usable `hsl(…)`. */
 function normalizeColor(value: string): string {
   const v = value.trim();
@@ -260,7 +283,14 @@ export function parseThemeCss(css: string): ParsedThemeCss {
   const palette = extractPalette(rootVars, [rootVars]);
   const paletteDark = darkVars.size > 0 ? extractPalette(darkVars, [darkVars, rootVars]) : {};
 
-  const result: ParsedThemeCss = { colors, colorsDark, palette, paletteDark, warnings };
+  const result: ParsedThemeCss = {
+    colors,
+    colorsDark,
+    palette,
+    paletteDark,
+    warnings,
+    rootVars,
+  };
 
   const radiusRaw = rootVars.get("radius");
   if (radiusRaw !== undefined) {

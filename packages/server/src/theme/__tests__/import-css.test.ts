@@ -245,4 +245,38 @@ describe("importThemeCss", () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value.changes.map((c) => c.token)).toContain("palette.brand-700");
   });
+
+  test("a config color colliding with a semantic slot does NOT become a palette passthrough", async () => {
+    const cfg = `export default { theme: { extend: { colors: {
+      "primary-foreground": "hsl(var(--primary-foreground))",
+      destructive: "#dc2626",
+      brand: "#0ea5e9",
+    } } } };`;
+    const r = unwrap(await importThemeCss(ctx, HOST_APP_CSS, { apply: true, tailwindConfig: cfg }));
+    const onDisk = await diskTheme();
+    // The collisions are filtered — they'd otherwise shadow the semantic slots
+    // extractColors owns with an unrelated (var-ref) value.
+    expect(onDisk.palette?.["primary-foreground"]).toBeUndefined();
+    expect(onDisk.palette?.destructive).toBeUndefined();
+    // A non-colliding brand name still lands.
+    expect(onDisk.palette?.brand).toBe("#0ea5e9");
+    expect(r.changes.map((c) => c.token)).not.toContain("palette.primary-foreground");
+    expect(r.changes.map((c) => c.token)).toContain("palette.brand");
+  });
+
+  test("a config color value referencing a stylesheet var resolves to the concrete value", async () => {
+    // --accent-warm is declared in the imported stylesheet; the config names a
+    // palette color whose value points at it via var(). It must flatten.
+    const css = `:root { --accent-warm: 24 100% 50%; }`;
+    const cfg = `export default { theme: { extend: { colors: {
+      "accent-warm": "hsl(var(--accent-warm))",
+      ghost: "hsl(var(--does-not-exist))",
+    } } } };`;
+    const r = unwrap(await importThemeCss(ctx, css, { apply: true, tailwindConfig: cfg }));
+    const onDisk = await diskTheme();
+    expect(onDisk.palette?.["accent-warm"]).toBe("hsl(24 100% 50%)");
+    // A ref that resolves to nothing is dropped (not persisted dangling) + warned.
+    expect(onDisk.palette?.ghost).toBeUndefined();
+    expect(r.warnings.some((w) => w.includes("ghost"))).toBe(true);
+  });
 });
