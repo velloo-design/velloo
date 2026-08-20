@@ -12,6 +12,7 @@ import {
   type Viewport,
 } from "@velloo/schema";
 import {
+  findHostTailwindConfig,
   LiveBundler,
   liveExtensions,
   migrateConfig,
@@ -271,6 +272,7 @@ export default defineCommand({
       undefined,
       undefined,
       bundler ? () => bundler.hostSourceDirs() : undefined,
+      () => findHostTailwindConfig(folder, config.hostApp),
     );
     const snapshotCss = await jit.build();
 

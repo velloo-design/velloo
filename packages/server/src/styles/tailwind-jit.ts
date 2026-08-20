@@ -49,6 +49,13 @@ export class TailwindJit {
      * live extension brings its classes in without a restart.
      */
     private readonly extraSourceDirs?: () => string[],
+    /**
+     * Absolute path to the host app's legacy Tailwind config (or null). When present
+     * it's injected as a v4 `@config` directive so the app's container/screens/plugins
+     * apply in the canvas; velloo's `@theme` tokens stay authoritative. Compiled with a
+     * fallback — a config that throws (missing plugin, etc.) is dropped, not fatal.
+     */
+    private readonly hostConfigPath?: () => string | null,
   ) {
     this.providers = Array.isArray(providers) ? providers : [providers];
     if (this.providers.length === 0) {
@@ -146,14 +153,32 @@ export class TailwindJit {
     return { css: extra ? `${merged}\n\n${extra}` : merged, base: primaryBase };
   }
 
+  private warnedHostConfig = false;
+
   private getCompiler(): Promise<Compiler> {
     if (this.compilerPromise) return this.compilerPromise;
     this.compilerPromise = (async () => {
       const { css, base } = await this.mergedEntryCss();
-      return compile(css, {
-        base,
-        onDependency: () => {},
-      });
+      const hostConfig = this.hostConfigPath?.() ?? null;
+      if (hostConfig) {
+        // `@config` is appended after the provider entry so velloo's `@theme` (CSS, parsed
+        // first) wins for tokens it owns; the host config supplies container/screens/plugins.
+        const withConfig = `${css}\n@config ${JSON.stringify(hostConfig)};\n`;
+        try {
+          return await compile(withConfig, { base, onDependency: () => {} });
+        } catch (err) {
+          // A broken/unresolvable host config must never break the canvas — drop it.
+          if (!this.warnedHostConfig) {
+            this.warnedHostConfig = true;
+            console.error(
+              `velloo: ignoring host Tailwind config ${hostConfig} — it failed to compile ` +
+                `(${err instanceof Error ? err.message.split("\n")[0] : String(err)}). ` +
+                "Container/screens from it won't apply in the canvas.",
+            );
+          }
+        }
+      }
+      return compile(css, { base, onDependency: () => {} });
     })();
     return this.compilerPromise;
   }

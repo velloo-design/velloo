@@ -25,6 +25,7 @@ import {
 } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { migrateConfig, resolveProviders } from "./providers.ts";
+import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
 import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
 
@@ -180,6 +181,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     undefined,
     () => extraThemeBlock(folder),
     () => bundler.hostSourceDirs(),
+    () => findHostTailwindConfig(folder.root, folder.config.hostApp),
   );
   const broadcast = (e: WatchEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
@@ -321,6 +323,7 @@ export {
   migrateLibrarySource,
   resolveProviders,
 } from "./providers.ts";
+export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";
 export { derivePalette } from "./theme/derive-palette.ts";
 export type { WatchEvent } from "./watcher.ts";

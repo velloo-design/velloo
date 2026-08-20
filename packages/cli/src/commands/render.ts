@@ -16,6 +16,7 @@ import {
   type Viewport,
 } from "@velloo/schema";
 import {
+  findHostTailwindConfig,
   migrateConfig,
   registryForScreen,
   resolveProviders,
@@ -96,7 +97,14 @@ export default defineCommand({
 
     const { providers, defaultProvider } = await resolveProviders(config, folder);
     const registry = registryForScreen(screen, providers, defaultProvider, config.extensions ?? {});
-    const jit = new TailwindJit(Object.values(providers), join(folder, "screens"));
+    const jit = new TailwindJit(
+      Object.values(providers),
+      join(folder, "screens"),
+      undefined,
+      undefined,
+      undefined,
+      () => findHostTailwindConfig(folder, config.hostApp),
+    );
     const snapshotCss = await jit.build();
     const { html } = await renderScreen(screen, theme, {
       viewport,
