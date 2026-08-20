@@ -97,6 +97,12 @@ export class LiveBundler {
     private readonly folderRoot: string,
     private readonly hostAppFor: () => HostApp | undefined,
     private readonly liveExtensionsFor: () => Record<string, Extension>,
+    /**
+     * Minify the output. Off for the canvas dev preview (readable stacks,
+     * faster builds across edit bursts); on for `velloo publish`, whose
+     * bundle ships in a public share where transfer size matters.
+     */
+    private readonly minify = false,
   ) {}
 
   /** Monotonic counter bumped on every invalidate — used to cache-bust the iframe. */
@@ -224,7 +230,7 @@ export class LiveBundler {
       entrypoints: [entryPath],
       target: "browser",
       format: "esm",
-      minify: false,
+      minify: this.minify,
       sourcemap: "none",
       define: { "process.env.NODE_ENV": '"production"' },
       plugins: [aliasPlugin(hostRoot, aliases)],

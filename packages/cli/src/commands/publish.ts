@@ -11,7 +11,14 @@ import {
   ThemeSchema,
   type Viewport,
 } from "@velloo/schema";
-import { migrateConfig, resolveProviders, TailwindJit } from "@velloo/server";
+import {
+  LiveBundler,
+  liveExtensions,
+  migrateConfig,
+  registryForScreen,
+  resolveProviders,
+  TailwindJit,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
@@ -238,7 +245,33 @@ export default defineCommand({
     const theme = ThemeSchema.parse(themeJson);
     const config = migrateConfig(ConfigSchema.parse(configJson));
     const { providers, defaultProvider } = await resolveProviders(config, folder);
-    const jit = new TailwindJit(Object.values(providers), screensDir);
+
+    // Live-island bundle: when the folder declares render:"live" extensions
+    // (charts &c.), compile the host app's real components into one ESM module
+    // shipped beside the screens. Each screen's injected runtime imports it and
+    // client-mounts the real component into its SSR marker, so the share shows
+    // the actual chart instead of the placeholder skeleton. No live extensions
+    // ⇒ no bundler, no runtime — every other folder publishes exactly as before.
+    const liveExt = liveExtensions(config.extensions);
+    const bundler =
+      Object.keys(liveExt).length > 0
+        ? new LiveBundler(
+            folder,
+            () => config.hostApp,
+            () => liveExt,
+            true, // minify — the bundle ships in a public share
+          )
+        : null;
+
+    // The host live components carry their own Tailwind classes; feed their
+    // source dirs to the JIT so those utilities compile into the shared CSS.
+    const jit = new TailwindJit(
+      Object.values(providers),
+      screensDir,
+      undefined,
+      undefined,
+      bundler ? () => bundler.hostSourceDirs() : undefined,
+    );
     const snapshotCss = await jit.build();
 
     const screens: Screen[] = [];
@@ -260,15 +293,35 @@ export default defineCommand({
     const title = args.title ?? `${folder.split("/").filter(Boolean).pop()} designs`;
     const form = new FormData();
     let renderedBytes = 0;
+
+    // Build + upload the live bundle once (it's folder-scoped). A relative URL
+    // resolves against each screen HTML's own location in the share, so it
+    // works whether the share is mounted at a path or a subdomain root. A
+    // failed/partial build degrades to placeholders — surface the reason so the
+    // publisher knows their charts won't be live (e.g. host React not installed).
+    let liveBundleUrl: string | undefined;
+    if (bundler) {
+      const bundle = await bundler.build();
+      for (const e of bundle.errors) {
+        console.log(`  live-island warning: ${e.message}`);
+      }
+      form.append("file", new File([bundle.code], "bundle.js", { type: "text/javascript" }));
+      liveBundleUrl = "./bundle.js";
+    }
+
     for (const screen of screens) {
-      const registry = screen.library
-        ? (providers[screen.library] ?? defaultProvider).registry
-        : defaultProvider.registry;
+      const registry = registryForScreen(
+        screen,
+        providers,
+        defaultProvider,
+        config.extensions ?? {},
+      );
       const { html } = await renderScreen(screen, theme, {
         viewport,
         snapshotCss,
         registry,
         snippets,
+        liveBundleUrl,
       });
       form.append("file", new File([html], `${screen.id}.html`, { type: "text/html" }));
       renderedBytes += html.length;

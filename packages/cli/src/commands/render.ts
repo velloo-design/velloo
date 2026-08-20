@@ -15,7 +15,13 @@ import {
   ThemeSchema,
   type Viewport,
 } from "@velloo/schema";
-import { migrateConfig, resolveProviders, TailwindJit, writeText } from "@velloo/server";
+import {
+  migrateConfig,
+  registryForScreen,
+  resolveProviders,
+  TailwindJit,
+  writeText,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
 import { pickScreen, resolveDesignFolder } from "../folder.ts";
@@ -89,15 +95,13 @@ export default defineCommand({
     }
 
     const { providers, defaultProvider } = await resolveProviders(config, folder);
-    const screenProvider = screen.library
-      ? (providers[screen.library] ?? defaultProvider)
-      : defaultProvider;
+    const registry = registryForScreen(screen, providers, defaultProvider, config.extensions ?? {});
     const jit = new TailwindJit(Object.values(providers), join(folder, "screens"));
     const snapshotCss = await jit.build();
     const { html } = await renderScreen(screen, theme, {
       viewport,
       snapshotCss,
-      registry: screenProvider.registry,
+      registry,
       snippets,
     });
 
