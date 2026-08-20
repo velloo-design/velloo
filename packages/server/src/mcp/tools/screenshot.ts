@@ -27,6 +27,13 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { registryForScreen, resolve as resolveLocator } from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import {
+  PathSchema,
+  RenderModeSchema,
+  resolveViewport,
+  ThemeNameSchema,
+  ViewportSchema,
+} from "./schemas.ts";
 
 type McpResult = {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -239,18 +246,16 @@ export function registerScreenshotTool(
         screenId: z.string(),
         w: z.number().int().positive().optional(),
         h: z.number().int().positive().optional(),
-        viewport: z
-          .object({ w: z.number().int().positive(), h: z.number().int().positive() })
-          .optional()
-          .describe("Alternative to flat w/h; explicit w/h win if both are given"),
-        mode: z.enum(["light", "dark", "compare"]).optional(),
+        viewport: ViewportSchema.optional().describe(
+          "Alternative to flat w/h; explicit w/h win if both are given",
+        ),
+        mode: RenderModeSchema,
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional(),
-        path: z
-          .union([z.array(z.number().int().nonnegative()), z.string()])
-          .optional()
-          .describe('Capture only this node — path array or "@id" (not with mode: "compare")'),
-        theme: z.string().optional().describe("Named theme to render with (boards pin one)"),
+        path: PathSchema.optional().describe(
+          'Capture only this node — path array or "@id" (not with mode: "compare"). Omit it (or pass "@root"/[]) to capture the whole screen, which is the default.',
+        ),
+        theme: ThemeNameSchema,
         diff: z.boolean().optional().describe("Compare against the previous same-params capture"),
         resetBaseline: z.boolean().optional(),
         fitFrames: z
@@ -277,8 +282,7 @@ export function registerScreenshotTool(
     }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
-      w ??= vp?.w;
-      h ??= vp?.h;
+      ({ w, h } = resolveViewport(w, h, vp));
 
       if (diff && (mode === "compare" || path !== undefined)) {
         return errorResult('screenshot: diff cannot combine with mode: "compare" or path');
@@ -289,9 +293,16 @@ export function registerScreenshotTool(
         if (mode === "compare") {
           return errorResult('screenshot: path cannot be combined with mode: "compare"');
         }
-        const resolved = resolveLocator(screen.tree, path, screenId);
-        if (!resolved.ok) return errorResult(JSON.stringify(resolved.error));
-        clipSelector = `[data-node-path="${resolved.value.join(".")}"]`;
+        // "@root", [] and "[]" all mean the whole tree — capture the full screen (no clip).
+        const isWholeTree =
+          path === "@root" ||
+          (Array.isArray(path) && path.length === 0) ||
+          (typeof path === "string" && path.replace(/\s/g, "") === "[]");
+        if (!isWholeTree) {
+          const resolved = resolveLocator(screen.tree, path, screenId);
+          if (!resolved.ok) return errorResult(JSON.stringify(resolved.error));
+          clipSelector = `[data-node-path="${resolved.value.join(".")}"]`;
+        }
       }
 
       const defaults = defaultViewport(ctx.folder);
@@ -500,14 +511,13 @@ export function registerScreenshotTool(
         url: z.string().describe("Live URL to compare against, e.g. http://localhost:3000/pricing"),
         w: z.number().int().positive().optional(),
         h: z.number().int().positive().optional(),
-        viewport: z
-          .object({ w: z.number().int().positive(), h: z.number().int().positive() })
-          .optional()
-          .describe("Alternative to flat w/h; explicit w/h win if both are given"),
+        viewport: ViewportSchema.optional().describe(
+          "Alternative to flat w/h; explicit w/h win if both are given",
+        ),
         mode: z.enum(["light", "dark"]).optional(),
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional().describe("Default 0.5"),
-        theme: z.string().optional().describe("Named theme to render with"),
+        theme: ThemeNameSchema,
         storageStatePath: z
           .string()
           .optional()
@@ -571,7 +581,8 @@ export function registerScreenshotTool(
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
 
       const defaults = defaultViewport(ctx.folder);
-      const viewport: Viewport = { w: w ?? vp?.w ?? defaults.w, h: h ?? vp?.h ?? defaults.h };
+      const resolved = resolveViewport(w, h, vp);
+      const viewport: Viewport = { w: resolved.w ?? defaults.w, h: resolved.h ?? defaults.h };
       const scaleFactor = scale ?? 0.5;
 
       try {
@@ -719,15 +730,10 @@ export function registerScreenshotTool(
         snippetId: z.string(),
         args: z.record(z.string(), z.unknown()).optional(),
         extraClassName: z.string().optional(),
-        viewport: z
-          .object({
-            w: z.number().int().positive(),
-            h: z.number().int().positive(),
-          })
-          .optional(),
-        mode: z.enum(["light", "dark", "compare"]).optional(),
+        viewport: ViewportSchema.optional().describe("Defaults to 480×640"),
+        mode: RenderModeSchema,
         scale: z.number().min(0.25).max(1).optional(),
-        theme: z.string().optional().describe("Named theme to render with"),
+        theme: ThemeNameSchema,
       },
     },
     async ({ snippetId, args, extraClassName, viewport, mode, scale, theme }) => {

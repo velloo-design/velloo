@@ -10,6 +10,7 @@ import {
   removeNote,
   updateNote,
 } from "../../mutations/index.ts";
+import { PathSchema } from "./schemas.ts";
 
 type McpResult = {
   content: { type: "text"; text: string }[];
@@ -83,9 +84,7 @@ export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
         'Pin a markdown annotation to a specific node (questions for the designer, review remarks). The canvas draws a connector to the node in every frame showing it. Created with author: "agent" — you may remove your own annotations later, but user-authored ones are read-only to you.',
       inputSchema: {
         screenId: z.string(),
-        path: z
-          .union([z.array(z.number().int().nonnegative()), z.string()])
-          .describe('Target node — path array or "@id"'),
+        path: PathSchema,
         body: z.string(),
         collapsed: z.boolean().optional(),
       },

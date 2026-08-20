@@ -40,8 +40,7 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
             props: {
               variant: "lead",
               className: "max-w-xl",
-              children:
-                "This screen was generated from your app's route structure. Ask your AI agent to design it — start with the hero, then add the supporting sections.",
+              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
             },
           },
           {

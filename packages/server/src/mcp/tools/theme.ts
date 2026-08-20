@@ -22,6 +22,7 @@ import {
   setToken,
   type ThemeContext,
 } from "../../theme/index.ts";
+import { singleOrBulkError } from "./schemas.ts";
 
 type McpResult = {
   content: { type: "text"; text: string }[];
@@ -168,6 +169,12 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       },
     },
     async (args) => {
+      if (args.tokens !== undefined && (args.path !== undefined || args.value !== undefined)) {
+        return themeErrorResult({
+          kind: "BadRequest",
+          message: singleOrBulkError.both("set_token", "path+value", "tokens"),
+        });
+      }
       const entries: Array<[string, string | number]> = args.tokens
         ? Object.entries(args.tokens)
         : args.path !== undefined && args.value !== undefined
@@ -176,7 +183,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       if (entries.length === 0) {
         return themeErrorResult({
           kind: "BadRequest",
-          message: "set_token: pass path + value, or tokens: { <path>: <value>, … }.",
+          message: singleOrBulkError.missing("set_token", "path+value", "tokens"),
         });
       }
       const applied: string[] = [];
@@ -286,13 +293,15 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "import_theme",
     {
       description:
-        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. **Also captures every non-semantic color var** — numeric scales (`--primary-600`), extra roles (`--success-500`, `--danger`), AND bare brand names (`--paprika`, `--ink`, `--teal`) — into the theme's `palette`, so verbatim app classes like `bg-primary-600` / `text-success-500` / `bg-ink` resolve literally on the canvas instead of silently falling back to the default palette — apply this BEFORE porting screens so copied classes render. (`palette.*` entries are raw passthroughs that don't theme-flip, unlike the semantic `colors.*` slots; tweak them by hand with `set_token palette.<name>`.) Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` (absolute, or relative to the design folder) to the app's globals.css. When given a `cssPath`, it also reads the nearby tailwind.config (or an explicit `tailwindConfigPath`) and ingests its `theme.extend` — **brand `colors` → `palette` (so `bg-paprika` resolves), named `spacing` → spacing tokens (so `w-icon-rail` / `h-header` / `p-sidebar` resolve), `boxShadow` → `shadows` (`shadow-card`), `fontFamily` → font roles (`font-display`), and `keyframes` + `animation` → `--animate-*` (so `animate-fade-in` resolves)** — the tokens an app keeps in JS config rather than the stylesheet. CSS-derived values win over the config literal for the same name. It also applies the app's `container` config (center/padding/max-width) so `class=\"container\"` matches the app, and reports the equivalent `container.suggestedClasses` if you'd rather wrap content explicitly. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
+        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. **Also captures every non-semantic color var** — numeric scales (`--primary-600`), extra roles (`--success-500`, `--danger`), AND bare brand names (`--paprika`, `--ink`, `--teal`) — into the theme's `palette`, so verbatim app classes like `bg-primary-600` / `text-success-500` / `bg-ink` resolve literally on the canvas instead of silently falling back to the default palette — apply this BEFORE porting screens so copied classes render. (`palette.*` entries are raw passthroughs that don't theme-flip, unlike the semantic `colors.*` slots; tweak them by hand with `set_token palette.<name>`.) Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` to the app's globals.css (absolute, or relative to the host app root — globals.css lives OUTSIDE the design folder). When given a `cssPath`, it also reads the nearby tailwind.config (or an explicit `tailwindConfigPath`) and ingests its `theme.extend` — **brand `colors` → `palette` (so `bg-paprika` resolves), named `spacing` → spacing tokens (so `w-icon-rail` / `h-header` / `p-sidebar` resolve), `boxShadow` → `shadows` (`shadow-card`), `fontFamily` → font roles (`font-display`), and `keyframes` + `animation` → `--animate-*` (so `animate-fade-in` resolves)** — the tokens an app keeps in JS config rather than the stylesheet. CSS-derived values win over the config literal for the same name. It also applies the app's `container` config (center/padding/max-width) so `class=\"container\"` matches the app, and reports the equivalent `container.suggestedClasses` if you'd rather wrap content explicitly. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
       inputSchema: {
         css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
         cssPath: z
           .string()
           .optional()
-          .describe("Path to the stylesheet — absolute, or relative to the design folder"),
+          .describe(
+            "Path to the stylesheet — absolute, or relative to the HOST APP root (where globals.css lives, normally OUTSIDE the design folder); the design folder is tried as a last resort",
+          ),
         theme: z.string().optional().describe('Named theme to merge into; default "default"'),
         apply: z.boolean().optional().describe("Persist the merge (default false = dry-run)"),
         tailwindConfigPath: z
@@ -304,7 +313,8 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       },
     },
     async (args) => {
-      let css = args.css;
+      // Treat an empty/whitespace `css` as not-provided (agents sometimes pass css:"" + cssPath).
+      let css: string | undefined = args.css?.trim() ? args.css : undefined;
       let cssResolvedPath: string | undefined;
       if (css === undefined) {
         if (args.cssPath === undefined) {
@@ -313,15 +323,37 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
             message: "pass either `css` text or a `cssPath`",
           });
         }
-        cssResolvedPath = isAbsolute(args.cssPath)
-          ? args.cssPath
-          : join(ctx.folder.root, args.cssPath);
-        try {
-          css = await readFile(cssResolvedPath, "utf8");
-        } catch (e) {
+        // The host app's globals.css lives OUTSIDE the design folder (which sits at
+        // <appRoot>/velloo). Try the host app root, then the design folder's parent, then
+        // the design folder itself — read the first that exists.
+        const hostRoot = ctx.folder.config.hostApp?.root;
+        const bases: string[] = isAbsolute(args.cssPath)
+          ? [""]
+          : [
+              ...(hostRoot
+                ? [isAbsolute(hostRoot) ? hostRoot : join(ctx.folder.root, hostRoot)]
+                : []),
+              join(ctx.folder.root, ".."),
+              ctx.folder.root,
+            ];
+        const tried: string[] = [];
+        for (const base of bases) {
+          const candidate = base === "" ? args.cssPath : join(base, args.cssPath);
+          tried.push(candidate);
+          const text = await readFile(candidate, "utf8").catch(() => null);
+          if (text !== null) {
+            css = text;
+            cssResolvedPath = candidate;
+            break;
+          }
+        }
+        if (css === undefined) {
           return themeErrorResult({
             kind: "BadRequest",
-            message: `could not read ${cssResolvedPath}: ${e instanceof Error ? e.message : String(e)}`,
+            message:
+              `could not read "${args.cssPath}" — tried ${tried.map((t) => `"${t}"`).join(", ")}. ` +
+              `The host app's globals.css usually lives OUTSIDE the design folder (the design folder is at <appRoot>/velloo). ` +
+              `Pass an absolute path, a path relative to the host app root, or paste the stylesheet text directly as \`css\`.`,
           });
         }
       }

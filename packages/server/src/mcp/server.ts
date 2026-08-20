@@ -8,11 +8,17 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { z } from "zod";
 import type { CloudAuth } from "../cloud.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
+import {
+  applyDefaultTiers,
+  flatToolsMode,
+  instrumentTools,
+  registerRevealTool,
+  revealInstructions,
+} from "./tiers.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
@@ -71,7 +77,7 @@ const INSTRUCTION_PARTS = [
   "",
   "**Three customization layers** stack additively in every folder ( A folder registers N (`config.libraries`); each screen pins one via `screen.library`. Multi-library lets marketing boards use no-lib while app boards use shadcn in the same folder. Component ids resolve against the screen's library only.",
   "  - **Extensions** add wholly new components the active library doesn't have — your app's custom `DataTable`, a brand `Hero`, a bespoke `PriceChart`. Register one with `add_extension` (it persists in `.design/config.json`); the canvas renders a placeholder card carrying the component id + props, and `emit_code` emits a real `import` from the extension's declared `importPath`. Extensions are folder-global and shadow library components with the same id. Use them for *additive customization*, NOT for compositions (snippets cover that). For a component whose look needs the real implementation (charts especially), register it with `render:\"live\"` — Velloo bundles the actual component from your app (e.g. your exact recharts) and mounts it in the canvas for a pixel-faithful preview (now also in `screenshot` / `compare_to_url` / `render_snippet`, not just the live canvas), falling back to the placeholder on any failure. The built-in `Chart` node previews via echarts without an extension — handy for a generic chart, but it will NOT pixel-match an app built on recharts/visx/chart.js, so when you're porting a charts-heavy app reach for a `render:\"live\"` extension of the app's own chart component for fidelity.",
-  "  - **Snippets** compose existing components (library + extension) into named subtrees with typed params. Use them for repeated structure (FeatureCard, NavRow, PricingTier).",
+  '  - **Snippets** compose existing components (library + extension) into named subtrees with typed params. Use them for repeated structure (FeatureCard, NavRow, PricingTier). Reference a snippet with a `{"$snippet":"<kebab-id>"}` node or `instantiate_snippet` — NOT `$ref`, which is only for PascalCase library components / registered extensions. A PascalCase name that is actually a snippet (`$ref:"SiteHeader"` for the snippet `site-header`) is a common mix-up.',
   "",
   '`list_components` returns both library entries and extensions in one call, each tagged with `kind: "library" | "extension"`. Filter with `kind` when you only want one type.',
   "",
@@ -101,7 +107,7 @@ const INSTRUCTION_PARTS = [
   "",
   '**Verification loop**: when a screen feels done, run `screenshot mode: "compare"` — returns one PNG with light + dark rendered side-by-side, the fastest signal that the design actually adapts. While iterating, `screenshot diff: true` compares against your previous capture: zero change costs no image at all, small changes return a highlight crop naming the changed nodes. Pass `scale: 0.5` when checking layout (smaller payload), and `path` to capture a single node close-up. Call `audit` to score the screen; coverage 1.0 + an empty problems list is the green light. `validate_classes` is free and fast — run it on any arbitrary-value classes (`shadow-[…]`, `grid-cols-[…]`, etc.) before relying on them. `inspect` returns SSR\'d HTML + resolved props for a specific node when you need to verify what landed.',
   "",
-  "**Code-to-design (porting an existing app)**: when asked to bring an existing app's pages onto the canvas, *re-express — don't clone*. The loop: (1) `import_theme` with the app's globals.css (`cssPath`; dry-run first, then `apply: true`) so palette/radius/fonts match before any composition — beyond the semantic slots, it captures every other custom color var into the theme `palette`: numeric scales (`--primary-600`), extra roles (`--success-500`, `--danger`), AND bare brand names (`--paprika`, `--ink`, `--teal`). The `palette.*` namespace is a raw passthrough — `palette.ink` makes `bg-ink`/`text-ink`/`border-ink` resolve literally on the canvas — distinct from the semantic `colors.*` slots that theme-flip in dark mode. So app classes like `bg-primary-600` / `text-success-500` / `bg-ink` render as-is instead of falling back. Add or tweak entries by hand with `set_token palette.<name>` (e.g. `set_token palette.ink \"#1a1a1a\"`); run `validate_classes` if unsure a class resolved. It also reports the app's Tailwind `container` config as `container.suggestedClasses` (centered/padded/capped layout doesn't transfer as a theme — wrap page content in a `Box` with those classes, or use `Container`). (2) Read the page's source in the host repo alongside `list_components`, then rebuild it as one screen — strip handlers/state/data-fetching, inline representative copy as literals, keep Tailwind classes verbatim (shadcn apps share Velloo's component vocabulary, so most refs map 1:1). (3) Component mapping is snippet-first, extension-second: a presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real; a complex app-specific component (DataTable, charts) becomes `add_extension` with its real importPath — placeholder on canvas, real import on emit, so capture → redesign → emit never loses component identity. (4) Verify with `compare_to_url` against the running app at the same viewport — 0.85+ similarity is a faithful structural port; use the per-region node refs to fix what's off, and don't chase 1.0 (fonts and imagery legitimately differ). **If the result is `unverified`, STOP — similarity is meaningless there**: either the URL redirected to a login page / hit an auth wall (pass `storageStatePath`/`cookies`/`localStorage` to reach the real page), or `pageError` says the target app is throwing/blank (fix its dev server — the low score is the app being broken, not your design). If you can't get a real capture, leave the screen flagged unverified and tell the user rather than iterating against a page you never saw (a guess will land far from reality). Data-heavy pages: capture the structure with fixture copy — designs are static by construction. Known canvas-vs-app gaps to expect: `dark:` variant classes are inert (Velloo dark mode swaps token values, not a class — replace `bg-white dark:bg-background` patterns with the semantic token), Radix `AvatarImage` renders only after client-side load so SSR captures show the fallback (re-express avatars as `Image`), the app's vendored shadcn may predate the snapshot (e.g. an older `CardTitle` baked in `text-2xl` — re-add drifted classes explicitly), and the headless render substitutes some emoji glyphs and doesn't fetch remote images (an `i.pravatar.cc` avatar shows an initials/fallback box) — both are expected, so don't chase the small `compare_to_url` dip they cause; use `upload_asset` + local `Image`/`Placeholder` for art you need pixel-faithful.",
+  "**Code-to-design (porting an existing app)**: when asked to bring an existing app's pages onto the canvas, *re-express — don't clone*. The loop: (1) `import_theme` with the app's globals.css (`cssPath` — an absolute path or one relative to the host app root, since globals.css lives OUTSIDE the design folder; or paste the stylesheet as `css`; dry-run first, then `apply: true`) so palette/radius/fonts match before any composition — beyond the semantic slots, it captures every other custom color var into the theme `palette`: numeric scales (`--primary-600`), extra roles (`--success-500`, `--danger`), AND bare brand names (`--paprika`, `--ink`, `--teal`). The `palette.*` namespace is a raw passthrough — `palette.ink` makes `bg-ink`/`text-ink`/`border-ink` resolve literally on the canvas — distinct from the semantic `colors.*` slots that theme-flip in dark mode. So app classes like `bg-primary-600` / `text-success-500` / `bg-ink` render as-is instead of falling back. Add or tweak entries by hand with `set_token palette.<name>` (e.g. `set_token palette.ink \"#1a1a1a\"`); run `validate_classes` if unsure a class resolved. It also reports the app's Tailwind `container` config as `container.suggestedClasses` (centered/padded/capped layout doesn't transfer as a theme — wrap page content in a `Box` with those classes, or use `Container`). (2) Read the page's source in the host repo alongside `list_components`. The route-scan already created one placeholder screen per detected route (id = route slug) — build INTO the existing screen (clear the placeholder with `remove_node`, then `add_node` / `instantiate_snippet`); don't `add_screen` for a scanned route, it returns ScreenIdConflict. Rebuild it as one screen — strip handlers/state/data-fetching, inline representative copy as literals, keep Tailwind classes verbatim (shadcn apps share Velloo's component vocabulary, so most refs map 1:1). (3) Component mapping is snippet-first, extension-second: a presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real; a complex app-specific component (DataTable, charts) becomes `add_extension` with its real importPath — placeholder on canvas, real import on emit, so capture → redesign → emit never loses component identity. (4) Verify with `compare_to_url` against the running app at the same viewport — 0.85+ similarity is a faithful structural port; use the per-region node refs to fix what's off, and don't chase 1.0 (fonts and imagery legitimately differ). **If the result is `unverified`, STOP — similarity is meaningless there**: either the URL redirected to a login page / hit an auth wall (pass `storageStatePath`/`cookies`/`localStorage` to reach the real page), or `pageError` says the target app is throwing/blank (fix its dev server — the low score is the app being broken, not your design). If you can't get a real capture, leave the screen flagged unverified and tell the user rather than iterating against a page you never saw (a guess will land far from reality). Data-heavy pages: capture the structure with fixture copy — designs are static by construction. Known canvas-vs-app gaps to expect: `dark:` variant classes are inert (Velloo dark mode swaps token values, not a class — replace `bg-white dark:bg-background` patterns with the semantic token), Radix `AvatarImage` renders only after client-side load so SSR captures show the fallback (re-express avatars as `Image`), the app's vendored shadcn may predate the snapshot (e.g. an older `CardTitle` baked in `text-2xl` — re-add drifted classes explicitly), and the headless render substitutes some emoji glyphs and doesn't fetch remote images (an `i.pravatar.cc` avatar shows an initials/fallback box) — both are expected, so don't chase the small `compare_to_url` dip they cause; use `upload_asset` + local `Image`/`Placeholder` for art you need pixel-faithful.",
   "",
   '**Designer annotations**: `list_annotations(screenId)` returns markdown notes the designer attached to specific nodes on a screen. Treat them as guidance for the current screen — addressable feedback like "this CTA should land harder" or "tighten the copy." Each annotation carries a `resolved` path (null when the targeted node has been removed — low-priority, the designer\'s note is stale). You can also pin your own with `add_annotation` (author: "agent") — questions for the designer, review remarks — and remove your own with `remove_annotation`; user-authored annotations are read-only to you. Board-level guidance that isn\'t node-specific goes in canvas notes (`add_note`).',
 ];
@@ -120,8 +126,13 @@ const FEEDBACK_INSTRUCTION =
  * the stdio transport, where the canvas binds an ephemeral port the user can't
  * predict. The feedback paragraph is appended only when opted in.
  */
-export function buildInstructions(feedbackEnabled: boolean, canvasUrl?: string): string {
+export function buildInstructions(
+  feedbackEnabled: boolean,
+  canvasUrl?: string,
+  tiered = false,
+): string {
   const parts = [...INSTRUCTION_PARTS];
+  if (tiered) parts.push("", revealInstructions());
   if (canvasUrl) {
     parts.push(
       "",
@@ -132,38 +143,6 @@ export function buildInstructions(feedbackEnabled: boolean, canvasUrl?: string):
   return parts.join("\n");
 }
 
-/**
- * The SDK wraps raw input shapes with a non-strict z.object, so a typo'd
- * argument (`ids` for `filter`) is silently dropped and the tool runs as
- * if the arg was never passed — the agent gets a confidently wrong
- * result. Rewrap every registered shape as z.strictObject so unknown
- * arguments fail loudly with the list of valid keys.
- */
-function withStrictToolArgs(mcp: McpServer): McpServer {
-  const original = mcp.registerTool.bind(mcp);
-  const patched: typeof original = (name, config, cb) => {
-    const input = (config as { inputSchema?: unknown }).inputSchema;
-    const isRawShape =
-      input !== undefined &&
-      input !== null &&
-      typeof input === "object" &&
-      typeof (input as { safeParse?: unknown }).safeParse !== "function";
-    if (isRawShape) {
-      return original(
-        name,
-        {
-          ...config,
-          inputSchema: z.strictObject(input as z.ZodRawShape),
-        } as unknown as Parameters<typeof original>[1],
-        cb,
-      );
-    }
-    return original(name, config, cb);
-  };
-  (mcp as { registerTool: typeof original }).registerTool = patched;
-  return mcp;
-}
-
 function buildMcpServer(
   ctx: MutationContext,
   jit: TailwindJit,
@@ -172,14 +151,19 @@ function buildMcpServer(
   cloud?: CloudAuth,
 ): McpServer {
   const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled);
-  const mcp = withStrictToolArgs(
-    new McpServer(
-      { name: "velloo", version: "0.1.0" },
-      { instructions: buildInstructions(feedbackEnabled, assetOrigin?.replace(/\/+$/, "")) },
-    ),
+  const tiered = !flatToolsMode();
+  const mcp = new McpServer(
+    { name: "velloo", version: "0.1.0" },
+    { instructions: buildInstructions(feedbackEnabled, assetOrigin?.replace(/\/+$/, ""), tiered) },
   );
-  // Hidden, env-gated session tape (VELLOO_TRACE). Wrap before any tool
-  // registers so every handler is taped; no-op when the flag is unset.
+  // Instrument `registerTool` before any tool registers: rewrap each raw input
+  // shape as z.strictObject (so a typo'd argument fails loudly with the valid
+  // keys instead of being silently dropped) AND capture every tool's handle so
+  // the disclosure tiers can hide/reveal it. The returned registry is keyed by
+  // tool id.
+  const registry = instrumentTools(mcp);
+  // Hidden, env-gated session tape (VELLOO_TRACE). Wrap after instrumentTools
+  // so every handler is taped; no-op when the flag is unset.
   const recorder = createTraceRecorder(ctx.folder.root);
   if (recorder) withCallRecording(mcp, recorder);
   registerDiscoveryTools(mcp, ctx);
@@ -196,6 +180,19 @@ function buildMcpServer(
   // Opt-in, auth-gated. The token may be absent (logged out) — the tool then
   // returns a "run velloo login" message rather than failing.
   if (feedbackEnabled) registerFeedbackTool(mcp, ctx, cloud ?? { url: "" });
+  // Progressive disclosure: advertise a lean core and reveal the long-tail
+  // families on demand via `reveal_tools`. VELLOO_MCP_FLAT opts out. Disabling
+  // here is silent (the server isn't connected yet, so no list_changed fires —
+  // the first tools/list simply reflects the hidden state).
+  if (tiered) {
+    registerRevealTool(mcp, registry);
+    const { missing } = applyDefaultTiers(registry);
+    if (missing.length > 0) {
+      console.error(
+        `velloo mcp: disclosure families reference unknown tools: ${missing.join(", ")}`,
+      );
+    }
+  }
   return mcp;
 }
 

@@ -34,6 +34,14 @@ import {
 } from "../../mutations/index.ts";
 import { propWarnings, propWarningsForTree } from "../../mutations/prop-warnings.ts";
 import { pathAt } from "../../path.ts";
+import {
+  InnerPathSchema,
+  jsonTolerant,
+  NodeIdInputSchema,
+  PatchRecordSchema,
+  PathSchema,
+  singleOrBulkError,
+} from "./schemas.ts";
 
 type McpResult = {
   content: { type: "text"; text: string }[];
@@ -66,17 +74,6 @@ async function toMcpWithWarnings<T>(
   return jsonResult(propWarnings.length > 0 ? { ...result.value, propWarnings } : result.value);
 }
 
-const IdLocator = z
-  .string()
-  .regex(/^@[a-zA-Z][a-zA-Z0-9_-]*$/)
-  .describe(`@id reference, e.g. "@hero-cta"`);
-const PathSchema = z
-  .union([z.array(z.number().int().nonnegative()), IdLocator])
-  .describe('Path from screen tree root ([0, 2, 1]) or "@id" reference');
-const NodeIdInputSchema = z
-  .string()
-  .regex(/^[a-zA-Z][a-zA-Z0-9_-]*$/)
-  .describe("Stable id for the node (letters/digits/_/-, leading letter)");
 export function registerMutationTools(mcp: McpServer, ctx: MutationContext): void {
   // ── Tree mutations ─────────────────────────────────────────────────────
   mcp.registerTool(
@@ -89,15 +86,15 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         parentPath: PathSchema,
         componentRef: z.string(),
         id: NodeIdInputSchema.optional(),
-        props: z.record(z.string(), z.unknown()).optional(),
-        propPatch: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe("Alias for `props`, accepted so the key matches update_props."),
-        // A bare scalar (`children: "Save"`) is accepted past the SDK's arg
-        // check only so the handler can answer with the `props.children`
-        // nudge instead of the SDK's opaque "expected array" rejection.
-        children: z.union([z.array(NodeSchema), z.string(), z.number()]).optional(),
+        props: PatchRecordSchema.optional(),
+        propPatch: PatchRecordSchema.optional().describe(
+          "Alias for `props`, accepted so the key matches update_props.",
+        ),
+        // `jsonTolerant` parses a stringified array (`children: "[{…}]"` — the most
+        // common agent mistake) into a real array. A bare scalar (`children: "Save"`)
+        // is still accepted past the SDK's arg check so the handler can answer with
+        // the `props.children` nudge instead of the SDK's opaque "expected array".
+        children: jsonTolerant(z.union([z.array(NodeSchema), z.string(), z.number()])).optional(),
         index: z.number().int().nonnegative().optional(),
       },
     },
@@ -128,17 +125,16 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_props",
     {
       description:
-        "Shallow-merge propPatch into the node at path (null removes a key; className restyles). For many nodes in one atomic write, pass `patches: [{ path, propPatch }]` instead.",
+        "Shallow-merge propPatch into the node at path (null removes a key; className restyles). For many nodes in one atomic write, pass `patches: [{ path, propPatch }]` instead. This patches a plain screen node; to patch a node *inside a snippet* use override_snippet_props (one instance only) or update_snippet's innerPatch (the shared definition, all instances).",
       inputSchema: {
         screenId: z.string(),
         path: PathSchema.optional(),
-        propPatch: z.record(z.string(), z.unknown()).optional(),
-        props: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe("Alias for `propPatch`, accepted so the key matches add_node."),
+        propPatch: PatchRecordSchema.optional(),
+        props: PatchRecordSchema.optional().describe(
+          "Alias for `propPatch`, accepted so the key matches add_node.",
+        ),
         patches: z
-          .array(z.object({ path: PathSchema, propPatch: z.record(z.string(), z.unknown()) }))
+          .array(z.object({ path: PathSchema, propPatch: PatchRecordSchema }))
           .min(1)
           .optional()
           .describe("Bulk mode — mutually exclusive with path/propPatch"),
@@ -147,13 +143,13 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => {
       const propPatch = args.propPatch ?? args.props;
       if (args.patches) {
-        if (args.path !== undefined || propPatch !== undefined) {
-          return mutationErrorResult({
-            kind: "BadRequest",
-            message: "update_props: pass either path+propPatch or patches, not both.",
-          });
-        }
-        const bulkArgs = { screenId: args.screenId, patches: args.patches };
+        // Be liberal: if a single edit is ALSO passed, merge it into the bulk list
+        // rather than rejecting — agents routinely conflate the two forms.
+        const patches =
+          args.path !== undefined && propPatch !== undefined
+            ? [{ path: args.path, propPatch }, ...args.patches]
+            : args.patches;
+        const bulkArgs = { screenId: args.screenId, patches };
         return toMcpWithWarnings(await updatePropsBulk(ctx, bulkArgs), async () => {
           const screen = ctx.folder.screens.get(args.screenId);
           if (!screen) return [];
@@ -169,10 +165,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         });
       }
       if (args.path === undefined || propPatch === undefined) {
-        return mutationErrorResult({
-          kind: "BadRequest",
-          message: "update_props: path and propPatch are required (or pass patches).",
-        });
+        return mutationErrorResult(
+          badRequest(singleOrBulkError.missing("update_props", "path+propPatch", "patches")),
+        );
       }
       const single = { screenId: args.screenId, path: args.path, propPatch };
       return toMcpWithWarnings(await updateProps(ctx, single), async (value) => {
@@ -189,14 +184,12 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "override_snippet_props",
     {
       description:
-        'Patch props on one node INSIDE a snippet instance\'s body — the one-off escape hatch ("this instance\'s badge is red") without forking the snippet. path locates the instance; innerPath addresses the body node: "@id" when the body node carries a $id (preferred — survives body restructures), a dotted index path ("0.2" = third child of first child), or "" for the body root. Merges into the instance\'s $overrides; null values remove keys; an empty result clears the override. emit_code inlines overridden instances instead of emitting the shared component.',
+        'Patch props on one node INSIDE a snippet instance\'s body — the one-off escape hatch ("this instance\'s badge is red") without forking the snippet. path locates the instance; innerPath addresses the body node: "@id" when the body node carries a $id (preferred — survives body restructures), a dotted index path ("0.2" = third child of first child), or "" for the body root. Merges into the instance\'s $overrides; null values remove keys; an empty result clears the override. emit_code inlines overridden instances instead of emitting the shared component. Siblings: update_props patches a plain screen node; update_snippet\'s innerPatch changes the shared definition (every instance at once).',
       inputSchema: {
         screenId: z.string(),
         path: PathSchema,
-        innerPath: z
-          .string()
-          .describe('"@id" of a body node (preferred), dotted index path, or "" for the root'),
-        propPatch: z.record(z.string(), z.unknown()),
+        innerPath: InnerPathSchema,
+        propPatch: PatchRecordSchema,
       },
     },
     async (args) => toMcp(await overrideSnippetProps(ctx, args)),
@@ -252,7 +245,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_screen",
     {
       description:
-        "Create a new screen. Does not place it on the board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one.",
+        "Create a NEW screen. Does not place it on the board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one. Note: a route-scan already scaffolds one placeholder screen per detected route (id = route slug) — don't add_screen for those (it returns ScreenIdConflict); build into the existing screen with add_node/instantiate_snippet (clear the placeholder with remove_node first). Omit `id` to auto-suffix a unique id.",
       inputSchema: {
         name: z.string(),
         id: z.string().optional(),
@@ -351,52 +344,53 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => toMcp(await addFrame(ctx, args)),
   );
 
+  const FramePatchSchema = z.object({
+    x: z.number().optional(),
+    y: z.number().optional(),
+    w: z.number().int().positive().optional(),
+    h: z.number().int().positive().optional(),
+    label: z.string().nullable().optional(),
+    group: z.string().nullable().optional(),
+  });
+
   mcp.registerTool(
     "update_frame",
     {
       description:
-        "Update a frame's position, size, label, or group on a given board. Pass `label: null` or `group: null` to clear.",
+        "Move/resize/relabel/regroup a frame on a board (`label: null` or `group: null` clears). One frame: pass `frameId` + `patch`. For many frames in one atomic write — single persist + broadcast + undo entry — pass `patches: [{ frameId, patch }]` instead (the same single-or-bulk shape as update_props).",
       inputSchema: {
         boardId: z.string(),
-        frameId: z.string(),
-        patch: z.object({
-          x: z.number().optional(),
-          y: z.number().optional(),
-          w: z.number().int().positive().optional(),
-          h: z.number().int().positive().optional(),
-          label: z.string().nullable().optional(),
-          group: z.string().nullable().optional(),
-        }),
-      },
-    },
-    async (args) => toMcp(await updateFrame(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "update_frames",
-    {
-      description:
-        "Atomic bulk frame update on one board — single persist + broadcast + history entry.",
-      inputSchema: {
-        boardId: z.string(),
+        frameId: z.string().optional(),
+        patch: FramePatchSchema.optional(),
         patches: z
-          .array(
-            z.object({
-              frameId: z.string(),
-              patch: z.object({
-                x: z.number().optional(),
-                y: z.number().optional(),
-                w: z.number().int().positive().optional(),
-                h: z.number().int().positive().optional(),
-                label: z.string().nullable().optional(),
-                group: z.string().nullable().optional(),
-              }),
-            }),
-          )
-          .min(1),
+          .array(z.object({ frameId: z.string(), patch: FramePatchSchema }))
+          .min(1)
+          .optional()
+          .describe("Bulk mode — mutually exclusive with frameId/patch"),
       },
     },
-    async (args) => toMcp(await updateFrames(ctx, args)),
+    async (args) => {
+      if (args.patches) {
+        // Merge a single frame edit into the bulk list rather than rejecting.
+        const patches =
+          args.frameId !== undefined && args.patch !== undefined
+            ? [{ frameId: args.frameId, patch: args.patch }, ...args.patches]
+            : args.patches;
+        return toMcp(await updateFrames(ctx, { boardId: args.boardId, patches }));
+      }
+      if (args.frameId === undefined || args.patch === undefined) {
+        return mutationErrorResult(
+          badRequest(singleOrBulkError.missing("update_frame", "frameId+patch", "patches")),
+        );
+      }
+      return toMcp(
+        await updateFrame(ctx, {
+          boardId: args.boardId,
+          frameId: args.frameId,
+          patch: args.patch,
+        }),
+      );
+    },
   );
 
   mcp.registerTool(
@@ -469,7 +463,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet",
     {
       description:
-        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast. To tweak ONE node's props inside the body without resending the whole tree, pass `innerPatch` (the definition-level counterpart of override_snippet_props — the change is shared by all instances); pass `tree` only for a full body replacement.",
+        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast. To tweak ONE node's props inside the body without resending the whole tree, pass `innerPatch` — the definition-level member of the prop-patch trio: update_props (a plain screen node), override_snippet_props (one instance's body), update_snippet innerPatch (this — the shared definition, every instance at once). Pass `tree` only for a full body replacement.",
       inputSchema: {
         snippetId: z.string(),
         patch: z.object({
@@ -478,12 +472,8 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
           tree: NodeSchema.optional(),
           innerPatch: z
             .object({
-              innerPath: z
-                .string()
-                .describe(
-                  '"@id" of a body node (preferred), dotted index path ("0.2"), or "" for root',
-                ),
-              propPatch: z.record(z.string(), z.unknown()),
+              innerPath: InnerPathSchema,
+              propPatch: PatchRecordSchema,
             })
             .optional()
             .describe("Patch one body node's props in place; null values remove keys"),
@@ -507,7 +497,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "instantiate_snippet",
     {
       description:
-        "Add a `$snippet` instance to a screen tree under parentPath. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` to patch interior body nodes for THIS instance only (the active nav item, a red badge) at placement — no follow-up `override_snippet_props` needed. Stamp a shared snippet on many screens, each with its own `overrides`.",
+        "Add a `$snippet` instance to a screen tree under parentPath. `args` must satisfy the snippet's declared params — pass every required param (check `list_snippets`/`get_snippet` first: each param reports name, type, and `required`). Omitting a required param or passing an undeclared key returns SnippetParamMismatch listing the offending names. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` to patch interior body nodes for THIS instance only (the active nav item, a red badge) at placement — no follow-up `override_snippet_props` needed. Stamp a shared snippet on many screens, each with its own `overrides`.",
       inputSchema: {
         screenId: z.string(),
         parentPath: PathSchema,
@@ -516,7 +506,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         args: z.record(z.string(), z.unknown()).optional(),
         extraClassName: z.string().optional(),
         overrides: z
-          .record(z.string(), z.object({ props: z.record(z.string(), z.unknown()) }))
+          .record(z.string(), z.object({ props: PatchRecordSchema }))
           .optional()
           .describe(
             'Per-instance interior prop patches, keyed by body-node selector: "@id" (preferred), a dotted index path like "0.2", or "" for the body root. e.g. {"@nav-dashboard": {"props": {"className": "bg-accent"}}}. Same field override_snippet_props patches on an already-placed instance.',

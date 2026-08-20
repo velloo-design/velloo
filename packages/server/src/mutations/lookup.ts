@@ -22,6 +22,7 @@ import {
   invalidPath,
   type MutationError,
   nearestRefs,
+  normalizeRef,
   screenNotFound,
   snippetNotFound,
   unknownComponent,
@@ -75,8 +76,21 @@ export function resolve(
 ): Result<number[], MutationError> {
   const path = resolveLocator(root, locator);
   if (path !== null) return ok(path);
-  if (isIdLocator(locator)) return err(idNotFound(screenId, locator.slice(1)));
-  return err(invalidPath(`No node at path ${JSON.stringify(locator)}`, locator as number[]));
+  if (isIdLocator(locator)) {
+    const id = locator.slice(1);
+    const hint =
+      id === "root"
+        ? `There is no node with id "root". The root node is the empty path []; tools like screenshot/compare_to_url treat the whole screen as the default when \`path\` is omitted.`
+        : undefined;
+    return err(idNotFound(screenId, id, hint));
+  }
+  return err(
+    invalidPath(
+      `No node at path ${JSON.stringify(locator)}`,
+      locator as number[],
+      `Numeric paths go stale after siblings are added, removed, or moved. Re-locate the node with find_nodes (it returns current paths + ids), or give it a stable @id via set_node_id and address it as "@id".`,
+    ),
+  );
 }
 
 /** True if any component node inside `node`'s subtree carries `$id === id`. */
@@ -156,7 +170,15 @@ export function getNode(
   const r = resolve(root, locator, screenId);
   if (!r.ok) return r;
   const n = pathAt(root, r.value);
-  return n ? ok(n) : err(invalidPath(`No node at path ${JSON.stringify(r.value)}`, r.value));
+  return n
+    ? ok(n)
+    : err(
+        invalidPath(
+          `No node at path ${JSON.stringify(r.value)}`,
+          r.value,
+          `Numeric paths go stale after siblings change. Re-locate with find_nodes or address by stable @id.`,
+        ),
+      );
 }
 
 export function getComponentNode(
@@ -237,6 +259,20 @@ export function ensureKnownComponent(
   if (ref in provider.registry) return ok(undefined);
   const extensions = getExtensions(ctx);
   if (ref in extensions) return ok(undefined);
+  // Common mix-up: a `$ref` that's actually a snippet — PascalCase "SiteHeader" for the
+  // kebab snippet "site-header". Snippets aren't components; point at the right tool.
+  const snippetMatch = [...ctx.folder.snippets.keys()].find(
+    (s) => normalizeRef(s) === normalizeRef(ref),
+  );
+  if (snippetMatch) {
+    return err(
+      unknownComponent(
+        ref,
+        [],
+        `"${ref}" is a snippet, not a library component. Place it with instantiate_snippet, or use a {"$snippet":"${snippetMatch}"} node — "$ref" is only for library components and registered extensions.`,
+      ),
+    );
+  }
   const known = [...Object.keys(provider.registry), ...Object.keys(extensions)];
   return err(unknownComponent(ref, nearestRefs(ref, known)));
 }

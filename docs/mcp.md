@@ -8,6 +8,16 @@ A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`
 
 ## Tool surface
 
+### Progressive disclosure
+
+The server advertises a lean **core** surface (the compose→verify→emit loop) and hides long-tail tool *families* until the agent asks for them, so fewer schemas sit in context and there are fewer ways to mis-select. A hidden tool is absent from `tools/list` and rejects calls.
+
+| Tool | Args | Notes |
+|---|---|---|
+| `reveal_tools` | `area: "theme-authoring" \| "lifecycle" \| "annotations-write" \| "all"` | Unlock a hidden family. Fires `tools/list_changed` (compliant clients re-fetch the larger list automatically) and returns the now-callable tool names + that family's guidance. Idempotent |
+
+Hidden families (default): **theme-authoring** (`add_theme`, `apply_preset`, `score_theme_contrast`, `list_themes`), **lifecycle** (the `remove_*` for boards/frames/groups/screens/snippets/extensions + `update_board`/`update_group`/`update_screen`/`update_extension`), **annotations-write** (`add_annotation`, `remove_annotation`). Everything else — including reads (`list_annotations`), node deletes (`remove_node`), frame edits (`update_frame`), `import_theme`, and `derive_palette_from_color` — stays core. Set `VELLOO_MCP_FLAT=1` to advertise every tool up front (for clients that don't honor `list_changed`).
+
 ### Discovery
 
 | Tool | Args | Returns |
@@ -84,8 +94,7 @@ Frames are placements of screens on a chosen board. Multiple frames of the same 
 | Tool | Args | Notes |
 |---|---|---|
 | `add_frame` | `boardId, screenId, x?, y?, w, h, label?, group?, id?` | Drop a frame for a screen at a given size + position on a specific board. Position defaults to a free spot on the board if `x`/`y` omitted |
-| `update_frame` | `boardId, frameId, patch` | Sparse: `x`, `y`, `w`, `h`, `label`, `group` (pass `null` to clear label/group) |
-| `update_frames` | `boardId, patches: [{ frameId, patch }]` | Atomic bulk update on a single board — single persist, single broadcast, single undo entry. Use when laying out many frames together |
+| `update_frame` | `boardId, frameId, patch` **or** `boardId, patches: [{ frameId, patch }]` | Sparse patch: `x`, `y`, `w`, `h`, `label`, `group` (pass `null` to clear label/group). Single-or-bulk like `update_props`: pass `patches` to lay out many frames in one atomic write (single persist, broadcast, undo entry) |
 | `remove_frame` | `boardId, frameId` | Removes the frame placement; the underlying screen is untouched |
 | `add_group` | `boardId, name, color?, id?` | Create a board group (visual tag for related frames — "marketing flow", "settings flow") |
 | `update_group` | `boardId, groupId, patch` | Sparse: `name`, `color` (pass `color: null` to clear) |
@@ -224,7 +233,7 @@ Server returns the standard MCP `initialize` response with concrete agent nudges
 - **Velloo is the design source; you are the bridge to code.** When asked to implement, call `emit_code` (per screen) or `emit_snippet` and write the real file in the user's stack — Velloo's output is IR, not finished JSX.
 - **Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`) over raw Tailwind palette colors so designs auto-flip under `screenshot mode: "dark"` and survive theme changes. Use raw palette only for *intentional* accent colors that should not theme-flip — and mark those nodes with `data-accent: "ok"` so `inspect_dark_diff` exempts them.
 - **`inspect_dark_diff` is a triage signal, not a gate.** Read the per-node `problems[]` and decide; the coverage number is a guide, not a target.
-- **Use `add_node`'s `children` array** to land whole subtrees in one call. The bulk forms (`update_props` with `patches`, `update_frames`) collapse N round-trips into one persist + one undo entry; `batch` covers multi-tool sequences atomically.
+- **Use `add_node`'s `children` array** to land whole subtrees in one call. The bulk forms (`update_props` / `update_frame` with `patches`) collapse N round-trips into one persist + one undo entry; `batch` covers multi-tool sequences atomically.
 - **Use `@id` locators** for anchors you reference more than once. Pass `id: "hero-cta"` to `add_node` / `instantiate_snippet`, or call `set_node_id` to retroactively name a node. Ids survive sibling insertions.
 - **Snippet instances are opaque.** Design for variation up-front: boolean params + `$if`, `enum` params for full-className swaps, `node` params for slot composition, `extraClassName` for one-off per-instance tweaks.
 - **Always call `render_snippet` after `add_snippet`** — `$param` wiring bugs and `$if` truthy-coercion mistakes are silent at definition time and only surface at instantiation.

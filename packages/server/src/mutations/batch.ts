@@ -91,8 +91,22 @@ const addNodeBatch: BatchFn = (ctx, args) => {
   const a = args as Record<string, unknown> & {
     props?: Record<string, unknown>;
     propPatch?: Record<string, unknown>;
+    children?: unknown;
   };
-  return addNode(ctx, { ...a, props: a.props ?? a.propPatch } as never);
+  // Batch dispatches past the MCP arg schema, so mirror add_node's jsonTolerant: parse a
+  // stringified `children` array (a common agent mistake) into a real array.
+  let children = a.children;
+  if (typeof children === "string") {
+    const t = children.trim();
+    if (t.startsWith("[") || t.startsWith("{")) {
+      try {
+        children = JSON.parse(t);
+      } catch {
+        /* leave as-is; addNode will reject with the props.children nudge */
+      }
+    }
+  }
+  return addNode(ctx, { ...a, props: a.props ?? a.propPatch, children } as never);
 };
 
 export const BATCH_TOOLS: Record<string, BatchFn> = {
@@ -323,6 +337,38 @@ export async function runBatch(
       }
     }
     ctx.folder.history.truncateUndoTo(undoDepth);
+  }
+
+  // Pre-flight: ≥2 numeric-path remove_node/move_node on the SAME screen is a footgun —
+  // each removal shifts later siblings' indices, so subsequent numeric paths miss and the
+  // whole atomic batch rolls back. Refuse upfront with an actionable message instead.
+  const isIndexPath = (p: unknown): boolean =>
+    Array.isArray(p) || (typeof p === "string" && p.trim().startsWith("["));
+  const indexEdits = new Map<string, number>();
+  for (const call of calls) {
+    if (call.tool !== "remove_node" && call.tool !== "move_node") continue;
+    const a = call.args as { screenId?: unknown; path?: unknown; fromPath?: unknown };
+    const p = a.path ?? a.fromPath;
+    if (typeof a.screenId === "string" && isIndexPath(p)) {
+      indexEdits.set(a.screenId, (indexEdits.get(a.screenId) ?? 0) + 1);
+    }
+  }
+  const footgun = [...indexEdits].find(([, n]) => n >= 2);
+  if (footgun) {
+    return {
+      completed: 0,
+      total: calls.length,
+      rolledBack: atomic,
+      results: [
+        {
+          tool: "batch",
+          ok: false,
+          error: badRequest(
+            `batch: ${footgun[1]} remove_node/move_node calls on screen "${footgun[0]}" use numeric paths. Indices shift as earlier siblings are removed, so later paths miss and the batch rolls back. Give each target a stable @id (set_node_id) and address it as "@id", or order removals deepest-index-first.`,
+          ),
+        },
+      ],
+    };
   }
 
   const results: BatchCallResult[] = [];

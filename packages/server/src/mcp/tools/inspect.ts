@@ -8,8 +8,7 @@ import {
   inspect,
   type MutationContext,
 } from "../../mutations/index.ts";
-
-const Locator = z.union([z.array(z.number().int().nonnegative()), z.string()]);
+import { PathSchema } from "./schemas.ts";
 
 export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
@@ -19,7 +18,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
         "Return SSR'd HTML, resolved className list, $ref, and resolved props for the node at path. Use this instead of guessing the rendered output. When path resolves to a snippet instance, pass innerPath to inspect a node *inside* the resolved body (args, $overrides, and $extraClassName applied) — omit it to inspect the body root.",
       inputSchema: {
         screenId: z.string(),
-        path: Locator,
+        path: PathSchema,
         innerPath: z
           .string()
           .optional()

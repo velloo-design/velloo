@@ -18,6 +18,17 @@ function jsonResult(value: unknown): { content: { type: "text"; text: string }[]
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
+/**
+ * Snippets mark a param required by the *absence* of `default`/`optional`. Agents reliably
+ * miss inferred-from-absence contracts, so surface it as an explicit `required` flag — this
+ * is the pre-call visibility that prevents the SnippetParamMismatch first-try failure.
+ */
+function withRequiredFlag<T extends { default?: unknown; optional?: boolean }>(
+  param: T,
+): T & { required: boolean } {
+  return { ...param, required: param.default === undefined && !param.optional };
+}
+
 interface ComponentSummary {
   id: string;
   category: ComponentDescriptor["category"];
@@ -253,14 +264,14 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_snippets",
     {
       description:
-        "List every snippet defined in design/snippets/. Returns { id, name, params } per entry.",
+        "List every snippet defined in design/snippets/. Returns { id, name, params } per entry; each param reports `name`, `type`, and `required` (true when it has no default and isn't optional). Read these before instantiate_snippet — passing the wrong set returns SnippetParamMismatch.",
       inputSchema: {},
     },
     async () => {
       const snippets = [...ctx.folder.snippets.entries()].map(([id, snippet]) => ({
         id,
         name: snippet.name,
-        params: snippet.params,
+        params: snippet.params.map(withRequiredFlag),
       }));
       return jsonResult({ snippets });
     },
@@ -269,7 +280,8 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "get_snippet",
     {
-      description: "Return the full JSON for a single snippet (id, name, params, body tree).",
+      description:
+        "Return the full JSON for a single snippet (id, name, params, body tree). Each param reports a derived `required` flag (no default and not optional).",
       inputSchema: { snippetId: z.string() },
     },
     async ({ snippetId }) => {
@@ -280,7 +292,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           content: [{ type: "text", text: `Snippet not found: ${snippetId}` }],
         };
       }
-      return jsonResult(snippet);
+      return jsonResult({ ...snippet, params: snippet.params.map(withRequiredFlag) });
     },
   );
 

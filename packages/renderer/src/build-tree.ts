@@ -17,7 +17,10 @@ import { cloneElement, createElement, Fragment, type ReactElement, type ReactNod
 
 export class UnknownComponentError extends Error {
   constructor(public readonly ref: string) {
-    super(`Unknown component $ref="${ref}". Not in the active component provider's registry.`);
+    super(
+      `Unknown component $ref="${ref}". Not in the active component provider's registry. ` +
+        `("$ref" is a library component or registered extension; for a snippet use a {"$snippet":"<id>"} node or instantiate_snippet.)`,
+    );
     this.name = "UnknownComponentError";
   }
 }

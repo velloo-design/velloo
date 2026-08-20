@@ -8,13 +8,13 @@ export type MutationError =
   | { kind: "BoardNotFound"; boardId: string }
   | { kind: "FrameNotFound"; boardId: string; frameId: string }
   | { kind: "GroupNotFound"; boardId: string; groupId: string }
-  | { kind: "UnknownComponent"; ref: string; suggestions: string[] }
-  | { kind: "InvalidPath"; reason: string; path?: number[] }
+  | { kind: "UnknownComponent"; ref: string; suggestions: string[]; hint?: string }
+  | { kind: "InvalidPath"; reason: string; path?: number[]; hint?: string }
   | { kind: "InvalidMove"; reason: string }
   | { kind: "LastScreen"; screenId: string }
   | { kind: "LastBoard"; boardId: string }
   | { kind: "ScreenInUse"; screenId: string; usage: { boardId: string; frameIds: string[] }[] }
-  | { kind: "ScreenIdConflict"; screenId: string }
+  | { kind: "ScreenIdConflict"; screenId: string; hint?: string }
   | { kind: "ScreenIdExhausted"; base: string }
   | { kind: "BoardIdConflict"; boardId: string }
   | { kind: "BoardIdExhausted"; base: string }
@@ -71,15 +71,21 @@ export const groupNotFound = (boardId: string, groupId: string): MutationError =
   boardId,
   groupId,
 });
-export const unknownComponent = (ref: string, suggestions: string[]): MutationError => ({
+export const unknownComponent = (
+  ref: string,
+  suggestions: string[],
+  hint?: string,
+): MutationError => ({
   kind: "UnknownComponent",
   ref,
   suggestions,
+  ...(hint !== undefined ? { hint } : {}),
 });
-export const invalidPath = (reason: string, path?: number[]): MutationError => ({
+export const invalidPath = (reason: string, path?: number[], hint?: string): MutationError => ({
   kind: "InvalidPath",
   reason,
   ...(path !== undefined ? { path } : {}),
+  ...(hint !== undefined ? { hint } : {}),
 });
 export const invalidMove = (reason: string): MutationError => ({
   kind: "InvalidMove",
@@ -104,6 +110,11 @@ export const screenInUse = (
 export const screenIdConflict = (screenId: string): MutationError => ({
   kind: "ScreenIdConflict",
   screenId,
+  hint:
+    `Screen "${screenId}" already exists (a route-scan may have scaffolded it as a placeholder). ` +
+    `Build into it instead: add_node / instantiate_snippet with screenId "${screenId}" (clear the ` +
+    `placeholder first with remove_node if needed). To replace it, remove_screen then add_screen. ` +
+    `To create a separate screen, omit \`id\` (add_screen auto-suffixes a unique one).`,
 });
 export const screenIdExhausted = (base: string): MutationError => ({
   kind: "ScreenIdExhausted",
@@ -278,9 +289,13 @@ export function levenshtein(a: string, b: string): number {
   return dp[bl] ?? 0;
 }
 
+/** Normalize for fuzzy matching: case- and separator-insensitive (SiteHeader ↔ site-header). */
+export const normalizeRef = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 export function nearestRefs(target: string, refs: string[], n = 3): string[] {
+  const t = normalizeRef(target);
   return refs
-    .map((r) => ({ r, d: levenshtein(target.toLowerCase(), r.toLowerCase()) }))
+    .map((r) => ({ r, d: levenshtein(t, normalizeRef(r)) }))
     .sort((a, b) => a.d - b.d)
     .slice(0, n)
     .map((x) => x.r);
