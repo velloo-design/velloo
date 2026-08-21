@@ -100,6 +100,28 @@ export interface RenderPass {
   css(html: string): string;
 }
 
+// --- canvas bundle (#18: render the project's actually-installed components) ---
+
+/**
+ * Declares how to bundle this framework's component set from the host app's
+ * `node_modules` into a self-contained browser module (`mountScreen`) so the
+ * canvas can client-render against the user's exact installed version. Pure
+ * data — the server's bundler reads it + the host root and runs `Bun.build`.
+ * Absent ⇒ the canvas uses in-process SSR (today's path) only.
+ */
+export interface CanvasBundleSpec {
+  /** Bare module the components import from, e.g. `@mui/material`. */
+  moduleBase: string;
+  /** Component ids imported as `<moduleBase>/<id>` (default export each). */
+  componentIds: string[];
+  /** Overlay ids the bundle renders via inline canvas-safe shims (Dialog/Menu/…). */
+  overlayIds: string[];
+  /** emotion cache key prefix (MUI uses `vmui`). */
+  emotionKey: string;
+  /** Module exporting `ThemeProvider` + `createTheme`, e.g. `@mui/material/styles`. */
+  stylesModule: string;
+}
+
 // --- the adapter ---
 
 export interface FrameworkAdapter extends ComponentProvider {
@@ -130,7 +152,12 @@ export interface FrameworkAdapter extends ComponentProvider {
    * globals.css path. Pairs with `codegenModule` for MUI-like frameworks.
    */
   themeToNative?(theme: Theme): unknown;
-  // theme import (the JS createTheme reader) and canvasBundle land in their phases.
+  /**
+   * How to bundle this framework's installed components for the canvas (#18).
+   * Present ⇒ the server can build a `mountScreen` bundle from the host's
+   * `node_modules` for an exact-installed-version client render; absent ⇒ SSR.
+   */
+  canvasBundleSpec?: CanvasBundleSpec;
 }
 
 /** The active style channel for a provider — defaults to Tailwind className when unspecified. */

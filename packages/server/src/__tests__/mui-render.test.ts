@@ -72,6 +72,41 @@ describe("MUI adapter SSR", () => {
     expect(mui.styleChannel?.needsTailwindJit).toBe(false);
   });
 
+  test("overlay components render open + inline (Dialog content is visible in SSR)", async () => {
+    const dialogScreen: Screen = {
+      id: "d",
+      name: "D",
+      tree: {
+        $ref: "Dialog",
+        props: { maxWidth: "sm" },
+        children: [
+          { $ref: "DialogTitle", props: { children: "Delete item?" } },
+          {
+            $ref: "DialogContent",
+            children: [{ $ref: "DialogContentText", props: { children: "This is permanent." } }],
+          },
+          {
+            $ref: "DialogActions",
+            children: [{ $ref: "Button", props: { variant: "contained", children: "Delete" } }],
+          },
+        ],
+      },
+    };
+    const { bodyHtml } = await renderScreen(dialogScreen, theme, {
+      viewport: { w: 800, h: 600 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(theme),
+    });
+    // The dialog surface + all its content render inline (no portal stripped it away).
+    expect(bodyHtml).toContain("MuiPaper-root");
+    expect(bodyHtml).toContain("Delete item?");
+    expect(bodyHtml).toContain("This is permanent.");
+    expect(bodyHtml).toContain("Delete");
+    // No fixed modal backdrop (the canvas-safe shim drops it).
+    expect(bodyHtml).not.toContain("MuiBackdrop-root");
+  });
+
   test("emits MUI-native code from the provider's codegenModule + manifest", async () => {
     // Mirrors what the emit_code tool's targetFor() builds for a MUI screen.
     expect(mui.codegenModule).toBe("@mui/material");

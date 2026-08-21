@@ -48,6 +48,13 @@ export function createProvider(): FrameworkAdapter {
     renderPass: (theme) => makeRenderPass(theme),
     codegenModule: "@mui/material",
     themeToNative: (theme) => muiThemeOptions(theme),
+    canvasBundleSpec: {
+      moduleBase: "@mui/material",
+      componentIds: Object.keys(registry),
+      overlayIds: ["Dialog", "Menu", "Popover", "Drawer", "Snackbar"],
+      emotionKey: "vmui",
+      stylesModule: "@mui/material/styles",
+    },
   };
 }
 

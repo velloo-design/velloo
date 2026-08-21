@@ -1,10 +1,11 @@
 import type { ComponentDescriptor, Manifest, PropDescriptor } from "@velloo/provider";
 
 /**
- * Hand-authored MUI manifest for the shipped registry. Deliberately small +
- * focused on the props an agent actually sets (variant/color/size, the `sx`
- * style channel, children). A ts-morph generator over MUI's `.d.ts` (Phase 3
- * follow-up) will widen this; the shape is the same so it's a drop-in.
+ * Hand-authored MUI manifest for the shipped registry — curated to the props an
+ * agent actually sets (variant/color/size, the `sx` style channel, children),
+ * which reads far better than a generated dump of MUI's vast type surface. A
+ * ts-morph `.d.ts` generator remains an option for breadth, but the curated
+ * manifest is the chosen default; this stays the source of truth.
  */
 
 const sx: PropDescriptor = {
@@ -159,4 +160,30 @@ export const MUI_MANIFEST: Manifest = [
     { name: "title", type: "ReactNode", optional: true, control: "string" },
   ]),
   ui("Alert", [children, enumProp("severity", ["success", "info", "warning", "error"], "success")]),
+
+  // Overlay surface — canvas-safe: rendered OPEN + inline in design mode (no
+  // portal/backdrop), so build the content directly inside them.
+  ui(
+    "Dialog",
+    [children, enumProp("maxWidth", ["xs", "sm", "md", "lg", "xl"], "sm")],
+    "Modal dialog surface — renders open + inline in design mode. Fill it with DialogTitle / DialogContent / DialogActions.",
+    { maxWidth: "sm" },
+  ),
+  ui("DialogTitle", [children], "The dialog's heading row."),
+  ui("DialogContent", [children], "The dialog's body."),
+  ui("DialogContentText", [children], "Secondary text inside DialogContent."),
+  ui("DialogActions", [children], "The dialog's button row (right-aligned)."),
+  ui(
+    "Menu",
+    [children],
+    "A menu surface holding MenuItems — renders open + inline in design mode.",
+  ),
+  ui("Popover", [children], "A popover surface — renders open + inline in design mode."),
+  ui("Drawer", [children], "A side panel — renders inline as a fixed-width column in design mode."),
+  ui(
+    "Snackbar",
+    [children, { name: "message", type: "ReactNode", optional: true, control: "string" }],
+    "A toast — renders inline as a dark pill in design mode. Use `message` or children.",
+    { message: "Saved" },
+  ),
 ];

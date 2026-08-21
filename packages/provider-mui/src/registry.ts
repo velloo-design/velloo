@@ -31,16 +31,29 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
+import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { ComponentRegistry } from "@velloo/provider";
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Drawer,
+  Menu,
+  Popover,
+  Snackbar,
+} from "./overlays.ts";
 
 /**
  * The runtime registry for MUI-native folders: design `$ref` ids → real MUI
- * components. SSR'd in-process via the adapter's emotion render pass. Overlay
- * components (Dialog/Menu/Popover/Tooltip/Snackbar) get canvas-safe wrappers
- * before they join this set; for now Tooltip is included as a passthrough (it
- * renders its child inline in SSR).
+ * components. SSR'd in-process via the adapter's emotion render pass. The
+ * overlay surface (Dialog/Menu/Popover/Drawer/Snackbar) is canvas-safe-wrapped
+ * in `overlays.ts` — rendered open + inline so a screenshot shows it; their
+ * sub-parts (DialogTitle/Content/Actions) are MUI's real inline components.
+ * Tooltip is a passthrough (it renders its child inline in SSR).
  */
 export const registry: ComponentRegistry = {
   Alert,
@@ -56,16 +69,25 @@ export const registry: ComponentRegistry = {
   Checkbox,
   Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
+  Drawer,
   IconButton,
   LinearProgress,
   Link,
   List,
   ListItem,
   ListItemText,
+  Menu,
   MenuItem,
   Paper,
+  Popover,
   Select,
+  Snackbar,
   Stack,
   Switch,
   Tab,
@@ -76,6 +98,7 @@ export const registry: ComponentRegistry = {
   TableRow,
   Tabs,
   TextField,
+  Toolbar,
   Tooltip,
   Typography,
 };
