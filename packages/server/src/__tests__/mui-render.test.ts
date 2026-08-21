@@ -72,6 +72,17 @@ describe("MUI adapter SSR", () => {
     expect(mui.styleChannel?.needsTailwindJit).toBe(false);
   });
 
+  test("catalog() reports every manifest component installed from @mui/material", async () => {
+    const catalog = (await mui.catalog?.()) ?? [];
+    expect(catalog.length).toBeGreaterThan(20);
+    const button = catalog.find((e) => e.id === "Button");
+    expect(button?.installed).toBe(true); // the whole MUI set is bundled
+    expect(button?.importPath).toBe("@mui/material");
+    expect(button?.renderStrategy).toBe("library");
+    // Every entry carries its descriptor (so list/install can show props).
+    expect(catalog.every((e) => e.descriptor.id === e.id)).toBe(true);
+  });
+
   test("overlay components render open + inline (Dialog content is visible in SSR)", async () => {
     const dialogScreen: Screen = {
       id: "d",

@@ -1,7 +1,12 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type FrameworkAdapter, type Manifest, SX_PROP } from "@velloo/provider";
+import {
+  catalogFromManifest,
+  type FrameworkAdapter,
+  type Manifest,
+  SX_PROP,
+} from "@velloo/provider";
 import { MUI_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { makeRenderPass } from "./render-pass.ts";
@@ -44,6 +49,8 @@ export function createProvider(): FrameworkAdapter {
     styleEntryPath: join(srcDir, "tailwind-entry.css"),
     registry,
     loadManifest: async (): Promise<Manifest> => MUI_MANIFEST,
+    // Every MUI component ships in the bundled `@mui/material` — all installed.
+    catalog: async () => catalogFromManifest(MUI_MANIFEST, { importPath: "@mui/material" }),
     styleChannel: SX_PROP,
     renderPass: (theme) => makeRenderPass(theme),
     codegenModule: "@mui/material",

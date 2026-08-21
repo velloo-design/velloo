@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Manifest } from "@velloo/provider";
+import { type Manifest, type StyleChannel, styleChannelOf } from "@velloo/provider";
 import { Hono } from "hono";
 import type { MutationContext } from "../mutations/index.ts";
 
@@ -22,11 +22,30 @@ async function loadManifestForCtx(ctx: MutationContext): Promise<Manifest> {
   }
 }
 
+export interface ComponentsResponse {
+  manifest: Manifest;
+  /** The default library's native style channel — drives the inspector's editor. */
+  styleChannel: StyleChannel;
+  /** Per-library channels (multi-library folders), so the inspector edits a screen in its library's channel. */
+  channelsByLibrary: Record<string, StyleChannel>;
+}
+
 export function createComponentsRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
 
   r.get("/", async (c) => {
-    return c.json(await loadManifestForCtx(ctxFor()));
+    const ctx = ctxFor();
+    const manifest = await loadManifestForCtx(ctx);
+    const channelsByLibrary: Record<string, StyleChannel> = {};
+    for (const [id, provider] of Object.entries(ctx.providers)) {
+      channelsByLibrary[id] = styleChannelOf(provider);
+    }
+    const body: ComponentsResponse = {
+      manifest,
+      styleChannel: styleChannelOf(ctx.defaultProvider),
+      channelsByLibrary,
+    };
+    return c.json(body);
   });
 
   return r;

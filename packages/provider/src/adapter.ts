@@ -66,6 +66,26 @@ export interface CatalogEntry {
   renderStrategy: RenderStrategy;
 }
 
+/**
+ * Default `catalog()`: derive one `CatalogEntry` per manifest component. The
+ * shipped adapters bundle their whole component set, so every entry is
+ * `installed: true` from one `importPath` (MUI: `@mui/material`). An adapter
+ * whose components install incrementally (shadcn-upstream's per-component fetch)
+ * overrides this to report real installed-status + offer `installComponent`.
+ */
+export function catalogFromManifest(
+  manifest: ComponentDescriptor[],
+  opts: { importPath: string; installed?: boolean; renderStrategy?: RenderStrategy },
+): CatalogEntry[] {
+  return manifest.map((descriptor) => ({
+    id: descriptor.id,
+    descriptor,
+    installed: opts.installed ?? true,
+    importPath: opts.importPath,
+    renderStrategy: opts.renderStrategy ?? "library",
+  }));
+}
+
 // --- install / provisioning ---
 
 /** Where a framework's components are installed: the host app, or a velloo-only cache. */

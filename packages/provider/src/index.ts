@@ -1,6 +1,7 @@
 export {
   type CanvasBundleSpec,
   type CatalogEntry,
+  catalogFromManifest,
   type FrameworkAdapter,
   type InstallCtx,
   type InstallResult,

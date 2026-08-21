@@ -1,4 +1,4 @@
-import type { Manifest } from "@velloo/provider";
+import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Screen, Snippet, SnippetParam, Theme, ViewportPreset } from "@velloo/schema";
 import type { AnnotationEntry, CanvasNoteEntry } from "../store.ts";
 import type { MutateError } from "./http.ts";
@@ -94,7 +94,13 @@ export async function fetchNotes(boardId: string): Promise<CanvasNoteEntry[]> {
   return body.notes;
 }
 
-export function fetchComponents(): Promise<Manifest> {
+export interface ComponentsResponse {
+  manifest: Manifest;
+  styleChannel: StyleChannel;
+  channelsByLibrary: Record<string, StyleChannel>;
+}
+
+export function fetchComponents(): Promise<ComponentsResponse> {
   return getJson("/api/components", "fetchComponents");
 }
 

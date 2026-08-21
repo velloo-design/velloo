@@ -8,6 +8,7 @@ import { CopyField } from "./CopyField.tsx";
 import { IdField } from "./IdField.tsx";
 import { PropField } from "./PropField.tsx";
 import { SnippetInspector } from "./SnippetInspector.tsx";
+import { SxField } from "./SxField.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
@@ -18,6 +19,8 @@ export function Inspector() {
   const selection = useCanvas((s) => s.selection);
   const components = useCanvas((s) => s.components);
   const screens = useCanvas((s) => s.screens);
+  const styleChannel = useCanvas((s) => s.styleChannel);
+  const channelsByLibrary = useCanvas((s) => s.channelsByLibrary);
   const loadComponents = useCanvas((s) => s.loadComponents);
 
   useEffect(() => {
@@ -74,6 +77,17 @@ export function Inspector() {
     }, DEBOUNCE_MS);
   };
 
+  // The active library's native style channel drives the editor: Tailwind
+  // classes (shadcn / no-lib) vs an `sx` / `style` object (MUI). Resolve it for
+  // the selected screen's library, falling back to the folder default.
+  const screenLibrary = screens[selection.screenId]?.library;
+  const channel = (screenLibrary ? channelsByLibrary[screenLibrary] : undefined) ?? styleChannel;
+  const channelProp = channel?.prop ?? "className";
+  const isObjectChannel = channel?.kind === "sx" || channel?.kind === "style";
+  // Hide the channel prop from the generic prop list — it's edited below by the
+  // dedicated field (so a MUI node's `sx` doesn't also show as a raw string prop).
+  const hiddenProps = new Set([...HIDDEN_PROPS, channelProp]);
+
   const selectionKey = `${selection.screenId}:${selection.path}`;
   const initialClasses =
     typeof node.props?.className === "string" ? (node.props.className as string) : "";
@@ -110,11 +124,11 @@ export function Inspector() {
           />
         ) : null}
 
-        {descriptor && descriptor.props.filter((p) => !HIDDEN_PROPS.has(p.name)).length > 0 ? (
+        {descriptor && descriptor.props.filter((p) => !hiddenProps.has(p.name)).length > 0 ? (
           <section className="flex flex-col gap-3">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Props</div>
             {descriptor.props
-              .filter((p) => !HIDDEN_PROPS.has(p.name))
+              .filter((p) => !hiddenProps.has(p.name))
               .map((p) => (
                 <PropField
                   key={`${selectionKey}:${p.name}`}
@@ -126,13 +140,29 @@ export function Inspector() {
           </section>
         ) : null}
 
-        <ClassesField
-          key={`${selectionKey}:className`}
-          initialValue={initialClasses}
-          screenId={selection.screenId}
-          path={selection.path}
-          debounceMs={DEBOUNCE_MS}
-        />
+        {isObjectChannel ? (
+          <SxField
+            key={`${selectionKey}:${channelProp}`}
+            initialValue={
+              node.props?.[channelProp] && typeof node.props[channelProp] === "object"
+                ? (node.props[channelProp] as Record<string, unknown>)
+                : undefined
+            }
+            prop={channelProp}
+            label={channel?.editorLabel ?? "style"}
+            screenId={selection.screenId}
+            path={selection.path}
+            debounceMs={DEBOUNCE_MS}
+          />
+        ) : (
+          <ClassesField
+            key={`${selectionKey}:className`}
+            initialValue={initialClasses}
+            screenId={selection.screenId}
+            path={selection.path}
+            debounceMs={DEBOUNCE_MS}
+          />
+        )}
       </div>
     </div>
   );

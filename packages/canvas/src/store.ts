@@ -1,4 +1,4 @@
-import type { Manifest } from "@velloo/provider";
+import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Node, Screen, Theme } from "@velloo/schema";
 import { create } from "zustand";
 import {
@@ -64,6 +64,10 @@ export interface CanvasState {
   currentScreenId: string | null;
   screenVersion: number;
   components: Manifest | null;
+  /** Default library's native style channel — drives the inspector's style editor. */
+  styleChannel: StyleChannel | null;
+  /** Per-library channels, so a multi-library folder edits each screen in its own channel. */
+  channelsByLibrary: Record<string, StyleChannel>;
   theme: Theme | null;
   themeVersion: number;
   presets: string[];
@@ -183,6 +187,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   currentScreenId: null,
   screenVersion: 0,
   components: null,
+  styleChannel: null,
+  channelsByLibrary: {},
   // ── state: theme ─────────────────────────────────────────────
   theme: null,
   themeVersion: 0,
@@ -259,7 +265,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   async loadComponents() {
     if (get().components) return;
-    set({ components: await fetchComponents() });
+    const { manifest, styleChannel, channelsByLibrary } = await fetchComponents();
+    set({ components: manifest, styleChannel, channelsByLibrary });
   },
 
   async loadTheme() {

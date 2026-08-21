@@ -21,6 +21,7 @@ import {
 } from "./tiers.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
+import { registerCatalogTools } from "./tools/catalog.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
@@ -176,6 +177,7 @@ function buildMcpServer(
   registerScreenshotTool(mcp, ctx, jit, bundler, assetOrigin);
   registerValidateTools(mcp, ctx, jit);
   registerExtensionTools(mcp, ctx);
+  registerCatalogTools(mcp, ctx);
   registerNoteTools(mcp, ctx);
   registerAssetTools(mcp, ctx);
   registerBatchTool(mcp, ctx);
