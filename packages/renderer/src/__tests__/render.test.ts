@@ -131,6 +131,34 @@ describe("renderScreen", () => {
     expect(html).not.toContain("__VELLOO_LIVE_BUNDLE_URL__");
   });
 
+  test("canvasBundle wraps the SSR body + embeds the resolved tree + mount runtime", async () => {
+    const screen = screenWith({ $ref: "Button", props: { children: "Go" } });
+    const { html } = await renderScreen(screen, sampleTheme, {
+      ...opts,
+      canvasBundle: {
+        url: "/api/canvas/bundle.js?v=2",
+        themeOptions: { palette: { mode: "light" } },
+      },
+    });
+    // SSR body (the fallback) is wrapped so the runtime can hide it on success.
+    expect(html).toContain('id="velloo-ssr"');
+    expect(html).toContain("Go"); // the SSR content still rendered
+    // The resolved tree + theme are embedded for the client interpreter.
+    expect(html).toContain('id="velloo-canvas-data"');
+    expect(html).toContain('"ref":"Button"');
+    // The mount runtime + interpolated bundle URL are present.
+    expect(html).toContain("window.__velloo_canvas");
+    expect(html).toContain('"/api/canvas/bundle.js?v=2"');
+    expect(html).not.toContain("__VELLOO_CANVAS_BUNDLE_URL__");
+  });
+
+  test("no canvasBundle ⇒ no #velloo-ssr wrapper or mount runtime (SSR unchanged)", async () => {
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, sampleTheme, opts);
+    expect(html).not.toContain("velloo-ssr");
+    expect(html).not.toContain("__velloo_canvas");
+  });
+
   test("throws UnknownComponentError on bad $ref", async () => {
     const screen = screenWith({ $ref: "Definitely-Not-A-Component", props: {} });
     await expect(renderScreen(screen, sampleTheme, opts)).rejects.toBeInstanceOf(

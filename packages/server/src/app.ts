@@ -42,7 +42,7 @@ export function createApp(
   app.route("/api/screen", createScreenRouter(folder));
   app.route("/api/board", createBoardRouter(folder));
   app.route("/api/snippets", createSnippetsRouter(folder));
-  app.route("/api/render", createRenderRouter(ctxFor, jit, bundler));
+  app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/live", createLiveRouter(bundler));
   app.route("/api/canvas", createCanvasRouter(canvasBundler));
   app.route("/api/components", createComponentsRouter(ctxFor));

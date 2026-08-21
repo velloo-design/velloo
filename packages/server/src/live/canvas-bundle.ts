@@ -123,10 +123,16 @@ function buildCanvasEntry(opts: {
   components: { id: string; path: string }[];
   overlayIds: string[];
 }): string {
+  // Namespace-import + `pick`: a MUI subpath's component is its *default* export,
+  // but CJS/ESM interop can wrap it as `{ default: Comp }` — a plain default
+  // import then yields the wrapper object, which React rejects (error #130). pick
+  // unwraps it (mirrors bundle-core).
   const imports = opts.components
-    .map((c, i) => `import __c${i} from ${JSON.stringify(c.path)};`)
+    .map((c, i) => `import * as __m${i} from ${JSON.stringify(c.path)};`)
     .join("\n");
-  const registry = opts.components.map((c, i) => `  ${JSON.stringify(c.id)}: __c${i},`).join("\n");
+  const registry = opts.components
+    .map((c, i) => `  ${JSON.stringify(c.id)}: pick(__m${i}, ${JSON.stringify(c.id)}),`)
+    .join("\n");
   return `import * as React from ${JSON.stringify(opts.reactPath)};
 import { createRoot } from ${JSON.stringify(opts.reactDomClientPath)};
 import createCache from ${JSON.stringify(opts.emotionCachePath)};
@@ -134,6 +140,19 @@ import { CacheProvider } from ${JSON.stringify(opts.emotionReactPath)};
 import { ThemeProvider, createTheme } from ${JSON.stringify(opts.stylesPath)};
 ${imports}
 
+// Drill through CJS/ESM interop layers to the component: a MUI subpath can
+// double-wrap (\`import * as m\` → m.default is the whole module.exports, whose
+// own .default is the component). Stop at a function or a forwardRef/memo object.
+function pick(mod, id) {
+  var v = mod;
+  for (var i = 0; i < 4; i++) {
+    if (typeof v === "function" || (v && v.$$typeof)) return v;
+    if (v && typeof v === "object" && v[id] && (typeof v[id] === "function" || v[id].$$typeof)) return v[id];
+    if (v && typeof v === "object" && v.default !== undefined) { v = v.default; continue; }
+    break;
+  }
+  return v;
+}
 var registry = {
 ${registry}
 };
@@ -187,13 +206,30 @@ function build(node) {
   return el(Comp, props, kids);
 }
 
+// On a render error anywhere in the tree, signal the host so it restores the SSR
+// content — a broken installed-component mount is never worse than today's SSR.
+class ErrorBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(e) { if (this.props.onError) this.props.onError(e); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+function Ready(props) {
+  React.useEffect(function () { if (props.onReady) props.onReady(); }, []);
+  return null;
+}
+
 export function mountScreen(opts) {
   var cache = createCache({ key: ${JSON.stringify(opts.emotionKey)}, prepend: true });
   var theme = createTheme(opts.themeOptions || {});
   var root = createRoot(opts.el);
   root.render(
-    React.createElement(CacheProvider, { value: cache },
-      React.createElement(ThemeProvider, { theme: theme }, build(opts.tree))),
+    React.createElement(ErrorBoundary, { onError: opts.onError },
+      React.createElement(CacheProvider, { value: cache },
+        React.createElement(ThemeProvider, { theme: theme },
+          React.createElement(React.Fragment, null,
+            build(opts.tree),
+            React.createElement(Ready, { onReady: opts.onReady }))))),
   );
   return root;
 }

@@ -10,6 +10,7 @@ import {
 import { renderToString } from "react-dom/server";
 import { buildRoot } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
+import { serializeTree } from "./serialize-tree.ts";
 import { themeToCss } from "./theme-to-css.ts";
 
 // The render-pass contract lives in @velloo/provider (the adapter owns it); re-exported
@@ -64,6 +65,14 @@ export interface RenderOptions {
    * Tailwind-class frameworks (shadcn / no-lib) — the SSR path is unchanged.
    */
   renderPass?: RenderPass;
+  /**
+   * Framework-native canvas bundle (#18): the installed-component `mountScreen`
+   * URL + native theme options. When set, the document embeds the resolved tree
+   * + this, and the canvas runtime client-mounts the exact installed version
+   * over the SSR (which stays as the fallback). The SSR still runs — so a build
+   * miss or mount failure is invisible.
+   */
+  canvasBundle?: { url: string; themeOptions: unknown };
 }
 
 /**
@@ -90,6 +99,17 @@ export async function renderScreen(
   const adapterCss = pass ? pass.css(bodyHtml) : undefined;
   const themeCss = themeToCss(theme);
 
+  // Resolve the screen to plain JSON for the client mount only when a bundle is
+  // supplied; null (an unresolvable tree) drops back to SSR-only cleanly.
+  const canvasBundle = options.canvasBundle
+    ? (() => {
+        const tree = serializeTree(screen.tree, { snippets: options.snippets });
+        return tree
+          ? { url: options.canvasBundle.url, tree, themeOptions: options.canvasBundle.themeOptions }
+          : undefined;
+      })()
+    : undefined;
+
   const html = buildDocument({
     viewport: options.viewport,
     bodyHtml,
@@ -102,6 +122,7 @@ export async function renderScreen(
     title: screen.name,
     dark: options.dark,
     liveBundleUrl: options.liveBundleUrl,
+    canvasBundle,
   });
 
   return { html, bodyHtml, themeCss };

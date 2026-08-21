@@ -1,4 +1,5 @@
 import type { Viewport } from "@velloo/schema";
+import { CANVAS_RUNTIME } from "./canvas-runtime.ts";
 import { IFRAME_RUNTIME } from "./iframe-runtime.ts";
 import { LIVE_RUNTIME } from "./live-runtime.ts";
 
@@ -38,6 +39,13 @@ export interface DocumentOptions {
    * injects the client mount runtime that fills the SSR markers.
    */
   liveBundleUrl?: string;
+  /**
+   * Framework-native canvas bundle (#18): the installed-component `mountScreen`
+   * URL + the resolved screen tree + native theme options. When set, the SSR
+   * body is wrapped in `#velloo-ssr` and the canvas runtime client-mounts the
+   * exact installed version over it (restoring the SSR on any failure).
+   */
+  canvasBundle?: { url: string; tree: unknown; themeOptions: unknown };
 }
 
 /**
@@ -59,11 +67,19 @@ export function buildDocument(opts: DocumentOptions): string {
     includeRuntime = true,
     dark,
     liveBundleUrl,
+    canvasBundle,
   } = opts;
   const runtime = includeRuntime ? `<script>${IFRAME_RUNTIME}</script>` : "";
   const live = liveBundleUrl
     ? `<script>${LIVE_RUNTIME.replace("__VELLOO_LIVE_BUNDLE_URL__", JSON.stringify(liveBundleUrl))}</script>`
     : "";
+  // The installed-component client mount (#18): the SSR body becomes the
+  // fallback inside #velloo-ssr; the runtime mounts the bundle over it.
+  const canvas = canvasBundle
+    ? `<script type="application/json" id="velloo-canvas-data">${jsonForScript({ tree: canvasBundle.tree, themeOptions: canvasBundle.themeOptions })}</script>` +
+      `<script>${CANVAS_RUNTIME.replace("__VELLOO_CANVAS_BUNDLE_URL__", JSON.stringify(canvasBundle.url))}</script>`
+    : "";
+  const body = canvasBundle ? `<div id="velloo-ssr">${bodyHtml}</div>` : bodyHtml;
   const fontLinks =
     googleFonts && googleFonts.length > 0
       ? // Entries are already in css2 `family=` value syntax (spaces as `+`,
@@ -96,8 +112,13 @@ export function buildDocument(opts: DocumentOptions): string {
     <style>${snapshotCss}</style>
     <style>${themeCss}</style>${adapterStyle}${customStyle}
   </head>
-  <body ${antiAutofill}>${bodyHtml}${runtime}${live}</body>
+  <body ${antiAutofill}>${body}${runtime}${live}${canvas}</body>
 </html>`;
+}
+
+/** JSON safe to inline in a `<script>` — escape `<` so `</script>` can't break out. */
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
 function escapeHtml(s: string): string {

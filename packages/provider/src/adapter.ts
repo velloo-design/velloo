@@ -151,7 +151,7 @@ export interface FrameworkAdapter extends ComponentProvider {
    * it to the native theme artifact (`emitMuiTheme`). Absent ⇒ the Tailwind
    * globals.css path. Pairs with `codegenModule` for MUI-like frameworks.
    */
-  themeToNative?(theme: Theme): unknown;
+  themeToNative?(theme: Theme, dark?: boolean): unknown;
   /**
    * How to bundle this framework's installed components for the canvas (#18).
    * Present ⇒ the server can build a `mountScreen` bundle from the host's

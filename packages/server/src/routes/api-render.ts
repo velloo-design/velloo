@@ -1,12 +1,14 @@
+import type { FrameworkAdapter } from "@velloo/provider";
 import { renderScreen, resolveSnippetBodyForEdit, UnknownComponentError } from "@velloo/renderer";
-import type { Node, Screen, Viewport } from "@velloo/schema";
+import type { Node, Screen, Theme, Viewport } from "@velloo/schema";
 import { Hono } from "hono";
 import { themeByName } from "../design-folder.ts";
 import { buildShowcaseTree } from "../library/showcases.ts";
+import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import { liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
-import { registryForScreen, renderPassForScreen } from "../mutations/lookup.ts";
+import { providerForScreen, registryForScreen, renderPassForScreen } from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -19,6 +21,7 @@ export function createRenderRouter(
   ctxFor: () => MutationContext,
   jit: TailwindJit,
   bundler: LiveBundler,
+  canvasBundler: CanvasBundler,
 ): Hono {
   const r = new Hono();
 
@@ -31,6 +34,29 @@ export function createRenderRouter(
     Object.keys(liveExtensions(ctx.folder.config.extensions)).length > 0
       ? `/api/live/bundle.js?v=${bundler.version}`
       : undefined;
+
+  /**
+   * The framework-native canvas bundle wiring for a screen (#18): the
+   * installed-component `mountScreen` URL + native theme options, or undefined
+   * when the screen's adapter declares no `canvasBundleSpec` OR the build
+   * failed (framework not installed) — both keep the canvas on SSR. Awaits the
+   * (cached) build so a build miss never embeds a dead bundle URL.
+   */
+  const canvasBundleFor = async (
+    ctx: MutationContext,
+    screen: Pick<Screen, "library">,
+    theme: Theme,
+    dark: boolean,
+  ): Promise<{ url: string; themeOptions: unknown } | undefined> => {
+    const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
+    if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
+    const { errors } = await canvasBundler.build();
+    if (errors.length > 0) return undefined;
+    return {
+      url: `/api/canvas/bundle.js?v=${canvasBundler.version}`,
+      themeOptions: provider.themeToNative(theme, dark),
+    };
+  };
 
   /**
    * Render a snippet in isolation as live HTML. Wraps the snippet in a
@@ -267,6 +293,7 @@ export function createRenderRouter(
       const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
       const theme = themeByName(f, c.req.query("theme"));
+      const canvasBundle = await canvasBundleFor(ctx, screen, theme, dark);
       const { html } = await renderScreen(screen, theme, {
         viewport,
         snapshotCss,
@@ -276,6 +303,7 @@ export function createRenderRouter(
         customCss: f.customCss,
         dark,
         liveBundleUrl: liveBundleUrl(ctx),
+        ...(canvasBundle ? { canvasBundle } : {}),
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
     } catch (err) {
