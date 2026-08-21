@@ -46,6 +46,22 @@ describe("detectHost uiLibrary", () => {
 
   test("neither ⇒ undefined (caller keeps the default library)", async () => {
     await writePkg({ react: "19.2.6" });
-    expect(detectHost(tmp).uiLibrary).toBeUndefined();
+    const d = detectHost(tmp);
+    expect(d.uiLibrary).toBeUndefined();
+    expect(d.unsupportedUi).toBeUndefined();
+  });
+
+  test("a Chakra app ⇒ unsupportedUi (no supported lib) for the no-framework fallback", async () => {
+    await writePkg({ "@chakra-ui/react": "^2.8.0", react: "19.2.6" });
+    const d = detectHost(tmp);
+    expect(d.uiLibrary).toBeUndefined();
+    expect(d.unsupportedUi).toBe("Chakra UI");
+  });
+
+  test("a supported lib suppresses the unsupported signal", async () => {
+    await writePkg({ "@mui/material": "^6", "@chakra-ui/react": "^2", react: "19.2.6" });
+    const d = detectHost(tmp);
+    expect(d.uiLibrary).toBe("mui");
+    expect(d.unsupportedUi).toBeUndefined();
   });
 });

@@ -39,6 +39,14 @@ export interface DetectedHost {
    * neither, so the caller keeps the explicit/default library.
    */
   uiLibrary?: "shadcn" | "mui";
+  /**
+   * A UI framework velloo doesn't adapt yet (Chakra, Mantine, Ant Design, …),
+   * by display name. Set only when no supported framework was found. The scan
+   * flow falls back to the no-framework adapter (div-backed primitives) — the
+   * agent approximates the app's components and preserves their real imports
+   * via `$emitAs`. Undefined ⇒ no unsupported framework detected.
+   */
+  unsupportedUi?: string;
 }
 
 export interface WizardAnswers {

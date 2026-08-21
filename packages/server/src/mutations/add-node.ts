@@ -15,6 +15,13 @@ export interface AddNodeArgs {
   props?: Record<string, unknown>;
   children?: Node[];
   index?: number;
+  /**
+   * Mark this node a host-component facade: the canvas renders the subtree you
+   * build here (your approximation of a scanned app component), but `emit_code`
+   * emits `<name />` from `importPath` instead — preserving the app's real
+   * component. See ComponentNode.$emitAs.
+   */
+  emitAs?: { name: string; importPath: string };
 }
 
 export interface AddNodeResult {
@@ -51,6 +58,7 @@ export async function addNode(
       ...(args.id !== undefined ? { $id: args.id } : {}),
       ...(args.props ? { props: args.props } : {}),
       ...(args.children ? { children: args.children } : {}),
+      ...(args.emitAs ? { $emitAs: args.emitAs } : {}),
     };
     parent.children.splice(idx, 0, newNode);
 

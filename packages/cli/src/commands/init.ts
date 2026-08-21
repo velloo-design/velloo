@@ -673,10 +673,21 @@ export default defineCommand({
       // The "existing project" flow: when the user didn't pin a library, adopt
       // the framework the app actually uses so the scan renders + emits in the
       // host's framework (a MUI app → the MUI adapter), not a default mismatch.
+      // An unsupported framework (Chakra/Mantine/…) → the no-framework adapter:
+      // the agent approximates with div-backed primitives + preserves real
+      // imports via $emitAs.
       if (!cliArgs.library && answers.detected.uiLibrary) {
         answers.library = answers.detected.uiLibrary === "mui" ? "mui" : "shadcn-react";
         answers.source = "binary";
         console.log(pc.dim(`  Detected ${answers.detected.uiLibrary} — using that library.`));
+      } else if (!cliArgs.library && answers.detected.unsupportedUi) {
+        answers.library = "none";
+        answers.source = "binary";
+        console.log(
+          pc.dim(
+            `  Detected ${answers.detected.unsupportedUi} (no velloo adapter yet) — using the no-framework adapter; approximate its components and preserve their imports with emit-as.`,
+          ),
+        );
       }
     }
 

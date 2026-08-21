@@ -132,6 +132,31 @@ describe("mutation happy path", () => {
     expect(events.every((e) => e.type === "screen-changed")).toBe(true);
   });
 
+  test("add_node emitAs sets a host facade — emit_code emits the real import", async () => {
+    const added = unwrap(
+      await addNode(ctx, {
+        screenId: "landing",
+        parentPath: [],
+        componentRef: "Card",
+        props: { className: "rounded border" },
+        children: [{ $ref: "Text", props: { children: "approx rows" } }],
+        emitAs: { name: "DataTable", importPath: "@/components/data-table" },
+      }),
+    );
+    const screen = folder.screens.get("landing");
+    if (!screen) throw new Error("no screen");
+    const node = isComponentNode(screen.tree)
+      ? screen.tree.children?.[added.path.at(-1) ?? 0]
+      : null;
+    expect(node && isComponentNode(node) ? node.$emitAs : undefined).toEqual({
+      name: "DataTable",
+      importPath: "@/components/data-table",
+    });
+    const ir = unwrap(await emitCode(screen));
+    expect(ir.jsx).toContain("<DataTable />");
+    expect(ir.jsx).not.toContain("approx rows");
+  });
+
   test("add_node rejects an unknown component ref", async () => {
     const r = await addNode(ctx, {
       screenId: "landing",

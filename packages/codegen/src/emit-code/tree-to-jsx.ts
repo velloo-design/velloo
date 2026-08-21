@@ -147,6 +147,16 @@ function renderComponent(
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
+  // Host-component facade: the canvas rendered this node's approximation subtree,
+  // but codegen emits the app's real component import instead (identity preserved
+  // through scan → design → emit). Bare `<Name />` — the data-bound props live in
+  // the app, not the design. See ComponentNode.$emitAs.
+  const emitAs = node.$emitAs;
+  if (emitAs) {
+    ctx.imports.addBare(emitAs.importPath, emitAs.name);
+    return ok(`${ctx.indent(depth)}<${emitAs.name} />`);
+  }
+
   type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean };
   // A framework target (MUI) wins over the shadcn REGISTRY: a MUI screen's
   // `Card`/`Box` must resolve to `@mui/material`, not the shadcn primitive of

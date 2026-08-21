@@ -59,13 +59,34 @@ export function detectHost(appRoot: string): DetectedHost {
       ? "shadcn"
       : undefined;
 
+  // A UI framework velloo doesn't adapt — only relevant when no supported one
+  // was found, so the scan can fall back to the no-framework (div) adapter.
+  const unsupportedUi = uiLibrary ? undefined : detectUnsupportedUi(deps);
+
   return {
     shadcn,
     shadcnStyle,
     tailwindMajor,
     globalsCssPath: findGlobalsCss(appRoot, componentsJson),
     ...(uiLibrary ? { uiLibrary } : {}),
+    ...(unsupportedUi ? { unsupportedUi } : {}),
   };
+}
+
+/** Known UI frameworks velloo has no adapter for → display name, or undefined. */
+function detectUnsupportedUi(deps: Record<string, unknown>): string | undefined {
+  const known: Array<[string, string]> = [
+    ["@chakra-ui/react", "Chakra UI"],
+    ["@mantine/core", "Mantine"],
+    ["antd", "Ant Design"],
+    ["@ant-design/web3", "Ant Design"],
+    ["@nextui-org/react", "NextUI"],
+    ["@heroui/react", "HeroUI"],
+    ["react-bootstrap", "React Bootstrap"],
+    ["@fluentui/react-components", "Fluent UI"],
+  ];
+  for (const [pkg, label] of known) if (depRange(deps, pkg)) return label;
+  return undefined;
 }
 
 /** Best-effort location of the host's global stylesheet (the theme source). */

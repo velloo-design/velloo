@@ -75,6 +75,12 @@ const DECLARED = declaredVersions();
 // never want its absence to fail `npm install velloo`.
 const OPTIONAL = new Set(["playwright-core"]);
 
+// Peer deps that externalized packages require at runtime but the bundle never
+// imports directly, so the import-scanning externalizer wouldn't see them. MUI
+// (@mui/styled-engine) requires @emotion/styled even though velloo's code only
+// uses @emotion/react/cache/server — without this it's missing from the install.
+const FORCED_DEPS = ["@emotion/styled"];
+
 function step(msg: string): void {
   console.log(`\x1b[36m▸\x1b[0m ${msg}`);
 }
@@ -231,6 +237,7 @@ for (const { pkg, paths } of PKG_ASSETS) {
 step("writing dist/package.json");
 const dependencies: Record<string, string> = {};
 const optionalDependencies: Record<string, string> = {};
+for (const pkg of FORCED_DEPS) externals.add(pkg);
 for (const pkg of [...externals].sort()) {
   const target = OPTIONAL.has(pkg) ? optionalDependencies : dependencies;
   target[pkg] = installedVersion(pkg);

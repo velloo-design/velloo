@@ -30,6 +30,16 @@ export type ComponentNode = {
   $id?: string;
   props?: Record<string, unknown>;
   children?: Node[];
+  /**
+   * Host-component facade (framework-native scan/import — see
+   * docs/framework-native.md). When set, the canvas renders this node's real
+   * velloo subtree (the design agent's faithful approximation of a scanned app
+   * component it can't map to a primitive — SSR-only, data-bound, bespoke), but
+   * `emit_code` emits `<name />` imported from `importPath` *instead* of the
+   * subtree — preserving the app's real component identity through
+   * capture → design → emit. Absent ⇒ the node emits as itself.
+   */
+  $emitAs?: { name: string; importPath: string };
 };
 
 export type SnippetInstance = {
@@ -104,6 +114,11 @@ function wrapScalarChild(item: string | number | Node): Node {
   return item;
 }
 
+const EmitAsSchema = z.object({
+  name: z.string().min(1),
+  importPath: z.string().min(1),
+});
+
 const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
   z.object({
     $ref: z.string().min(1),
@@ -113,6 +128,7 @@ const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
       .array(z.union([z.string(), z.number(), NodeSchema]))
       .transform((items) => items.map(wrapScalarChild))
       .optional(),
+    $emitAs: EmitAsSchema.optional(),
   }),
 );
 

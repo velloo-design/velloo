@@ -97,6 +97,12 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         // the `props.children` nudge instead of the SDK's opaque "expected array".
         children: jsonTolerant(z.union([z.array(NodeSchema), z.string(), z.number()])).optional(),
         index: z.number().int().nonnegative().optional(),
+        emitAs: z
+          .object({ name: z.string().min(1), importPath: z.string().min(1) })
+          .optional()
+          .describe(
+            "Host-component facade: render the subtree you build here, but emit_code emits `<name/>` from importPath instead — preserves a scanned app component's real identity.",
+          ),
       },
     },
     async (args) => {
