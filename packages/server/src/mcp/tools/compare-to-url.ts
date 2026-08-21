@@ -12,6 +12,7 @@ import {
 import type { Viewport } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { registryForScreen, renderPassForScreen } from "../../mutations/lookup.ts";
@@ -26,6 +27,7 @@ import {
   fitFramesToContent,
   framesShorterThan,
   type McpResult,
+  makeCanvasBundle,
   makeLiveUrl,
   regionNode,
 } from "./screenshot-helpers.ts";
@@ -39,9 +41,11 @@ export function registerCompareToUrlTool(
   ctx: MutationContext,
   jit: TailwindJit,
   bundler: LiveBundler,
+  canvasBundler: CanvasBundler,
   assetOrigin?: string,
 ): void {
   const liveUrl = makeLiveUrl(ctx, bundler);
+  const canvasBundle = makeCanvasBundle(ctx, canvasBundler);
 
   // Frozen URL captures, keyed by capture params so repeated calls on a
   // *dynamic* page diff against one stable reference instead of re-fetching
@@ -159,6 +163,7 @@ export function registerCompareToUrlTool(
       try {
         const snapshotCss = await jit.build();
         const resolvedTheme = themeByName(ctx.folder, theme);
+        const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");
         const { html } = await renderScreen(screen, resolvedTheme, {
           viewport,
           snapshotCss,
@@ -172,6 +177,9 @@ export function registerCompareToUrlTool(
           // placeholders, which `screenshot`/`render_snippet` already avoid.
           liveBundleUrl: liveUrl(),
           dark: mode === "dark",
+          // Compare against the user's EXACT installed components when available
+          // (#18) — apples-to-apples fidelity vs the live app.
+          ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
         });
         const resolvedStorageState =
           storageStatePath === undefined

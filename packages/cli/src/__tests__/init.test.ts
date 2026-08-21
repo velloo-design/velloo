@@ -198,6 +198,10 @@ describe("velloo init", () => {
     expect(json).toContain('"Typography"');
     expect(json).toContain('"sx"');
     expect(json).not.toContain('"className"');
+
+    // The README hands off the app-level MUI install (for the emitted code).
+    const readme = await readFile(join(design, "README.md"), "utf8");
+    expect(readme).toContain("npm install @mui/material @emotion/react @emotion/styled");
   }, 30_000);
 
   test("--library=none ships bare primitives with a two-screen sample", async () => {

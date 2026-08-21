@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
@@ -17,9 +18,10 @@ export function registerScreenshotTool(
   ctx: MutationContext,
   jit: TailwindJit,
   bundler: LiveBundler,
+  canvasBundler: CanvasBundler,
   assetOrigin?: string,
 ): void {
-  registerScreenshotCaptureTool(mcp, ctx, jit, bundler, assetOrigin);
-  registerCompareToUrlTool(mcp, ctx, jit, bundler, assetOrigin);
-  registerRenderSnippetTool(mcp, ctx, jit, bundler, assetOrigin);
+  registerScreenshotCaptureTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
+  registerCompareToUrlTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
+  registerRenderSnippetTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
 }

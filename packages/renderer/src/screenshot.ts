@@ -13,14 +13,28 @@ import type { Browser, Page } from "playwright-core";
  * string probe avoids a pointless wait on every plain screenshot).
  */
 async function waitForLiveIslands(page: Page, html: string): Promise<void> {
-  if (!html.includes("data-live-node")) return;
-  await page
-    .waitForFunction(
-      () => (window as unknown as { __velloo_live_ready?: boolean }).__velloo_live_ready === true,
-      undefined,
-      { timeout: 6000 },
-    )
-    .catch(() => {});
+  if (html.includes("data-live-node")) {
+    await page
+      .waitForFunction(
+        () => (window as unknown as { __velloo_live_ready?: boolean }).__velloo_live_ready === true,
+        undefined,
+        { timeout: 6000 },
+      )
+      .catch(() => {});
+  }
+  // The framework-native canvas mount (#18): wait for the installed-component
+  // mount (or its SSR fallback) to settle before capturing. The runtime flips
+  // `__velloo_canvas_ready` on success OR fallback, so this never stalls the shot.
+  if (html.includes("velloo-canvas-data")) {
+    await page
+      .waitForFunction(
+        () =>
+          (window as unknown as { __velloo_canvas_ready?: boolean }).__velloo_canvas_ready === true,
+        undefined,
+        { timeout: 6000 },
+      )
+      .catch(() => {});
+  }
 }
 
 /**

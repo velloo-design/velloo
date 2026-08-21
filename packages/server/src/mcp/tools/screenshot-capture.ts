@@ -12,6 +12,7 @@ import {
 import type { Viewport } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import {
@@ -36,6 +37,7 @@ import {
   fitFramesToContent,
   framesShorterThan,
   type McpResult,
+  makeCanvasBundle,
   makeLiveUrl,
   regionNode,
 } from "./screenshot-helpers.ts";
@@ -53,9 +55,11 @@ export function registerScreenshotCaptureTool(
   ctx: MutationContext,
   jit: TailwindJit,
   bundler: LiveBundler,
+  canvasBundler: CanvasBundler,
   assetOrigin?: string,
 ): void {
   const liveUrl = makeLiveUrl(ctx, bundler);
+  const canvasBundle = makeCanvasBundle(ctx, canvasBundler);
 
   // Diff baselines per render-parameter key, LRU-capped. Deliberately in-memory
   // only: a restart means components/themes may have changed underneath, and a
@@ -137,6 +141,7 @@ export function registerScreenshotCaptureTool(
         try {
           const snapshotCss = await jit.build();
           const resolvedTheme = themeByName(ctx.folder, theme);
+          const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");
           const { html } = await renderScreen(screen, resolvedTheme, {
             viewport,
             snapshotCss,
@@ -147,6 +152,7 @@ export function registerScreenshotCaptureTool(
             baseHref: assetOrigin,
             liveBundleUrl: liveUrl(),
             dark: mode === "dark",
+            ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
           });
           const capture = await captureScreenshot({
             html,
@@ -239,6 +245,10 @@ export function registerScreenshotCaptureTool(
         const screenRegistry = registryForScreen(ctx, screen);
         const resolvedTheme = themeByName(ctx.folder, theme);
         const screenPass = renderPassForScreen(ctx, screen, resolvedTheme);
+        const [canvasLight, canvasDark] = await Promise.all([
+          canvasBundle(screen, resolvedTheme, false),
+          canvasBundle(screen, resolvedTheme, true),
+        ]);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
             renderScreen(screen, resolvedTheme, {
@@ -251,6 +261,7 @@ export function registerScreenshotCaptureTool(
               baseHref: assetOrigin,
               liveBundleUrl: liveUrl(),
               dark: false,
+              ...(canvasLight ? { canvasBundle: canvasLight } : {}),
             }),
             renderScreen(screen, resolvedTheme, {
               viewport,
@@ -262,6 +273,7 @@ export function registerScreenshotCaptureTool(
               baseHref: assetOrigin,
               liveBundleUrl: liveUrl(),
               dark: true,
+              ...(canvasDark ? { canvasBundle: canvasDark } : {}),
             }),
           ]);
           buf = await screenshotCompareBuffer({
@@ -281,6 +293,9 @@ export function registerScreenshotCaptureTool(
             baseHref: assetOrigin,
             liveBundleUrl: liveUrl(),
             dark: mode === "dark",
+            ...((mode === "dark" ? canvasDark : canvasLight)
+              ? { canvasBundle: mode === "dark" ? canvasDark : canvasLight }
+              : {}),
           });
           if (clipSelector) {
             buf = await screenshotBuffer({

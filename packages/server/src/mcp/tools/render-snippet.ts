@@ -3,6 +3,7 @@ import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo
 import type { Screen, Viewport } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { registryForScreen, renderPassForScreen } from "../../mutations/lookup.ts";
@@ -12,6 +13,7 @@ import {
   browserErrorMessage,
   captureTimeoutMessage,
   errorResult,
+  makeCanvasBundle,
   makeLiveUrl,
 } from "./screenshot-helpers.ts";
 
@@ -20,9 +22,11 @@ export function registerRenderSnippetTool(
   ctx: MutationContext,
   jit: TailwindJit,
   bundler: LiveBundler,
+  canvasBundler: CanvasBundler,
   assetOrigin?: string,
 ): void {
   const liveUrl = makeLiveUrl(ctx, bundler);
+  const canvasBundle = makeCanvasBundle(ctx, canvasBundler);
 
   mcp.registerTool(
     "render_snippet",
@@ -76,6 +80,10 @@ export function registerRenderSnippetTool(
         const screenRegistry = registryForScreen(ctx, syntheticScreen);
         const resolvedTheme = themeByName(ctx.folder, theme);
         const screenPass = renderPassForScreen(ctx, syntheticScreen, resolvedTheme);
+        const [canvasLight, canvasDark] = await Promise.all([
+          canvasBundle(syntheticScreen, resolvedTheme, false),
+          canvasBundle(syntheticScreen, resolvedTheme, true),
+        ]);
         if (mode === "compare") {
           const [light, dark] = await Promise.all([
             renderScreen(syntheticScreen, resolvedTheme, {
@@ -88,6 +96,7 @@ export function registerRenderSnippetTool(
               baseHref: assetOrigin,
               liveBundleUrl: liveUrl(),
               dark: false,
+              ...(canvasLight ? { canvasBundle: canvasLight } : {}),
             }),
             renderScreen(syntheticScreen, resolvedTheme, {
               viewport: vp,
@@ -99,6 +108,7 @@ export function registerRenderSnippetTool(
               baseHref: assetOrigin,
               liveBundleUrl: liveUrl(),
               dark: true,
+              ...(canvasDark ? { canvasBundle: canvasDark } : {}),
             }),
           ]);
           buf = await screenshotCompareBuffer({
@@ -118,6 +128,9 @@ export function registerRenderSnippetTool(
             baseHref: assetOrigin,
             liveBundleUrl: liveUrl(),
             dark: mode === "dark",
+            ...((mode === "dark" ? canvasDark : canvasLight)
+              ? { canvasBundle: mode === "dark" ? canvasDark : canvasLight }
+              : {}),
           });
           buf = await screenshotBuffer({
             html,

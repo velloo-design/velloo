@@ -54,7 +54,24 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("```");
   lines.push("");
 
-  if (plan.pendingUpstream) {
+  if (plan.library.id === "mui") {
+    lines.push("## Material UI in your app");
+    lines.push("");
+    lines.push("The canvas renders **real Material UI** components (bundled with velloo,");
+    lines.push("emotion-rendered) — no files were written to your app. When you implement");
+    lines.push("a screen, `emit_code` emits idiomatic MUI (`sx` props + `@mui/material`");
+    lines.push("imports) and `emit_theme` emits a `createTheme(...)` module. For that code");
+    lines.push("to build, install the runtime deps in your app:");
+    lines.push("");
+    lines.push("```bash");
+    lines.push("npm install @mui/material @emotion/react @emotion/styled");
+    lines.push("```");
+    lines.push("");
+    lines.push("Once installed, velloo can also client-render the canvas against your");
+    lines.push("app's exact MUI version. Style nodes with the `sx` editor (canvas) or");
+    lines.push("`set_style` (agent).");
+    lines.push("");
+  } else if (plan.pendingUpstream) {
     lines.push("## Bringing shadcn into your app");
     lines.push("");
     lines.push("Init did not write anything into your app. The canvas renders against");

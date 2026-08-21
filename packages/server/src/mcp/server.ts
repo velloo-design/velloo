@@ -9,6 +9,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { CloudAuth } from "../cloud.ts";
+import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
@@ -39,6 +40,7 @@ export interface McpServerOptions {
   host: string;
   jit: TailwindJit;
   bundler: LiveBundler;
+  canvasBundler: CanvasBundler;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
   assetOrigin?: string;
   /**
@@ -150,6 +152,7 @@ function buildMcpServer(
   ctx: MutationContext,
   jit: TailwindJit,
   bundler: LiveBundler,
+  canvasBundler: CanvasBundler,
   assetOrigin?: string,
   cloud?: CloudAuth,
 ): McpServer {
@@ -174,7 +177,7 @@ function buildMcpServer(
   registerInspectTool(mcp, ctx);
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
-  registerScreenshotTool(mcp, ctx, jit, bundler, assetOrigin);
+  registerScreenshotTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerValidateTools(mcp, ctx, jit);
   registerExtensionTools(mcp, ctx);
   registerCatalogTools(mcp, ctx);
@@ -260,7 +263,14 @@ export async function createMcpServer(
               sessions.set(id, { transport, server });
             },
           });
-          const server = buildMcpServer(ctx, opts.jit, opts.bundler, opts.assetOrigin, opts.cloud);
+          const server = buildMcpServer(
+            ctx,
+            opts.jit,
+            opts.bundler,
+            opts.canvasBundler,
+            opts.assetOrigin,
+            opts.cloud,
+          );
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
             void server.close().catch(() => undefined);
@@ -327,6 +337,7 @@ export async function createMcpServer(
 export interface StdioMcpServerOptions {
   jit: TailwindJit;
   bundler: LiveBundler;
+  canvasBundler: CanvasBundler;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
   assetOrigin?: string;
   cloud?: CloudAuth;
@@ -346,7 +357,14 @@ export async function createStdioMcpServer(
   ctx: MutationContext,
   opts: StdioMcpServerOptions,
 ): Promise<StdioMcpServerHandle> {
-  const server = buildMcpServer(ctx, opts.jit, opts.bundler, opts.assetOrigin, opts.cloud);
+  const server = buildMcpServer(
+    ctx,
+    opts.jit,
+    opts.bundler,
+    opts.canvasBundler,
+    opts.assetOrigin,
+    opts.cloud,
+  );
   const transport = new StdioServerTransport();
   await server.connect(transport);
   return {

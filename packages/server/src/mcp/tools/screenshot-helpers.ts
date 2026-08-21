@@ -1,13 +1,16 @@
+import type { FrameworkAdapter } from "@velloo/provider";
 import {
   type CaptureNodeRect,
   CHROMIUM_INSTALL_CMD,
   type DiffRegion,
   isCaptureTimeout,
 } from "@velloo/renderer";
-import { isComponentNode, nodeId, type Screen, type Viewport } from "@velloo/schema";
+import { isComponentNode, nodeId, type Screen, type Theme, type Viewport } from "@velloo/schema";
+import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import { updateFrame } from "../../mutations/api/frames.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { providerForScreen } from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
 
 export type McpResult = {
@@ -77,6 +80,34 @@ export function makeLiveUrl(ctx: MutationContext, bundler: LiveBundler): () => s
     Object.keys(liveExtensions(ctx.folder.config.extensions)).length > 0
       ? `/api/live/bundle.js?v=${bundler.version}`
       : undefined;
+}
+
+/**
+ * A thunk yielding the framework-native canvas-bundle render option (#18) for a
+ * screen — the installed-component `mountScreen` URL (root-relative; resolved
+ * against the screenshot's `<base href>` like the live bundle) + native theme
+ * options — or undefined when the screen's adapter declares no bundle spec OR
+ * the build failed (framework not installed). Both keep the capture on SSR.
+ * Awaits the cached build so a build miss never embeds a dead URL.
+ */
+export function makeCanvasBundle(
+  ctx: MutationContext,
+  canvasBundler: CanvasBundler,
+): (
+  screen: Pick<Screen, "library">,
+  theme: Theme,
+  dark: boolean,
+) => Promise<{ url: string; themeOptions: unknown } | undefined> {
+  return async (screen, theme, dark) => {
+    const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
+    if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
+    const { errors } = await canvasBundler.build();
+    if (errors.length > 0) return undefined;
+    return {
+      url: `/api/canvas/bundle.js?v=${canvasBundler.version}`,
+      themeOptions: provider.themeToNative(theme, dark),
+    };
+  };
 }
 
 /** Region → deepest node mapping. Rects are CSS px; regions are image px. */

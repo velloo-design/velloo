@@ -295,11 +295,18 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       host: opts.host ?? "127.0.0.1",
       jit,
       bundler,
+      canvasBundler,
       assetOrigin,
       cloud: opts.cloud,
     });
   } else if (opts.mcp?.transport === "stdio") {
-    stdioMcp = await createStdioMcpServer(ctx, { jit, bundler, assetOrigin, cloud: opts.cloud });
+    stdioMcp = await createStdioMcpServer(ctx, {
+      jit,
+      bundler,
+      canvasBundler,
+      assetOrigin,
+      cloud: opts.cloud,
+    });
   }
 
   return {
