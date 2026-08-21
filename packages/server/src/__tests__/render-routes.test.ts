@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { createApp } from "../app.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
+import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
@@ -89,6 +90,11 @@ beforeEach(async () => {
     () => folder.config.hostApp,
     () => liveExtensions(folder.config.extensions),
   );
+  const canvasBundler = new CanvasBundler(
+    folder.root,
+    () => folder.config.hostApp,
+    () => undefined,
+  );
   const ctx: MutationContext = {
     folder,
     providers: { default: provider },
@@ -96,7 +102,7 @@ beforeEach(async () => {
     provider,
     broadcast: () => undefined,
   };
-  app = createApp(() => ctx, jit, bundler);
+  app = createApp(() => ctx, jit, bundler, canvasBundler);
 });
 
 afterEach(async () => {

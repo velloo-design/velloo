@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { extname, join } from "node:path";
 import { canvasDistPath } from "@velloo/canvas";
 import { keyframesToCss } from "@velloo/codegen";
+import type { FrameworkAdapter } from "@velloo/provider";
 import type { ServerWebSocket } from "bun";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
@@ -16,6 +17,7 @@ import {
   reloadSnippet,
   reloadTheme,
 } from "./design-folder.ts";
+import { CanvasBundler } from "./live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 import {
   createMcpServer,
@@ -175,6 +177,11 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     () => folder.config.hostApp,
     () => liveExtensions(folder.config.extensions),
   );
+  const canvasBundler = new CanvasBundler(
+    folder.root,
+    () => folder.config.hostApp,
+    () => (defaultProvider as FrameworkAdapter).canvasBundleSpec,
+  );
   const jit = new TailwindJit(
     Object.values(providers),
     join(folder.root, "screens"),
@@ -192,6 +199,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     // new host component's utility classes compile.
     if (e.type === "config-changed") {
       bundler.invalidate();
+      canvasBundler.invalidate();
       jit.invalidate();
     }
     broadcaster.broadcast(e);
@@ -203,7 +211,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     provider: defaultProvider,
     broadcast,
   };
-  const app = createApp(() => ctx, jit, bundler);
+  const app = createApp(() => ctx, jit, bundler, canvasBundler);
 
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {

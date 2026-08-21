@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import type { DesignFolder } from "./design-folder.ts";
+import type { CanvasBundler } from "./live/canvas-bundler.ts";
 import type { LiveBundler } from "./live/component-bundler.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { createAnnotationsRouter } from "./routes/api-annotations.ts";
 import { createBoardRouter } from "./routes/api-board.ts";
+import { createCanvasRouter } from "./routes/api-canvas.ts";
 import { createComponentsRouter } from "./routes/api-components.ts";
 import { createDesignRouter } from "./routes/api-design.ts";
 import { createEmitRouter } from "./routes/api-emit.ts";
@@ -26,6 +28,7 @@ export function createApp(
   ctxFor: () => MutationContext,
   jit: TailwindJit,
   bundler: LiveBundler,
+  canvasBundler: CanvasBundler,
 ): Hono {
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
@@ -41,6 +44,7 @@ export function createApp(
   app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler));
   app.route("/api/live", createLiveRouter(bundler));
+  app.route("/api/canvas", createCanvasRouter(canvasBundler));
   app.route("/api/components", createComponentsRouter(ctxFor));
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/inspect", createInspectRouter(ctxFor));
