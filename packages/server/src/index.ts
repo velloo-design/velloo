@@ -312,7 +312,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 export type { CloudAuth } from "./cloud.ts";
 export type { DesignFolder } from "./design-folder.ts";
 // Re-export key types and helpers for downstream consumers.
-export { registryForScreen } from "./extensions/registry.ts";
+export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";

@@ -1,0 +1,74 @@
+{
+  "id": "welcome",
+  "name": "Welcome",
+  "tree": {
+    "$ref": "Container",
+    "props": { "maxWidth": "lg", "sx": { "py": 8 } },
+    "children": [
+      {
+        "$ref": "Stack",
+        "props": { "spacing": 4 },
+        "children": [
+          {
+            "$ref": "Typography",
+            "props": { "variant": "h2", "children": "Designs that ship" }
+          },
+          {
+            "$ref": "Typography",
+            "props": {
+              "variant": "h6",
+              "color": "text.secondary",
+              "children": "This is the Material UI starter — real MUI components, sx styling, an emotion-rendered canvas."
+            }
+          },
+          {
+            "$ref": "Stack",
+            "props": { "direction": "row", "spacing": 2 },
+            "children": [
+              { "$ref": "Button", "props": { "variant": "contained", "children": "Get started" } },
+              { "$ref": "Button", "props": { "variant": "outlined", "children": "View docs" } }
+            ]
+          },
+          {
+            "$ref": "Card",
+            "props": { "variant": "outlined", "sx": { "mt": 4 } },
+            "children": [
+              {
+                "$ref": "CardContent",
+                "children": [
+                  {
+                    "$ref": "Stack",
+                    "props": { "spacing": 2 },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": { "variant": "h6", "children": "What's in this provider" }
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "variant": "body2",
+                          "color": "text.secondary",
+                          "children": "Box, Stack, Container, Card, Button, TextField, Typography, Chip, Divider, Tabs, Table — the MUI component set, styled with the sx prop."
+                        }
+                      },
+                      { "$ref": "Divider", "props": {} },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "variant": "body2",
+                          "color": "text.secondary",
+                          "children": "Ask your AI agent: “add a pricing section with three plans” and watch the canvas update."
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

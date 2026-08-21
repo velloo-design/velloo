@@ -19,6 +19,7 @@ import {
   findHostTailwindConfig,
   migrateConfig,
   registryForScreen,
+  renderPassForScreen,
   resolveProviders,
   TailwindJit,
   writeText,
@@ -97,6 +98,7 @@ export default defineCommand({
 
     const { providers, defaultProvider } = await resolveProviders(config, folder);
     const registry = registryForScreen(screen, providers, defaultProvider, config.extensions ?? {});
+    const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
     const jit = new TailwindJit(
       Object.values(providers),
       join(folder, "screens"),
@@ -111,6 +113,7 @@ export default defineCommand({
       snapshotCss,
       registry,
       snippets,
+      renderPass,
     });
 
     // Output: explicit --to wins; otherwise interactively choose the format and

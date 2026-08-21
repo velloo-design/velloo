@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { compile } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
-import type { ComponentProvider } from "@velloo/provider";
+import { type ComponentProvider, styleChannelOf } from "@velloo/provider";
 
 type Compiler = Awaited<ReturnType<typeof compile>>;
 
@@ -30,6 +30,14 @@ export class TailwindJit {
   private cachedCandidates: string[] | null = null;
   private readonly snippetsDir: string;
   private readonly providers: ComponentProvider[];
+  /**
+   * The subset whose style channel actually compiles Tailwind (shadcn / no-lib).
+   * MUI (`needsTailwindJit: false`) is excluded — its `styleEntryPath` is a
+   * contract stub, not a real Tailwind entry, so feeding it to the compiler
+   * would fail to resolve `tailwindcss`. A pure-MUI folder has none, so
+   * `build()` short-circuits to empty.
+   */
+  private readonly tailwindProviders: ComponentProvider[];
 
   constructor(
     providers: ComponentProvider[] | ComponentProvider,
@@ -61,6 +69,7 @@ export class TailwindJit {
     if (this.providers.length === 0) {
       throw new Error("TailwindJit: at least one provider is required.");
     }
+    this.tailwindProviders = this.providers.filter((p) => styleChannelOf(p).needsTailwindJit);
     this.snippetsDir = snippetsDir ?? join(pagesDir, "..", "snippets");
   }
 
@@ -84,6 +93,8 @@ export class TailwindJit {
    * cached, so the shared cache stays the pure disk-scan result.
    */
   async build(extraCandidates?: string[]): Promise<string> {
+    // No Tailwind-channel provider (e.g. a pure-MUI folder) ⇒ no CSS to compile.
+    if (this.tailwindProviders.length === 0) return "";
     const hasExtra = extraCandidates !== undefined && extraCandidates.length > 0;
     if (!hasExtra && this.cached !== null) return this.cached;
     const compiler = await this.getCompiler();
@@ -98,7 +109,7 @@ export class TailwindJit {
   /** Scan the providers' components + the page/snippet JSON for class candidates. */
   private scanCandidates(): string[] {
     if (this.cachedCandidates !== null) return this.cachedCandidates;
-    const dedupedDirs = Array.from(new Set(this.providers.map((p) => p.componentsDir)));
+    const dedupedDirs = Array.from(new Set(this.tailwindProviders.map((p) => p.componentsDir)));
     const hostDirs = Array.from(new Set(this.extraSourceDirs?.() ?? []));
     const scanner = new Scanner({
       sources: [
@@ -133,18 +144,19 @@ export class TailwindJit {
    * — deferred until then; concatenation is last-wins for now.
    */
   private async mergedEntryCss(): Promise<{ css: string; base: string }> {
-    const primary = this.providers[0];
+    // Only Tailwind-channel providers contribute a real entry; MUI's stub is skipped.
+    const primary = this.tailwindProviders[0];
     if (!primary) {
-      throw new Error("TailwindJit: providers is empty, cannot build entry CSS.");
+      throw new Error("TailwindJit: no Tailwind-channel provider, cannot build entry CSS.");
     }
     const primaryBase = dirname(primary.styleEntryPath);
     const extra = this.extraEntryCss?.() ?? "";
-    if (this.providers.length === 1) {
+    if (this.tailwindProviders.length === 1) {
       const css = await readFile(primary.styleEntryPath, "utf8");
       return { css: extra ? `${css}\n\n${extra}` : css, base: primaryBase };
     }
     const sources = await Promise.all(
-      this.providers.map(async (p) => {
+      this.tailwindProviders.map(async (p) => {
         const css = await readFile(p.styleEntryPath, "utf8");
         return `/* === provider: ${p.id} (${p.version}) === */\n${css}`;
       }),

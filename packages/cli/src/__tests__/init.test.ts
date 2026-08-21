@@ -177,11 +177,27 @@ describe("velloo init", () => {
     expect(readme).toContain("Bringing shadcn into your app");
   }, 30_000);
 
-  test("--library=mui errors with the 'not yet vendored' message (Sprint X+2.1)", async () => {
-    const { exitCode, stderr } = await runInit(tmp, ["--library=mui"]);
-    expect(exitCode).not.toBe(0);
-    expect(stderr.toLowerCase()).toContain("mui");
-    expect(stderr.toLowerCase()).toContain("vendored");
+  test("--library=mui scaffolds a MUI folder with a two-screen sx sample", async () => {
+    const { exitCode } = await runInit(tmp, ["--library=mui"]);
+    expect(exitCode).toBe(0);
+    const design = designDir(tmp);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.library?.id).toBe("mui");
+    expect(config.library?.source).toBe("binary");
+
+    const screenFiles = await jsonFiles(join(design, "screens"));
+    expect(screenFiles).toContain("welcome.json");
+    expect(screenFiles).toContain("signup.json");
+    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+
+    // The sample uses MUI component ids + sx styling, not shadcn refs/classNames.
+    const welcome = JSON.parse(await readFile(join(design, "screens/welcome.json"), "utf8"));
+    const json = JSON.stringify(welcome);
+    expect(json).toContain('"Typography"');
+    expect(json).toContain('"sx"');
+    expect(json).not.toContain('"className"');
   }, 30_000);
 
   test("--library=none ships bare primitives with a two-screen sample", async () => {

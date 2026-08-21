@@ -73,6 +73,74 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
   };
 }
 
+/**
+ * MUI placeholder tree — the MUI registry has no `Heading`/`Text`/`Badge`
+ * (it's `Typography`), so the shadcn/no-lib placeholder above won't resolve on
+ * a MUI folder. Uses only Container / Stack / Typography / Card / CardContent +
+ * `sx`, all in the MUI registry.
+ */
+function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+  return {
+    $ref: "Container",
+    props: { maxWidth: "md", sx: { py: 8 } },
+    children: [
+      {
+        $ref: "Stack",
+        props: { spacing: 3, sx: { alignItems: "center", textAlign: "center" } },
+        children: [
+          {
+            $ref: "Typography",
+            props: { variant: "overline", color: "text.secondary", children: route.routePath },
+          },
+          { $ref: "Typography", props: { variant: "h3", children: route.name } },
+          {
+            $ref: "Typography",
+            props: {
+              variant: "body1",
+              color: "text.secondary",
+              sx: { maxWidth: 520 },
+              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+            },
+          },
+          {
+            $ref: "Card",
+            props: { variant: "outlined", sx: { mt: 2, width: "100%", textAlign: "left" } },
+            children: [
+              {
+                $ref: "CardContent",
+                children: [
+                  {
+                    $ref: "Stack",
+                    props: { spacing: 1 },
+                    children: [
+                      {
+                        $ref: "Typography",
+                        props: {
+                          variant: "caption",
+                          color: "text.secondary",
+                          children: "Detected from",
+                        },
+                      },
+                      {
+                        $ref: "Typography",
+                        props: {
+                          variant: "body2",
+                          sx: { fontFamily: "monospace" },
+                          children: route.sourceFile,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 interface BuildScreensOpts {
   routes: ScannedRoute[];
   /**
@@ -80,13 +148,15 @@ interface BuildScreensOpts {
    * When false, the placeholder tree uses a Text node instead of a Badge.
    */
   hasBadge: boolean;
+  /** MUI folder ⇒ emit a MUI-native placeholder (Typography/sx) instead. */
+  mui?: boolean;
 }
 
 export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
   return opts.routes.map((route) => ({
     id: route.id,
     name: route.name,
-    tree: buildPlaceholderTree(route, opts.hasBadge),
+    tree: opts.mui ? buildMuiPlaceholderTree(route) : buildPlaceholderTree(route, opts.hasBadge),
   }));
 }
 

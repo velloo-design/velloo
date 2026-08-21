@@ -49,11 +49,22 @@ export function detectHost(appRoot: string): DetectedHost {
   const shadcnStyle =
     typeof componentsJson?.style === "string" ? (componentsJson.style as string) : undefined;
 
+  // UI framework inference for the "existing project" flow. MUI is the strong
+  // signal (a real npm dependency); shadcn is inferred from `components.json`.
+  // MUI wins if both somehow appear — a `@mui/material` install is concrete,
+  // a stray components.json is not.
+  const uiLibrary: DetectedHost["uiLibrary"] = depRange(deps, "@mui/material")
+    ? "mui"
+    : shadcn
+      ? "shadcn"
+      : undefined;
+
   return {
     shadcn,
     shadcnStyle,
     tailwindMajor,
     globalsCssPath: findGlobalsCss(appRoot, componentsJson),
+    ...(uiLibrary ? { uiLibrary } : {}),
   };
 }
 

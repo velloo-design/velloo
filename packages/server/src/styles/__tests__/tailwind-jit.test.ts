@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { TailwindJit } from "../tailwind-jit.ts";
 
@@ -35,6 +36,28 @@ describe("TailwindJit.build", () => {
     // The extra must not leak into the cached base build.
     const baseAgain = await jit.build();
     expect(baseAgain).not.toContain("#abcdef");
+  });
+
+  // A pure-MUI folder has no Tailwind-channel provider; build() must short-circuit
+  // to empty rather than try to compile MUI's stub entry (which can't resolve
+  // `tailwindcss`). Mixed folders still compile the Tailwind providers' entries.
+  test("returns empty for a non-Tailwind (MUI-only) folder without compiling", async () => {
+    const muiJit = new TailwindJit(
+      createMuiProvider(),
+      join(tmp, "screens"),
+      join(tmp, "snippets"),
+    );
+    expect(await muiJit.build()).toBe("");
+  });
+
+  test("still compiles when a Tailwind provider sits alongside MUI", async () => {
+    const mixed = new TailwindJit(
+      [createMuiProvider(), provider],
+      join(tmp, "screens"),
+      join(tmp, "snippets"),
+    );
+    const css = await mixed.build(["bg-primary"]);
+    expect(css.length).toBeGreaterThan(0);
   });
 });
 

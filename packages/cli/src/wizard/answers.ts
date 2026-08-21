@@ -32,6 +32,13 @@ export interface DetectedHost {
   tailwindMajor: 3 | 4 | null;
   /** Resolved path to the host's global stylesheet, if found. */
   globalsCssPath?: string;
+  /**
+   * The host's UI framework, inferred from dependencies — drives which adapter
+   * a scanned folder defaults to (the "existing project" flow). `mui` ⇒ MUI is
+   * installed; `shadcn` ⇒ a shadcn `components.json` is present; undefined ⇒
+   * neither, so the caller keeps the explicit/default library.
+   */
+  uiLibrary?: "shadcn" | "mui";
 }
 
 export interface WizardAnswers {

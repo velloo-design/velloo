@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { MUI_VERSION } from "@velloo/provider-mui";
 import { noLibVersion } from "@velloo/provider-none";
 import type { Library } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
@@ -28,15 +29,13 @@ export interface InstallPlan {
  */
 export function planInstall(answers: WizardAnswers): InstallPlan {
   if (answers.library === "mui") {
-    // Mirrors the loader's error so users see the same message
-    // whether they hit it via init or via `velloo run`.
-    throw new Error(
-      [
-        "the MUI provider is scaffolded but not yet vendored.",
-        "Track in docs/roadmap.md under Sprint X+2.1.",
-        "Use --library=shadcn-upstream (default) or --library=none for now.",
-      ].join("\n"),
-    );
+    // Framework-native: MUI is a first-class adapter bundled with velloo
+    // (@mui/material + emotion are velloo deps; components SSR in-process). See
+    // docs/framework-native.md.
+    return {
+      library: { id: "mui", version: MUI_VERSION, source: "binary", componentsPath: "binary" },
+      summary: { name: `Material UI v${MUI_VERSION}`, location: "bundled with velloo" },
+    };
   }
 
   if (answers.library === "none") {

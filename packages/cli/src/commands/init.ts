@@ -27,7 +27,9 @@ import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
+import { findMuiTheme, importThemeFromMui } from "../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
+import { buildMuiBoards, buildMuiScreens, buildMuiSnippets } from "../scaffold/mui-sample.ts";
 import {
   buildNoLibBoards,
   buildNoLibScreens,
@@ -86,9 +88,20 @@ function blankScaffold(theme: Theme): Scaffold {
  * canvas renders in their brand; everything else uses the chosen preset.
  */
 function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFrom?: string } {
-  if (answers.initialContent === "scan" && answers.detected?.globalsCssPath) {
-    const imported = importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset);
-    if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
+  if (answers.initialContent === "scan") {
+    // A MUI app's theme lives in a `createTheme({...})` module, not globals.css —
+    // read that first when scanning a MUI host.
+    if (answers.detected?.uiLibrary === "mui") {
+      const themeFile = findMuiTheme(answers.scanRoot);
+      if (themeFile) {
+        const imported = importThemeFromMui(themeFile, answers.themePreset);
+        if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
+      }
+    }
+    if (answers.detected?.globalsCssPath) {
+      const imported = importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset);
+      if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
+    }
   }
   return { theme: buildPresetTheme(answers.themePreset) };
 }
@@ -109,7 +122,7 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
       return blankScaffold(theme);
     }
     const hasBadge = answers.library !== "none";
-    const screens = buildScreensFromScan({ routes, hasBadge });
+    const screens = buildScreensFromScan({ routes, hasBadge, mui: answers.library === "mui" });
     const board = buildBoardFromScan({ screens });
     return { theme, screens, boards: [board], snippets: [], annotations: [], notes: [] };
   }
@@ -123,6 +136,19 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
       screens: buildNoLibScreens(),
       boards: buildNoLibBoards(),
       snippets: buildNoLibSnippets(),
+      annotations: [],
+      notes: [],
+    };
+  }
+
+  // Pulse isn't ported to MUI (its shadcn composition would need a full
+  // redesign). Ship a two-screen MUI welcome sample (sx styling) instead.
+  if (answers.library === "mui") {
+    return {
+      theme,
+      screens: buildMuiScreens(),
+      boards: buildMuiBoards(),
+      snippets: buildMuiSnippets(),
       annotations: [],
       notes: [],
     };
@@ -644,6 +670,14 @@ export default defineCommand({
         console.log(pc.dim(`  Scanning UI in ${relToApp} (app root has no package.json).`));
       }
       answers.detected = detectHost(scanRoot);
+      // The "existing project" flow: when the user didn't pin a library, adopt
+      // the framework the app actually uses so the scan renders + emits in the
+      // host's framework (a MUI app → the MUI adapter), not a default mismatch.
+      if (!cliArgs.library && answers.detected.uiLibrary) {
+        answers.library = answers.detected.uiLibrary === "mui" ? "mui" : "shadcn-react";
+        answers.source = "binary";
+        console.log(pc.dim(`  Detected ${answers.detected.uiLibrary} — using that library.`));
+      }
     }
 
     const folder = answers.folder;

@@ -1,18 +1,33 @@
 import { createTheme, type Theme as MuiTheme, type ThemeOptions } from "@mui/material/styles";
 import type { ColorPair, Theme as VellooTheme } from "@velloo/schema";
+import { formatRgb, parse } from "culori";
 
-/** A color slot is a CSS string or a { DEFAULT, foreground } pair — pull the base color. */
-function base(slot: ColorPair | undefined, fallback: string): string {
-  if (typeof slot === "string") return slot;
-  if (slot && typeof slot === "object" && typeof slot.DEFAULT === "string") return slot.DEFAULT;
-  return fallback;
+/**
+ * MUI's color manipulator (lighten/darken in createPalette) only parses
+ * `#hex`, `rgb()/rgba()`, `hsl()/hsla()`, `color()` — NOT `oklch()`, which is
+ * exactly what velloo themes store. Convert anything outside MUI's set to
+ * `rgb(...)` via culori; pass MUI-native formats through untouched so a hex
+ * theme stays hex (and round-trips identically in codegen).
+ */
+function muiColor(css: string): string {
+  const s = css.trim();
+  if (/^(#|rgb|hsl)/i.test(s)) return s;
+  return formatRgb(parse(s)) ?? s;
 }
 
-/** The `foreground` half of a pair (the on-color), or a fallback. */
+/** A color slot is a CSS string or a { DEFAULT, foreground } pair — pull the base color (MUI-safe). */
+function base(slot: ColorPair | undefined, fallback: string): string {
+  if (typeof slot === "string") return muiColor(slot);
+  if (slot && typeof slot === "object" && typeof slot.DEFAULT === "string")
+    return muiColor(slot.DEFAULT);
+  return muiColor(fallback);
+}
+
+/** The `foreground` half of a pair (the on-color, MUI-safe), or a fallback. */
 function fg(slot: ColorPair | undefined, fallback: string): string {
   if (slot && typeof slot === "object" && typeof slot.foreground === "string")
-    return slot.foreground;
-  return fallback;
+    return muiColor(slot.foreground);
+  return muiColor(fallback);
 }
 
 /** MUI's shape.borderRadius is a px number; coerce velloo's radius.md (number or CSS len). */
@@ -42,9 +57,9 @@ export function muiThemeOptions(theme: VellooTheme, dark = false): ThemeOptions 
       primary: { main: base(c.primary, "#4f46e5"), contrastText: fg(c.primary, "#ffffff") },
       secondary: { main: base(c.secondary, "#64748b"), contrastText: fg(c.secondary, "#ffffff") },
       error: { main: base(c.destructive, "#dc2626"), contrastText: fg(c.destructive, "#ffffff") },
-      background: { default: c.background, paper: base(c.card, c.background) },
-      text: { primary: c.foreground, secondary: base(c.muted, c.foreground) },
-      divider: c.border ?? "rgba(0,0,0,0.12)",
+      background: { default: muiColor(c.background), paper: base(c.card, c.background) },
+      text: { primary: muiColor(c.foreground), secondary: base(c.muted, c.foreground) },
+      divider: c.border ? muiColor(c.border) : "rgba(0,0,0,0.12)",
     },
     shape: { borderRadius: radiusPx(theme) },
     typography: {
