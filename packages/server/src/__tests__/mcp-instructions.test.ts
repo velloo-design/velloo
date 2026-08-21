@@ -27,4 +27,31 @@ describe("buildInstructions", () => {
   test("omits the canvas-URL line when no URL is given", () => {
     expect(buildInstructions(false)).not.toContain("give the user this URL");
   });
+
+  test("a MUI (sx) folder is framed for Material UI, not shadcn/Tailwind", () => {
+    const mui = buildInstructions(false, undefined, false, "sx");
+    expect(mui).toContain("Material UI");
+    expect(mui).toContain("Style with the `sx` object");
+    // It tells the agent the Tailwind guidance below doesn't apply here.
+    expect(mui).toContain("does NOT apply here");
+    // The MUI frame leads (before the shadcn-tuned base parts).
+    expect(mui.indexOf("Material UI")).toBeLessThan(mui.indexOf("pinned shadcn snapshot"));
+  });
+
+  test("a shadcn (tailwind) folder keeps the default Tailwind-shaped framing", () => {
+    const shadcn = buildInstructions(false, undefined, false, "tailwind-classname", "shadcn-react");
+    expect(shadcn).not.toContain("Style with the `sx` object");
+    // No framework-specific intro prepended — the default opening leads.
+    expect(shadcn).not.toContain("**no-framework** Velloo design folder");
+    expect(shadcn).toContain("pinned shadcn snapshot");
+  });
+
+  test("a no-framework folder is framed as bare primitives, correcting the shadcn claim", () => {
+    const none = buildInstructions(false, undefined, false, "tailwind-classname", "none");
+    expect(none).toContain("no-framework");
+    expect(none).toContain("NO shadcn surface");
+    // Still Tailwind-shaped (no sx), and the correction leads.
+    expect(none).not.toContain("Style with the `sx` object");
+    expect(none.indexOf("no-framework")).toBeLessThan(none.indexOf("pinned shadcn snapshot"));
+  });
 });

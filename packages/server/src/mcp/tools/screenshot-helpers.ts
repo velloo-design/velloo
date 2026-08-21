@@ -100,6 +100,10 @@ export function makeCanvasBundle(
 ) => Promise<{ url: string; themeOptions: unknown } | undefined> {
   return async (screen, theme, dark) => {
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
+    // The bundler builds the DEFAULT provider's components, so only a screen on
+    // the default library can mount against it — a non-default-library screen in
+    // a multi-library folder keeps SSR (the bundle wouldn't have its components).
+    if (provider !== ctx.defaultProvider) return undefined;
     if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
     const { errors } = await canvasBundler.build();
     if (errors.length > 0) return undefined;

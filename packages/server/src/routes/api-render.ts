@@ -49,6 +49,10 @@ export function createRenderRouter(
     dark: boolean,
   ): Promise<{ url: string; themeOptions: unknown } | undefined> => {
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
+    // The bundler builds the default provider's components, so only a
+    // default-library screen can mount against it (a non-default-library screen
+    // in a multi-library folder keeps SSR — see makeCanvasBundle).
+    if (provider !== ctx.defaultProvider) return undefined;
     if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
     const { errors } = await canvasBundler.build();
     if (errors.length > 0) return undefined;
