@@ -1,0 +1,67 @@
+{
+  "id": "aligngrid",
+  "name": "Alignment dot grid",
+  "params": [],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "grid grid-cols-3 gap-1.5 p-2 rounded-md border border-input bg-background w-fit"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-primary"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "size-1.5 rounded-full bg-muted-foreground/30"
+        }
+      }
+    ]
+  }
+}

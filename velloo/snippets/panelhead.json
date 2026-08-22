@@ -1,0 +1,72 @@
+{
+  "id": "panelhead",
+  "name": "Panel header",
+  "params": [
+    {
+      "name": "node",
+      "type": "string"
+    },
+    {
+      "name": "path",
+      "type": "string"
+    },
+    {
+      "name": "channel",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "px-3 py-2.5 border-b border-border"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-2"
+        },
+        "children": [
+          {
+            "$ref": "Icon",
+            "props": {
+              "name": "box-select",
+              "size": 15,
+              "className": "text-muted-foreground shrink-0"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-sm font-medium text-foreground",
+              "children": {
+                "$param": "node"
+              }
+            }
+          },
+          {
+            "$ref": "Badge",
+            "props": {
+              "variant": "secondary",
+              "className": "ml-auto font-mono text-[10px]",
+              "children": {
+                "$param": "channel"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "mt-1.5 block text-[11px] text-muted-foreground",
+          "children": {
+            "$param": "path"
+          }
+        }
+      }
+    ]
+  }
+}

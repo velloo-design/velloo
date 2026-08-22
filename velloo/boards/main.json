@@ -1,6 +1,68 @@
 {
   "id": "main",
-  "name": "Main",
-  "frames": [],
-  "groups": []
+  "name": "Node edit pane explorations",
+  "frames": [
+    {
+      "id": "baseline-1",
+      "screen": "baseline",
+      "x": 0,
+      "y": 0,
+      "w": 360,
+      "h": 580,
+      "label": "Baseline — today",
+      "group": "today"
+    },
+    {
+      "id": "tw-a1-1",
+      "screen": "tw-a1",
+      "x": 440,
+      "y": 0,
+      "w": 360,
+      "h": 1290,
+      "label": "A1 · Controls ⇄ classes",
+      "group": "tailwind-classname"
+    },
+    {
+      "id": "mui-b1-1",
+      "screen": "mui-b1",
+      "x": 880,
+      "y": 0,
+      "w": 360,
+      "h": 1320,
+      "label": "B1 · Token controls + raw",
+      "group": "mui-sx"
+    },
+    {
+      "id": "none-c-1",
+      "screen": "none-c",
+      "x": 1320,
+      "y": 0,
+      "w": 360,
+      "h": 1380,
+      "label": "C · Box-model + synced declarations",
+      "group": "inline-style-none"
+    }
+  ],
+  "groups": [
+    {
+      "id": "today",
+      "name": "Today",
+      "color": "#94a3b8"
+    },
+    {
+      "id": "tailwind-classname",
+      "name": "Tailwind · className",
+      "color": "#0ea5e9"
+    },
+    {
+      "id": "mui-sx",
+      "name": "MUI · sx",
+      "color": "#7c3aed"
+    },
+    {
+      "id": "inline-style-none",
+      "name": "Inline style · none",
+      "color": "#0d9488"
+    }
+  ]
 }

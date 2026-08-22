@@ -1,0 +1,35 @@
+{
+  "id": "field",
+  "name": "Field row",
+  "params": [
+    {
+      "name": "label",
+      "type": "string"
+    },
+    {
+      "name": "control",
+      "type": "node"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex items-center justify-between gap-3 min-h-7"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-xs text-muted-foreground shrink-0",
+          "children": {
+            "$param": "label"
+          }
+        }
+      },
+      {
+        "$param": "control"
+      }
+    ]
+  }
+}

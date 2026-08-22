@@ -1,0 +1,36 @@
+{
+  "id": "selecttrig",
+  "name": "Select trigger",
+  "params": [
+    {
+      "name": "value",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "inline-flex items-center justify-between gap-1.5 h-7 px-2 rounded-md border border-input bg-background min-w-[6.5rem]"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-xs text-foreground truncate",
+          "children": {
+            "$param": "value"
+          }
+        }
+      },
+      {
+        "$ref": "Icon",
+        "props": {
+          "name": "chevrons-up-down",
+          "size": 13,
+          "className": "text-muted-foreground shrink-0"
+        }
+      }
+    ]
+  }
+}

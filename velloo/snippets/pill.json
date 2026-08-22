@@ -1,0 +1,36 @@
+{
+  "id": "pill",
+  "name": "Class chip",
+  "params": [
+    {
+      "name": "label",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "as": "span",
+      "className": "inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded bg-secondary text-secondary-foreground text-[11px] font-mono"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "children": {
+            "$param": "label"
+          }
+        }
+      },
+      {
+        "$ref": "Icon",
+        "props": {
+          "name": "x",
+          "size": 11,
+          "className": "text-muted-foreground"
+        }
+      }
+    ]
+  }
+}

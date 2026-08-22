@@ -1,0 +1,42 @@
+{
+  "id": "numfield",
+  "name": "Number field",
+  "params": [
+    {
+      "name": "value",
+      "type": "string"
+    },
+    {
+      "name": "unit",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "inline-flex items-center justify-between gap-1.5 h-7 px-2 rounded-md border border-input bg-background min-w-[3.5rem]"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-xs tabular-nums text-foreground",
+          "children": {
+            "$param": "value"
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-[10px] text-muted-foreground",
+          "children": {
+            "$param": "unit"
+          }
+        }
+      }
+    ]
+  }
+}

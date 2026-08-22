@@ -1,0 +1,110 @@
+{
+  "id": "baseline",
+  "name": "Baseline — today",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "min-h-full bg-card text-card-foreground font-sans"
+    },
+    "children": [
+      {
+        "$snippet": "panelhead",
+        "args": {
+          "node": "Box",
+          "path": "Card / CardContent / Box",
+          "channel": "Tailwind · className"
+        }
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "STYLES",
+          "body": {
+            "$ref": "Box",
+            "props": {
+              "className": "space-y-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-[11px] text-muted-foreground",
+                  "children": "Tailwind classes"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "rounded-md border border-input bg-background p-2.5 font-mono text-[11px] leading-relaxed text-foreground min-h-[84px] whitespace-pre-wrap break-words",
+                  "children": "flex items-center gap-2 p-4 bg-card rounded-lg border border-border text-sm shadow-sm"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "sx / inline style — the same box",
+          "body": {
+            "$ref": "Box",
+            "props": {
+              "className": "space-y-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-[11px] text-muted-foreground",
+                  "children": "Raw JSON — MUI sx and inline style share this one field"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "rounded-md border border-input bg-background p-2.5 font-mono text-[11px] leading-relaxed text-foreground whitespace-pre-wrap break-words",
+                  "children": "{\n  \"display\": \"flex\",\n  \"alignItems\": \"center\",\n  \"gap\": 2,\n  \"p\": 2\n}"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "px-3 py-3"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-start gap-2 rounded-md bg-muted/50 border border-border p-2.5"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "info",
+                  "size": 13,
+                  "className": "text-muted-foreground mt-0.5 shrink-0"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-[11px] leading-relaxed text-muted-foreground",
+                  "children": "Today: two freeform text boxes for three frameworks. No structure, no validation, no swatches — you must already know the exact class or JSON key."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

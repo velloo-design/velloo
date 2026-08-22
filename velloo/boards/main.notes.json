@@ -1,0 +1,9 @@
+[
+  {
+    "id": "note_4d98eaf8",
+    "x": -1.5825619543134053,
+    "y": -263.0585974142101,
+    "width": 820,
+    "body": "## Node editor — style pane explorations\n\nReplace the raw class/JSON **textarea** with structured visual controls — **one control system, three CSS channels**, each compiling to its native idiom while the **raw code stays reachable and two-way bound**: edit a control → the class/declaration updates, edit the raw side → the control updates.\n\n**Today** → 2 freeform textareas for 3 frameworks.\n**A1** Tailwind — visual controls ⇄ class chips; editable box-model (right margin 24 → `mr-6`, off-scale → `mr-[25px]`).\n**B1** MUI — theme-token controls (spacing scale, palette, elevation, breakpoints) + live `sx`.\n**C** Inline — box-model + Layout/Appearance controls + synced declaration rows (no toggles).\nEvery panel now carries a **Typography** section.\n\nPatterns: Figma/Penpot alignment grid · DevTools box-model & declarations · Webflow/Windframe class chips · Tailwind IntelliSense autocomplete + hover-resolve · Framer/MUI token pickers · Tailwind Play / Penpot \"panel == output\"."
+  }
+]

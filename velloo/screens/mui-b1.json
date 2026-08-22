@@ -1,0 +1,697 @@
+{
+  "id": "mui-b1",
+  "name": "B1 · Token controls + raw (MUI sx)",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "min-h-full bg-card text-card-foreground font-sans"
+    },
+    "children": [
+      {
+        "$snippet": "panelhead",
+        "args": {
+          "node": "Box",
+          "path": "Stack / Box",
+          "channel": "MUI · sx"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "px-3 py-2.5 border-b border-border flex items-center justify-between"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "inline-flex items-center gap-0.5 p-0.5 rounded-md bg-muted"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "px-1.5 h-5 flex items-center rounded bg-background shadow-sm text-foreground text-[10px] font-medium",
+                  "children": "xs"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "px-1.5 h-5 flex items-center rounded text-muted-foreground text-[10px]",
+                  "children": "sm"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "px-1.5 h-5 flex items-center rounded text-muted-foreground text-[10px]",
+                  "children": "md"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "px-1.5 h-5 flex items-center rounded text-muted-foreground text-[10px]",
+                  "children": "lg"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "px-1.5 h-5 flex items-center rounded text-muted-foreground text-[10px]",
+                  "children": "xl"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[10px] text-muted-foreground",
+              "children": "editing base"
+            }
+          }
+        ]
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "LAYOUT",
+          "body": {
+            "$ref": "Box",
+            "props": {
+              "className": "space-y-2.5"
+            },
+            "children": [
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "display",
+                  "control": {
+                    "$snippet": "selecttrig",
+                    "args": {
+                      "value": "flex"
+                    }
+                  }
+                }
+              },
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "flexDirection",
+                  "control": {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-0.5 p-0.5 rounded-md bg-muted"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-6 flex items-center justify-center rounded-[5px] bg-background shadow-sm text-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "move-right",
+                              "size": 13
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-6 flex items-center justify-center rounded-[5px] text-muted-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "move-down",
+                              "size": 13
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-start justify-between gap-3 pt-0.5"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "space-y-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block text-[10px] text-muted-foreground",
+                          "children": "alignItems"
+                        }
+                      },
+                      {
+                        "$snippet": "aligngrid",
+                        "args": {}
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex-1 space-y-2"
+                    },
+                    "children": [
+                      {
+                        "$snippet": "field",
+                        "args": {
+                          "label": "justify",
+                          "control": {
+                            "$snippet": "selecttrig",
+                            "args": {
+                              "value": "space-between"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "$snippet": "field",
+                        "args": {
+                          "label": "gap",
+                          "control": {
+                            "$snippet": "numfield",
+                            "args": {
+                              "value": "2",
+                              "unit": "·16px"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "SPACING · theme.spacing ×8",
+          "body": {
+            "$ref": "Box",
+            "props": {
+              "className": "space-y-2.5"
+            },
+            "children": [
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "p",
+                  "control": {
+                    "$snippet": "numfield",
+                    "args": {
+                      "value": "2",
+                      "unit": "·16px"
+                    }
+                  }
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "grid grid-cols-2 gap-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center justify-between gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-xs text-muted-foreground",
+                          "children": "px"
+                        }
+                      },
+                      {
+                        "$snippet": "numfield",
+                        "args": {
+                          "value": "2",
+                          "unit": "·16"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center justify-between gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-xs text-muted-foreground",
+                          "children": "py"
+                        }
+                      },
+                      {
+                        "$snippet": "numfield",
+                        "args": {
+                          "value": "1",
+                          "unit": "·8"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-start gap-1.5 rounded bg-muted/50 px-2 py-1"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "info",
+                      "size": 11,
+                      "className": "text-muted-foreground shrink-0 mt-0.5"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-[10px] text-muted-foreground leading-relaxed",
+                      "children": "number → theme.spacing(n): 2 = 16px  ·  or a string for raw units: '2rem'"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "TYPOGRAPHY",
+          "body": {
+            "$ref": "Box",
+            "props": {
+              "className": "space-y-2.5"
+            },
+            "children": [
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "variant",
+                  "control": {
+                    "$snippet": "selecttrig",
+                    "args": {
+                      "value": "body2"
+                    }
+                  }
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "grid grid-cols-2 gap-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center justify-between gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-xs text-muted-foreground",
+                          "children": "fontSize"
+                        }
+                      },
+                      {
+                        "$snippet": "numfield",
+                        "args": {
+                          "value": "14",
+                          "unit": "px"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center justify-between gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-xs text-muted-foreground",
+                          "children": "lineHeight"
+                        }
+                      },
+                      {
+                        "$snippet": "numfield",
+                        "args": {
+                          "value": "1.5",
+                          "unit": ""
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "fontWeight",
+                  "control": {
+                    "$snippet": "selecttrig",
+                    "args": {
+                      "value": "medium · 500"
+                    }
+                  }
+                }
+              },
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "textAlign",
+                  "control": {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-0.5 p-0.5 rounded-md bg-muted"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-6 flex items-center justify-center rounded-[5px] bg-background shadow-sm text-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "align-left",
+                              "size": 13
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-6 flex items-center justify-center rounded-[5px] text-muted-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "align-center",
+                              "size": 13
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-6 flex items-center justify-center rounded-[5px] text-muted-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "align-right",
+                              "size": 13
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-6 flex items-center justify-center rounded-[5px] text-muted-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "align-justify",
+                              "size": 13
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "color",
+                  "control": {
+                    "$snippet": "swatch",
+                    "args": {
+                      "token": "text.primary",
+                      "squareClass": "size-4 rounded-[3px] border border-border bg-foreground"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "APPEARANCE",
+          "body": {
+            "$ref": "Box",
+            "props": {
+              "className": "space-y-2.5"
+            },
+            "children": [
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "bgcolor",
+                  "control": {
+                    "$snippet": "swatch",
+                    "args": {
+                      "token": "background.paper",
+                      "squareClass": "size-4 rounded-[3px] border border-border bg-card"
+                    }
+                  }
+                }
+              },
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "boxShadow",
+                  "control": {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "inline-flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-6 rounded-md bg-card border border-border shadow-md"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-xs text-foreground",
+                          "children": "elevation 3"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$snippet": "field",
+                "args": {
+                  "label": "borderRadius",
+                  "control": {
+                    "$snippet": "numfield",
+                    "args": {
+                      "value": "1",
+                      "unit": "·4px"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "ADDITIONAL sx (raw)",
+          "body": {
+            "$ref": "Box",
+            "props": {
+              "className": "space-y-1.5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "block text-[10px] text-muted-foreground leading-relaxed",
+                  "children": "only props the controls above don't cover — pseudo-selectors, transitions, one-offs"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "font-mono text-[11px] text-muted-foreground w-20 shrink-0 truncate",
+                      "children": "cursor"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "flex-1 min-w-0 inline-flex items-center h-6 px-1.5 rounded border border-input bg-background font-mono text-[11px] text-foreground truncate",
+                      "children": "'pointer'"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "font-mono text-[11px] text-muted-foreground w-20 shrink-0 truncate",
+                      "children": "transition"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "flex-1 min-w-0 inline-flex items-center h-6 px-1.5 rounded border border-input bg-background font-mono text-[11px] text-foreground truncate",
+                      "children": "'all .2s'"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "font-mono text-[11px] text-muted-foreground w-20 shrink-0 truncate",
+                      "children": "'&:hover'"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "flex-1 min-w-0 inline-flex items-center h-6 px-1.5 rounded border border-input bg-background font-mono text-[11px] text-foreground truncate",
+                      "children": "{ bgcolor: 'action.hover' }"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-1.5 h-7 px-2 rounded-md border border-dashed border-input bg-background w-fit"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "plus",
+                      "size": 12,
+                      "className": "text-muted-foreground"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-[11px] text-muted-foreground",
+                      "children": "property…  (sx autocomplete)"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$snippet": "section",
+        "args": {
+          "title": "sx (live preview — merged)",
+          "body": {
+            "$snippet": "codeblock",
+            "args": {
+              "code": "{\n  display: 'flex',\n  justifyContent: 'space-between',\n  gap: 2,\n  p: 2,\n  typography: 'body2',\n  fontWeight: 'medium',\n  bgcolor: 'background.paper',\n  boxShadow: 3,\n  cursor: 'pointer',\n  transition: 'all .2s',\n  '&:hover': { bgcolor: 'action.hover' }\n}"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

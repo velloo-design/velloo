@@ -1,0 +1,51 @@
+{
+  "id": "section",
+  "name": "Inspector section",
+  "params": [
+    {
+      "name": "title",
+      "type": "string"
+    },
+    {
+      "name": "body",
+      "type": "node"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "px-3 py-3 border-b border-border space-y-2.5"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center justify-between"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+              "children": {
+                "$param": "title"
+              }
+            }
+          },
+          {
+            "$ref": "Icon",
+            "props": {
+              "name": "chevron-down",
+              "size": 13,
+              "className": "text-muted-foreground/70"
+            }
+          }
+        ]
+      },
+      {
+        "$param": "body"
+      }
+    ]
+  }
+}

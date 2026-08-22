@@ -1,0 +1,57 @@
+{
+  "id": "unitfield",
+  "name": "Number + unit dropdown",
+  "params": [
+    {
+      "name": "value",
+      "type": "string"
+    },
+    {
+      "name": "unit",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "inline-flex items-center h-7 rounded-md border border-input bg-background overflow-hidden"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "px-2 text-xs tabular-nums text-foreground",
+          "children": {
+            "$param": "value"
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-0.5 self-stretch px-1.5 border-l border-input bg-muted/60 text-muted-foreground"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[10px]",
+              "children": {
+                "$param": "unit"
+              }
+            }
+          },
+          {
+            "$ref": "Icon",
+            "props": {
+              "name": "chevron-down",
+              "size": 10
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

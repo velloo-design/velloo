@@ -1,0 +1,40 @@
+{
+  "id": "swatch",
+  "name": "Color swatch control",
+  "params": [
+    {
+      "name": "token",
+      "type": "string"
+    },
+    {
+      "name": "squareClass",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "inline-flex items-center gap-1.5 h-7 pl-1.5 pr-2 rounded-md border border-input bg-background"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": {
+            "$param": "squareClass"
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-xs text-foreground",
+          "children": {
+            "$param": "token"
+          }
+        }
+      }
+    ]
+  }
+}
