@@ -25,7 +25,7 @@ describe("urlCacheKey", () => {
 
   test("each pixel-affecting input partitions the cache", () => {
     const k = urlCacheKey(baseKey);
-    expect(urlCacheKey({ ...baseKey, url: baseKey.url + "/x" })).not.toBe(k);
+    expect(urlCacheKey({ ...baseKey, url: `${baseKey.url}/x` })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, w: 768 })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, h: 1200 })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, fullPage: false })).not.toBe(k);

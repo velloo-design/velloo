@@ -3,12 +3,13 @@ import { useEffect, useMemo, useRef } from "react";
 import { mutate } from "../api.ts";
 import { pathFromString } from "../path.ts";
 import { selectedNode, useCanvas } from "../store.ts";
-import { ClassesField } from "./ClassesField.tsx";
 import { CopyField } from "./CopyField.tsx";
 import { IdField } from "./IdField.tsx";
 import { PropField } from "./PropField.tsx";
 import { SnippetInspector } from "./SnippetInspector.tsx";
-import { SxField } from "./SxField.tsx";
+import { StyleObjectEditor } from "./style-editor/StyleObjectEditor.tsx";
+import { SxStyleEditor } from "./style-editor/SxStyleEditor.tsx";
+import { TailwindStyleEditor } from "./style-editor/TailwindStyleEditor.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
@@ -141,21 +142,27 @@ export function Inspector() {
         ) : null}
 
         {isObjectChannel ? (
-          <SxField
-            key={`${selectionKey}:${channelProp}`}
-            initialValue={
+          (() => {
+            const objValue =
               node.props?.[channelProp] && typeof node.props[channelProp] === "object"
                 ? (node.props[channelProp] as Record<string, unknown>)
-                : undefined
-            }
-            prop={channelProp}
-            label={channel?.editorLabel ?? "style"}
-            screenId={selection.screenId}
-            path={selection.path}
-            debounceMs={DEBOUNCE_MS}
-          />
+                : undefined;
+            const editorProps = {
+              key: `${selectionKey}:${channelProp}`,
+              initialValue: objValue,
+              prop: channelProp,
+              screenId: selection.screenId,
+              path: selection.path,
+              debounceMs: DEBOUNCE_MS,
+            };
+            return channel?.kind === "sx" ? (
+              <SxStyleEditor {...editorProps} />
+            ) : (
+              <StyleObjectEditor {...editorProps} />
+            );
+          })()
         ) : (
-          <ClassesField
+          <TailwindStyleEditor
             key={`${selectionKey}:className`}
             initialValue={initialClasses}
             screenId={selection.screenId}
