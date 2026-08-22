@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Brand wordmark face — bundled locally so the lockup renders in Poppins
+ * offline (no Google Fonts call). Only the 700 weight the lockup needs. */
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/poppins-700.woff2") format("woff2");
+}
+
 /*
  * Canvas chrome theme. Tokens follow shadcn's idiom (--background,
  * --foreground, --card, --primary, …) so vendored shadcn components
@@ -34,6 +44,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-amber: var(--brand-amber);
+  --color-coral: var(--brand-coral);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -42,51 +54,56 @@
   --font-mono: var(--font-mono);
 }
 
+/* Velloo brand — duotone (amber + coral) on warm bone (light) / ink (dark). */
 :root {
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.18 0.01 264);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.01 264);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.01 264);
-  --primary: oklch(0.56 0.18 264);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.005 264);
-  --secondary-foreground: oklch(0.22 0.01 264);
-  --muted: oklch(0.96 0.005 264);
-  --muted-foreground: oklch(0.5 0.01 264);
-  --accent: oklch(0.95 0.02 264);
-  --accent-foreground: oklch(0.22 0.01 264);
+  --background: #f7f2e6;
+  --foreground: #141210;
+  --card: #fffdf7;
+  --card-foreground: #141210;
+  --popover: #fffdf7;
+  --popover-foreground: #141210;
+  --primary: #ffab1f;
+  --primary-foreground: #141210;
+  --secondary: #ece3d2;
+  --secondary-foreground: #141210;
+  --muted: #efe7d8;
+  --muted-foreground: #6f665a;
+  --accent: #ffe9c2;
+  --accent-foreground: #7a4a12;
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.95 0.004 264);
-  --input: oklch(0.93 0.005 264);
-  --ring: oklch(0.56 0.18 264);
+  --border: #e2d8c4;
+  --input: #e2d8c4;
+  --ring: #ffab1f;
+  --brand-amber: #ffab1f;
+  --brand-coral: #ff6f4d;
   --radius: 0.625rem;
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
 }
 
 .dark {
-  --background: oklch(0.15 0.005 264);
-  --foreground: oklch(0.96 0.005 264);
-  --card: oklch(0.19 0.005 264);
-  --card-foreground: oklch(0.96 0.005 264);
-  --popover: oklch(0.19 0.005 264);
-  --popover-foreground: oklch(0.96 0.005 264);
-  --primary: oklch(0.7 0.18 264);
-  --primary-foreground: oklch(0.15 0.005 264);
-  --secondary: oklch(0.24 0.005 264);
-  --secondary-foreground: oklch(0.96 0.005 264);
-  --muted: oklch(0.22 0.005 264);
-  --muted-foreground: oklch(0.65 0.01 264);
-  --accent: oklch(0.27 0.01 264);
-  --accent-foreground: oklch(0.96 0.005 264);
+  --background: #0d0c0a;
+  --foreground: #f3eee3;
+  --card: #15130e;
+  --card-foreground: #f3eee3;
+  --popover: #15130e;
+  --popover-foreground: #f3eee3;
+  --primary: #ffab1f;
+  --primary-foreground: #0d0c0a;
+  --secondary: #1d1a14;
+  --secondary-foreground: #f3eee3;
+  --muted: #1d1a14;
+  --muted-foreground: #a59c8d;
+  --accent: #26221c;
+  --accent-foreground: #ffab1f;
   --destructive: oklch(0.65 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.245 0.005 264);
-  --input: oklch(0.27 0.005 264);
-  --ring: oklch(0.7 0.18 264);
+  --border: #26221c;
+  --input: #26221c;
+  --ring: #ffab1f;
+  --brand-amber: #ffab1f;
+  --brand-coral: #ff6f4d;
   color-scheme: dark;
 }
 

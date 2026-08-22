@@ -15,7 +15,7 @@ import {
 import { redo as redoApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { Logo } from "./Logo.tsx";
+import { LogoLockup } from "./Logo.tsx";
 import { Button } from "./ui/button.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 import { Separator } from "./ui/separator.tsx";
@@ -128,8 +128,7 @@ export function TopBar() {
     <TooltipProvider delayDuration={200}>
       <header className="h-11 shrink-0 border-b bg-card flex items-center gap-3 px-4 text-sm">
         <div className="flex items-center gap-2 min-w-0">
-          <Logo size={22} />
-          <span className="font-semibold tracking-tight">Velloo</span>
+          <LogoLockup fontSize={15} />
           {view === "library" ? (
             <>
               <span className="text-muted-foreground">/</span>
