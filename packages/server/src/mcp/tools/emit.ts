@@ -42,8 +42,11 @@ async function targetFor(
   const provider = providerForScreen(ctx, thing) as FrameworkAdapter;
   if (!provider.codegenModule) return undefined;
   const manifest = await provider.loadManifest();
+  // Only the framework's OWN components import from its module — the reused
+  // velloo helpers (Icon, Image, …; source "velloo") fall through to the shadcn
+  // REGISTRY so `Icon` emits a lucide-react import, not `@mui/material`.
   return moduleTarget(
-    manifest.map((c) => c.id),
+    manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
     provider.codegenModule,
   );
 }

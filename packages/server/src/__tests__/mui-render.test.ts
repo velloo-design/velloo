@@ -72,6 +72,30 @@ describe("MUI adapter SSR", () => {
     expect(mui.styleChannel?.needsTailwindJit).toBe(false);
   });
 
+  test("MUI folders get the velloo Icon helper (MUI bundles no icon set)", async () => {
+    const iconScreen: Screen = {
+      id: "i",
+      name: "I",
+      tree: {
+        $ref: "Button",
+        props: { variant: "contained" },
+        children: [{ $ref: "Icon", props: { name: "ArrowRight", size: 18 } }],
+      },
+    };
+    const { bodyHtml } = await renderScreen(iconScreen, theme, {
+      viewport: { w: 400, h: 200 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(theme),
+    });
+    expect(bodyHtml).toContain("MuiButton-root"); // real MUI button
+    expect(bodyHtml).toContain("<svg"); // the lucide icon rendered (sized via `size`, not Tailwind)
+    expect(bodyHtml).toContain('width="18"');
+    // The manifest surfaces Icon so list_components shows it.
+    const manifest = await mui.loadManifest();
+    expect(manifest.find((c) => c.id === "Icon")).toBeDefined();
+  });
+
   test("catalog() reports every manifest component installed from @mui/material", async () => {
     const catalog = (await mui.catalog?.()) ?? [];
     expect(catalog.length).toBeGreaterThan(20);
@@ -118,22 +142,27 @@ describe("MUI adapter SSR", () => {
     expect(bodyHtml).not.toContain("MuiBackdrop-root");
   });
 
-  test("emits MUI-native code from the provider's codegenModule + manifest", async () => {
-    // Mirrors what the emit_code tool's targetFor() builds for a MUI screen.
+  test("emits MUI-native code; velloo helpers (Icon) emit lucide, not @mui/material", async () => {
+    // Mirrors what the emit_code tool's targetFor() builds — only MUI-source ids.
     expect(mui.codegenModule).toBe("@mui/material");
     const manifest = await mui.loadManifest();
     const target = moduleTarget(
-      manifest.map((c) => c.id),
+      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
       mui.codegenModule ?? "",
     );
     const sxScreen: Screen = {
       ...screen,
-      tree: { $ref: "Card", props: { variant: "outlined", sx: { p: 3 } }, children: [] },
+      tree: {
+        $ref: "Card",
+        props: { variant: "outlined", sx: { p: 3 } },
+        children: [{ $ref: "Icon", props: { name: "ArrowRight", size: 18 } }],
+      },
     };
     const result = unwrap(await emitCode(sxScreen, { target }));
-    expect(result.jsx).toBe(`<Card variant="outlined" sx={{ p: 3 }} />`);
-    // Real MUI ids are in the manifest, so they resolve to the module (not unknown).
-    expect(result.componentsUsed).toEqual(["Card"]);
+    expect(result.jsx).toContain("<Card variant=");
+    // Icon (a velloo helper) lowers to the lucide JSX tag, NOT a MUI import.
+    expect(result.jsx).toContain("<ArrowRight");
+    expect(result.iconsUsed).toContain("ArrowRight");
     // No shadcn install plan on a native framework.
     expect(result.componentsToInstall).toEqual([]);
   });

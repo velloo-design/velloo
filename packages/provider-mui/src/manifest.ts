@@ -45,6 +45,30 @@ function ui(
   };
 }
 
+const className: PropDescriptor = {
+  name: "className",
+  type: "string | undefined",
+  optional: true,
+  control: "string",
+};
+
+/** A reused framework-neutral velloo helper (source "velloo") — styled via className, not sx. */
+function helper(
+  id: string,
+  props: PropDescriptor[],
+  notes?: string,
+  example?: Record<string, unknown>,
+): ComponentDescriptor {
+  return {
+    id,
+    category: "ui",
+    source: "velloo",
+    props: [...props, className],
+    designModeNotes: notes,
+    example,
+  };
+}
+
 export const MUI_MANIFEST: Manifest = [
   ui("Box", [children], "Generic layout primitive; style via sx."),
   ui(
@@ -185,5 +209,45 @@ export const MUI_MANIFEST: Manifest = [
     [children, { name: "message", type: "ReactNode", optional: true, control: "string" }],
     "A toast — renders inline as a dark pill in design mode. Use `message` or children.",
     { message: "Saved" },
+  ),
+
+  // Framework-neutral velloo helpers (MUI bundles no icon set; @mui/icons-material
+  // isn't shipped). source:"velloo" — sized/styled via props (NOT sx/Tailwind: a
+  // MUI folder has no JIT). `Icon` emits a lucide-react import in codegen.
+  helper(
+    "Icon",
+    [
+      { name: "name", type: "string", optional: false, control: "icon" },
+      { name: "size", type: "number", optional: true, control: "number" },
+    ],
+    "A lucide icon — MUI has no bundled icon set. Set the pixel `size` prop (not Tailwind). `name` is a lucide id (PascalCase or kebab). Emits a `lucide-react` import.",
+    { name: "ArrowRight", size: 20 },
+  ),
+  helper(
+    "Image",
+    [
+      { name: "src", type: "string", optional: false, control: "string" },
+      { name: "alt", type: "string", optional: false, control: "string" },
+    ],
+    "An image. Use velloo assets (`/assets/…`) or a URL.",
+  ),
+  helper(
+    "Placeholder",
+    [{ name: "label", type: "string", optional: true, control: "string" }],
+    "A labeled placeholder box for imagery you haven't authored yet (avatars, hero shots).",
+  ),
+  helper(
+    "SVG",
+    [
+      { name: "content", type: "string", optional: false, control: "string" },
+      { name: "viewBox", type: "string", optional: false, control: "string" },
+    ],
+    "Raw inline SVG markup.",
+  ),
+  helper("Layer", [children], "An absolutely-positioned overlay layer for stacked composition."),
+  helper(
+    "Gradient",
+    [{ name: "from", type: "string", optional: true, control: "color" }],
+    "A gradient fill block.",
   ),
 ];

@@ -35,6 +35,7 @@ import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { ComponentRegistry } from "@velloo/provider";
+import { registry as snapshotRegistry } from "@velloo/shadcn-snapshot";
 import {
   Dialog,
   DialogActions,
@@ -46,6 +47,17 @@ import {
   Popover,
   Snackbar,
 } from "./overlays.ts";
+
+const REUSED_HELPER_IDS = ["Icon", "Image", "Placeholder", "SVG", "Layer", "Gradient"] as const;
+
+function reusedHelpers(): ComponentRegistry {
+  const out: ComponentRegistry = {};
+  for (const id of REUSED_HELPER_IDS) {
+    const component = snapshotRegistry[id];
+    if (component) out[id] = component;
+  }
+  return out;
+}
 
 /**
  * The runtime registry for MUI-native folders: design `$ref` ids → real MUI
@@ -101,4 +113,9 @@ export const registry: ComponentRegistry = {
   Toolbar,
   Tooltip,
   Typography,
+  // Framework-neutral velloo helpers MUI has no equivalent for — chiefly `Icon`
+  // (lucide; MUI's own @mui/icons-material isn't bundled) + imagery/composition
+  // helpers. Reused verbatim from the snapshot, like provider-none. They size
+  // via props (`Icon size`), not Tailwind — the JIT is off on a MUI folder.
+  ...reusedHelpers(),
 };

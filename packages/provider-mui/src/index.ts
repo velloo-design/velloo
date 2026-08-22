@@ -49,15 +49,25 @@ export function createProvider(): FrameworkAdapter {
     styleEntryPath: join(srcDir, "tailwind-entry.css"),
     registry,
     loadManifest: async (): Promise<Manifest> => MUI_MANIFEST,
-    // Every MUI component ships in the bundled `@mui/material` — all installed.
-    catalog: async () => catalogFromManifest(MUI_MANIFEST, { importPath: "@mui/material" }),
+    // The catalog is the MUI *library* surface — every `@mui/material` component,
+    // all installed (bundled). The reused velloo helpers (source "velloo", e.g.
+    // Icon→lucide) are always-available built-ins, not library components to
+    // install, so they're excluded.
+    catalog: async () =>
+      catalogFromManifest(
+        MUI_MANIFEST.filter((c) => c.source === "mui"),
+        { importPath: "@mui/material" },
+      ),
     styleChannel: SX_PROP,
     renderPass: (theme) => makeRenderPass(theme),
     codegenModule: "@mui/material",
     themeToNative: (theme, dark) => muiThemeOptions(theme, dark),
     canvasBundleSpec: {
       moduleBase: "@mui/material",
-      componentIds: Object.keys(registry),
+      // Only the MUI-source components bundle from `@mui/material`; the reused
+      // velloo helpers (Icon, …) aren't subpaths of it. They render in SSR; the
+      // exact-installed client mount is the MUI surface.
+      componentIds: MUI_MANIFEST.filter((c) => c.source === "mui").map((c) => c.id),
       overlayIds: ["Dialog", "Menu", "Popover", "Drawer", "Snackbar"],
       emotionKey: "vmui",
       stylesModule: "@mui/material/styles",

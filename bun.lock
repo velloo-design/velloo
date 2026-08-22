@@ -105,6 +105,7 @@
         "@mui/material": "^6",
         "@velloo/provider": "workspace:*",
         "@velloo/schema": "workspace:*",
+        "@velloo/shadcn-snapshot": "workspace:*",
         "culori": "4.0.2",
         "react": "19.2.6",
         "react-dom": "19.2.6",

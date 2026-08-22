@@ -7,9 +7,14 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "lib": ["ES2023"],
-    "types": ["bun"]
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun", "react"]
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../provider" }, { "path": "../schema" }]
+  "references": [
+    { "path": "../provider" },
+    { "path": "../schema" },
+    { "path": "../shadcn-snapshot" }
+  ]
 }
