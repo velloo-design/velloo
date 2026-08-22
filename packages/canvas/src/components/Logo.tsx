@@ -1,47 +1,76 @@
 /**
- * Velloo wordmark/mark. The geometry: a chamfered "V" rendered as two
- * tapering strokes with a single AI spark hovering in the negative space
- * — vellum-page surface meets the bright dot of generative intelligence.
- *
- * Renders cleanly at 16×16 (favicon) and at the top-bar size (≈24×24).
+ * Velloo logo — two interlinked rounded frames ("Design + Code, interlinked").
+ * Coral frame weaves over amber at the top crossing, under at the bottom.
+ * Flat duotone (amber #FFAB1F + coral #FF6F4D); renders cleanly at 16px (favicon)
+ * through hero sizes. See velloo-brand/brand/2-guidelines for the full spec.
  */
 interface Props {
   className?: string;
   size?: number;
-  /** Override fill colors. Defaults inherit currentColor for the V, accent for the spark. */
-  inkColor?: string;
-  sparkColor?: string;
 }
 
-export function Logo({ className, size = 24, inkColor = "currentColor", sparkColor }: Props) {
+export function Logo({ className, size = 24 }: Props) {
   return (
     <svg
-      viewBox="0 0 32 32"
+      viewBox="0 0 120 120"
       width={size}
       height={size}
       className={className}
       role="img"
       aria-label="Velloo"
+      fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
       <title>Velloo</title>
-      {/* Soft parchment field — only visible when explicitly given a background. */}
-      <rect x="0" y="0" width="32" height="32" rx="7" fill="none" />
-      {/* V — two strokes meeting at the bottom, slight inward taper. */}
-      <path d="M6 6 L13 23 L16 23 L9 6 Z" fill={inkColor} />
-      <path d="M26 6 L19 23 L16 23 L23 6 Z" fill={inkColor} />
-      {/* AI spark: a small four-pointed star above the V's apex. */}
-      <path
-        d="M22 7
-           L23.6 9.4
-           L26 11
-           L23.6 12.6
-           L22 15
-           L20.4 12.6
-           L18 11
-           L20.4 9.4 Z"
-        fill={sparkColor ?? "var(--primary, oklch(0.56 0.18 264))"}
+      <defs>
+        <clipPath id="velloo-weave">
+          <rect x="52" y="30" width="38" height="35" />
+        </clipPath>
+      </defs>
+      <rect x="21" y="21" width="58" height="58" rx="20" stroke="#FF6F4D" strokeWidth="11" strokeLinejoin="round" />
+      <rect x="41" y="41" width="58" height="58" rx="20" stroke="#FFAB1F" strokeWidth="11" strokeLinejoin="round" />
+      <rect
+        x="21"
+        y="21"
+        width="58"
+        height="58"
+        rx="20"
+        stroke="#FF6F4D"
+        strokeWidth="11"
+        strokeLinejoin="round"
+        clipPath="url(#velloo-weave)"
       />
     </svg>
+  );
+}
+
+/**
+ * Full lockup: the mark + the "velloo" wordmark (lowercase, Poppins, the oo as
+ * amber + coral dots). Requires the Poppins font to be loaded in the app
+ * (falls back to ui-sans-serif). `color` flows to the "vell" letters.
+ */
+export function LogoLockup({ className, fontSize = 26 }: { className?: string; fontSize?: number }) {
+  const dot = Math.round(fontSize * 0.57);
+  const gap = Math.max(1, Math.round(fontSize * 0.022));
+  const markSize = Math.round(fontSize * 1.55);
+  return (
+    <span className={className} style={{ display: "inline-flex", alignItems: "center", gap: Math.round(markSize * 0.28) }}>
+      <Logo size={markSize} />
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "baseline",
+          fontFamily: '"Poppins", ui-sans-serif, system-ui, sans-serif',
+          fontWeight: 700,
+          fontSize,
+          letterSpacing: "-0.06em",
+          lineHeight: 1,
+        }}
+      >
+        vell
+        <span style={{ width: dot, height: dot, borderRadius: 9999, background: "#FFAB1F", marginLeft: gap, display: "inline-block" }} />
+        <span style={{ width: dot, height: dot, borderRadius: 9999, background: "#FF6F4D", marginLeft: gap, display: "inline-block" }} />
+      </span>
+    </span>
   );
 }
