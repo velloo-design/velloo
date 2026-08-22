@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import type { Viewport } from "@velloo/schema";
-import type { Browser, Page } from "playwright-core";
+import type { Browser, BrowserContext, Page } from "playwright-core";
 
 /**
  * When the doc carries live-island markers, wait for the client mount to
@@ -118,6 +118,109 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 /**
+ * Cap on concurrent browser renders, process-wide (so it bounds every agent
+ * sharing the daemon). Renders now share one pooled Chromium (see `withContext`),
+ * so each concurrent slot is a cheap browser *context*, not a whole process — the
+ * spawn spike that used to stall the daemon is gone. Kept modest so a burst of
+ * tall captures still can't peg CPU.
+ */
+const MAX_CONCURRENT_RENDERS = 3;
+
+let renderSlots = MAX_CONCURRENT_RENDERS;
+const renderQueue: Array<() => void> = [];
+
+/**
+ * Acquire a render slot, waiting in line if all are taken. Returns an idempotent
+ * release that hands the slot straight to the next waiter, so it's never lost.
+ */
+async function acquireRenderSlot(): Promise<() => void> {
+  if (renderSlots > 0) {
+    renderSlots -= 1;
+  } else {
+    await new Promise<void>((resolve) => renderQueue.push(resolve));
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const next = renderQueue.shift();
+    if (next) next();
+    else renderSlots += 1;
+  };
+}
+
+/**
+ * One warm Chromium, reused across captures. Launching a browser costs hundreds
+ * of ms + a process spawn; a fresh BrowserContext costs ~ms and is fully isolated
+ * — so we pay the launch once and hand each capture its own context. Launched
+ * lazily and dropped if it dies, so the next call relaunches; Playwright kills the
+ * child on process exit, so daemon shutdown is covered.
+ */
+let pooledBrowser: Browser | null = null;
+let browserLaunch: Promise<Browser> | null = null;
+
+async function pooledChromium(): Promise<Browser> {
+  if (pooledBrowser?.isConnected()) return pooledBrowser;
+  // Coalesce concurrent first-launches so a burst doesn't spawn N browsers.
+  if (!browserLaunch) {
+    browserLaunch = launchBrowser()
+      .then((b) => {
+        pooledBrowser = b;
+        b.on("disconnected", () => {
+          if (pooledBrowser === b) pooledBrowser = null;
+        });
+        return b;
+      })
+      .finally(() => {
+        browserLaunch = null;
+      });
+  }
+  return browserLaunch;
+}
+
+/** Playwright's "the browser/context/page died under us" errors — the cue to drop
+ *  the pooled browser and retry once instead of failing the capture. */
+function isBrowserGone(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return /has been closed|Target closed|browser closed|Connection closed|crashed/i.test(m);
+}
+
+/**
+ * Run `fn` with a fresh isolated context from the pooled browser, under the
+ * concurrency cap. Always closes the context (never the shared browser); if the
+ * pooled browser died, relaunches and retries once so a crash isn't user-facing.
+ * The single chokepoint every capture path funnels through.
+ */
+async function withContext<T>(
+  options: Parameters<Browser["newContext"]>[0],
+  fn: (context: BrowserContext) => Promise<T>,
+): Promise<T> {
+  const release = await acquireRenderSlot();
+  try {
+    return await runInContext(options, fn);
+  } catch (err) {
+    if (!isBrowserGone(err)) throw err;
+    pooledBrowser = null; // force a relaunch, then a single retry
+    return await runInContext(options, fn);
+  } finally {
+    release();
+  }
+}
+
+async function runInContext<T>(
+  options: Parameters<Browser["newContext"]>[0],
+  fn: (context: BrowserContext) => Promise<T>,
+): Promise<T> {
+  const browser = await pooledChromium();
+  const context = await browser.newContext(options);
+  try {
+    return await fn(context);
+  } finally {
+    await context.close().catch(() => undefined);
+  }
+}
+
+/**
  * Upper bound on a single rasterize / setContent step. Playwright defaults to
  * 30s; we cap lower so a one-off render stall (a cold web-font fetch, a very
  * expensive paint) fails fast with an actionable message and frees the browser
@@ -197,52 +300,51 @@ export interface CaptureResult {
 export async function captureScreenshot(
   opts: Omit<ScreenshotOptions, "outPath" | "clipSelector">,
 ): Promise<CaptureResult> {
-  const browser = await launchBrowser();
-  try {
-    const context = await browser.newContext({
+  return withContext(
+    {
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
-    });
-    const page = await context.newPage();
-    await page.setContent(opts.html, {
-      waitUntil: "domcontentloaded",
-      timeout: CAPTURE_TIMEOUT_MS,
-    });
-    await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
-    // Webfonts (Google Fonts <link>) load lazily — without waiting for them a
-    // capture can freeze the Inter fallback before a declared font-<role> face
-    // applies. Bounded so a slow/offline font can't stall the shot.
-    await page
-      .evaluate(() =>
-        Promise.race([
-          (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready,
-          new Promise((r) => setTimeout(r, 2000)),
-        ]),
-      )
-      .catch(() => {});
-    await waitForLiveIslands(page, opts.html);
-    const nodeRects = await page.$$eval("[data-node-path]", (els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return {
-          path: (el as HTMLElement).dataset.nodePath ?? "",
-          x: r.left,
-          y: r.top,
-          w: r.width,
-          h: r.height,
-        };
-      }),
-    );
-    const png = await page.screenshot({
-      fullPage: opts.fullPage ?? true,
-      animations: "disabled",
-      caret: "hide",
-      timeout: CAPTURE_TIMEOUT_MS,
-    });
-    return { png, nodeRects };
-  } finally {
-    await browser.close();
-  }
+    },
+    async (context) => {
+      const page = await context.newPage();
+      await page.setContent(opts.html, {
+        waitUntil: "domcontentloaded",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+      // Webfonts (Google Fonts <link>) load lazily — without waiting for them a
+      // capture can freeze the Inter fallback before a declared font-<role> face
+      // applies. Bounded so a slow/offline font can't stall the shot.
+      await page
+        .evaluate(() =>
+          Promise.race([
+            (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready,
+            new Promise((r) => setTimeout(r, 2000)),
+          ]),
+        )
+        .catch(() => {});
+      await waitForLiveIslands(page, opts.html);
+      const nodeRects = await page.$$eval("[data-node-path]", (els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return {
+            path: (el as HTMLElement).dataset.nodePath ?? "",
+            x: r.left,
+            y: r.top,
+            w: r.width,
+            h: r.height,
+          };
+        }),
+      );
+      const png = await page.screenshot({
+        fullPage: opts.fullPage ?? true,
+        animations: "disabled",
+        caret: "hide",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      return { png, nodeRects };
+    },
+  );
 }
 
 /** A cookie to seed before navigating — Playwright's `addCookies` shape, trimmed. */
@@ -304,88 +406,87 @@ export interface UrlScreenshotOptions {
  * are frozen so the capture diffs cleanly against a Velloo render.
  */
 export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<UrlCaptureResult> {
-  const browser = await launchBrowser();
-  try {
-    const context = await browser.newContext({
+  return withContext(
+    {
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
       ...(opts.dark ? { colorScheme: "dark" as const } : {}),
       ...(opts.storageStatePath ? { storageState: opts.storageStatePath } : {}),
-    });
-    if (opts.cookies && opts.cookies.length > 0) {
-      await context.addCookies(opts.cookies);
-    }
-    if (opts.localStorage && Object.keys(opts.localStorage).length > 0) {
-      await context.addInitScript((entries: Array<[string, string]>) => {
-        try {
-          for (const [k, v] of entries) localStorage.setItem(k, v);
-        } catch {}
-      }, Object.entries(opts.localStorage));
-    }
-    if (opts.dark) {
-      // Seed before any page script runs so localStorage-driven togglers
-      // (next-themes &c.) read "dark" on first paint instead of flashing light.
-      await context.addInitScript(() => {
-        try {
-          localStorage.setItem("theme", "dark");
-        } catch {}
-      });
-    }
-    const page = await context.newPage();
-    await page.goto(opts.url, { waitUntil: "domcontentloaded", timeout: 15000 });
-    if (opts.dark) {
-      // Class-strategy Tailwind (shadcn's default) keys off `.dark` on the
-      // root; some apps read `data-theme`. Set both — harmless if unused.
+    },
+    async (context) => {
+      if (opts.cookies && opts.cookies.length > 0) {
+        await context.addCookies(opts.cookies);
+      }
+      if (opts.localStorage && Object.keys(opts.localStorage).length > 0) {
+        await context.addInitScript((entries: Array<[string, string]>) => {
+          try {
+            for (const [k, v] of entries) localStorage.setItem(k, v);
+          } catch {}
+        }, Object.entries(opts.localStorage));
+      }
+      if (opts.dark) {
+        // Seed before any page script runs so localStorage-driven togglers
+        // (next-themes &c.) read "dark" on first paint instead of flashing light.
+        await context.addInitScript(() => {
+          try {
+            localStorage.setItem("theme", "dark");
+          } catch {}
+        });
+      }
+      const page = await context.newPage();
+      await page.goto(opts.url, { waitUntil: "domcontentloaded", timeout: 15000 });
+      if (opts.dark) {
+        // Class-strategy Tailwind (shadcn's default) keys off `.dark` on the
+        // root; some apps read `data-theme`. Set both — harmless if unused.
+        await page
+          .evaluate(() => {
+            const el = document.documentElement;
+            el.classList.add("dark");
+            el.setAttribute("data-theme", "dark");
+            el.style.colorScheme = "dark";
+          })
+          .catch(() => {});
+      }
       await page
-        .evaluate(() => {
-          const el = document.documentElement;
-          el.classList.add("dark");
-          el.setAttribute("data-theme", "dark");
-          el.style.colorScheme = "dark";
-        })
+        .waitForLoadState("networkidle", { timeout: opts.settleTimeoutMs ?? 8000 })
         .catch(() => {});
-    }
-    await page
-      .waitForLoadState("networkidle", { timeout: opts.settleTimeoutMs ?? 8000 })
-      .catch(() => {});
-    // Read the landed URL + auth signal before the screenshot so the caller can
-    // tell a faithful capture from one that bounced to a login page.
-    const finalUrl = page.url();
-    const authWall = await page
-      .locator('input[type="password"]')
-      .count()
-      .then((n) => n > 0)
-      .catch(() => false);
-    // A broken target — dev error overlay, error page, blank doc — would
-    // otherwise pixel-diff against the design and report a confident-but-bogus
-    // low similarity blamed on the design. Detect it so the caller can say so.
-    const pageError = await page
-      .evaluate(() => {
-        if (
-          document.querySelector(
-            "nextjs-portal, [data-nextjs-dialog], #__next-build-error, vite-error-overlay",
-          )
-        ) {
-          return "the target app is showing a dev error overlay — it's throwing, so the diff isn't about your design";
-        }
-        const txt = (document.body?.innerText ?? "").trim();
-        if (txt.length === 0) return "the target captured as a blank page (no visible text)";
-        const m = txt.match(
-          /Unhandled Runtime Error|Application error: a (?:client|server)-side exception|Internal Server Error|This page (?:could not be|isn't) found|Failed to compile|\b(?:Type|Syntax|Reference)Error:/i,
-        );
-        return m ? `the target looks like an error page ("${m[0]}")` : null;
-      })
-      .catch(() => null);
-    const png = await page.screenshot({
-      fullPage: opts.fullPage ?? true,
-      animations: "disabled",
-      caret: "hide",
-      timeout: CAPTURE_TIMEOUT_MS,
-    });
-    return { png, finalUrl, authWall, pageError };
-  } finally {
-    await browser.close();
-  }
+      // Read the landed URL + auth signal before the screenshot so the caller can
+      // tell a faithful capture from one that bounced to a login page.
+      const finalUrl = page.url();
+      const authWall = await page
+        .locator('input[type="password"]')
+        .count()
+        .then((n) => n > 0)
+        .catch(() => false);
+      // A broken target — dev error overlay, error page, blank doc — would
+      // otherwise pixel-diff against the design and report a confident-but-bogus
+      // low similarity blamed on the design. Detect it so the caller can say so.
+      const pageError = await page
+        .evaluate(() => {
+          if (
+            document.querySelector(
+              "nextjs-portal, [data-nextjs-dialog], #__next-build-error, vite-error-overlay",
+            )
+          ) {
+            return "the target app is showing a dev error overlay — it's throwing, so the diff isn't about your design";
+          }
+          const txt = (document.body?.innerText ?? "").trim();
+          if (txt.length === 0) return "the target captured as a blank page (no visible text)";
+          const m = txt.match(
+            /Unhandled Runtime Error|Application error: a (?:client|server)-side exception|Internal Server Error|This page (?:could not be|isn't) found|Failed to compile|\b(?:Type|Syntax|Reference)Error:/i,
+          );
+          return m ? `the target looks like an error page ("${m[0]}")` : null;
+        })
+        .catch(() => null);
+      const png = await page.screenshot({
+        fullPage: opts.fullPage ?? true,
+        animations: "disabled",
+        caret: "hide",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      return { png, finalUrl, authWall, pageError };
+    },
+  );
 }
 
 const LOGIN_PATH =
@@ -424,44 +525,43 @@ export function classifyCapture(
 }
 
 async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | null> {
-  const browser = await launchBrowser();
-  try {
-    const context = await browser.newContext({
+  return withContext(
+    {
       viewport: { width: opts.viewport.w, height: opts.viewport.h },
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
-    });
-    const page = await context.newPage();
-    await page.setContent(opts.html, {
-      waitUntil: "domcontentloaded",
-      timeout: CAPTURE_TIMEOUT_MS,
-    });
-    // Give network images a bounded chance to land — otherwise every
-    // remote <img> screenshots as a blank box and the agent's visual
-    // QA loop is blind to imagery. Offline/slow assets just time out
-    // and the capture proceeds.
-    await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
-    await waitForLiveIslands(page, opts.html);
-    if (opts.clipSelector) {
-      const locator = page.locator(opts.clipSelector).first();
-      if ((await locator.count()) === 0) {
-        throw new Error(`screenshot: no element matches selector ${opts.clipSelector}`);
+    },
+    async (context) => {
+      const page = await context.newPage();
+      await page.setContent(opts.html, {
+        waitUntil: "domcontentloaded",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      // Give network images a bounded chance to land — otherwise every
+      // remote <img> screenshots as a blank box and the agent's visual
+      // QA loop is blind to imagery. Offline/slow assets just time out
+      // and the capture proceeds.
+      await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+      await waitForLiveIslands(page, opts.html);
+      if (opts.clipSelector) {
+        const locator = page.locator(opts.clipSelector).first();
+        if ((await locator.count()) === 0) {
+          throw new Error(`screenshot: no element matches selector ${opts.clipSelector}`);
+        }
+        if (opts.outPath) {
+          await locator.screenshot({ path: opts.outPath, timeout: CAPTURE_TIMEOUT_MS });
+          return null;
+        }
+        return await locator.screenshot({ timeout: CAPTURE_TIMEOUT_MS });
       }
+      const fullPage = opts.fullPage ?? true;
       if (opts.outPath) {
-        await locator.screenshot({ path: opts.outPath, timeout: CAPTURE_TIMEOUT_MS });
+        await page.screenshot({ path: opts.outPath, fullPage, timeout: CAPTURE_TIMEOUT_MS });
         return null;
       }
-      return await locator.screenshot({ timeout: CAPTURE_TIMEOUT_MS });
-    }
-    const fullPage = opts.fullPage ?? true;
-    if (opts.outPath) {
-      await page.screenshot({ path: opts.outPath, fullPage, timeout: CAPTURE_TIMEOUT_MS });
-      return null;
-    }
-    const buf = await page.screenshot({ fullPage, timeout: CAPTURE_TIMEOUT_MS });
-    return buf;
-  } finally {
-    await browser.close();
-  }
+      const buf = await page.screenshot({ fullPage, timeout: CAPTURE_TIMEOUT_MS });
+      return buf;
+    },
+  );
 }
 
 export interface ScreenshotCompareOptions {
@@ -489,28 +589,30 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
   const w = opts.viewport.w;
   const h = opts.viewport.h;
   const wrapper = buildCompareWrapper(opts.leftHtml, opts.rightHtml, w, h, labelLeft, labelRight);
-  const browser = await launchBrowser();
-  try {
-    const context = await browser.newContext({
+  return withContext(
+    {
       // Width = 2 panels + 1px gutter + horizontal padding; arbitrary tall
       // initial height — we screenshot fullPage so the wrapper grows.
       viewport: { width: w * 2 + 24, height: 800 },
       deviceScaleFactor: opts.deviceScaleFactor ?? 1,
-    });
-    const page = await context.newPage();
-    await page.setContent(wrapper, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT_MS });
-    // Wait until both iframes have measured + the wrapper sized itself.
-    await page.waitForFunction(() => {
-      const l = document.getElementById("L") as HTMLIFrameElement | null;
-      const r = document.getElementById("R") as HTMLIFrameElement | null;
-      return !!(l && r && l.dataset.ready === "1" && r.dataset.ready === "1");
-    });
-    // Bounded grace for network images (see screenshotInternal).
-    await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
-    return await page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS });
-  } finally {
-    await browser.close();
-  }
+    },
+    async (context) => {
+      const page = await context.newPage();
+      await page.setContent(wrapper, {
+        waitUntil: "domcontentloaded",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      // Wait until both iframes have measured + the wrapper sized itself.
+      await page.waitForFunction(() => {
+        const l = document.getElementById("L") as HTMLIFrameElement | null;
+        const r = document.getElementById("R") as HTMLIFrameElement | null;
+        return !!(l && r && l.dataset.ready === "1" && r.dataset.ready === "1");
+      });
+      // Bounded grace for network images (see screenshotInternal).
+      await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+      return await page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS });
+    },
+  );
 }
 
 function buildCompareWrapper(
