@@ -152,6 +152,19 @@ const NONE_INTRO = [
 ];
 
 /**
+ * Prepended for a no-framework folder whose CSS framework is also `none` (the
+ * inline-`style` channel). Same primitives as NONE_INTRO, but styling is plain
+ * inline `style` objects with no Tailwind — so the Tailwind/className/audit
+ * guidance below must be ignored.
+ */
+const NONE_INLINE_INTRO = [
+  "You are working on a **no-framework** Velloo design folder with **no CSS framework** — bare primitives + velloo helpers (`Box`/`Stack`/`Container`, `Card`, `Button`, `Input`, `Heading`/`Text`, `Image`, `Icon`, `SVG`, `Divider`, `Gradient`, `Layer`, `Placeholder`) wrapping plain HTML, styled with **inline `style` objects** — there is no Tailwind here. Call `list_components` for the exact set; there is NO shadcn surface (no `Badge`/`Avatar`/`Tabs`/`Dialog`/etc.), so build those from primitives or snippets.",
+  "",
+  '**Style with the `style` object, not Tailwind classes.** Use `set_style { style: { display: "flex", gap: "16px", padding: "24px", borderRadius: "8px", color: "var(--color-foreground)" } }` — a plain React style object (merges shallowly; an inner `null` drops a key; `style: null` clears). Reference theme tokens as CSS variables (`var(--color-primary)`, `var(--color-muted-foreground)`, `var(--radius)`) from `get_theme` so the design stays themable. `emit_code` emits `style={{…}}` on plain elements (no imports, no Tailwind). **The Tailwind-specific guidance in the rest of these instructions — `className`, utility tokens (`bg-background`, `text-muted-foreground`), `apply_classes`, the `audit` tool — does NOT apply here; ignore it.**',
+  "",
+];
+
+/**
  * The instructions string. `canvasUrl` (when the MCP boots alongside a canvas)
  * is surfaced so the agent can hand the user a URL to watch — important under
  * the stdio transport, where the canvas binds an ephemeral port the user can't
@@ -166,7 +179,14 @@ export function buildInstructions(
   channelKind?: StyleChannelKind,
   providerId?: string,
 ): string {
-  const intro = channelKind === "sx" ? MUI_INTRO : providerId === "none" ? NONE_INTRO : [];
+  const intro =
+    channelKind === "sx"
+      ? MUI_INTRO
+      : providerId === "none"
+        ? channelKind === "style"
+          ? NONE_INLINE_INTRO
+          : NONE_INTRO
+        : [];
   const parts = [...intro, ...INSTRUCTION_PARTS];
   if (tiered) parts.push("", revealInstructions());
   if (canvasUrl) {
@@ -189,7 +209,10 @@ function buildMcpServer(
 ): McpServer {
   const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled);
   const tiered = !flatToolsMode();
-  const channelKind = styleChannelOf(ctx.defaultProvider).kind;
+  const channelKind = styleChannelOf(
+    ctx.defaultProvider,
+    ctx.folder.config.styling?.framework,
+  ).kind;
   const mcp = new McpServer(
     { name: "velloo", version: "0.1.0" },
     {

@@ -139,6 +139,12 @@ export interface EmitCodeOptions {
    * suppressed (they don't apply to a non-shadcn framework). Absent ⇒ shadcn.
    */
   target?: CodegenTarget;
+  /**
+   * No-CSS-framework folder (`config.styling.framework === "none"`): the no-lib
+   * primitives emit as plain HTML with inline `style` defaults (Tailwind-free),
+   * and the shadcn install lists are suppressed. Absent ⇒ class-based.
+   */
+  inlineStyle?: boolean;
 }
 
 const DEFAULT_ALIAS = "@/components/ui";
@@ -225,6 +231,7 @@ export async function emitCode(
       snippets: options.snippets,
       extensions: extensionsMap,
       target: options.target,
+      inlineStyle: options.inlineStyle,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
@@ -244,14 +251,15 @@ export async function emitCode(
           snippets: options.snippets,
           extensions: options.extensions,
           target: options.target,
+          inlineStyle: options.inlineStyle,
         }),
       );
       snippetIRs.push(snippetR);
     }
 
-    // A non-shadcn target (MUI) has no shadcn components to `npx shadcn add`
-    // and no velloo helpers to materialize — its components import natively.
-    const native = options.target !== undefined;
+    // A non-shadcn target (MUI) or a no-CSS-framework folder has no shadcn
+    // components to `npx shadcn add` and no velloo helpers to materialize.
+    const native = options.target !== undefined || Boolean(options.inlineStyle);
     return {
       screen: { id: screen.id, name: screen.name },
       jsx: body,
@@ -274,6 +282,8 @@ export interface EmitSnippetOptions {
   extensions?: Record<string, Extension>;
   /** Framework target — same shape + meaning as `EmitCodeOptions.target`. */
   target?: CodegenTarget;
+  /** No-CSS-framework folder — same shape + meaning as `EmitCodeOptions.inlineStyle`. */
+  inlineStyle?: boolean;
 }
 
 function buildExtensionsMap(
@@ -306,12 +316,13 @@ export async function emitSnippet(
       snippetParamNames: paramNames,
       extensions: extensionsMap,
       target: options.target,
+      inlineStyle: options.inlineStyle,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(snippet.tree, ctx));
     const meta = collectMetadata(snippet.tree, options.snippets);
-    const native = options.target !== undefined;
+    const native = options.target !== undefined || Boolean(options.inlineStyle);
     return {
       id: snippet.id,
       componentName,

@@ -9,7 +9,7 @@ import {
   emitTheme,
   moduleTarget,
 } from "@velloo/codegen";
-import type { FrameworkAdapter } from "@velloo/provider";
+import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { Screen, Snippet } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
@@ -51,6 +51,21 @@ async function targetFor(
   );
 }
 
+/**
+ * Whether a screen/snippet emits on the inline-`style` channel (a none/none
+ * folder). When true, emit_code lowers the no-lib primitives to plain HTML with
+ * inline `style` defaults — Tailwind-free — instead of className lowering.
+ */
+function isInlineStyle(
+  ctx: MutationContext,
+  thing: Pick<Screen, "library"> | Pick<Snippet, "library">,
+): boolean {
+  return (
+    styleChannelOf(providerForScreen(ctx, thing), ctx.folder.config.styling?.framework).kind ===
+    "style"
+  );
+}
+
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
     "emit_code",
@@ -73,6 +88,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
         ...(target ? { target } : {}),
+        ...(isInlineStyle(ctx, screen) ? { inlineStyle: true } : {}),
       });
       if (!result.ok) return codegenErrorResult(result.error);
       return jsonResult(result.value);
@@ -100,6 +116,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
         ...(target ? { target } : {}),
+        ...(isInlineStyle(ctx, snippet) ? { inlineStyle: true } : {}),
       });
       if (!result.ok) return codegenErrorResult(result.error);
       return jsonResult(result.value);

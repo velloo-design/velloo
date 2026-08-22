@@ -9,6 +9,7 @@ import {
   type Board,
   BoardSchema,
   type CanvasNote,
+  type Config,
   ConfigSchema,
   type Screen,
   ScreenSchema,
@@ -183,12 +184,21 @@ async function writeScaffold(
   // bundler's `{ "@/*": "*" }` default — reading the host tsconfig per the
   // codebase stance is fragile; apps with a non-root `@` alias edit it once.
   const hostAppRoot = relative(folder, answers.scanRoot);
+  // CSS framework (the styling axis): only the no-framework library has a real
+  // choice — shadcn carries Tailwind and MUI carries `sx` intrinsically. For a
+  // `none` folder, detect Tailwind in the host (config/dep) ⇒ "tailwind",
+  // otherwise ⇒ "none" (inline styles, no build step).
+  const styling: Config["styling"] =
+    plan.library.id === "none"
+      ? { framework: answers.detected?.tailwindMajor ? "tailwind" : "none" }
+      : undefined;
   const config = buildDefaultConfig({
     library: plan.library,
     projectId,
     defaultScreen: defaultScreenForScaffold(scaffold),
     ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
     ...(answers.feedback ? { feedback: answers.feedback } : {}),
+    ...(styling ? { styling } : {}),
   });
   ConfigSchema.parse(config);
   ThemeSchema.parse(scaffold.theme);

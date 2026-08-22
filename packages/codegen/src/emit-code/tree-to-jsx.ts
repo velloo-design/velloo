@@ -10,7 +10,7 @@ import {
   type Snippet,
   substituteSnippetParams,
 } from "@velloo/schema";
-import { LOWERED_CONSUMED_PROPS, REGISTRY } from "../component-registry.ts";
+import { inlineNoneLower, LOWERED_CONSUMED_PROPS, REGISTRY } from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
 import type { ImportSet } from "./imports.ts";
@@ -44,6 +44,12 @@ export interface EmitContext {
    * screen's `Card`/`Box` resolve to MUI, not the shadcn primitive of that id.
    */
   target?: CodegenTarget;
+  /**
+   * The folder is a no-CSS-framework (`none/none`) folder: the no-lib primitives
+   * lower to plain HTML with inline `style` defaults (no Tailwind), consulted
+   * before the REGISTRY. Set from `config.styling.framework === "none"`.
+   */
+  inlineStyle?: boolean;
   /**
    * Non-fatal emit caveats accumulated during the walk (e.g. an Icon whose
    * `name` is a dynamic param, which can't survive lowering — see
@@ -158,42 +164,50 @@ function renderComponent(
   }
 
   type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean };
+  // none/none folder: a no-lib primitive (Box/Stack/Card/Button/…) lowers to
+  // plain HTML + inline `style` defaults — consulted FIRST so `Card`/`Button`
+  // resolve to a styled `<div>`/`<button>`, not the shadcn import of that id.
+  // Helpers (Icon/Image/…) return null here and fall through to the REGISTRY.
+  const inlineLowered = ctx.inlineStyle ? inlineNoneLower(node.$ref, node.props ?? {}) : null;
+
   // A framework target (MUI) wins over the shadcn REGISTRY: a MUI screen's
   // `Card`/`Box` must resolve to `@mui/material`, not the shadcn primitive of
   // the same id. The component emits as a bare import + its `sx` object flows
   // through the generic prop path (no Tailwind lowering, no className merge).
-  const native = ctx.target?.importFor(node.$ref) ?? null;
   let entry: SyntheticEntry | undefined;
-  if (native) {
-    entry = {
-      kind: "shadcn",
-      jsxName: native.jsxName,
-      importFile: native.from,
-      __bareImport: true,
-    };
-  } else {
-    // Built-in (library) component? Use the static registry entry which
-    // knows the lowering / cva variant / shadcn import path.
-    entry = REGISTRY[node.$ref];
-    if (!entry) {
-      // Registered extension? Synthesize a shadcn-shaped registry entry so
-      // the rest of this function reads the importPath off it and uses the
-      // ref's own id as the JSX name. Extensions are always emitted as
-      // bare external imports with the user-supplied importPath.
-      const ext = ctx.extensions?.get(node.$ref);
-      if (ext) {
-        entry = {
-          kind: "shadcn",
-          jsxName: node.$ref,
-          importFile: ext.importPath,
-          // Mark so the import set uses `addBare` (verbatim path) rather
-          // than `add` (which prepends componentsAlias).
-          __bareImport: true,
-        };
+  if (!inlineLowered) {
+    const native = ctx.target?.importFor(node.$ref) ?? null;
+    if (native) {
+      entry = {
+        kind: "shadcn",
+        jsxName: native.jsxName,
+        importFile: native.from,
+        __bareImport: true,
+      };
+    } else {
+      // Built-in (library) component? Use the static registry entry which
+      // knows the lowering / cva variant / shadcn import path.
+      entry = REGISTRY[node.$ref];
+      if (!entry) {
+        // Registered extension? Synthesize a shadcn-shaped registry entry so
+        // the rest of this function reads the importPath off it and uses the
+        // ref's own id as the JSX name. Extensions are always emitted as
+        // bare external imports with the user-supplied importPath.
+        const ext = ctx.extensions?.get(node.$ref);
+        if (ext) {
+          entry = {
+            kind: "shadcn",
+            jsxName: node.$ref,
+            importFile: ext.importPath,
+            // Mark so the import set uses `addBare` (verbatim path) rather
+            // than `add` (which prepends componentsAlias).
+            __bareImport: true,
+          };
+        }
       }
     }
+    if (!entry) return err(unknownComponent(node.$ref));
   }
-  if (!entry) return err(unknownComponent(node.$ref));
 
   const props = { ...(node.props ?? {}) };
   const childrenProp = props.children;
@@ -216,7 +230,26 @@ function renderComponent(
   let mergedClassName: string;
   let loweredFallbackChild: string | undefined;
 
-  if (entry.kind === "lowered") {
+  if (inlineLowered) {
+    // Plain HTML element styled inline. The node's authored `style` merges OVER
+    // the structural defaults; no className/import on this channel.
+    for (const k of inlineLowered.consumed) delete props[k];
+    const authored =
+      props.style && typeof props.style === "object" && !Array.isArray(props.style)
+        ? (props.style as Record<string, unknown>)
+        : undefined;
+    const mergedStyle = { ...inlineLowered.style, ...(authored ?? {}) };
+    if (Object.keys(mergedStyle).length > 0) props.style = mergedStyle;
+    else delete props.style;
+    if (inlineLowered.extraProps) {
+      for (const [k, v] of Object.entries(inlineLowered.extraProps)) {
+        if (props[k] === undefined) props[k] = v;
+      }
+    }
+    mergedClassName = "";
+    openTag = inlineLowered.tag;
+    closeTag = inlineLowered.tag;
+  } else if (entry?.kind === "lowered") {
     const result = entry.lower(props);
     mergedClassName = mergeClasses(result.extraClasses, classNameProp);
     const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
@@ -229,7 +262,7 @@ function renderComponent(
     loweredFallbackChild = result.fallbackChild;
     openTag = result.tag;
     closeTag = result.tag;
-  } else if (entry.kind === "dynamic") {
+  } else if (entry?.kind === "dynamic") {
     const { jsxName, extraClasses } = entry.resolve(props);
     // A dynamic Icon name (a $param/$if ref) can't survive lowering: the
     // lucide name becomes the JSX tag, which must be a static identifier,
@@ -248,7 +281,7 @@ function renderComponent(
     if (consumed) for (const k of consumed) delete props[k];
     openTag = jsxName;
     closeTag = jsxName;
-  } else {
+  } else if (entry) {
     // Synthetic extension entries set `__bareImport` so the importPath
     // flows through verbatim instead of being prefixed with the
     // components alias.
@@ -260,6 +293,10 @@ function renderComponent(
     mergedClassName = mergeClasses(classNameProp);
     openTag = entry.jsxName;
     closeTag = entry.jsxName;
+  } else {
+    // Unreachable: a non-inline node always resolves an entry (or returned
+    // UnknownComponent above). Keeps the compiler happy about the union.
+    return err(unknownComponent(node.$ref));
   }
 
   const attrParts: string[] = [];

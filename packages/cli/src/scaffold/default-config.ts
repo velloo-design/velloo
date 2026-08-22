@@ -26,6 +26,13 @@ interface DefaultConfigOpts {
    * user signs in. Absent ⇒ feedback stays off (the default).
    */
   feedback?: { enabled: boolean; contactOk?: boolean };
+  /**
+   * The folder's CSS framework (the styling axis). Set only for the
+   * no-framework library — shadcn carries Tailwind and MUI carries `sx`, so
+   * their channel is intrinsic and `styling` stays absent. See
+   * docs/framework-native.md.
+   */
+  styling?: Config["styling"];
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
@@ -52,5 +59,6 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ...(opts.projectId ? { projectId: opts.projectId } : {}),
     ...(opts.hostApp ? { hostApp: opts.hostApp } : {}),
     ...(opts.feedback ? { feedback: opts.feedback } : {}),
+    ...(opts.styling ? { styling: opts.styling } : {}),
   };
 }

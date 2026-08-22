@@ -40,7 +40,10 @@ export async function setStyle(
 
   const screenR = getScreen(ctx, screenId);
   if (!screenR.ok) return screenR;
-  const channel = styleChannelOf(providerForScreen(ctx, screenR.value));
+  const channel = styleChannelOf(
+    providerForScreen(ctx, screenR.value),
+    ctx.folder.config.styling?.framework,
+  );
   const prop = channel.prop;
 
   const wantsString = channel.kind === "tailwind-classname";

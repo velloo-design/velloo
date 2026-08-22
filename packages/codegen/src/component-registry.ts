@@ -418,3 +418,167 @@ export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Stack: new Set(["direction", "gap", "align", "justify"]),
   Container: new Set(["size"]),
 };
+
+// ── Inline-style lowering for a none/none folder (the `style` channel) ───────
+// Mirrors packages/provider-none/src/components-inline.tsx: the no-lib primitives
+// emit as plain HTML with their structural defaults as a `style` object (themed
+// via CSS vars), so `emit_code` for a no-CSS-framework folder is Tailwind-free.
+
+type CssObject = Record<string, string | number>;
+type InlineLowering = { tag: string; style: CssObject; consumed: string[]; extraProps?: CssObject };
+
+const space = (n: number) => `${n * 0.25}rem`;
+const STACK_ALIGN_STYLE: Record<string, string> = {
+  start: "flex-start",
+  center: "center",
+  end: "flex-end",
+  stretch: "stretch",
+};
+const STACK_JUSTIFY_STYLE: Record<string, string> = {
+  start: "flex-start",
+  center: "center",
+  end: "flex-end",
+  between: "space-between",
+  around: "space-around",
+};
+const CONTAINER_MAX_WIDTH: Record<string, string> = {
+  sm: "640px",
+  md: "768px",
+  lg: "1024px",
+  xl: "1280px",
+  full: "100%",
+};
+const BUTTON_VARIANT_STYLE: Record<string, CssObject> = {
+  default: { background: "var(--color-foreground)", color: "var(--color-background)" },
+  ghost: { background: "transparent", color: "var(--color-foreground)" },
+  outline: {
+    background: "transparent",
+    color: "var(--color-foreground)",
+    border: "1px solid var(--color-border)",
+  },
+};
+const HEADING_STYLE_BY_LEVEL: Record<number, CssObject> = {
+  1: { fontSize: "3rem", fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.1 },
+  2: { fontSize: "2.25rem", fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.1 },
+  3: { fontSize: "1.875rem", fontWeight: 600, letterSpacing: "-0.025em" },
+  4: { fontSize: "1.5rem", fontWeight: 600, letterSpacing: "-0.025em" },
+  5: { fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.025em" },
+  6: { fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.025em" },
+};
+const TEXT_STYLE_BY_VARIANT: Record<string, CssObject> = {
+  default: { fontSize: "1rem", color: "var(--color-foreground)", lineHeight: 1.75 },
+  muted: { fontSize: "0.875rem", color: "var(--color-muted-foreground)" },
+  small: { fontSize: "0.875rem", fontWeight: 500, lineHeight: 1 },
+  lead: { fontSize: "1.25rem", color: "var(--color-muted-foreground)" },
+};
+
+/**
+ * Inline-style lowering for the no-library primitives. Returns the HTML tag +
+ * the structural default `style` (which the node's authored `style` merges over)
+ * + the props it consumes, or null for a `$ref` that isn't a no-lib primitive
+ * (helpers like Icon/Image fall through to the normal REGISTRY). Only consulted
+ * when emitting a `style`-channel (none/none) folder.
+ */
+export function inlineNoneLower(
+  ref: string,
+  props: Record<string, unknown>,
+): InlineLowering | null {
+  switch (ref) {
+    case "Box": {
+      const as = props.as;
+      const tag = typeof as === "string" && /^[a-z][a-z0-9]*$/.test(as) ? as : "div";
+      return { tag, style: {}, consumed: ["as"] };
+    }
+    case "Stack": {
+      const gap = typeof props.gap === "number" ? props.gap : 4;
+      const style: CssObject = {
+        display: "flex",
+        flexDirection: props.direction === "row" ? "row" : "column",
+        gap: space(gap),
+      };
+      const align = STACK_ALIGN_STYLE[String(props.align)];
+      if (align) style.alignItems = align;
+      const justify = STACK_JUSTIFY_STYLE[String(props.justify)];
+      if (justify) style.justifyContent = justify;
+      return { tag: "div", style, consumed: ["direction", "gap", "align", "justify"] };
+    }
+    case "Container":
+      return {
+        tag: "div",
+        style: {
+          marginInline: "auto",
+          width: "100%",
+          paddingInline: "1rem",
+          maxWidth: CONTAINER_MAX_WIDTH[String(props.size ?? "md")] ?? "768px",
+        },
+        consumed: ["size"],
+      };
+    case "Card":
+      return {
+        tag: "div",
+        style: {
+          borderRadius: "var(--radius)",
+          border: "1px solid var(--color-border)",
+          background: "var(--color-card)",
+          color: "var(--color-card-foreground)",
+          padding: "1.5rem",
+          boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+        },
+        consumed: [],
+      };
+    case "Button":
+      return {
+        tag: "button",
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.5rem",
+          borderRadius: "var(--radius)",
+          padding: "0.5rem 1rem",
+          fontSize: "0.875rem",
+          fontWeight: 500,
+          cursor: "pointer",
+          ...(BUTTON_VARIANT_STYLE[String(props.variant ?? "default")] ??
+            BUTTON_VARIANT_STYLE.default),
+        },
+        consumed: ["variant"],
+        extraProps: { type: "button" },
+      };
+    case "Input":
+      return {
+        tag: "input",
+        style: {
+          display: "block",
+          width: "100%",
+          borderRadius: "var(--radius)",
+          border: "1px solid var(--color-input)",
+          background: "var(--color-background)",
+          padding: "0.5rem 0.75rem",
+          fontSize: "0.875rem",
+        },
+        consumed: [],
+        extraProps: { type: "text" },
+      };
+    case "Heading": {
+      const level = Number(props.level ?? 1);
+      const safe = Number.isFinite(level) && level >= 1 && level <= 6 ? Math.trunc(level) : 1;
+      return {
+        tag: `h${safe}`,
+        style: HEADING_STYLE_BY_LEVEL[safe] ?? HEADING_STYLE_BY_LEVEL[1] ?? {},
+        consumed: ["level"],
+      };
+    }
+    case "Text":
+      return {
+        tag: "p",
+        style:
+          TEXT_STYLE_BY_VARIANT[String(props.variant ?? "default")] ??
+          TEXT_STYLE_BY_VARIANT.default ??
+          {},
+        consumed: ["variant"],
+      };
+    default:
+      return null;
+  }
+}

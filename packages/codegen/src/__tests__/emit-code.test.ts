@@ -7,6 +7,55 @@ function screenOf(tree: Screen["tree"]): Screen {
   return { id: "home", name: "Home", tree };
 }
 
+describe("emitCode — inline-style channel (none/none)", () => {
+  test("lowers no-lib primitives to plain HTML with inline style (no Tailwind, no imports)", async () => {
+    const screen = screenOf({
+      $ref: "Stack",
+      props: { direction: "col", gap: 6, style: { padding: "40px" } },
+      children: [
+        {
+          $ref: "Card",
+          children: [
+            { $ref: "Heading", props: { level: 2, children: "Hello" } },
+            { $ref: "Button", props: { variant: "outline", children: "Go" } },
+          ],
+        },
+      ],
+    });
+    const result = unwrap(await emitCode(screen, { inlineStyle: true }));
+    // Plain HTML tags, not <Stack>/<Card>/<Button> imports.
+    expect(result.jsx).toContain("<div");
+    expect(result.jsx).toContain("<button");
+    expect(result.jsx).toContain("<h2");
+    expect(result.jsx).not.toContain("<Stack");
+    expect(result.jsx).not.toContain("<Card");
+    // Inline style with structural defaults; no className anywhere.
+    expect(result.jsx).toContain("style={{");
+    expect(result.jsx).toContain('display: "flex"');
+    expect(result.jsx).toContain('gap: "1.5rem"');
+    expect(result.jsx).not.toContain("className");
+    // The node's authored style merges over the defaults.
+    expect(result.jsx).toContain('padding: "40px"');
+    // Button gets type="button"; consumed props (variant/level/direction) gone.
+    expect(result.jsx).toContain('type="button"');
+    expect(result.jsx).not.toContain("variant=");
+    expect(result.jsx).not.toContain("direction=");
+    // No shadcn install plan on a Tailwind-free folder.
+    expect(result.componentsToInstall).toEqual([]);
+    expect(result.helpersToMaterialize).toEqual([]);
+  });
+
+  test("Icon still lowers to a lucide import on the inline channel", async () => {
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Icon", props: { name: "ArrowRight" } }), {
+        inlineStyle: true,
+      }),
+    );
+    expect(result.jsx).toContain("<ArrowRight");
+    expect(result.iconsUsed).toContain("ArrowRight");
+  });
+});
+
 describe("emitCode", () => {
   test("serializes a component tree to JSX with metadata", async () => {
     const screen = screenOf({
