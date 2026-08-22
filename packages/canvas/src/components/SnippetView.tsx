@@ -90,7 +90,14 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
         // `snippet:` prefix. Selection / Tree / Inspector are all
         // screen-shaped — letting them target this id lets us reuse
         // them unchanged.
-        setScreen(virtualScreenId, { id: virtualScreenId, name: s.name, tree: s.tree });
+        // Carry the snippet's library so the Inspector edits the body in that
+        // library's native style channel (sx for a MUI snippet, not className).
+        setScreen(virtualScreenId, {
+          id: virtualScreenId,
+          name: s.name,
+          tree: s.tree,
+          ...(s.library ? { library: s.library } : {}),
+        });
       })
       .catch(() => {
         if (alive) setLoading(false);

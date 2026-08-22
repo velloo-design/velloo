@@ -86,6 +86,7 @@ export function connectWs(): () => void {
                 id: `snippet:${payload.snippetId}`,
                 name: s.name,
                 tree: s.tree,
+                ...(s.library ? { library: s.library } : {}),
               });
             } catch {
               /* the snippet may have been deleted; ignore */
