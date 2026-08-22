@@ -1,6 +1,8 @@
 export {
   type CanvasBundleSpec,
   type CatalogEntry,
+  CSS_FRAMEWORK_CHANNEL,
+  type CssFramework,
   catalogFromManifest,
   type FrameworkAdapter,
   type InstallCtx,
@@ -8,6 +10,8 @@ export {
   type InstallTarget,
   type RenderPass,
   type RenderStrategy,
+  STYLE_CHANNELS,
+  STYLE_PROP,
   type StyleChannel,
   type StyleChannelKind,
   SX_PROP,

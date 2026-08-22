@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { compile } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
-import { type ComponentProvider, styleChannelOf } from "@velloo/provider";
+import { type ComponentProvider, type CssFramework, styleChannelOf } from "@velloo/provider";
 
 type Compiler = Awaited<ReturnType<typeof compile>>;
 
@@ -64,12 +64,20 @@ export class TailwindJit {
      * fallback — a config that throws (missing plugin, etc.) is dropped, not fatal.
      */
     private readonly hostConfigPath?: () => string | null,
+    /**
+     * The folder's CSS framework — resolves each provider's active channel, so
+     * a `none/none` folder (the no-lib provider on the inline-`style` channel)
+     * drops out of the Tailwind set and `build()` short-circuits to empty.
+     */
+    folderCss?: CssFramework,
   ) {
     this.providers = Array.isArray(providers) ? providers : [providers];
     if (this.providers.length === 0) {
       throw new Error("TailwindJit: at least one provider is required.");
     }
-    this.tailwindProviders = this.providers.filter((p) => styleChannelOf(p).needsTailwindJit);
+    this.tailwindProviders = this.providers.filter(
+      (p) => styleChannelOf(p, folderCss).needsTailwindJit,
+    );
     this.snippetsDir = snippetsDir ?? join(pagesDir, "..", "snippets");
   }
 

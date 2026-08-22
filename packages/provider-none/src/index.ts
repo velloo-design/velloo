@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@velloo/provider";
 import { NONE_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
+import { inlineRegistry } from "./registry-inline.ts";
 
 export { Box, Button, Card, Container, Input, Stack } from "./components.tsx";
 export { NONE_MANIFEST } from "./manifest.ts";
@@ -55,6 +56,12 @@ export function createProvider(): FrameworkAdapter {
     registry,
     loadManifest,
     label: `none ${noLibVersion}`,
+    // Default to Tailwind (existing folders); a folder whose `config.styling`
+    // is `none` resolves to the inline-`style` channel instead.
     styleChannel: TAILWIND_CLASSNAME,
+    styleChannels: ["tailwind-classname", "style"],
+    // Inline-styled primitives for the `style` channel; Tailwind-classed for
+    // every other channel. Lets a `none/none` folder paint with the JIT off.
+    registryForChannel: (kind) => (kind === "style" ? inlineRegistry : registry),
   };
 }

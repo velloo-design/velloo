@@ -67,5 +67,6 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
     },
     label: `shadcn (upstream @ ${version})`,
     styleChannel: TAILWIND_CLASSNAME,
+    styleChannels: ["tailwind-classname"],
   };
 }

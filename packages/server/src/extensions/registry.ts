@@ -1,8 +1,10 @@
-import type {
-  ComponentProvider,
-  ComponentRegistry,
-  FrameworkAdapter,
-  RenderPass,
+import {
+  type ComponentProvider,
+  type ComponentRegistry,
+  type CssFramework,
+  type FrameworkAdapter,
+  type RenderPass,
+  styleChannelOf,
 } from "@velloo/provider";
 import type { Extension, Screen, Snippet, Theme } from "@velloo/schema";
 import { createElement } from "react";
@@ -67,8 +69,14 @@ export function registryForScreen(
   providers: Record<string, ComponentProvider>,
   defaultProvider: ComponentProvider,
   extensions: Record<string, Extension>,
+  folderCss?: CssFramework,
 ): ComponentRegistry {
-  const base = providerForScreen(screen, providers, defaultProvider).registry;
+  const provider = providerForScreen(screen, providers, defaultProvider) as FrameworkAdapter;
+  // The provider may ship channel-specific components (none: inline-styled for the
+  // `style` channel vs Tailwind-classed otherwise). Resolve the screen's channel
+  // from the folder's CSS framework and pick the matching registry.
+  const channel = styleChannelOf(provider, folderCss);
+  const base = provider.registryForChannel?.(channel.kind) ?? provider.registry;
   if (Object.keys(extensions).length === 0) return base;
   return { ...base, ...buildExtensionRegistry(extensions) };
 }

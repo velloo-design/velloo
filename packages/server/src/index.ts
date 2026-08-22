@@ -189,6 +189,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     () => extraThemeBlock(folder),
     () => bundler.hostSourceDirs(),
     () => findHostTailwindConfig(folder.root, folder.config.hostApp),
+    folder.config.styling?.framework,
   );
   const broadcast = (e: WatchEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {

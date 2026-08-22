@@ -1,7 +1,12 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { ComponentProvider, ProviderLoader } from "@velloo/provider";
-import { createProviderLoader, UnknownProviderError } from "@velloo/provider";
+import {
+  CSS_FRAMEWORK_CHANNEL,
+  createProviderLoader,
+  styleChannelOf,
+  UnknownProviderError,
+} from "@velloo/provider";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoLibProvider } from "@velloo/provider-none";
 import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
@@ -184,6 +189,25 @@ export async function resolveProviders(
     throw new Error(
       `velloo: defaultLibrary "${config.defaultLibrary}" doesn't match any registered library.`,
     );
+  }
+  // Coherence guard for the CSS-framework axis: the chosen
+  // styling must be a channel at least one registered library supports.
+  // shadcn + "none" is nonsensical (shadcn IS Tailwind) and is rejected here.
+  if (config.styling) {
+    const css = config.styling.framework;
+    const wanted = CSS_FRAMEWORK_CHANNEL[css];
+    const supported = Object.values(providers).some((p) => styleChannelOf(p, css).kind === wanted);
+    if (!supported) {
+      const libs = Object.values(config.libraries)
+        .map((l) => l.id)
+        .join(", ");
+      throw new Error(
+        `velloo: config.styling.framework "${css}" isn't supported by any registered ` +
+          `library (${libs}). shadcn and MUI carry their own styling; only the ` +
+          `no-framework library can pair with "none". Fix the CSS framework or library ` +
+          "in .design/config.json.",
+      );
+    }
   }
   return { providers, defaultProvider };
 }

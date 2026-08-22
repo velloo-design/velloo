@@ -123,6 +123,18 @@ export const ConfigSchema = z
     /** Board id the canvas should open on first load. Falls back to the first board. */
     defaultBoard: z.string().min(1).optional(),
     codegen: CodegenConfigSchema.optional(),
+    /**
+     * The folder's CSS framework — the styling axis, independent of the
+     * component library (`library`). `init` detects it from the host app.
+     * `"tailwind"` ⇒ Tailwind utility classes on `className`; `"none"` ⇒ inline
+     * `style` objects (themed via the CSS vars `themeToCss` injects, no build
+     * step). Absent ⇒ the active library's default channel (Tailwind for
+     * shadcn/none, `sx` for MUI). Honored per screen only when that screen's
+     * library supports it — a shadcn screen stays Tailwind even here. The
+     * server rejects a folder whose CSS framework no registered library
+     * supports (e.g. shadcn + none). See docs/framework-native.md.
+     */
+    styling: z.object({ framework: z.enum(["tailwind", "none"]) }).optional(),
     /** Host app location for the live-island bundler. See `HostAppSchema`. */
     hostApp: HostAppSchema.optional(),
     /**

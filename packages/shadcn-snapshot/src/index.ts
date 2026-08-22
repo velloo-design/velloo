@@ -39,5 +39,6 @@ export function createProvider(opts: { componentsDir?: string } = {}): Framework
     loadManifest,
     label: `shadcn-react ${snapshotVersion}`,
     styleChannel: TAILWIND_CLASSNAME,
+    styleChannels: ["tailwind-classname"],
   };
 }

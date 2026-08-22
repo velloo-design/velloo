@@ -59,6 +59,7 @@ export function createProvider(): FrameworkAdapter {
         { importPath: "@mui/material" },
       ),
     styleChannel: SX_PROP,
+    styleChannels: ["sx"],
     renderPass: (theme) => makeRenderPass(theme),
     codegenModule: "@mui/material",
     themeToNative: (theme, dark) => muiThemeOptions(theme, dark),

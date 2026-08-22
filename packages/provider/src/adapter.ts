@@ -47,6 +47,39 @@ export const SX_PROP: StyleChannel = {
   editorLabel: "sx props",
 };
 
+/**
+ * No CSS framework: a plain React `style` object (inline styles), rendered
+ * with no build step. Theme tokens reach it as CSS variables (`var(--color-…)`,
+ * `var(--radius)`) injected by `themeToCss`, so it themes without Tailwind.
+ */
+export const STYLE_PROP: StyleChannel = {
+  kind: "style",
+  prop: "style",
+  needsTailwindJit: false,
+  editorLabel: "Inline styles",
+};
+
+/** Every channel by kind, for resolving a folder's CSS-framework choice. */
+export const STYLE_CHANNELS: Record<StyleChannelKind, StyleChannel> = {
+  "tailwind-classname": TAILWIND_CLASSNAME,
+  sx: SX_PROP,
+  style: STYLE_PROP,
+};
+
+/**
+ * The CSS-framework axis, independent of the UI-component framework (the
+ * library). `init` detects it from the host app; the folder records it in
+ * `config.styling`. `"sx"` is intentionally absent — it's intrinsic to MUI,
+ * not a free CSS-framework choice. See docs/framework-native.md.
+ */
+export type CssFramework = "tailwind" | "none";
+
+/** Map a folder's chosen CSS framework to the style channel it selects. */
+export const CSS_FRAMEWORK_CHANNEL: Record<CssFramework, StyleChannelKind> = {
+  tailwind: "tailwind-classname",
+  none: "style",
+};
+
 // --- component catalog + installed-status (so the MCP can install on demand) ---
 
 /**
@@ -145,8 +178,29 @@ export interface CanvasBundleSpec {
 // --- the adapter ---
 
 export interface FrameworkAdapter extends ComponentProvider {
-  /** Native style channel. Absent ⇒ Tailwind className (today's behavior). */
+  /**
+   * The provider's default/intrinsic style channel. Absent ⇒ Tailwind
+   * className. For a single-channel framework (shadcn ⇒ Tailwind, MUI ⇒ sx)
+   * this is the only channel; for `none` it's the default when the folder
+   * hasn't chosen a CSS framework.
+   */
   styleChannel?: StyleChannel;
+  /**
+   * The CSS frameworks this UI library can pair with, as style-channel kinds
+   * (first = default). shadcn ⇒ `["tailwind-classname"]`, MUI ⇒ `["sx"]`,
+   * none ⇒ `["tailwind-classname", "style"]`. The folder's `config.styling`
+   * choice is honored only if it resolves to a channel in this set; otherwise
+   * the default wins (so a shadcn screen stays Tailwind even in a `none`-CSS
+   * folder). Absent ⇒ `[styleChannel.kind]`.
+   */
+  styleChannels?: StyleChannelKind[];
+  /**
+   * Channel-appropriate runtime registry. A framework whose primitives style
+   * differently per channel (`none`: Tailwind-classed vs inline-styled
+   * components) returns the right set here; absent ⇒ the static `registry` for
+   * every channel. Consumed by `registryForScreen`.
+   */
+  registryForChannel?(kind: StyleChannelKind): ComponentProvider["registry"];
   /** The library's full catalog with installed-status. Absent ⇒ derive from the manifest. */
   catalog?(): Promise<CatalogEntry[]>;
   /** Install a single catalog entry (per-component for shadcn; no-op when package-level). */
@@ -180,7 +234,23 @@ export interface FrameworkAdapter extends ComponentProvider {
   canvasBundleSpec?: CanvasBundleSpec;
 }
 
-/** The active style channel for a provider — defaults to Tailwind className when unspecified. */
-export function styleChannelOf(p: ComponentProvider | FrameworkAdapter): StyleChannel {
-  return (p as FrameworkAdapter).styleChannel ?? TAILWIND_CLASSNAME;
+/**
+ * Resolve a provider's active style channel, honoring the folder's CSS-framework
+ * choice when the provider supports it. With no `folderCss`, or when the chosen
+ * framework isn't in the provider's allowed set, the provider's default channel
+ * wins — so shadcn stays Tailwind and MUI stays `sx` regardless of the folder's
+ * CSS choice, while `none` follows it (Tailwind ↔ inline `style`).
+ */
+export function styleChannelOf(
+  p: ComponentProvider | FrameworkAdapter,
+  folderCss?: CssFramework,
+): StyleChannel {
+  const adapter = p as FrameworkAdapter;
+  const allowed = adapter.styleChannels ?? [adapter.styleChannel?.kind ?? "tailwind-classname"];
+  const fallback = allowed[0] ?? "tailwind-classname";
+  if (folderCss) {
+    const wanted = CSS_FRAMEWORK_CHANNEL[folderCss];
+    if (allowed.includes(wanted)) return STYLE_CHANNELS[wanted];
+  }
+  return STYLE_CHANNELS[fallback];
 }

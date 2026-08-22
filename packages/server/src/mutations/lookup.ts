@@ -242,7 +242,13 @@ export function registryForScreen(
   ctx: MutationContext,
   screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
 ): ComponentRegistry {
-  return registryForScreenImpl(screen, ctx.providers, ctx.defaultProvider, getExtensions(ctx));
+  return registryForScreenImpl(
+    screen,
+    ctx.providers,
+    ctx.defaultProvider,
+    getExtensions(ctx),
+    ctx.folder.config.styling?.framework,
+  );
 }
 
 /**
