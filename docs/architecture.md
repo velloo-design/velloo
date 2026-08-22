@@ -328,7 +328,7 @@ Default mode users see no traces of this in their flow — it's a flag, not a ti
 
 ### Framework expansion
 
-The Library Registry is retained as an internal abstraction so a second library entry can ship cleanly if signal demands it. It is **not** a public promise: Velloo is positioned as shadcn-first, and a second library entry only ships after it satisfies the canvas-safe contract. Mantine / MUI / Chakra all rely on providers in ways that may exclude them; that's known and acceptable.
+**Superseded by the framework-native migration (`docs/framework-native.md`).** This section read "Velloo is positioned as shadcn-first… Mantine / MUI / Chakra all rely on providers in ways that may exclude them." That's no longer the stance: the `ComponentProvider` grew into a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework still has to satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode), but "may be excluded" is now "is adapted." Chakra/Mantine/Ant Design without an adapter fall back to the no-framework (div-backed) provider via scan detection.
 
 ## Theme model
 

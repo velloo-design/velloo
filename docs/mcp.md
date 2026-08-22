@@ -27,6 +27,7 @@ Hidden families (default): **theme-authoring** (`add_theme`, `apply_preset`, `sc
 | `list_boards` | `include_frames?: boolean` | `[{ id, name, frameCount, frames?, groups? }]` — pass `include_frames: true` to embed each board's full frame list in one round-trip |
 | `get_board` | `boardId` | `{ id, name, frames: [...], groups: [...] }` — frame placement on the named board |
 | `list_components` | `filter?, mode?: "summary" \| "full"` | `[{ id, props, category, summary }]` — summary mode returns just `{ id, props (names only), category, source }` to avoid blowing the token cap on first call |
+| `install_component` | `componentId, screenId?` | The existing-project flow's "is this component available + install it if not." Resolves the active library's catalog: an already-present component (every shipped library bundles its whole set, so the common case) returns `{ installed: true, importPath }` — just `$ref` it; an uninstalled one routes to the adapter's installer (shadcn-upstream's per-component fetch); an unknown id errors with the catalog. `screenId` picks the library; omitted ⇒ folder default |
 | `list_snippets` | — | `[{ id, name, params }]` |
 | `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
 | `get_theme` | — | full token tree |
@@ -42,6 +43,7 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 |---|---|
 | `add_node` | `screenId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
 | `update_props` | `screenId, path?, propPatch?` OR `patches: [{ path, propPatch }]` — shallow prop merge (null removes a key; className is a prop like any other). `patches` applies many nodes in one atomic write. Successful calls may carry advisory `propWarnings` |
+| `set_style` | `screenId, path, style` — style a node through the screen's framework-native **`StyleChannel`**: a Tailwind `className` string for shadcn, an `sx`/`style` object for MUI/no-framework. Object channels merge shallowly (inner `null` drops a key); `style: null` clears. A payload shape that doesn't fit the channel is rejected with the expected shape (how the agent discovers the channel). On shadcn, equivalent to setting `className` via `update_props` |
 | `override_snippet_props` | `screenId, path, innerPath, propPatch` — patch props on one node *inside* a snippet instance's body (path = instance locator; innerPath = `"@id"` of a body node (preferred — survives restructures), dotted index, or "" for root). Persists as `$overrides` on the instance; applied after param substitution at render; emit_code inlines overridden instances |
 | `move_node` | `screenId, fromPath, toParent, toIndex?` |
 | `remove_node` | `screenId, path` |
@@ -148,9 +150,9 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 
 | Tool | Args |
 |---|---|
-| `emit_code` | `screenId, componentsAlias?` — returns a structured JSX-shaped intermediate representation intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). `componentsAlias` overrides the per-folder default. **Not paste-ready output.** |
+| `emit_code` | `screenId, componentsAlias?` — returns a structured JSX-shaped intermediate representation intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). Emits the screen framework's native idiom: shadcn → library ids + Tailwind classes; MUI → `<Component sx={{…}} />` importing from `@mui/material`. `componentsAlias` overrides the per-folder default. **Not paste-ready output.** |
 | `emit_snippet` | `snippetId, componentsAlias?` — same idea, scoped to a single snippet. Returns PascalCase component name, typed params, JSX body |
-| `emit_theme` | `outputDir, apply?: boolean, cssOnly?: boolean` — generates Tailwind v4 `globals.css` (and optionally `tailwind.config.ts`). Defaults to dry-run; set `apply: true` to write. Direct user-facing artifact; agent does not need to transform it |
+| `emit_theme` | `outputDir, apply?: boolean, cssOnly?: boolean, themePath?` — emits the active framework's theme artifact: shadcn → Tailwind v4 `globals.css` (+ optional `tailwind.config.ts`); MUI → a `createTheme(...)` module at `themePath` (default `theme.ts`). Defaults to dry-run; set `apply: true` to write. Direct user-facing artifact; agent does not need to transform it |
 
 ## Path addressing
 

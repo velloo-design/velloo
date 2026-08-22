@@ -18,11 +18,11 @@ import { muiThemeOptions } from "./theme.ts";
  * (pre-bundle), so its components SSR in-process against the shared monorepo
  * React; the adapter's emotion `renderPass` extracts the critical CSS. Styling
  * is the `sx` prop (not Tailwind), and the theme projects velloo tokens onto a
- * MUI `createTheme`.
- *
- * Still landing in follow-on Phase-3 increments: canvas-safe overlay wrappers
- * (Dialog/Menu/Popover/Snackbar), a `.d.ts`-driven manifest generator, install
- * selection in `velloo init`, Pulse-MUI, and idiomatic `sx`/`createTheme` codegen.
+ * MUI `createTheme`. Canvas-safe overlays (Dialog/Menu/Popover/Drawer/Snackbar),
+ * `sx`/`createTheme` codegen, `velloo init --library=mui`, the catalog, and the
+ * installed-component canvas bundle (`canvasBundleSpec`) are all wired. The only
+ * deliberate non-build is a `.d.ts` manifest generator — the curated
+ * `MUI_MANIFEST` reads better than a generated dump of MUI's type surface.
  */
 
 export const MUI_VERSION = "6" as const;

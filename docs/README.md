@@ -36,7 +36,7 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 - **Local-first.** Every byte of design state — screens, boards, theme, snippets — lives on disk in the user's repo. The local tool needs no account, no server, no telemetry, and works offline. Cloud features are additive — they publish the git artifact, never replace it (see [monetization.md](./monetization.md)).
 - **Open source.** The local tool, from the first public release, under Apache-2.0. Paid cloud services are closed-source and live outside this repo. See [monetization.md](./monetization.md).
 - **Useful first.** The bar is: genuinely useful to a single solo developer (the author) for real product work. Commercial plans live in [monetization.md](./monetization.md) and don't reorder that.
-- **shadcn-first.** Other libraries (Mantine, MUI, Chakra) are an internal abstraction for a possible later, not a public promise. React-only.
+- **Framework-native, React-only** (updated from "shadcn-first" by the migration, #34 / [framework-native.md](./framework-native.md)). velloo is native to shadcn, **MUI** (real `@mui/material`, `sx`, emotion), and no-framework — each rendered, styled, and emitted in its own idiom. Frameworks without an adapter (Mantine, Chakra, …) fall back to no-framework primitives; non-React stacks remain out of scope.
 
 ## Status
 
