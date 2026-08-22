@@ -1,0 +1,3 @@
+# Velloo runtime + debug artifacts — regenerated on demand, never commit.
+.design/cache/
+.velloo/
