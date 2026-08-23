@@ -135,9 +135,10 @@ describe("connect", () => {
     expect(cfg.mcpServers.velloo).toEqual({ command: "velloo", args: ["mcp"] });
   });
 
-  test("installs the Claude Code skill when requested", async () => {
+  test("installs the Claude Code skills when requested", async () => {
     const r = await connect({ designFolder: design, agents: ["claude-code"], installSkill: true });
-    expect(r.skill?.installed).toBe(true);
+    expect(r.skills?.length).toBeGreaterThan(0);
+    expect(r.skills?.map((s) => s.name)).toContain("velloo-design");
     const skillBody = await readFile(
       join(tmp, ".claude", "skills", "velloo-design", "SKILL.md"),
       "utf8",
@@ -145,8 +146,8 @@ describe("connect", () => {
     expect(skillBody).toContain("name: velloo-design");
   });
 
-  test("does not install the skill for a non-claude agent", async () => {
+  test("does not install skills for a non-claude agent", async () => {
     const r = await connect({ designFolder: design, agents: ["cursor"], installSkill: true });
-    expect(r.skill).toBeUndefined();
+    expect(r.skills).toBeUndefined();
   });
 });

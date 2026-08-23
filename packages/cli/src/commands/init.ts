@@ -296,7 +296,10 @@ function printWired(connected: ConnectResult | undefined): void {
   console.log(
     `    ${pc.green("✓")} ${wired} ${pc.dim(`(MCP config under ${connected.projectRoot})`)}`,
   );
-  if (connected.skill?.installed) console.log(pc.dim("    + Claude Code skill"));
+  if (connected.skills?.length)
+    console.log(
+      pc.dim(`    + ${connected.skills.length} Claude Code skill${connected.skills.length === 1 ? "" : "s"}`),
+    );
   if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
 }
 

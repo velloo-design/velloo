@@ -4,7 +4,7 @@ import { isCancel, multiselect } from "@clack/prompts";
 import { AGENTS, type McpConnection, PROJECT_AGENT_IDS } from "./agents.ts";
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import { resolveProjectRoot } from "./project-root.ts";
-import { installSkill, type SkillResult } from "./skill.ts";
+import { installSkills, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 
 export { AGENT_IDS, AGENTS, PROJECT_AGENT_IDS } from "./agents.ts";
@@ -51,7 +51,7 @@ export interface ConnectResult {
   projectRoot: string;
   transport: "stdio" | "http";
   configs: WriteResult[];
-  skill?: SkillResult;
+  skills?: SkillResult[];
   /** Cursor project rule, installed when cursor is a target. */
   cursorRules?: CursorRulesResult;
   /** Requested agent ids that aren't recognized. */
@@ -93,12 +93,12 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   // guidance too" flag) and keyed on family so global targets count too.
   const hasFamily = (family: "claude-code" | "cursor") =>
     opts.agents.some((id) => AGENTS[id]?.family === family);
-  const skill =
-    opts.installSkill && hasFamily("claude-code") ? await installSkill(projectRoot) : undefined;
+  const skills =
+    opts.installSkill && hasFamily("claude-code") ? await installSkills(projectRoot) : undefined;
   const cursorRules =
     opts.installSkill && hasFamily("cursor")
       ? await installCursorRules(projectRoot, opts.designFolder)
       : undefined;
 
-  return { projectRoot, transport, configs, skill, cursorRules, unknownAgents };
+  return { projectRoot, transport, configs, skills, cursorRules, unknownAgents };
 }

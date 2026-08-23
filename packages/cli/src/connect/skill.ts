@@ -1,47 +1,62 @@
+import type { Dirent } from "node:fs";
 import { existsSync } from "node:fs";
-import { access, copyFile, mkdir } from "node:fs/promises";
+import { access, cp, mkdir, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Locate the velloo-design skill source. Works from source
+ * Locate the skills source root. Works from source
  * (`packages/cli/src/connect/` → repo-root `skills/`) and from the bundled
- * binary, where `build.ts` copies the skill to `<dist>/skills/`.
+ * binary, where `build.ts` copies the skills tree to `<dist>/skills/`.
  */
-function resolveSkillSrc(): string {
-  const dev = join(here, "..", "..", "..", "..", "skills", "velloo-design", "SKILL.md");
-  const candidates = [
-    process.env.VELLOO_SKILL_SRC,
-    join(here, "skills", "velloo-design", "SKILL.md"),
-    dev,
-  ].filter((p): p is string => Boolean(p));
+function resolveSkillsRoot(): string {
+  const dev = join(here, "..", "..", "..", "..", "skills");
+  const candidates = [process.env.VELLOO_SKILLS_SRC, join(here, "skills"), dev].filter(
+    (p): p is string => Boolean(p),
+  );
   return candidates.find((p) => existsSync(p)) ?? dev;
 }
 
-const SKILL_SRC = resolveSkillSrc();
+const SKILLS_ROOT = resolveSkillsRoot();
 
 export interface SkillResult {
+  name: string;
   installed: boolean;
   path?: string;
   reason?: string;
 }
 
 /**
- * Copy the velloo-design skill into `<projectRoot>/.claude/skills/`. The
- * skill is Claude Code-shaped; callers install it only when claude-code is
- * a target. Missing source (e.g. running from a bundle that didn't ship
- * the skill) degrades to a skip, never an error.
+ * Copy every bundled skill into `<projectRoot>/.claude/skills/<name>/`. A skill
+ * is any directory under the skills root that contains a `SKILL.md`; the whole
+ * directory is copied so a skill can ship supporting files beside it. Skills
+ * are Claude Code-shaped; callers install them only when claude-code is a
+ * target. A missing skills root (e.g. a bundle that didn't ship them) degrades
+ * to an empty list, never an error.
  */
-export async function installSkill(projectRoot: string): Promise<SkillResult> {
+export async function installSkills(projectRoot: string): Promise<SkillResult[]> {
+  let entries: Dirent[];
   try {
-    await access(SKILL_SRC);
+    entries = await readdir(SKILLS_ROOT, { withFileTypes: true });
   } catch {
-    return { installed: false, reason: "skill source not found" };
+    return [];
   }
-  const dest = join(projectRoot, ".claude", "skills", "velloo-design", "SKILL.md");
-  await mkdir(dirname(dest), { recursive: true });
-  await copyFile(SKILL_SRC, dest);
-  return { installed: true, path: dest };
+  const results: SkillResult[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const name = entry.name;
+    const srcDir = join(SKILLS_ROOT, name);
+    try {
+      await access(join(srcDir, "SKILL.md"));
+    } catch {
+      continue; // a directory without a SKILL.md is not a skill
+    }
+    const destDir = join(projectRoot, ".claude", "skills", name);
+    await mkdir(dirname(destDir), { recursive: true });
+    await cp(srcDir, destDir, { recursive: true });
+    results.push({ name, installed: true, path: join(destDir, "SKILL.md") });
+  }
+  return results;
 }

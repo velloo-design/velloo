@@ -92,10 +92,8 @@ export default defineCommand({
     for (const c of result.configs) {
       console.log(`    ${c.action === "created" ? "wrote   " : "updated "} ${pc.cyan(c.path)}`);
     }
-    if (result.skill?.installed && result.skill.path) {
-      console.log(`    skill    ${pc.cyan(result.skill.path)}`);
-    } else if (result.skill && !result.skill.installed) {
-      console.log(pc.dim(`    skill skipped (${result.skill.reason})`));
+    for (const s of result.skills ?? []) {
+      console.log(`    skill    ${pc.cyan(s.path ?? s.name)}`);
     }
     if (result.cursorRules?.installed && result.cursorRules.path) {
       console.log(`    rule     ${pc.cyan(result.cursorRules.path)}`);
