@@ -18,12 +18,11 @@ Concrete providers (each a separate package):
 - (later) host-repo provider — scans the user's app components, builds a
   registry without copying them onto disk.
 
-See `docs/decisions.md` #22 for the rationale.
-
 ## What this package does NOT own
 
 - Component implementations live in concrete provider packages, not here.
 - The active provider is wired up by `@velloo/server` at boot time using
   `createProviderLoader({ id → factory })`. This package only owns the
   interface and the loader plumbing.
-- Tailwind is a canvas-wide concern (one v4 install, embedded forever). It's not the provider's job to bring a Tailwind copy.
+- Tailwind is a canvas-wide concern (one v4 install, embedded forever). It's
+  not the provider's job to bring a Tailwind copy.

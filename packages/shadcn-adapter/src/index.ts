@@ -3,7 +3,7 @@
  * provider (`@velloo/provider-shadcn-upstream`) fetches vanilla shadcn
  * sources at a pinned version and consults this package to decide which
  * components need a canvas-mode replacement and which can pass through
- * unchanged. See `docs/decisions.md` #25.
+ * unchanged.
  *
  * Consumers typically import:
  *

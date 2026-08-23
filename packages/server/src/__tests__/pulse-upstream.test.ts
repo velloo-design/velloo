@@ -6,18 +6,16 @@ import { renderScreen, UnknownComponentError } from "@velloo/renderer";
 import { ScreenSchema, type Theme } from "@velloo/schema";
 
 /**
- * Sprint Z sanity: every Pulse screen renders without throwing against
+ * Sanity: every Pulse screen renders without throwing against
  * the upstream provider. Pulse uses ~all of shadcn's surface; if any
  * component id falls outside the provider's registry, this test
  * surfaces it as a clear "Pulse references X" failure rather than
  * waiting for someone to hit it in the canvas.
  *
  * The upstream provider's runtime registry currently re-uses the
- * snapshot's components (Sprint Z scope note), so this test is
- * effectively a rerun of the legacy snapshot's render coverage with a
- * different provider identity attached. When the bundler-based
- * upstream registry lands in a future sprint, this test continues to
- * pass against the new registry.
+ * snapshot's components, so this test is effectively a rerun of the
+ * legacy snapshot's render coverage with a different provider identity
+ * attached.
  */
 
 const pulseRoot = resolve(import.meta.dir, "../../../cli/src/scaffold/pulse");

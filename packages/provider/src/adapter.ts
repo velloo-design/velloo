@@ -9,15 +9,12 @@ import type { ComponentProvider } from "./types.ts";
  * full component catalog (and which entries are installed), its native styling channel, theme
  * import/emit, the canvas bundle of real installed components, codegen lowering, and scan/import.
  *
- * The migration (see docs/framework-native.md) lands these capabilities phase by phase, so every
- * field beyond the base `ComponentProvider` is OPTIONAL: a plain `ComponentProvider` is a valid
- * (minimal) adapter, and absent capabilities fall back to today's behavior. As each phase lands,
- * the relevant capability moves from "optional, defaulted" to "the adapter supplies it".
- *
- * Reverses the earlier one-embedded-snapshot and Tailwind-everywhere stance.
+ * Every field beyond the base `ComponentProvider` is OPTIONAL: a plain `ComponentProvider` is a valid
+ * (minimal) adapter, and absent capabilities fall back to the default behavior. Where an adapter
+ * supplies a capability, it takes over from that default.
  */
 
-// --- styling channel (reverses #23: styling is the adapter's, not universally Tailwind) ---
+// --- styling channel (styling is the adapter's, not universally Tailwind) ---
 
 export type StyleChannelKind = "tailwind-classname" | "sx" | "style";
 
@@ -70,7 +67,7 @@ export const STYLE_CHANNELS: Record<StyleChannelKind, StyleChannel> = {
  * The CSS-framework axis, independent of the UI-component framework (the
  * library). `init` detects it from the host app; the folder records it in
  * `config.styling`. `"sx"` is intentionally absent — it's intrinsic to MUI,
- * not a free CSS-framework choice. See docs/framework-native.md.
+ * not a free CSS-framework choice.
  */
 export type CssFramework = "tailwind" | "none";
 

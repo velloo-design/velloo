@@ -1,7 +1,7 @@
 /**
  * emit_code: agent-consumed intermediate representation for a screen.
  *
- * emit_code is no longer a paste-ready file. The
+ * emit_code is an agent-consumed IR, not a paste-ready file. The
  * agent reads this IR alongside the user's app code and writes the real file
  * in the user's conventions (their import paths, their prettier config, their
  * wrappers). Velloo's job is to be honest about what's in the screen — the
@@ -125,7 +125,7 @@ export interface EmitCodeOptions {
   /** Snippets registry — required if the screen tree contains $snippet instances. */
   snippets?: Map<string, Snippet>;
   /**
-   * Extensions registry — folder-global custom components (Sprint Y).
+   * Extensions registry — folder-global custom components.
    * Required for emit_code to emit imports for any extension $refs in the
    * tree; without it, references to a registered extension surface as
    * `UnknownComponent`. Pass `Object.entries(config.extensions ?? {})`
@@ -278,7 +278,7 @@ export interface EmitSnippetOptions {
   componentsAlias?: string;
   snippetsAlias?: string;
   snippets?: Map<string, Snippet>;
-  /** Folder-global extensions (Sprint Y) — same shape as `EmitCodeOptions.extensions`. */
+  /** Folder-global extensions — same shape as `EmitCodeOptions.extensions`. */
   extensions?: Record<string, Extension>;
   /** Framework target — same shape + meaning as `EmitCodeOptions.target`. */
   target?: CodegenTarget;

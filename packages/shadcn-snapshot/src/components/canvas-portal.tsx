@@ -31,8 +31,8 @@
  * and gets the actual modal behavior. The canvas-only adapter is what
  * lets the *canvas* render those modals inline.
  *
- * See `docs/decisions.md` #18 (snapshot stays design-mode only) and
- * #25 (upstream provider + adapter layer).
+ * The snapshot stays design-mode only; the upstream provider + adapter
+ * layer drive real app behavior.
  */
 import type * as React from "react";
 

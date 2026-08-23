@@ -10,7 +10,7 @@ import type { WatchEvent } from "../../watcher.ts";
 import { type MutationContext, setStyle } from "../index.ts";
 
 /**
- * `set_style` routes a style payload through the screen's *native* channel
+ * `set_style` routes a style payload through the screen's *native* channel:
  * a className string on a Tailwind (shadcn) folder, an `sx`
  * object on a MUI folder. The tool rejects a payload whose shape doesn't fit.
  */

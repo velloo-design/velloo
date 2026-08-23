@@ -44,7 +44,7 @@ src/
 - WebSocket invalidations are the source of truth for refresh — direct refetch is the fallback. Don't refetch after every mutation; let `ws-client.ts` notify the store.
 - The store is a single slice. New related fields can group via `store-hooks.ts`'s namespaced hooks — don't fragment the slice itself.
 - Frames render iframes that load `/api/render/<screen>?w=&h=...`. Selection/hover comes back via MessageChannel.
-- IDE chrome uses real shadcn from `@/components/ui/*`. The `@velloo/shadcn-snapshot` import in this package is **types-only** (`Manifest`, `ComponentDescriptor`, `PropDescriptor`) — never import its components, they're design-mode stubs (see `docs/decisions.md` #18).
+- IDE chrome uses real shadcn from `@/components/ui/*`. The `@velloo/shadcn-snapshot` import in this package is **types-only** (`Manifest`, `ComponentDescriptor`, `PropDescriptor`) — never import its components, they're design-mode stubs.
 - App theme (light/dark/system) is tracked in the store and applied as `.dark` on `<html>` by `app-theme.ts`. It's independent of `designMode` (which is passed to the iframe URLs to control the *design*'s theme).
 
 The canvas package also exports `canvasDistPath` for the server's static handler.

@@ -13,7 +13,7 @@ import { ExtensionPlaceholder } from "./placeholder.tsx";
 
 /**
  * Pick the component provider a given screen's tree renders against.
- * `screen.library` (Sprint Y) names the library id; absent falls back
+ * `screen.library` names the library id; absent falls back
  * to the folder's default. An unknown library id returns the default
  * provider — the resolver upstream should already have surfaced this
  * as a typed error, so the canvas doesn't crash on a stale reference.
@@ -62,7 +62,7 @@ export function buildExtensionRegistry(extensions: Record<string, Extension>): C
  * Merge the screen's provider's registry with the folder's extension
  * placeholders. Extensions shadow library components with the same id
  * (the agent explicitly registered a custom component, so it wins over
- * a library default — see `decisions.md` #24).
+ * a library default).
  */
 export function registryForScreen(
   screen: Pick<Screen, "library"> | Pick<Snippet, "library">,

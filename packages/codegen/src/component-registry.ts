@@ -274,8 +274,8 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   // presets, focal cropping, divider label slots). Too structural to
   // lower to a single HTML tag, so the IR keeps the identifier verbatim
   // — the agent reads it from componentsUsed and materializes the
-  // component in the host app (emit_code is honest IR,
-  // not paste-ready output).
+  // component in the host app (emit_code is honest IR, not paste-ready
+  // output).
   Divider: shadcn("Divider", "velloo/divider"),
   Gradient: shadcn("Gradient", "velloo/gradient"),
   Image: shadcn("Image", "velloo/image"),

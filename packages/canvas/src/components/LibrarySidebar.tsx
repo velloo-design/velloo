@@ -22,7 +22,7 @@ export function LibrarySidebar({ snippets }: Props) {
         extensions: [] as { id: string; label: string }[],
       };
     }
-    // Sprint Y: /api/components now returns library entries + extensions,
+    // /api/components returns library entries + extensions,
     // each tagged with `kind`. Older builds omit `kind`; treat those as library.
     const ids = new Set<string>();
     const exts: { id: string; label: string }[] = [];

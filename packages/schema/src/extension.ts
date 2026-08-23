@@ -5,8 +5,7 @@ import { z } from "zod";
  * which isn't part of any library's registry. The canvas renders an
  * extension node as a labelled placeholder (Tier 1); codegen emits a
  * real import to `importPath` so the user's app mounts the actual
- * component. See `docs/decisions.md` #24 for the three-tier
- * customization story.
+ * component — one tier of the three-tier customization story.
  *
  * The prop schema mirrors `@velloo/provider`'s `PropDescriptor` — kept
  * here as a Zod schema so `.design/config.json` validation works

@@ -7,7 +7,7 @@ import { moduleTarget } from "../emit-code/target.ts";
 /**
  * A codegen target makes emit framework-native: a MUI screen lowers to real
  * MUI component JSX (imported from `@mui/material`) with `sx={{…}}` styling,
- * NOT shadcn primitives + Tailwind classes. See docs/framework-native.md.
+ * NOT shadcn primitives + Tailwind classes.
  */
 
 const muiTarget = moduleTarget(

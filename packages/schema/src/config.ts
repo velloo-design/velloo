@@ -22,7 +22,7 @@ export type ViewportPreset = z.infer<typeof ViewportPresetSchema>;
  *   "in-repo"          — components live inside the user's app folder.
  *                        `componentsPath` is the resolved location.
  *   "registry:shadcn"  — legacy alias for "binary" with the shadcn
- *                        snapshot, kept for round-tripping pre-Sprint-X
+ *                        snapshot, kept for round-tripping older
  *                        config files.
  *   "embedded:shadcn"  — legacy alias for "binary", same reason.
  *   "shared:<path>"    — experimental "point at the user's app components".
@@ -33,8 +33,8 @@ export type ViewportPreset = z.infer<typeof ViewportPresetSchema>;
  */
 export const LibrarySchema = z.object({
   /**
-   * Component provider id. Pre-Sprint-Z folders use `"shadcn-react"`
-   * (the vendored snapshot); Sprint-Z folders default to
+   * Component provider id. Legacy folders use `"shadcn-react"`
+   * (the vendored snapshot); new folders default to
    * `"shadcn-upstream"` (fetched from upstream). Other providers add
    * their own ids ("none", "mui", …). The server's provider loader
    * maps ids to factories.
@@ -83,8 +83,7 @@ export type HostApp = z.infer<typeof HostAppSchema>;
  * For backward compat the legacy single-library shape (`library:
  * Library`, no `libraries` / `defaultLibrary`) still parses. The
  * server's `migrateConfig` normalizes legacy configs in-memory so the
- * rest of the codebase only sees the multi-library shape. See
- * `decisions.md` #24.
+ * rest of the codebase only sees the multi-library shape.
  */
 export const ConfigSchema = z
   .object({
@@ -97,12 +96,12 @@ export const ConfigSchema = z
      */
     projectId: z.string().min(1).optional(),
     /**
-     * Legacy single-library shape. Folders created before Sprint Y
-     * carry this field; the server migrates them in-memory at load.
+     * Legacy single-library shape. Older folders carry this field;
+     * the server migrates them in-memory at load.
      */
     library: LibrarySchema.optional(),
     /**
-     * Multi-library shape (Sprint Y). Map of `libraryId → Library`.
+     * Multi-library shape. Map of `libraryId → Library`.
      * Library ids are free-form strings the user picks (e.g.
      * "shadcn", "marketing", "internal"); the `Library.id` field
      * inside each entry still names the provider implementation.
@@ -140,7 +139,7 @@ export const ConfigSchema = z
      * shadcn/none, `sx` for MUI). Honored per screen only when that screen's
      * library supports it — a shadcn screen stays Tailwind even here. The
      * server rejects a folder whose CSS framework no registered library
-     * supports (e.g. shadcn + none). See docs/framework-native.md.
+     * supports (e.g. shadcn + none).
      */
     styling: z.object({ framework: z.enum(["tailwind", "none"]) }).optional(),
     /** Host app location for the live-island bundler. See `HostAppSchema`. */

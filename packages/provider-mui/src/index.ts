@@ -13,9 +13,8 @@ import { makeRenderPass } from "./render-pass.ts";
 import { muiThemeOptions } from "./theme.ts";
 
 /**
- * Material UI v6 provider — a first-class FrameworkAdapter (framework-native
- * migration; see docs/framework-native.md). MUI ships as a velloo dependency
- * (pre-bundle), so its components SSR in-process against the shared monorepo
+ * Material UI v6 provider — a first-class FrameworkAdapter. MUI ships as a
+ * velloo dependency (pre-bundle), so its components SSR in-process against the shared monorepo
  * React; the adapter's emotion `renderPass` extracts the critical CSS. Styling
  * is the `sx` prop (not Tailwind), and the theme projects velloo tokens onto a
  * MUI `createTheme`. Canvas-safe overlays (Dialog/Menu/Popover/Drawer/Snackbar),

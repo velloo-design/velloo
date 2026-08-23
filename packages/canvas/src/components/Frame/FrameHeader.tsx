@@ -7,7 +7,7 @@ interface FrameHeaderProps {
   h: number;
   sharedCount: number;
   /**
-   * The library id this frame's screen pins (Sprint Y). When unset we
+   * The library id this frame's screen pins. When unset we
    * skip rendering the badge — a single-library folder doesn't need
    * the extra chrome.
    */

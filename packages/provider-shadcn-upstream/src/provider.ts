@@ -12,7 +12,7 @@ import { readManifest } from "./manifest.ts";
 /**
  * Build the `shadcn-upstream` ComponentProvider.
  *
- * Sprint Z's shape — pragmatic hybrid:
+ * The current shape — a pragmatic hybrid:
  *
  *  - **User-visible win**: components in the user's app are vanilla
  *    shadcn fetched at a pinned version (deposited by the fetcher
@@ -30,8 +30,7 @@ import { readManifest } from "./manifest.ts";
  *    upstream prop schemas. Falls back to the snapshot's manifest when
  *    the cache is missing (e.g. during in-memory tests).
  *
- * The deferred bundler-based canvas-from-upstream story is parked for
- * a future sprint (see `docs/decisions.md` #25 + Sprint Z notes).
+ * The bundler-based canvas-from-upstream story is deferred for now.
  */
 export interface CreateUpstreamProviderOptions {
   /**

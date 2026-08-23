@@ -10,7 +10,7 @@ import * as React from "react";
  *
  * Codegen still emits a real `import { DataTable } from <importPath>`
  * — the placeholder is only what the canvas mounts. Real visual
- * fidelity is Tier 2 (Sprint Y.2).
+ * fidelity is Tier 2.
  *
  * Tailwind classes use the semantic theme tokens
  * (`border-border`, `bg-muted/40`, `text-muted-foreground`) every

@@ -16,11 +16,11 @@ import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot"
 /**
  * Build the loader the server uses to resolve `Library` → provider.
  *
- * Sprint X+1 supports "binary" (snapshot lives in the velloo binary),
+ * Supports "binary" (snapshot lives in the velloo binary),
  * "in-repo" / "cache" (snapshot was copied to disk at init — the JIT
  * scans that location so user customizations contribute to compiled
- * CSS). The runtime registry stays bundled regardless. Sprint X+2 will
- * add `"none"` and `"mui"` factories alongside.
+ * CSS). The runtime registry stays bundled regardless. The `"none"`
+ * and `"mui"` factories are registered alongside.
  */
 export function createServerProviderLoader(folderRoot?: string): ProviderLoader {
   return createProviderLoader({
@@ -39,11 +39,10 @@ export function createServerProviderLoader(folderRoot?: string): ProviderLoader 
       return createShadcnProvider();
     },
     none: () => createNoLibProvider(),
-    // MUI is a first-class FrameworkAdapter (framework-native migration): real
-    // MUI components SSR'd in-process, sx styling, emotion render pass. See
-    // docs/framework-native.md.
+    // MUI is a first-class FrameworkAdapter: real MUI components SSR'd
+    // in-process, sx styling, emotion render pass.
     mui: () => createMuiProvider(),
-    // Sprint Z: shadcn-upstream — components fetched from the official
+    // shadcn-upstream — components fetched from the official
     // registry, deposited at the user's chosen location, and the canvas
     // renders against the cached manifest. `componentsPath` resolves to
     // the cache root so `loadManifest` and the JIT scan target follow

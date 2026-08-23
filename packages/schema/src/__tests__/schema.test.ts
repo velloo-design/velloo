@@ -262,7 +262,7 @@ describe("BoardSchema", () => {
     }
   });
 
-  test("rejects a board missing id + name (post-pivot: every board is identified)", () => {
+  test("rejects a board missing id + name (every board is identified)", () => {
     expect(BoardSchema.safeParse({}).success).toBe(false);
     expect(BoardSchema.safeParse({ id: "app" }).success).toBe(false);
     expect(BoardSchema.safeParse({ name: "App" }).success).toBe(false);
@@ -331,7 +331,7 @@ describe("ConfigSchema", () => {
     expect(ConfigSchema.safeParse(config).success).toBe(true);
   });
 
-  test("accepts new provider ids reserved for Sprint X+2", () => {
+  test("accepts the reserved provider ids", () => {
     const baseViewports = [{ name: "Mobile", w: 390, h: 844 }];
     for (const id of ["none", "mui"] as const) {
       const config = {
@@ -421,7 +421,7 @@ describe("ConfigSchema", () => {
     expect(ConfigSchema.safeParse(config).success).toBe(true);
   });
 
-  test("accepts the new multi-library shape (Sprint Y)", () => {
+  test("accepts the new multi-library shape", () => {
     const config = {
       schemaVersion: 1,
       toolVersion: "0.1.0",
@@ -536,7 +536,7 @@ describe("ConfigSchema", () => {
   });
 });
 
-describe("ScreenSchema (Sprint Y additions)", () => {
+describe("ScreenSchema", () => {
   test("accepts an optional library field", () => {
     const screen = {
       id: "landing",

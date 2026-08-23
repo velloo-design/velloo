@@ -30,8 +30,7 @@ export interface InstallPlan {
 export function planInstall(answers: WizardAnswers): InstallPlan {
   if (answers.library === "mui") {
     // Framework-native: MUI is a first-class adapter bundled with velloo
-    // (@mui/material + emotion are velloo deps; components SSR in-process). See
-    // docs/framework-native.md.
+    // (@mui/material + emotion are velloo deps; components SSR in-process).
     return {
       library: { id: "mui", version: MUI_VERSION, source: "binary", componentsPath: "binary" },
       summary: { name: `Material UI v${MUI_VERSION}`, location: "bundled with velloo" },

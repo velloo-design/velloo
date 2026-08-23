@@ -6,10 +6,10 @@ import type { Manifest } from "@velloo/provider";
 import { createProvider, installShadcnUpstream } from "../index.ts";
 
 /**
- * End-to-end of the Sprint-Z upstream provider:
+ * End-to-end of the upstream provider:
  *
  *   1. The factory returns a ComponentProvider with id "shadcn-upstream",
- *      reusing the snapshot's registry (Sprint Z scope note).
+ *      reusing the snapshot's registry.
  *   2. The provider's `loadManifest` reads from a per-cache manifest.json
  *      when present; falls back to the snapshot manifest when missing.
  *   3. `installShadcnUpstream` fetches + writes + manifests; the provider

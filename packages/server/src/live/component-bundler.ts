@@ -16,8 +16,7 @@ import {
  * loads and mounts into SSR markers. Now a thin consumer of the shared
  * `bundleComponents` core (bundle-core.ts) — the same primitive the
  * framework-native canvas bundle uses for a whole library. Same
- * cache/invalidate shape; failure stays graceful. See decisions.md (live
- * islands) + #34.
+ * cache/invalidate shape; failure stays graceful (live islands).
  */
 
 export type { BundleError, BundleResult } from "./bundle-core.ts";

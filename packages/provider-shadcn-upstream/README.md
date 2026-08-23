@@ -22,7 +22,7 @@ the user's repo doesn't carry a Velloo-flavored fork of shadcn.
 - A `createProvider()` factory that returns a `ComponentProvider`
   with `id: "shadcn-upstream"`.
 
-## Sprint Z scope notes
+## Scope notes
 
 The canvas's runtime registry currently reuses
 `@velloo/shadcn-snapshot`'s components. The snapshot's overlays
@@ -31,12 +31,12 @@ near-byte-identical to upstream. Reusing the snapshot's registry
 avoids bundling 25+ `@radix-ui/*` sub-packages into the velloo
 binary.
 
-A future sprint can swap the runtime registry to dynamically-imported
+The runtime registry can later swap to dynamically-imported
 upstream code if a real cost surfaces from the snapshot/upstream drift.
 The infrastructure for that swap (adaptation map in
 `@velloo/shadcn-adapter`, fetcher/cache here) is already in place.
 
-The user-facing wins for Sprint Z:
+The user-facing wins:
 
 - The user's app gets vanilla shadcn (no Velloo modifications visible
   in their `components/ui/<name>.tsx` files).
@@ -44,8 +44,3 @@ The user-facing wins for Sprint Z:
   pre-installed components.
 - The lockfile pins which shadcn version they're on; `velloo upgrade`
   (future) can refresh.
-
-## How it fits
-
-See `docs/decisions.md` #25 for the architectural rationale and the
-deprecation path for `@velloo/shadcn-snapshot`.

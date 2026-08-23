@@ -64,8 +64,7 @@ export class ParamRefError extends Error {
 export interface BuildTreeOptions {
   /**
    * Component registry from the active provider. Required — the renderer
-   * is provider-agnostic and never imports a registry directly. See
-   *.
+   * is provider-agnostic and never imports a registry directly.
    */
   registry: ComponentRegistry;
   /** Snippet registry used to resolve `$snippet` nodes. Required if the tree contains any. */

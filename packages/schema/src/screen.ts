@@ -21,7 +21,6 @@ export const ScreenSchema = z.object({
    * Optional — when absent the folder's `defaultLibrary` is used.
    * Multi-library per folder; one library per screen. A screen's
    * components and extensions resolve against this library's registry.
-   *
    */
   library: z.string().min(1).optional(),
   tree: NodeSchema,

@@ -183,8 +183,6 @@ Two things to know:
 
 The canvas's snippet editor view uses exactly this surface — the Inspector targets `screenId: "snippet:<id>"` for every mutation it commits.
 
-See `decisions.md` #21 for the rationale.
-
 ### Locator-aware tools
 
 `add_node`, `update_props` (single and `patches` bulk), `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_args`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.

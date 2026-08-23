@@ -6,8 +6,7 @@
  * The target is consulted *before* the built-in shadcn REGISTRY so a MUI
  * screen's `Card` / `Box` / `Button` resolve to MUI, not the shadcn primitives
  * of the same id. Styling is unaffected here — the node's `sx` (or `style`)
- * object serializes through the generic prop path as `sx={{…}}`; see
- * docs/framework-native.md (#34) for the channel model.
+ * object serializes through the generic prop path as `sx={{…}}`.
  */
 export interface CodegenTarget {
   /**

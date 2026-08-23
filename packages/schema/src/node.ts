@@ -31,8 +31,8 @@ export type ComponentNode = {
   props?: Record<string, unknown>;
   children?: Node[];
   /**
-   * Host-component facade (framework-native scan/import — see
-   * docs/framework-native.md). When set, the canvas renders this node's real
+   * Host-component facade (scan/import of a host-app component). When
+   * set, the canvas renders this node's real
    * velloo subtree (the design agent's faithful approximation of a scanned app
    * component it can't map to a primitive — SSR-only, data-bound, bespoke), but
    * `emit_code` emits `<name />` imported from `importPath` *instead* of the

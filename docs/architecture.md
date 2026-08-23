@@ -149,7 +149,7 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 ### Config
 
 ```json
-// .design/config.json (Sprint Y multi-library shape)
+// .design/config.json (multi-library shape)
 {
   "schemaVersion": 1,
   "toolVersion": "0.1.0",
@@ -192,11 +192,11 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 }
 ```
 
-The `libraries` map (Sprint Y) declares every library this folder uses; each screen pins one via its own `library` field. `defaultLibrary` names the entry used when a screen doesn't specify. The legacy single-library shape (`library: Library` at the top level) still parses for backward compat — the server normalizes it to `libraries: { default: Library }` in-memory at load time.
+The `libraries` map declares every library this folder uses; each screen pins one via its own `library` field. `defaultLibrary` names the entry used when a screen doesn't specify. The legacy single-library shape (`library: Library` at the top level) still parses for backward compat — the server normalizes it to `libraries: { default: Library }` in-memory at load time.
 
-The `extensions` map (Sprint Y) holds user-declared custom components — agent-registered via the `add_extension` MCP tool. Each entry records the bare `importPath` codegen emits, a hand-authored prop schema, and an `origin` tag (`"agent"` or `"manual"`). Extensions are folder-global: every screen in every library sees them. Extension ids shadow library components with the same name.
+The `extensions` map holds user-declared custom components — agent-registered via the `add_extension` MCP tool. Each entry records the bare `importPath` codegen emits, a hand-authored prop schema, and an `origin` tag (`"agent"` or `"manual"`). Extensions are folder-global: every screen in every library sees them. Extension ids shadow library components with the same name.
 
-`source` is the canonical vocabulary for "where do the components live" — `"binary"` (default: shipped with the velloo binary, the embedded shadcn snapshot today), `"cache"` (Sprint X+1: `~/.velloo/<projectId>/...`), `"in-repo"` (Sprint X+1: the user's app folder), or `"shared:<path>"` (experimental — designed but not yet implemented). Legacy `"embedded:shadcn"` and `"registry:shadcn"` values are normalized in-memory at folder load.
+`source` is the canonical vocabulary for "where do the components live" — `"binary"` (default: shipped with the velloo binary, the embedded shadcn snapshot today), `"cache"` (`~/.velloo/<projectId>/...`), `"in-repo"` (the user's app folder), or `"shared:<path>"` (experimental — designed but not yet implemented). Legacy `"embedded:shadcn"` and `"registry:shadcn"` values are normalized in-memory at folder load.
 
 `projectId` (optional) is a stable id used to key external-cache paths. Existing folders without one fall back to a path-derived hash.
 
@@ -227,7 +227,9 @@ The `extensions` map (Sprint Y) holds user-declared custom components — agent-
 └─────────────────────────────────────────────────────┘
 ```
 
-One **persistent canvas daemon per folder**, with two thin clients attaching to it ( Binds `:7300` if free, else any free port; records `{ pid, canvasUrl, mcpUrl, ports }` in `.design/cache/runtime.json`. Persistent — it outlives any session and self-exits after 5 min idle (no canvas tabs and no agents).
+One **persistent canvas daemon per folder**, with two thin clients attaching to it:
+
+- **The daemon** = canvas (HTML/JS UI) + HTTP MCP + the authoritative in-memory state + watcher, one detached background process per design folder, keyed by the folder's realpath. Binds `:7300` if free, else any free port; records `{ pid, canvasUrl, mcpUrl, ports }` in `.design/cache/runtime.json`. Persistent — it outlives any session and self-exits after 5 min idle (no canvas tabs and no agents).
 - **`velloo run`** ensures the daemon (spawning a detached one if needed), opens the browser, and exits. `velloo stop` / `velloo status` manage daemons.
 - **`velloo mcp`** is the agent-facing entry — **stdio by default**: it ensures the daemon and *proxies* the agent's stdin/stdout JSON-RPC to the daemon's HTTP MCP. So N agents for a folder share one daemon (one writer, one canvas URL). `--http` prints the daemon's `StreamableHTTPServerTransport` URL for clients that dial instead of spawning.
 
@@ -235,7 +237,7 @@ Every client drives the same tool surface — agent edits and human edits are op
 
 ## Component sourcing
 
-Components come from the **active component provider** (`@velloo/provider`). The design folder doesn't ship a `components/` directory. Today the only provider that ships is the embedded shadcn snapshot; Sprint X+2 will add no-lib + MUI alongside, and a host-repo provider is later on the roadmap.
+Components come from the **active component provider** (`@velloo/provider`). The design folder doesn't ship a `components/` directory.
 
 The provider interface is the contract every library entry implements:
 
@@ -250,31 +252,31 @@ interface ComponentProvider {
 }
 ```
 
-The renderer, the Tailwind JIT, MCP discovery, codegen — every consumer reads through this. The server's `MutationContext` carries one resolved `provider` instance per design folder, looked up at boot via a `ProviderLoader` (`packages/server/src/providers.ts`). This is a Sprint-X refactor of an earlier hardcoded design where every consumer imported from `@velloo/shadcn-snapshot` directly.
+The renderer, the Tailwind JIT, MCP discovery, codegen — every consumer reads through this. The server's `MutationContext` carries one resolved `provider` instance per design folder, looked up at boot via a `ProviderLoader` (`packages/server/src/providers.ts`).
 
-The reasoning behind not putting components on disk in the design folder still holds: an earlier draft had `velloo init` pull components into the design folder so the user "owned" them on disk. The reversion was driven by AI-agent confusion — two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) made the source of truth unclear. The provider abstraction keeps the design folder pure data while still letting different libraries take the active slot.
+Components are not put on disk in the design folder: two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) would make the source of truth unclear to AI agents. The provider abstraction keeps the design folder pure data while still letting different libraries take the active slot.
 
 ### shadcn providers (two flavors)
 
-**`shadcn-upstream` (Sprint Z, default for new folders).** Fetches components from the official shadcn registry at a pinned version and deposits byte-identical vanilla shadcn into the user's app (or `~/.velloo/providers/shadcn-upstream-<projectId>/`). No Velloo modifications visible in the user's files — `npx shadcn add <component>` works alongside it. The canvas-safe contract (Radix portal replacements, runtime-state fakes for Calendar/Chart/Carousel) is applied through `@velloo/shadcn-adapter`'s wrap-at-render-time adapter layer.
+**`shadcn-upstream` (default for new folders).** Fetches components from the official shadcn registry at a pinned version and deposits byte-identical vanilla shadcn into the user's app (or `~/.velloo/providers/shadcn-upstream-<projectId>/`). No Velloo modifications visible in the user's files — `npx shadcn add <component>` works alongside it. The canvas-safe contract (Radix portal replacements, runtime-state fakes for Calendar/Chart/Carousel) is applied through `@velloo/shadcn-adapter`'s wrap-at-render-time adapter layer.
 
-**`shadcn-react` (legacy, back-compat).** The hand-vendored snapshot in `@velloo/shadcn-snapshot`. Pre-Sprint-Z folders default to this; existing folders keep working unchanged through the migration shim. Deprecation path is documented in; the snapshot stays registered for at least two more sprints before being collapsed into a shim around the upstream provider.
+**`shadcn-react` (legacy, back-compat).** The hand-vendored snapshot in `@velloo/shadcn-snapshot`. Older folders default to this; existing folders keep working unchanged through the migration shim. The snapshot stays registered and is on a deprecation path toward being collapsed into a shim around the upstream provider.
 
 Both ship ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus 9 Velloo helpers (`<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`).
 
-Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-adapter/src/lib/canvas-portal.tsx` (or the legacy snapshot's `canvas-portal.tsx`) and. Calendar / Chart / Carousel are static fakes for the same reason.
+Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-adapter/src/lib/canvas-portal.tsx` (or the legacy snapshot's `canvas-portal.tsx`). Calendar / Chart / Carousel are static fakes for the same reason.
 
-The snapshot's `snapshotVersion` (`2026.05.22` at the time of this section) is the legacy provider's `version`. The upstream provider's `version` reflects the date the cache was fetched.
+The snapshot's `snapshotVersion` (`2026.05.22`) is the legacy provider's `version`. The upstream provider's `version` reflects the date the cache was fetched.
 
 ### Tailwind is a canvas concern, not a provider concern
 
 **Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
 
-Tailwind v4 stays embedded in the velloo binary forever, regardless of which provider is active. Per-instance overrides (`apply_classes`) are always Tailwind classes; codegen translates them to the user's styling system at emit time (verbatim for shadcn/no-lib; converted to `sx` props for MUI when that provider ships). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
+Tailwind v4 stays embedded in the velloo binary regardless of which provider is active. Per-instance overrides (`apply_classes`) are always Tailwind classes; codegen translates them to the user's styling system at emit time (verbatim for shadcn/no-lib; converted to `sx` props for MUI). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
 
 ### Customizing components
 
-How do users customize when the components are baked in? Short answer:
+How do users customize when the components are baked in?
 
 - **Per-instance className** (`apply_classes`) and **per-instance props** (`update_props`) handle most needs.
 - **Snippets** are the supported "your version of a primitive" layer. A snippet wraps one or more components with typed params; every instance stays in sync.
@@ -326,9 +328,9 @@ The contract is the same as default mode (canvas-safe). The cost is operational:
 
 Default mode users see no traces of this in their flow — it's a flag, not a tier, and it's not on the user-facing pitch.
 
-### Framework expansion
+### Framework adapters
 
-**Superseded by the framework-native migration (`docs/framework-native.md`).** This section read "Velloo is positioned as shadcn-first… Mantine / MUI / Chakra all rely on providers in ways that may exclude them." That's no longer the stance: the `ComponentProvider` grew into a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework still has to satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode), but "may be excluded" is now "is adapted." Chakra/Mantine/Ant Design without an adapter fall back to the no-framework (div-backed) provider via scan detection.
+Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Chakra, Mantine, Ant Design) fall back to the no-framework (div-backed) provider via scan detection.
 
 ## Theme model
 

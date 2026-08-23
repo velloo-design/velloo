@@ -6,7 +6,7 @@
  *
  * Pulse isn't ported to MUI (its shadcn-specific composition would need a full
  * redesign); the user asks the agent to expand these starter screens once
- * they're on the canvas. See docs/framework-native.md.
+ * they're on the canvas.
  */
 import type { Board, Screen, Snippet } from "@velloo/schema";
 

@@ -1,9 +1,8 @@
 # @velloo/provider-mui
 
-The Material UI v6 **`FrameworkAdapter`** — velloo's first fully framework-native
-library (the migration in `docs/framework-native.md`). A folder
-that targets `mui` renders, styles, and emits **real Material UI**, not a
-shadcn/Tailwind imitation.
+The Material UI v6 **`FrameworkAdapter`** — a fully framework-native library
+adapter. A folder that targets `mui` renders, styles, and emits **real Material
+UI**, not a shadcn/Tailwind imitation.
 
 `createProvider()` returns a working adapter; the server registers it in
 `packages/server/src/providers.ts` and `velloo init --library=mui` scaffolds a

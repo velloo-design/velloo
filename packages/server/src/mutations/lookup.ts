@@ -34,8 +34,7 @@ import {
  * Sentinel screenId prefix that virtualizes a snippet body as a screen so
  * the existing tree mutations work against it. The canvas's snippet
  * editor sets `selection.screenId = "snippet:<id>"`; everything
- * downstream (resolve, clone, persist) flows through this adapter. See
- * `decisions.md` note on snippet body editing.
+ * downstream (resolve, clone, persist) flows through this adapter.
  */
 export const SNIPPET_TREE_PREFIX = "snippet:";
 
@@ -220,10 +219,10 @@ export function getExtensions(ctx: MutationContext): Record<string, Extension> {
 }
 
 /**
- * Pick the provider a given screen's tree resolves against. Sprint Y:
+ * Pick the provider a given screen's tree resolves against:
  * a screen's `library` field selects from `ctx.providers`; absent
  * means use the default. Snippet bodies inherit their snippet's
- * library (not the embedding screen's) — see `decisions.md` #24.
+ * library (not the embedding screen's).
  */
 export function providerForScreen(
   ctx: MutationContext,
@@ -266,7 +265,7 @@ export function renderPassForScreen(
 
 /**
  * Validate that a `$ref` resolves to either a library component or a
- * registered extension. Sprint Y: takes the screen so it can pick the
+ * registered extension. Takes the screen so it can pick the
  * right library (extensions are folder-global, libraries are
  * per-screen). The screen lookup is permissive — pass `null` when
  * checking against the default library (e.g. before a screen exists).

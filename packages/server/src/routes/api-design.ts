@@ -19,7 +19,7 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
     return c.json({
       snapshotVersion: ctx.provider.version,
       providerId: ctx.provider.id,
-      // Multi-library summary (Sprint Y). The canvas reads this to
+      // Multi-library summary. The canvas reads this to
       // render the library badge per frame and the active-library
       // selector in the Library tab.
       libraries,

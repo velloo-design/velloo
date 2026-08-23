@@ -28,7 +28,7 @@ export interface SetStyleArgs {
 /**
  * Set a node's style through the screen's *native* channel — the framework
  * adapter decides whether that's Tailwind `className`, MUI `sx`, or a plain
- * `style` object (see `decisions.md` #34 / docs/framework-native.md). The
+ * `style` object. The
  * agent uses one verb regardless of framework; the tool routes the payload to
  * the right prop and rejects a payload whose shape doesn't fit the channel.
  */

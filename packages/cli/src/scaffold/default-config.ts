@@ -10,9 +10,8 @@ interface DefaultConfigOpts {
   /** Default board id to open on first load. */
   defaultBoard?: string;
   /**
-   * Stable project id. Sprint X+1 will start writing one of these for
-   * every new folder to key external-cache provider paths; today we
-   * leave it optional so existing folders don't need rewriting.
+   * Stable project id, used to key external-cache provider paths. Left
+   * optional for now so existing folders don't need rewriting.
    */
   projectId?: string;
   /**
@@ -29,8 +28,7 @@ interface DefaultConfigOpts {
   /**
    * The folder's CSS framework (the styling axis). Set only for the
    * no-framework library — shadcn carries Tailwind and MUI carries `sx`, so
-   * their channel is intrinsic and `styling` stays absent. See
-   * docs/framework-native.md.
+   * their channel is intrinsic and `styling` stays absent.
    */
   styling?: Config["styling"];
 }
@@ -42,9 +40,9 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     library: opts.library ?? {
       id: "shadcn-react",
       version: snapshotVersion,
-      // "binary" is the Sprint-X canonical source vocabulary: the
-      // components live inside the velloo binary, not on disk in the
-      // design folder. The migration shim in @velloo/server still
+      // "binary" is the canonical source vocabulary: the components
+      // live inside the velloo binary, not on disk in the design
+      // folder. The migration shim in @velloo/server still
       // accepts the legacy `"embedded:shadcn"` form for back-compat.
       source: "binary",
       componentsPath: "binary",

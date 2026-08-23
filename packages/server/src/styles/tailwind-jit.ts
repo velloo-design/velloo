@@ -12,10 +12,11 @@ type Compiler = Awaited<ReturnType<typeof compile>>;
  * CSS the snapshot used to ship: anything the user (or an agent) writes
  * as a className is generated.
  *
- * Sprint Y: takes an array of providers (one per registered library).
+ * Takes an array of providers (one per registered library).
  * Each provider contributes its `componentsDir` to the scan and its
  * `styleEntryPath` to the entry-CSS merge. Single-library folders pass
- * an array of one — no special-case path.
+ * an array of one — no special-case path. Tailwind itself stays
+ * embedded while scan sources move with the active providers.
  *
  * The expensive step is `compile()` (parse entry CSS, resolve @theme,
  * register @custom-variant rules). We do that once at server start and

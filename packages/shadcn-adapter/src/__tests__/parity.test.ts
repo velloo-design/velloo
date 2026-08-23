@@ -7,8 +7,8 @@ import { join } from "node:path";
  * implementation maintained in two packages: the snapshot's copies must
  * stay self-contained because `installSnapshot()` copies the files
  * verbatim into user apps, while the adapter is the canonical layer the
- * upstream provider bundles. Until the snapshot is deleted
- * the copies must stay in lockstep — this suite
+ * upstream provider bundles. Until the snapshot is deleted, the copies
+ * must stay in lockstep — this suite
  * fails on any divergence beyond each package's import-path layout, so
  * an upstream bump applied to one side can't silently skip the other.
  */

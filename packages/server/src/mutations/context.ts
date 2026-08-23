@@ -4,7 +4,7 @@ import type { WatchEvent } from "../watcher.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 
 /**
- * Per-design-folder server state. Multi-library (Sprint Y): every
+ * Per-design-folder server state. Multi-library: every
  * library registered in `folder.config.libraries` resolves to a
  * provider in `providers` keyed by the same id; `defaultProvider`
  * is `providers[folder.config.defaultLibrary]` for fast access.

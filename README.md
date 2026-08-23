@@ -1,19 +1,16 @@
 # Velloo
 
-Local, code-shaped canvas for solo devs whose design team is an AI agent. Designs live in your repo as JSON, made of real shadcn components. Your agent reads them through MCP and writes the real code into your app.
+Local, code-shaped canvas for solo devs whose design team is an AI agent. Designs live in your repo as JSON, made of real components. Your agent reads them through MCP and writes the real code into your app.
 
-See [`docs/`](./docs) for the full design.
+See [`docs/`](./docs) for the architecture and MCP reference.
 
-## Status
+## What it does
 
-Working substrate, used end-to-end. Sprints A → G are done. Highlights:
-
-- **Board + Screen + Frame** mental model. Multi-board, frames sized freely on each board, sync between frames sharing a screen is implicit.
-- **~50 MCP tools.** Discovery, tree mutations, screen / frame / board / snippet lifecycle, theme ops, inspect + dark-diff, screenshot + render_snippet, agent-consumed `emit_code` IR.
-- **Pulse sample** ships with `velloo init` — 2 boards × 6 screens (landing, pricing, signup, dashboard, insights, settings), 3 snippets, 100% dark-mode coverage.
-- **Components embedded** in `@velloo/shadcn-snapshot` — the design folder ships pure data (no `components/*.tsx`). Customization is via snippets.
-
-See docs/roadmap.md for what's done and what's next.
+- **Board + Screen + Frame** mental model. A design folder hosts many boards; frames sharing a screen stay in sync.
+- **Framework-native.** A folder targets a framework — shadcn (Tailwind `className`), MUI (`sx` + emotion, real `@mui/material`), or no-framework (bare primitives) — each rendered, styled, and emitted in its own idiom.
+- **MCP surface for agents.** Discovery, tree mutations, screen / frame / board / snippet lifecycle, theme ops, inspect + dark-diff, screenshot + render_snippet, and an agent-consumed `emit_code` IR.
+- **Pulse sample** ships with `velloo init` — three boards (Marketing + App + Playground), seven screens, with full dark-mode coverage.
+- **Components come from a `ComponentProvider`.** The design folder is pure data (no `components/*.tsx`); customization happens through snippets.
 
 ## Repo layout
 
@@ -40,4 +37,4 @@ The Playwright screenshot path requires `bunx playwright install chromium` once.
 
 ## License
 
-Not yet released. License choice is deferred until first public release — see [docs/README.md](./docs/README.md). The current `LICENSE` file is a placeholder while the source is private.
+Not yet released. The license choice is deferred until the first public release; the current `LICENSE` file is a placeholder while the source is private.

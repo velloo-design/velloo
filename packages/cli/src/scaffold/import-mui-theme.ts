@@ -48,7 +48,8 @@ function createThemeArg(src: string): ObjectLiteralExpression | undefined {
  * only inline string/number literals are read, and an unparseable or
  * non-literal theme returns null so the caller falls back to the preset.
  *
- * The "existing project" flow's theme import for MUI apps (* docs/framework-native.md), the counterpart to `importThemeFromGlobals`.
+ * The "existing project" flow's theme import for MUI apps, the counterpart to
+ * `importThemeFromGlobals`.
  */
 export function importThemeFromMui(filePath: string, presetId?: string): ImportedTheme | null {
   let src: string;

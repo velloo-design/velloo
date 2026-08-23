@@ -3,7 +3,7 @@ import type { Library } from "@velloo/schema";
 import { createServerProviderLoader } from "../providers.ts";
 
 /**
- * Sprint Z: the loader knows about `shadcn-upstream` alongside the
+ * The loader knows about `shadcn-upstream` alongside the
  * legacy providers. Existing folders that still declare
  * `library.id: "shadcn-react"` resolve to the vendored snapshot
  * (back-compat). New folders that declare `shadcn-upstream` resolve

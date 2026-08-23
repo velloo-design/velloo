@@ -5,10 +5,10 @@ import type { MutateError } from "./http.ts";
 
 export interface DesignSummary {
   snapshotVersion: string;
-  /** Provider id for the default library (Sprint Y). */
+  /** Provider id for the default library. */
   providerId?: string;
   /**
-   * Multi-library map (Sprint Y). `null` for older builds; `{}` if none
+   * Multi-library map. `null` for older builds; `{}` if none
    * registered. Keys are user-chosen library ids (the same string a
    * screen pins via `screen.library`).
    */
@@ -28,7 +28,7 @@ export interface DesignSummary {
 export interface ScreenMeta {
   id: string;
   name: string;
-  /** Resolved library id (Sprint Y) — falls back to defaultLibrary server-side. */
+  /** Resolved library id — falls back to defaultLibrary server-side. */
   library?: string | null;
 }
 
@@ -42,7 +42,7 @@ export interface SnippetMeta {
   id: string;
   name: string;
   params: SnippetParam[];
-  /** Resolved library id (Sprint Y). */
+  /** Resolved library id. */
   library?: string | null;
 }
 
