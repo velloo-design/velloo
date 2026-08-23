@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Velloo — code-shaped design tool for shadcn devs",
+  "description": "Velloo — code-shaped design tool for developers",
   "workspaces": [
     "packages/*"
   ],

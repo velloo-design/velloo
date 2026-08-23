@@ -14,7 +14,7 @@ export interface DeviceLoginResult {
   email: string;
 }
 
-function openBrowser(url: string): void {
+export function openBrowser(url: string): void {
   const cmd =
     process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
   try {
@@ -55,7 +55,7 @@ const sleepCancelable = (ms: number, signal: AbortSignal): Promise<void> =>
  */
 export async function performDeviceLogin(
   cloudUrl: string,
-  onPrompt: (info: { verificationUrl: string; userCode: string }) => void,
+  onPrompt: (info: { verificationUrl: string; userCode: string }) => void | Promise<void>,
   signal?: AbortSignal,
 ): Promise<DeviceLoginResult> {
   const configRes = await fetch(`${cloudUrl}/v1/auth/config`).catch(() => null);
@@ -70,7 +70,9 @@ export async function performDeviceLogin(
   if (!codeRes?.ok) throw new Error(`the auth service at ${issuer} is not answering — is it up?`);
   const device = (await codeRes.json()) as DeviceCodeResponse;
 
-  onPrompt({ verificationUrl: device.verification_uri_complete, userCode: device.user_code });
+  // Await the prompt so a caller can confirm (e.g. "press Enter") before we open
+  // the browser; the browser opens only once it resolves.
+  await onPrompt({ verificationUrl: device.verification_uri_complete, userCode: device.user_code });
   openBrowser(device.verification_uri_complete);
 
   const deadline = Date.now() + device.expires_in * 1000;

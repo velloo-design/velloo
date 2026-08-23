@@ -1,8 +1,21 @@
+import { createInterface } from "node:readline/promises";
 import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
 import { normalizeCloudUrl, saveCredential } from "../cloud-credentials.ts";
 import { type DeviceLoginResult, performDeviceLogin } from "../cloud-login.ts";
 import { fail } from "../fail.ts";
+
+// Block on Enter so the user knows the browser is about to open (and can read
+// the URL/code first). Non-interactive (piped) stdin just continues.
+async function waitForEnter(message: string): Promise<void> {
+  if (!process.stdin.isTTY) return;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    await rl.question(message);
+  } finally {
+    rl.close();
+  }
+}
 
 export default defineCommand({
   meta: {
@@ -20,7 +33,11 @@ export default defineCommand({
 
     let result: DeviceLoginResult;
     try {
-      result = await performDeviceLogin(cloudUrl, ({ verificationUrl, userCode }) => {
+      result = await performDeviceLogin(cloudUrl, async ({ verificationUrl, userCode }) => {
+        console.log(
+          `\nvelloo login will open your browser to approve this device (code ${userCode}).`,
+        );
+        await waitForEnter("Press Enter to open the browser… ");
         console.log(`Opening ${verificationUrl}`);
         console.log(`If the browser doesn't open, visit that URL and enter: ${userCode}`);
       });

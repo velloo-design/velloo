@@ -7,7 +7,7 @@ const main = defineCommand({
   meta: {
     name: "velloo",
     version: TOOL_VERSION,
-    description: "Code-shaped design tool for shadcn devs",
+    description: "Code-shaped design tool for developers",
   },
   subCommands: {
     init: () => import("./commands/init.ts").then((m) => m.default),
