@@ -1,6 +1,7 @@
 {
   "name": "@velloo/shadcn-adapter",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "description": "Canvas-safe adapter layer for shadcn components — overlay replacements, static fakes, and the adaptation map the upstream provider's bundler reads",

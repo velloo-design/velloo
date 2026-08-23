@@ -1,6 +1,7 @@
 {
   "name": "@velloo/codegen",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "description": "Velloo codegen \u2014 design JSON \u2192 idiomatic shadcn JSX + Tailwind v4 globals.css",

@@ -1,6 +1,7 @@
 {
   "name": "@velloo/provider-shadcn-upstream",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "description": "Velloo provider that fetches shadcn components from upstream at a pinned version and bundles them with the canvas-safe adapter layer",

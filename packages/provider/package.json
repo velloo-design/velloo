@@ -1,6 +1,7 @@
 {
   "name": "@velloo/provider",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "description": "Component provider abstraction — the interface every Velloo library entry (shadcn, MUI, no-lib, host scan) implements",

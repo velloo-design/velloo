@@ -1,6 +1,7 @@
 {
   "name": "@velloo/shadcn-snapshot",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "description": "[legacy — see provider-shadcn-upstream] Pinned shadcn snapshot — vendored components, Tailwind v4 entry CSS, prop manifest",

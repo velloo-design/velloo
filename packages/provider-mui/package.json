@@ -1,6 +1,7 @@
 {
   "name": "@velloo/provider-mui",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "description": "Material UI v6 provider for Velloo — a first-class FrameworkAdapter (sx styling, emotion SSR, MUI theme).",

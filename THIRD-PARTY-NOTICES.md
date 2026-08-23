@@ -1,0 +1,70 @@
+# Third-Party Notices
+
+Velloo bundles and/or redistributes the third-party open-source software
+listed below. Each component is the property of its respective copyright
+holders and is used under the terms of its own license.
+
+> This file lists the directly redistributed components. Before each public
+> release it should be regenerated from the full dependency tree (e.g. with a
+> license-collection tool) so every transitively bundled package is covered.
+
+The most directly redistributed surfaces are:
+
+- `packages/shadcn-snapshot` — a pinned snapshot of shadcn/ui components,
+  embedded in the binary and emitted into user projects.
+- The framework providers (`@velloo/provider-*`) and adapters, which build on
+  the upstream component libraries below.
+
+## Components
+
+| Component | License | Copyright | Source |
+|---|---|---|---|
+| shadcn/ui | MIT | © 2023 shadcn | https://github.com/shadcn-ui/ui |
+| Radix UI (`@radix-ui/*`) | MIT | © 2022 WorkOS | https://github.com/radix-ui/primitives |
+| Lucide (`lucide` / `lucide-react`) | ISC | © 2022 Lucide Contributors (portions from Feather, MIT, © 2013–2017 Cole Bemis) | https://github.com/lucide-icons/lucide |
+| Tailwind CSS | MIT | © Tailwind Labs, Inc. | https://github.com/tailwindlabs/tailwindcss |
+| MUI (`@mui/material`) | MIT | © 2014 Call-Em-All | https://github.com/mui/material-ui |
+| Emotion (`@emotion/*`) | MIT | © Emotion team and other contributors | https://github.com/emotion-js/emotion |
+
+## License texts
+
+The components above are distributed under the MIT or ISC license. The full
+texts follow; the copyright line of each applies as listed in the table.
+
+### MIT License
+
+```
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### ISC License
+
+```
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+```
