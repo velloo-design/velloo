@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -80,14 +81,23 @@ describe("watchDesignFolder", () => {
   });
 
   test("rapid consecutive writes to one file collapse into one event", async () => {
-    const events = collectEvents(100);
+    const events = collectEvents(150);
     const path = join(tmp, "screens", "landing.json");
-    await writeFile(path, "{}", "utf8");
-    await writeFile(path, '{"x":1}', "utf8");
-    await writeFile(path, '{"x":2}', "utf8");
+    // Let fs.watch actually start delivering events before writing — on macOS
+    // the kernel watch needs a beat to warm up after watch() returns, and a
+    // synchronous burst would otherwise race ahead of it (zero events).
+    await new Promise((r) => setTimeout(r, 80));
+    // Synchronous back-to-back writes: the event loop does not turn between
+    // them, so the watcher's debounce timer cannot fire mid-burst and split the
+    // writes into separate events. (With awaited writes the loop yields between
+    // each, letting a tight debounce fire early — the source of the flake.) The
+    // 150ms window then comfortably absorbs the OS's fs-event delivery spread.
+    writeFileSync(path, "{}", "utf8");
+    writeFileSync(path, '{"x":1}', "utf8");
+    writeFileSync(path, '{"x":2}', "utf8");
     await until(() => events.length > 0);
-    // Allow the debounce window plus slack to ensure no second event lands.
-    await new Promise((r) => setTimeout(r, 250));
+    // Wait well past the debounce window so a (spurious) second event would land.
+    await new Promise((r) => setTimeout(r, 400));
     const screenEvents = events.filter((e) => e.type === "screen-changed");
     expect(screenEvents.length).toBe(1);
   });

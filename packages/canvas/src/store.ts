@@ -51,6 +51,27 @@ function readAppTheme(): AppTheme {
   return raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
 }
 
+const LEFT_PANELS_KEY = "velloo:leftPanels";
+
+/** Collapsed state of the boards-mode left panels, persisted like the app theme. */
+function readLeftPanels(): { boards: boolean; tree: boolean } {
+  if (typeof localStorage === "undefined") return { boards: false, tree: false };
+  try {
+    const raw = localStorage.getItem(LEFT_PANELS_KEY);
+    if (!raw) return { boards: false, tree: false };
+    const parsed = JSON.parse(raw) as { boards?: unknown; tree?: unknown };
+    return { boards: parsed.boards === true, tree: parsed.tree === true };
+  } catch {
+    return { boards: false, tree: false };
+  }
+}
+
+function persistLeftPanels(boards: boolean, tree: boolean) {
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(LEFT_PANELS_KEY, JSON.stringify({ boards, tree }));
+  }
+}
+
 export interface Selection {
   screenId: string;
   path: string;
@@ -94,6 +115,10 @@ export interface CanvasState {
   nodeRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>;
   annotationsVisible: boolean;
   editingMarkupId: string | null;
+  /** Collapsed state of the boards list in the boards-mode left sidebar. */
+  boardsCollapsed: boolean;
+  /** Collapsed state of the screen tree in the boards-mode left sidebar. */
+  treeCollapsed: boolean;
   view: ViewMode;
   libraryItem: LibraryItemRef | null;
   /**
@@ -132,6 +157,8 @@ export interface CanvasState {
   refreshNotes(): Promise<void>;
   setAnnotationsVisible(b: boolean): void;
   setEditingMarkupId(id: string | null): void;
+  toggleBoardsCollapsed(): void;
+  toggleTreeCollapsed(): void;
   setNodeRects(
     frameId: string,
     rects: { path: string; x: number; y: number; w: number; h: number }[],
@@ -215,6 +242,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   nodeRects: {},
   annotationsVisible: true,
   editingMarkupId: null,
+  boardsCollapsed: readLeftPanels().boards,
+  treeCollapsed: readLeftPanels().tree,
   // ── state: library view ──────────────────────────────────────
   view: "boards",
   libraryItem: null,
@@ -400,6 +429,22 @@ export const useCanvas = create<CanvasState>((set, get) => ({
 
   setEditingMarkupId(editingMarkupId) {
     set({ editingMarkupId });
+  },
+
+  toggleBoardsCollapsed() {
+    set((s) => {
+      const boardsCollapsed = !s.boardsCollapsed;
+      persistLeftPanels(boardsCollapsed, s.treeCollapsed);
+      return { boardsCollapsed };
+    });
+  },
+
+  toggleTreeCollapsed() {
+    set((s) => {
+      const treeCollapsed = !s.treeCollapsed;
+      persistLeftPanels(s.boardsCollapsed, treeCollapsed);
+      return { treeCollapsed };
+    });
   },
 
   setNodeRects(frameId, rects) {

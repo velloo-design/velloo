@@ -298,7 +298,9 @@ function printWired(connected: ConnectResult | undefined): void {
   );
   if (connected.skills?.length)
     console.log(
-      pc.dim(`    + ${connected.skills.length} Claude Code skill${connected.skills.length === 1 ? "" : "s"}`),
+      pc.dim(
+        `    + ${connected.skills.length} Claude Code skill${connected.skills.length === 1 ? "" : "s"}`,
+      ),
     );
   if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
 }

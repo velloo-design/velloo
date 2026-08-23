@@ -85,7 +85,9 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
         paths: z
           .array(z.string())
           .min(1)
-          .describe("Absolute or relative file paths and/or globs, e.g. ['../gen/*.png', '/abs/logo.svg']"),
+          .describe(
+            "Absolute or relative file paths and/or globs, e.g. ['../gen/*.png', '/abs/logo.svg']",
+          ),
         baseDir: z
           .string()
           .optional()
@@ -103,7 +105,8 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
       for (const p of paths) {
         if (p.includes("*") || p.includes("?") || p.includes("[")) {
           try {
-            for await (const f of new Bun.Glob(p).scan({ cwd: base, absolute: true })) sources.push(f);
+            for await (const f of new Bun.Glob(p).scan({ cwd: base, absolute: true }))
+              sources.push(f);
           } catch {
             /* malformed glob — skip, reported as zero matches */
           }
@@ -132,7 +135,12 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
             continue;
           }
           await writeFile(abs, Buffer.from(await file.arrayBuffer()));
-          results.push({ path: src, assetPath: `assets/${safe}`, url: `/assets/${safe}`, bytes: size });
+          results.push({
+            path: src,
+            assetPath: `assets/${safe}`,
+            url: `/assets/${safe}`,
+            bytes: size,
+          });
         } catch (e) {
           results.push({ path: src, error: String((e as Error).message ?? e) });
         }
@@ -140,7 +148,9 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
 
       const imported = results.filter((r) => "url" in r).length;
       return {
-        content: [{ type: "text", text: JSON.stringify({ imported, matched: sources.length, results }) }],
+        content: [
+          { type: "text", text: JSON.stringify({ imported, matched: sources.length, results }) },
+        ],
       } as McpResult;
     },
   );
