@@ -53,6 +53,9 @@ export const mutate = {
   removeBoard(args: { boardId: string }) {
     return postMutate<{ removedBoardId: string }>("remove_board", args);
   },
+  reorderBoards(args: { order: string[] }) {
+    return postMutate<{ order: string[] }>("reorder_boards", args);
+  },
   updateProps(args: { screenId: string; path: number[]; propPatch: Record<string, unknown> }) {
     return postMutate<{ path: number[] }>("update_props", args);
   },

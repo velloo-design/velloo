@@ -2,6 +2,7 @@ import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Node, Screen, Theme } from "@velloo/schema";
 import { create } from "zustand";
 import {
+  type BoardMeta,
   type DesignSummary,
   fetchBoard,
   fetchComponents,
@@ -134,6 +135,13 @@ export interface CanvasState {
   loadDesign(): Promise<void>;
   refreshHistory(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
+  /**
+   * Reorder `design.boards` in place to match `order` (board ids). Used
+   * by the sidebar drag-and-drop for an optimistic update before the
+   * reorder mutation round-trips; the server's `config-changed` event
+   * later reconciles via `refreshDesignSummary`.
+   */
+  reorderBoardsLocal(order: string[]): void;
   loadComponents(): Promise<void>;
   loadTheme(): Promise<void>;
   refreshTheme(): Promise<void>;
@@ -290,6 +298,24 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   async refreshDesignSummary() {
     const design = await fetchDesign();
     set({ design });
+  },
+
+  reorderBoardsLocal(order) {
+    set((s) => {
+      if (!s.design) return s;
+      const byId = new Map(s.design.boards.map((b) => [b.id, b]));
+      const next: BoardMeta[] = [];
+      for (const id of order) {
+        const b = byId.get(id);
+        if (b) {
+          next.push(b);
+          byId.delete(id);
+        }
+      }
+      // Any board not named in `order` keeps its place at the end.
+      for (const b of s.design.boards) if (byId.has(b.id)) next.push(b);
+      return { design: { ...s.design, boards: next } };
+    });
   },
 
   async loadComponents() {

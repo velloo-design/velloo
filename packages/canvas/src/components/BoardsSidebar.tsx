@@ -6,7 +6,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type DragEvent, useMemo, useRef, useState } from "react";
 import { type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -51,6 +51,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const treeCollapsed = useCanvas((s) => s.treeCollapsed);
   const toggleBoardsCollapsed = useCanvas((s) => s.toggleBoardsCollapsed);
   const toggleTreeCollapsed = useCanvas((s) => s.toggleTreeCollapsed);
+  const reorderBoardsLocal = useCanvas((s) => s.reorderBoardsLocal);
   const currentScreen = useCanvas((s) =>
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
   );
@@ -99,6 +100,97 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     void mutate.removeBoard({ boardId: id }).catch((e) => toastError(e, "Could not delete board"));
   };
 
+  // ── Board drag-and-drop reordering ─────────────────────────────────────
+  // A single board can't be reordered, so the drag affordances stay off.
+  const canReorder = boards.length > 1;
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  // While a drag is in flight, `dragOrder` holds the live previewed order
+  // so the list reflows under the pointer. Null when not dragging.
+  const [dragOrder, setDragOrder] = useState<string[] | null>(null);
+  // Distinguishes a real drop (persist) from a cancelled drag / drop
+  // outside the list (revert). `onDragEnd` fires for both.
+  const dropHandled = useRef(false);
+
+  const renderedBoards = useMemo<BoardMeta[]>(() => {
+    if (!dragOrder) return boards;
+    const byId = new Map(boards.map((b) => [b.id, b]));
+    const out: BoardMeta[] = [];
+    for (const id of dragOrder) {
+      const b = byId.get(id);
+      if (b) out.push(b);
+    }
+    for (const b of boards) if (!dragOrder.includes(b.id)) out.push(b);
+    return out;
+  }, [dragOrder, boards]);
+
+  const onBoardDragStart = (e: DragEvent<HTMLLIElement>, id: string) => {
+    dropHandled.current = false;
+    setDraggingId(id);
+    setDragOrder(boards.map((b) => b.id));
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox won't start a drag unless some data is attached.
+    e.dataTransfer.setData("text/plain", id);
+    // Grabbing cursor workspace-wide for the duration of the drag (and
+    // the styles.css rule also drops design-iframe pointer-events so a
+    // frame can't swallow the drop).
+    document.body.classList.add("velloo-dragging");
+  };
+
+  // Reflow the previewed order as the pointer passes over a sibling: pull
+  // the dragged id out and reinsert it at the hovered row's index.
+  const onBoardDragOver = (e: DragEvent<HTMLLIElement>, overId: string) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (overId === draggingId) return;
+    setDragOrder((prev) => {
+      const cur = prev ?? boards.map((b) => b.id);
+      const from = cur.indexOf(draggingId);
+      const to = cur.indexOf(overId);
+      if (from === -1 || to === -1 || from === to) return cur;
+      const next = [...cur];
+      next.splice(from, 1);
+      next.splice(to, 0, draggingId);
+      return next;
+    });
+  };
+
+  // Drops bubble to the list so a release in a gap or the empty space
+  // below the last row still lands — the previewed `dragOrder` already
+  // reflects the final position.
+  const onListDragOver = (e: DragEvent<HTMLUListElement>) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const onListDrop = (e: DragEvent<HTMLUListElement>) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    dropHandled.current = true;
+    const order = dragOrder;
+    setDraggingId(null);
+    setDragOrder(null);
+    if (!order) return;
+    const original = boards.map((b) => b.id);
+    if (order.length === original.length && order.every((id, i) => id === original[i])) return;
+    // Optimistic: reorder the store now so the list doesn't flash back to
+    // the old order before the server's `config-changed` reconciles.
+    reorderBoardsLocal(order);
+    void mutate.reorderBoards({ order }).catch((err) => {
+      toastError(err, "Could not reorder boards");
+      void useCanvas.getState().refreshDesignSummary();
+    });
+  };
+
+  const onBoardDragEnd = () => {
+    document.body.classList.remove("velloo-dragging");
+    if (dropHandled.current) return;
+    // Cancelled (Esc) or dropped outside the list — discard the preview.
+    setDraggingId(null);
+    setDragOrder(null);
+  };
+
   // The boards list never eats the whole pane: when both panels are
   // open it's capped at half so the tree stays visible; when the tree
   // is collapsed it grows to fill instead. Collapsing a panel drops it
@@ -138,11 +230,27 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
         {boardsCollapsed ? null : boards.length === 0 ? (
           <div className="px-4 pb-2 text-sm text-muted-foreground">No boards yet.</div>
         ) : (
-          <ul className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2 min-h-0">
-            {boards.map((b) => {
+          <ul
+            className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2 min-h-0"
+            onDragOver={onListDragOver}
+            onDrop={onListDrop}
+          >
+            {renderedBoards.map((b) => {
               const active = b.id === currentBoardId;
+              const dragging = draggingId === b.id;
               return (
-                <li key={b.id} className="relative group/board">
+                <li
+                  key={b.id}
+                  draggable={canReorder}
+                  onDragStart={(e) => onBoardDragStart(e, b.id)}
+                  onDragOver={(e) => onBoardDragOver(e, b.id)}
+                  onDragEnd={onBoardDragEnd}
+                  className={
+                    "relative group/board rounded-md " +
+                    (canReorder ? "cursor-grab active:cursor-grabbing " : "") +
+                    (dragging ? "opacity-50" : "")
+                  }
+                >
                   <button
                     type="button"
                     onClick={() => {

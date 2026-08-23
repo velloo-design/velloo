@@ -1,9 +1,9 @@
-import { $, DoAsync, err, type Result } from "@velloo/result";
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import type { Board } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { boardIdConflict, boardIdExhausted, lastBoard, type MutationError } from "./errors.ts";
 import { getBoard } from "./lookup.ts";
-import { deletePersistedBoard, persistBoard } from "./persist.ts";
+import { deletePersistedBoard, persistBoard, persistConfig } from "./persist.ts";
 
 export interface AddBoardArgs {
   name: string;
@@ -79,6 +79,45 @@ export async function updateBoard(
   });
 }
 
+export interface ReorderBoardsArgs {
+  /** Board ids in the desired left-sidebar order. */
+  order: string[];
+}
+
+export interface ReorderBoardsResult {
+  /** The persisted order — a sanitized, complete permutation of the folder's boards. */
+  order: string[];
+}
+
+/**
+ * Persist the left-sidebar board order to `config.boardOrder`. The caller
+ * sends the order it wants; we drop ids that don't resolve to a board,
+ * de-duplicate, then append any boards the caller omitted (in their
+ * current order) so the stored order is always a complete permutation.
+ * No-op writes (order already matches) still persist — cheap, and keeps
+ * the result honest.
+ */
+export async function reorderBoards(
+  ctx: MutationContext,
+  args: ReorderBoardsArgs,
+): Promise<Result<ReorderBoardsResult, MutationError>> {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const id of args.order) {
+    if (ctx.folder.boards.has(id) && !seen.has(id)) {
+      order.push(id);
+      seen.add(id);
+    }
+  }
+  for (const id of ctx.folder.boards.keys()) {
+    if (!seen.has(id)) order.push(id);
+  }
+  const nextConfig = { ...ctx.folder.config, boardOrder: order };
+  await persistConfig(ctx.folder, nextConfig);
+  ctx.broadcast({ type: "config-changed" });
+  return ok({ order });
+}
+
 export interface RemoveBoardArgs {
   boardId: string;
 }
@@ -97,6 +136,18 @@ export async function removeBoard(
       return yield* $(err(lastBoard(args.boardId)));
     }
     await deletePersistedBoard(ctx.folder, args.boardId);
+    // Prune the deleted id from the saved sidebar order so config.json
+    // doesn't accumulate dangling ids. Drop the field entirely once
+    // nothing's left rather than persisting an empty array.
+    const order = ctx.folder.config.boardOrder;
+    if (order?.includes(args.boardId)) {
+      const pruned = order.filter((id) => id !== args.boardId);
+      const nextConfig = {
+        ...ctx.folder.config,
+        boardOrder: pruned.length > 0 ? pruned : undefined,
+      };
+      await persistConfig(ctx.folder, nextConfig);
+    }
     ctx.broadcast({ type: "board-changed", boardId: args.boardId });
     return { removedBoardId: args.boardId };
   });

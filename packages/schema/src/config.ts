@@ -122,6 +122,14 @@ export const ConfigSchema = z
     defaultScreen: z.string().min(1).optional(),
     /** Board id the canvas should open on first load. Falls back to the first board. */
     defaultBoard: z.string().min(1).optional(),
+    /**
+     * Left-sidebar display order of boards, as board ids. The canvas
+     * writes this when the user drags boards to reorder them. Boards not
+     * listed fall to the end in filename (alphabetical) order; ids that
+     * no longer resolve are ignored. Absent ⇒ filename order — the
+     * historical default, so existing folders are unaffected.
+     */
+    boardOrder: z.array(z.string().min(1)).optional(),
     codegen: CodegenConfigSchema.optional(),
     /**
      * The folder's CSS framework — the styling axis, independent of the

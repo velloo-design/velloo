@@ -195,6 +195,31 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   };
 }
 
+/**
+ * Board `[id, board]` entries in display order: ids listed in
+ * `config.boardOrder` first (in that sequence), then any remaining boards
+ * in their loaded (filename) order. Stale ids in `boardOrder` — boards
+ * that have since been deleted — are skipped. Absent/empty `boardOrder`
+ * ⇒ the plain filename order.
+ */
+export function orderedBoards(folder: DesignFolder): [string, Board][] {
+  const order = folder.config.boardOrder;
+  if (!order || order.length === 0) return [...folder.boards.entries()];
+  const seen = new Set<string>();
+  const out: [string, Board][] = [];
+  for (const id of order) {
+    const board = folder.boards.get(id);
+    if (board && !seen.has(id)) {
+      out.push([id, board]);
+      seen.add(id);
+    }
+  }
+  for (const [id, board] of folder.boards) {
+    if (!seen.has(id)) out.push([id, board]);
+  }
+  return out;
+}
+
 /** Reload one screen from disk and update the cache in place. */
 export async function reloadScreen(folder: DesignFolder, screenId: string): Promise<Screen | null> {
   const path = join(folder.root, "screens", `${screenId}.json`);

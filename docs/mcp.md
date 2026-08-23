@@ -69,6 +69,7 @@ Boards are the canvases of a design folder; one folder has many. Each board owns
 | `add_board` | `name, id?` | Create a new empty board. Id is derived from `name` if omitted |
 | `update_board` | `boardId, patch` | Sparse patch on `name` (only field today) |
 | `remove_board` | `boardId` | Refuses to remove the last board (returns `LastBoard`). Undoable |
+| `reorder_boards` | `order` | Set the sidebar board order (board ids). Unknown ids dropped, omitted boards appended. Persists to `config.boardOrder`; the canvas drag-and-drop calls this |
 
 ### Canvas notes
 

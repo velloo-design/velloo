@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { orderedBoards } from "../design-folder.ts";
 import type { MutationContext } from "../mutations/index.ts";
 
 export function createDesignRouter(ctxFor: () => MutationContext): Hono {
@@ -32,7 +33,7 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
         name: screen.name,
         library: screen.library ?? f.config.defaultLibrary ?? null,
       })),
-      boards: [...f.boards.entries()].map(([id, board]) => ({
+      boards: orderedBoards(f).map(([id, board]) => ({
         id,
         name: board.name,
         frameCount: board.frames.length,

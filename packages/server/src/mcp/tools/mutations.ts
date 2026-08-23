@@ -21,6 +21,7 @@ import {
   removeNode,
   removeScreen,
   removeSnippet,
+  reorderBoards,
   setNodeId,
   setStyle,
   updateBoard,
@@ -358,6 +359,16 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: { boardId: z.string() },
     },
     async (args) => toMcp(await removeBoard(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "reorder_boards",
+    {
+      description:
+        "Set the left-sidebar display order of boards. `order` is the list of board ids in the desired order; unknown ids are ignored and any omitted boards are appended in their current order. Persisted to config.json (config.boardOrder).",
+      inputSchema: { order: z.array(z.string()) },
+    },
+    async (args) => toMcp(await reorderBoards(ctx, args)),
   );
 
   // ── Frame / group lifecycle ────────────────────────────────────────────

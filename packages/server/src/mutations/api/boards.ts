@@ -5,7 +5,10 @@ import {
   addBoard as addBoardImpl,
   type RemoveBoardArgs,
   type RemoveBoardResult,
+  type ReorderBoardsArgs,
+  type ReorderBoardsResult,
   removeBoard as removeBoardImpl,
+  reorderBoards as reorderBoardsImpl,
   type UpdateBoardArgs,
   type UpdateBoardResult,
   updateBoard as updateBoardImpl,
@@ -32,12 +35,22 @@ export function removeBoard(
 ): Promise<Result<RemoveBoardResult, MutationError>> {
   return withBoardLock(args.boardId, () => removeBoardImpl(ctx, args));
 }
+// Reorder writes folder config (not a single board file), so a per-board
+// lock wouldn't serialize it against anything. Mirrors addBoard.
+export function reorderBoards(
+  ctx: MutationContext,
+  args: ReorderBoardsArgs,
+): Promise<Result<ReorderBoardsResult, MutationError>> {
+  return reorderBoardsImpl(ctx, args);
+}
 
 export type {
   AddBoardArgs,
   AddBoardResult,
   RemoveBoardArgs,
   RemoveBoardResult,
+  ReorderBoardsArgs,
+  ReorderBoardsResult,
   UpdateBoardArgs,
   UpdateBoardResult,
 };

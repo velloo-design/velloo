@@ -99,6 +99,9 @@ export const UpdateBoardBody = z.object({
 export const RemoveBoardBody = z.object({
   boardId: z.string().min(1),
 });
+export const ReorderBoardsBody = z.object({
+  order: z.array(z.string().min(1)),
+});
 
 // ── Frame / group lifecycle ────────────────────────────────────────────
 export const AddFrameBody = z.object({
