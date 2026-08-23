@@ -66,4 +66,28 @@ describe("answersFromArgs", () => {
     const a = answersFromArgs({ themePreset: "   " });
     expect(a.themePreset).toBeUndefined();
   });
+
+  test("--surface picks a Pulse slice; only valid for the shadcn sample", () => {
+    expect(answersFromArgs({ surface: "analytics" }).productSurface).toBe("analytics");
+    expect(answersFromArgs({}).productSurface).toBeUndefined();
+    expect(() => answersFromArgs({ surface: "ecommerce" })).toThrow(/unknown --surface/);
+    expect(() => answersFromArgs({ surface: "saas", library: "none" })).toThrow(
+      /--surface only applies/,
+    );
+    expect(() => answersFromArgs({ surface: "saas", initialContent: "blank" })).toThrow(
+      /--surface only applies/,
+    );
+  });
+
+  test("--vibe themes by feel and excludes --theme-preset", () => {
+    expect(answersFromArgs({ vibe: "playful" }).themeVibe).toBe("playful");
+    expect(() => answersFromArgs({ vibe: "corporate-synergy" })).toThrow(/unknown --vibe/);
+    expect(() => answersFromArgs({ vibe: "playful", themePreset: "violet" })).toThrow(/not both/);
+  });
+
+  test("--stack records the app stack for the codegen alias", () => {
+    expect(answersFromArgs({ stack: "remix" }).stack).toBe("remix");
+    expect(answersFromArgs({}).stack).toBeUndefined();
+    expect(() => answersFromArgs({ stack: "rails" })).toThrow(/unknown --stack/);
+  });
 });

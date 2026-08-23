@@ -155,6 +155,41 @@ describe("velloo init", () => {
     expect(JSON.stringify(theme.colors.primary)).not.toContain("5e6ad2");
   }, 30_000);
 
+  test("--surface, --vibe, and --stack tailor the sample, theme, and codegen alias", async () => {
+    const { exitCode, stderr } = await runInit(tmp, [
+      "--surface=marketing",
+      "--vibe=cozy",
+      "--stack=remix",
+    ]);
+    if (exitCode !== 0) throw new Error(stderr);
+    const design = designDir(tmp);
+
+    // Marketing slice: the Marketing board's screens + the showcase, no App board.
+    const screenFiles = await jsonFiles(join(design, "screens"));
+    expect(screenFiles.sort()).toEqual([
+      "landing.json",
+      "pricing.json",
+      "showcase.json",
+      "signup.json",
+    ]);
+    expect((await jsonFiles(join(design, "boards"))).sort()).toEqual([
+      "marketing.json",
+      "playground.json",
+    ]);
+
+    // The remix stack lands as the codegen import alias.
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.codegen?.componentsAlias).toBe("~/components/ui");
+
+    // The cozy vibe derives its own primary (not the Pulse indigo default).
+    const theme = ThemeSchema.parse(
+      JSON.parse(await readFile(join(design, "theme/default.json"), "utf8")),
+    );
+    expect(JSON.stringify(theme.colors.primary)).not.toContain("5e6ad2");
+  }, 30_000);
+
   test("upstream never writes into the app during init (deferred)", async () => {
     const { exitCode } = await runInit(tmp, [
       "--library=shadcn-upstream",

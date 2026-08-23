@@ -31,6 +31,11 @@ interface DefaultConfigOpts {
    * their channel is intrinsic and `styling` stays absent.
    */
   styling?: Config["styling"];
+  /**
+   * Codegen defaults — set when the wizard's stack prompt picked an import
+   * alias. Absent ⇒ codegen falls back to `@/components/ui`.
+   */
+  codegen?: Config["codegen"];
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
@@ -58,5 +63,6 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ...(opts.hostApp ? { hostApp: opts.hostApp } : {}),
     ...(opts.feedback ? { feedback: opts.feedback } : {}),
     ...(opts.styling ? { styling: opts.styling } : {}),
+    ...(opts.codegen ? { codegen: opts.codegen } : {}),
   };
 }

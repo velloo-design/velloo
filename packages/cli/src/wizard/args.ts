@@ -1,6 +1,9 @@
 import { resolve } from "node:path";
+import { PRODUCT_SURFACES, type ProductSurface } from "../scaffold/sample-page.ts";
 import { isValidPreset } from "../scaffold/theme-presets.ts";
+import { isValidVibe } from "../scaffold/vibes.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
+import { isValidStack } from "./stacks.ts";
 
 /**
  * Pure flag → answers logic for `velloo init`'s non-interactive mode.
@@ -24,7 +27,13 @@ export interface InitCliArgs {
   library?: string;
   componentsDir?: string;
   initialContent?: string;
+  /** Pulse slice for a shadcn sample: saas | analytics | marketing. */
+  surface?: string;
   themePreset?: string;
+  /** Vibe id (theme by feel) — mutually exclusive with --theme-preset. */
+  vibe?: string;
+  /** App stack: nextjs | vite | astro | remix — sets codegen.componentsAlias. */
+  stack?: string;
 }
 
 export function isValidLibraryId(v: string): v is LibraryId {
@@ -71,6 +80,19 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
   if (themePreset && !isValidPreset(themePreset)) {
     throw new Error(`unknown --theme-preset ${JSON.stringify(args.themePreset)}.`);
   }
+  const themeVibe = args.vibe?.trim() || undefined;
+  if (themeVibe && !isValidVibe(themeVibe)) {
+    throw new Error(`unknown --vibe ${JSON.stringify(args.vibe)}.`);
+  }
+  if (themePreset && themeVibe) {
+    throw new Error("pass one of --theme-preset or --vibe, not both.");
+  }
+  const stack = args.stack?.trim() || undefined;
+  if (stack && !isValidStack(stack)) {
+    throw new Error(
+      `unknown --stack ${JSON.stringify(args.stack)}. Valid: nextjs | vite | astro | remix.`,
+    );
+  }
 
   const appRoot = resolve(args.folder ?? ".");
   const folder = resolve(appRoot, args.designFolder ?? "velloo");
@@ -80,6 +102,23 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
   const initialContent: InitialContent = scan
     ? "scan"
     : ((args.initialContent as InitialContent | undefined) ?? "sample");
+
+  const surface = args.surface?.trim() || undefined;
+  if (surface && !PRODUCT_SURFACES.includes(surface as ProductSurface)) {
+    throw new Error(
+      `unknown --surface ${JSON.stringify(args.surface)}. Valid: saas | analytics | marketing.`,
+    );
+  }
+  // The surface picks a slice of the shadcn Pulse sample — meaningless (so
+  // loudly rejected) for other libraries or non-sample content.
+  if (surface && (library === "none" || library === "mui")) {
+    throw new Error(`--surface only applies to the shadcn sample, not --library=${library}.`);
+  }
+  if (surface && initialContent !== "sample") {
+    throw new Error(
+      `--surface only applies to the sample (got --initial-content=${initialContent}).`,
+    );
+  }
 
   // Upstream components live in the app (written post-init); everything else
   // renders from the bundled snapshot. Init writes nothing to the app.
@@ -95,6 +134,9 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     source,
     componentsRelative: args.componentsDir ?? "src/components/ui",
     initialContent,
+    ...(surface ? { productSurface: surface as ProductSurface } : {}),
     themePreset,
+    ...(themeVibe ? { themeVibe } : {}),
+    ...(stack ? { stack } : {}),
   };
 }

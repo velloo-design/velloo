@@ -22,7 +22,7 @@
     "cli:release": "bun scripts/publish-cli.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.15",
+    "@biomejs/biome": "2.5.2",
     "@types/bun": "latest",
     "typescript": "6.0.3"
   },

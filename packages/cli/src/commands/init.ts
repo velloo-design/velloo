@@ -39,6 +39,7 @@ import {
 import { buildSampleBoards, buildSampleScreens } from "../scaffold/sample-page.ts";
 import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
 import { buildPresetTheme, presetById } from "../scaffold/theme-presets.ts";
+import { buildVibeTheme, vibeById } from "../scaffold/vibes.ts";
 import { detectHost } from "../scan/detect.ts";
 import {
   buildBoardFromScan,
@@ -53,6 +54,7 @@ import { type InstallPlan, planInstall } from "../wizard/install.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
 import { renderDesignReadme } from "../wizard/readme.ts";
+import { stackById } from "../wizard/stacks.ts";
 
 async function isEmptyOrMissing(path: string): Promise<boolean> {
   try {
@@ -104,6 +106,7 @@ function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFrom?: st
       if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
     }
   }
+  if (answers.themeVibe) return { theme: buildVibeTheme(answers.themeVibe) };
   return { theme: buildPresetTheme(answers.themePreset) };
 }
 
@@ -157,8 +160,8 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
 
   return {
     theme,
-    screens: buildSampleScreens(),
-    boards: buildSampleBoards(),
+    screens: buildSampleScreens(answers.productSurface),
+    boards: buildSampleBoards(answers.productSurface),
     snippets: buildSampleSnippets(),
     annotations: [],
     notes: [],
@@ -192,6 +195,9 @@ async function writeScaffold(
     plan.library.id === "none"
       ? { framework: answers.detected?.tailwindMajor ? "tailwind" : "none" }
       : undefined;
+  // The stack prompt's one output: emit_code mentions imports under the
+  // alias the user's app actually resolves.
+  const stack = stackById(answers.stack);
   const config = buildDefaultConfig({
     library: plan.library,
     projectId,
@@ -199,6 +205,7 @@ async function writeScaffold(
     ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
     ...(answers.feedback ? { feedback: answers.feedback } : {}),
     ...(styling ? { styling } : {}),
+    ...(stack ? { codegen: { componentsAlias: stack.alias } } : {}),
   });
   ConfigSchema.parse(config);
   ThemeSchema.parse(scaffold.theme);
@@ -252,9 +259,12 @@ function printSummary(
   importedFrom: string | undefined,
 ): void {
   const boardLabels = scaffold.boards.map((b) => b.name).join(" + ");
+  const vibe = vibeById(answers.themeVibe);
   const themeLabel = importedFrom
     ? `imported from ${relative(answers.appRoot, importedFrom) || importedFrom}`
-    : (presetById(answers.themePreset)?.label ?? "Indigo (Pulse default)");
+    : vibe
+      ? `${vibe.label} vibe (${vibe.description})`
+      : (presetById(answers.themePreset)?.label ?? "Indigo (Pulse default)");
 
   console.log("");
   console.log(pc.green(`✓ Done. Scaffolded ${folder}.`));
@@ -279,6 +289,8 @@ function printSummary(
   console.log(`    Design      ${folder}`);
   console.log(`    Library     ${plan.summary.name}`);
   console.log(`    Theme       ${themeLabel}`);
+  const stack = stackById(answers.stack);
+  if (stack) console.log(`    Stack       ${stack.label} (imports via ${stack.alias})`);
   if (plan.pendingUpstream) {
     console.log(
       pc.dim(
@@ -578,7 +590,7 @@ export default defineCommand({
       type: "boolean",
       default: true,
       description:
-        "Wire the MCP config + guidance for Claude Code and Cursor (use --no-connect to skip)",
+        "Wire your AI agents' MCP config + guidance — Claude Code / Cursor / Codex / Continue; non-interactive default wires Claude Code + Cursor (use --no-connect to skip)",
     },
     start: {
       type: "string",
@@ -602,9 +614,24 @@ export default defineCommand({
       type: "string",
       description: "Initial content: sample | blank (default sample). Use --start=scan to scan.",
     },
+    surface: {
+      type: "string",
+      description:
+        "Pulse slice for the shadcn sample: saas (all of it) | analytics (App board) | marketing (Marketing board)",
+    },
     themePreset: {
       type: "string",
       description: "Theme preset: indigo | violet | blue | emerald | rose | orange | amber | zinc",
+    },
+    vibe: {
+      type: "string",
+      description:
+        "Theme by feel: playful | calm | natural | bold | minimal | premium | techy | soft | cozy | sunny | moody | fresh",
+    },
+    stack: {
+      type: "string",
+      description:
+        "Your app's stack — sets the emitted import alias: nextjs | vite | astro (@/components/ui) | remix (~/components/ui)",
     },
   },
   async run({ args }) {

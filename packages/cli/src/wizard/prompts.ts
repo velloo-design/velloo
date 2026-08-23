@@ -13,11 +13,14 @@ import pc from "picocolors";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential, saveCredential } from "../cloud-credentials.ts";
 import { performDeviceLogin, verifyCredential } from "../cloud-login.ts";
+import type { ProductSurface } from "../scaffold/sample-page.ts";
 import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
+import { VIBES } from "../scaffold/vibes.ts";
 import { detectHost } from "../scan/detect.ts";
 import { resolveScanRoot, scanAppRoutes } from "../scan/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
+import { STACKS } from "./stacks.ts";
 
 function isAborted(value: unknown): value is symbol {
   return isCancel(value);
@@ -309,32 +312,92 @@ export async function runInteractive(ctx: {
     if (cr) componentsRelative = cr;
   }
 
-  const initialContent = await select<Exclude<InitialContent, "scan">>({
-    message: "Initial design",
-    options: [
-      {
-        value: "sample",
-        label: library === "none" ? "Welcome sample" : "Pulse sample",
-        hint: library === "none" ? "A small primitives demo" : "7 screens, 3 boards",
-      },
-      { value: "blank", label: "Blank", hint: "Empty board, no screens" },
-    ],
-    initialValue: "sample",
-  });
-  if (isAborted(initialContent)) return abort();
+  // The product surface folds the old sample-vs-blank question into "what
+  // are you designing?" — the answer picks which slice of Pulse ships. The
+  // no-library welcome sample has no surfaces, so it keeps the plain pair.
+  let initialContent: Exclude<InitialContent, "scan">;
+  let productSurface: ProductSurface | undefined;
+  if (library === "none") {
+    const content = await select<Exclude<InitialContent, "scan">>({
+      message: "Initial design",
+      options: [
+        { value: "sample", label: "Welcome sample", hint: "A small primitives demo" },
+        { value: "blank", label: "Blank", hint: "Empty board, no screens" },
+      ],
+      initialValue: "sample",
+    });
+    if (isAborted(content)) return abort();
+    initialContent = content;
+  } else {
+    const surface = await select<ProductSurface | "blank">({
+      message: "What are you designing? (tailors the Pulse starter)",
+      options: [
+        { value: "saas", label: "A full product", hint: "all of Pulse — 7 screens, 3 boards" },
+        {
+          value: "analytics",
+          label: "An app / dashboard",
+          hint: "Pulse's App board — dashboard, insights, settings",
+        },
+        {
+          value: "marketing",
+          label: "A marketing site",
+          hint: "Pulse's Marketing board — landing, pricing, sign-up",
+        },
+        { value: "blank", label: "Blank", hint: "Empty board, no screens" },
+      ],
+      initialValue: "saas",
+    });
+    if (isAborted(surface)) return abort();
+    initialContent = surface === "blank" ? "blank" : "sample";
+    if (surface !== "blank") productSurface = surface;
+  }
 
   let themePreset: string | undefined;
+  let themeVibe: string | undefined;
   if (library === "shadcn-upstream" || library === "shadcn-react") {
     const preset = await select<string>({
-      message: "Theme preset",
-      options: THEME_PRESETS.map((p) => ({
-        value: p.id,
-        label: `${swatch(p.seed)} ${p.label}`,
-      })),
+      message: "Theme",
+      options: [
+        ...THEME_PRESETS.map((p) => ({
+          value: p.id,
+          label: `${swatch(p.seed)} ${p.label}`,
+        })),
+        { value: "vibe", label: "Pick by vibe…", hint: "playful / calm / premium / …" },
+      ],
       initialValue: "indigo",
     });
     if (isAborted(preset)) return abort();
-    themePreset = typeof preset === "string" ? preset : undefined;
+    if (preset === "vibe") {
+      const vibe = await select<string>({
+        message: "How should it feel?",
+        options: VIBES.map((v) => ({
+          value: v.id,
+          label: `${swatch(v.seed)} ${v.label}`,
+          hint: v.description,
+        })),
+        initialValue: VIBES[0]?.id,
+      });
+      if (isAborted(vibe)) return abort();
+      themeVibe = typeof vibe === "string" ? vibe : undefined;
+    } else {
+      themePreset = typeof preset === "string" ? preset : undefined;
+    }
+  }
+
+  // Stack → codegen import alias. Only shadcn emits aliased component
+  // imports, so the question is noise for the no-library flow.
+  let stack: string | undefined;
+  if (library === "shadcn-upstream" || library === "shadcn-react") {
+    const picked = await select<string>({
+      message: "Your app's stack (sets the import alias emitted code uses)",
+      options: [
+        ...STACKS.map((s) => ({ value: s.id, label: s.label, hint: s.alias })),
+        { value: "skip", label: "Skip", hint: "decide later — defaults to @/components/ui" },
+      ],
+      initialValue: "nextjs",
+    });
+    if (isAborted(picked)) return abort();
+    if (picked !== "skip") stack = picked;
   }
 
   const share = await promptShareAndFeedback();
@@ -350,7 +413,10 @@ export async function runInteractive(ctx: {
     source,
     componentsRelative,
     initialContent,
+    productSurface,
     themePreset,
+    themeVibe,
+    stack,
     ...share,
   };
 }

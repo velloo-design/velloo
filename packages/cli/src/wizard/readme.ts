@@ -34,9 +34,13 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push(`| Library | ${plan.summary.name} |`);
   lines.push(`| Components | ${plan.summary.location} |`);
   lines.push(`| App root | ${answers.appRoot} |`);
+  const surfaceLabel =
+    answers.productSurface && answers.productSurface !== "saas"
+      ? ` (${answers.productSurface} slice)`
+      : "";
   const contentLabel =
     answers.initialContent === "sample"
-      ? "Pulse sample"
+      ? `Pulse sample${surfaceLabel}`
       : answers.initialContent === "scan"
         ? "scanned from your app"
         : "blank";

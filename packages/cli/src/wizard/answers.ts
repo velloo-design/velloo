@@ -4,6 +4,7 @@
  * `--flag` in non-interactive mode.
  */
 
+import type { ProductSurface } from "../scaffold/sample-page.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
 export type LibraryId = "shadcn-react" | "shadcn-upstream" | "none" | "mui";
@@ -74,8 +75,26 @@ export interface WizardAnswers {
    */
   componentsRelative: string;
   initialContent: InitialContent;
+  /**
+   * What the user is designing — tailors which slice of the Pulse sample
+   * ships (see `ProductSurface`). Only meaningful for a shadcn `sample`
+   * scaffold; undefined ⇒ the full sample (the historical default).
+   */
+  productSurface?: ProductSurface;
   /** Built-in theme preset id. Undefined → the default Pulse theme. */
   themePreset?: string;
+  /**
+   * Vibe id (see `scaffold/vibes.ts`) — the "pick by feel" alternative to a
+   * preset. Mutually exclusive with `themePreset`; wins when set.
+   */
+  themeVibe?: string;
+  /**
+   * The host app's stack (see `wizard/stacks.ts`). Sets
+   * `codegen.componentsAlias` in the folder config so `emit_code` mentions
+   * imports under the alias the app actually uses. Undefined ⇒ codegen's
+   * `@/components/ui` default.
+   */
+  stack?: string;
   /** Host detection result (populated when `initialContent === "scan"`). */
   detected?: DetectedHost;
   /**

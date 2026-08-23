@@ -23,18 +23,28 @@ import settings from "./pulse/screens/settings.json" with { type: "json" };
 import showcase from "./pulse/screens/showcase.json" with { type: "json" };
 import signup from "./pulse/screens/signup.json" with { type: "json" };
 
-export function buildSampleScreens(): Screen[] {
-  return [
-    landing as Screen,
-    pricing as Screen,
-    signup as Screen,
-    dashboard as Screen,
-    insights as Screen,
-    settings as Screen,
-    showcase as Screen,
-  ];
+/**
+ * What the user is designing — tailors which slice of Pulse ships.
+ * `saas` is the whole product (the historical default); `analytics` keeps
+ * the App board (dashboard / insights / settings); `marketing` keeps the
+ * Marketing board (landing / pricing / sign-up). Every surface keeps
+ * Playground — the component showcase is reference material, not product.
+ */
+export type ProductSurface = "saas" | "analytics" | "marketing";
+
+export const PRODUCT_SURFACES: ProductSurface[] = ["saas", "analytics", "marketing"];
+
+const APP_SCREENS = [dashboard, insights, settings] as Screen[];
+const MARKETING_SCREENS = [landing, pricing, signup] as Screen[];
+
+export function buildSampleScreens(surface: ProductSurface = "saas"): Screen[] {
+  if (surface === "analytics") return [...APP_SCREENS, showcase as Screen];
+  if (surface === "marketing") return [...MARKETING_SCREENS, showcase as Screen];
+  return [...MARKETING_SCREENS, ...APP_SCREENS, showcase as Screen];
 }
 
-export function buildSampleBoards(): Board[] {
+export function buildSampleBoards(surface: ProductSurface = "saas"): Board[] {
+  if (surface === "analytics") return [appBoard as Board, playgroundBoard as Board];
+  if (surface === "marketing") return [marketingBoard as Board, playgroundBoard as Board];
   return [appBoard as Board, marketingBoard as Board, playgroundBoard as Board];
 }
