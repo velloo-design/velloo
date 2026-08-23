@@ -17,10 +17,18 @@ a mark you'll redo. Each stage produces a **board the user can see and sign off
 on** — visuals settle arguments that words can't. Designs on the canvas are
 static; you verify them with screenshots, not by clicking.
 
+> **Set up — one brand, one folder.** The theme is folder-global, so a design
+> folder holds exactly one locked palette. Run the whole engagement in its own
+> folder (`velloo init <brand>`) — never share one with another brand or the
+> product's working design. And until you lock the palette (step 4), every
+> exploration uses **explicit colors** (`bg-[#…]`, inline `style`), *not* theme
+> tokens: each territory is its own candidate palette, so semantic tokens can't
+> express them yet. You switch to tokens only after a territory wins.
+
 ## 0. Frame it — three questions (do this first, always)
 
-Before anything visual, get three answers. They become the rubric you judge
-every later choice against:
+Before anything visual, get three answers **from the user** (don't invent them).
+They become the rubric you judge every later choice against:
 
 1. **Energy / flavor** — where on minimal↔expressive and soft↔brutalist should
    this land? (A range is fine: "expressive, with a raw edge.")
@@ -28,8 +36,9 @@ every later choice against:
    ("sharp + dev-native, but approachable").
 3. **Starting point** — strategy, audit, or both?
 
-Write them down verbatim. Every later decision must trace back to these. If a
-choice doesn't, cut it.
+**Pin them on a `framing` board** as the first screen — the rubric lives on the
+canvas, not in your head, so every later board is visibly judged against it.
+Every later decision must trace back to these three answers; if one doesn't, cut it.
 
 ## 1. Strategy — words before pictures
 
@@ -53,9 +62,11 @@ half the deliverable). Output a `brief.md` and a `rationale.md`.
 ## 3. Visual territories — this is the sign-off gate
 
 - Build **3–4 distinct territories** as real mini-comps, not swatches: a
-  marketing-site header **and** an app screen, using the *same* content across
-  all of them so they're directly comparable. Push each to a different corner of
-  the brief's flavor axis.
+  marketing-site header **and** an app screen, using the *same* content **and the
+  same tile size** across all of them so the choice is about character, not
+  layout. Push each to a different corner of the brief's flavor axis. Each
+  territory carries its own **explicit candidate palette** (you haven't locked
+  yet) — and clearly **mark the chosen one** once the user picks.
 - Render each in light **and** dark (`screenshot mode: "compare"`).
 - The user picks **one**. Do not advance on a text description of a territory —
   people cannot sign off on adjectives, only on pictures. This is the single
@@ -71,13 +82,18 @@ half the deliverable). Output a `brief.md` and a `rationale.md`.
   to prove every pair passes in **both** modes (dark is where contrast breaks).
 - Type: a display face, a text/UI face, and a mono. Keep it to **two or three
   families**. If a wordmark face is involved, it can be a fourth, used only there.
-- Commit the system with `set_token` / `emit_theme` so every later board renders
-  *against* the real tokens — you're designing in the system, not next to it.
+- Now — and only now — commit the winner with `set_token` / `emit_theme` and
+  switch the **final** boards to **semantic tokens** (`bg-background`,
+  `text-foreground`, `bg-primary`) so they theme-flip light↔dark. The exploration
+  and territory boards keep their explicit colors as the record of how you got here.
 
 ## 5. Logo & wordmark
 
 Hand off to the **velloo-logo** skill for the mark, wordmark, lockup, and favicon
-set. Come back with a master SVG and a font decision.
+set. Come back with a master SVG and a font decision. Don't block the engagement
+on a perfect logo — a simple placeholder mark (one SVG shape + the wordmark) is
+enough to carry the territory and system boards; finalize the real mark via
+velloo-logo before handoff.
 
 ## 6. Apply it — prove the system in the world
 

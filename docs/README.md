@@ -24,6 +24,7 @@ Velloo's bet: designs that are made of **real shadcn components from the start**
 - [mcp.md](./mcp.md) — MCP tool surface for agents
 - [roadmap.md](./roadmap.md) — Roadmap philosophy and the next ~8 weeks of sprints
 - [monetization.md](./monetization.md) — Commercial plan: tiers, billing requirements, cloud surface, the Velloo agent add-on
+- [brand-exports.md](./brand-exports.md) — Deferred: brand-deliverable exports (token bundle, icons, guidelines, deck) as `emit_*` generators; waits on hosted asset-gen + the agent
 - [decisions.md](./decisions.md) — Pivot log and design rationale
 - [comparison/](./comparison/) — Dated per-tool competitive comparisons; the README there carries the consensus-gap rollup
 
