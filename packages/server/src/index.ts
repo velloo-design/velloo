@@ -94,7 +94,7 @@ async function serveStatic(req: Request): Promise<Response | null> {
  * themeToCss's :root vars; the JIT only needs the token to exist so the
  * utility is generated when a className references it.
  */
-function extraThemeBlock(folder: DesignFolder): string {
+export function extraThemeBlock(folder: DesignFolder): string {
   // Merge across every named theme so utilities compile for whichever theme a
   // board renders with — values are overridden per render by themeToCss.
   const fonts: Record<string, string> = {};
@@ -327,6 +327,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 
 export type { CloudAuth } from "./cloud.ts";
 export type { DesignFolder } from "./design-folder.ts";
+export { loadDesignFolder } from "./design-folder.ts";
 // Re-export key types and helpers for downstream consumers.
 export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";

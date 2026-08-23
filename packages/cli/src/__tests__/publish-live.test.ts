@@ -8,26 +8,34 @@ type StubServer = Server<undefined>;
 
 /**
  * `velloo publish` must ship the live-island bundle so a shared design renders
- * the host's real charts client-side instead of the placeholder skeleton. This
- * drives the real command against an in-process stub cloud and asserts the
- * upload carries `bundle.js` and each screen HTML imports it — but only when
- * the folder declares `render:"live"` extensions (no bundle otherwise).
+ * the host's real charts client-side instead of the placeholder skeleton. Under
+ * the data-upload contract, publish uploads `design.json` (+ `snapshot.css`) and
+ * — only when the folder declares `render:"live"` extensions — `bundle.js`,
+ * flagging `live: true` + `bundlePath` in the design so the cloud's screen viewer
+ * loads it. This drives the real command against an in-process stub cloud and
+ * asserts that contract (no per-screen HTML is uploaded anymore).
  *
  * The stub host has no React, so the bundle compiles to an empty module; that's
- * fine — this guards publish's WIRING (build + upload + inject the URL). The
- * bundler's own compile is covered in @velloo/server's component-bundler tests
- * and validated end-to-end against a real recharts app.
+ * fine — this guards publish's WIRING (build + upload + flag). The bundler's own
+ * compile is covered in @velloo/server's component-bundler tests.
  */
+
+interface CapturedDesign {
+  live?: boolean;
+  bundlePath?: string;
+  extensions?: Record<string, unknown>;
+  screens?: { id: string }[];
+}
 
 const cliPath = resolve(import.meta.dir, "../cli.ts");
 
 let tmp: string;
 let server: StubServer;
-let captured: { names: string[]; htmlByName: Record<string, string> };
+let captured: { names: string[]; design?: CapturedDesign };
 
 beforeEach(() => {
   tmp = join(tmpdir(), `velloo-pub-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  captured = { names: [], htmlByName: {} };
+  captured = { names: [] };
   server = Bun.serve({
     port: 0,
     async fetch(req) {
@@ -40,7 +48,9 @@ beforeEach(() => {
         for (const value of form.getAll("file")) {
           if (value instanceof File) {
             captured.names.push(value.name);
-            if (value.name.endsWith(".html")) captured.htmlByName[value.name] = await value.text();
+            if (value.name === "design.json") {
+              captured.design = JSON.parse(await value.text()) as CapturedDesign;
+            }
           }
         }
         return Response.json(
@@ -137,18 +147,24 @@ async function runPublish(design: string) {
   return { exitCode, stderr };
 }
 
-test("publish ships the live bundle and wires the screen import", async () => {
+test("publish ships the live bundle and flags it in the design", async () => {
   const design = join(tmp, "velloo");
   await scaffold(design, true);
   const { exitCode, stderr } = await runPublish(design);
   if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
 
+  // Data + deps, no per-screen HTML.
+  expect(captured.names).toContain("design.json");
+  expect(captured.names).toContain("snapshot.css");
   expect(captured.names).toContain("bundle.js");
-  const home = captured.htmlByName["home.html"];
-  expect(home).toBeDefined();
-  expect(home).toContain('"./bundle.js"');
-  expect(home).toContain("__velloo_live");
-  expect(home).toContain('data-live-ref="Sparkline"');
+  expect(captured.names.some((n) => n.endsWith(".html"))).toBe(false);
+
+  // The design flags the live bundle so the cloud viewer loads it, and carries
+  // the live extension + the screen that uses it.
+  expect(captured.design?.live).toBe(true);
+  expect(captured.design?.bundlePath).toBe("bundle.js");
+  expect(captured.design?.extensions).toHaveProperty("Sparkline");
+  expect(captured.design?.screens?.some((s) => s.id === "home")).toBe(true);
 });
 
 test("publish omits the bundle when the folder has no live extensions", async () => {
@@ -157,6 +173,8 @@ test("publish omits the bundle when the folder has no live extensions", async ()
   const { exitCode, stderr } = await runPublish(design);
   if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
 
+  expect(captured.names).toContain("design.json");
   expect(captured.names).not.toContain("bundle.js");
-  expect(captured.htmlByName["home.html"]).not.toContain("./bundle.js");
+  expect(captured.design?.live).toBe(false);
+  expect(captured.design?.bundlePath).toBeUndefined();
 });

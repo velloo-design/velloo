@@ -1,22 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { renderScreen } from "@velloo/renderer";
+import type { Viewport } from "@velloo/schema";
 import {
-  ConfigSchema,
-  type Screen,
-  ScreenSchema,
-  type Snippet,
-  SnippetSchema,
-  ThemeSchema,
-  type Viewport,
-} from "@velloo/schema";
-import {
+  extraThemeBlock,
   findHostTailwindConfig,
   LiveBundler,
   liveExtensions,
+  loadDesignFolder,
   migrateConfig,
-  registryForScreen,
   resolveProviders,
   TailwindJit,
 } from "@velloo/server";
@@ -24,7 +16,7 @@ import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { fail } from "../fail.ts";
-import { resolveDesignFolder } from "../folder.ts";
+import { pickBoards, resolveDesignFolder } from "../folder.ts";
 
 interface CreatedLink {
   slug: string;
@@ -49,141 +41,10 @@ function gitCommitSha(folder: string): string | null {
   }
 }
 
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
-function galleryIndex(title: string, screens: Screen[], viewport: Viewport): string {
-  const cards = screens
-    .map(
-      (s) => `
-    <a class="card" href="${s.id}.html" data-screen="${s.id}">
-      <span class="preview" style="aspect-ratio:${viewport.w}/${viewport.h}">
-        <iframe src="${s.id}.html" loading="lazy" tabindex="-1"
-                style="width:${viewport.w}px;height:${viewport.h}px"></iframe>
-      </span>
-      <span class="meta">
-        <span class="name">${escapeHtml(s.name)}</span>
-        <span class="actions">
-          <span class="id">${viewport.w}×${viewport.h}</span>
-          <button class="fullscreen" data-screen="${s.id}" title="Full screen">⛶</button>
-        </span>
-      </span>
-    </a>`,
-    )
-    .join("\n");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: 48px 24px; font: 15px/1.5 system-ui, sans-serif; background: #fafafa; color: #18181b; }
-  main { max-width: 1080px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: #71717a; margin: 0 0 28px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-  .card { display: block; background: #fff; border: 1px solid #e4e4e7; border-radius: 12px;
-          overflow: hidden; text-decoration: none; color: inherit; }
-  .card:hover { border-color: #a1a1aa; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
-  .preview { display: block; position: relative; overflow: hidden; background: #fff;
-             border-bottom: 1px solid #f0f0f2; }
-  .preview iframe { border: 0; position: absolute; top: 0; left: 0;
-                    transform-origin: top left; pointer-events: none; }
-  .meta { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; }
-  .name { font-weight: 600; font-size: 14px; }
-  .actions { display: flex; align-items: center; gap: 10px; }
-  .id { color: #71717a; font-size: 12px; }
-  .fullscreen { border: 1px solid #e4e4e7; background: #fff; border-radius: 6px; padding: 2px 8px;
-                font-size: 14px; cursor: pointer; color: #52525b; }
-  .fullscreen:hover { border-color: #a1a1aa; color: #18181b; }
-  #overlay { position: fixed; inset: 0; background: #fafafa; z-index: 9999; display: flex; flex-direction: column; }
-  #overlay[hidden] { display: none; }
-  #overlay-bar { display: flex; justify-content: space-between; align-items: center;
-                 padding: 10px 16px; border-bottom: 1px solid #e4e4e7; background: #fff; }
-  #overlay-title { font-weight: 600; font-size: 14px; }
-  #overlay-close { border: 1px solid #e4e4e7; background: #fff; border-radius: 8px; width: 32px; height: 32px;
-                   font-size: 16px; cursor: pointer; color: #52525b; line-height: 1; }
-  #overlay-close:hover { border-color: #a1a1aa; color: #18181b; }
-  #overlay iframe { flex: 1; border: 0; width: 100%; background: #fff; }
-</style>
-</head>
-<body>
-<main>
-  <h1>${escapeHtml(title)}</h1>
-  <p class="sub">${screens.length} screen${screens.length === 1 ? "" : "s"} · click a card to view full screen</p>
-  <div class="grid">
-${cards}
-  </div>
-</main>
-<div id="overlay" hidden>
-  <div id="overlay-bar">
-    <span id="overlay-title"></span>
-    <button id="overlay-close" aria-label="Close (Esc)">✕</button>
-  </div>
-  <iframe id="overlay-frame" title="Screen preview"></iframe>
-</div>
-<script>
-(() => {
-  const names = ${JSON.stringify(Object.fromEntries(screens.map((s) => [s.id, s.name])))};
-  const overlay = document.getElementById("overlay");
-  const frame = document.getElementById("overlay-frame");
-  const overlayTitle = document.getElementById("overlay-title");
-
-  const open = (id) => {
-    if (!(id in names)) return;
-    frame.src = id + ".html";
-    overlayTitle.textContent = names[id];
-    overlay.hidden = false;
-    document.body.style.overflow = "hidden";
-    if (location.hash !== "#" + id) history.pushState(null, "", "#" + id);
-  };
-  const close = () => {
-    if (overlay.hidden) return;
-    overlay.hidden = true;
-    frame.src = "about:blank";
-    document.body.style.overflow = "";
-    if (location.hash) history.pushState(null, "", location.pathname + location.search);
-  };
-
-  for (const card of document.querySelectorAll("[data-screen]")) {
-    card.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      open(card.dataset.screen);
-    });
-  }
-  document.getElementById("overlay-close").addEventListener("click", close);
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
-  window.addEventListener("popstate", () => {
-    const id = location.hash.slice(1);
-    if (id in names) open(id); else close();
-  });
-
-  // Scale each preview iframe to its card's width.
-  const fit = () => {
-    for (const p of document.querySelectorAll(".preview")) {
-      const iframe = p.querySelector("iframe");
-      p.style.height = "";
-      iframe.style.transform = "scale(" + p.clientWidth / ${viewport.w} + ")";
-    }
-  };
-  window.addEventListener("resize", fit);
-  fit();
-
-  if (location.hash) open(location.hash.slice(1));
-})();
-</script>
-</body>
-</html>
-`;
-}
-
 export default defineCommand({
   meta: {
     name: "publish",
-    description: "Render every screen and publish the folder as a velloo-cloud share link",
+    description: "Publish the design folder as a velloo-cloud share link (the cloud renders it)",
   },
   args: {
     folder: {
@@ -206,6 +67,10 @@ export default defineCommand({
     title: {
       type: "string",
       description: "Link title (default: folder name)",
+    },
+    boards: {
+      type: "string",
+      description: "Comma-separated board ids to publish (default: pick interactively / all)",
     },
     visibility: {
       type: "string",
@@ -231,28 +96,35 @@ export default defineCommand({
       h: args.h ? Number(args.h) : 900,
     };
 
-    const screensDir = join(folder, "screens");
-    const screenFiles = (await readdir(screensDir).catch(() => null))?.filter((f) =>
-      f.endsWith(".json"),
-    );
-    if (!screenFiles || screenFiles.length === 0) {
-      fail("publish", `no screens found in ${screensDir} — is this a velloo design folder?`);
+    const design = await loadDesignFolder(folder);
+    if (design.screens.size === 0) {
+      fail("publish", `no screens found in ${folder} — is this a velloo design folder?`);
     }
 
-    const [themeJson, configJson] = await Promise.all([
-      readFile(join(folder, "theme", "default.json"), "utf8").then(JSON.parse),
-      readFile(join(folder, ".design", "config.json"), "utf8").then(JSON.parse),
-    ]);
-    const theme = ThemeSchema.parse(themeJson);
-    const config = migrateConfig(ConfigSchema.parse(configJson));
-    const { providers, defaultProvider } = await resolveProviders(config, folder);
+    // Publish whole boards: pick which (interactive multiselect, all preselected;
+    // or --boards a,b), then export those boards + every screen they place. A
+    // folder with no boards publishes all its screens (selected = []).
+    const interactive = Boolean(process.stdin.isTTY);
+    const selected = await pickBoards(folder, args.boards, interactive, "publish");
+    const selectedIds = new Set(selected.map((b) => b.id));
+    const boards = selected.length
+      ? [...design.boards.values()].filter((b) => selectedIds.has(b.id))
+      : [...design.boards.values()];
+    const screenIds = selected.length
+      ? new Set(boards.flatMap((b) => b.frames.map((f) => f.screen)))
+      : null; // null ⇒ all screens (board-less folder)
+    const screens = screenIds
+      ? [...design.screens.values()].filter((s) => screenIds.has(s.id))
+      : [...design.screens.values()];
+    if (screens.length === 0) fail("publish", "the selected boards have no screens.");
+
+    const config = migrateConfig(design.config);
+    const { providers } = await resolveProviders(config, folder);
 
     // Live-island bundle: when the folder declares render:"live" extensions
-    // (charts &c.), compile the host app's real components into one ESM module
-    // shipped beside the screens. Each screen's injected runtime imports it and
-    // client-mounts the real component into its SSR marker, so the share shows
-    // the actual chart instead of the placeholder skeleton. No live extensions
-    // ⇒ no bundler, no runtime — every other folder publishes exactly as before.
+    // (charts &c.), compile the host app's real components into one ESM module.
+    // The cloud's screen viewer imports it and client-mounts the real component
+    // into its marker. No live extensions ⇒ no bundler, no bundle.js.
     const liveExt = liveExtensions(config.extensions);
     const bundler =
       Object.keys(liveExt).length > 0
@@ -260,84 +132,88 @@ export default defineCommand({
             folder,
             () => config.hostApp,
             () => liveExt,
-            true, // minify — the bundle ships in a public share
+            true,
           )
         : null;
 
-    // The host live components carry their own Tailwind classes; feed their
-    // source dirs to the JIT so those utilities compile into the shared CSS.
+    // Compile Tailwind once for the whole folder. The cloud serves this CSS as-is
+    // and never runs Tailwind, so it must include everything the screens use —
+    // crucially the theme's palette/font utilities (`bg-ink`, `bg-amber`,
+    // `font-display`), which only compile when the theme's @theme block is fed in
+    // (same as the dev canvas). Host live components carry their own classes too.
     const jit = new TailwindJit(
       Object.values(providers),
-      screensDir,
+      join(folder, "screens"),
       undefined,
-      undefined,
+      () => extraThemeBlock(design),
       bundler ? () => bundler.hostSourceDirs() : undefined,
       () => findHostTailwindConfig(folder, config.hostApp),
+      config.styling?.framework,
     );
     const snapshotCss = await jit.build();
 
-    const screens: Screen[] = [];
-    for (const file of screenFiles.sort()) {
-      const raw = await readFile(join(screensDir, file), "utf8").then(JSON.parse);
-      screens.push(ScreenSchema.parse(raw));
-    }
-
-    const snippets = new Map<string, Snippet>();
-    const snippetFiles = (await readdir(join(folder, "snippets")).catch(() => [])).filter((f) =>
-      f.endsWith(".json"),
-    );
-    for (const file of snippetFiles) {
-      const raw = await readFile(join(folder, "snippets", file), "utf8").then(JSON.parse);
-      const snippet = SnippetSchema.parse(raw);
-      snippets.set(snippet.id, snippet);
-    }
-
     const title = args.title ?? `${folder.split("/").filter(Boolean).pop()} designs`;
     const form = new FormData();
-    let renderedBytes = 0;
 
-    // Build + upload the live bundle once (it's folder-scoped). A relative URL
-    // resolves against each screen HTML's own location in the share, so it
-    // works whether the share is mounted at a path or a subdomain root. A
-    // failed/partial build degrades to placeholders — surface the reason so the
-    // publisher knows their charts won't be live (e.g. host React not installed).
-    let liveBundleUrl: string | undefined;
+    let live = false;
     if (bundler) {
       const bundle = await bundler.build();
-      for (const e of bundle.errors) {
-        console.log(`  live-island warning: ${e.message}`);
-      }
+      for (const e of bundle.errors) console.log(`  live-island warning: ${e.message}`);
       form.append("file", new File([bundle.code], "bundle.js", { type: "text/javascript" }));
-      liveBundleUrl = "./bundle.js";
+      live = true;
     }
 
-    for (const screen of screens) {
-      const registry = registryForScreen(
-        screen,
-        providers,
-        defaultProvider,
-        config.extensions ?? {},
-      );
-      const { html } = await renderScreen(screen, theme, {
-        viewport,
-        snapshotCss,
-        registry,
-        snippets,
-        liveBundleUrl,
-      });
-      form.append("file", new File([html], `${screen.id}.html`, { type: "text/html" }));
-      renderedBytes += html.length;
-      console.log(`  rendered ${screen.id} (${Math.round(html.length / 1024)} KB)`);
-    }
+    // The design model the cloud renders from: raw screen trees + boards + theme
+    // + snippets + the slice of config needed to rebuild the component registry.
+    // No HTML and no gallery — the cloud owns the frame.
+    const designDoc = {
+      version: 1 as const,
+      title,
+      viewport,
+      defaultLibrary: config.defaultLibrary,
+      libraries: config.libraries,
+      extensions: config.extensions ?? {},
+      viewportPresets: config.viewportPresets ?? [],
+      theme: design.theme,
+      themes: Object.fromEntries(design.themes),
+      customCss: design.customCss,
+      snippets: [...design.snippets.values()],
+      screens,
+      boards,
+      live,
+      snapshotCssPath: "snapshot.css",
+      ...(live ? { bundlePath: "bundle.js" } : {}),
+    };
     form.append(
       "file",
-      new File([galleryIndex(title, screens, viewport)], "index.html", { type: "text/html" }),
+      new File([JSON.stringify(designDoc)], "design.json", { type: "application/json" }),
     );
+    form.append("file", new File([snapshotCss], "snapshot.css", { type: "text/css" }));
+
+    // Upload the image assets the published screens reference (absolute
+    // `/assets/…` paths). Only referenced files travel — keeps the publish lean
+    // and within the size limit; the cloud serves them under /s/<slug>/assets/.
+    const assetRefs = new Set<string>();
+    const assetRe = /\/assets\/[A-Za-z0-9._@\-/]+/g;
+    for (const s of screens) {
+      for (const m of JSON.stringify(s).matchAll(assetRe)) assetRefs.add(m[0]);
+    }
+    for (const ref of assetRefs) {
+      const rel = ref.replace(/^\//, ""); // assets/foo.png
+      try {
+        const bytes = await readFile(join(folder, rel));
+        form.append("file", new File([bytes], rel));
+      } catch {
+        console.log(`  asset not found: ${rel}`);
+      }
+    }
+
     const commitSha = gitCommitSha(folder);
     if (commitSha) form.append("commitSha", commitSha);
 
     const authorized = { authorization: `Bearer ${token}` };
     let link: CreatedLink;
+    let createdHere = false;
     const createRes = await fetch(`${baseUrl}/v1/links`, {
       method: "POST",
       headers: authorized,
@@ -356,6 +232,7 @@ export default defineCommand({
       link = { slug: args.slug, accessToken: null };
     } else if (createRes.status === 201) {
       link = (await createRes.json()) as CreatedLink;
+      createdHere = true;
     } else {
       const body = (await createRes.json().catch(() => ({}))) as { message?: string };
       fail("publish", `link creation failed (${createRes.status}): ${body.message ?? "unknown"}`);
@@ -368,6 +245,15 @@ export default defineCommand({
     });
     if (uploadRes.status !== 201) {
       const body = (await uploadRes.json().catch(() => ({}))) as { message?: string };
+      // A link with no version is a dead /s/ page. If we just created it (this
+      // run), delete it so a failed publish — e.g. over the size limit — doesn't
+      // leave a broken board in the user's home.
+      if (createdHere) {
+        await fetch(`${baseUrl}/v1/links/${link.slug}`, {
+          method: "DELETE",
+          headers: authorized,
+        }).catch(() => {});
+      }
       fail("publish", `upload failed (${uploadRes.status}): ${body.message ?? "unknown"}`);
     }
     const upload = (await uploadRes.json()) as UploadResult;
@@ -380,6 +266,5 @@ export default defineCommand({
       `velloo publish: ${upload.files} files, ${Math.round(upload.bytes / 1024)} KB${commitSha ? `, commit ${commitSha.slice(0, 7)}` : ""}`,
     );
     console.log(`  ${shareLink}${key}`);
-    if (renderedBytes === 0) fail("publish", "rendered zero bytes — something is wrong");
   },
 });
