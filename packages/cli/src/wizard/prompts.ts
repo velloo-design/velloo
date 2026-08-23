@@ -11,8 +11,8 @@ import {
 } from "@clack/prompts";
 import pc from "picocolors";
 import { defaultCloudUrl } from "../cloud.ts";
-import { saveCredential } from "../cloud-credentials.ts";
-import { performDeviceLogin } from "../cloud-login.ts";
+import { loadCredential, saveCredential } from "../cloud-credentials.ts";
+import { performDeviceLogin, verifyCredential } from "../cloud-login.ts";
 import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
 import { detectHost } from "../scan/detect.ts";
 import { resolveScanRoot, scanAppRoutes } from "../scan/index.ts";
@@ -92,14 +92,57 @@ async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
 async function promptShareAndFeedback(): Promise<{
   feedback?: { enabled: boolean; contactOk: boolean };
 } | null> {
+  const cloudUrl = defaultCloudUrl();
+  let signedIn = false;
+
+  // Sticky login: if ~/.velloo already holds a valid credential, don't ask to
+  // sign in again — note who we are and go straight to the feedback opt-in.
+  const existing = await loadCredential(cloudUrl);
+  const existingEmail = existing ? await verifyCredential(cloudUrl, existing.token) : null;
+  if (existingEmail) {
+    note(`Signed in as ${existingEmail}.`, "Velloo cloud");
+    signedIn = true;
+  }
+
+  if (!signedIn) {
+    const ok = await promptSignIn(cloudUrl);
+    if (ok === null) return null; // cancelled the whole wizard
+    signedIn = ok;
+  }
+
+  if (!signedIn) return {};
+
+  const choice = await select<"yes" | "yes-contact" | "no">({
+    message: "Enable the feedback tool? Your agent can send Velloo product feedback to improve it.",
+    options: [
+      { value: "yes", label: "Yes", hint: "Agent can send product feedback" },
+      {
+        value: "yes-contact",
+        label: "Yes — and it's OK to contact me about it",
+        hint: "We may follow up by email",
+      },
+      { value: "no", label: "No", hint: "Don't enable feedback" },
+    ],
+    initialValue: "yes",
+  });
+  if (isAborted(choice)) return null;
+  if (choice === "no") return {};
+  return { feedback: { enabled: true, contactOk: choice === "yes-contact" } };
+}
+
+/**
+ * The interactive sign-in step: confirm intent, then run the device flow.
+ * Returns true on a completed sign-in, false if the user declines or skips
+ * (soft), or null if they cancel the whole wizard.
+ */
+async function promptSignIn(cloudUrl: string): Promise<boolean | null> {
   const wantShare = await confirm({
     message: "Share your designs for free? Sign in to publish branded share links.",
     initialValue: false,
   });
   if (isAborted(wantShare)) return null;
-  if (!wantShare) return {};
+  if (!wantShare) return false;
 
-  const cloudUrl = defaultCloudUrl();
   const spin = spinner();
   let signedIn = false;
 
@@ -156,24 +199,7 @@ async function promptShareAndFeedback(): Promise<{
       process.stdin.pause();
     }
   }
-  if (!signedIn) return {};
-
-  const choice = await select<"yes" | "yes-contact" | "no">({
-    message: "Enable the feedback tool? Your agent can send Velloo product feedback to improve it.",
-    options: [
-      { value: "yes", label: "Yes", hint: "Agent can send product feedback" },
-      {
-        value: "yes-contact",
-        label: "Yes — and it's OK to contact me about it",
-        hint: "We may follow up by email",
-      },
-      { value: "no", label: "No", hint: "Don't enable feedback" },
-    ],
-    initialValue: "yes",
-  });
-  if (isAborted(choice)) return null;
-  if (choice === "no") return {};
-  return { feedback: { enabled: true, contactOk: choice === "yes-contact" } };
+  return signedIn;
 }
 
 /**

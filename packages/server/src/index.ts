@@ -6,7 +6,7 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import type { ServerWebSocket } from "bun";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
-import type { CloudAuth } from "./cloud.ts";
+import type { CanvasAuth, CloudAuth } from "./cloud.ts";
 import {
   type DesignFolder,
   loadDesignFolder,
@@ -50,6 +50,11 @@ export interface ServerOptions {
    * `~/.velloo/credentials.json`. Enables the opt-in `send_feedback` tool.
    */
   cloud?: CloudAuth;
+  /**
+   * Live login state + logout for the canvas account menu, provided by the CLI.
+   * Omit ⇒ the canvas reports logged out.
+   */
+  auth?: CanvasAuth;
 }
 
 export interface ServerHandle {
@@ -212,7 +217,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     provider: defaultProvider,
     broadcast,
   };
-  const app = createApp(() => ctx, jit, bundler, canvasBundler);
+  const app = createApp(() => ctx, jit, bundler, canvasBundler, opts.auth);
 
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {
@@ -325,7 +330,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   };
 }
 
-export type { CloudAuth } from "./cloud.ts";
+export type { CanvasAuth, CloudAuth } from "./cloud.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { loadDesignFolder } from "./design-folder.ts";
 // Re-export key types and helpers for downstream consumers.

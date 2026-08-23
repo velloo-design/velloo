@@ -2,22 +2,34 @@ import {
   Eye,
   EyeOff,
   Hand,
+  LogOut,
   MessageSquareText,
   Minus,
   Moon,
   MousePointer2,
   Plus,
   Redo2,
+  Settings,
   StickyNote,
   Sun,
   Undo2,
 } from "lucide-react";
-import { redo as redoApi, undo as undoApi } from "../api.ts";
+import { useEffect, useState } from "react";
+import { type AuthStatus, auth, redo as redoApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
-import { toastError } from "../toast.ts";
+import { pushToast, toastError } from "../toast.ts";
 import { LogoLockup } from "./Logo.tsx";
 import { Button } from "./ui/button.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu.tsx";
 import { Separator } from "./ui/separator.tsx";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip.tsx";
@@ -242,29 +254,87 @@ export function TopBar() {
             </Button>
           </HotkeyTip>
 
-          <AppThemePicker value={appTheme} onChange={setAppTheme} />
+          <SettingsMenu appTheme={appTheme} setAppTheme={setAppTheme} />
         </div>
       </header>
     </TooltipProvider>
   );
 }
 
-function AppThemePicker({ value, onChange }: { value: AppTheme; onChange: (t: AppTheme) => void }) {
+// Top-right account + settings. Shows the signed-in velloo-cloud user (with a
+// Log out action) and the app theme (Velloo UI, independent of the design's
+// theme). Login state is served live by the CLI daemon from ~/.velloo.
+function SettingsMenu({
+  appTheme,
+  setAppTheme,
+}: {
+  appTheme: AppTheme;
+  setAppTheme: (t: AppTheme) => void;
+}) {
+  const [status, setStatus] = useState<AuthStatus | null>(null);
+  const refresh = () => {
+    auth
+      .status()
+      .then(setStatus)
+      .catch(() => setStatus({ loggedIn: false }));
+  };
+  useEffect(refresh, []);
+
+  const loggedIn = status?.loggedIn ?? false;
+
+  const onLogout = async () => {
+    try {
+      await auth.logout();
+      setStatus({ loggedIn: false });
+      pushToast({ kind: "success", message: "Signed out of velloo-cloud." });
+    } catch (err) {
+      toastError(err, "Could not sign out.");
+    }
+  };
+
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as AppTheme)}>
-      <SelectTrigger
-        size="sm"
-        className="w-[7.5rem] text-xs"
-        title="App theme (Velloo UI). Independent of the design's theme."
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="light">App: Light</SelectItem>
-        <SelectItem value="dark">App: Dark</SelectItem>
-        <SelectItem value="system">App: System</SelectItem>
-      </SelectContent>
-    </Select>
+    <DropdownMenu onOpenChange={(open) => open && refresh()}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="max-w-[12rem] text-xs"
+          title="Settings & account"
+        >
+          <Settings />
+          <span className="truncate">{loggedIn && status?.email ? status.email : "Settings"}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="font-normal">
+          {loggedIn ? (
+            <span className="flex flex-col">
+              <span className="text-[11px] text-muted-foreground">Signed in to velloo-cloud</span>
+              <span className="truncate text-sm">{status?.email ?? "Signed in"}</span>
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">
+              Not signed in — run <span className="font-mono">velloo login</span>
+            </span>
+          )}
+        </DropdownMenuLabel>
+        {loggedIn ? (
+          <DropdownMenuItem onClick={onLogout}>
+            <LogOut />
+            Log out
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+          App theme
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={appTheme} onValueChange={(v) => setAppTheme(v as AppTheme)}>
+          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

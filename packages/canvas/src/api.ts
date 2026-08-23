@@ -4,6 +4,7 @@
  * importing from `../api.ts`.
  */
 export { annotations } from "./api/annotations.ts";
+export { type AuthStatus, auth } from "./api/auth.ts";
 export {
   type BoardMeta,
   type DesignSummary,

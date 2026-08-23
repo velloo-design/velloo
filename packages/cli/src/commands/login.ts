@@ -1,8 +1,8 @@
 import { createInterface } from "node:readline/promises";
 import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
-import { normalizeCloudUrl, saveCredential } from "../cloud-credentials.ts";
-import { type DeviceLoginResult, performDeviceLogin } from "../cloud-login.ts";
+import { loadCredential, normalizeCloudUrl, saveCredential } from "../cloud-credentials.ts";
+import { type DeviceLoginResult, performDeviceLogin, verifyCredential } from "../cloud-login.ts";
 import { fail } from "../fail.ts";
 
 // Block on Enter so the user knows the browser is about to open (and can read
@@ -27,9 +27,27 @@ export default defineCommand({
       type: "string",
       description: "velloo-cloud base URL (default: $VELLOO_CLOUD_URL or the built-in default)",
     },
+    force: {
+      type: "boolean",
+      description: "Re-authenticate even if already logged in",
+      default: false,
+    },
   },
   async run({ args }) {
     const cloudUrl = args.url ? normalizeCloudUrl(args.url) : defaultCloudUrl();
+
+    // Sticky login: a valid token is already saved in ~/.velloo → nothing to do.
+    if (!args.force) {
+      const existing = await loadCredential(cloudUrl);
+      const email = existing && (await verifyCredential(cloudUrl, existing.token));
+      if (email) {
+        console.log(`velloo login: already logged in to ${cloudUrl} as ${email}.`);
+        console.log(
+          "  Use `velloo login --force` to switch accounts, or `velloo logout` to sign out.",
+        );
+        return;
+      }
+    }
 
     let result: DeviceLoginResult;
     try {

@@ -1,9 +1,11 @@
 import { Hono } from "hono";
+import type { CanvasAuth } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
 import type { LiveBundler } from "./live/component-bundler.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { createAnnotationsRouter } from "./routes/api-annotations.ts";
+import { createAuthRouter } from "./routes/api-auth.ts";
 import { createBoardRouter } from "./routes/api-board.ts";
 import { createCanvasRouter } from "./routes/api-canvas.ts";
 import { createComponentsRouter } from "./routes/api-components.ts";
@@ -29,6 +31,7 @@ export function createApp(
   jit: TailwindJit,
   bundler: LiveBundler,
   canvasBundler: CanvasBundler,
+  auth?: CanvasAuth,
 ): Hono {
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
@@ -52,6 +55,7 @@ export function createApp(
   app.route("/api/emit", createEmitRouter(folder));
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));
   app.route("/api/notes", createNotesRouter(ctxFor));
+  app.route("/api/auth", createAuthRouter(auth));
   app.route(
     "/api/undo",
     createUndoRouter(folder, (e) => ctxFor().broadcast(e)),

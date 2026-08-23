@@ -1,7 +1,7 @@
-import { createServer, type ServerHandle } from "@velloo/server";
+import { type CanvasAuth, createServer, type ServerHandle } from "@velloo/server";
 import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
-import { loadCredential } from "../cloud-credentials.ts";
+import { deleteCredential, loadCredential } from "../cloud-credentials.ts";
 import {
   type DaemonRecord,
   daemonRoot,
@@ -43,6 +43,19 @@ export default defineCommand({
     const cred = await loadCredential(cloudUrl);
     const cloud = { url: cloudUrl, token: cred?.token };
 
+    // Live login state for the canvas account menu — re-read from ~/.velloo each
+    // call so signing in/out (here or via `velloo login`/`logout`) shows without
+    // restarting the daemon.
+    const auth: CanvasAuth = {
+      async status() {
+        const c = await loadCredential(cloudUrl);
+        return { loggedIn: Boolean(c?.token), email: c?.email };
+      },
+      async logout() {
+        await deleteCredential(cloudUrl);
+      },
+    };
+
     // Prefer the requested port (7300 by default), fall back to a free one.
     const preferred = args.port ? Number(args.port) : 7300;
     const canvasPort = portFree(preferred, host) ? preferred : 0;
@@ -54,6 +67,7 @@ export default defineCommand({
         host,
         mcp: { transport: "http", port: 0 },
         cloud,
+        auth,
       });
     } catch (err) {
       // Lost the preferred port between probe and bind — take any free port.
@@ -64,6 +78,7 @@ export default defineCommand({
         host,
         mcp: { transport: "http", port: 0 },
         cloud,
+        auth,
       });
     }
 

@@ -14,7 +14,23 @@ export interface DeviceLoginResult {
   email: string;
 }
 
-export function openBrowser(url: string): void {
+/**
+ * Whether a stored CLI token is still accepted by `cloudUrl`. Returns the
+ * account email when the cloud validates it (`GET /v1/me`), else null — token
+ * revoked/expired, or the cloud unreachable. Lets `login` / `init` say "already
+ * logged in" instead of re-running the device flow.
+ */
+export async function verifyCredential(cloudUrl: string, token: string): Promise<string | null> {
+  const res = await fetch(`${cloudUrl}/v1/me`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  const body = (await res.json().catch(() => null)) as { email?: string } | null;
+  return body?.email ?? null;
+}
+
+function openBrowser(url: string): void {
   const cmd =
     process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
   try {
