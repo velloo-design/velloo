@@ -4,6 +4,7 @@ import { confirm, isCancel, select } from "@clack/prompts";
 import {
   BrowserMissingError,
   CHROMIUM_INSTALL_CMD,
+  closePooledBrowser,
   renderScreen,
   screenshot,
 } from "@velloo/renderer";
@@ -145,7 +146,13 @@ export default defineCommand({
     }
 
     if (out === ".png") {
-      await captureWithBrowserSetup(() => screenshot({ html, viewport, outPath }));
+      try {
+        await captureWithBrowserSetup(() => screenshot({ html, viewport, outPath }));
+      } finally {
+        // One-shot process: release the pooled Chromium or the open browser
+        // connection keeps the CLI alive after the file is written.
+        await closePooledBrowser();
+      }
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }

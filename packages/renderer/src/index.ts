@@ -36,6 +36,7 @@ export {
   captureUrlScreenshot,
   chromiumExecutable,
   classifyCapture,
+  closePooledBrowser,
   isCaptureTimeout,
   type ScreenshotCompareOptions,
   type ScreenshotOptions,

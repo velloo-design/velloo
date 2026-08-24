@@ -1,0 +1,228 @@
+import type { Board, Frame, Screen, Viewport } from "@velloo/schema";
+
+/**
+ * Screenshot capture for `velloo publish`: one PNG per
+ * published screen, one composite per published board, plus a cover — shipped
+ * inside the same multipart bundle and indexed from design.json's
+ * `screenshots` manifest.
+ *
+ * The cloud rejects the WHOLE publish when a screenshot violates its limits
+ * (≤4MB each, ≤120 per publish, every referenced path present), so this module
+ * enforces them client-side: an over-limit PNG is re-captured downscaled to
+ * ≤1280px wide, a still-over-limit or failed shot is dropped from BOTH the
+ * manifest and the file list, and a missing headless browser skips screenshots
+ * entirely (publish keeps working browser-less).
+ *
+ * Rendering + rasterizing reuse the existing pipeline: callers thread in the
+ * same `renderScreen` HTML the MCP `screenshot` tool uses and a `capture`
+ * function wrapping `captureScreenshot` (@velloo/renderer) — injectable so the
+ * limit logic tests without a browser.
+ */
+
+export const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
+export const MAX_SCREENSHOT_COUNT = 120;
+/** Downscale target when a capture exceeds the byte limit. */
+export const DOWNSCALE_WIDTH = 1280;
+
+/** Pixel-width cap for board composites (frames laid out in board coords). */
+const BOARD_MAX_WIDTH = 1600;
+const BOARD_PADDING = 24;
+
+export interface ScreenshotManifest {
+  cover: string;
+  screens: Record<string, string>;
+  boards: Record<string, string>;
+}
+
+export interface BundleScreenshots {
+  manifest: ScreenshotManifest;
+  files: Array<{ path: string; bytes: Uint8Array }>;
+}
+
+export interface CaptureRequest {
+  html: string;
+  viewport: Viewport;
+  fullPage: boolean;
+  /** <1 shrinks the raster — the downscale retry for over-limit PNGs. */
+  deviceScaleFactor: number;
+}
+
+export type CaptureFn = (req: CaptureRequest) => Promise<Uint8Array>;
+
+export interface CaptureBundleScreenshotsOptions {
+  screens: Screen[];
+  /** Published boards, in publish order — the first becomes the cover. */
+  boards: Board[];
+  viewport: Viewport;
+  /**
+   * Render a screen to a full HTML document (same render the cloud shows).
+   * `themeName` carries a board's pinned theme for its composite.
+   */
+  renderHtml: (screen: Screen, themeName?: string) => Promise<string>;
+  capture: CaptureFn;
+  warn: (message: string) => void;
+}
+
+function isBrowserMissing(err: unknown): boolean {
+  return err instanceof Error && err.name === "BrowserMissingError";
+}
+
+/**
+ * Capture every publishable screenshot, enforcing the cloud's limits.
+ * Returns null when nothing could be captured (no browser, or every shot
+ * failed) — the publish then simply omits the manifest.
+ */
+export async function captureBundleScreenshots(
+  opts: CaptureBundleScreenshotsOptions,
+): Promise<BundleScreenshots | null> {
+  const { screens, boards, viewport, renderHtml, capture, warn } = opts;
+  const files: Array<{ path: string; bytes: Uint8Array }> = [];
+  const manifest: ScreenshotManifest = { cover: "", screens: {}, boards: {} };
+  // One slot stays reserved for the cover (a byte-copy of an existing shot).
+  let budget = MAX_SCREENSHOT_COUNT - 1;
+
+  /** Capture; retry downscaled if over the byte limit; null if it stays over. */
+  const shoot = async (
+    html: string,
+    vp: Viewport,
+    fullPage: boolean,
+  ): Promise<Uint8Array | null> => {
+    let png = await capture({ html, viewport: vp, fullPage, deviceScaleFactor: 1 });
+    if (png.byteLength > MAX_SCREENSHOT_BYTES && DOWNSCALE_WIDTH < vp.w) {
+      png = await capture({
+        html,
+        viewport: vp,
+        fullPage,
+        deviceScaleFactor: DOWNSCALE_WIDTH / vp.w,
+      });
+    }
+    return png.byteLength <= MAX_SCREENSHOT_BYTES ? png : null;
+  };
+
+  try {
+    for (const screen of screens) {
+      if (budget <= 0) {
+        warn(`screenshot limit (${MAX_SCREENSHOT_COUNT}) reached — remaining shots skipped`);
+        break;
+      }
+      try {
+        const png = await shoot(await renderHtml(screen), viewport, true);
+        if (!png) {
+          warn(`screenshot of screen "${screen.id}" exceeds 4MB even downscaled — skipped`);
+          continue;
+        }
+        const path = `screenshots/${screen.id}.png`;
+        files.push({ path, bytes: png });
+        manifest.screens[screen.id] = path;
+        budget -= 1;
+      } catch (err) {
+        if (isBrowserMissing(err)) throw err;
+        warn(`screenshot of screen "${screen.id}" failed — skipped (${message(err)})`);
+      }
+    }
+
+    const screenById = new Map(screens.map((s) => [s.id, s]));
+    for (const board of boards) {
+      if (board.frames.length === 0) continue;
+      if (budget <= 0) {
+        warn(`screenshot limit (${MAX_SCREENSHOT_COUNT}) reached — board shots skipped`);
+        break;
+      }
+      try {
+        const framed: Array<{ frame: Frame; html: string }> = [];
+        for (const frame of board.frames) {
+          const screen = screenById.get(frame.screen);
+          if (!screen) continue;
+          framed.push({ frame, html: await renderHtml(screen, board.theme) });
+        }
+        if (framed.length === 0) continue;
+        const composite = buildBoardComposite(framed);
+        const png = await shoot(composite.html, composite.viewport, false);
+        if (!png) {
+          warn(`screenshot of board "${board.id}" exceeds 4MB even downscaled — skipped`);
+          continue;
+        }
+        const path = `screenshots/${board.id}.png`;
+        files.push({ path, bytes: png });
+        manifest.boards[board.id] = path;
+        budget -= 1;
+      } catch (err) {
+        if (isBrowserMissing(err)) throw err;
+        warn(`screenshot of board "${board.id}" failed — skipped (${message(err)})`);
+      }
+    }
+  } catch (err) {
+    if (isBrowserMissing(err)) {
+      warn("no headless browser available — publishing without screenshots");
+      return null;
+    }
+    throw err;
+  }
+
+  // Cover: the first board shot, or the first screen shot.
+  const coverSource =
+    boards.map((b) => manifest.boards[b.id]).find((p) => p !== undefined) ??
+    screens.map((s) => manifest.screens[s.id]).find((p) => p !== undefined);
+  if (!coverSource) return null;
+  const source = files.find((f) => f.path === coverSource);
+  if (!source) return null;
+  manifest.cover = "screenshots/cover.png";
+  files.push({ path: manifest.cover, bytes: source.bytes });
+
+  return { manifest, files };
+}
+
+function message(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.split("\n")[0] ?? msg;
+}
+
+/**
+ * One HTML document laying the board's frames out in board coordinate space —
+ * each frame is an `<iframe srcdoc>` (isolated document, same trick as the
+ * light/dark compare wrapper) clipped to its frame rect, the whole canvas
+ * CSS-scaled to at most BOARD_MAX_WIDTH so a sprawling board still captures
+ * as one modest PNG.
+ */
+export function buildBoardComposite(frames: Array<{ frame: Frame; html: string }>): {
+  html: string;
+  viewport: Viewport;
+} {
+  const minX = Math.min(...frames.map(({ frame }) => frame.x));
+  const minY = Math.min(...frames.map(({ frame }) => frame.y));
+  const maxX = Math.max(...frames.map(({ frame }) => frame.x + frame.w));
+  const maxY = Math.max(...frames.map(({ frame }) => frame.y + frame.h));
+  const w = maxX - minX + BOARD_PADDING * 2;
+  const h = maxY - minY + BOARD_PADDING * 2;
+  const scale = Math.min(1, BOARD_MAX_WIDTH / w);
+  const outW = Math.max(1, Math.round(w * scale));
+  const outH = Math.max(1, Math.round(h * scale));
+
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const iframes = frames
+    .map(({ frame, html }) => {
+      const left = frame.x - minX + BOARD_PADDING;
+      const top = frame.y - minY + BOARD_PADDING;
+      return (
+        `<iframe scrolling="no" srcdoc="${esc(html)}" ` +
+        `style="position:absolute;left:${left}px;top:${top}px;width:${frame.w}px;height:${frame.h}px"></iframe>`
+      );
+    })
+    .join("\n    ");
+
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}
+body{margin:0;background:#f4f4f5;width:${outW}px;height:${outH}px;overflow:hidden}
+.canvas{position:relative;width:${w}px;height:${h}px;transform:scale(${scale});transform-origin:0 0}
+iframe{border:1px solid #e4e4e7;background:#fff;display:block}
+</style></head>
+<body>
+  <div class="canvas">
+    ${iframes}
+  </div>
+</body></html>`;
+
+  return { html, viewport: { w: outW, h: outH } };
+}

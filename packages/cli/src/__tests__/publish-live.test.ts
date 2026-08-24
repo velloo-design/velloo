@@ -139,6 +139,9 @@ async function runPublish(design: string) {
       "test-token",
       "--slug",
       "test-slug",
+      // Screenshot capture has its own suites (publish-screenshots*.test.ts);
+      // skipping it here keeps this wiring test fast and browser-free.
+      "--no-screenshots",
     ],
     { cwd: resolve(import.meta.dir, "../../../.."), stdout: "pipe", stderr: "pipe" },
   );

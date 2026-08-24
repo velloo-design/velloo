@@ -164,6 +164,20 @@ async function acquireRenderSlot(): Promise<() => void> {
 let pooledBrowser: Browser | null = null;
 let browserLaunch: Promise<Browser> | null = null;
 
+/**
+ * Close the shared Chromium and forget it. The long-lived daemon never needs
+ * this (Playwright kills the child on process exit) — but a one-shot CLI
+ * command (`velloo publish`, `velloo render`) must release it once its
+ * captures are done, or the open browser connection keeps the process's event
+ * loop alive after the work has finished. Safe to call with nothing pooled;
+ * the next capture simply relaunches.
+ */
+export async function closePooledBrowser(): Promise<void> {
+  const browser = pooledBrowser ?? (browserLaunch ? await browserLaunch.catch(() => null) : null);
+  pooledBrowser = null;
+  await browser?.close().catch(() => undefined);
+}
+
 async function pooledChromium(): Promise<Browser> {
   if (pooledBrowser?.isConnected()) return pooledBrowser;
   // Coalesce concurrent first-launches so a burst doesn't spawn N browsers.
