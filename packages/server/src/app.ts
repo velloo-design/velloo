@@ -4,22 +4,21 @@ import type { DesignFolder } from "./design-folder.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
 import type { LiveBundler } from "./live/component-bundler.ts";
 import type { MutationContext } from "./mutations/index.ts";
-import { createAnnotationsRouter } from "./routes/api-annotations.ts";
-import { createAuthRouter } from "./routes/api-auth.ts";
-import { createBoardRouter } from "./routes/api-board.ts";
-import { createCanvasRouter } from "./routes/api-canvas.ts";
-import { createComponentsRouter } from "./routes/api-components.ts";
-import { createDesignRouter } from "./routes/api-design.ts";
-import { createEmitRouter } from "./routes/api-emit.ts";
-import { createInspectRouter } from "./routes/api-inspect.ts";
-import { createLiveRouter } from "./routes/api-live.ts";
-import { createMutateRouter } from "./routes/api-mutate.ts";
-import { createNotesRouter } from "./routes/api-notes.ts";
-import { createRenderRouter } from "./routes/api-render.ts";
-import { createScreenRouter } from "./routes/api-screen.ts";
-import { createSnippetsRouter } from "./routes/api-snippets.ts";
-import { createThemeRouter } from "./routes/api-theme.ts";
-import { createUndoRouter } from "./routes/api-undo.ts";
+import { createAuthRouter } from "./routes/auth.ts";
+import { createCanvasRouter, createLiveRouter } from "./routes/bundles.ts";
+import {
+  createBoardRouter,
+  createComponentsRouter,
+  createDesignRouter,
+  createScreenRouter,
+  createSnippetsRouter,
+} from "./routes/design.ts";
+import { createEmitRouter } from "./routes/emit.ts";
+import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
+import { createMutateRouter } from "./routes/mutate.ts";
+import { createInspectRouter, createRenderRouter } from "./routes/render.ts";
+import { createThemeRouter } from "./routes/theme.ts";
+import { createUndoRouter } from "./routes/undo.ts";
 import type { TailwindJit } from "./styles/tailwind-jit.ts";
 
 /**

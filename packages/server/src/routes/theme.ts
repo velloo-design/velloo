@@ -1,5 +1,6 @@
 import { map } from "@velloo/result";
 import { Hono } from "hono";
+import { z } from "zod";
 import {
   applyPreset,
   derivePaletteFromColor,
@@ -10,7 +11,20 @@ import {
   type ThemeContext,
 } from "../theme/index.ts";
 import { makeThemeRoute } from "./route.ts";
-import { ApplyPresetBody, DeriveFromColorBody, SetTokenBody } from "./theme-schemas.ts";
+
+const SetTokenBody = z.object({
+  path: z.string().min(1),
+  value: z.union([z.string(), z.number()]),
+});
+
+const ApplyPresetBody = z.object({
+  presetName: z.string().min(1),
+});
+
+const DeriveFromColorBody = z.object({
+  seedColor: z.string().min(1),
+  name: z.string().min(1).optional(),
+});
 
 export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
   const r = new Hono();
