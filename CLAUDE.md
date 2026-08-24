@@ -47,7 +47,7 @@ The cleanest packages (`schema`, `result`, `provider`) have no internal runtime 
 - **MCP tools** — `packages/server/src/mcp/tools/<area>.ts`. The instructions string lives in `packages/server/src/mcp/server.ts` (around `INSTRUCTIONS`).
 - **Provider plumbing** — `packages/provider/src/` for the interface + loader. `packages/server/src/providers.ts` for the server-side factory registration + migration shims (`migrateLibrarySource`, `migrateConfig`, `resolveProviders`). Concrete providers live in their own packages.
 - **Extensions** — `packages/server/src/extensions/registry.ts` for the per-screen registry composer (library + extensions, with shadowing). `packages/server/src/extensions/placeholder.tsx` for the canvas Tier-1 render. Schema lives in `packages/schema/src/extension.ts`.
-- **Canvas state** — single Zustand slice in `packages/canvas/src/store.ts`. Convenience namespaced hooks (`useSelection`, `useViewport`, etc.) in `store-hooks.ts`.
+- **Canvas state** — one Zustand store composed from feature-grouped slices in `packages/canvas/src/store/` (design / selection / viewport / modes / inspector / library / annotations). Consumers import `useCanvas` from `packages/canvas/src/store.ts`.
 - **Canvas HTTP surface** — `packages/canvas/src/api/<area>.ts`, re-exported from `packages/canvas/src/api.ts`.
 - **Renderer iframe runtime** — `packages/renderer/src/iframe-runtime.ts` (the script injected into design iframes). Pair with `packages/canvas/src/iframe-channel.ts` (parent side).
 
