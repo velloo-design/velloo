@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { Theme } from "@velloo/schema";
 import { diffFile, type FileDiff } from "../diff.ts";
 import { type FormatError, formatCss } from "../format.ts";
-import { emitGlobalsCss } from "./globals-css.ts";
+import { emitGlobalsCss, paletteShadowedSlots } from "./globals-css.ts";
 import { emitTailwindConfig } from "./tailwind-config.ts";
 
 export interface EmitThemeOptions {
@@ -40,10 +40,21 @@ export interface EmitThemeFile {
 
 export interface EmitThemeResult {
   files: EmitThemeFile[];
+  /** Non-fatal notes about the emit — e.g. palette tokens shadowing semantic slots. */
+  warnings: string[];
 }
 
 export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promise<EmitThemeResult> {
   const files: EmitThemeFile[] = [];
+  const warnings: string[] = [];
+  const shadowed = paletteShadowedSlots(theme);
+  if (shadowed.length > 0) {
+    warnings.push(
+      `Skipped palette token${shadowed.length > 1 ? "s" : ""} ${shadowed.map((n) => `\`${n}\``).join(", ")}: ` +
+        `each would emit a duplicate \`--color-<name>\` shadowing the semantic slot (the .dark override then repaints it — brand text like \`text-muted\` goes invisible on dark surfaces). ` +
+        `Set the semantic slot itself (\`colors.<name>\` / \`colorsDark.<name>\`) or rename the palette token (e.g. \`brand-<name>\`).`,
+    );
+  }
 
   const cssPath = join(options.outputDir, options.cssPath ?? "app/globals.css");
   const cssRaw = emitGlobalsCss(theme, { customCss: options.customCss });
@@ -84,5 +95,5 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
     });
   }
 
-  return { files };
+  return { files, warnings };
 }

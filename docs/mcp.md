@@ -58,7 +58,7 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 |---|---|---|
 | `add_screen` | `name, id?, fromScreenId?, tree?` | Creates a screen. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one explicitly. Empty by default. Does *not* place the screen on the board — that's a separate, intentional step |
 | `update_screen` | `screenId, patch` | Sparse patch — currently only `name` is patchable; screen id stays stable |
-| `remove_screen` | `screenId` | Refuses to remove the last screen; also refuses if any frame on the board references it (returns the `frameIds[]` so the agent can remove them first); undoable via `/api/undo` (canvas ⌘Z) |
+| `remove_screen` | `screenId` | Refuses to remove the last screen (`LastScreen`). Frames referencing the screen are removed too — **cascaded** across every board and returned as `removedFrames: [{ boardId, frameIds[] }]`; undoable via `/api/undo` (canvas ⌘Z) |
 
 ### Board lifecycle
 
@@ -88,8 +88,19 @@ Board-level sticky notes in board coordinates (the same space as frame `x`/`y`).
 | Tool | Args |
 |---|---|
 | `upload_asset` | `filename, data (base64), overwrite?` — writes into `assets/`, served at `/assets/<name>`; the agent authors SVG/raster art itself (max 5MB) |
+| `import_assets` | `paths: string[], baseDir?, overwrite?` — bulk-import existing image/SVG files into `assets/` BY PATH (no base64). Globs (`../gen/*.png`) expand relative to `baseDir` (default: server cwd). Max 5MB each; missing/oversized/non-image entries are reported per-entry, never failing the batch |
 | `generate_asset` | `prompt, kind: "image" \| "svg", size?, filename?` — hosted, credit-metered generation via velloo-cloud (requires `velloo login`). Decodes the result into `assets/` (same store + naming as `upload_asset`) and returns the `/assets/<name>` URL; `kind: "svg"` also returns the inline markup for `<SVG content>`. The result reports the credit cost + remaining balance; quota/feature failures (out of credits, rate-limited, generation disabled) come back as clear messages naming the way out |
 | `batch` | `calls: [{ tool, args }], atomic?` — multi-mutation envelope. Atomic by default: first error rolls back every touched resource (disk + memory + undo history) and reports `rolledBack: true`. `atomic: false` keeps completed work |
+
+### Extensions
+
+Extensions register wholly new components the active library doesn't have — the app's custom `DataTable`, a brand `Hero`, a bespoke chart. Folder-global; a same-id extension shadows the library component. `add_extension` is core; `update_extension` / `remove_extension` live in the `lifecycle` hidden family.
+
+| Tool | Args | Notes |
+|---|---|---|
+| `add_extension` | `id, importPath, props, category?, description?, render?, fit?` | Registers the component: placeholder card on the canvas, real `import` from `importPath` on `emit_code`. `render: "live"` bundles the actual host component and client-mounts it for a pixel-faithful preview (charts above all); `fit` sizes the live island (`aspect-video` default, `content` for self-sizing) |
+| `update_extension` | `id, patch: { importPath?, props?, category?, description?, render?, fit? }` | Sparse patch — add/remove props, retarget importPath, flip render mode. Renaming is deliberate remove+add (a rename would break tree references) |
+| `remove_extension` | `id` | Refuses while any screen/snippet tree still references it (`ExtensionInUse`, carrying the offending nodes) — remove or re-`$ref` those first, then retry |
 
 ### Frame / group lifecycle
 
@@ -207,7 +218,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `InvalidMove` | `move_node` would create a cycle or move into self |
 | `LastScreen` | `remove_screen` refuses when only one screen is left |
 | `LastBoard` | `remove_board` refuses when only one board is left |
-| `ScreenInUse` | `remove_screen` refuses when frames reference it; carries `usage: { boardId, frameIds[] }[]` |
+| `ScreenInUse` | The strict removal variant (`removeScreenStrict`, HTTP layer) refuses when frames reference the screen; carries `usage: { boardId, frameIds[] }[]`. The MCP `remove_screen` tool cascades instead and never returns this |
 | `ScreenIdConflict` | `add_screen` id collides with an existing screen |
 | `ScreenIdExhausted` | Couldn't derive a unique screen id from the supplied name |
 | `BoardIdConflict` | `add_board` id collides with an existing board |

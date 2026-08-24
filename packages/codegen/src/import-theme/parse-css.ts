@@ -1,5 +1,5 @@
 import type { ColorPair, Colors } from "@velloo/schema";
-import { COLOR_SLOTS } from "../emit-theme/globals-css.ts";
+import { COLOR_SLOTS, SEMANTIC_SLOTS } from "../emit-theme/globals-css.ts";
 
 /**
  * Parse theme tokens out of a host app's stylesheet — the reverse of
@@ -48,12 +48,11 @@ const NON_FAMILY_FONT_ROLE = /^(size|weight|leading|tracking)(-|$)/;
 
 /** A valid palette key — kebab-case identifier, matching the schema's PaletteSchema. */
 const PALETTE_KEY = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
-/** Semantic slots extractColors owns (plus their `-foreground` pairs) — kept out of palette. */
-export const SEMANTIC_SLOTS: ReadonlySet<string> = new Set<string>(
-  COLOR_SLOTS.flatMap(({ key, pair }) =>
-    pair ? [key as string, `${key as string}-foreground`] : [key as string],
-  ),
-);
+
+// Semantic slots (plus `-foreground` pairs) — kept out of palette. The set
+// lives with the emit vocabulary in globals-css.ts so import and emit agree;
+// re-exported here for existing consumers.
+export { SEMANTIC_SLOTS };
 
 /**
  * The Tailwind color name (sans `--`/`color-` prefix) a var should be captured

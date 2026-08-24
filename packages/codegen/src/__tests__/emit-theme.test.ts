@@ -171,6 +171,32 @@ describe("emitTheme", () => {
     const result = await emitTheme(theme, { outputDir: outDir, apply: false });
     const css = result.files[0]?.contents ?? "";
     expect(css).not.toContain(".dark {");
+    expect(result.warnings).toEqual([]);
+  }, 30_000);
+
+  test("a palette token shadowing a semantic slot is skipped and warned about", async () => {
+    // The velloo.design papercut: a brand `palette.muted` text color emitted a
+    // second --color-muted that won in light mode, while `.dark` re-pointed
+    // the same var at the semantic dark surface — body copy went invisible.
+    const theme: Theme = {
+      ...buildDefaultTheme(),
+      colorsDark: { muted: { DEFAULT: "#1d1a14", foreground: "#a8a29e" } },
+      palette: { muted: "#a59c8d", ink: "#1a1a1a" },
+      paletteDark: { muted: "#a59c8d" },
+    };
+    const outDir = join(tmpdir(), `velloo-theme-shadow-${Date.now()}`);
+    const result = await emitTheme(theme, { outputDir: outDir, apply: false });
+    const css = result.files[0]?.contents ?? "";
+    // Exactly one --color-muted per block: the semantic one (@theme + .dark).
+    expect(css.match(/--color-muted:/g)?.length).toBe(2);
+    expect(css).not.toContain("--color-muted: #a59c8d");
+    // Non-colliding palette entries still pass through.
+    expect(css).toContain("--color-ink: #1a1a1a;");
+    // The skip is visible in the emitted CSS and in the result warnings.
+    expect(css).toContain("palette.muted skipped");
+    expect(result.warnings.length).toBe(1);
+    expect(result.warnings[0]).toContain("`muted`");
+    expect(result.warnings[0]).toContain("rename");
   }, 30_000);
 });
 

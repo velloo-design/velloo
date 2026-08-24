@@ -649,6 +649,18 @@ describe("themeToCss", () => {
     expect(css).toContain("--color-success-500: #22c55e;");
     expect(css).toMatch(/\.dark \{[^}]*--color-primary-600: #818cf8;/s);
   });
+
+  test("a palette token shadowing a semantic slot is skipped (matches emit_theme)", () => {
+    const t: Theme = {
+      ...sampleTheme,
+      palette: { muted: "#a59c8d", ink: "#1a1a1a" },
+    };
+    const css = themeToCss(t);
+    // Only the semantic --color-muted survives; the shadowing palette entry
+    // would flip body copy invisible under .dark (velloo.design papercut).
+    expect(css).not.toContain("#a59c8d");
+    expect(css).toContain("--color-ink: #1a1a1a;");
+  });
 });
 
 describe("inline rich text (node-valued children prop)", () => {

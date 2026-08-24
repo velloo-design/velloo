@@ -21,6 +21,31 @@ export const COLOR_SLOTS: Array<{ key: keyof Colors; pair: boolean }> = [
   { key: "ring", pair: false },
 ];
 
+/**
+ * The var names the semantic slots own (plus their `-foreground` pairs). The
+ * import path keeps these out of `palette` (see `paletteName`), and the emit
+ * path skips palette entries that collide — a `palette.muted` would otherwise
+ * emit a SECOND `--color-muted` that wins in light mode while `.dark`
+ * re-points the same var at the semantic dark surface, turning `text-muted`
+ * body copy invisible on brand surfaces.
+ */
+export const SEMANTIC_SLOTS: ReadonlySet<string> = new Set<string>(
+  COLOR_SLOTS.flatMap(({ key, pair }) =>
+    pair ? [key as string, `${key as string}-foreground`] : [key as string],
+  ),
+);
+
+/** Palette keys (light + dark) that shadow a semantic slot — skipped on emit. */
+export function paletteShadowedSlots(theme: Theme): string[] {
+  const names = new Set<string>();
+  for (const source of [theme.palette, theme.paletteDark]) {
+    for (const name of Object.keys(source ?? {})) {
+      if (SEMANTIC_SLOTS.has(name)) names.add(name);
+    }
+  }
+  return [...names].sort();
+}
+
 function defaultOf(value: ColorPair | undefined): string | undefined {
   if (typeof value === "string") return value;
   if (value) return value.DEFAULT;
@@ -36,6 +61,12 @@ function fgOf(value: ColorPair | undefined): string | undefined {
 function appendPalette(palette: Record<string, string> | undefined, lines: string[]): void {
   if (!palette) return;
   for (const [name, value] of Object.entries(palette)) {
+    if (SEMANTIC_SLOTS.has(name)) {
+      lines.push(
+        `  /* palette.${name} skipped: it would shadow the semantic --color-${name} (set colors.${name} instead, or rename the palette token). */`,
+      );
+      continue;
+    }
     lines.push(`  --color-${name}: ${value};`);
   }
 }

@@ -166,7 +166,10 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         cssOnly: args.cssOnly,
         customCss: ctx.folder.customCss,
       });
-      return jsonResult({ files: result.files });
+      return jsonResult({
+        files: result.files,
+        ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+      });
     },
   );
 }

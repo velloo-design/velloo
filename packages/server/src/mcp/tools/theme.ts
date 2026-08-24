@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { containerClasses, parseTailwindContainer } from "@velloo/codegen";
+import { containerClasses, parseTailwindContainer, SEMANTIC_SLOTS } from "@velloo/codegen";
 import type { Result } from "@velloo/result";
 import { z } from "zod";
 import type { DesignFolder } from "../../design-folder.ts";
@@ -192,7 +192,23 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         if (!r.ok) return themeErrorResult(r.error);
         applied.push(path);
       }
-      return jsonResult({ applied, theme: args.theme ?? "default" });
+      // A palette token named after a semantic slot would emit a duplicate
+      // `--color-<name>` — the emit paths skip it, so warn at the source.
+      const warnings: string[] = [];
+      for (const path of applied) {
+        const m = /^palette(?:Dark)?\.([a-z0-9-]+)$/.exec(path);
+        const name = m?.[1];
+        if (name && SEMANTIC_SLOTS.has(name)) {
+          warnings.push(
+            `\`${path}\` shadows the semantic slot \`${name}\` and is skipped on emit and in the canvas (the semantic \`--color-${name}\` wins). Set \`colors.${name}\` / \`colorsDark.${name}\` instead, or rename the palette token (e.g. \`brand-${name}\`).`,
+          );
+        }
+      }
+      return jsonResult({
+        applied,
+        theme: args.theme ?? "default",
+        ...(warnings.length > 0 ? { warnings } : {}),
+      });
     },
   );
 

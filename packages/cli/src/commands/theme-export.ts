@@ -90,6 +90,10 @@ export default defineCommand({
     const useColor = stdout.isTTY === true;
     let anyChange = false;
 
+    for (const warning of result.warnings) {
+      console.error(`velloo theme:export: warning: ${warning}`);
+    }
+
     for (const file of result.files) {
       if (file.errors.length > 0) {
         // CSS formatter warnings are non-fatal; surface them but keep going.

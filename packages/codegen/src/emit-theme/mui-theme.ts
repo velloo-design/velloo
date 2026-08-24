@@ -37,5 +37,5 @@ export const theme = createTheme(${jsLiteral(themeOptions)});
     await writeFile(themePath, contents, "utf8");
     applied = true;
   }
-  return { files: [{ path: themePath, contents, diff, applied, errors: [] }] };
+  return { files: [{ path: themePath, contents, diff, applied, errors: [] }], warnings: [] };
 }

@@ -27,10 +27,23 @@ function emit(varName: string, value: string | number | undefined, lines: string
   }
 }
 
+/**
+ * Var names the semantic slots own — a palette key that collides is skipped,
+ * mirroring codegen's emit (`SEMANTIC_SLOTS` in emit-theme/globals-css.ts;
+ * renderer can't import codegen, so this derives the same set from
+ * COLOR_TOKEN_MAP). Without the skip, `palette.muted` emits a second
+ * `--color-muted` that wins in light mode while `.dark` repaints it — the
+ * canvas would then diverge from the exported globals.css.
+ */
+const SEMANTIC_COLOR_VARS: ReadonlySet<string> = new Set(
+  Object.values(COLOR_TOKEN_MAP).flatMap((target) => (Array.isArray(target) ? target : [target])),
+);
+
 /** Raw scale/role passthrough: `primary-600` → `--color-primary-600`. */
 function emitPalette(palette: Record<string, string> | undefined, lines: string[]): void {
   if (!palette) return;
   for (const [name, value] of Object.entries(palette)) {
+    if (SEMANTIC_COLOR_VARS.has(`--color-${name}`)) continue;
     lines.push(`  --color-${name}: ${value};`);
   }
 }
