@@ -1,0 +1,357 @@
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { Annotation, Node } from "@velloo/schema";
+import type { CloudAuth } from "./cloud.ts";
+import type { DesignFolder } from "./design-folder.ts";
+import { writeJsonAtomic } from "./fs.ts";
+import { withScreenLock } from "./mutations/context.ts";
+import { persistAnnotations } from "./mutations/persist.ts";
+import { pathAt, pathFromString } from "./path.ts";
+import type { WatchEvent } from "./watcher.ts";
+
+/**
+ * Share-link comments → local annotations, pull-only: the cloud
+ * NEVER writes into the repo — this module fetches comments left on the
+ * folder's published links and converts them locally into annotations via the
+ * existing mutation/persist path. Resolution round-trips: deleting a pulled
+ * annotation locally PATCHes the comment resolved on the next pull; a comment
+ * resolved in the cloud UI removes its local annotation.
+ *
+ * Persistence:
+ *  - `.design/links.json` — the publish record (slug + share URL per publish).
+ *    Written by `velloo publish`; the slug-keyed pull reads it. Committed with
+ *    the folder so every machine knows its links.
+ *  - `.design/cache/comments.json` — machine-local sync state: the `since`
+ *    cursor plus the commentId ↔ annotationId map. Losing it never duplicates
+ *    annotations (each pulled annotation carries `cloud.commentId`, which the
+ *    pull re-adopts), it only forgets pre-wipe local deletions.
+ *
+ * Everything here is offline-tolerant by construction: logged out, no links,
+ * or an unreachable cloud are quiet no-ops with a summary status.
+ */
+
+// ── Publish record (.design/links.json) ─────────────────────────────────────
+
+export interface PublishedLink {
+  slug: string;
+  /** Canonical share URL (no access token — that only prints to the terminal). */
+  url: string;
+  /** velloo-cloud base URL the slug lives on. */
+  cloudUrl: string;
+  /** Board ids included in the publish ([] = the whole folder). */
+  boards: string[];
+  publishedAt: string;
+}
+
+interface LinksFile {
+  version: 1;
+  links: PublishedLink[];
+}
+
+const linksPath = (root: string) => join(root, ".design", "links.json");
+
+export async function readPublishedLinks(root: string): Promise<PublishedLink[]> {
+  try {
+    const raw = JSON.parse(await readFile(linksPath(root), "utf8")) as LinksFile;
+    if (raw.version === 1 && Array.isArray(raw.links)) return raw.links;
+  } catch {
+    // missing or corrupt — treat as never published
+  }
+  return [];
+}
+
+/** Upsert one published link (keyed slug + cloudUrl). Called by `velloo publish`. */
+export async function recordPublishedLink(
+  root: string,
+  link: Omit<PublishedLink, "publishedAt">,
+): Promise<void> {
+  const links = await readPublishedLinks(root);
+  const rest = links.filter((l) => !(l.slug === link.slug && l.cloudUrl === link.cloudUrl));
+  rest.push({ ...link, publishedAt: new Date().toISOString() });
+  await writeJsonAtomic(linksPath(root), { version: 1, links: rest } satisfies LinksFile);
+}
+
+// ── Sync state (.design/cache/comments.json) ────────────────────────────────
+
+interface CommentMapping {
+  annotationId: string;
+  screenId: string;
+  /** True once resolution is settled on both sides — no more work for this comment. */
+  resolved: boolean;
+}
+
+interface CommentSyncState {
+  version: 1;
+  /** The cloud's `now` from the last pull — passed back as `?since=`. */
+  since?: string;
+  /** Slug set of the last pull; a slug we haven't seen forces a full pull. */
+  slugs: string[];
+  comments: Record<string, CommentMapping>;
+}
+
+const statePath = (root: string) => join(root, ".design", "cache", "comments.json");
+
+async function readState(root: string): Promise<CommentSyncState> {
+  try {
+    const raw = JSON.parse(await readFile(statePath(root), "utf8")) as CommentSyncState;
+    if (raw.version === 1 && raw.comments) {
+      return { ...raw, slugs: Array.isArray(raw.slugs) ? raw.slugs : [] };
+    }
+  } catch {
+    // missing or corrupt — full pull; cloud.commentId adoption keeps it idempotent
+  }
+  return { version: 1, slugs: [], comments: {} };
+}
+
+// ── The pull ─────────────────────────────────────────────────────────────────
+
+/** Cloud limit on GET /v1/comments. */
+const MAX_SLUGS = 200;
+const FETCH_TIMEOUT_MS = 10_000;
+
+interface CloudComment {
+  id: string;
+  slug: string;
+  screenId: string;
+  nodePath?: string | null;
+  author?: string | null;
+  body: string;
+  resolved: boolean;
+}
+
+type LinkStatus = "ok" | "revoked" | "unknown";
+
+interface CommentsResponse {
+  comments?: CloudComment[];
+  links?: Record<string, LinkStatus>;
+  now?: string;
+}
+
+/**
+ * Structural subset of MutationContext — everything the sync needs. Keeps the
+ * pull callable from anywhere that has the folder + broadcaster (server boot,
+ * the MCP tool, tests) without a full provider setup.
+ */
+export interface CommentSyncContext {
+  folder: DesignFolder;
+  broadcast: (e: WatchEvent) => void;
+}
+
+export interface PullCommentsSummary {
+  status: "ok" | "logged-out" | "no-links" | "error";
+  /** New unresolved comments landed as annotations. */
+  pulled: number;
+  /** Locally-resolved (deleted) annotations whose comments we PATCHed resolved. */
+  resolvedUp: number;
+  /** Cloud-resolved comments whose local annotations we removed. */
+  resolvedDown: number;
+  /** Per-slug link status from the cloud (`ok` | `revoked` | `unknown`). */
+  links: Record<string, LinkStatus>;
+  /** Human-readable note — revoked links, the skip reason, or the error cause. */
+  note?: string;
+}
+
+const inFlight = new Map<string, Promise<PullCommentsSummary>>();
+
+/** One pull at a time per folder — the boot pull, the interval, and the MCP tool coalesce. */
+export function pullComments(
+  ctx: CommentSyncContext,
+  cloud: CloudAuth,
+): Promise<PullCommentsSummary> {
+  const key = ctx.folder.root;
+  const running = inFlight.get(key);
+  if (running) return running;
+  const run = doPull(ctx, cloud).finally(() => inFlight.delete(key));
+  inFlight.set(key, run);
+  return run;
+}
+
+async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCommentsSummary> {
+  const root = ctx.folder.root;
+  const zero = {
+    pulled: 0,
+    resolvedUp: 0,
+    resolvedDown: 0,
+    links: {} as Record<string, LinkStatus>,
+  };
+
+  const links = (await readPublishedLinks(root)).filter((l) => l.cloudUrl === cloud.url);
+  if (links.length === 0) {
+    return {
+      status: "no-links",
+      ...zero,
+      note: "This folder has no published share links — `velloo publish` creates one.",
+    };
+  }
+  if (!cloud.token) {
+    return {
+      status: "logged-out",
+      ...zero,
+      note: "Not signed in to velloo-cloud — run `velloo login` to sync share-link comments.",
+    };
+  }
+
+  const state = await readState(root);
+  const slugs = links.map((l) => l.slug).slice(0, MAX_SLUGS);
+  // A slug we've never pulled may carry comments older than the cursor
+  // (published elsewhere, links.json synced via git) — do one full pull.
+  const since = slugs.every((s) => state.slugs.includes(s)) ? state.since : undefined;
+
+  let payload: CommentsResponse;
+  try {
+    const query = new URLSearchParams({ slugs: slugs.join(",") });
+    if (since) query.set("since", since);
+    const res = await fetch(`${cloud.url}/v1/comments?${query}`, {
+      headers: { authorization: `Bearer ${cloud.token}` },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      return { status: "error", ...zero, note: `comment fetch failed (${res.status})` };
+    }
+    payload = (await res.json()) as CommentsResponse;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { status: "error", ...zero, note: `couldn't reach velloo-cloud (${msg})` };
+  }
+
+  const map: Record<string, CommentMapping> = { ...state.comments };
+  const annotationsOf = (screenId: string) => ctx.folder.annotations.get(screenId) ?? [];
+  const hasAnnotation = (m: CommentMapping) =>
+    annotationsOf(m.screenId).some((a) => a.id === m.annotationId);
+
+  // ── Down: land new comments; remove annotations for cloud-resolved ones ──
+  let pulled = 0;
+  let resolvedDown = 0;
+  const adds = new Map<string, Annotation[]>();
+  const removes = new Map<string, Set<string>>();
+
+  for (const c of payload.comments ?? []) {
+    if (!c || typeof c.id !== "string" || typeof c.screenId !== "string") continue;
+    let entry = map[c.id];
+    if (!entry) {
+      // Cross-machine idempotency: an annotation from another machine's pull
+      // (or a pre-wipe state) already carries this comment id — adopt it.
+      const adopted = annotationsOf(c.screenId).find((a) => a.cloud?.commentId === c.id);
+      if (adopted) {
+        entry = { annotationId: adopted.id, screenId: c.screenId, resolved: false };
+        map[c.id] = entry;
+      }
+    }
+    if (entry) {
+      if (c.resolved && !entry.resolved) {
+        if (hasAnnotation(entry)) {
+          let ids = removes.get(entry.screenId);
+          if (!ids) {
+            ids = new Set();
+            removes.set(entry.screenId, ids);
+          }
+          ids.add(entry.annotationId);
+          resolvedDown += 1;
+        }
+        entry.resolved = true;
+      }
+      continue;
+    }
+    // Unmapped: only new UNRESOLVED comments land; a resolved one we never saw
+    // has nothing to show or track.
+    if (c.resolved) continue;
+    const screen = ctx.folder.screens.get(c.screenId);
+    if (!screen) continue; // published screen no longer exists locally
+    const annotation: Annotation = {
+      id: `ann_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+      target: { locator: locatorFor(screen.tree, c.nodePath) },
+      position: "auto",
+      body: withProvenance(c),
+      author: "user",
+      cloud: { commentId: c.id, slug: c.slug, ...(c.author ? { author: c.author } : {}) },
+    };
+    let list = adds.get(c.screenId);
+    if (!list) {
+      list = [];
+      adds.set(c.screenId, list);
+    }
+    list.push(annotation);
+    map[c.id] = { annotationId: annotation.id, screenId: c.screenId, resolved: false };
+    pulled += 1;
+  }
+
+  for (const screenId of new Set([...adds.keys(), ...removes.keys()])) {
+    await withScreenLock(screenId, async () => {
+      const current = ctx.folder.annotations.get(screenId) ?? [];
+      const drop = removes.get(screenId);
+      const next = [
+        ...(drop ? current.filter((a) => !drop.has(a.id)) : current),
+        ...(adds.get(screenId) ?? []),
+      ];
+      await persistAnnotations(ctx.folder, screenId, next);
+    });
+    ctx.broadcast({ type: "annotations-changed", screenId });
+  }
+
+  // ── Up: a mapped annotation deleted locally means "resolved" — PATCH it. ──
+  let resolvedUp = 0;
+  for (const [commentId, entry] of Object.entries(map)) {
+    if (entry.resolved || hasAnnotation(entry)) continue;
+    try {
+      const res = await fetch(`${cloud.url}/v1/comments/${encodeURIComponent(commentId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${cloud.token}` },
+        body: JSON.stringify({ resolved: true }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        entry.resolved = true;
+        resolvedUp += 1;
+      } else if (res.status === 404 || res.status === 410) {
+        entry.resolved = true; // comment gone in the cloud — stop retrying
+      }
+    } catch {
+      // offline mid-pull — retry on the next cycle
+    }
+  }
+
+  const nextSince = payload.now ?? state.since;
+  await writeJsonAtomic(statePath(root), {
+    version: 1,
+    ...(nextSince ? { since: nextSince } : {}),
+    slugs,
+    comments: map,
+  } satisfies CommentSyncState);
+
+  const linkStatuses = payload.links ?? {};
+  const revoked = Object.keys(linkStatuses).filter((slug) => linkStatuses[slug] === "revoked");
+  return {
+    status: "ok",
+    pulled,
+    resolvedUp,
+    resolvedDown,
+    links: linkStatuses,
+    ...(revoked.length > 0
+      ? {
+          note: `Revoked share link${revoked.length > 1 ? "s" : ""}: ${revoked.join(", ")} — comments no longer sync there.`,
+        }
+      : {}),
+  };
+}
+
+/**
+ * A comment's `nodePath` is the dotted `data-node-path` form ("0.2.1"). A
+ * path that no longer resolves (the tree changed since the publish) — or no
+ * path at all — anchors at the screen root instead of being dropped.
+ */
+function locatorFor(tree: Node, nodePath: string | null | undefined): number[] {
+  if (!nodePath) return [];
+  let path: number[];
+  try {
+    path = pathFromString(nodePath);
+  } catch {
+    return [];
+  }
+  return pathAt(tree, path) ? path : [];
+}
+
+function withProvenance(c: CloudComment): string {
+  const who = c.author?.trim() || "a reviewer";
+  return `${c.body}\n\n— ${who}, via share link \`${c.slug}\``;
+}

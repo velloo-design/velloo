@@ -7,6 +7,7 @@ import type { ServerWebSocket } from "bun";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
 import type { CanvasAuth, CloudAuth } from "./cloud.ts";
+import { pullComments } from "./cloud-comments.ts";
 import {
   type DesignFolder,
   loadDesignFolder,
@@ -169,6 +170,9 @@ async function serveSpaFallback(): Promise<Response> {
   );
 }
 
+/** Cadence of the share-link comment pull while the daemon lives. */
+const COMMENT_SYNC_INTERVAL_MS = 5 * 60_000;
+
 export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const folder: DesignFolder = await loadDesignFolder(opts.folder);
   // Promote legacy single-library configs to the Sprint-Y multi-library
@@ -289,6 +293,30 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const port = server.port ?? opts.port ?? 7300;
   const assetOrigin = `http://${opts.host ?? "127.0.0.1"}:${port}/`;
 
+  // Share-link comment sync: pull at boot, then on a slow cadence
+  // while the daemon lives. Logged-out / unpublished / offline are quiet
+  // no-ops inside pullComments — the folder keeps working fully offline; the
+  // one-line log fires only when something actually synced.
+  let commentTimer: ReturnType<typeof setInterval> | null = null;
+  if (opts.cloud) {
+    const cloud = opts.cloud;
+    const sync = async () => {
+      try {
+        const s = await pullComments(ctx, cloud);
+        if (s.status === "ok" && s.pulled + s.resolvedUp + s.resolvedDown > 0) {
+          console.error(
+            `velloo: share-link comments — ${s.pulled} pulled, ${s.resolvedUp} resolved up, ${s.resolvedDown} resolved down`,
+          );
+        }
+        if (s.status === "ok" && s.note) console.error(`velloo: ${s.note}`);
+      } catch {
+        // sync must never break the server
+      }
+    };
+    void sync();
+    commentTimer = setInterval(() => void sync(), COMMENT_SYNC_INTERVAL_MS);
+  }
+
   // MCP is optional and transport-pluggable. `velloo run` omits it (canvas
   // only); `velloo mcp` attaches stdio (default) or HTTP. Either way the MCP
   // reuses this ctx/jit/bundler, so screenshots resolve /assets against the
@@ -322,6 +350,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     mcpPort: httpMcp?.port,
     connections: () => ({ canvas: broadcaster.size(), mcp: httpMcp?.sessions() ?? 0 }),
     async close() {
+      if (commentTimer) clearInterval(commentTimer);
       watcher?.close();
       await httpMcp?.close();
       await stdioMcp?.close();
@@ -331,6 +360,14 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 }
 
 export type { CanvasAuth, CloudAuth } from "./cloud.ts";
+export {
+  type CommentSyncContext,
+  type PublishedLink,
+  type PullCommentsSummary,
+  pullComments,
+  readPublishedLinks,
+  recordPublishedLink,
+} from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { loadDesignFolder } from "./design-folder.ts";
 // Re-export key types and helpers for downstream consumers.

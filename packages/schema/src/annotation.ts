@@ -58,6 +58,21 @@ export const AnnotationSchema = z.object({
    * annotations remain the protected designer→agent channel.
    */
   author: z.enum(["user", "agent"]).optional(),
+  /**
+   * Provenance for an annotation pulled from a velloo-cloud share-link
+   * comment (the `pull_comments` sync). `commentId` keys idempotent
+   * re-pulls — a cloud comment lands as at most one annotation, on any
+   * machine that syncs this folder. `slug` names the share link it came
+   * from; `author` is the commenter's display name. Locally authored
+   * annotations never carry this field.
+   */
+  cloud: z
+    .object({
+      commentId: z.string().min(1),
+      slug: z.string().min(1),
+      author: z.string().optional(),
+    })
+    .optional(),
 });
 export type Annotation = z.infer<typeof AnnotationSchema>;
 

@@ -24,6 +24,7 @@ import {
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCatalogTools } from "./tools/catalog.ts";
+import { registerCommentTools } from "./tools/comments.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
@@ -110,7 +111,7 @@ const INSTRUCTION_PARTS = [
   "",
   "**Code-to-design (porting an existing app)**: *re-express — don't clone*. The loop: (1) `import_theme` with the app's globals.css (`cssPath` — absolute or relative to the host app root, since globals.css lives OUTSIDE the design folder; dry-run first, then `apply: true`) BEFORE any composition, so semantic slots, the raw `palette.*` passthrough (brand vars like `--ink`, scales like `--primary-600`), fonts, and the tailwind.config's `theme.extend`/`container` all resolve — then verbatim app classes like `bg-ink` render as-is. Tweak entries with `set_token palette.<name>`; run `validate_classes` if unsure a class resolved. (2) Read the page's source alongside `list_components`, then build INTO the route-scan's existing placeholder screen (clear the placeholder with `remove_node`; `add_screen` on a scanned route returns ScreenIdConflict). Strip handlers/state/data-fetching, inline representative copy as literals, keep Tailwind classes verbatim (shadcn apps share Velloo's component vocabulary, so most refs map 1:1). (3) Component mapping is snippet-first, extension-second: a presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real; a complex app-specific component (DataTable, charts) becomes `add_extension` with its real importPath, so capture → redesign → emit never loses component identity. (4) Verify with `compare_to_url` at the same viewport — 0.85+ similarity is a faithful structural port; use the per-region node refs to fix what's off, and don't chase 1.0 (fonts and imagery legitimately differ). **If the result is `unverified`, STOP — similarity is meaningless there**: authenticate (`storageStatePath`/`cookies`/`localStorage`) or fix the target app's dev server, and if you can't get a real capture, leave the screen flagged unverified and tell the user rather than iterating against a page you never saw. Data-heavy pages: fixture copy — designs are static by construction. Known canvas-vs-app gaps to expect (don't chase the small similarity dip): `dark:` variant classes are inert (Velloo dark mode swaps token values, not a class — use the semantic token instead), Radix `AvatarImage` SSR-captures as its fallback (re-express avatars as `Image`), the app's vendored shadcn may predate the snapshot (re-add drifted classes explicitly), and the headless render substitutes some emoji and doesn't fetch remote images (use `upload_asset` + local `Image`/`Placeholder` for art you need pixel-faithful).",
   "",
-  '**Designer annotations**: `list_annotations(screenId)` returns markdown notes attached to specific nodes. Treat them as addressable guidance ("this CTA should land harder"); a null `resolved` path means the targeted node is gone — low-priority. Pin your own with `add_annotation`, remove only your own. Board-level guidance that isn\'t node-specific goes in canvas notes (`add_note`).',
+  "**Designer annotations**: `list_annotations(screenId)` returns markdown notes attached to specific nodes. Treat them as addressable guidance (\"this CTA should land harder\"); a null `resolved` path means the targeted node is gone — low-priority. Pin your own with `add_annotation`, remove only your own. Board-level guidance that isn't node-specific goes in canvas notes (`add_note`). Annotations can also arrive from OUTSIDE reviewers: `pull_comments` fetches comments left on the folder's published share links and lands them as annotations whose body names the commenter + link (the daemon also syncs them at startup). Treat those like designer guidance; deleting one resolves the cloud comment on the next sync.",
 ];
 
 /**
@@ -245,6 +246,8 @@ function buildMcpServer(
   // Opt-in, auth-gated. The token may be absent (logged out) — the tool then
   // returns a "run velloo login" message rather than failing.
   if (feedbackEnabled) registerFeedbackTool(mcp, ctx, cloud ?? { url: "" });
+  // Always on: logged-out / unpublished / offline are reported no-ops.
+  registerCommentTools(mcp, ctx, cloud ?? { url: "" });
   // Progressive disclosure: advertise a lean core and reveal the long-tail
   // families on demand via `reveal_tools`. VELLOO_MCP_FLAT opts out. Disabling
   // here is silent (the server isn't connected yet, so no list_changed fires —

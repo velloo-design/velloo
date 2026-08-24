@@ -7,6 +7,7 @@ import { CopyField } from "./CopyField.tsx";
 import { IdField } from "./IdField.tsx";
 import { PropField } from "./PropField.tsx";
 import { SnippetInspector } from "./SnippetInspector.tsx";
+import { SnippetSubstitutions } from "./SnippetSubstitutions.tsx";
 import { StyleObjectEditor } from "./style-editor/StyleObjectEditor.tsx";
 import { SxStyleEditor } from "./style-editor/SxStyleEditor.tsx";
 import { TailwindStyleEditor } from "./style-editor/TailwindStyleEditor.tsx";
@@ -139,6 +140,10 @@ export function Inspector() {
                 />
               ))}
           </section>
+        ) : null}
+
+        {selection.screenId.startsWith("snippet:") ? (
+          <SnippetSubstitutions key={`${selectionKey}:subs`} selection={selection} node={node} />
         ) : null}
 
         {isObjectChannel ? (
