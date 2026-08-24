@@ -10,6 +10,8 @@ interface Props {
   onChange(name: string): void;
 }
 
+// Unavoidable cast: lucide's namespace has thousands of icon exports (forwardRef
+// exotics, indistinguishable from helper exports at runtime) and no Record-typed index.
 const LUCIDE = Lucide as unknown as Record<string, React.ComponentType<Lucide.LucideProps>>;
 
 /**

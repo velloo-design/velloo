@@ -94,6 +94,12 @@ const SCALAR_KEYS = [
 ] as const;
 const SCALAR_SET = new Set<string>(SCALAR_KEYS);
 
+type ScalarKey = (typeof SCALAR_KEYS)[number];
+
+function isScalarKey(k: string): k is ScalarKey {
+  return SCALAR_SET.has(k);
+}
+
 /** MUI's default `theme.spacing` step (px). */
 const SPACING_PX = 8;
 
@@ -123,8 +129,8 @@ export function parseSx(obj: Record<string, unknown> | undefined): ParsedSx {
       spacing.push({ box: sp.box, v: sp.v, val });
       continue;
     }
-    if (SCALAR_SET.has(k) && (typeof val === "string" || typeof val === "number")) {
-      (model as unknown as Record<string, SxVal>)[k] = val;
+    if (isScalarKey(k) && (typeof val === "string" || typeof val === "number")) {
+      model[k] = val;
       continue;
     }
     extra[k] = val;

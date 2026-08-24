@@ -28,6 +28,8 @@ export interface IconProps extends React.SVGAttributes<SVGSVGElement> {
   strokeWidth?: number;
 }
 
+// Unavoidable cast: lucide's namespace has thousands of icon exports (forwardRef
+// exotics, indistinguishable from helper exports at runtime) and no Record-typed index.
 const REGISTRY = Lucide as unknown as Record<string, React.ComponentType<Lucide.LucideProps>>;
 
 export function Icon({ name, className, size = 16, strokeWidth = 2, ...props }: IconProps) {

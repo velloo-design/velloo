@@ -1,4 +1,4 @@
-import type { UrlCaptureResult } from "@velloo/renderer";
+import type { UrlCaptureResult, UrlCookie } from "@velloo/renderer";
 
 /** A URL capture frozen at a point in time, for cross-call reuse. */
 export interface CachedUrlCapture {
@@ -16,8 +16,8 @@ export interface UrlCacheKeyParams {
   dark: boolean;
   /** Resolved absolute path, or null when no storage state. */
   storageStatePath: string | null;
-  cookies?: unknown;
-  localStorage?: unknown;
+  cookies?: UrlCookie[];
+  localStorage?: Record<string, string>;
 }
 
 /**

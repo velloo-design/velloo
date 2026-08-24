@@ -206,6 +206,8 @@ export const NodeSchema: z.ZodType<Node> = z
   // transform above still does the real validation; this only annotates the
   // emitted schema so clients send objects. Keep it as `additionalProperties:
   // true` (any object) rather than the full union — minimal and permissive.
+  // Unavoidable cast: `.transform().meta()` erases the recursive output type
+  // (ZodPipe of unknown), so reassert the declared `z.ZodType<Node>`.
   .meta({ type: "object", additionalProperties: true }) as unknown as z.ZodType<Node>;
 
 export { ComponentNodeSchema, ParamRefSchema, SnippetInstanceSchema };

@@ -264,7 +264,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_snippets",
     {
       description:
-        "List every snippet defined in design/snippets/. Returns { id, name, params } per entry; each param reports `name`, `type`, and `required` (true when it has no default and isn't optional). Read these before instantiate_snippet — passing the wrong set returns SnippetParamMismatch.",
+        "List every snippet defined in the folder's snippets/. Returns { id, name, params } per entry; each param reports `name`, `type`, and `required` (true when it has no default and isn't optional). Read these before instantiate_snippet — passing the wrong set returns SnippetParamMismatch.",
       inputSchema: {},
     },
     async () => {
@@ -300,7 +300,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_annotations",
     {
       description:
-        "List designer-authored annotations on a screen. Each annotation is anchored to a specific node via a locator; `resolved` carries the resolved path (or null if the targeted node has since vanished — treat dangling annotations as low-priority). Read-only: agents can consume annotations as guidance but cannot create or edit them. The `body` field is markdown.",
+        "List the annotations on a screen — designer-authored guidance plus any you pinned yourself. Each annotation is anchored to a specific node via a locator and carries an `author`; `resolved` is the resolved path (or null if the targeted node has since vanished — treat dangling annotations as low-priority). User-authored annotations are read-only to you; pin/remove your own with add_annotation / remove_annotation. The `body` field is markdown.",
       inputSchema: { screenId: z.string() },
     },
     async ({ screenId }) => {
@@ -318,7 +318,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_notes",
     {
       description:
-        "List free-positioned markdown notes on one board. Designer scratchpad — read-only from the agent's POV.",
+        "List free-positioned markdown notes on one board — board-level commentary beside the frames (tour steps, review remarks, handoff context). Writable via add_note / update_note / remove_note.",
       inputSchema: { boardId: z.string() },
     },
     async ({ boardId }) => {

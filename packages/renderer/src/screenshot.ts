@@ -2,6 +2,12 @@ import { existsSync } from "node:fs";
 import type { Viewport } from "@velloo/schema";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 
+/** Flags the injected live/canvas runtimes set on the rendered page's window. */
+type VellooReadyFlags = {
+  __velloo_live_ready?: boolean;
+  __velloo_canvas_ready?: boolean;
+};
+
 /**
  * When the doc carries live-island markers, wait for the client mount to
  * settle (`window.__velloo_live_ready`) so the capture lands the real
@@ -16,7 +22,7 @@ async function waitForLiveIslands(page: Page, html: string): Promise<void> {
   if (html.includes("data-live-node")) {
     await page
       .waitForFunction(
-        () => (window as unknown as { __velloo_live_ready?: boolean }).__velloo_live_ready === true,
+        () => (window as Window & VellooReadyFlags).__velloo_live_ready === true,
         undefined,
         { timeout: 6000 },
       )
@@ -28,8 +34,7 @@ async function waitForLiveIslands(page: Page, html: string): Promise<void> {
   if (html.includes("velloo-canvas-data")) {
     await page
       .waitForFunction(
-        () =>
-          (window as unknown as { __velloo_canvas_ready?: boolean }).__velloo_canvas_ready === true,
+        () => (window as Window & VellooReadyFlags).__velloo_canvas_ready === true,
         undefined,
         { timeout: 6000 },
       )
@@ -317,10 +322,7 @@ export async function captureScreenshot(
       // applies. Bounded so a slow/offline font can't stall the shot.
       await page
         .evaluate(() =>
-          Promise.race([
-            (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready,
-            new Promise((r) => setTimeout(r, 2000)),
-          ]),
+          Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2000))]),
         )
         .catch(() => {});
       await waitForLiveIslands(page, opts.html);

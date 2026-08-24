@@ -40,9 +40,9 @@ describe("urlCacheKey", () => {
     expect(urlCacheKey({ ...baseKey, localStorage: { jwt: "x" } })).not.toBe(k);
   });
 
-  test("absent and null auth normalize to the same key", () => {
+  test("absent and explicitly-undefined auth normalize to the same key", () => {
     expect(urlCacheKey({ ...baseKey, cookies: undefined, localStorage: undefined })).toBe(
-      urlCacheKey({ ...baseKey, cookies: null, localStorage: null }),
+      urlCacheKey(baseKey),
     );
   });
 });

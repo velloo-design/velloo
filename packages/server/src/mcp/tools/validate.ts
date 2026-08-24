@@ -86,6 +86,11 @@ function declaredVars(css: string): Set<string> {
   return out;
 }
 
+/**
+ * The structural slice of Tailwind's internal `Theme` we read. Its vendor
+ * .d.ts imports './theme', which isn't shipped, so `ds.theme` is untyped —
+ * the call site asserts this shape (unavoidable until upstream ships types).
+ */
 type ThemeLookup = { get(path: string[]): string | null };
 
 /**

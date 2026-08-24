@@ -99,6 +99,8 @@ export function instrumentTools(mcp: McpServer): ToolRegistry {
       input !== null &&
       typeof input === "object" &&
       typeof (input as { safeParse?: unknown }).safeParse !== "function";
+    // Unavoidable cast: swapping a raw shape for its z.strictObject changes the
+    // SDK's inferred config generic, which no non-generic rewrap can satisfy.
     const finalConfig = isRawShape
       ? ({
           ...config,
@@ -169,18 +171,17 @@ export function revealFamily(
 export function registerRevealTool(mcp: McpServer, registry: ToolRegistry): void {
   const areas = Object.keys(TOOL_FAMILIES) as FamilyName[];
   const familyList = areas.map((a) => `\`${a}\` — ${TOOL_FAMILIES[a].summary}`).join(" ");
+  const areaValues: [FamilyName | "all", ...(FamilyName | "all")[]] = ["all", ...areas];
   mcp.registerTool(
     "reveal_tools",
     {
       description: `Unlock a hidden tool family so its tools become callable — the core surface stays lean and this reveals more on demand (fires tools/list_changed; your client re-fetches the larger list). Families: ${familyList} Pass "all" to reveal every family. Idempotent.`,
       inputSchema: {
-        area: z
-          .enum([...areas, "all"] as unknown as [string, ...string[]])
-          .describe('Tool family to reveal, or "all".'),
+        area: z.enum(areaValues).describe('Tool family to reveal, or "all".'),
       },
     },
     async ({ area }) => {
-      const { unlocked, alreadyOn, guidance } = revealFamily(registry, area as FamilyName | "all");
+      const { unlocked, alreadyOn, guidance } = revealFamily(registry, area);
       const lines: string[] = [];
       if (unlocked.length > 0) lines.push(`Revealed (now callable): ${unlocked.join(", ")}.`);
       if (alreadyOn.length > 0) lines.push(`Already available: ${alreadyOn.join(", ")}.`);

@@ -283,7 +283,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_screen",
     {
       description:
-        "Create a NEW screen. Does not place it on the board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one. Note: a route-scan already scaffolds one placeholder screen per detected route (id = route slug) — don't add_screen for those (it returns ScreenIdConflict); build into the existing screen with add_node/instantiate_snippet (clear the placeholder with remove_node first). Omit `id` to auto-suffix a unique id.",
+        "Create a NEW screen. Does not place it on any board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one. Note: a route-scan already scaffolds one placeholder screen per detected route (id = route slug) — don't add_screen for those (it returns ScreenIdConflict); build into the existing screen with add_node/instantiate_snippet (clear the placeholder with remove_node first). Omit `id` to auto-suffix a unique id.",
       inputSchema: {
         name: z.string(),
         id: z.string().optional(),

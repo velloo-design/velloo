@@ -36,6 +36,15 @@ import { type CachedUrlCapture, LruMap, planUrlCache, urlCacheKey } from "./url-
 const URL_CACHE_CAP = 20;
 const DEFAULT_URL_CACHE_TTL_MS = 300_000; // 5 min
 
+/** Mirrors the renderer's {@link UrlCookie} — `satisfies` keeps the two in lockstep. */
+const UrlCookieSchema = z.object({
+  name: z.string(),
+  value: z.string(),
+  url: z.string().optional(),
+  domain: z.string().optional(),
+  path: z.string().optional(),
+}) satisfies z.ZodType<UrlCookie>;
+
 export function registerCompareToUrlTool(
   mcp: McpServer,
   ctx: MutationContext,
@@ -77,15 +86,7 @@ export function registerCompareToUrlTool(
             "Path to a Playwright storage-state JSON (logged-in cookies + localStorage) — absolute, or relative to the design folder. The robust way past auth gates.",
           ),
         cookies: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              url: z.string().optional(),
-              domain: z.string().optional(),
-              path: z.string().optional(),
-            }),
-          )
+          .array(UrlCookieSchema)
           .optional()
           .describe("Session cookies to seed before navigating (each needs url OR domain+path)"),
         localStorage: z
@@ -226,7 +227,7 @@ export function registerCompareToUrlTool(
                 dark: mode === "dark",
                 ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
                 ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
-                ...(cookies ? { cookies: cookies as UrlCookie[] } : {}),
+                ...(cookies ? { cookies } : {}),
                 ...(localStorage ? { localStorage } : {}),
               }),
         ]);

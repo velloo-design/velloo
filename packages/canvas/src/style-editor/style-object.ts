@@ -68,6 +68,12 @@ const SCALAR_KEYS = [
 ] as const;
 const SCALAR_SET = new Set<string>(SCALAR_KEYS);
 
+type ScalarKey = (typeof SCALAR_KEYS)[number];
+
+function isScalarKey(k: string): k is ScalarKey {
+  return SCALAR_SET.has(k);
+}
+
 /** A multi-value shorthand (`"16px 24px"`) we don't break into sides — keep raw. */
 function isMultiValue(v: unknown): boolean {
   return typeof v === "string" && v.trim().includes(" ");
@@ -99,8 +105,8 @@ export function parseStyle(obj: Record<string, unknown> | undefined): ParsedStyl
       spacing.push({ box: sp.box, v: sp.v, val });
       continue;
     }
-    if (SCALAR_SET.has(k) && (typeof val === "number" || typeof val === "string")) {
-      (model as unknown as Record<string, CssVal>)[k] = val;
+    if (isScalarKey(k) && (typeof val === "number" || typeof val === "string")) {
+      model[k] = val;
       continue;
     }
     extra[k] = val;
