@@ -23,15 +23,26 @@ const MUI_SPEC: CanvasBundleSpec = {
 };
 
 describe("buildCanvasBundle", () => {
-  test("bundles the host's real MUI + emotion into a mountScreen module", async () => {
-    const { code, errors } = await buildCanvasBundle(HOST_ROOT, MUI_SPEC);
-    expect(errors).toEqual([]);
-    // A real, non-trivial browser bundle (not the empty fallback stub).
-    expect(code).toContain("mountScreen");
-    expect(code.length).toBeGreaterThan(20_000);
-    // The interpreter + overlay shims made it in.
-    expect(code).toContain("createTheme");
-  }, 30_000);
+  // Skipped under VELLOO_E2E: canvas-mount.e2e.test.ts performs this exact
+  // full-spec build in its beforeAll (throwing on any error), and a Bun
+  // test-runner bug poisons Bun.build across test files — after one large
+  // build in another file, the next build fails with spurious
+  // EISDIR/"Unexpected reading file" on real node_modules files (repro:
+  // full-MUI-spec build in file A, any build in file B, `bun test A B`).
+  // Coverage is identical either way; this dodges the double-build.
+  test.skipIf(process.env.VELLOO_E2E === "1")(
+    "bundles the host's real MUI + emotion into a mountScreen module",
+    async () => {
+      const { code, errors } = await buildCanvasBundle(HOST_ROOT, MUI_SPEC);
+      expect(errors).toEqual([]);
+      // A real, non-trivial browser bundle (not the empty fallback stub).
+      expect(code).toContain("mountScreen");
+      expect(code.length).toBeGreaterThan(20_000);
+      // The interpreter + overlay shims made it in.
+      expect(code).toContain("createTheme");
+    },
+    30_000,
+  );
 
   test("missing host framework ⇒ empty module + structured errors, never throws", async () => {
     const bogus: CanvasBundleSpec = { ...MUI_SPEC, moduleBase: "@no-such/ui-kit-xyz" };

@@ -7,7 +7,7 @@ import {
   type Screen,
 } from "@velloo/schema";
 import { PanelsTopLeft } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 
@@ -67,12 +67,25 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
   const pathStr = pathToString(path);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
-  const selection = useCanvas((s) => s.selection);
-  const hover = useCanvas((s) => s.hover);
   const openSnippetEditor = useCanvas((s) => s.openSnippetEditor);
 
-  const isSelected = selection?.screenId === screenId && selection.path === pathStr;
-  const isHovered = hover?.screenId === screenId && hover.path === pathStr;
+  // Subscribe to the derived booleans, not the selection/hover objects: a
+  // hover change then re-renders the two affected rows instead of every row
+  // in the tree — the difference between instant and laggy hover on big
+  // screens.
+  const isSelected = useCanvas(
+    (s) => s.selection?.screenId === screenId && s.selection.path === pathStr,
+  );
+  const isHovered = useCanvas((s) => s.hover?.screenId === screenId && s.hover.path === pathStr);
+
+  // When selection arrives from outside the tree (a canvas click), reveal the
+  // row. `block: "nearest"` scrolls the sidebar the minimum amount — never a
+  // jump when the row is already visible.
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (isSelected) rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isSelected]);
+
   const childList = nodeChildren(node);
   const hasChildren = (childList?.length ?? 0) > 0;
   const isOpen = hasChildren ? expandedSet.has(pathStr) : false;
@@ -92,7 +105,7 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
 
   return (
     <div>
-      <div className={rowClass} style={{ paddingLeft: `${0.5 + depth * 0.875}rem` }}>
+      <div ref={rowRef} className={rowClass} style={{ paddingLeft: `${0.5 + depth * 0.875}rem` }}>
         <button
           type="button"
           onClick={() => setExpanded(pathStr, !isOpen)}

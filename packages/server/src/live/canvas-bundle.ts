@@ -86,14 +86,25 @@ export async function buildCanvasBundle(
   const entryPath = join(dir, "entry.tsx");
   await writeFile(entryPath, entrySource, "utf8");
 
-  const result = await Bun.build({
-    entrypoints: [entryPath],
-    target: "browser",
-    format: "esm",
-    minify,
-    sourcemap: "none",
-    define: { "process.env.NODE_ENV": '"production"' },
-  });
+  let result: Awaited<ReturnType<typeof Bun.build>>;
+  try {
+    result = await Bun.build({
+      entrypoints: [entryPath],
+      target: "browser",
+      format: "esm",
+      minify,
+      sourcemap: "none",
+      define: { "process.env.NODE_ENV": '"production"' },
+    });
+  } catch (err) {
+    // Bun ≥1.2 throws an AggregateError instead of returning success: false —
+    // map it into structured errors so the never-throws contract (and the
+    // caller's SSR fallback) holds.
+    for (const e of err instanceof AggregateError ? err.errors : [err]) {
+      errors.push({ message: e instanceof Error ? e.message : String(e) });
+    }
+    return { code: "export function mountScreen() {}\n", errors };
+  }
   if (!result.success) {
     for (const log of result.logs)
       errors.push({ message: typeof log === "string" ? log : log.message });

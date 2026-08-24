@@ -36,7 +36,17 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
   hover: null,
 
   setSelection(selection) {
-    set({ selection });
+    // Dedupe by value (fresh object literals arrive per click) so re-selecting
+    // the selected node doesn't re-render every subscriber — but still run the
+    // screen-follow below, since the *current screen* may have moved on.
+    const prev = get().selection;
+    const same =
+      prev === selection ||
+      (prev !== null &&
+        selection !== null &&
+        prev.screenId === selection.screenId &&
+        prev.path === selection.path);
+    if (!same) set({ selection });
     // If the selected node lives on a screen other than the currently
     // open one, follow it — otherwise the sidebar Tree shows a tree
     // unrelated to what's selected in the canvas. Annotations follow
@@ -53,6 +63,12 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
   },
 
   setHover(hover) {
+    // Dedupe by value: hover reports arrive as fresh object literals on every
+    // pointer event, and setting an identical value re-renders every
+    // subscriber and re-messages every frame iframe.
+    const prev = get().hover;
+    if (prev === hover) return;
+    if (prev && hover && prev.screenId === hover.screenId && prev.path === hover.path) return;
     set({ hover });
   },
 });

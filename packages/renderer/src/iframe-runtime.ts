@@ -100,16 +100,28 @@ export const IFRAME_RUNTIME = String.raw`
     }
   }, true);
 
+  // Hover reports coalesce to one message per animation frame — sweeping the
+  // cursor across a dense tree otherwise floods the parent with a store
+  // update + a React render pass per crossed node.
+  let hoverRaf = 0;
+  function flushHover() {
+    hoverRaf = 0;
+    send({ type: 'hover', path: pendingHover });
+  }
+
   document.addEventListener('mouseover', (ev) => {
     const path = findPath(ev.target);
-    if (path !== pendingHover) {
-      pendingHover = path;
-      send({ type: 'hover', path: path });
-    }
+    if (path === pendingHover) return;
+    pendingHover = path;
+    if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);
   });
 
   document.addEventListener('mouseleave', () => {
     pendingHover = null;
+    if (hoverRaf) {
+      cancelAnimationFrame(hoverRaf);
+      hoverRaf = 0;
+    }
     send({ type: 'hover', path: null });
   });
 
