@@ -27,6 +27,7 @@ import { registerCatalogTools } from "../src/mcp/tools/catalog.ts";
 import { registerDiscoveryTools } from "../src/mcp/tools/discovery.ts";
 import { registerEmitTools } from "../src/mcp/tools/emit.ts";
 import { registerExtensionTools } from "../src/mcp/tools/extensions.ts";
+import { registerGenerateTools } from "../src/mcp/tools/generate.ts";
 import { registerInspectTool } from "../src/mcp/tools/inspect.ts";
 import { registerMutationTools } from "../src/mcp/tools/mutations.ts";
 import { registerNoteTools } from "../src/mcp/tools/notes.ts";
@@ -99,6 +100,7 @@ async function main(): Promise<void> {
     registerNoteTools(mcp, ctx);
     registerAssetTools(mcp, ctx);
     registerBatchTool(mcp, ctx);
+    registerGenerateTools(mcp, ctx, { url: "" });
     registerRevealTool(mcp, registry);
     applyDefaultTiers(registry);
 

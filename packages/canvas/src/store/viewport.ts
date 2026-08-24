@@ -15,6 +15,14 @@ export interface ViewportSlice {
    * frame's board-world offset to anchor in the canvas.
    */
   nodeRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>;
+  /**
+   * Measured frame chrome, fed by a ResizeObserver in Frame.tsx: `x`/`y` are
+   * the iframe's offset from the frame origin (header row above it) in
+   * board-world units, `chromeH` the total vertical chrome around the iframe
+   * (header + preset chips). Annotation anchoring and frame collision read
+   * these instead of hardcoding the chrome layout.
+   */
+  frameInsets: Record<string, { x: number; y: number; chromeH: number }>;
 
   setCanvasZoom(z: number): void;
   setCursorMode(m: CursorMode): void;
@@ -24,6 +32,8 @@ export interface ViewportSlice {
     rects: { path: string; x: number; y: number; w: number; h: number }[],
   ): void;
   clearNodeRects(frameId: string): void;
+  /** Pass `null` to drop the measurement when the frame unmounts. */
+  setFrameInset(frameId: string, inset: { x: number; y: number; chromeH: number } | null): void;
 }
 
 export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlice> = (set) => ({
@@ -31,6 +41,7 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
   cursorMode: "select",
   pan: { x: 0, y: 0 },
   nodeRects: {},
+  frameInsets: {},
 
   setCanvasZoom(canvasZoom) {
     set({ canvasZoom: Math.max(0.1, Math.min(4, canvasZoom)) });
@@ -62,6 +73,22 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
       const { [frameId]: _drop, ...rest } = s.nodeRects;
       void _drop;
       return { nodeRects: rest };
+    });
+  },
+
+  setFrameInset(frameId, inset) {
+    set((s) => {
+      const prev = s.frameInsets[frameId];
+      if (inset === null) {
+        if (!prev) return s;
+        const { [frameId]: _drop, ...rest } = s.frameInsets;
+        void _drop;
+        return { frameInsets: rest };
+      }
+      if (prev && prev.x === inset.x && prev.y === inset.y && prev.chromeH === inset.chromeH) {
+        return s;
+      }
+      return { frameInsets: { ...s.frameInsets, [frameId]: inset } };
     });
   },
 });

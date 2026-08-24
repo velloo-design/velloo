@@ -88,6 +88,7 @@ Board-level sticky notes in board coordinates (the same space as frame `x`/`y`).
 | Tool | Args |
 |---|---|
 | `upload_asset` | `filename, data (base64), overwrite?` — writes into `assets/`, served at `/assets/<name>`; the agent authors SVG/raster art itself (max 5MB) |
+| `generate_asset` | `prompt, kind: "image" \| "svg", size?, filename?` — hosted, credit-metered generation via velloo-cloud (requires `velloo login`). Decodes the result into `assets/` (same store + naming as `upload_asset`) and returns the `/assets/<name>` URL; `kind: "svg"` also returns the inline markup for `<SVG content>`. The result reports the credit cost + remaining balance; quota/feature failures (out of credits, rate-limited, generation disabled) come back as clear messages naming the way out |
 | `batch` | `calls: [{ tool, args }], atomic?` — multi-mutation envelope. Atomic by default: first error rolls back every touched resource (disk + memory + undo history) and reports `rolledBack: true`. `atomic: false` keeps completed work |
 
 ### Frame / group lifecycle

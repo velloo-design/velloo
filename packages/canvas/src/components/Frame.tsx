@@ -37,6 +37,7 @@ interface FrameProps {
  */
 export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: FrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const chromeHostRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
   const screen = useCanvas((s) => s.screens[frame.screen]);
   const boardTheme = useCanvas((s) => s.boards[boardId]?.theme);
@@ -50,6 +51,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   const setHover = useCanvas((s) => s.setHover);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
+  const setFrameInset = useCanvas((s) => s.setFrameInset);
   const annotations = useCanvas((s) => s.annotations);
 
   const { draftPos, draftSize, startDrag, startResize } = useFrameInteractions({
@@ -62,6 +64,34 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   const h = draftSize?.h ?? frame.h;
   const x = draftPos?.x ?? frame.x;
   const y = draftPos?.y ?? frame.y;
+  const hasScreen = Boolean(screen);
+
+  // Measure the frame chrome instead of hardcoding its layout: the iframe's
+  // offset from the frame origin (header row above) feeds annotation
+  // anchoring, and the total vertical chrome feeds frame collision. The
+  // ResizeObserver keeps the numbers true through chrome edits — label
+  // wrapping, new badges, restyled headers.
+  useEffect(() => {
+    void hasScreen; // the measured host only exists once the screen loaded
+    const host = chromeHostRef.current;
+    if (!host) return;
+    const column = host.parentElement;
+    const report = () => {
+      setFrameInset(frame.id, {
+        x: host.offsetLeft,
+        y: host.offsetTop,
+        chromeH: (column?.offsetHeight ?? host.offsetHeight) - host.offsetHeight,
+      });
+    };
+    report();
+    const ro = new ResizeObserver(report);
+    if (column) ro.observe(column);
+    ro.observe(host);
+    return () => {
+      ro.disconnect();
+      setFrameInset(frame.id, null);
+    };
+  }, [frame.id, hasScreen, setFrameInset]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -77,6 +107,26 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       },
       onRects(rects) {
         setNodeRects(frame.id, rects);
+      },
+      // A reloaded iframe (screenVersion bump after an edit, HMR) comes up
+      // with a blank document while the store still holds selection/hover —
+      // and the effects below are keyed on those values, so nothing re-sends
+      // them. Re-establish everything the parent believes is true, and
+      // re-request annotation rects so anchors track the fresh layout.
+      onReady() {
+        const s = useCanvas.getState();
+        if (s.selection?.screenId === frame.screen) {
+          channel.send({ type: "applyHighlight", path: s.selection.path });
+        }
+        if (s.hover?.screenId === frame.screen) {
+          channel.send({ type: "applyHover", path: s.hover.path });
+        }
+        const annotated = s.annotations
+          .filter((a) => a.resolved !== null)
+          .map((a) => (a.resolved ?? []).join("."));
+        if (annotated.length > 0) {
+          channel.send({ type: "requestRects", paths: annotated });
+        }
       },
       // Cmd/Ctrl + wheel inside the iframe → zoom the board. Same
       // factor as Board.tsx's own onWheel handler so the two routes
@@ -221,7 +271,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
             Loading {frame.screen}…
           </div>
         ) : (
-          <div className="relative" style={{ width: w, height: h }}>
+          <div ref={chromeHostRef} className="relative" style={{ width: w, height: h }}>
             <iframe
               ref={iframeRef}
               title={`${screen.name} (${frame.id})`}

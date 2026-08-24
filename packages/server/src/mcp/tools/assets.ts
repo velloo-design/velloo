@@ -1,25 +1,13 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { sanitizeFilename, storeAsset } from "../../fs.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 
 type McpResult = {
   content: { type: "text"; text: string }[];
   isError?: true;
 };
-
-/** Basename-only, no traversal, no leading dots. */
-function sanitizeFilename(filename: string): string {
-  const base = filename.split(/[/\\]/).pop() ?? "asset";
-  return (
-    base
-      .replace(/\.\./g, "_")
-      .replace(/[^a-zA-Z0-9._-]/g, "_")
-      .replace(/^[._-]+/, "")
-      .replace(/_+/g, "_") || "asset"
-  );
-}
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -57,21 +45,14 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
           ],
         };
       }
-      const dir = join(ctx.folder.root, "assets");
-      await mkdir(dir, { recursive: true });
-      const abs = join(dir, safe);
+      const abs = join(ctx.folder.root, "assets", safe);
       if (overwrite === false && (await Bun.file(abs).exists())) {
         return {
           isError: true,
           content: [{ type: "text", text: `upload_asset: ${safe} exists (overwrite: false)` }],
         };
       }
-      await writeFile(abs, bytes);
-      const result = {
-        assetPath: `assets/${safe}`,
-        url: `/assets/${safe}`,
-        bytes: bytes.length,
-      };
+      const result = await storeAsset(ctx.folder.root, safe, bytes);
       return { content: [{ type: "text", text: JSON.stringify(result) }] } as McpResult;
     },
   );
@@ -98,7 +79,6 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     async ({ paths, baseDir, overwrite }) => {
       const base = baseDir ?? process.cwd();
       const dir = join(ctx.folder.root, "assets");
-      await mkdir(dir, { recursive: true });
 
       // expand globs + resolve relatives
       const sources: string[] = [];
@@ -129,18 +109,16 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
             continue;
           }
           const safe = sanitizeFilename(src);
-          const abs = join(dir, safe);
-          if (overwrite === false && (await Bun.file(abs).exists())) {
+          if (overwrite === false && (await Bun.file(join(dir, safe)).exists())) {
             results.push({ path: src, error: "exists (overwrite: false)" });
             continue;
           }
-          await writeFile(abs, Buffer.from(await file.arrayBuffer()));
-          results.push({
-            path: src,
-            assetPath: `assets/${safe}`,
-            url: `/assets/${safe}`,
-            bytes: size,
-          });
+          const stored = await storeAsset(
+            ctx.folder.root,
+            safe,
+            Buffer.from(await file.arrayBuffer()),
+          );
+          results.push({ path: src, ...stored });
         } catch (e) {
           results.push({ path: src, error: String((e as Error).message ?? e) });
         }

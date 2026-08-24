@@ -6,17 +6,14 @@ import { toastError } from "../toast.ts";
 import { Markdown } from "./Markdown.tsx";
 
 /**
- * Height of the `FrameHeader` chrome that sits above the iframe in
- * board-world units. Used to translate iframe-document coordinates
- * (where node rects are reported) into board coords for anchoring.
- *
- * Must stay in sync with the layout of `Frame.tsx` — header row is
- * `text-xs` (~16px) + the flex-col gap-1 (~4px). Keep this small and
- * obvious: if `Frame.tsx`'s structure changes, update this and the
- * connector lines will follow.
+ * Fallback iframe inset (offset of the iframe from the frame origin, in
+ * board-world units) used only before the first measurement lands: each
+ * frame's real chrome is observed by a ResizeObserver in `Frame.tsx` and
+ * reported into `frameInsets`, so anchors stay locked through chrome
+ * edits — label wrapping, new badges, restyled headers — without this
+ * constant needing to track the layout.
  */
-const FRAME_IFRAME_OFFSET_Y = 20;
-const FRAME_IFRAME_OFFSET_X = 0;
+const FALLBACK_INSET = { x: 0, y: 20 };
 /** Distance from the right edge of the frame to the annotation card. */
 const CARD_GUTTER = 24;
 /** Annotation card width — matches the `w-60` Tailwind class below. */
@@ -50,10 +47,12 @@ export function AnnotationsLayer() {
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const board = useCanvas((s) => (currentBoardId ? s.boards[currentBoardId] : null));
   const nodeRects = useCanvas((s) => s.nodeRects);
+  const frameInsets = useCanvas((s) => s.frameInsets);
   if (!visible || annotations.length === 0 || !board || !currentScreenId) return null;
 
   const targetFrame = board.frames.find((f) => f.screen === currentScreenId);
   if (!targetFrame) return null;
+  const inset = frameInsets[targetFrame.id] ?? FALLBACK_INSET;
 
   const resolved: ResolvedAnnotation[] = annotations.map((annotation, idx) => {
     const pathStr = annotation.resolved !== null ? annotation.resolved.join(".") : null;
@@ -62,8 +61,8 @@ export function AnnotationsLayer() {
     if (rect && annotation.position === "auto") {
       // Anchor in board coords: frame origin + iframe inset + iframe-local rect.
       const nodeRect = {
-        x: targetFrame.x + FRAME_IFRAME_OFFSET_X + rect.x,
-        y: targetFrame.y + FRAME_IFRAME_OFFSET_Y + rect.y,
+        x: targetFrame.x + inset.x + rect.x,
+        y: targetFrame.y + inset.y + rect.y,
         w: rect.w,
         h: rect.h,
       };
@@ -81,8 +80,8 @@ export function AnnotationsLayer() {
         frame: targetFrame,
         nodeRect: rect
           ? {
-              x: targetFrame.x + FRAME_IFRAME_OFFSET_X + rect.x,
-              y: targetFrame.y + FRAME_IFRAME_OFFSET_Y + rect.y,
+              x: targetFrame.x + inset.x + rect.x,
+              y: targetFrame.y + inset.y + rect.y,
               w: rect.w,
               h: rect.h,
             }

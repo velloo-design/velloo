@@ -29,6 +29,7 @@ import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
 import { registerFeedbackTool } from "./tools/feedback.ts";
+import { registerGenerateTools } from "./tools/generate.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
@@ -248,6 +249,8 @@ function buildMcpServer(
   if (feedbackEnabled) registerFeedbackTool(mcp, ctx, cloud ?? { url: "" });
   // Always on: logged-out / unpublished / offline are reported no-ops.
   registerCommentTools(mcp, ctx, cloud ?? { url: "" });
+  // Hosted generation: quota/feature failures return actionable messages.
+  registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
   // Progressive disclosure: advertise a lean core and reveal the long-tail
   // families on demand via `reveal_tools`. VELLOO_MCP_FLAT opts out. Disabling
   // here is silent (the server isn't connected yet, so no list_changed fires —

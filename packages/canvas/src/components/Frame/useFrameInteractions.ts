@@ -3,9 +3,19 @@ import { useState } from "react";
 import { mutate } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
+import {
+  clampResizeToNeighbors,
+  MIN_FRAME_SIDE,
+  type Rect,
+  resolveMoveCollision,
+} from "./collision.ts";
 
-const FRAME_PADDING = 16;
-const MIN_FRAME_SIDE = 120;
+/**
+ * Fallback for a frame whose chrome hasn't been measured yet: header row
+ * (~20 incl. gap) + preset chips row (~24). The ResizeObserver in Frame.tsx
+ * reports the real value into `frameInsets`.
+ */
+const DEFAULT_CHROME_H = 44;
 
 type ResizeDirection = "e" | "s" | "se";
 
@@ -21,32 +31,24 @@ interface UseFrameInteractionsArgs {
  * thrash through `updateFrame` every pointer-move) and commits to the
  * server on pointer-up.
  *
- * Resize is clamped against every neighboring frame so two frames never
- * overlap. The clamp is conservative — it shrinks against the *current*
- * neighbor edges; it does not push neighbors out of the way.
+ * Both gestures respect neighbors, working on "occupied" rects (schema rect +
+ * measured chrome height, see collision.ts): resize expands freely until the
+ * draft actually touches a neighbor, and a move resolves collisions by
+ * nudging the dragged frame flush against whatever it hit — neighbors are
+ * never displaced, and a drop can't silently overlap.
  */
 export function useFrameInteractions({ boardId, frame, otherFrames }: UseFrameInteractionsArgs) {
   const [draftSize, setDraftSize] = useState<{ w: number; h: number } | null>(null);
   const [draftPos, setDraftPos] = useState<{ x: number; y: number } | null>(null);
 
-  const clampResize = (nextW: number, nextH: number): { w: number; h: number } => {
-    let cw = nextW;
-    let ch = nextH;
-    for (const other of otherFrames) {
-      const ox1 = other.x;
-      const oy1 = other.y;
-      const ox2 = other.x + other.w;
-      const oy2 = other.y + other.h;
-      if (oy1 < frame.y + ch && oy2 > frame.y && ox1 >= frame.x + frame.w - 1) {
-        const maxW = ox1 - frame.x - FRAME_PADDING;
-        if (maxW < cw) cw = maxW;
-      }
-      if (ox1 < frame.x + cw && ox2 > frame.x && oy1 >= frame.y + frame.h - 1) {
-        const maxH = oy1 - frame.y - FRAME_PADDING;
-        if (maxH < ch) ch = maxH;
-      }
-    }
-    return { w: Math.max(MIN_FRAME_SIDE, cw), h: Math.max(MIN_FRAME_SIDE, ch) };
+  /** Occupied rects, captured once per gesture — frames don't move mid-gesture. */
+  const captureNeighbors = (): { chromeH: number; neighbors: Rect[] } => {
+    const insets = useCanvas.getState().frameInsets;
+    const chromeOf = (f: FrameT) => insets[f.id]?.chromeH ?? DEFAULT_CHROME_H;
+    return {
+      chromeH: chromeOf(frame),
+      neighbors: otherFrames.map((f) => ({ x: f.x, y: f.y, w: f.w, h: f.h + chromeOf(f) })),
+    };
   };
 
   const startResize = (direction: ResizeDirection) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -59,13 +61,16 @@ export function useFrameInteractions({ boardId, frame, otherFrames }: UseFrameIn
     const startX = e.clientX;
     const startY = e.clientY;
     const zoom = useCanvas.getState().canvasZoom || 1;
+    const { chromeH, neighbors } = captureNeighbors();
+    const startRect: Rect = { x: frame.x, y: frame.y, w: frame.w, h: frame.h + chromeH };
 
     const compute = (ev: PointerEvent) => {
       const dx = (ev.clientX - startX) / zoom;
       const dy = (ev.clientY - startY) / zoom;
-      const rawW = direction === "s" ? startW : Math.round(startW + dx);
-      const rawH = direction === "e" ? startH : Math.round(startH + dy);
-      return clampResize(rawW, rawH);
+      const rawW = direction === "s" ? startW : Math.max(MIN_FRAME_SIDE, Math.round(startW + dx));
+      const rawH = direction === "e" ? startH : Math.max(MIN_FRAME_SIDE, Math.round(startH + dy));
+      const clamped = clampResizeToNeighbors(startRect, neighbors, rawW, rawH + chromeH);
+      return { w: clamped.w, h: clamped.h - chromeH };
     };
 
     const onMove = (ev: PointerEvent) => setDraftSize(compute(ev));
@@ -97,11 +102,18 @@ export function useFrameInteractions({ boardId, frame, otherFrames }: UseFrameIn
     const startPx = e.clientX;
     const startPy = e.clientY;
     const zoom = useCanvas.getState().canvasZoom || 1;
+    const { chromeH, neighbors } = captureNeighbors();
+    const size = { w: frame.w, h: frame.h + chromeH };
 
     const compute = (ev: PointerEvent) => {
       const dx = (ev.clientX - startPx) / zoom;
       const dy = (ev.clientY - startPy) / zoom;
-      return { x: Math.round(startX + dx), y: Math.round(startY + dy) };
+      return resolveMoveCollision(
+        size,
+        neighbors,
+        { x: Math.round(startX + dx), y: Math.round(startY + dy) },
+        { x: startX, y: startY },
+      );
     };
 
     const onMove = (ev: PointerEvent) => setDraftPos(compute(ev));
