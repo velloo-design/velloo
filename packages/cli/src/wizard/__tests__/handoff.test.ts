@@ -34,7 +34,7 @@ describe("buildHandoffPrompt", () => {
       [board([])],
     );
     expect(prompt).toContain(SCREENS_PLACEHOLDER);
-    expect(prompt).toContain("these 2 screens");
+    expect(prompt).toContain("These 2 screens");
     expect(prompt).not.toContain("- Home");
   });
 
@@ -45,8 +45,16 @@ describe("buildHandoffPrompt", () => {
       [board([])],
     );
     const without = buildHandoffPrompt(BASE, [screen("a", "A")], [board([])]);
-    expect(withFlag).toContain("choose the highest-impact screen yourself");
-    expect(without).not.toContain("choose the highest-impact screen yourself");
+    expect(withFlag).toContain("Start with the highest-impact screen");
+    expect(without).not.toContain("Start with the highest-impact screen");
+  });
+
+  test("folder-ownership and feature guidance stay in the MCP instructions, not here", () => {
+    const prompt = buildHandoffPrompt(BASE, [screen("a", "A")], [board([])]);
+    expect(prompt).not.toContain("Velloo lives in");
+    expect(prompt).not.toContain("velloo run");
+    expect(prompt).not.toContain("snippets");
+    expect(prompt).not.toContain("semantic theme tokens");
   });
 
   test("a multi-app scan names each app instead of the single UI dir", () => {

@@ -164,13 +164,13 @@ export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
 
 interface BuildBoardsOpts {
   routes: ScannedRoute[];
-  /** Frame width (default 1024). */
+  /** Desktop frame width (default 1024). */
   frameWidth?: number;
-  /** Frame height (default 720). */
+  /** Desktop frame height (default 720). */
   frameHeight?: number;
-  /** Frames per row before wrapping. Default 3. */
+  /** Screens per row before wrapping. Default 3. */
   columns?: number;
-  /** Horizontal gutter between frames. Default 80. */
+  /** Horizontal gutter between screens. Default 80. */
   gutter?: number;
 }
 
@@ -180,6 +180,13 @@ interface BoardDims {
   cols: number;
   gutter: number;
 }
+
+/**
+ * Every scanned screen gets a mobile frame beside its desktop one (same
+ * screen — edits sync), so responsive checking is set up from the first
+ * render instead of being a handoff-prompt chore. 390×844 ≈ current iPhone.
+ */
+const MOBILE = { w: 390, h: 844, gap: 40 };
 
 /** Top-level route segment ("" for the root page) — the grouping key. */
 function sectionOf(routePath: string): string {
@@ -195,18 +202,36 @@ function sectionOf(routePath: string): string {
  */
 function buildAppBoard(id: string, name: string, routes: ScannedRoute[], dims: BoardDims): Board {
   const { w, h, cols, gutter } = dims;
+  const cellW = w + MOBILE.gap + MOBILE.w;
+  const rowH = Math.max(h, MOBILE.h) + gutter;
   const gridFrames = (rs: ScannedRoute[], startY: number, group?: string): Frame[] =>
-    rs.map((route, i) => ({
-      id: `f-${route.id}`,
-      screen: route.id,
-      x: 80 + (i % cols) * (w + gutter),
-      y: startY + Math.floor(i / cols) * (h + gutter),
-      w,
-      h,
-      label: route.name,
-      ...(group ? { group } : {}),
-    }));
-  const bandHeight = (count: number) => Math.ceil(count / cols) * (h + gutter);
+    rs.flatMap((route, i) => {
+      const x = 80 + (i % cols) * (cellW + gutter);
+      const y = startY + Math.floor(i / cols) * rowH;
+      return [
+        {
+          id: `f-${route.id}`,
+          screen: route.id,
+          x,
+          y,
+          w,
+          h,
+          label: route.name,
+          ...(group ? { group } : {}),
+        },
+        {
+          id: `f-${route.id}-m`,
+          screen: route.id,
+          x: x + w + MOBILE.gap,
+          y,
+          w: MOBILE.w,
+          h: MOBILE.h,
+          label: `${route.name} · Mobile`,
+          ...(group ? { group } : {}),
+        },
+      ];
+    });
+  const bandHeight = (count: number) => Math.ceil(count / cols) * rowH;
 
   const sections = new Map<string, ScannedRoute[]>();
   for (const route of routes) {

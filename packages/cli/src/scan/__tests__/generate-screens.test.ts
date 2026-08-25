@@ -61,9 +61,31 @@ describe("buildBoardsFromScan", () => {
     expect(boards).toHaveLength(1);
     expect(boards[0]?.id).toBe("app");
     expect(boards[0]?.groups).toEqual([]);
-    expect(boards[0]?.frames.map((f) => f.screen)).toEqual(["index", "about", "pricing"]);
+    expect(boards[0]?.frames.map((f) => f.screen)).toEqual([
+      "index",
+      "index",
+      "about",
+      "about",
+      "pricing",
+      "pricing",
+    ]);
     // 3-column grid, one row.
     expect(new Set(boards[0]?.frames.map((f) => f.y)).size).toBe(1);
+  });
+
+  test("every screen gets a desktop + mobile frame pair at the same spot", () => {
+    const boards = buildBoardsFromScan({ routes: [route("/"), route("/about")] });
+    const frames = boards[0]?.frames ?? [];
+    for (const r of ["index", "about"]) {
+      const pair = frames.filter((f) => f.screen === r);
+      expect(pair.map((f) => f.id)).toEqual([`f-${r}`, `f-${r}-m`]);
+      const [desktop, mobile] = pair;
+      expect(desktop?.w).toBe(1024);
+      expect(mobile?.w).toBe(390);
+      expect(mobile?.y).toBe(desktop?.y as number);
+      expect(mobile?.x).toBeGreaterThan((desktop?.x as number) + (desktop?.w as number));
+      expect(mobile?.label).toContain("Mobile");
+    }
   });
 
   test("repeated route sections become board groups in separate bands", () => {
@@ -110,6 +132,8 @@ describe("buildBoardsFromScan", () => {
       ["apps-web", "apps/web"],
     ]);
     const web = boards.find((b) => b.id === "apps-web");
-    expect(web?.frames.map((f) => f.screen)).toEqual(["apps-web-index", "apps-web-pricing"]);
+    expect(new Set(web?.frames.map((f) => f.screen))).toEqual(
+      new Set(["apps-web-index", "apps-web-pricing"]),
+    );
   });
 });

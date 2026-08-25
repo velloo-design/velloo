@@ -10,6 +10,7 @@ import {
   spinner,
   text,
 } from "@clack/prompts";
+import { topUpTokens } from "@velloo/server";
 import pc from "picocolors";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential, saveCredential } from "../cloud-credentials.ts";
@@ -147,9 +148,12 @@ async function promptShareAndFeedback(): Promise<{
     "  - The agent always shows you the exact message and asks before sending.",
     "  - It is instructed to never include your design content, code, or",
     "    file/repo paths — only a plain-prose description of the issue.",
-    `  - "Yes": anonymous — the feedback isn't linked to you and we won't`,
-    "    contact you about it.",
-    `  - "Yes — contact OK": we may follow up by email about your feedback.`,
+    `  - "Yes": anonymous by construction — the message is sent with a`,
+    "    blind-signed token (RFC 9474) instead of your account, so the server",
+    "    can verify it came from a real signed-in user but cannot tell which",
+    "    one. The whole flow lives in velloo's open-source CLI, so you don't",
+    "    have to take the cloud's word for it.",
+    `  - "Yes — contact OK": sent from your account so we can reply by email.`,
     `  - "No": the tool is never registered, so the agent can't send anything.`,
   ].join("\n");
 
@@ -188,6 +192,14 @@ async function promptShareAndFeedback(): Promise<{
     note(details, "The feedback tool");
   }
   if (choice === "no") return {};
+
+  // Anonymous feedback spends blind-signed tokens; pre-fetch a batch NOW so
+  // a later send doesn't time-correlate with its issuance. Best-effort — the
+  // send path tops up on demand.
+  if (choice === "yes") {
+    const cred = await loadCredential(cloudUrl);
+    if (cred) await topUpTokens({ url: cloudUrl, token: cred.token }, 10).catch(() => {});
+  }
   return { feedback: { enabled: true, contactOk: choice === "yes-contact" } };
 }
 
@@ -198,8 +210,8 @@ async function promptShareAndFeedback(): Promise<{
  */
 async function promptSignIn(cloudUrl: string): Promise<boolean | null> {
   const wantShare = await confirm({
-    message: "Share your designs for free? Sign in to publish branded share links.",
-    initialValue: false,
+    message: "Share your designs for free? Sign up to publish branded share links.",
+    initialValue: true,
   });
   if (isAborted(wantShare)) return null;
   if (!wantShare) return false;
@@ -223,8 +235,8 @@ async function promptSignIn(cloudUrl: string): Promise<boolean | null> {
       cloudUrl,
       ({ verificationUrl, userCode }) => {
         note(
-          `Opening your browser to sign in.\nIf it doesn't open, visit:\n${pc.cyan(verificationUrl)}\nand enter the code: ${pc.bold(userCode)}\n\n${pc.dim("Press Esc to skip and continue without signing in.")}`,
-          "Sign in",
+          `Opening your browser to sign up (or sign in).\nIf it doesn't open, visit:\n${pc.cyan(verificationUrl)}\nand enter the code: ${pc.bold(userCode)}\n\n${pc.dim("Press Esc to skip and continue without signing in.")}`,
+          "Sign up",
         );
         spin.start("Waiting for sign-in  (Esc to skip)");
       },

@@ -8,29 +8,70 @@ import { resolveProjectRoot } from "./project-root.ts";
 import { installSkills, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 
-export { AGENT_IDS, AGENTS, PROJECT_AGENT_IDS } from "./agents.ts";
+export { AGENT_IDS, AGENTS, GLOBAL_AGENT_IDS, PROJECT_AGENT_IDS } from "./agents.ts";
 export type { WriteResult } from "./write-config.ts";
 
 /** Default velloo MCP endpoint for `--http` connections — matches `velloo mcp --http`. */
 export const DEFAULT_MCP_URL = "http://127.0.0.1:7301/mcp";
 
 /**
- * Interactive agent checklist (global scope first + preselected — one wire
- * covers every project). Shared by `velloo connect` and the init wizard.
- * Returns the chosen ids, or null on cancel.
+ * Sentinel id `pickAgents` returns for the "manual / other agent" choice —
+ * not a real AgentTarget; callers filter it out and print `manualSetupText`.
  */
-export async function pickAgents(): Promise<string[] | null> {
-  const agents = Object.values(AGENTS).sort((a, b) =>
-    a.scope === b.scope ? 0 : a.scope === "global" ? -1 : 1,
-  );
+export const MANUAL_AGENT_ID = "manual";
+
+/**
+ * The copy-paste MCP config for agents velloo can't wire itself. Kept in one
+ * place so `velloo connect` and the init wizard print the same thing.
+ */
+export function manualSetupText(): string {
+  return [
+    "velloo speaks MCP over stdio (recommended) or HTTP — any MCP-capable agent can connect.",
+    "",
+    "stdio — the agent spawns the server itself:",
+    '  command: "velloo"   args: ["mcp"]',
+    '  (resolves the design folder from the agent\'s cwd; pin one with ["mcp", "path/to/velloo"])',
+    "",
+    "  Most agents take the JSON convention:",
+    '    { "mcpServers": { "velloo": { "command": "velloo", "args": ["mcp"] } } }',
+    "",
+    "HTTP — for agents that dial a URL: start `velloo mcp --http <folder>` (it prints the",
+    `MCP URL, default ${DEFAULT_MCP_URL}), then point the agent at it:`,
+    `    { "mcpServers": { "velloo": { "type": "http", "url": "${DEFAULT_MCP_URL}" } } }`,
+  ].join("\n");
+}
+
+/**
+ * Interactive agent checklist (global scope first + preselected — one wire
+ * covers every project), plus a "manual / other agent" row that resolves to
+ * MANUAL_AGENT_ID. Shared by `velloo connect` and the init wizard. `exclude`
+ * hides agents that are already wired; `initial` overrides the preselection
+ * (defaults to the global pair). Returns the chosen ids, or null on cancel.
+ */
+export async function pickAgents(opts?: {
+  exclude?: string[];
+  initial?: string[];
+}): Promise<string[] | null> {
+  const exclude = new Set(opts?.exclude ?? []);
+  const agents = Object.values(AGENTS)
+    .filter((a) => !exclude.has(a.id))
+    .sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "global" ? -1 : 1));
+  const initial = (opts?.initial ?? GLOBAL_AGENT_IDS).filter((id) => !exclude.has(id));
   const picked = await multiselect<string>({
     message: "Wire the velloo MCP into which agents?",
-    options: agents.map((a) => ({
-      value: a.id,
-      label: a.label,
-      hint: a.path(".", "~"),
-    })),
-    initialValues: GLOBAL_AGENT_IDS,
+    options: [
+      ...agents.map((a) => ({
+        value: a.id,
+        label: a.label,
+        hint: a.path(".", "~"),
+      })),
+      {
+        value: MANUAL_AGENT_ID,
+        label: "Manual / other agent",
+        hint: "prints the MCP config to paste anywhere",
+      },
+    ],
+    initialValues: initial,
     required: false,
   });
   return isCancel(picked) ? null : picked;

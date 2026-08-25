@@ -5,6 +5,8 @@ import {
   AGENT_IDS,
   connect,
   DEFAULT_MCP_URL,
+  MANUAL_AGENT_ID,
+  manualSetupText,
   PROJECT_AGENT_IDS,
   pickAgents,
 } from "../connect/index.ts";
@@ -24,7 +26,7 @@ export default defineCommand({
     },
     agent: {
       type: "string",
-      description: `Comma-separated agents: ${AGENT_IDS.join(", ")} (default ${PROJECT_AGENT_IDS.join(",")})`,
+      description: `Comma-separated agents: ${AGENT_IDS.join(", ")}, manual — print the config for any other agent (default ${PROJECT_AGENT_IDS.join(",")})`,
     },
     projectRoot: {
       type: "string",
@@ -53,6 +55,7 @@ export default defineCommand({
     // Explicit --agent wins; otherwise ask interactively (init's checklist),
     // falling back to the project defaults when there's no TTY.
     let agents: string[];
+    let manual = false;
     if (args.agent) {
       agents = args.agent
         .split(",")
@@ -65,10 +68,24 @@ export default defineCommand({
         console.log(pc.dim("No agents selected — nothing wired."));
         return;
       }
-      agents = picked;
+      manual = picked.includes(MANUAL_AGENT_ID);
+      agents = picked.filter((id) => id !== MANUAL_AGENT_ID);
     } else {
       agents = PROJECT_AGENT_IDS;
     }
+    // `--agent manual` also just prints the config — no files written.
+    if (agents.includes(MANUAL_AGENT_ID)) {
+      manual = true;
+      agents = agents.filter((id) => id !== MANUAL_AGENT_ID);
+    }
+
+    if (manual) {
+      console.log("");
+      console.log(pc.bold("  Manual MCP setup"));
+      for (const line of manualSetupText().split("\n")) console.log(`  ${line}`);
+      console.log("");
+    }
+    if (agents.length === 0) return;
 
     const result = await connect({
       designFolder: folder,

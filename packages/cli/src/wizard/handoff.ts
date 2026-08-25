@@ -17,10 +17,12 @@ function libraryLabel(library: WizardAnswers["library"]): string {
 
 /**
  * Build the copy-paste prompt that gets the user's agent to recreate their app
- * as a Velloo design: a screen per page, boards with mobile + desktop frames,
- * reusable snippets, all verified against the running app via the `screenshot`
- * tool. Init can't screenshot the app itself (it isn't running yet), so the
- * agent — which has the velloo MCP tools and a shell — does the work.
+ * as a Velloo design. Init can't screenshot the app itself (it isn't running
+ * yet), so the agent — which has the velloo MCP tools and a shell — does the
+ * work. Deliberately short: everything a generic Velloo session needs (folder
+ * ownership, snippets, semantic tokens, verification tools) already ships in
+ * the MCP server's instructions — this prompt carries only what's specific to
+ * *this* app and *this* scaffold.
  *
  * The screen list appears as `{{screens}}` — call `expandHandoffPrompt`
  * before actually sending the prompt.
@@ -30,17 +32,8 @@ export function buildHandoffPrompt(
   screens: Screen[],
   boards: Board[],
 ): string {
-  // The agent runs at the app root (its MCP config + skill are wired there),
-  // so the app is "this project" and the design folder is just `velloo`. The
-  // design is managed entirely through the MCP tools — never edited by hand —
-  // so the folder only appears in the `velloo run` command that points the
-  // server at it. Keep it relative; fall back to absolute only if it sits
-  // outside the app root.
-  const rel = relative(answers.appRoot, answers.folder);
-  const designDir = rel && !rel.startsWith("..") ? rel : answers.folder;
   const lines = [
-    "Build a Velloo design that mirrors this app — reproduce each page's UI as a Velloo screen.",
-    `Velloo lives in \`${designDir}/\`. You have the velloo MCP tools (wired during setup) — do everything through them; they own the design, so don't edit files under \`${designDir}/\` by hand. To watch the canvas, run \`velloo run ${designDir}\` — it prints and opens the canvas URL (defaults to :7300, or a free port if that's taken).`,
+    "Recreate this app's pages as a Velloo design — one Velloo screen per page, faithful to the real UI. Work entirely through the velloo MCP tools (wired during setup).",
   ];
 
   // Multi-app scan: one board per app; the agent must pair each screen with
@@ -61,12 +54,12 @@ export function buildHandoffPrompt(
 
   if (screens.length > 0) {
     lines.push(
-      `Build only these ${screens.length} screens (each already has a placeholder screen + a board frame), from the project's ${libraryLabel(answers.library)} components:`,
+      `These ${screens.length} screens are already scaffolded from the app's routes — design these, and only these, with the project's ${libraryLabel(answers.library)} components:`,
       SCREENS_PLACEHOLDER,
     );
     if (answers.agentPicksFirst) {
       lines.push(
-        "First, choose the highest-impact screen yourself (usually the landing page or the main dashboard) and design it fully — it sets the quality bar for the rest. Then continue screen by screen.",
+        "Start with the highest-impact screen (usually the landing page or the main dashboard) and design it fully — it sets the quality bar. Then work through the rest.",
       );
     }
   } else {
@@ -75,20 +68,14 @@ export function buildHandoffPrompt(
     );
   }
 
-  lines.push("- Lay the screens out on boards with both mobile and desktop frames.");
+  lines.push(
+    "- Each screen already has a desktop and a mobile frame on its board (same screen — edits sync); make sure layouts hold at both widths.",
+  );
   if (boards.some((b) => b.groups.length > 0)) {
-    lines.push(
-      "- Frames are pre-grouped on the board by route section — keep the groups tidy, and reorganize boards/frames/groups as flows take shape.",
-    );
+    lines.push("- Frames are pre-grouped by route section — keep the groups tidy as flows evolve.");
   }
   lines.push(
-    "- Extract repeated UI (nav, headers, cards, footers) into reusable snippets.",
-    "- Start the app's dev server and use the velloo `screenshot` tool to compare each screen against the real page; iterate until they match.",
-  );
-  lines.push(
-    answers.library === "mui"
-      ? "- Style with `sx` and theme palette keys (primary.main, text.secondary, …) so screens follow the folder theme."
-      : "- Keep semantic theme tokens (bg-background, text-foreground, …).",
+    "- What matters most for quality: compare against the real app, not memory. Get the app running first — start its dev server yourself if the scripts make it obvious; otherwise ask me for the command, a running URL, or a deployed preview. If pages need sign-in, ask me how to authenticate (`compare_to_url` accepts `storageStatePath` / `cookies`), or use any browser tooling I've set up. Then iterate each screen with `screenshot` + `compare_to_url` until it matches the real page.",
   );
   return lines.join("\n");
 }

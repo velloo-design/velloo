@@ -9,7 +9,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@cloudflare/blindrsa-ts": "0.4.6",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@tailwindcss/node": "4.3.0",
+    "@tailwindcss/oxide": "4.3.0",
     "@velloo/canvas": "workspace:*",
     "@velloo/codegen": "workspace:*",
     "@velloo/provider": "workspace:*",
@@ -20,8 +23,6 @@
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*",
-    "@tailwindcss/node": "4.3.0",
-    "@tailwindcss/oxide": "4.3.0",
     "culori": "4.0.2",
     "hono": "4.12.27",
     "tailwindcss": "4.3.0",

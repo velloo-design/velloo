@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline/promises";
+import { topUpTokens } from "@velloo/server";
 import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential, normalizeCloudUrl, saveCredential } from "../cloud-credentials.ts";
@@ -66,5 +67,13 @@ export default defineCommand({
     const path = await saveCredential(cloudUrl, result);
     console.log(`velloo login: logged in to ${cloudUrl} as ${result.email}`);
     console.log(`  credentials saved to ${path}`);
+
+    // Best-effort: pre-fetch a batch of blind feedback tokens NOW so a later
+    // anonymous `send_feedback` doesn't time-correlate with its issuance.
+    try {
+      await topUpTokens({ url: cloudUrl, token: result.token }, 10);
+    } catch {
+      // Feedback tokens are a nicety at login time — the send path tops up.
+    }
   },
 });

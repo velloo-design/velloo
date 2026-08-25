@@ -26,14 +26,16 @@ import {
   AGENTS,
   type ConnectResult,
   connect,
+  GLOBAL_AGENT_IDS,
   globallyWiredAgents,
+  MANUAL_AGENT_ID,
+  manualSetupText,
   PROJECT_AGENT_IDS,
   pickAgents,
 } from "../connect/index.ts";
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
-import { openUrl } from "../open-url.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { findMuiTheme, importThemeFromMui } from "../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
@@ -405,8 +407,42 @@ async function editPrompt(prompt: string): Promise<string | null> {
 }
 
 /**
- * Print the agent handoff (scan only) and — interactively, when `claude` is on
- * PATH — offer to start velloo and launch claude straight into the task.
+ * Agent CLIs the handoff step can launch straight into the task. Only agents
+ * velloo can also wire (see connect/agents.ts) belong here — launching an
+ * agent that can't carry the velloo MCP hands the user a tool-less session.
+ */
+const AGENT_LAUNCHERS = [
+  { bin: "claude", label: "Claude Code", argv: (p: string) => ["claude", p] },
+  { bin: "cursor-agent", label: "Cursor CLI", argv: (p: string) => ["cursor-agent", p] },
+  { bin: "codex", label: "Codex CLI", argv: (p: string) => ["codex", p] },
+] as const;
+type AgentLauncher = (typeof AGENT_LAUNCHERS)[number];
+
+/** Best-effort clipboard write via the platform's native CLI. */
+async function copyToClipboard(text: string): Promise<boolean> {
+  const candidates: string[][] =
+    process.platform === "darwin"
+      ? [["pbcopy"]]
+      : process.platform === "win32"
+        ? [["clip"]]
+        : [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]];
+  for (const argv of candidates) {
+    const bin = argv[0];
+    if (!bin || !Bun.which(bin)) continue;
+    const proc = Bun.spawn(argv, { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
+    proc.stdin.write(text);
+    await proc.stdin.end();
+    if ((await proc.exited) === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Print the agent handoff (scan only) and — interactively — offer to start
+ * velloo and launch an installed agent CLI straight into the task, or copy
+ * the prompt for any other agent. Deliberately does NOT open the canvas in a
+ * browser: the launched agent asks for MCP approval right here in the
+ * terminal, and yanking the user away to a browser makes them miss it.
  */
 async function printAgentHandoff(
   answers: WizardAnswers,
@@ -431,24 +467,50 @@ async function printAgentHandoff(
   }
   console.log("");
 
-  if (!interactive || !Bun.which("claude")) return;
-  const action = await select<"launch" | "edit" | "skip">({
-    message: "Start velloo and launch Claude to do this now?",
+  if (!interactive) return;
+  const launchers = AGENT_LAUNCHERS.filter((l) => Bun.which(l.bin));
+  const first = launchers[0];
+  const action = await select<string>({
+    message: first
+      ? "Start velloo and launch your agent to do this now?"
+      : "No supported agent CLI found on PATH — what next?",
     options: [
-      { value: "launch", label: "Yes — launch Claude with this prompt" },
-      {
-        value: "edit",
-        label: "Edit the prompt first",
-        hint: `opens ${detectEditor()[0] ?? "your editor"}`,
-      },
-      { value: "skip", label: "No — I'll run it later" },
+      ...launchers.map((l) => ({
+        value: `launch:${l.bin}`,
+        label: `Yes — launch ${l.label} with this prompt`,
+      })),
+      ...(first
+        ? [
+            {
+              value: "edit",
+              label: "Edit the prompt first",
+              hint: `opens ${detectEditor()[0] ?? "your editor"}`,
+            },
+          ]
+        : []),
+      { value: "copy", label: "Copy the prompt to my clipboard" },
+      { value: "skip", label: first ? "No — I'll run it later" : "Skip" },
     ],
-    initialValue: "launch",
+    initialValue: first ? `launch:${first.bin}` : "copy",
   });
   if (isCancel(action) || action === "skip") return;
 
+  if (action === "copy") {
+    const copied = await copyToClipboard(expandHandoffPrompt(prompt, screens));
+    console.log(
+      copied
+        ? `  ${pc.green("✓")} Prompt copied — paste it into your agent.`
+        : pc.dim("  Couldn't reach a clipboard tool — copy the prompt printed above."),
+    );
+    return;
+  }
+
   let finalPrompt = prompt;
-  if (action === "edit") {
+  let launcher: AgentLauncher | undefined = first;
+  if (action.startsWith("launch:")) {
+    launcher = launchers.find((l) => `launch:${l.bin}` === action);
+  } else {
+    // action === "edit"
     const edited = await editPrompt(prompt);
     if (edited === null) {
       console.error("  Couldn't open an editor. Set $EDITOR and retry, or copy the prompt above.");
@@ -459,14 +521,25 @@ async function printAgentHandoff(
       return;
     }
     finalPrompt = edited;
+    if (launchers.length > 1) {
+      const pick = await select<string>({
+        message: "Launch which agent?",
+        options: launchers.map((l) => ({ value: l.bin, label: l.label })),
+        initialValue: launchers[0]?.bin,
+      });
+      if (isCancel(pick)) return;
+      launcher = launchers.find((l) => l.bin === pick);
+    }
   }
+  if (!launcher) return;
+
   // The user reads + edits the compact placeholder form; the agent gets the
   // real screen list.
   finalPrompt = expandHandoffPrompt(finalPrompt, screens);
 
-  // Start the persistent canvas so the user can watch; Claude attaches its own
-  // `velloo mcp` (wired during init) to the same daemon. The canvas stays up
-  // after Claude exits (auto-stops after 5 min idle).
+  // Start the persistent canvas so it's ready to watch; the agent attaches its
+  // own `velloo mcp` (wired during init) to the same daemon. The canvas stays
+  // up after the agent exits (auto-stops after 5 min idle).
   let canvasUrl: string;
   try {
     const rec = await ensureDaemon(answers.folder);
@@ -478,9 +551,14 @@ async function printAgentHandoff(
     );
     return;
   }
-  console.log(pc.dim(`  velloo canvas at ${canvasUrl}. Launching claude…`));
-  await openUrl(canvasUrl);
-  await Bun.spawn(["claude", finalPrompt], {
+  console.log("");
+  console.log(`  Canvas running at ${pc.cyan(canvasUrl)} — open it to watch the design build.`);
+  console.log(
+    pc.dim(
+      `  Launching ${launcher.label} here — it may ask you to approve the velloo MCP server first.`,
+    ),
+  );
+  await Bun.spawn(launcher.argv(finalPrompt), {
     stdout: "inherit",
     stderr: "inherit",
     stdin: "inherit",
@@ -490,9 +568,11 @@ async function printAgentHandoff(
 /**
  * Wire the velloo MCP into the user's agents. Interactively, ask which
  * (checkboxes, global Claude Code + Cursor pre-selected — one wire covers
- * every project) — unless a global config already carries velloo, in which
- * case say so and skip the question. Non-interactively, wire the project
- * agents. Returns undefined when skipped.
+ * every project). Global configs that already carry velloo are noted and
+ * hidden from the list; the question is skipped only when EVERY global
+ * default is covered — a lone wired Cursor must not silently leave Claude
+ * Code unwired (the agent handoff would then launch a claude without velloo).
+ * Non-interactively, wire the project agents. Returns undefined when skipped.
  */
 async function wireAgents(
   folder: string,
@@ -501,26 +581,42 @@ async function wireAgents(
 ): Promise<WireOutcome> {
   if (!enabled) return undefined;
   let agents: string[] = PROJECT_AGENT_IDS;
+  let manual = false;
   if (interactive) {
     const wired = await globallyWiredAgents();
+    const unwiredDefaults = GLOBAL_AGENT_IDS.filter((id) => !wired.includes(id));
     if (wired.length > 0) {
       const labels = wired.map((id) => AGENTS[id]?.label ?? id).join(", ");
       console.log("");
+      if (unwiredDefaults.length === 0) {
+        console.log(
+          `  ${pc.green("✓")} velloo is already wired globally — ${labels} ${pc.dim("(covers this project; skipping agent setup)")}`,
+        );
+        return "already-global";
+      }
       console.log(
-        `  ${pc.green("✓")} velloo is already wired globally — ${labels} ${pc.dim("(covers this project; skipping agent setup)")}`,
+        `  ${pc.green("✓")} Already wired globally: ${labels} ${pc.dim("(covers this project)")}`,
       );
-      return "already-global";
     }
-    const picked = await pickAgents();
+    const picked = await pickAgents({ exclude: wired, initial: unwiredDefaults });
     if (picked === null) return undefined;
-    agents = picked;
+    manual = picked.includes(MANUAL_AGENT_ID);
+    agents = picked.filter((id) => id !== MANUAL_AGENT_ID);
   }
-  if (agents.length === 0) return undefined;
-  try {
-    return await connect({ designFolder: folder, agents, installSkill: true });
-  } catch {
-    return undefined;
+  let result: ConnectResult | undefined;
+  if (agents.length > 0) {
+    try {
+      result = await connect({ designFolder: folder, agents, installSkill: true });
+    } catch {
+      result = undefined;
+    }
   }
+  if (manual) {
+    console.log("");
+    console.log(pc.bold("  Manual MCP setup"));
+    for (const line of manualSetupText().split("\n")) console.log(`  ${line}`);
+  }
+  return result;
 }
 
 /**
