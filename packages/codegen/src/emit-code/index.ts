@@ -38,7 +38,6 @@ import {
   shadcnInstallTargets,
 } from "../component-registry.ts";
 import type { CodegenError } from "../errors.ts";
-import { ImportSet } from "./imports.ts";
 import type { CodegenTarget } from "./target.ts";
 import { emitTree } from "./tree-to-jsx.ts";
 
@@ -189,6 +188,18 @@ function collectMetadata(
   const components = new Set<string>();
   const icons = new Set<string>();
   const snippetIds = new Set<string>();
+  // Nodes can also live inside *props* (a `children` prop carrying inline rich
+  // text / an Icon, a slot prop) — emitTree renders those, so metadata must
+  // count them too. Mirrors build-tree's resolvePropChildren.
+  function walkPropValue(value: unknown): void {
+    if (Array.isArray(value)) {
+      for (const item of value) walkPropValue(item);
+      return;
+    }
+    if (value && typeof value === "object" && ("$ref" in value || "$snippet" in value)) {
+      walk(value as Node);
+    }
+  }
   function walk(node: Node): void {
     if (isComponentNode(node)) {
       components.add(node.$ref);
@@ -198,6 +209,7 @@ function collectMetadata(
       if (node.$ref === "Icon") {
         icons.add(resolveLucideJsxName(node.props?.name));
       }
+      for (const val of Object.values(node.props ?? {})) walkPropValue(val);
       for (const child of node.children ?? []) walk(child);
       return;
     }
@@ -224,7 +236,6 @@ export async function emitCode(
     const extensionsMap = buildExtensionsMap(options.extensions);
     const warnings: string[] = [];
     const ctx = {
-      imports: new ImportSet(),
       componentsAlias,
       snippetsAlias: options.snippetsAlias,
       snippetPascalById,
@@ -308,7 +319,6 @@ export async function emitSnippet(
     const extensionsMap = buildExtensionsMap(options.extensions);
     const warnings: string[] = [];
     const ctx = {
-      imports: new ImportSet(),
       componentsAlias,
       snippetsAlias: options.snippetsAlias,
       snippetPascalById,

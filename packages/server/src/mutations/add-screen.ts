@@ -5,6 +5,7 @@ import type { MutationContext } from "./context.ts";
 import { type MutationError, screenIdConflict, screenIdExhausted } from "./errors.ts";
 import { getScreen } from "./lookup.ts";
 import { persistScreen } from "./persist.ts";
+import { slugify } from "./slugify.ts";
 
 export interface AddScreenArgs {
   /** Display name. Screen id is slug(name) unless `id` is provided. */
@@ -21,16 +22,6 @@ export interface AddScreenResult {
   screen: Screen;
 }
 
-function slugify(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "screen"
-  );
-}
-
 /**
  * Create a new screen. Does *not* place it on the board — the user/agent
  * calls add_frame separately to surface the new screen on the canvas.
@@ -40,7 +31,7 @@ export async function addScreen(
   args: AddScreenArgs,
 ): Promise<Result<AddScreenResult, MutationError>> {
   return DoAsync<AddScreenResult, MutationError>(async function* () {
-    const baseId = args.id ?? slugify(args.name);
+    const baseId = args.id ?? slugify(args.name, "screen");
     if (args.id !== undefined && ctx.folder.screens.has(args.id)) {
       return yield* $(err(screenIdConflict(args.id)));
     }

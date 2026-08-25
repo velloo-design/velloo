@@ -1,13 +1,8 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
-import {
-  applySnippetOverrides,
-  isComponentNode,
-  type Node,
-  type Snippet,
-  type SnippetParam,
-} from "@velloo/schema";
+import { applySnippetOverrides, type Node, type Snippet, type SnippetParam } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError, snippetCycle } from "./errors.ts";
+import { innerPathResolves } from "./inner-path.ts";
 import { getSnippet } from "./lookup.ts";
 import { persistSnippet } from "./persist.ts";
 import { detectSnippetCycle } from "./snippet-cycle.ts";
@@ -29,28 +24,6 @@ export interface UpdateSnippetArgs {
      */
     innerPatch?: { innerPath: string; propPatch: Record<string, unknown> };
   };
-}
-
-function findNodeById(root: Node, id: string): Node | undefined {
-  if (!isComponentNode(root)) return undefined;
-  if (root.$id === id) return root;
-  for (const child of root.children ?? []) {
-    const hit = findNodeById(child, id);
-    if (hit) return hit;
-  }
-  return undefined;
-}
-
-/** True if `innerPath` addresses a component node inside `body`. */
-function innerPathResolves(body: Node, innerPath: string): boolean {
-  if (innerPath.startsWith("@")) return findNodeById(body, innerPath.slice(1)) !== undefined;
-  const segments = innerPath === "" ? [] : innerPath.split(".").map(Number);
-  let cursor: Node | undefined = body;
-  for (const i of segments) {
-    if (!cursor || !isComponentNode(cursor) || !cursor.children) return false;
-    cursor = cursor.children[i];
-  }
-  return cursor !== undefined && isComponentNode(cursor);
 }
 
 export interface UpdateSnippetResult {

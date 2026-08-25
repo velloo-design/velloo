@@ -62,16 +62,19 @@ export async function loadPipeline(folderPath: string): Promise<FolderPipeline> 
  * BrowserMissingError propagates (the command turns it into exit 2).
  */
 export async function captureScreens(opts: {
-  pipeline: FolderPipeline;
+  /** Null when the folder couldn't be loaded (e.g. base ref missing a design config). */
+  pipeline: FolderPipeline | null;
   screens: Screen[];
   viewport: Viewport;
   outDir: string;
   warn: (message: string) => void;
 }): Promise<Map<string, string>> {
   const { pipeline, screens, viewport, outDir, warn } = opts;
-  const { design, providers, defaultProvider, config, snapshotCss } = pipeline;
   const written = new Map<string, string>();
-  if (screens.length === 0) return written;
+  // Nothing to shoot (no changed screens) or no folder to shoot from — the
+  // documented "before shots skipped" degrade path. Guard BEFORE destructuring.
+  if (!pipeline || screens.length === 0) return written;
+  const { design, providers, defaultProvider, config, snapshotCss } = pipeline;
 
   await mkdir(outDir, { recursive: true });
   await withAssetServer(pipeline.folderPath, null, async (baseHref) => {

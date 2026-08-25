@@ -1,31 +1,19 @@
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
 import {
   BrowserMissingError,
+  CHROMIUM_INSTALL_ARGV,
   CHROMIUM_INSTALL_CMD,
   closePooledBrowser,
   renderScreen,
   screenshot,
 } from "@velloo/renderer";
-import {
-  ConfigSchema,
-  ScreenSchema,
-  type Snippet,
-  SnippetSchema,
-  ThemeSchema,
-  type Viewport,
-} from "@velloo/schema";
-import {
-  findHostTailwindConfig,
-  migrateConfig,
-  registryForScreen,
-  renderPassForScreen,
-  resolveProviders,
-  TailwindJit,
-  writeText,
-} from "@velloo/server";
+import { ScreenSchema, type Viewport } from "@velloo/schema";
+import { registryForScreen, renderPassForScreen, writeText } from "@velloo/server";
 import { defineCommand } from "citty";
+import { withAssetServer } from "../asset-server.ts";
+import { loadPipeline } from "../ci/render.ts";
 import { fail } from "../fail.ts";
 import { pickScreen, resolveDesignFolder } from "../folder.ts";
 
@@ -70,52 +58,34 @@ export default defineCommand({
       screenPath = (await pickScreen(folder, screenArg, interactive, "render")).path;
     }
 
-    const themePath = resolve(folder, "theme", "default.json");
-    const configPath = resolve(folder, ".design", "config.json");
-
-    const [screenJson, themeJson, configJson] = await Promise.all([
-      readFile(screenPath, "utf8").then(JSON.parse),
-      readFile(themePath, "utf8").then(JSON.parse),
-      readFile(configPath, "utf8").then(JSON.parse),
-    ]);
-    const screen = ScreenSchema.parse(screenJson);
-    const theme = ThemeSchema.parse(themeJson);
-    const config = migrateConfig(ConfigSchema.parse(configJson));
+    const screen = ScreenSchema.parse(JSON.parse(await readFile(screenPath, "utf8")));
 
     const viewport: Viewport = {
       w: args.w ? Number(args.w) : 1440,
       h: args.h ? Number(args.h) : 900,
     };
 
-    const snippets = new Map<string, Snippet>();
-    const snippetFiles = (await readdir(join(folder, "snippets")).catch(() => [])).filter((f) =>
-      f.endsWith(".json"),
-    );
-    for (const file of snippetFiles) {
-      const raw = await readFile(join(folder, "snippets", file), "utf8").then(JSON.parse);
-      const snippet = SnippetSchema.parse(raw);
-      snippets.set(snippet.id, snippet);
-    }
-
-    const { providers, defaultProvider } = await resolveProviders(config, folder);
+    // Reuse the same headless pipeline as `velloo ci`/`publish`: the JIT carries
+    // `extraThemeBlock` (so palette/font utilities compile), and the render gets
+    // the folder's custom.css — both of which the old hand-rolled path dropped,
+    // making `velloo render` diverge from the canvas.
+    const pipeline = await loadPipeline(folder);
+    const { design, config, providers, defaultProvider, snapshotCss } = pipeline;
+    const theme = design.theme;
     const registry = registryForScreen(screen, providers, defaultProvider, config.extensions ?? {});
     const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
-    const jit = new TailwindJit(
-      Object.values(providers),
-      join(folder, "screens"),
-      undefined,
-      undefined,
-      undefined,
-      () => findHostTailwindConfig(folder, config.hostApp),
-    );
-    const snapshotCss = await jit.build();
-    const { html } = await renderScreen(screen, theme, {
-      viewport,
-      snapshotCss,
-      registry,
-      snippets,
-      renderPass,
-    });
+    const renderHtml = async (baseHref?: string): Promise<string> => {
+      const { html } = await renderScreen(screen, theme, {
+        viewport,
+        snapshotCss,
+        registry,
+        snippets: design.snippets,
+        renderPass,
+        customCss: design.customCss,
+        ...(baseHref ? { baseHref } : {}),
+      });
+      return html;
+    };
 
     // Output: explicit --to wins; otherwise interactively choose the format and
     // write ./<screen>.<ext> (HTML needs no browser, so it's the non-TTY default).
@@ -140,19 +110,25 @@ export default defineCommand({
     const out = extname(outPath).toLowerCase();
 
     if (out === ".html") {
-      await writeText(outPath, html);
+      // Root-relative `/assets/…` links stay as-is (no baseHref) — an .html
+      // written to disk has no live server to resolve an ephemeral origin.
+      await writeText(outPath, await renderHtml());
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }
 
     if (out === ".png") {
-      try {
-        await captureWithBrowserSetup(() => screenshot({ html, viewport, outPath }));
-      } finally {
-        // One-shot process: release the pooled Chromium or the open browser
-        // connection keeps the CLI alive after the file is written.
-        await closePooledBrowser();
-      }
+      // Serve the folder's assets/ so `/assets/…` resolve during capture.
+      await withAssetServer(folder, null, async (baseHref) => {
+        const html = await renderHtml(baseHref);
+        try {
+          await captureWithBrowserSetup(() => screenshot({ html, viewport, outPath }));
+        } finally {
+          // One-shot process: release the pooled Chromium or the open browser
+          // connection keeps the CLI alive after the file is written.
+          await closePooledBrowser();
+        }
+      });
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
       return;
     }
@@ -179,7 +155,7 @@ async function captureWithBrowserSetup(capture: () => Promise<unknown>): Promise
       initialValue: true,
     });
     if (isCancel(proceed) || !proceed) fail("render", e.message);
-    const code = await Bun.spawn(["bunx", "playwright", "install", "chromium"], {
+    const code = await Bun.spawn([...CHROMIUM_INSTALL_ARGV], {
       stdout: "inherit",
       stderr: "inherit",
       stdin: "inherit",

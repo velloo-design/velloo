@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
-import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
+import { CHROMIUM_INSTALL_ARGV, CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   type Annotation,
   type Board,
@@ -542,7 +542,7 @@ async function printScreenshotReadiness(interactive: boolean): Promise<void> {
       initialValue: false,
     });
     if (!isCancel(proceed) && proceed) {
-      const code = await Bun.spawn(["bunx", "playwright", "install", "chromium"], {
+      const code = await Bun.spawn([...CHROMIUM_INSTALL_ARGV], {
         stdout: "inherit",
         stderr: "inherit",
         stdin: "inherit",

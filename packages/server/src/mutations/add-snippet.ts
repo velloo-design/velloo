@@ -3,6 +3,7 @@ import type { Node, Snippet, SnippetParam } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { type MutationError, snippetCycle, snippetIdConflict } from "./errors.ts";
 import { persistSnippet } from "./persist.ts";
+import { slugify } from "./slugify.ts";
 import { detectSnippetCycle } from "./snippet-cycle.ts";
 
 export interface AddSnippetArgs {
@@ -23,16 +24,6 @@ export interface AddSnippetResult {
   snippet: Snippet;
 }
 
-function slugify(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "snippet"
-  );
-}
-
 /**
  * Create a new snippet. The id is derived from the name (slug) unless the
  * caller supplies one; uniqueness is enforced — `id` collisions return
@@ -42,7 +33,7 @@ export async function addSnippet(
   ctx: MutationContext,
   args: AddSnippetArgs,
 ): Promise<Result<AddSnippetResult, MutationError>> {
-  const id = args.id ?? slugify(args.name);
+  const id = args.id ?? slugify(args.name, "snippet");
   if (ctx.folder.snippets.has(id)) return err(snippetIdConflict(id));
 
   const snippet: Snippet = {

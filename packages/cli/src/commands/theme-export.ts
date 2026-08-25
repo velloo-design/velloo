@@ -2,12 +2,64 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import { colorizeDiff, emitTheme } from "@velloo/codegen";
-import { ThemeSchema } from "@velloo/schema";
+import { colorizeDiff, type EmitThemeResult, emitMuiTheme, emitTheme } from "@velloo/codegen";
+import type { FrameworkAdapter } from "@velloo/provider";
+import { type Theme, ThemeSchema } from "@velloo/schema";
+import { loadDesignFolder, migrateConfig, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
 import { detectHost } from "../scan/detect.ts";
+
+/** Read a file if it exists, else undefined. */
+async function readMaybe(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve the folder's framework-native emit context: for a MUI folder, a
+ * `createTheme()` producer (its native artifact); otherwise the Tailwind
+ * globals.css producer, threaded with `theme/custom.css` (which the MCP
+ * emit_theme passes but this command used to drop). Mirrors the MCP tool.
+ */
+async function themeEmitter(
+  folderRoot: string,
+  theme: Theme,
+  outDir: string,
+  cssOnly: boolean,
+): Promise<{ native: boolean; produce: (apply: boolean) => Promise<EmitThemeResult> }> {
+  const design = await loadDesignFolder(folderRoot);
+  const config = migrateConfig(design.config);
+  const { defaultProvider } = await resolveProviders(config, folderRoot);
+  const adapter = defaultProvider as FrameworkAdapter;
+  if (adapter.codegenModule && adapter.themeToNative) {
+    const toNative = adapter.themeToNative.bind(adapter);
+    return {
+      native: true,
+      produce: (apply) =>
+        emitMuiTheme(toNative(theme), {
+          outputDir: outDir,
+          apply,
+          ...(theme.colorsDark ? { darkThemeOptions: toNative(theme, true) } : {}),
+        }),
+    };
+  }
+  const customCss = await readMaybe(join(folderRoot, "theme", "custom.css"));
+  return {
+    native: false,
+    produce: (apply) =>
+      emitTheme(theme, {
+        outputDir: outDir,
+        apply,
+        cssOnly,
+        ...(customCss ? { customCss } : {}),
+      }),
+  };
+}
 
 /**
  * Velloo emits Tailwind v4 (`@import "tailwindcss"`, `@theme`, oklch), which
@@ -68,24 +120,28 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const themePath = args.theme
-      ? resolve(args.theme)
-      : join(await resolveDesignFolder(args.folder, "theme:export"), "theme", "default.json");
+    const folderRoot = await resolveDesignFolder(args.folder, "theme:export");
+    const themePath = args.theme ? resolve(args.theme) : join(folderRoot, "theme", "default.json");
     const outDir = isAbsolute(args.to) ? args.to : resolve(args.to);
-
-    // Guard against emitting v4 into a v3 app (won't compile, clobbers config).
-    if (!args["force-v4"] && detectHost(outDir).tailwindMajor === 3) {
-      refuseV3(outDir, themePath);
-    }
 
     const themeJson = JSON.parse(await readFile(themePath, "utf8"));
     const theme = ThemeSchema.parse(themeJson);
 
-    const result = await emitTheme(theme, {
-      outputDir: outDir,
-      apply: Boolean(args.apply),
-      cssOnly: Boolean(args["css-only"]),
-    });
+    const { native, produce } = await themeEmitter(
+      folderRoot,
+      theme,
+      outDir,
+      Boolean(args["css-only"]),
+    );
+
+    // The v3/v4 guard only applies to the Tailwind (shadcn) target — a MUI
+    // folder emits a createTheme() module, not globals.css, so v3 detection
+    // is irrelevant there.
+    if (!native && !args["force-v4"] && detectHost(outDir).tailwindMajor === 3) {
+      refuseV3(outDir, themePath);
+    }
+
+    const result = await produce(Boolean(args.apply));
 
     const useColor = stdout.isTTY === true;
     let anyChange = false;
@@ -125,11 +181,7 @@ export default defineCommand({
     const answer = (await rl.question("Apply all? (y/N) ")).trim().toLowerCase();
     rl.close();
     if (answer === "y" || answer === "yes") {
-      const final = await emitTheme(theme, {
-        outputDir: outDir,
-        apply: true,
-        cssOnly: Boolean(args["css-only"]),
-      });
+      const final = await produce(true);
       for (const file of final.files) {
         if (file.applied) console.log(`velloo theme:export: wrote ${file.path}`);
       }

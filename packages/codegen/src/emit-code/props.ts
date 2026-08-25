@@ -121,11 +121,13 @@ function jsxStringLiteral(value: string): string {
 }
 
 /**
- * Children that are strings need to be JSX-text-safe. Escape `{`, `}`, `<`, `>`
- * by wrapping the whole text in a JSX expression when needed.
+ * Children that are strings need to be JSX-text-safe. `{`, `}`, `<`, `>` break
+ * the tag; a bare `&` starts an HTML entity in JSX text (so a design string
+ * `&amp;` would decode to `&` in the app but render literally on the canvas).
+ * Wrap the whole text in a JSX expression when any of them appear.
  */
 export function serializeTextChild(value: string): string {
-  if (/[{}<>]/.test(value)) {
+  if (/[{}<>&]/.test(value)) {
     // Wrap as JSX expression.
     return `{${JSON.stringify(value)}}`;
   }

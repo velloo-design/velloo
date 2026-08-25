@@ -1,12 +1,50 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
-import { emitCode } from "@velloo/codegen";
-import { ScreenSchema } from "@velloo/schema";
+import { type CodegenTarget, emitCode, moduleTarget } from "@velloo/codegen";
+import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import { type Screen, ScreenSchema } from "@velloo/schema";
+import { loadDesignFolder, migrateConfig, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
 import { pickScreen, resolveDesignFolder } from "../folder.ts";
+
+/**
+ * Load the emit context a screen needs from its containing design folder:
+ * snippets (so `@id` snippet refs resolve), extensions (so extension `$ref`s
+ * resolve), and the framework target / inline-style flag (so a MUI or
+ * none/none folder emits its native idiom instead of shadcn-Tailwind lowering).
+ * Mirrors the MCP `emit_code` tool. Returns {} when the screen isn't inside a
+ * folder (a bare external path) — emit still works, just without folder context.
+ */
+async function folderEmitContext(
+  screenPath: string,
+  screen: Screen,
+): Promise<Partial<Parameters<typeof emitCode>[1]>> {
+  const found = await findDesignConfig(screenPath);
+  if (!found) return {};
+  const design = await loadDesignFolder(found.folder);
+  const config = migrateConfig(design.config);
+  const { providers, defaultProvider } = await resolveProviders(config, found.folder);
+  const provider = (screen.library && providers[screen.library]) || defaultProvider;
+  const adapter = provider as FrameworkAdapter;
+  let target: CodegenTarget | undefined;
+  if (adapter.codegenModule) {
+    const manifest = await provider.loadManifest();
+    target = moduleTarget(
+      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
+      adapter.codegenModule,
+    );
+  }
+  const inlineStyle = styleChannelOf(provider, config.styling?.framework).kind === "style";
+  return {
+    snippets: design.snippets,
+    ...(config.extensions ? { extensions: config.extensions } : {}),
+    ...(target ? { target } : {}),
+    ...(inlineStyle ? { inlineStyle: true } : {}),
+  };
+}
 
 export default defineCommand({
   meta: {
@@ -52,9 +90,11 @@ export default defineCommand({
     const screen = ScreenSchema.parse(screenJson);
 
     const componentsAlias = args["components-alias"] ?? (await readConfigAlias(screenPath));
+    const context = await folderEmitContext(screenPath, screen);
 
     const result = await emitCode(screen, {
       ...(componentsAlias ? { componentsAlias } : {}),
+      ...context,
     });
     if (!result.ok) {
       const e = result.error;

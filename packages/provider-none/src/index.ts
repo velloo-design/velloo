@@ -1,7 +1,11 @@
-import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@velloo/provider";
+import {
+  type FrameworkAdapter,
+  type Manifest,
+  resolveProviderSrcDir,
+  TAILWIND_CLASSNAME,
+} from "@velloo/provider";
 import { NONE_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { inlineRegistry } from "./registry-inline.ts";
@@ -21,16 +25,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 /** Component sources + Tailwind entry CSS. Resolves from source and from the
  *  bundled CLI (build.ts copies them to `<dist>/pkgs/provider-none/src`). */
-function resolveSrcDir(): string {
-  const dev = join(here, "..", "src");
-  const candidates = [
-    process.env.VELLOO_NOLIB_SRC,
-    join(here, "pkgs", "provider-none", "src"),
-    dev,
-  ].filter((p): p is string => Boolean(p));
-  return candidates.find((d) => existsSync(join(d, "tailwind-entry.css"))) ?? dev;
-}
-const srcDir = resolveSrcDir();
+const srcDir = resolveProviderSrcDir(here, "provider-none", process.env.VELLOO_NOLIB_SRC);
 
 /** Absolute path to the Tailwind entry CSS shipped with the no-library provider. */
 export const entryCssPath: string = join(srcDir, "tailwind-entry.css");

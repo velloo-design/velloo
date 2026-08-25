@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Annotation, Node } from "@velloo/schema";
 import type { CloudAuth } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
 import { writeJsonAtomic } from "./fs.ts";
+import { newAnnotationId } from "./mutations/annotations.ts";
 import { withScreenLock } from "./mutations/context.ts";
 import { persistAnnotations } from "./mutations/persist.ts";
 import { pathAt, pathFromString } from "./path.ts";
@@ -288,7 +288,7 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
     const screen = ctx.folder.screens.get(c.screenId);
     if (!screen) continue; // published screen no longer exists locally
     const annotation: Annotation = {
-      id: `ann_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+      id: newAnnotationId(),
       target: { locator: locatorFor(screen.tree, c.nodePath) },
       position: "auto",
       body: withProvenance(c),

@@ -4,6 +4,7 @@ import type { MutationContext } from "./context.ts";
 import { groupIdConflict, groupNotFound, type MutationError } from "./errors.ts";
 import { getBoard } from "./lookup.ts";
 import { persistBoard } from "./persist.ts";
+import { slugify } from "./slugify.ts";
 
 export interface AddGroupArgs {
   boardId: string;
@@ -16,23 +17,13 @@ export interface AddGroupResult {
   group: BoardGroup;
 }
 
-function slugify(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "group"
-  );
-}
-
 export async function addGroup(
   ctx: MutationContext,
   args: AddGroupArgs,
 ): Promise<Result<AddGroupResult, MutationError>> {
   return DoAsync<AddGroupResult, MutationError>(async function* () {
     const board = yield* $(getBoard(ctx, args.boardId));
-    const baseId = args.id ?? slugify(args.name);
+    const baseId = args.id ?? slugify(args.name, "group");
     if (args.id !== undefined && board.groups.some((g) => g.id === args.id)) {
       return yield* $(err(groupIdConflict(args.boardId, args.id)));
     }

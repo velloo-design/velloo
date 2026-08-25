@@ -8,15 +8,7 @@ export type CodegenError =
   | { kind: "UnknownComponent"; ref: string }
   | { kind: "SnippetNotFound"; snippetId: string };
 
-export const screenNotFound = (screenId: string): CodegenError => ({
-  kind: "ScreenNotFound",
-  screenId,
-});
 export const unknownComponent = (ref: string): CodegenError => ({
   kind: "UnknownComponent",
   ref,
-});
-export const snippetNotFound = (snippetId: string): CodegenError => ({
-  kind: "SnippetNotFound",
-  snippetId,
 });

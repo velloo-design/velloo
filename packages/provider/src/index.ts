@@ -28,6 +28,7 @@ export type {
   Manifest,
   PropDescriptor,
 } from "./manifest.ts";
+export { resolveProviderSrcDir } from "./src-dir.ts";
 export {
   type ComponentProvider,
   type ComponentRegistry,

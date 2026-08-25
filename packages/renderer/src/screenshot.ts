@@ -43,13 +43,34 @@ async function waitForLiveIslands(page: Page, html: string): Promise<void> {
 }
 
 /**
+ * Wait for a freshly set-content page to be ready to rasterize: the load event,
+ * webfonts (Google Fonts `<link>` loads lazily — bounded so a slow/offline font
+ * can't stall the shot), and any live islands. Shared by every capture path so
+ * they don't drift — a missing fonts wait previously froze the fallback face on
+ * the single-shot + compare paths. Pass `liveIslands: false` for composite pages
+ * whose islands live in child frames, not the top document (the compare wrapper).
+ */
+async function settleForCapture(
+  page: Page,
+  html: string,
+  opts: { liveIslands?: boolean } = {},
+): Promise<void> {
+  await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+  await page
+    .evaluate(() => Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2000))]))
+    .catch(() => {});
+  if (opts.liveIslands !== false) await waitForLiveIslands(page, html);
+}
+
+/**
  * The command that installs the headless browser screenshots need. Pinned to
  * the same version as the `playwright` / `playwright-core` devDeps in this
  * package's package.json: an unpinned `bunx playwright install` resolves the
  * latest CLI and downloads a Chromium revision that the pinned runtime then
  * refuses to launch. Bump both together.
  */
-export const CHROMIUM_INSTALL_CMD = "bunx playwright@1.59.1 install chromium";
+export const CHROMIUM_INSTALL_ARGV = ["bunx", "playwright@1.59.1", "install", "chromium"] as const;
+export const CHROMIUM_INSTALL_CMD = CHROMIUM_INSTALL_ARGV.join(" ");
 
 const INSTALL_HINT =
   "Velloo screenshots need a headless browser. Install it once with:\n" +
@@ -330,16 +351,7 @@ export async function captureScreenshot(
         waitUntil: "domcontentloaded",
         timeout: CAPTURE_TIMEOUT_MS,
       });
-      await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
-      // Webfonts (Google Fonts <link>) load lazily — without waiting for them a
-      // capture can freeze the Inter fallback before a declared font-<role> face
-      // applies. Bounded so a slow/offline font can't stall the shot.
-      await page
-        .evaluate(() =>
-          Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2000))]),
-        )
-        .catch(() => {});
-      await waitForLiveIslands(page, opts.html);
+      await settleForCapture(page, opts.html);
       const nodeRects = await page.$$eval("[data-node-path]", (els) =>
         els.map((el) => {
           const r = el.getBoundingClientRect();
@@ -552,12 +564,8 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
         waitUntil: "domcontentloaded",
         timeout: CAPTURE_TIMEOUT_MS,
       });
-      // Give network images a bounded chance to land — otherwise every
-      // remote <img> screenshots as a blank box and the agent's visual
-      // QA loop is blind to imagery. Offline/slow assets just time out
-      // and the capture proceeds.
-      await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
-      await waitForLiveIslands(page, opts.html);
+      // Bounded settle: load event, webfonts, live islands (see settleForCapture).
+      await settleForCapture(page, opts.html);
       if (opts.clipSelector) {
         const locator = page.locator(opts.clipSelector).first();
         if ((await locator.count()) === 0) {
@@ -619,13 +627,21 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
         timeout: CAPTURE_TIMEOUT_MS,
       });
       // Wait until both iframes have measured + the wrapper sized itself.
-      await page.waitForFunction(() => {
-        const l = document.getElementById("L") as HTMLIFrameElement | null;
-        const r = document.getElementById("R") as HTMLIFrameElement | null;
-        return !!(l && r && l.dataset.ready === "1" && r.dataset.ready === "1");
-      });
-      // Bounded grace for network images (see screenshotInternal).
-      await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
+      // Bounded to CAPTURE_TIMEOUT_MS so a stuck pane can't hang past the
+      // capture budget (Playwright's default waitForFunction timeout is 30s).
+      await page
+        .waitForFunction(
+          () => {
+            const l = document.getElementById("L") as HTMLIFrameElement | null;
+            const r = document.getElementById("R") as HTMLIFrameElement | null;
+            return !!(l && r && l.dataset.ready === "1" && r.dataset.ready === "1");
+          },
+          undefined,
+          { timeout: CAPTURE_TIMEOUT_MS },
+        )
+        .catch(() => {});
+      // Islands live in the two child iframes, not the top document.
+      await settleForCapture(page, wrapper, { liveIslands: false });
       return await page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS });
     },
   );

@@ -17,6 +17,7 @@
   "dependencies": {
     "@clack/prompts": "1.4.0",
     "@velloo/codegen": "workspace:*",
+    "@velloo/provider": "workspace:*",
     "@velloo/provider-mui": "workspace:*",
     "@velloo/provider-none": "workspace:*",
     "@velloo/provider-shadcn-upstream": "workspace:*",

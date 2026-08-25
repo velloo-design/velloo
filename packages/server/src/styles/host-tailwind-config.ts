@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { HostApp } from "@velloo/schema";
+import { hostAppRootFrom } from "../live/bundle-core.ts";
 
 const CONFIG_NAMES = [
   "tailwind.config.ts",
@@ -8,16 +9,6 @@ const CONFIG_NAMES = [
   "tailwind.config.cjs",
   "tailwind.config.mjs",
 ];
-
-/**
- * Resolve the host app root — the directory the design folder belongs to. Mirrors the
- * live bundler's resolution: an explicit `hostApp.root` (absolute or folder-relative)
- * wins, else the design folder's parent (the `<app>/velloo` layout).
- */
-function hostAppRoot(folderRoot: string, hostApp: HostApp | undefined): string {
-  if (!hostApp?.root) return resolve(folderRoot, "..");
-  return isAbsolute(hostApp.root) ? hostApp.root : resolve(folderRoot, hostApp.root);
-}
 
 /**
  * Locate the host app's legacy (Tailwind v3-style) config, if any.
@@ -34,7 +25,7 @@ export function findHostTailwindConfig(
   folderRoot: string,
   hostApp: HostApp | undefined,
 ): string | null {
-  const root = hostAppRoot(folderRoot, hostApp);
+  const root = hostAppRootFrom(folderRoot, hostApp);
   for (const name of CONFIG_NAMES) {
     const path = resolve(root, name);
     if (existsSync(path)) return path;

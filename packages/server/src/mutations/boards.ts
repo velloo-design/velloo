@@ -4,6 +4,7 @@ import type { MutationContext } from "./context.ts";
 import { boardIdConflict, boardIdExhausted, lastBoard, type MutationError } from "./errors.ts";
 import { getBoard } from "./lookup.ts";
 import { deletePersistedBoard, persistBoard, persistConfig } from "./persist.ts";
+import { slugify } from "./slugify.ts";
 
 export interface AddBoardArgs {
   name: string;
@@ -15,22 +16,12 @@ export interface AddBoardResult {
   board: Board;
 }
 
-function slugify(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "board"
-  );
-}
-
 export async function addBoard(
   ctx: MutationContext,
   args: AddBoardArgs,
 ): Promise<Result<AddBoardResult, MutationError>> {
   return DoAsync<AddBoardResult, MutationError>(async function* () {
-    const baseId = args.id ?? slugify(args.name);
+    const baseId = args.id ?? slugify(args.name, "board");
     if (args.id !== undefined && ctx.folder.boards.has(args.id)) {
       return yield* $(err(boardIdConflict(args.id)));
     }

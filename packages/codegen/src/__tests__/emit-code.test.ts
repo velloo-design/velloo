@@ -462,3 +462,21 @@ describe("emitCode", () => {
     expect(result.jsx).toBe("<div>hi</div>");
   });
 });
+
+describe("emitCode — metadata from children-prop nodes", () => {
+  test("counts an Icon rendered via a `children` prop, not just node.children", async () => {
+    // A Button whose label is inline rich text: [<Icon/>, "Go"] in props.children.
+    // emitTree renders the Icon, so iconsUsed + componentsUsed must include it.
+    const screen = screenOf({
+      $ref: "Button",
+      props: {
+        children: [{ $ref: "Icon", props: { name: "arrow-right" } }, "Go"],
+      },
+    });
+    const result = unwrap(await emitCode(screen));
+    expect(result.componentsUsed).toContain("Icon");
+    expect(result.iconsUsed).toContain("ArrowRight");
+    // The Icon is actually rendered in the JSX (not silently dropped from metadata).
+    expect(result.jsx).toContain("ArrowRight");
+  });
+});

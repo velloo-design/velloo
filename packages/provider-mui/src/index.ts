@@ -1,10 +1,10 @@
-import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   catalogFromManifest,
   type FrameworkAdapter,
   type Manifest,
+  resolveProviderSrcDir,
   SX_PROP,
 } from "@velloo/provider";
 import { MUI_MANIFEST } from "./manifest.ts";
@@ -28,16 +28,7 @@ export const MUI_VERSION = "6" as const;
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Resolve the provider src (Tailwind entry + sources), from dev + the bundled CLI. */
-function resolveSrcDir(): string {
-  const dev = join(here, "..", "src");
-  const candidates = [
-    process.env.VELLOO_MUI_SRC,
-    join(here, "pkgs", "provider-mui", "src"),
-    dev,
-  ].filter((p): p is string => Boolean(p));
-  return candidates.find((d) => existsSync(join(d, "tailwind-entry.css"))) ?? dev;
-}
-const srcDir = resolveSrcDir();
+const srcDir = resolveProviderSrcDir(here, "provider-mui", process.env.VELLOO_MUI_SRC);
 
 export function createProvider(): FrameworkAdapter {
   return {

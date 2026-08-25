@@ -31,6 +31,7 @@ export {
   BrowserMissingError,
   type CaptureNodeRect,
   type CaptureResult,
+  CHROMIUM_INSTALL_ARGV,
   CHROMIUM_INSTALL_CMD,
   captureScreenshot,
   captureUrlScreenshot,

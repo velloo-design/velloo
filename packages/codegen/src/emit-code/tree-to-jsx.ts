@@ -18,7 +18,6 @@ import {
 } from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
-import type { ImportSet } from "./imports.ts";
 import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
 import type { CodegenTarget } from "./target.ts";
 
@@ -40,7 +39,6 @@ const VALID_JSX_NAME = /^[A-Za-z_$][\w$.]*$/;
 const VALID_IMPORT_SPECIFIER = /^[\w@./~-]+$/;
 
 export interface EmitContext {
-  imports: ImportSet;
   componentsAlias: string;
   /** Where snippet React components live. Defaults to `<componentsAlias>/../snippets`. */
   snippetsAlias?: string;
@@ -139,11 +137,6 @@ function renderSnippetInstance(
   if (!pascal) {
     return err(unknownComponent(`@${node.$snippet}`));
   }
-  const snippetsAlias = ctx.snippetsAlias ?? `${ctx.componentsAlias}/../snippets`;
-  // Bare so the path is used verbatim — ImportSet.add() would prepend
-  // componentsAlias a second time.
-  ctx.imports.addBare(`${snippetsAlias}/${pascal}`, pascal);
-
   const attrParts: string[] = [];
   for (const [name, value] of Object.entries(node.args ?? {})) {
     const serialized = serializeProp(name, value, ctx.snippetParamNames);
@@ -184,7 +177,6 @@ function renderComponent(
     if (!VALID_JSX_NAME.test(emitAs.name) || !VALID_IMPORT_SPECIFIER.test(emitAs.importPath)) {
       return err(unknownComponent(`$emitAs:${emitAs.name}`));
     }
-    ctx.imports.addBare(emitAs.importPath, emitAs.name);
     return ok(`${ctx.indent(depth)}<${emitAs.name} />`);
   }
 
@@ -306,21 +298,12 @@ function renderComponent(
         `Icon "name" is dynamic (${dynName}) but lowered to a static <${jsxName}> fallback — a lucide icon name must be a literal JSX tag, so every instance renders the same glyph. For a per-instance icon, declare a \`node\` param (it emits as a {slot} the caller fills) instead of an \`icon\` param, or wire a name→component map in your app.`,
       );
     }
-    ctx.imports.addBare(entry.importFrom, jsxName);
     mergedClassName = mergeClasses(extraClasses, classNameProp);
     const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
     if (consumed) for (const k of consumed) delete props[k];
     openTag = jsxName;
     closeTag = jsxName;
   } else if (entry) {
-    // Synthetic extension entries set `__bareImport` so the importPath
-    // flows through verbatim instead of being prefixed with the
-    // components alias.
-    if ((entry as { __bareImport?: boolean }).__bareImport) {
-      ctx.imports.addBare(entry.importFile, entry.jsxName);
-    } else {
-      ctx.imports.add(entry.importFile, entry.jsxName);
-    }
     mergedClassName = mergeClasses(classNameProp);
     openTag = entry.jsxName;
     closeTag = entry.jsxName;
