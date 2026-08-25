@@ -146,10 +146,36 @@ export interface PullCommentsSummary {
   resolvedUp: number;
   /** Cloud-resolved comments whose local annotations we removed. */
   resolvedDown: number;
+  /**
+   * Pulled comments still waiting locally as annotations, whole folder —
+   * `countUnresolvedPulledComments` after this pull. The same count the MCP
+   * instructions surface at initialize. Reported even on the no-network
+   * statuses (it derives from local state alone).
+   */
+  unresolvedTotal: number;
   /** Per-slug link status from the cloud (`ok` | `revoked` | `unknown`). */
   links: Record<string, LinkStatus>;
   /** Human-readable note — revoked links, the skip reason, or the error cause. */
   note?: string;
+}
+
+/**
+ * Pulled share-link comments still waiting to be read, derived purely from
+ * local state: an annotation carrying `cloud.commentId` exists exactly while
+ * its comment is unresolved on both sides — a cloud-side resolve removes it on
+ * the next pull, a local delete removes it immediately (the pending PATCH-up
+ * is tracked in the mapping cache, not here). `folder.annotations` mirrors the
+ * on-disk sidecars (mutations, pulls, and the watcher all keep it fresh), so
+ * this is synchronous and never touches the network — safe on the MCP
+ * initialize path. Staleness: only as fresh as the daemon's last pull (boot +
+ * the interval).
+ */
+export function countUnresolvedPulledComments(folder: DesignFolder): number {
+  let count = 0;
+  for (const annotations of folder.annotations.values()) {
+    for (const a of annotations) if (a.cloud?.commentId) count += 1;
+  }
+  return count;
 }
 
 const inFlight = new Map<string, Promise<PullCommentsSummary>>();
@@ -169,25 +195,28 @@ export function pullComments(
 
 async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCommentsSummary> {
   const root = ctx.folder.root;
-  const zero = {
+  // Recomputed per return: local state may have changed by the time an OK
+  // pull finishes persisting.
+  const zero = () => ({
     pulled: 0,
     resolvedUp: 0,
     resolvedDown: 0,
+    unresolvedTotal: countUnresolvedPulledComments(ctx.folder),
     links: {} as Record<string, LinkStatus>,
-  };
+  });
 
   const links = (await readPublishedLinks(root)).filter((l) => l.cloudUrl === cloud.url);
   if (links.length === 0) {
     return {
       status: "no-links",
-      ...zero,
+      ...zero(),
       note: "This folder has no published share links — `velloo publish` creates one.",
     };
   }
   if (!cloud.token) {
     return {
       status: "logged-out",
-      ...zero,
+      ...zero(),
       note: "Not signed in to velloo-cloud — run `velloo login` to sync share-link comments.",
     };
   }
@@ -207,12 +236,12 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
-      return { status: "error", ...zero, note: `comment fetch failed (${res.status})` };
+      return { status: "error", ...zero(), note: `comment fetch failed (${res.status})` };
     }
     payload = (await res.json()) as CommentsResponse;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { status: "error", ...zero, note: `couldn't reach velloo-cloud (${msg})` };
+    return { status: "error", ...zero(), note: `couldn't reach velloo-cloud (${msg})` };
   }
 
   const map: Record<string, CommentMapping> = { ...state.comments };
@@ -326,6 +355,7 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
     pulled,
     resolvedUp,
     resolvedDown,
+    unresolvedTotal: countUnresolvedPulledComments(ctx.folder),
     links: linkStatuses,
     ...(revoked.length > 0
       ? {

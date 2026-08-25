@@ -9,7 +9,7 @@
  *    or will after `pnpm add`).
  */
 
-import { pascalizeIconName } from "@velloo/schema";
+import { pascalizeIconName, sanitizeSvgMarkup } from "@velloo/schema";
 
 export type LoweredEntry = {
   kind: "lowered";
@@ -120,6 +120,20 @@ export function resolveLucideJsxName(name: unknown): string {
   const raw = typeof name === "string" ? name : "";
   const pascal = pascalizeIconName(raw);
   return /^[A-Z][A-Za-z0-9]*$/.test(pascal) ? pascal : "HelpCircle";
+}
+
+/**
+ * The SVG helper inlines its `content` string via dangerouslySetInnerHTML in
+ * the shipped app, so a static `content` from (untrusted) design JSON must have
+ * its active content stripped before emit_code writes it into the consumer app
+ * — the same sanitization the runtime SVG component applies. Dynamic
+ * ($param/$if) content is a caller-filled slot, sanitized at the render
+ * boundary instead. Mutates `props` in place; no-op for non-SVG refs.
+ */
+export function sanitizeEmittedProps(ref: string, props: Record<string, unknown>): void {
+  if (ref === "SVG" && typeof props.content === "string") {
+    props.content = sanitizeSvgMarkup(props.content);
+  }
 }
 
 /**

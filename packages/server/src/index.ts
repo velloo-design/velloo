@@ -317,7 +317,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         const s = await pullComments(ctx, cloud);
         if (s.status === "ok" && s.pulled + s.resolvedUp + s.resolvedDown > 0) {
           console.error(
-            `velloo: share-link comments — ${s.pulled} pulled, ${s.resolvedUp} resolved up, ${s.resolvedDown} resolved down`,
+            `velloo: share-link comments — ${s.pulled} pulled, ${s.resolvedUp} resolved up, ${s.resolvedDown} resolved down, ${s.unresolvedTotal} unresolved waiting`,
           );
         }
         if (s.status === "ok" && s.note) console.error(`velloo: ${s.note}`);
@@ -374,6 +374,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 export type { CanvasAuth, CloudAuth } from "./cloud.ts";
 export {
   type CommentSyncContext,
+  countUnresolvedPulledComments,
   type PublishedLink,
   type PullCommentsSummary,
   pullComments,

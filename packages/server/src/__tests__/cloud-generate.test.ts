@@ -191,6 +191,24 @@ describe("success", () => {
     expect(r.value.assetPath).toBe("assets/brand_mark.svg");
     expect(stub.requests[0]?.body).toEqual({ prompt: "a mark", kind: "svg" });
   });
+
+  test("model passes through for images, never for svg", async () => {
+    const r = await generateAsset(tmp, cloud(), {
+      prompt: "hero art",
+      kind: "image",
+      model: "flux-schnell",
+    });
+    expect(r.ok).toBe(true);
+    expect(stub.requests[0]?.body).toEqual({
+      prompt: "hero art",
+      kind: "image",
+      model: "flux-schnell",
+    });
+
+    stub.body = svgSuccess();
+    await generateAsset(tmp, cloud(), { prompt: "a mark", kind: "svg", model: "flux-schnell" });
+    expect(stub.requests[1]?.body).toEqual({ prompt: "a mark", kind: "svg" });
+  });
 });
 
 describe("failure statuses map to actionable messages", () => {
@@ -219,6 +237,23 @@ describe("failure statuses map to actionable messages", () => {
     reject(400, "bad_request", "prompt must be 1..2000 characters");
     const e = await generate();
     expect(e.message).toContain("prompt must be 1..2000 characters");
+  });
+
+  test("400 for an unknown model relays the server's allowlist verbatim", async () => {
+    reject(
+      400,
+      "bad_request",
+      'Unknown image model "dall-e-9". Allowed models: gpt-image-1, flux-schnell.',
+    );
+    const r = await generateAsset(tmp, cloud(), {
+      prompt: "x",
+      kind: "image",
+      model: "dall-e-9",
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("expected failure");
+    expect(r.error.status).toBe(400);
+    expect(r.error.message).toContain("Allowed models: gpt-image-1, flux-schnell.");
   });
 
   test("402 keeps the cloud's price/balance/top-up text and adds the way out", async () => {
@@ -345,6 +380,29 @@ describe("the generate_asset tool", () => {
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
     expect(res.isError).toBe(true);
     expect(text).toContain("velloo login");
+    await client.close();
+  });
+
+  test("a rejected model surfaces the server's allowlist in the tool text", async () => {
+    stub.status = 400;
+    stub.body = {
+      error: "bad_request",
+      message: 'Unknown image model "dall-e-9". Allowed models: gpt-image-1, flux-schnell.',
+    };
+    const client = await connectTool("vlk_test");
+    const res = await client.callTool({
+      name: "generate_asset",
+      arguments: { prompt: "hero art", kind: "image", model: "dall-e-9" },
+    });
+    const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
+    expect(res.isError).toBe(true);
+    expect(text).toContain("Allowed models: gpt-image-1, flux-schnell.");
+    // The model the agent asked for reached the wire.
+    expect(stub.requests[0]?.body).toEqual({
+      prompt: "hero art",
+      kind: "image",
+      model: "dall-e-9",
+    });
     await client.close();
   });
 });

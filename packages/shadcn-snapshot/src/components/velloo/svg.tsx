@@ -33,6 +33,28 @@ const COLOR_CLASS: Record<string, string> = {
   muted: "text-muted-foreground",
 };
 
+/**
+ * Strip active content (script/foreignObject/SMIL elements, inline event
+ * handlers, javascript:/data:text/html URLs) from SVG markup before it's
+ * inlined via dangerouslySetInnerHTML — the `content` prop comes from untrusted
+ * design JSON. Inline twin of @velloo/schema's `sanitizeSvgMarkup`: this file is
+ * copied verbatim into user apps by installSnapshot, so it can't import
+ * @velloo/*. Keep the two in sync.
+ */
+function sanitizeSvgContent(markup: string): string {
+  return markup
+    .replace(/<\s*(script|foreignObject)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(
+      /<\s*\/?\s*(?:script|foreignObject|animate|animateTransform|animateMotion|animateColor|set)\b[^>]*>/gi,
+      "",
+    )
+    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(
+      /((?:xlink:href|href|src)\s*=\s*)(?:"\s*(?:javascript:|data:text\/html)[^"]*"|'\s*(?:javascript:|data:text\/html)[^']*'|(?:javascript:|data:text\/html)[^\s>]*)/gi,
+      '$1"#"',
+    );
+}
+
 export function SVG({
   content,
   viewBox = "0 0 24 24",
@@ -53,7 +75,7 @@ export function SVG({
 
   if (content) {
     // biome-ignore lint/security/noDangerouslySetInnerHtml: this is the whole point of the SVG helper
-    return <svg {...props} dangerouslySetInnerHTML={{ __html: content }} />;
+    return <svg {...props} dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(content) }} />;
   }
   // biome-ignore lint/a11y/noSvgWithoutTitle: consumer supplies title via children when needed
   return <svg {...props}>{children}</svg>;

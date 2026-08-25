@@ -26,14 +26,26 @@ export function registerGenerateTools(
         prompt: z.string().min(1).max(2000).describe("What to generate, in plain language."),
         kind: z.enum(["image", "svg"]),
         size: z.enum(IMAGE_SIZES).optional().describe('Image only; default "1024x1024".'),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            "Image only; a server-allowlisted model id — omit for the server default. On rejection the error lists the allowed models.",
+          ),
         filename: z
           .string()
           .optional()
           .describe("Stem for assets/<filename>.<png|svg>; default: the generation id."),
       },
     },
-    async ({ prompt, kind, size, filename }) => {
-      const r = await generateAsset(ctx.folder.root, cloud, { prompt, kind, size, filename });
+    async ({ prompt, kind, size, model, filename }) => {
+      const r = await generateAsset(ctx.folder.root, cloud, {
+        prompt,
+        kind,
+        size,
+        model,
+        filename,
+      });
       if (!r.ok) {
         return {
           isError: true as const,

@@ -54,4 +54,23 @@ describe("buildInstructions", () => {
     expect(none).not.toContain("Style with the `sx` object");
     expect(none.indexOf("no-framework")).toBeLessThan(none.indexOf("pinned shadcn snapshot"));
   });
+
+  test("surfaces waiting share-link comments as one line when the count is positive", () => {
+    const text = buildInstructions(false, undefined, false, undefined, undefined, 3);
+    expect(text).toContain(
+      "**3 unresolved share-link comments are waiting as annotations** — read them via `list_annotations`; refresh with `pull_comments`.",
+    );
+  });
+
+  test("the waiting-comments line reads correctly for a single comment", () => {
+    const text = buildInstructions(false, undefined, false, undefined, undefined, 1);
+    expect(text).toContain("**1 unresolved share-link comment is waiting as an annotation**");
+  });
+
+  test("omits the waiting-comments line at zero (and by default)", () => {
+    expect(buildInstructions(false)).not.toContain("waiting as annotation");
+    expect(buildInstructions(false, undefined, false, undefined, undefined, 0)).not.toContain(
+      "waiting as annotation",
+    );
+  });
 });

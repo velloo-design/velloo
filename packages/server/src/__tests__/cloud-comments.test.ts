@@ -6,6 +6,7 @@ import { AnnotationSchema } from "@velloo/schema";
 import type { Server } from "bun";
 import {
   type CommentSyncContext,
+  countUnresolvedPulledComments,
   pullComments,
   readPublishedLinks,
   recordPublishedLink,
@@ -315,6 +316,79 @@ test("revoked links surface in the summary", async () => {
   expect(summary.links).toEqual({ demo: "revoked" });
   expect(summary.note).toContain("demo");
   expect(summary.note?.toLowerCase()).toContain("revoked");
+});
+
+describe("unresolved waiting count", () => {
+  test("pull reports unresolvedTotal; a local annotation delete drops the count immediately", async () => {
+    await publishLink();
+    stub.comments = [
+      { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
+      { id: "c2", slug: "demo", screenId: "home", nodePath: null, body: "also", resolved: false },
+    ];
+    const ctx = await makeCtx();
+    // Cold cache / nothing pulled yet: nothing waiting.
+    expect(countUnresolvedPulledComments(ctx.folder)).toBe(0);
+
+    const first = await pullComments(ctx, cloud());
+    expect(first.unresolvedTotal).toBe(2);
+    expect(countUnresolvedPulledComments(ctx.folder)).toBe(2);
+
+    // Local delete = resolved locally: the count reflects it BEFORE any
+    // network round-trip (the PATCH-up happens on the next pull).
+    const anns = ctx.folder.annotations.get("home") ?? [];
+    await persistAnnotations(
+      ctx.folder,
+      "home",
+      anns.filter((a) => a.cloud?.commentId !== "c1"),
+    );
+    expect(countUnresolvedPulledComments(ctx.folder)).toBe(1);
+
+    const second = await pullComments(ctx, cloud());
+    expect(second.resolvedUp).toBe(1);
+    expect(second.unresolvedTotal).toBe(1);
+  });
+
+  test("locally authored annotations never count — only pulled (cloud) ones", async () => {
+    const ctx = await makeCtx();
+    await persistAnnotations(ctx.folder, "home", [
+      { id: "ann_local1", target: { locator: [] }, position: "auto", body: "mine", author: "user" },
+    ]);
+    expect(countUnresolvedPulledComments(ctx.folder)).toBe(0);
+  });
+
+  test("logged-out and no-links summaries still report the local count", async () => {
+    await publishLink();
+    stub.comments = [
+      { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
+    ];
+    const ctx = await makeCtx();
+    await pullComments(ctx, cloud());
+
+    const loggedOut = await pullComments(ctx, { url: base });
+    expect(loggedOut.status).toBe("logged-out");
+    expect(loggedOut.unresolvedTotal).toBe(1);
+
+    await rm(join(tmp, ".design", "links.json"));
+    const noLinks = await pullComments(ctx, cloud());
+    expect(noLinks.status).toBe("no-links");
+    expect(noLinks.unresolvedTotal).toBe(1);
+  });
+
+  test("a cloud-side resolve removes the annotation and the count follows", async () => {
+    await publishLink();
+    stub.comments = [
+      { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
+    ];
+    const ctx = await makeCtx();
+    await pullComments(ctx, cloud());
+    expect(countUnresolvedPulledComments(ctx.folder)).toBe(1);
+
+    stub.comments = [{ ...(stub.comments[0] as StubComment), resolved: true }];
+    const summary = await pullComments(ctx, cloud());
+    expect(summary.resolvedDown).toBe(1);
+    expect(summary.unresolvedTotal).toBe(0);
+    expect(countUnresolvedPulledComments(ctx.folder)).toBe(0);
+  });
 });
 
 test("comments for screens that no longer exist are skipped, not fatal", async () => {

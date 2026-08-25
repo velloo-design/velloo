@@ -10,6 +10,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { type StyleChannelKind, styleChannelOf } from "@velloo/provider";
 import type { CloudAuth } from "../cloud.ts";
+import { countUnresolvedPulledComments } from "../cloud-comments.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -167,7 +168,8 @@ const NONE_INLINE_INTRO = [
  * the stdio transport, where the canvas binds an ephemeral port the user can't
  * predict. The feedback paragraph is appended only when opted in. `channelKind`
  * + `providerId` frame the agent for the folder's framework (MUI ⇒ sx; no-lib ⇒
- * bare primitives; shadcn ⇒ the default framing).
+ * bare primitives; shadcn ⇒ the default framing). `unresolvedComments` (pulled
+ * share-link comments waiting locally as annotations) adds ONE line when > 0.
  */
 export function buildInstructions(
   feedbackEnabled: boolean,
@@ -175,6 +177,7 @@ export function buildInstructions(
   tiered = false,
   channelKind?: StyleChannelKind,
   providerId?: string,
+  unresolvedComments = 0,
 ): string {
   const intro =
     channelKind === "sx"
@@ -190,6 +193,14 @@ export function buildInstructions(
     parts.push(
       "",
       `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can open it and watch your edits render in real time. (They can also open a canvas any time with \`velloo run\`.)`,
+    );
+  }
+  if (unresolvedComments > 0) {
+    parts.push(
+      "",
+      unresolvedComments === 1
+        ? "**1 unresolved share-link comment is waiting as an annotation** — read it via `list_annotations`; refresh with `pull_comments`."
+        : `**${unresolvedComments} unresolved share-link comments are waiting as annotations** — read them via \`list_annotations\`; refresh with \`pull_comments\`.`,
     );
   }
   if (feedbackEnabled) parts.push("", FEEDBACK_INSTRUCTION);
@@ -210,6 +221,13 @@ function buildMcpServer(
     ctx.defaultProvider,
     ctx.folder.config.styling?.framework,
   ).kind;
+  // Waiting-comments count for the instructions, from LOCAL state only —
+  // initialize never touches the network. The daemon's boot + interval pulls
+  // (and any pull_comments call) keep `folder.annotations` fresh; each new
+  // session recomputes here. Cold cache: a comment that arrived since the
+  // last pull surfaces on the first connection built AFTER the pull lands,
+  // not this one.
+  const unresolvedComments = countUnresolvedPulledComments(ctx.folder);
   const mcp = new McpServer(
     { name: "velloo", version: "0.1.0" },
     {
@@ -219,6 +237,7 @@ function buildMcpServer(
         tiered,
         channelKind,
         ctx.defaultProvider.id,
+        unresolvedComments,
       ),
     },
   );

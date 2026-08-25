@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "@velloo/result";
+import { svgLooksActive } from "@velloo/schema";
 import type { CloudAuth } from "./cloud.ts";
 import { storeAsset } from "./fs.ts";
 
@@ -25,6 +26,12 @@ export interface GenerateAssetRequest {
   kind: GenerateKind;
   /** Image only; the cloud defaults to 1024x1024. */
   size?: ImageSize;
+  /**
+   * Image only; a cloud-allowlisted model id. Omitted ⇒ the server default.
+   * The allowlist lives server-side: an unknown id is a 400 whose message
+   * names the allowed models, passed through verbatim like every cloud error.
+   */
+  model?: string;
   /** Filename stem for `assets/<stem>.<png|svg>`; defaults to the generation id. */
   filename?: string;
 }
@@ -123,16 +130,10 @@ const DATA_URL = /^data:image\/(png|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/;
  * looks active rather than trying to repair it — a false positive just means
  * regenerating or authoring locally.
  */
-const ACTIVE_SVG = [
-  /<\s*script[\s>]/i,
-  /<\s*foreignObject[\s>]/i,
-  /\son[a-z]+\s*=/i, // onload= / onclick= / …
-  /(?:href|src)\s*=\s*["']?\s*(?:javascript:|data:text\/html)/i,
-];
-
-export function svgLooksActive(markup: string): boolean {
-  return ACTIVE_SVG.some((re) => re.test(markup));
-}
+// Detector lives in @velloo/schema (shared with the render boundary, codegen
+// emit, and the asset store); re-exported so this module's reject gate below
+// and existing importers still resolve it from cloud-generate.
+export { svgLooksActive };
 
 export async function generateAsset(
   root: string,
@@ -157,6 +158,7 @@ export async function generateAsset(
         prompt: req.prompt,
         kind: req.kind,
         ...(req.kind === "image" && req.size ? { size: req.size } : {}),
+        ...(req.kind === "image" && req.model ? { model: req.model } : {}),
       }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });

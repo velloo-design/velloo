@@ -16,7 +16,7 @@ export function registerCommentTools(mcp: McpServer, ctx: MutationContext, cloud
     "pull_comments",
     {
       description:
-        "Fetch reviewer comments left on this folder's published share links (velloo-cloud) and land new unresolved ones as annotations — read them afterwards with list_annotations (pulled ones carry the commenter + link in the body). Resolution syncs both ways: a pulled annotation deleted locally resolves its cloud comment; a comment resolved in the cloud removes its local annotation. Returns {status, pulled, resolvedUp, resolvedDown, links} — links maps each share-link slug to ok | revoked | unknown (revoked links no longer sync; mention that to the user). Requires `velloo login` and a prior `velloo publish`; logged-out or offline it is a safe no-op that reports why.",
+        "Fetch reviewer comments left on this folder's published share links (velloo-cloud) and land new unresolved ones as annotations — read them afterwards with list_annotations (pulled ones carry the commenter + link in the body). Resolution syncs both ways: a pulled annotation deleted locally resolves its cloud comment; a comment resolved in the cloud removes its local annotation. Returns {status, pulled, resolvedUp, resolvedDown, unresolvedTotal, links} — unresolvedTotal counts pulled comments still waiting as annotations; links maps each share-link slug to ok | revoked | unknown (revoked links no longer sync; mention that to the user). Requires `velloo login` and a prior `velloo publish`; logged-out or offline it is a safe no-op that reports why.",
       inputSchema: {},
     },
     async () => {

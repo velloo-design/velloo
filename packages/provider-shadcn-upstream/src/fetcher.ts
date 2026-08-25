@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { SHADCN_COMPONENT_IDS } from "./components.ts";
 import { hashContent, type ShadcnUpstreamLock } from "./lock.ts";
 
@@ -54,6 +54,12 @@ export interface FetchOptions {
    * defaults to `globalThis.fetch`.
    */
   fetchImpl?: typeof fetch;
+  /**
+   * Allow a non-HTTPS `registryBase`. Off by default — plain HTTP lets a MITM
+   * swap in a hostile registry response (which controls the files written), so
+   * the fetcher refuses it. Tests pointing at a local server opt in explicitly.
+   */
+  allowInsecure?: boolean;
 }
 
 export interface FetchResult {
@@ -78,6 +84,11 @@ export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
   const components = opts.components ?? SHADCN_COMPONENT_IDS;
   const style = opts.style ?? "new-york";
   const registryBase = opts.registryBase ?? DEFAULT_REGISTRY;
+  if (!opts.allowInsecure && !/^https:\/\//i.test(registryBase)) {
+    throw new Error(
+      `velloo: refusing to fetch shadcn from a non-HTTPS registry (${registryBase}) — a MITM could control the files written. Pass allowInsecure only for a trusted local test server.`,
+    );
+  }
   const fetchImpl = opts.fetchImpl ?? fetch;
   const fetchedAt = new Date();
 
@@ -100,6 +111,24 @@ export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
     fetched.push({ id, item });
   }
 
+  // Reject path traversal BEFORE touching disk: `file.path` is attacker-
+  // controlled input (a compromised/MITM registry could return "../../evil" or
+  // an absolute path to write outside the destination). Integrity here is still
+  // trust-on-first-use — the lock's SHA256s are download-derived, so they catch
+  // later drift but don't authenticate the first fetch; HTTPS + this rejection
+  // are the first-fetch protections.
+  const destRoot = resolve(opts.destination);
+  for (const { item } of fetched) {
+    for (const file of item.files) {
+      const abs = resolve(join(destRoot, file.path));
+      if (isAbsolute(file.path) || (abs !== destRoot && !abs.startsWith(destRoot + sep))) {
+        throw new Error(
+          `velloo: shadcn registry file path "${file.path}" escapes the destination — refusing to write.`,
+        );
+      }
+    }
+  }
+
   await mkdir(opts.destination, { recursive: true });
   const filesWritten: string[] = [];
   const lockComponents: ShadcnUpstreamLock["components"] = {};
@@ -109,9 +138,9 @@ export async function fetchShadcn(opts: FetchOptions): Promise<FetchResult> {
     for (const file of item.files) {
       // shadcn returns paths like "ui/button.tsx". Mirror them under
       // the destination so `<dest>/ui/button.tsx` exists exactly where
-      // a user's app would expect to find it.
+      // a user's app would expect to find it (validated above).
       const targetPath = file.path;
-      const abs = join(opts.destination, targetPath);
+      const abs = resolve(join(destRoot, targetPath));
       await mkdir(dirname(abs), { recursive: true });
       await writeFile(abs, file.content, "utf8");
       filesWritten.push(abs);

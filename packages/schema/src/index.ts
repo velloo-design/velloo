@@ -52,6 +52,7 @@ export {
   resolveSnippetArgs,
   substituteSnippetParams,
 } from "./snippet-resolve.ts";
+export { sanitizeSvgMarkup, svgLooksActive } from "./svg-sanitize.ts";
 export { type ColorPair, type Colors, ColorsSchema, type Theme, ThemeSchema } from "./theme.ts";
 export {
   collectIds,

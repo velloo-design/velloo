@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   fetchShadcn,
   LIB_UTILS_CONTENT,
@@ -157,6 +157,74 @@ describe("fetchShadcn", () => {
     // No partial files, no lockfile, not even the destination dir.
     expect(await Bun.file(join(tmp, "ui", "button.tsx")).exists()).toBe(false);
     expect(await Bun.file(join(tmp, "shadcn-upstream-lock.json")).exists()).toBe(false);
+  });
+});
+
+describe("fetchShadcn — hostile registry (FIX 3)", () => {
+  function evilStub(path: string): unknown {
+    return {
+      name: "button",
+      type: "registry:ui",
+      dependencies: [],
+      registryDependencies: [],
+      files: [{ path, content: "export const pwned = 1\n", type: "registry:ui", target: "" }],
+    };
+  }
+
+  test("rejects a path-traversal file.path and writes nothing", async () => {
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(JSON.stringify(evilStub("../velloo-evil.tsx")))) as unknown as typeof fetch;
+
+    await expect(
+      fetchShadcn({ destination: tmp, components: ["button"], fetchImpl }),
+    ).rejects.toThrow(/escapes the destination/);
+
+    // Validation runs before any disk write, so nothing lands — not the escaped
+    // file, not the destination tree, not the lockfile.
+    expect(await Bun.file(join(dirname(tmp), "velloo-evil.tsx")).exists()).toBe(false);
+    expect(await Bun.file(join(tmp, "ui", "button.tsx")).exists()).toBe(false);
+    expect(await Bun.file(join(tmp, "shadcn-upstream-lock.json")).exists()).toBe(false);
+  });
+
+  test("rejects an absolute file.path", async () => {
+    const absTarget = join(tmpdir(), `velloo-abs-${Date.now()}.tsx`);
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(JSON.stringify(evilStub(absTarget)))) as unknown as typeof fetch;
+
+    await expect(
+      fetchShadcn({ destination: tmp, components: ["button"], fetchImpl }),
+    ).rejects.toThrow(/escapes the destination/);
+    expect(await Bun.file(absTarget).exists()).toBe(false);
+  });
+
+  test("refuses a non-HTTPS registry base by default", async () => {
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(
+        JSON.stringify(buildRegistryStub("button", fakeButtonTsx())),
+      )) as unknown as typeof fetch;
+    await expect(
+      fetchShadcn({
+        destination: tmp,
+        components: ["button"],
+        registryBase: "http://ui.shadcn.com/r/styles",
+        fetchImpl,
+      }),
+    ).rejects.toThrow(/non-HTTPS/);
+  });
+
+  test("allowInsecure opts a trusted local test server out of the HTTPS gate", async () => {
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(
+        JSON.stringify(buildRegistryStub("button", fakeButtonTsx())),
+      )) as unknown as typeof fetch;
+    const result = await fetchShadcn({
+      destination: tmp,
+      components: ["button"],
+      registryBase: "http://127.0.0.1:9/r/styles",
+      allowInsecure: true,
+      fetchImpl,
+    });
+    expect(result.filesWritten.some((p) => p.endsWith("button.tsx"))).toBe(true);
   });
 });
 

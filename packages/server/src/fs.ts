@@ -1,5 +1,6 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { sanitizeSvgMarkup } from "@velloo/schema";
 
 /**
  * Write JSON atomically: write to a sibling temp file, then rename. Crash-safe.
@@ -42,6 +43,12 @@ export async function storeAsset(
   const safe = sanitizeFilename(filename);
   const dir = join(root, "assets");
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, safe), bytes);
-  return { assetPath: `assets/${safe}`, url: `/assets/${safe}`, bytes: bytes.length };
+  // SVGs are inlined via dangerouslySetInnerHTML and served from the canvas
+  // origin — strip active content before it lands, whatever authored it
+  // (upload_asset, import_assets, or hosted generation).
+  const out = /\.svg$/i.test(safe)
+    ? Buffer.from(sanitizeSvgMarkup(bytes.toString("utf8")), "utf8")
+    : bytes;
+  await writeFile(join(dir, safe), out);
+  return { assetPath: `assets/${safe}`, url: `/assets/${safe}`, bytes: out.length };
 }

@@ -10,12 +10,34 @@ import {
   type Snippet,
   substituteSnippetParams,
 } from "@velloo/schema";
-import { inlineNoneLower, LOWERED_CONSUMED_PROPS, REGISTRY } from "../component-registry.ts";
+import {
+  inlineNoneLower,
+  LOWERED_CONSUMED_PROPS,
+  REGISTRY,
+  sanitizeEmittedProps,
+} from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
 import type { ImportSet } from "./imports.ts";
 import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
 import type { CodegenTarget } from "./target.ts";
+
+/**
+ * A JSX component/tag name must be a plain identifier (dotted member paths
+ * allowed for `Namespace.Sub`). A design-JSON author controls `$ref` and
+ * `$emitAs.name`, which are emitted verbatim as the opening/closing tag and as
+ * an import binding — a value like `div onLoad={fetch(...)}` or one carrying a
+ * `}`/`"` would break out of the tag or the import statement, so reject it.
+ */
+const VALID_JSX_NAME = /^[A-Za-z_$][\w$.]*$/;
+
+/**
+ * A module specifier we're willing to emit verbatim into `import … from "…"`.
+ * Real bare/scoped packages, path aliases, and relative paths use only this
+ * conservative charset; anything else (quotes, spaces, semicolons, newlines)
+ * could break out of the import string, so reject it.
+ */
+const VALID_IMPORT_SPECIFIER = /^[\w@./~-]+$/;
 
 export interface EmitContext {
   imports: ImportSet;
@@ -159,6 +181,9 @@ function renderComponent(
   // the app, not the design. See ComponentNode.$emitAs.
   const emitAs = node.$emitAs;
   if (emitAs) {
+    if (!VALID_JSX_NAME.test(emitAs.name) || !VALID_IMPORT_SPECIFIER.test(emitAs.importPath)) {
+      return err(unknownComponent(`$emitAs:${emitAs.name}`));
+    }
     ctx.imports.addBare(emitAs.importPath, emitAs.name);
     return ok(`${ctx.indent(depth)}<${emitAs.name} />`);
   }
@@ -195,6 +220,9 @@ function renderComponent(
         // bare external imports with the user-supplied importPath.
         const ext = ctx.extensions?.get(node.$ref);
         if (ext) {
+          if (!VALID_JSX_NAME.test(node.$ref) || !VALID_IMPORT_SPECIFIER.test(ext.importPath)) {
+            return err(unknownComponent(node.$ref));
+          }
           entry = {
             kind: "shadcn",
             jsxName: node.$ref,
@@ -210,6 +238,9 @@ function renderComponent(
   }
 
   const props = { ...(node.props ?? {}) };
+  // Strip active content from an SVG `content` string before it lands in the
+  // consumer app via dangerouslySetInnerHTML (design JSON is untrusted).
+  sanitizeEmittedProps(node.$ref, props);
   const childrenProp = props.children;
   delete props.children;
   // Special-case className: if it's a `$param` or `$if` inside a snippet body,

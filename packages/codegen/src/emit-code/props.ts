@@ -90,18 +90,34 @@ function serializeIfLeaf(v: unknown, paramNames: Set<string>): string {
 }
 
 /**
- * JSX-safe string literal. Always double-quoted; escape backslashes + quotes;
- * fall back to a JSX expression with a template literal when the value contains
- * characters that don't fit cleanly in a double-quoted attribute (newlines, etc.).
+ * Characters JSX reinterprets or that break out of a double-quoted attribute.
+ * A double-quoted JSX attribute does NOT honor backslash escapes — `\"` is two
+ * literal chars, not an escaped quote — so a `"` in the value would close the
+ * attribute early and inject sibling attributes / handlers / JS into the
+ * consumer's built app. `<`, `>`, `&`, `{`, `}` are reinterpreted by JSX;
+ * backticks can't sit in the quoted form cleanly; a backslash would be taken
+ * literally. (Control chars are handled separately, by code point.)
+ */
+const JSX_ATTR_SPECIAL = /["`<>{}&\\]/;
+
+/** True when a char can't sit in a double-quoted JSX attribute (control chars). */
+function isControlChar(ch: string): boolean {
+  const code = ch.charCodeAt(0);
+  return code < 0x20 || code === 0x7f;
+}
+
+/**
+ * JSX-safe string literal for an attribute value's right-hand side. Values with
+ * any special or control character drop into a JSX expression container holding
+ * a JS string literal (`{"…"}`, escaped by JSON.stringify — mirrors jsLiteral),
+ * which is always correct and inert. Plain values keep the readable
+ * double-quoted form.
  */
 function jsxStringLiteral(value: string): string {
-  if (/[\r\n\t]/.test(value) || value.includes("${")) {
-    // Drop into a JSX expression with a template literal so newlines survive.
-    const inner = value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
-    return `{\`${inner}\`}`;
+  if (JSX_ATTR_SPECIAL.test(value) || [...value].some(isControlChar)) {
+    return `{${JSON.stringify(value)}}`;
   }
-  const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `"${escaped}"`;
+  return `"${value}"`;
 }
 
 /**
