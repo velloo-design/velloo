@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src=".github/assets/velloo-mark.svg" alt="Velloo" width="96" height="96">
+<img src="./.github/assets/velloo-mark-512.png" alt="Velloo" width="96" height="96">
 
 # Velloo
 
@@ -20,6 +20,38 @@ No Figma seats. No paste-ready JSX you babysit. No translation tax.
 
 See [`docs/`](./docs) for the architecture and the MCP reference.
 
+## Quickstart
+
+Velloo runs on the [Bun](https://bun.sh) runtime (≥ 1.3.0). From inside your app:
+
+```bash
+cd ~/code/my-shadcn-app
+bunx velloo init
+```
+
+The interactive wizard creates the design folder (default `velloo/`) and wires up your AI agent — **Claude Code** (`.mcp.json` + the `velloo-design` skill) and **Cursor** (`.cursor/mcp.json` + a project rule); restart the agent so it loads the new config. **Start from scratch** (pick a component library + a sample or blank board) or **scan what you have**: scan detects your shadcn + Tailwind versions, imports your real theme from `globals.css`, and builds one screen per route, so the canvas opens in your brand colors. `init` never writes into your app's source — it only creates the design folder (plus the agent config).
+
+Then start it:
+
+```bash
+bunx velloo run velloo      # the design folder you just created
+```
+
+- **Canvas:** http://localhost:7300
+- **MCP server (for your AI agent):** http://localhost:7301/mcp
+
+`Ctrl-C` stops the server. Prefer a resident command? `bun add -g velloo` puts `velloo` on your `PATH`; `bun remove -g velloo` uninstalls.
+
+### Screenshots — the one optional extra
+
+A headless Chromium is used for exactly two things: your agent's `screenshot` tool (so it can *see* a design) and `velloo render <screen> --to=out.png`. The canvas, editing, `velloo publish`, `velloo emit`, and everything else work without it. Install it anytime (one-time, ~150 MB):
+
+```bash
+bunx playwright install chromium
+```
+
+If a screenshot fails, run exactly that command, then retry. Ports busy? Pass `--port` / `--mcp-port` to `velloo run`.
+
 ## What it does
 
 - **Board + Screen + Frame** mental model. A design folder hosts many boards; frames sharing a screen stay in sync.
@@ -30,7 +62,14 @@ See [`docs/`](./docs) for the architecture and the MCP reference.
 
 ## Local-first by default
 
-The local tool is free, complete, account-free, and telemetry-free — nothing in the solo loop phones home. The only outbound calls are the optional, opt-in cloud commands (`velloo login`, `velloo publish`, feedback), and you choose when to make them.
+The local tool is free, complete, account-free, and telemetry-free — nothing in the solo loop phones home. The only outbound calls are the optional, opt-in cloud paths, and every one of them is gated behind an explicit `velloo login`:
+
+- `velloo login` / `velloo publish` — publish boards as a read-only share link
+- `pull_comments` — pull comments left on your share links back into the canvas as annotations
+- `generate_asset` — hosted image/SVG generation, metered against your account
+- `send_feedback` — agent-side product feedback, registered only when enabled in the folder config
+
+You choose when — and whether — to make any of them.
 
 ## Repo layout
 

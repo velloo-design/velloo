@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & ideas
-    url: https://github.com/velloo/velloo/discussions
+    url: https://github.com/velloo-design/velloo/discussions
     about: Ask questions, share designs, and propose ideas in Discussions.
   - name: Security report
-    url: https://github.com/velloo/velloo/security/advisories/new
+    url: https://github.com/velloo-design/velloo/security/advisories/new
     about: Report a vulnerability privately. Please do not open a public issue.

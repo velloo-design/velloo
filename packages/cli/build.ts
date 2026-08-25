@@ -233,6 +233,15 @@ for (const { pkg, paths } of PKG_ASSETS) {
   }
 }
 
+// 4d. Ship the docs npm renders/expects: README (the npmjs page), LICENSE +
+//     NOTICE (Apache-2.0), and the bundled third-party license texts.
+//     README/LICENSE/NOTICE are auto-included by pack; THIRD-PARTY-NOTICES.md
+//     rides the files whitelist.
+step("copying docs → dist/");
+for (const doc of ["README.md", "LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md"]) {
+  cpSync(join(repoRoot, doc), join(distDir, doc));
+}
+
 // 5. Generate the publishable manifest, pinned to exact installed versions.
 step("writing dist/package.json");
 const dependencies: Record<string, string> = {};
@@ -247,10 +256,28 @@ const manifest = {
   name: "velloo",
   version: VERSION,
   type: "module",
-  description: "Velloo — code-shaped design canvas for solo devs",
+  description:
+    "Local-first, code-shaped design canvas — your AI agent designs with your real components, in your repo",
+  license: "Apache-2.0",
+  homepage: "https://github.com/velloo-design/velloo#readme",
+  repository: { type: "git", url: "git+https://github.com/velloo-design/velloo.git" },
+  bugs: { url: "https://github.com/velloo-design/velloo/issues" },
+  keywords: [
+    "design",
+    "design-tool",
+    "canvas",
+    "mcp",
+    "ai-agent",
+    "claude-code",
+    "shadcn",
+    "tailwind",
+    "mui",
+    "local-first",
+    "bun",
+  ],
   bin: { velloo: "./cli.js" },
   engines: { bun: ">=1.3.0" },
-  files: ["cli.js", "canvas", "skills", "pkgs"],
+  files: ["cli.js", "canvas", "skills", "pkgs", "NOTICE", "THIRD-PARTY-NOTICES.md"],
   dependencies,
   ...(Object.keys(optionalDependencies).length ? { optionalDependencies } : {}),
 };
