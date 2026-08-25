@@ -129,3 +129,9 @@ export const AGENT_IDS = Object.keys(AGENTS);
 
 /** The default set wired without an explicit choice — project scope only. */
 export const PROJECT_AGENT_IDS = ["claude-code", "cursor"];
+
+/**
+ * The interactive default: global scope — one wire covers every project
+ * (the global stdio entry resolves the design folder from each cwd).
+ */
+export const GLOBAL_AGENT_IDS = ["claude-code-global", "cursor-global"];

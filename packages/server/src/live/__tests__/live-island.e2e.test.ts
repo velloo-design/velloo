@@ -137,7 +137,7 @@ export function TallChart() {
   );
   bundler = new LiveBundler(
     join(tmp, "velloo"),
-    () => ({ root: hostRoot, aliases: { "@/*": "src/*" } }),
+    () => ({ hostApp: { root: hostRoot, aliases: { "@/*": "src/*" } } }),
     () => liveExtensions(extensions),
   );
   if (hasChromium) {

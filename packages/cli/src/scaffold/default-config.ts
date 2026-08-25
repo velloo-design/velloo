@@ -16,6 +16,12 @@ interface DefaultConfigOpts {
    */
   hostApp?: HostApp;
   /**
+   * Named host apps for a monorepo scan — one entry per route-bearing app,
+   * keyed by the same short prefix the scan used for screen ids ("web",
+   * "admin"), so `extension.app` can route a live island to the right app.
+   */
+  hostApps?: Record<string, HostApp>;
+  /**
    * Opt-in product feedback, captured by the interactive wizard after the
    * user signs in. Absent ⇒ feedback stays off (the default).
    */
@@ -55,6 +61,7 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ...(opts.defaultScreen ? { defaultScreen: opts.defaultScreen } : {}),
     ...(opts.defaultBoard ? { defaultBoard: opts.defaultBoard } : {}),
     ...(opts.hostApp ? { hostApp: opts.hostApp } : {}),
+    ...(opts.hostApps ? { hostApps: opts.hostApps } : {}),
     ...(opts.feedback ? { feedback: opts.feedback } : {}),
     ...(opts.styling ? { styling: opts.styling } : {}),
     ...(opts.codegen ? { codegen: opts.codegen } : {}),

@@ -67,3 +67,47 @@ describe("scanAppRoutes — TanStack Router", () => {
     expect(result.routes.map((r) => r.routePath).sort()).toEqual(["/", "/about"]);
   });
 });
+
+describe("scanAppRoutes — SvelteKit", () => {
+  test("+page.svelte dirs are routes; groups drop, layouts/errors are not pages", async () => {
+    await writeFile(
+      join(appRoot, "package.json"),
+      JSON.stringify({ devDependencies: { "@sveltejs/kit": "^2.0.0", vite: "^7.0.0" } }),
+      "utf8",
+    );
+    await write("src/routes/+page.svelte"); // → "/"
+    await write("src/routes/+layout.svelte"); // layout → skip
+    await write("src/routes/+error.svelte"); // error page → skip
+    await write("src/routes/about/+page.svelte"); // → "/about"
+    await write("src/routes/about/+page.server.ts"); // load sibling → skip
+    await write("src/routes/(marketing)/pricing/+page.svelte"); // group drops → "/pricing"
+    await write("src/routes/blog/[slug]/+page.svelte"); // → "/blog/[slug]"
+
+    const result = await scanAppRoutes(appRoot);
+    expect(result.framework).toBe("sveltekit");
+    expect(result.routes.map((r) => r.routePath).sort()).toEqual([
+      "/",
+      "/about",
+      "/blog/[slug]",
+      "/pricing",
+    ]);
+    expect(result.routes.map((r) => r.id)).toContain("blog-slug");
+  });
+});
+
+describe("scanAppRoutes — Nuxt", () => {
+  test("pages/*.vue map to routes with bracket params", async () => {
+    await writeFile(
+      join(appRoot, "package.json"),
+      JSON.stringify({ dependencies: { nuxt: "^3.13.0" } }),
+      "utf8",
+    );
+    await write("pages/index.vue", "<template><div /></template>");
+    await write("pages/about.vue", "<template><div /></template>");
+    await write("pages/users/[id].vue", "<template><div /></template>");
+
+    const result = await scanAppRoutes(appRoot);
+    expect(result.framework).toBe("nuxt");
+    expect(result.routes.map((r) => r.routePath).sort()).toEqual(["/", "/about", "/users/[id]"]);
+  });
+});

@@ -1,4 +1,6 @@
-import type { Board, Screen } from "@velloo/schema";
+import type { Board, BoardGroup, Frame, Screen } from "@velloo/schema";
+import { idFromRoutePath, titleCaseFromSegment } from "./route-names.ts";
+import { appSlug } from "./scan-apps.ts";
 import type { ScannedRoute } from "./types.ts";
 
 /**
@@ -160,8 +162,8 @@ export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
   }));
 }
 
-interface BuildBoardOpts {
-  screens: Screen[];
+interface BuildBoardsOpts {
+  routes: ScannedRoute[];
   /** Frame width (default 1024). */
   frameWidth?: number;
   /** Frame height (default 720). */
@@ -172,28 +174,91 @@ interface BuildBoardOpts {
   gutter?: number;
 }
 
+interface BoardDims {
+  w: number;
+  h: number;
+  cols: number;
+  gutter: number;
+}
+
+/** Top-level route segment ("" for the root page) — the grouping key. */
+function sectionOf(routePath: string): string {
+  return routePath.split("/").filter(Boolean)[0] ?? "";
+}
+
 /**
- * Lay every scanned screen out in a regular grid on one board. The
- * grid is generated so the user opens the canvas to a wall of frames
- * matching their app's routes, ready for the agent to design.
+ * Lay one app's scanned routes out on a board. Few routes → the historical
+ * flat grid. Enough routes with repeated top-level sections ("/settings/*",
+ * "/blog/*") → one horizontal band per section, each multi-route section
+ * wrapped in a BoardGroup so the canvas opens to an organized wall instead
+ * of an undifferentiated grid. Single-route sections share a leading band.
  */
-export function buildBoardFromScan(opts: BuildBoardOpts): Board {
-  const w = opts.frameWidth ?? 1024;
-  const h = opts.frameHeight ?? 720;
-  const cols = opts.columns ?? 3;
-  const gutter = opts.gutter ?? 80;
-  return {
-    id: "app",
-    name: "App",
-    frames: opts.screens.map((screen, i) => ({
-      id: `f-${screen.id}`,
-      screen: screen.id,
+function buildAppBoard(id: string, name: string, routes: ScannedRoute[], dims: BoardDims): Board {
+  const { w, h, cols, gutter } = dims;
+  const gridFrames = (rs: ScannedRoute[], startY: number, group?: string): Frame[] =>
+    rs.map((route, i) => ({
+      id: `f-${route.id}`,
+      screen: route.id,
       x: 80 + (i % cols) * (w + gutter),
-      y: 80 + Math.floor(i / cols) * (h + gutter),
+      y: startY + Math.floor(i / cols) * (h + gutter),
       w,
       h,
-      label: screen.name,
-    })),
-    groups: [],
+      label: route.name,
+      ...(group ? { group } : {}),
+    }));
+  const bandHeight = (count: number) => Math.ceil(count / cols) * (h + gutter);
+
+  const sections = new Map<string, ScannedRoute[]>();
+  for (const route of routes) {
+    const key = sectionOf(route.routePath);
+    const list = sections.get(key);
+    if (list) list.push(route);
+    else sections.set(key, [route]);
+  }
+  const multi = [...sections.entries()].filter(([key, rs]) => key !== "" && rs.length >= 2);
+
+  if (routes.length < 5 || multi.length === 0) {
+    return { id, name, frames: gridFrames(routes, 80), groups: [] };
+  }
+
+  const singles = routes.filter((r) => !multi.some(([key]) => key === sectionOf(r.routePath)));
+  const frames: Frame[] = [];
+  const groups: BoardGroup[] = [];
+  let y = 80;
+  if (singles.length > 0) {
+    frames.push(...gridFrames(singles, y));
+    y += bandHeight(singles.length) + gutter;
+  }
+  for (const [key, rs] of multi) {
+    const groupId = `g-${idFromRoutePath(`/${key}`)}`;
+    groups.push({ id: groupId, name: titleCaseFromSegment(key) });
+    frames.push(...gridFrames(rs, y, groupId));
+    y += bandHeight(rs.length) + gutter;
+  }
+  return { id, name, frames, groups };
+}
+
+/**
+ * Build the scanned boards: one board per app (a monorepo scan yields
+ * several, named after each app's directory), each internally grouped by
+ * route section. A single-app scan keeps the historical `app`/"App" board.
+ */
+export function buildBoardsFromScan(opts: BuildBoardsOpts): Board[] {
+  const dims: BoardDims = {
+    w: opts.frameWidth ?? 1024,
+    h: opts.frameHeight ?? 720,
+    cols: opts.columns ?? 3,
+    gutter: opts.gutter ?? 80,
   };
+  const byApp = new Map<string | undefined, ScannedRoute[]>();
+  for (const route of opts.routes) {
+    const list = byApp.get(route.appRel);
+    if (list) list.push(route);
+    else byApp.set(route.appRel, [route]);
+  }
+  return [...byApp.entries()].map(([appRel, routes]) =>
+    appRel === undefined
+      ? buildAppBoard("app", "App", routes, dims)
+      : buildAppBoard(appSlug(appRel), appRel || "App", routes, dims),
+  );
 }

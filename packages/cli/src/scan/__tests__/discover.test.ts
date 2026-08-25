@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findScanRoot, resolveScanRoot } from "../discover.ts";
+import { discoverScanRoots, findScanRoot } from "../discover.ts";
 
 let root: string;
 
@@ -47,26 +47,25 @@ describe("findScanRoot", () => {
   });
 });
 
-describe("resolveScanRoot", () => {
-  test("an explicit scanDir wins and is not flagged as auto-discovered", async () => {
-    const r = await resolveScanRoot(root, "web/frontend");
-    expect(r.scanRoot).toBe(join(root, "web", "frontend"));
-    expect(r.relToApp).toBe(join("web", "frontend"));
-    expect(r.autoDiscovered).toBe(false);
+describe("discoverScanRoots", () => {
+  test("returns every React app in a monorepo, best-ranked first", async () => {
+    await writePkg("apps/web", { next: "15.0.0", react: "19.0.0" });
+    await writePkg("apps/admin", { react: "19.0.0" });
+    await writePkg("packages/eslint-config", {}); // not React — ignored
+    const found = await discoverScanRoots(root);
+    expect(found.map((a) => a.rel).sort()).toEqual([join("apps", "admin"), join("apps", "web")]);
   });
 
-  test("auto-discovers a nested UI folder when no scanDir is given", async () => {
-    await writePkg("web/frontend", { react: "19.0.0" });
-    const r = await resolveScanRoot(root);
-    expect(r.scanRoot).toBe(join(root, "web", "frontend"));
-    expect(r.autoDiscovered).toBe(true);
+  test("a React app root comes first, ahead of nested apps", async () => {
+    await writePkg(".", { react: "19.0.0" });
+    await writePkg("examples/demo", { react: "19.0.0" });
+    const found = await discoverScanRoots(root);
+    expect(found[0]?.rel).toBe("");
+    expect(found[0]?.dir).toBe(root);
   });
 
-  test("falls back to the app root when discovery finds nothing", async () => {
+  test("empty when nothing React-shaped exists", async () => {
     await writeFile(join(root, "requirements.txt"), "fastapi\n", "utf8");
-    const r = await resolveScanRoot(root);
-    expect(r.scanRoot).toBe(root);
-    expect(r.relToApp).toBe("");
-    expect(r.autoDiscovered).toBe(false);
+    expect(await discoverScanRoots(root)).toEqual([]);
   });
 });

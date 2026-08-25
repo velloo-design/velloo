@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
+import { idFromRoutePath, nameFromRoutePath } from "./route-names.ts";
+import { scanServerRoutes } from "./server-routes.ts";
 import type { Framework, ScannedRoute, ScanResult } from "./types.ts";
 import { dirExists, walkFiles } from "./walk.ts";
 
@@ -14,42 +16,6 @@ function hasExt(file: string): boolean {
 function stripExt(file: string): string {
   const dot = file.lastIndexOf(".");
   return dot === -1 ? file : file.slice(0, dot);
-}
-
-function titleCaseFromSegment(segment: string): string {
-  if (segment === "") return "Index";
-  if (segment === "index") return "Index";
-  // Convert "user-settings" → "User settings", "_id" → "Id".
-  const cleaned = segment.replace(/^[_[]+|[\]]+$/g, "").replace(/[-_]+/g, " ");
-  if (!cleaned) return segment;
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-}
-
-/**
- * Produce a stable, slug-safe screen id from a route path. Examples:
- *   "/"                    → "index"
- *   "/dashboard"           → "dashboard"
- *   "/settings/account"    → "settings-account"
- *   "/blog/[slug]"         → "blog-slug"
- */
-function idFromRoutePath(routePath: string): string {
-  if (routePath === "/" || routePath === "") return "index";
-  const out = routePath
-    .replace(/^\//, "")
-    .replace(/\//g, "-")
-    .replace(/[[\]()]/g, "")
-    .replace(/^_/, "")
-    .replace(/[^a-zA-Z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-  return out || "index";
-}
-
-function nameFromRoutePath(routePath: string): string {
-  if (routePath === "/" || routePath === "") return "Home";
-  const segments = routePath.replace(/^\//, "").split("/").map(titleCaseFromSegment);
-  return segments.join(" / ");
 }
 
 /**
@@ -110,15 +76,22 @@ async function scanNextPages(pagesDir: string): Promise<ScannedRoute[]> {
 }
 
 /**
- * Generic fallback for Vite / React Router / Astro — walk
+ * Generic fallback for Vite / React Router / Astro / Nuxt — walk
  * `src/pages/`, `src/routes/`, or `pages/` and treat each file as a
- * route. Astro and Vite-with-filesystem-router both follow this
- * convention closely enough to share one implementation.
+ * route. Astro, Nuxt (`.vue`, bracket params), and
+ * Vite-with-filesystem-router all follow this convention closely
+ * enough to share one implementation.
  */
 async function scanGenericPagesDir(dir: string): Promise<ScannedRoute[]> {
   const out: ScannedRoute[] = [];
   for await (const file of walkFiles(dir)) {
-    if (!hasExt(file) && !file.endsWith(".astro")) continue;
+    if (
+      !hasExt(file) &&
+      !file.endsWith(".astro") &&
+      !file.endsWith(".vue") &&
+      !file.endsWith(".svelte")
+    )
+      continue;
     const base = basename(file);
     if (base.startsWith("_")) continue;
     const rel = relative(dir, file);
@@ -126,6 +99,30 @@ async function scanGenericPagesDir(dir: string): Promise<ScannedRoute[]> {
     const last = stripExt(segments.pop() ?? "");
     const path = last === "index" ? segments : [...segments, last];
     const routePath = path.length === 0 ? "/" : `/${path.join("/")}`;
+    out.push({
+      id: idFromRoutePath(routePath),
+      name: nameFromRoutePath(routePath),
+      routePath,
+      sourceFile: file,
+    });
+  }
+  return dedupe(out);
+}
+
+/**
+ * Walk a SvelteKit routes dir (`src/routes`). Only `+page.svelte` files are
+ * pages — the route is the *directory* path, so `+layout` / `+error` /
+ * `+page.server.ts` siblings never match. Route groups `(app)` drop out of
+ * the URL; `[param]` directories already use the bracket convention the
+ * id/name logic understands.
+ */
+async function scanSvelteKit(dir: string): Promise<ScannedRoute[]> {
+  const out: ScannedRoute[] = [];
+  for await (const file of walkFiles(dir)) {
+    if (basename(file) !== "+page.svelte") continue;
+    const rel = relative(dir, dirname(file));
+    const segments = rel === "" ? [] : rel.split("/").filter((s) => !/^\(.*\)$/.test(s));
+    const routePath = segments.length === 0 ? "/" : `/${segments.join("/")}`;
     out.push({
       id: idFromRoutePath(routePath),
       name: nameFromRoutePath(routePath),
@@ -249,6 +246,10 @@ async function detectFramework(appRoot: string): Promise<Framework> {
     return "next-app";
   }
   if ("astro" in deps) return "astro";
+  // SvelteKit rides on Vite too — its dedicated conventions must win over
+  // the bare-vite fallback.
+  if ("@sveltejs/kit" in deps) return "sveltekit";
+  if ("nuxt" in deps) return "nuxt";
   // TanStack Router rides on Vite, so check it first — its file conventions
   // (layouts, route groups, pathless segments) need dedicated parsing.
   if (
@@ -294,6 +295,25 @@ export async function scanAppRoutes(appRoot: string): Promise<ScanResult> {
       }
     }
   }
+  if (framework === "sveltekit") {
+    const dir = join(appRoot, "src", "routes");
+    if (await dirExists(dir)) {
+      return { framework, routes: await scanSvelteKit(dir), routesRoot: dir };
+    }
+  }
+  if (framework === "nuxt") {
+    // Nuxt 4 defaults to `app/pages`; Nuxt 3 to `pages` (or `src/pages` with srcDir).
+    const candidates = [
+      join(appRoot, "app", "pages"),
+      join(appRoot, "src", "pages"),
+      join(appRoot, "pages"),
+    ];
+    for (const dir of candidates) {
+      if (await dirExists(dir)) {
+        return { framework, routes: await scanGenericPagesDir(dir), routesRoot: dir };
+      }
+    }
+  }
   if (framework === "tanstack-router") {
     const candidates = [
       await tanstackRoutesDir(appRoot),
@@ -323,16 +343,30 @@ export async function scanAppRoutes(appRoot: string): Promise<ScanResult> {
     }
   }
 
+  // No JS framework structure — the app may be server-rendered (Django /
+  // Flask / Rails / Laravel). Best-effort route extraction from the server
+  // router; the placeholder screens don't care what renders the real page.
+  const server = await scanServerRoutes(appRoot);
+  if (server) return server;
+
   return { framework, routes: [], routesRoot: appRoot };
 }
 
-/** True when the directory looks like a React app worth scanning. */
-export async function looksLikeReactApp(appRoot: string): Promise<boolean> {
+/**
+ * Dependencies marking a directory as a UI app worth scanning for routes.
+ * Broader than React on purpose: scan only extracts route *shape* — the
+ * placeholders are rebuilt from velloo's own components — so SvelteKit /
+ * Nuxt apps scan just as well.
+ */
+const UI_DEPS = ["react", "next", "astro", "@sveltejs/kit", "svelte", "nuxt", "vue"];
+
+/** True when the directory looks like a UI app worth scanning. */
+export async function looksLikeUiApp(appRoot: string): Promise<boolean> {
   const pkg = await readPackageJson(appRoot);
   if (!pkg) return false;
   const deps: Record<string, unknown> = {
     ...((pkg.dependencies as Record<string, unknown>) ?? {}),
     ...((pkg.devDependencies as Record<string, unknown>) ?? {}),
   };
-  return "react" in deps || "next" in deps || "astro" in deps;
+  return UI_DEPS.some((d) => d in deps);
 }

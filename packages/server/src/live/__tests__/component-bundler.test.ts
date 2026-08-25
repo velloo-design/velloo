@@ -3,7 +3,12 @@ import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { Extension, HostApp } from "@velloo/schema";
-import { LiveBundler, liveExtensions } from "../component-bundler.ts";
+import {
+  type HostAppsConfig,
+  LiveBundler,
+  liveExtensions,
+  resolveLiveImportWarning,
+} from "../component-bundler.ts";
 
 /**
  * Real `Bun.build` against a simulated host app (no fs mocks, per repo
@@ -54,12 +59,32 @@ function liveExt(importPath: string): Extension {
 function makeBundler(
   extensions: Record<string, Extension>,
   hostApp: HostApp | undefined = { root: hostRoot, aliases: { "@/*": "src/*" } },
+  hostApps?: Record<string, HostApp>,
 ): LiveBundler {
   return new LiveBundler(
     join(tmp, "velloo"),
-    () => hostApp,
+    () => ({ hostApp, hostApps }),
     () => liveExtensions(extensions),
   );
+}
+
+/** A second simulated host app (its own node_modules react + one component). */
+async function makeHost(name: string, componentFile: string, marker: string): Promise<string> {
+  const root = join(tmp, name);
+  await mkdir(join(root, "node_modules"), { recursive: true });
+  await mkdir(join(root, "src", dirname(componentFile)), { recursive: true });
+  await symlink(reactPkg, join(root, "node_modules", "react"), "dir");
+  await symlink(reactDomPkg, join(root, "node_modules", "react-dom"), "dir");
+  await writeFile(
+    join(root, "src", `${componentFile}.tsx`),
+    `import * as React from "react";
+export function C() {
+  return React.createElement("div", { className: "${marker}" }, "x");
+}
+`,
+    "utf8",
+  );
+  return root;
 }
 
 describe("liveExtensions", () => {
@@ -128,5 +153,83 @@ describe("LiveBundler", () => {
     const third = await bundler.build();
     expect(third).not.toBe(first); // rebuilt
     expect(third.code).toContain("price-chart-marker");
+  });
+});
+
+describe("LiveBundler — multiple host apps", () => {
+  test("extensions spanning apps serve a loader; each app bundles from its own root", async () => {
+    const adminRoot = await makeHost("admin", "widgets/UsageChart", "usage-chart-marker");
+    const bundler = makeBundler(
+      {
+        PriceChart: liveExt("@/charts/PriceChart"), // default host app
+        UsageChart: { ...liveExt("@/widgets/UsageChart"), app: "admin" },
+      },
+      { root: hostRoot, aliases: { "@/*": "src/*" } },
+      { admin: { root: adminRoot, aliases: { "@/*": "src/*" } } },
+    );
+
+    const root = await bundler.build();
+    expect(root.errors).toEqual([]);
+    // The root module is the loader — merged registry + per-island runtimes.
+    expect(root.code).toContain("runtimes");
+    expect(root.code).toContain("bundle-app.js?app=");
+
+    const defaultBundle = await bundler.buildApp("");
+    expect(defaultBundle.code).toContain("price-chart-marker");
+    expect(defaultBundle.code).not.toContain("usage-chart-marker");
+    const adminBundle = await bundler.buildApp("admin");
+    expect(adminBundle.code).toContain("usage-chart-marker");
+    expect(adminBundle.code).not.toContain("price-chart-marker");
+  });
+
+  test("a single named app still serves its bundle directly (no loader)", async () => {
+    const adminRoot = await makeHost("admin2", "widgets/UsageChart", "usage-chart-marker");
+    const bundler = makeBundler(
+      { UsageChart: { ...liveExt("@/widgets/UsageChart"), app: "admin" } },
+      undefined,
+      { admin: { root: adminRoot, aliases: { "@/*": "src/*" } } },
+    );
+    const root = await bundler.build();
+    expect(root.errors).toEqual([]);
+    expect(root.code).toContain("usage-chart-marker");
+    expect(root.code).not.toContain("bundle-app.js?app=");
+  });
+
+  test("an unknown app key yields a structured error, not a crash", async () => {
+    const bundler = makeBundler({
+      Ghost: { ...liveExt("@/charts/PriceChart"), app: "nope" },
+    });
+    const root = await bundler.build();
+    expect(root.errors.some((e) => e.message.includes('app "nope"'))).toBe(true);
+  });
+});
+
+describe("resolveLiveImportWarning — multiple host apps", () => {
+  const config = (hostApps?: Record<string, HostApp>): HostAppsConfig => ({
+    hostApp: { root: hostRoot, aliases: { "@/*": "src/*" } },
+    hostApps,
+  });
+
+  test("resolves against the named app's root", async () => {
+    const adminRoot = await makeHost("admin3", "widgets/UsageChart", "usage-chart-marker");
+    const cfg = config({ admin: { root: adminRoot, aliases: { "@/*": "src/*" } } });
+    expect(
+      resolveLiveImportWarning(join(tmp, "velloo"), cfg, "@/widgets/UsageChart", "admin"),
+    ).toBeNull();
+    // The same path does NOT resolve from the default app.
+    expect(
+      resolveLiveImportWarning(join(tmp, "velloo"), cfg, "@/widgets/UsageChart"),
+    ).not.toBeNull();
+  });
+
+  test("an unknown app key warns with the known keys", () => {
+    const warning = resolveLiveImportWarning(
+      join(tmp, "velloo"),
+      config({ admin: { root: hostRoot } }),
+      "@/charts/PriceChart",
+      "nope",
+    );
+    expect(warning).toContain('app "nope"');
+    expect(warning).toContain("admin");
   });
 });

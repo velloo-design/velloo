@@ -87,7 +87,7 @@ beforeEach(async () => {
   jit = new TailwindJit(provider, join(folder.root, "screens"));
   const bundler = new LiveBundler(
     folder.root,
-    () => folder.config.hostApp,
+    () => folder.config,
     () => liveExtensions(folder.config.extensions),
   );
   const canvasBundler = new CanvasBundler(

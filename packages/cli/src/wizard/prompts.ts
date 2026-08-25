@@ -1,3 +1,4 @@
+import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   cancel,
@@ -17,7 +18,7 @@ import type { ProductSurface } from "../scaffold/sample-page.ts";
 import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
 import { VIBES } from "../scaffold/vibes.ts";
 import { detectHost } from "../scan/detect.ts";
-import { resolveScanRoot, scanAppRoutes } from "../scan/index.ts";
+import { type AppsScanResult, primaryApp, scanApps } from "../scan/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 import { STACKS } from "./stacks.ts";
@@ -49,32 +50,54 @@ function describeDetected(d: ReturnType<typeof detectHost>): string {
 }
 
 /**
- * Scan the host app's routes and let the user choose which to scaffold into
- * screens + board frames. Every screen is pre-checked, so just pressing Enter
- * builds them all (matching the non-interactive path). The "All screens" group
- * header is a real select-all/none: toggling it (space) checks or unchecks
- * every screen at once; individual screens can still be unchecked to prune.
- * Returns the chosen routes ([] when none are detected or the user unchecks
- * everything → init falls back to a blank board) or null when the user cancels.
+ * Let the user choose which scanned routes to scaffold into screens + board
+ * frames. The top (default) option scaffolds everything and flags the handoff
+ * prompt to let the agent pick the first screen to design; "let me pick"
+ * drops into a multiselect grouped per app (a monorepo scan has several —
+ * each group header is a real select-all/none toggle). Returns the chosen
+ * routes ([] when the user unchecks everything → init falls back to a blank
+ * board) plus the agent-picks-first flag, or null when the user cancels.
  */
-async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
-  const spin = spinner();
-  spin.start("Scanning your app's routes");
-  const { routes } = await scanAppRoutes(appRoot);
-  spin.stop(
-    routes.length > 0
-      ? `Found ${routes.length} screen${routes.length === 1 ? "" : "s"}`
-      : "No routes detected — starting with a blank board",
-  );
-  if (routes.length === 0) return [];
+async function pickScreens(
+  scanned: AppsScanResult,
+): Promise<{ routes: ScannedRoute[]; agentPicksFirst: boolean } | null> {
+  const { apps, routes } = scanned;
 
-  // A single selectable group: its header toggles all screens (the group key
-  // never appears in the result — only the per-screen ids do).
+  const mode = await select<"all" | "choose">({
+    message: "Which screens should I scaffold as placeholders?",
+    options: [
+      {
+        value: "all",
+        label: `All ${routes.length} — my agent picks where to start`,
+        hint: "recommended",
+      },
+      { value: "choose", label: "Let me pick which screens to include" },
+    ],
+    initialValue: "all",
+  });
+  if (isAborted(mode)) return null;
+  if (mode === "all") return { routes, agentPicksFirst: true };
+
+  // One selectable group per app (a single-app scan gets one "All screens"
+  // group): the header toggles the whole app's screens at once; individual
+  // screens can still be unchecked to prune. Group keys never appear in the
+  // result — only the per-screen ids do. Multi-app labels drop the "Web / "
+  // name prefix the scan added, since the group header already names the app.
+  const options: Record<string, { value: string; label: string; hint?: string }[]> = {};
+  if (apps.length > 1) {
+    for (const app of apps) {
+      options[app.rel || "app root"] = app.routes.map((r) => ({
+        value: r.id,
+        label: r.name.replace(/^[^/]+ \/ /, ""),
+        hint: r.routePath,
+      }));
+    }
+  } else {
+    options["All screens"] = routes.map((r) => ({ value: r.id, label: r.name, hint: r.routePath }));
+  }
   const picked = await groupMultiselect<string>({
     message: "Which screens should I build boards for?",
-    options: {
-      "All screens": routes.map((r) => ({ value: r.id, label: r.name, hint: r.routePath })),
-    },
+    options,
     initialValues: routes.map((r) => r.id),
     selectableGroups: true,
     required: false,
@@ -82,7 +105,7 @@ async function pickScreens(appRoot: string): Promise<ScannedRoute[] | null> {
   if (isAborted(picked)) return null;
 
   const chosen = new Set(picked);
-  return routes.filter((r) => chosen.has(r.id));
+  return { routes: routes.filter((r) => chosen.has(r.id)), agentPicksFirst: false };
 }
 
 /**
@@ -115,20 +138,55 @@ async function promptShareAndFeedback(): Promise<{
 
   if (!signedIn) return {};
 
-  const choice = await select<"yes" | "yes-contact" | "no">({
-    message: "Enable the feedback tool? Your agent can send Velloo product feedback to improve it.",
-    options: [
-      { value: "yes", label: "Yes", hint: "Agent can send product feedback" },
-      {
-        value: "yes-contact",
-        label: "Yes — and it's OK to contact me about it",
-        hint: "We may follow up by email",
-      },
-      { value: "no", label: "No", hint: "Don't enable feedback" },
-    ],
-    initialValue: "yes",
-  });
-  if (isAborted(choice)) return null;
+  const details = [
+    "The `send_feedback` tool lets your agent send free-text product feedback",
+    "about Velloo itself — a confusing tool, a missing capability, something",
+    "that slowed it down. Never about your design or your project.",
+    "",
+    "How it behaves:",
+    "  - The agent always shows you the exact message and asks before sending.",
+    "  - It is instructed to never include your design content, code, or",
+    "    file/repo paths — only a plain-prose description of the issue.",
+    `  - "Yes": anonymous — the feedback isn't linked to you and we won't`,
+    "    contact you about it.",
+    `  - "Yes — contact OK": we may follow up by email about your feedback.`,
+    `  - "No": the tool is never registered, so the agent can't send anything.`,
+  ].join("\n");
+
+  // clack's select has no key-hook for a "press ? for more" footer, so the
+  // details live behind a re-asking option instead.
+  let choice: "yes" | "yes-contact" | "no";
+  for (;;) {
+    const picked = await select<"yes" | "yes-contact" | "no" | "details">({
+      message:
+        "Enable the feedback tool? Your agent can send Velloo product feedback to improve it.",
+      options: [
+        {
+          value: "yes",
+          label: "Yes — anonymous feedback",
+          hint: "agent always confirms with you before sending",
+        },
+        {
+          value: "yes-contact",
+          label: "Yes — and it's OK to contact me about it",
+          hint: "we may follow up by email",
+        },
+        { value: "no", label: "No", hint: "the tool is disabled entirely" },
+        {
+          value: "details",
+          label: "What exactly gets sent?",
+          hint: "prints details, then re-asks",
+        },
+      ],
+      initialValue: "yes",
+    });
+    if (isAborted(picked)) return null;
+    if (picked !== "details") {
+      choice = picked;
+      break;
+    }
+    note(details, "The feedback tool");
+  }
   if (choice === "no") return {};
   return { feedback: { enabled: true, contactOk: choice === "yes-contact" } };
 }
@@ -226,52 +284,89 @@ export async function runInteractive(ctx: {
   if (isAborted(folderInput)) return abort();
   const folder = resolve(ctx.appRoot, folderInput || "velloo");
 
+  // An empty app root has nothing to scan, so scratch leads; anywhere with
+  // real content defaults to mirroring what's there.
+  const rootEntries = await readdir(ctx.appRoot).catch(() => [] as string[]);
+  const emptyRoot = rootEntries.filter((e) => !e.startsWith(".")).length === 0;
+  const startOptions = {
+    scan: {
+      value: "scan" as const,
+      label: "Scan what I have",
+      hint: "Detect your routes + theme and build a starting board",
+    },
+    scratch: {
+      value: "scratch" as const,
+      label: "Start from scratch",
+      hint: "Pick a component library + a sample or blank board",
+    },
+  };
   const start = await select<"scratch" | "scan">({
     message: "How do you want to start?",
-    options: [
-      {
-        value: "scratch",
-        label: "Start from scratch",
-        hint: "Pick a component library + a sample or blank board",
-      },
-      {
-        value: "scan",
-        label: "Scan what I have",
-        hint: "Detect your routes + theme and build a starting board",
-      },
-    ],
-    initialValue: "scratch",
+    options: emptyRoot
+      ? [startOptions.scratch, startOptions.scan]
+      : [startOptions.scan, startOptions.scratch],
+    initialValue: emptyRoot ? "scratch" : "scan",
   });
   if (isAborted(start)) return abort();
 
   if (start === "scan") {
-    const { scanRoot, relToApp, autoDiscovered } = await resolveScanRoot(ctx.appRoot, ctx.scanDir);
-    if (relToApp && relToApp !== ".") {
-      note(
-        `Your app root has no package.json — scanning ${pc.cyan(relToApp)} instead.`,
-        autoDiscovered ? "Found your UI" : "Scanning subfolder",
-      );
+    const spin = spinner();
+    spin.start("Scanning your app's routes");
+    const scanned = await scanApps(ctx.appRoot, ctx.scanDir);
+    const appsSuffix = scanned.apps.length > 1 ? ` across ${scanned.apps.length} apps` : "";
+    spin.stop(
+      scanned.routes.length > 0
+        ? `Found ${scanned.routes.length} screen${scanned.routes.length === 1 ? "" : "s"}${appsSuffix}`
+        : "No routes detected — let's set up from scratch instead.",
+    );
+
+    if (scanned.routes.length > 0) {
+      // Rank-best app drives detection until the user picks screens; then the
+      // app contributing most of the selection takes over (theme + hostApp).
+      const rankPrimary = scanned.apps[0];
+      if (scanned.apps.length > 1) {
+        const lines = scanned.apps.map(
+          (a) =>
+            `${pc.cyan(a.rel || ".")} — ${a.routes.length} screen${a.routes.length === 1 ? "" : "s"}`,
+        );
+        lines.push("", "Each app gets its own board; screen ids are prefixed per app.");
+        note(lines.join("\n"), `Found ${scanned.apps.length} apps`);
+      } else if (rankPrimary?.rel && rankPrimary.rel !== ".") {
+        note(
+          `Your app root has no package.json — scanning ${pc.cyan(rankPrimary.rel)} instead.`,
+          ctx.scanDir ? "Scanning subfolder" : "Found your UI",
+        );
+      }
+      let detected = detectHost(rankPrimary?.dir ?? ctx.appRoot);
+      note(describeDetected(detected), "Detected in your app");
+
+      const picked = await pickScreens(scanned);
+      if (picked === null) return abort();
+      // Theme import + hostApp follow the app the user actually kept.
+      const primary = primaryApp(scanned.apps, picked.routes) ?? rankPrimary;
+      const scanRoot = primary?.dir ?? ctx.appRoot;
+      if (primary && primary !== rankPrimary) detected = detectHost(primary.dir);
+
+      const share = await promptShareAndFeedback();
+      if (share === null) return abort();
+      return {
+        appRoot: ctx.appRoot,
+        scanRoot,
+        folder,
+        // Scan renders against the bundled snapshot and imports the host theme;
+        // it never writes into the app.
+        library: "shadcn-react",
+        source: "binary",
+        componentsRelative: "src/components/ui",
+        initialContent: "scan",
+        detected,
+        selectedRoutes: picked.routes,
+        agentPicksFirst: picked.agentPicksFirst,
+        ...share,
+      };
     }
-    const detected = detectHost(scanRoot);
-    note(describeDetected(detected), "Detected in your app");
-    const selectedRoutes = await pickScreens(scanRoot);
-    if (selectedRoutes === null) return abort();
-    const share = await promptShareAndFeedback();
-    if (share === null) return abort();
-    return {
-      appRoot: ctx.appRoot,
-      scanRoot,
-      folder,
-      // Scan renders against the bundled snapshot and imports the host theme;
-      // it never writes into the app.
-      library: "shadcn-react",
-      source: "binary",
-      componentsRelative: "src/components/ui",
-      initialContent: "scan",
-      detected,
-      selectedRoutes,
-      ...share,
-    };
+    // Nothing scannable — fall through to the scratch questions rather than
+    // silently defaulting to a shadcn/indigo blank folder.
   }
 
   const library = await select<LibraryId>({

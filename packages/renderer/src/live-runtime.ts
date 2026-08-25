@@ -151,20 +151,24 @@ export const LIVE_RUNTIME = `
 
   import(BUNDLE_URL)
     .then(function (mod) {
-      if (!mod || !mod.components || typeof mod.createRoot !== 'function' || !mod.React) {
+      if (!mod || !mod.components) {
         clearTimeout(cap);
         settle();
         return;
       }
-      const React = mod.React;
-      const createRoot = mod.createRoot;
-      const ErrorBoundary = mod.ErrorBoundary;
 
       const mounts = markers.map(function (marker) {
         return new Promise(function (resolve) {
           const ref = marker.getAttribute('data-live-ref');
           const Comp = ref && mod.components[ref];
-          if (!Comp) { resolve(); return; }
+          // A multi-app loader exports a per-island runtime map — each
+          // island must mount with ITS host app's React copy. A single-app
+          // bundle exports React/createRoot at the top level (mod itself).
+          const rt = (mod.runtimes && ref && mod.runtimes[ref]) || mod;
+          if (!Comp || typeof rt.createRoot !== 'function' || !rt.React) { resolve(); return; }
+          const React = rt.React;
+          const createRoot = rt.createRoot;
+          const ErrorBoundary = rt.ErrorBoundary;
 
           let props = {};
           try { props = JSON.parse(marker.getAttribute('data-live-props') || '{}'); } catch (e) {}

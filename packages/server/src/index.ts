@@ -208,7 +208,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const broadcaster = new Broadcaster();
   const bundler = new LiveBundler(
     folder.root,
-    () => folder.config.hostApp,
+    () => folder.config,
     () => liveExtensions(folder.config.extensions),
   );
   const canvasBundler = new CanvasBundler(

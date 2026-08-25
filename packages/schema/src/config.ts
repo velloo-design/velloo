@@ -137,6 +137,16 @@ export const ConfigSchema = z
     /** Host app location for the live-island bundler. See `HostAppSchema`. */
     hostApp: HostAppSchema.optional(),
     /**
+     * Named host apps for monorepos — the multi-app twin of `hostApp`, keyed
+     * by a short app name (`"web"`, `"admin"`; `init`'s multi-app scan uses
+     * the same prefixes as the screen ids it generates). An extension can
+     * pick its app via `extension.app`, so its live island bundles against
+     * that app's root/aliases/node_modules (and its React copy). `hostApp`
+     * stays the default for extensions that don't name one. Absent ⇒
+     * single-app folder, everything resolves through `hostApp`.
+     */
+    hostApps: z.record(z.string().min(1), HostAppSchema).optional(),
+    /**
      * Opt-in product feedback. Set during interactive `init` (after the user
      * signs in). When `enabled`, the server exposes the `send_feedback` MCP
      * tool, which posts free-text feedback about Velloo to velloo-cloud.

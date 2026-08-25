@@ -23,16 +23,29 @@ import type { LiveBundler } from "../live/component-bundler.ts";
 export function createLiveRouter(bundler: LiveBundler): Hono {
   const r = new Hono();
 
+  const headers = {
+    "Content-Type": "text/javascript; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+  } as const;
+
   r.get("/bundle.js", async (c) => {
     const { code, errors } = await bundler.build();
     const body = errors.length
       ? `${code}\nexport const __velloo_live_error = ${JSON.stringify(errors)};\n`
       : code;
-    return c.body(body, 200, {
-      "Content-Type": "text/javascript; charset=utf-8",
-      "Cache-Control": "no-store",
-      "Access-Control-Allow-Origin": "*",
-    });
+    return c.body(body, 200, headers);
+  });
+
+  // One host app's bundle, imported by the loader module `/bundle.js` serves
+  // when a monorepo's live extensions span several apps (`?app=` is the
+  // `config.hostApps` key; empty = the default `config.hostApp`).
+  r.get("/bundle-app.js", async (c) => {
+    const { code, errors } = await bundler.buildApp(c.req.query("app") ?? "");
+    const body = errors.length
+      ? `${code}\nexport const __velloo_live_error = ${JSON.stringify(errors)};\n`
+      : code;
+    return c.body(body, 200, headers);
   });
 
   return r;

@@ -1,7 +1,8 @@
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { relative } from "node:path";
 import { isCancel, multiselect } from "@clack/prompts";
-import { AGENTS, type McpConnection, PROJECT_AGENT_IDS } from "./agents.ts";
+import { AGENTS, type AgentConfigFormat, GLOBAL_AGENT_IDS, type McpConnection } from "./agents.ts";
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import { installSkills, type SkillResult } from "./skill.ts";
@@ -14,21 +15,74 @@ export type { WriteResult } from "./write-config.ts";
 export const DEFAULT_MCP_URL = "http://127.0.0.1:7301/mcp";
 
 /**
- * Interactive agent checklist (project scope preselected). Shared by `velloo
- * connect` and the init wizard. Returns the chosen ids, or null on cancel.
+ * Interactive agent checklist (global scope first + preselected — one wire
+ * covers every project). Shared by `velloo connect` and the init wizard.
+ * Returns the chosen ids, or null on cancel.
  */
 export async function pickAgents(): Promise<string[] | null> {
+  const agents = Object.values(AGENTS).sort((a, b) =>
+    a.scope === b.scope ? 0 : a.scope === "global" ? -1 : 1,
+  );
   const picked = await multiselect<string>({
     message: "Wire the velloo MCP into which agents?",
-    options: Object.values(AGENTS).map((a) => ({
+    options: agents.map((a) => ({
       value: a.id,
       label: a.label,
       hint: a.path(".", "~"),
     })),
-    initialValues: PROJECT_AGENT_IDS,
+    initialValues: GLOBAL_AGENT_IDS,
     required: false,
   });
   return isCancel(picked) ? null : picked;
+}
+
+/** Whether an agent config's content already carries a velloo MCP entry. */
+function hasVellooEntry(content: string, format: AgentConfigFormat): boolean {
+  try {
+    switch (format) {
+      case "json": {
+        const parsed = JSON.parse(content) as { mcpServers?: Record<string, unknown> };
+        return Boolean(parsed.mcpServers && "velloo" in parsed.mcpServers);
+      }
+      case "codex-toml":
+        return /^\s*\[\s*mcp_servers\s*\.\s*(?:"velloo"|velloo)\s*(?:\]|\.)/m.test(content);
+      case "continue-block":
+        return true; // the block file IS velloo's own entry
+      case "continue-config": {
+        const doc = Bun.YAML.parse(content) as { mcpServers?: unknown };
+        return (
+          Array.isArray(doc?.mcpServers) &&
+          doc.mcpServers.some(
+            (s) =>
+              s !== null && typeof s === "object" && (s as { name?: unknown }).name === "velloo",
+          )
+        );
+      }
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Global agents whose config already carries a velloo entry — a global stdio
+ * wire resolves the design folder from each project's cwd, so an existing
+ * entry means this project is already covered and init can skip the wiring
+ * question.
+ */
+export async function globallyWiredAgents(homeDir = homedir()): Promise<string[]> {
+  const out: string[] = [];
+  for (const agent of Object.values(AGENTS)) {
+    if (agent.scope !== "global") continue;
+    let content: string;
+    try {
+      content = await readFile(agent.path(".", homeDir), "utf8");
+    } catch {
+      continue;
+    }
+    if (hasVellooEntry(content, agent.format)) out.push(agent.id);
+  }
+  return out;
 }
 
 export interface ConnectOptions {

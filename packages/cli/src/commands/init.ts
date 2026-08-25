@@ -10,6 +10,7 @@ import {
   type CanvasNote,
   type Config,
   ConfigSchema,
+  type HostApp,
   type Screen,
   ScreenSchema,
   type Snippet,
@@ -21,7 +22,14 @@ import { writeJsonAtomic, writeText } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { type ConnectResult, connect, PROJECT_AGENT_IDS, pickAgents } from "../connect/index.ts";
+import {
+  AGENTS,
+  type ConnectResult,
+  connect,
+  globallyWiredAgents,
+  PROJECT_AGENT_IDS,
+  pickAgents,
+} from "../connect/index.ts";
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
@@ -41,14 +49,16 @@ import { buildPresetTheme, presetById } from "../scaffold/theme-presets.ts";
 import { buildVibeTheme, vibeById } from "../scaffold/vibes.ts";
 import { detectHost } from "../scan/detect.ts";
 import {
-  buildBoardFromScan,
+  appPrefixes,
+  buildBoardsFromScan,
   buildScreensFromScan,
-  resolveScanRoot,
   scanAppRoutes,
+  scanApps,
 } from "../scan/index.ts";
 import { dirExists } from "../scan/walk.ts";
 import type { WizardAnswers } from "../wizard/answers.ts";
 import { answersFromArgs, type InitCliArgs, shouldRunWizard } from "../wizard/args.ts";
+import { buildHandoffPrompt, expandHandoffPrompt, SCREENS_PLACEHOLDER } from "../wizard/handoff.ts";
 import { type InstallPlan, planInstall } from "../wizard/install.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
@@ -126,8 +136,8 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
     }
     const hasBadge = answers.library !== "none";
     const screens = buildScreensFromScan({ routes, hasBadge, mui: answers.library === "mui" });
-    const board = buildBoardFromScan({ screens });
-    return { theme, screens, boards: [board], snippets: [], annotations: [], notes: [] };
+    const boards = buildBoardsFromScan({ routes });
+    return { theme, screens, boards, snippets: [], annotations: [], notes: [] };
   }
 
   // No-library Pulse doesn't exist (Avatar / Tabs / Accordion / Chart
@@ -178,13 +188,28 @@ async function writeScaffold(
   plan: InstallPlan,
   answers: WizardAnswers,
 ): Promise<void> {
-  // Point the live-island bundler at the host app. `scanRoot` is the React
+  // Point the live-island bundler at the host app. `scanRoot` is the primary
   // app root (the app itself, even when nested under a monorepo `appRoot`);
   // store it relative to the design folder, which is how the bundler resolves
   // it (`resolve(folderRoot, hostApp.root)`). Aliases are left to the
   // bundler's `{ "@/*": "*" }` default — reading the host tsconfig per the
   // codebase stance is fragile; apps with a non-root `@` alias edit it once.
   const hostAppRoot = relative(folder, answers.scanRoot);
+  // A multi-app scan also registers every route-bearing app under
+  // `config.hostApps`, keyed by the same prefixes the screen ids use, so a
+  // live extension can target its app via `extension.app`.
+  const appRels = [
+    ...new Set((answers.selectedRoutes ?? []).map((r) => r.appRel).filter(Boolean)),
+  ] as string[];
+  let hostApps: Record<string, HostApp> | undefined;
+  if (appRels.length > 1) {
+    const prefixes = appPrefixes(appRels);
+    hostApps = {};
+    for (const rel of appRels) {
+      const key = prefixes.get(rel);
+      if (key) hostApps[key] = { root: relative(folder, resolve(answers.appRoot, rel)) };
+    }
+  }
   // CSS framework (the styling axis): only the no-framework library has a real
   // choice — shadcn carries Tailwind and MUI carries `sx` intrinsically. For a
   // `none` folder, detect Tailwind in the host (config/dep) ⇒ "tailwind",
@@ -200,6 +225,7 @@ async function writeScaffold(
     library: plan.library,
     defaultScreen: defaultScreenForScaffold(scaffold),
     ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
+    ...(hostApps ? { hostApps } : {}),
     ...(answers.feedback ? { feedback: answers.feedback } : {}),
     ...(styling ? { styling } : {}),
     ...(stack ? { codegen: { componentsAlias: stack.alias } } : {}),
@@ -297,8 +323,11 @@ function printSummary(
   }
 }
 
-function printWired(connected: ConnectResult | undefined): void {
-  if (!connected || connected.configs.length === 0) return;
+/** How init's agent-wiring step ended — feeds the wired/next-steps output. */
+type WireOutcome = ConnectResult | "already-global" | undefined;
+
+function printWired(connected: WireOutcome): void {
+  if (connected === "already-global" || !connected || connected.configs.length === 0) return;
   const wired = connected.configs.map((c) => c.agent).join(" + ");
   console.log("");
   console.log(pc.bold("  Agents wired"));
@@ -314,11 +343,11 @@ function printWired(connected: ConnectResult | undefined): void {
   if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
 }
 
-function printNextSteps(folder: string, connected: ConnectResult | undefined): void {
+function printNextSteps(folder: string, connected: WireOutcome): void {
   console.log("");
   console.log(pc.bold("  Next steps"));
   let n = 1;
-  if (!connected || connected.configs.length === 0) {
+  if (connected !== "already-global" && (!connected || connected.configs.length === 0)) {
     console.log(
       `    ${n++}. ${pc.cyan(`velloo connect ${folder}`)} ${pc.dim("(wire your AI agent's MCP config + guidance)")}`,
     );
@@ -332,49 +361,6 @@ function printNextSteps(folder: string, connected: ConnectResult | undefined): v
   console.log("");
   console.log(pc.dim("  Open README.md in the design folder for the full guide."));
   console.log("");
-}
-
-/**
- * Build the copy-paste prompt that gets the user's agent to recreate their app
- * as a Velloo design: a screen per page, boards with mobile + desktop frames,
- * reusable snippets, all verified against the running app via the `screenshot`
- * tool. Init can't screenshot the app itself (it isn't running yet), so the
- * agent — which has the velloo MCP tools and a shell — does the work.
- */
-function buildHandoffPrompt(answers: WizardAnswers, screens: Screen[]): string {
-  // The agent runs at the app root (its MCP config + skill are wired there),
-  // so the app is "this project" and the design folder is just `velloo`. The
-  // design is managed entirely through the MCP tools — never edited by hand —
-  // so the folder only appears in the `velloo run` command that points the
-  // server at it. Keep it relative; fall back to absolute only if it sits
-  // outside the app root.
-  const rel = relative(answers.appRoot, answers.folder);
-  const designDir = rel && !rel.startsWith("..") ? rel : answers.folder;
-  const lines = [
-    "Build a Velloo design that mirrors this app — reproduce each page's UI as a Velloo screen.",
-    `Velloo lives in \`${designDir}/\`. You have the velloo MCP tools (wired during setup) — do everything through them; they own the design, so don't edit files under \`${designDir}/\` by hand. To watch the canvas, run \`velloo run ${designDir}\` — it prints and opens the canvas URL (defaults to :7300, or a free port if that's taken).`,
-  ];
-  const uiRel = relative(answers.appRoot, answers.scanRoot);
-  if (uiRel && !uiRel.startsWith("..")) {
-    lines.push(`This app's UI lives in \`${uiRel}/\` — run its dev server from there.`);
-  }
-  if (screens.length > 0) {
-    lines.push(
-      `Build only these ${screens.length} screens (each already has a placeholder screen + a board frame), from the project's shadcn components:`,
-    );
-    for (const s of screens) lines.push(`  - ${s.name || s.id}`);
-  } else {
-    lines.push(
-      "- For each route/page in the app, create a Velloo screen that reproduces that page's UI from the project's shadcn components.",
-    );
-  }
-  lines.push(
-    "- Lay the screens out on boards with both mobile and desktop frames.",
-    "- Extract repeated UI (nav, headers, cards, footers) into reusable snippets.",
-    "- Start the app's dev server and use the velloo `screenshot` tool to compare each screen against the real page; iterate until they match.",
-    "- Keep semantic theme tokens (bg-background, text-foreground, …).",
-  );
-  return lines.join("\n");
 }
 
 /**
@@ -424,16 +410,25 @@ async function editPrompt(prompt: string): Promise<string | null> {
  */
 async function printAgentHandoff(
   answers: WizardAnswers,
-  screens: Screen[],
+  scaffold: Scaffold,
   interactive: boolean,
 ): Promise<void> {
   if (answers.initialContent !== "scan") return;
 
-  const prompt = buildHandoffPrompt(answers, screens);
+  const { screens } = scaffold;
+  const prompt = buildHandoffPrompt(answers, screens, scaffold.boards);
   console.log(pc.bold("  Finish setup with your agent"));
   console.log(pc.dim("    Paste this to your AI agent to recreate your app as a Velloo design:"));
   console.log("");
   for (const line of prompt.split("\n")) console.log(pc.cyan(`    ${line}`));
+  if (prompt.includes(SCREENS_PLACEHOLDER)) {
+    console.log("");
+    console.log(
+      pc.dim(
+        `    ${SCREENS_PLACEHOLDER} is replaced with your ${screens.length} selected screens when the prompt is sent (an agent can also discover them with list_screens).`,
+      ),
+    );
+  }
   console.log("");
 
   if (!interactive || !Bun.which("claude")) return;
@@ -465,6 +460,9 @@ async function printAgentHandoff(
     }
     finalPrompt = edited;
   }
+  // The user reads + edits the compact placeholder form; the agent gets the
+  // real screen list.
+  finalPrompt = expandHandoffPrompt(finalPrompt, screens);
 
   // Start the persistent canvas so the user can watch; Claude attaches its own
   // `velloo mcp` (wired during init) to the same daemon. The canvas stays up
@@ -491,17 +489,28 @@ async function printAgentHandoff(
 
 /**
  * Wire the velloo MCP into the user's agents. Interactively, ask which
- * (checkboxes, project Claude Code + Cursor pre-selected, global opt-in);
- * non-interactively, wire the project agents. Returns undefined when skipped.
+ * (checkboxes, global Claude Code + Cursor pre-selected — one wire covers
+ * every project) — unless a global config already carries velloo, in which
+ * case say so and skip the question. Non-interactively, wire the project
+ * agents. Returns undefined when skipped.
  */
 async function wireAgents(
   folder: string,
   interactive: boolean,
   enabled: boolean,
-): Promise<ConnectResult | undefined> {
+): Promise<WireOutcome> {
   if (!enabled) return undefined;
   let agents: string[] = PROJECT_AGENT_IDS;
   if (interactive) {
+    const wired = await globallyWiredAgents();
+    if (wired.length > 0) {
+      const labels = wired.map((id) => AGENTS[id]?.label ?? id).join(", ");
+      console.log("");
+      console.log(
+        `  ${pc.green("✓")} velloo is already wired globally — ${labels} ${pc.dim("(covers this project; skipping agent setup)")}`,
+      );
+      return "already-global";
+    }
     const picked = await pickAgents();
     if (picked === null) return undefined;
     agents = picked;
@@ -700,15 +709,24 @@ export default defineCommand({
     }
 
     // Non-interactive scan still wants the host detection (the wizard fills it
-    // for the interactive path) — and the scan root resolution (--scan-dir or
-    // auto-discovery of a nested UI folder) the wizard would otherwise do.
+    // for the interactive path) — and the app discovery (--scan-dir, a nested
+    // UI folder, or a monorepo's several apps) the wizard would otherwise do.
     if (answers.initialContent === "scan" && !answers.detected) {
-      const { scanRoot, relToApp } = await resolveScanRoot(answers.appRoot, cliArgs.scanDir);
-      answers.scanRoot = scanRoot;
-      if (relToApp && relToApp !== ".") {
-        console.log(pc.dim(`  Scanning UI in ${relToApp} (app root has no package.json).`));
+      const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
+      const primary = scanned.apps[0];
+      if (primary) answers.scanRoot = primary.dir;
+      if (scanned.apps.length > 1) {
+        console.log(
+          pc.dim(
+            `  Found ${scanned.apps.length} apps (${scanned.apps.map((a) => a.rel || ".").join(", ")}) — one board per app.`,
+          ),
+        );
+      } else if (primary?.rel && primary.rel !== ".") {
+        console.log(pc.dim(`  Scanning UI in ${primary.rel} (app root has no package.json).`));
       }
-      answers.detected = detectHost(scanRoot);
+      answers.selectedRoutes = scanned.routes;
+      answers.agentPicksFirst = true;
+      answers.detected = detectHost(answers.scanRoot);
       // The "existing project" flow: when the user didn't pin a library, adopt
       // the framework the app actually uses so the scan renders + emits in the
       // host's framework (a MUI app → the MUI adapter), not a default mismatch.
@@ -773,7 +791,7 @@ export default defineCommand({
     const connected = await wireAgents(folder, interactive, cliArgs.connect !== false);
     printWired(connected);
     await printScreenshotReadiness(interactive);
-    await printAgentHandoff(answers, scaffold.screens, interactive);
+    await printAgentHandoff(answers, scaffold, interactive);
     printNextSteps(folder, connected);
   },
 });

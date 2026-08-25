@@ -55,7 +55,7 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
         "",
         "**Props schema.** Each prop entry has `name`, `type` (free-form TS-shaped string for display), `optional`, and a `control` of `boolean | number | string | color | enum | icon` (`enum` also takes `enumValues: string[]`). `defaultValue` (string) shows in the placeholder when the prop isn't set. Mirrors a library component's manifest entry — the inspector renders the same controls.",
         "",
-        '**Live preview (`render: "live"`).** For components whose visual fidelity needs the real implementation — charts above all — pass `render: "live"`: Velloo bundles the actual component from your app (resolved from `importPath` against the host app + its `node_modules`) and client-mounts it in the canvas. The component must be browser-renderable (no server-only imports); the preview is visual-only (clicks select the node), and any bundle/render failure falls back to the placeholder. The built-in `Chart` node already previews via echarts and needs no extension; use `render:"live"` for your own chart components.',
+        '**Live preview (`render: "live"`).** For components whose visual fidelity needs the real implementation — charts above all — pass `render: "live"`: Velloo bundles the actual component from your app (resolved from `importPath` against the host app + its `node_modules`) and client-mounts it in the canvas. The component must be browser-renderable (no server-only imports); the preview is visual-only (clicks select the node), and any bundle/render failure falls back to the placeholder. The built-in `Chart` node already previews via echarts and needs no extension; use `render:"live"` for your own chart components. In a monorepo folder (`config.hostApps` names several apps), also pass `app` so the island bundles from the right app.',
         "",
         '**Codegen.** `emit_code` writes `import { <id> } from "<importPath>"` exactly as supplied — use the alias your app actually uses (`@/components/data-table`).',
         "",
@@ -75,6 +75,13 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
           .optional()
           .describe(
             '"live" client-mounts the real component (charts); default "static" placeholder',
+          ),
+        app: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'monorepos only: which host app the component lives in — a config.hostApps key (e.g. "web", "admin"). The live island bundles from that app\'s root + node_modules. Omit for the default host app.',
           ),
         fit: z
           .enum(["aspect-video", "content"])
@@ -109,6 +116,7 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
           category: z.enum(["ui", "typography"]).optional(),
           description: z.string().optional(),
           render: z.enum(["static", "live"]).optional(),
+          app: z.string().min(1).optional(),
           fit: z.enum(["aspect-video", "content"]).optional(),
         }),
       },

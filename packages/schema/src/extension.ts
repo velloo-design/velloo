@@ -79,6 +79,14 @@ export const ExtensionSchema = z.object({
    */
   render: z.enum(["static", "live"]).optional(),
   /**
+   * Which host app this component lives in — a key into `config.hostApps`
+   * (monorepos only). A `render:"live"` island bundles its `importPath`
+   * against that app's root/aliases and mounts with that app's React copy.
+   * Absent ⇒ the folder default (`config.hostApp`), which is every
+   * single-app folder.
+   */
+  app: z.string().min(1).optional(),
+  /**
    * How a `render:"live"` island is sized on the canvas.
    *   "aspect-video" (default) — wrapper locks a 16:9 box (`aspect-video
    *                              w-full`); right for charts that fill their

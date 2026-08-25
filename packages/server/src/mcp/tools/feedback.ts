@@ -34,7 +34,7 @@ export function registerFeedbackTool(mcp: McpServer, ctx: MutationContext, cloud
     "send_feedback",
     {
       description:
-        "Send free-text product feedback about Velloo itself — the tool, its MCP surface, a confusing instruction, a missing capability, a tool that misbehaved, or anything that slowed you down. This is NOT for feedback about the user's design. ALWAYS show the user the exact `body` and get their confirmation before calling; never send unprompted. NEVER include the user's design content, code, or file/repo paths — describe the issue in your own words.",
+        "Send free-text product feedback about Velloo itself — the tool, its MCP surface, a confusing instruction, a missing capability, a tool that misbehaved, or anything that slowed you down. This is NOT for feedback about the user's design. ALWAYS show the user the exact `body` and get their confirmation before calling; never send unprompted. NEVER include the user's design content, code, or file/repo paths — describe the issue in your own words; feedback is treated as anonymous unless the user opted into being contacted. If you hit real friction during a session (a tool that fought you, a missing capability), it's worth offering ONCE at a natural stopping point — after finishing the task — to send a short note; drop it if the user declines.",
       inputSchema: {
         body: z
           .string()

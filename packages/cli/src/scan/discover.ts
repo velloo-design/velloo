@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import { looksLikeReactApp } from "./routes.ts";
+import { looksLikeUiApp } from "./routes.ts";
 
 /**
  * Directory names that usually hold the UI in a polyglot repo (a Python/Go/Rust
@@ -73,51 +73,41 @@ async function walkPackageJsonDirs(root: string, maxDepth: number): Promise<stri
   return out;
 }
 
+/** A UI-app directory discovered under the app root. */
+export interface DiscoveredApp {
+  /** Absolute directory. */
+  dir: string;
+  /** `dir` relative to the app root ("" when it's the root itself). */
+  rel: string;
+}
+
 /**
- * Find the directory that holds the host's React app. Fast-paths `appRoot`
- * itself (the common case); otherwise — e.g. a Python repo whose UI lives in
- * `web/frontend/` and whose root has no `package.json` — searches for a nested
- * React app, preferring the shallowest and a conventional UI dir name. Returns
- * null when nothing React-shaped is found.
+ * Find every directory that holds a UI app under `appRoot`, best-ranked
+ * first (the root itself, then shallowest / conventional UI dir names). A
+ * plain app returns one entry; a monorepo returns one per workspace app.
+ * Empty when nothing UI-shaped is found.
  */
-export async function findScanRoot(appRoot: string): Promise<string | null> {
-  if (await looksLikeReactApp(appRoot)) return appRoot;
+export async function discoverScanRoots(appRoot: string): Promise<DiscoveredApp[]> {
+  const out: DiscoveredApp[] = [];
+  if (await looksLikeUiApp(appRoot)) out.push({ dir: appRoot, rel: "" });
 
   const dirs = (await gitPackageJsonDirs(appRoot)) ?? (await walkPackageJsonDirs(appRoot, 5));
-  const candidates: { dir: string; rel: string }[] = [];
+  const nested: DiscoveredApp[] = [];
   for (const dir of new Set(dirs)) {
     if (dir === appRoot) continue;
-    if (await looksLikeReactApp(dir)) candidates.push({ dir, rel: relative(appRoot, dir) });
+    if (await looksLikeUiApp(dir)) nested.push({ dir, rel: relative(appRoot, dir) });
   }
-  candidates.sort((a, b) => rank(a.rel) - rank(b.rel) || a.rel.localeCompare(b.rel));
-  return candidates[0]?.dir ?? null;
-}
-
-export interface ResolvedScanRoot {
-  /** Absolute directory `detectHost` / `scanAppRoutes` should run against. */
-  scanRoot: string;
-  /** `scanRoot` relative to the app root ("" when they're the same). */
-  relToApp: string;
-  /** True when discovery picked a subfolder the user didn't name explicitly. */
-  autoDiscovered: boolean;
+  nested.sort((a, b) => rank(a.rel) - rank(b.rel) || a.rel.localeCompare(b.rel));
+  return [...out, ...nested];
 }
 
 /**
- * Decide where to scan: an explicit `--scan-dir` wins; otherwise auto-discover
- * a nested React app; otherwise fall back to `appRoot`. The design folder still
- * installs at `appRoot` — only the scan source + theme import shift.
+ * Find the directory that holds the host's UI app. Fast-paths `appRoot`
+ * itself (the common case); otherwise — e.g. a Python repo whose UI lives in
+ * `web/frontend/` and whose root has no `package.json` — searches for a nested
+ * UI app, preferring the shallowest and a conventional UI dir name. Returns
+ * null when nothing UI-shaped is found.
  */
-export async function resolveScanRoot(
-  appRoot: string,
-  scanDir?: string,
-): Promise<ResolvedScanRoot> {
-  if (scanDir?.trim()) {
-    const scanRoot = resolve(appRoot, scanDir.trim());
-    return { scanRoot, relToApp: relative(appRoot, scanRoot), autoDiscovered: false };
-  }
-  const found = await findScanRoot(appRoot);
-  if (found && found !== appRoot) {
-    return { scanRoot: found, relToApp: relative(appRoot, found), autoDiscovered: true };
-  }
-  return { scanRoot: appRoot, relToApp: "", autoDiscovered: false };
+export async function findScanRoot(appRoot: string): Promise<string | null> {
+  return (await discoverScanRoots(appRoot))[0]?.dir ?? null;
 }

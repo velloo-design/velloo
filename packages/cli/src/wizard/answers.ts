@@ -105,6 +105,13 @@ export interface WizardAnswers {
    */
   selectedRoutes?: ScannedRoute[];
   /**
+   * Scan flow: the handoff prompt tells the agent to choose the
+   * highest-impact screen itself and design it first. True on the wizard's
+   * default "all screens" path and on non-interactive scans; false when the
+   * user hand-picked screens.
+   */
+  agentPicksFirst?: boolean;
+  /**
    * Cloud feedback opt-in, set by the interactive wizard only after the user
    * signs in. `contactOk` records consent to be contacted about the feedback.
    * Absent ⇒ feedback disabled (and always so on the non-interactive path).

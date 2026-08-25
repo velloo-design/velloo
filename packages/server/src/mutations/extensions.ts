@@ -59,7 +59,22 @@ export interface AddExtensionArgs {
   category?: "ui" | "typography";
   description?: string;
   render?: "static" | "live";
+  app?: string;
   fit?: "aspect-video" | "content";
+}
+
+/** Reject an `app` that isn't a `config.hostApps` key (a typo, not a warning). */
+function unknownHostApp(ctx: MutationContext, app: string | undefined): MutationError | null {
+  if (!app) return null;
+  const known = Object.keys(ctx.folder.config.hostApps ?? {});
+  if (known.includes(app)) return null;
+  return {
+    kind: "BadRequest",
+    message: `app "${app}" is not a key of config.hostApps.`,
+    hint: known.length
+      ? `Known apps: ${known.join(", ")}. Omit \`app\` to use the default host app.`
+      : "This folder has no config.hostApps — omit `app` to use the default host app.",
+  };
 }
 
 export interface AddExtensionResult {
@@ -85,6 +100,9 @@ export async function addExtension(
   const existing = ctx.folder.config.extensions ?? {};
   if (args.id in existing) return err(extensionIdConflict(args.id));
 
+  const badApp = unknownHostApp(ctx, args.app);
+  if (badApp) return err(badApp);
+
   // Validate the prop schema up front so a malformed input fails fast
   // before we touch disk. Zod surfaces field-level paths in the error.
   for (const p of args.props) {
@@ -106,6 +124,7 @@ export async function addExtension(
     props: args.props,
     origin: "agent",
     render: args.render,
+    app: args.app,
     fit: args.fit,
   });
 
@@ -122,8 +141,9 @@ export async function addExtension(
   if (extension.render === "live") {
     const warning = resolveLiveImportWarning(
       ctx.folder.root,
-      ctx.folder.config.hostApp,
+      ctx.folder.config,
       args.importPath,
+      extension.app,
     );
     if (warning) result.liveResolveWarning = warning;
   }
@@ -138,6 +158,7 @@ export interface UpdateExtensionArgs {
     category?: "ui" | "typography";
     description?: string;
     render?: "static" | "live";
+    app?: string;
     fit?: "aspect-video" | "content";
   };
 }
@@ -156,6 +177,9 @@ export async function updateExtension(
   const existing = ctx.folder.config.extensions ?? {};
   const prev = existing[args.id];
   if (!prev) return err(extensionNotFound(args.id));
+
+  const badApp = unknownHostApp(ctx, args.patch.app);
+  if (badApp) return err(badApp);
 
   if (args.patch.props) {
     for (const p of args.patch.props) {
@@ -178,6 +202,7 @@ export async function updateExtension(
     ...(args.patch.category !== undefined ? { category: args.patch.category } : {}),
     ...(args.patch.description !== undefined ? { description: args.patch.description } : {}),
     ...(args.patch.render !== undefined ? { render: args.patch.render } : {}),
+    ...(args.patch.app !== undefined ? { app: args.patch.app } : {}),
     ...(args.patch.fit !== undefined ? { fit: args.patch.fit } : {}),
   });
 
@@ -191,8 +216,9 @@ export async function updateExtension(
   if (next.render === "live") {
     const warning = resolveLiveImportWarning(
       ctx.folder.root,
-      ctx.folder.config.hostApp,
+      ctx.folder.config,
       next.importPath,
+      next.app,
     );
     if (warning) result.liveResolveWarning = warning;
   }
