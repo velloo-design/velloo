@@ -1,0 +1,182 @@
+import { __unstable__loadDesignSystem } from "@tailwindcss/node";
+import type { TailwindJit } from "./tailwind-jit.ts";
+
+/**
+ * Tailwind class validation against the folder's merged design system —
+ * the core behind the MCP `validate_classes` tool, extracted so headless
+ * callers (`velloo ci`) can run the same checks without an MCP transport.
+ */
+
+type DesignSystem = Awaited<ReturnType<typeof __unstable__loadDesignSystem>>;
+
+let designSystemPromise: Promise<DesignSystem> | null = null;
+let designSystemKey: string | null = null;
+
+/**
+ * Load the Tailwind v4 design system for class-candidate parsing — from the
+ * SAME merged entry CSS the JIT compiles against (providers + the theme's
+ * `@theme` block), so theme-injected utilities like `bg-ink` / `font-display`
+ * resolve instead of reading as invalid. Keyed on the CSS itself, so a
+ * `set_token` / `set_fonts` edit transparently rebuilds.
+ */
+function getDesignSystem(jit: TailwindJit): Promise<DesignSystem> {
+  return jit.entryCss().then(({ css, base }) => {
+    if (designSystemPromise && designSystemKey === css) return designSystemPromise;
+    designSystemKey = css;
+    designSystemPromise = __unstable__loadDesignSystem(css, { base });
+    return designSystemPromise;
+  });
+}
+
+/**
+ * Whether `cls` is defined as a literal class selector in the folder's
+ * `custom_css`. Tailwind's design system only knows utilities + `@theme`
+ * tokens, so a hand-authored rule like `.shadow-lift { … }` (which the
+ * renderer injects verbatim and paints) would otherwise read as invalid.
+ * Identifier-like classes only — arbitrary-value forms aren't hand-written.
+ */
+function definedInCustomCss(customCss: string | undefined, cls: string): boolean {
+  if (!customCss || !/^[a-z][a-z0-9:_-]*$/i.test(cls)) return false;
+  const escaped = cls.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\.${escaped}(?![\\w-])`).test(customCss);
+}
+
+export interface ClassReport {
+  class: string;
+  valid: boolean;
+  reason?: string;
+  /**
+   * The class compiles, but its CSS references one or more `var(--x)` that
+   * resolve to nothing in the merged design system — so they'll fall back
+   * (often to the inherited/initial value) at runtime instead of the intended
+   * token. Soft signal: `valid` stays true, since the candidate itself is
+   * well-formed Tailwind.
+   */
+  warning?: string;
+}
+
+/** Custom-property names a `var(--x)` reads, in a CSS string. */
+function referencedVars(css: string): string[] {
+  const out = new Set<string>();
+  const re = /var\(\s*(--[a-zA-Z0-9-]+)/g;
+  let m = re.exec(css);
+  while (m !== null) {
+    out.add(m[1] as string);
+    m = re.exec(css);
+  }
+  return [...out];
+}
+
+/** Custom-property names DECLARED in a CSS string — body `--x:` decls and `@property --x` registrations. */
+function declaredVars(css: string): Set<string> {
+  const out = new Set<string>();
+  const decl = /(--[a-zA-Z0-9-]+)\s*:/g;
+  let m = decl.exec(css);
+  while (m !== null) {
+    out.add(m[1] as string);
+    m = decl.exec(css);
+  }
+  const prop = /@property\s+(--[a-zA-Z0-9-]+)/g;
+  m = prop.exec(css);
+  while (m !== null) {
+    out.add(m[1] as string);
+    m = prop.exec(css);
+  }
+  return out;
+}
+
+/**
+ * The structural slice of Tailwind's internal `Theme` we read. Its vendor
+ * .d.ts imports './theme', which isn't shipped, so `ds.theme` is untyped —
+ * the call site asserts this shape (unavoidable until upstream ships types).
+ */
+type ThemeLookup = { get(path: string[]): string | null };
+
+/**
+ * The `var(--x)` refs in `css` that resolve to nothing — neither defined by the
+ * candidate's own output (Tailwind's `--tw-*` runtime registrations, or a
+ * utility that declares the var it reads) nor a known design-system theme var.
+ * These paint a fallback at runtime, not the token the author meant.
+ */
+function unresolvedVars(css: string, theme: ThemeLookup): string[] {
+  const declared = declaredVars(css);
+  const out: string[] = [];
+  for (const name of referencedVars(css)) {
+    if (declared.has(name)) continue;
+    // Tailwind's internal namespace is always @property-registered at runtime;
+    // the design system doesn't surface those, so never flag them.
+    if (name.startsWith("--tw-")) continue;
+    if (theme.get([name]) === null) out.push(name);
+  }
+  return out;
+}
+
+/**
+ * Validate each class against the active JIT's design system: one report per
+ * input with `valid`, a short `reason` on failure, and a soft `warning` when a
+ * valid class reads CSS vars that resolve to nothing.
+ */
+export async function validateClassNames(
+  jit: TailwindJit,
+  customCss: string | undefined,
+  classes: string[],
+): Promise<ClassReport[]> {
+  const ds = await getDesignSystem(jit);
+  return classes.map((cls) => {
+    const trimmed = cls.trim();
+    if (trimmed === "") return { class: cls, valid: false, reason: "empty class" };
+    try {
+      // parseCandidate returns one or more candidate AST entries; an unknown
+      // class produces an empty result.
+      const parsed = ds.parseCandidate(trimmed);
+      if (parsed.length > 0) {
+        // Generation can still fail (e.g. variant on a non-utility); check
+        // that the candidate produces CSS.
+        const css = ds.candidatesToCss([trimmed]);
+        const generated = css[0];
+        if (generated !== null && generated !== undefined) {
+          // The candidate is valid Tailwind, but it may reference CSS vars
+          // that don't exist in the merged design system (e.g. an
+          // arbitrary value `text-[hsl(var(--primary-foreground))]` whose
+          // `--primary-foreground` was never declared). Those paint a
+          // runtime fallback, not the intended token — flag, don't fail.
+          const dangling = unresolvedVars(generated, ds.theme as unknown as ThemeLookup);
+          if (dangling.length > 0) {
+            return {
+              class: cls,
+              valid: true,
+              warning: `resolves to undefined CSS var ${dangling.join(", ")}; will fall back at runtime`,
+            };
+          }
+          return { class: cls, valid: true };
+        }
+      }
+      // Not a Tailwind utility — but a custom_css rule may still define it.
+      if (definedInCustomCss(customCss, trimmed)) {
+        return {
+          class: cls,
+          valid: true,
+          reason: "defined in custom_css (not a Tailwind utility)",
+        };
+      }
+      return {
+        class: cls,
+        valid: false,
+        reason: parsed.length === 0 ? "no matching Tailwind utility" : "candidate produced no CSS",
+      };
+    } catch (err) {
+      if (definedInCustomCss(customCss, trimmed)) {
+        return {
+          class: cls,
+          valid: true,
+          reason: "defined in custom_css (not a Tailwind utility)",
+        };
+      }
+      return {
+        class: cls,
+        valid: false,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+}

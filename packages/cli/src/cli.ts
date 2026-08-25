@@ -21,6 +21,7 @@ const main = defineCommand({
     __daemon: () => import("./commands/daemon.ts").then((m) => m.default),
     render: () => import("./commands/render.ts").then((m) => m.default),
     publish: () => import("./commands/publish.ts").then((m) => m.default),
+    ci: () => import("./commands/ci.ts").then((m) => m.default),
     emit: () => import("./commands/emit.ts").then((m) => m.default),
     "theme:export": () => import("./commands/theme-export.ts").then((m) => m.default),
     ...(traceEnabled()

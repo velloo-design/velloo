@@ -387,6 +387,13 @@ export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts
 export { writeJsonAtomic, writeText } from "./fs.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";
+// Verification cores (dark-mode audit / class validation / contrast) — the
+// same checks the MCP audit + validate_classes tools run, exported for
+// headless consumers (`velloo ci`).
+export {
+  type DarkModeAuditResult,
+  darkModeAuditTree,
+} from "./mutations/dark-mode-audit.ts";
 export {
   createServerProviderLoader,
   DEFAULT_LEGACY_LIBRARY_ID,
@@ -394,7 +401,13 @@ export {
   migrateLibrarySource,
   resolveProviders,
 } from "./providers.ts";
+export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";
+export {
+  type ContrastResult,
+  scoreThemeContrast,
+  scoreThemeContrastBoth,
+} from "./theme/contrast.ts";
 export { derivePalette } from "./theme/derive-palette.ts";
 export type { WatchEvent } from "./watcher.ts";

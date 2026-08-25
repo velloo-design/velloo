@@ -334,9 +334,11 @@ function auditClasses(className: string): AuditNodeOutcome {
 /**
  * Walk an arbitrary tree (variant root or snippet body) and produce the
  * audit result. Snippet instances inside the tree are NOT descended into
- * — those bodies have their own audit scope.
+ * — those bodies have their own audit scope. Exported for callers that
+ * hold a tree without a MutationContext (`velloo ci` runs it over the
+ * changed screens of a headless checkout).
  */
-function auditTree(root: Node): DarkModeAuditResult {
+export function darkModeAuditTree(root: Node): DarkModeAuditResult {
   const problems: DarkModeAuditNode[] = [];
   let totalColored = 0;
   let semanticCount = 0;
@@ -403,7 +405,7 @@ export async function darkModeAudit(
 ): Promise<Result<DarkModeAuditResult, MutationError>> {
   return DoAsync<DarkModeAuditResult, MutationError>(async function* () {
     const screen = yield* $(getScreen(ctx, args.screenId));
-    return auditTree(screen.tree);
+    return darkModeAuditTree(screen.tree);
   });
 }
 
@@ -426,6 +428,6 @@ export async function auditSnippet(
 ): Promise<Result<DarkModeAuditResult, MutationError>> {
   return DoAsync<DarkModeAuditResult, MutationError>(async function* () {
     const snippet = yield* $(getSnippet(ctx, args.snippetId));
-    return auditTree(snippet.tree);
+    return darkModeAuditTree(snippet.tree);
   });
 }
