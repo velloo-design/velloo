@@ -30,16 +30,6 @@ export class CanvasBundler {
     return this._version;
   }
 
-  /** Whether the active adapter wants client-rendered installed components. */
-  get available(): boolean {
-    return this.specFor() !== undefined;
-  }
-
-  /** Structured build errors from the last build, if any (e.g. framework not installed). */
-  lastError(): BundleResult["errors"] | null {
-    return this.cached?.errors ?? null;
-  }
-
   invalidate(): void {
     this.cached = null;
     this.buildPromise = null;

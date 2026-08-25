@@ -81,7 +81,6 @@ beforeEach(async () => {
     folder,
     providers: { default: shadcnProvider },
     defaultProvider: shadcnProvider,
-    provider: shadcnProvider,
     broadcast: (e) => events.push(e),
   };
 });

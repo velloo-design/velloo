@@ -93,7 +93,6 @@ beforeEach(async () => {
     folder,
     providers: { default: provider },
     defaultProvider: provider,
-    provider,
     broadcast: () => {},
   };
   jit = new TailwindJit(provider, join(tmp, "screens"), join(tmp, "snippets"));

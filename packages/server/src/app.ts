@@ -13,10 +13,9 @@ import {
   createScreenRouter,
   createSnippetsRouter,
 } from "./routes/design.ts";
-import { createEmitRouter } from "./routes/emit.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
-import { createInspectRouter, createRenderRouter } from "./routes/render.ts";
+import { createRenderRouter } from "./routes/render.ts";
 import { createThemeRouter } from "./routes/theme.ts";
 import { createUndoRouter } from "./routes/undo.ts";
 import { localOnlyMiddleware } from "./security.ts";
@@ -55,9 +54,7 @@ export function createApp(
   app.route("/api/canvas", createCanvasRouter(canvasBundler));
   app.route("/api/components", createComponentsRouter(ctxFor));
   app.route("/api/mutate", createMutateRouter(ctxFor));
-  app.route("/api/inspect", createInspectRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
-  app.route("/api/emit", createEmitRouter(folder));
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));
   app.route("/api/notes", createNotesRouter(ctxFor));
   app.route("/api/auth", createAuthRouter(auth));

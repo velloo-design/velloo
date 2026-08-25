@@ -26,8 +26,8 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
         )
       : {};
     return c.json({
-      snapshotVersion: ctx.provider.version,
-      providerId: ctx.provider.id,
+      snapshotVersion: ctx.defaultProvider.version,
+      providerId: ctx.defaultProvider.id,
       // Multi-library summary. The canvas reads this to
       // render the library badge per frame and the active-library
       // selector in the Library tab.
@@ -136,7 +136,7 @@ async function loadManifestForCtx(ctx: MutationContext): Promise<Manifest> {
     const raw = await readFile(onDisk, "utf8");
     return JSON.parse(raw) as Manifest;
   } catch {
-    return ctx.provider.loadManifest();
+    return ctx.defaultProvider.loadManifest();
   }
 }
 

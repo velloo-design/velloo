@@ -1,10 +1,6 @@
 import type { Result } from "@velloo/result";
 import { type AddNodeArgs, type AddNodeResult, addNode as addNodeImpl } from "../add-node.ts";
 import { type ApplyClassesArgs, applyClasses as applyClassesImpl } from "../apply-classes.ts";
-import {
-  type ApplyClassesBulkArgs,
-  applyClassesBulk as applyClassesBulkImpl,
-} from "../apply-classes-bulk.ts";
 import type { MutationContext } from "../context.ts";
 import { withScreenLock } from "../context.ts";
 import type { MutationError } from "../errors.ts";
@@ -66,12 +62,6 @@ export function applyClasses(
 ): Promise<Result<UpdatePropsResult, MutationError>> {
   return withScreenLock(args.screenId, () => applyClassesImpl(ctx, args));
 }
-export function applyClassesBulk(
-  ctx: MutationContext,
-  args: ApplyClassesBulkArgs,
-): Promise<Result<UpdatePropsBulkResult, MutationError>> {
-  return withScreenLock(args.screenId, () => applyClassesBulkImpl(ctx, args));
-}
 export function updatePropsBulk(
   ctx: MutationContext,
   args: UpdatePropsBulkArgs,
@@ -95,7 +85,6 @@ export type {
   AddNodeArgs,
   AddNodeResult,
   ApplyClassesArgs,
-  ApplyClassesBulkArgs,
   MoveNodeArgs,
   MoveNodeResult,
   RemoveNodeArgs,

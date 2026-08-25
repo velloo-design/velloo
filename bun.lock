@@ -41,7 +41,7 @@
     },
     "packages/cli": {
       "name": "@velloo/cli",
-      "version": "0.0.2",
+      "version": "0.1.0",
       "bin": {
         "velloo": "./src/cli.ts",
       },
@@ -137,10 +137,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@velloo/provider": "workspace:*",
-        "@velloo/schema": "workspace:*",
-        "@velloo/shadcn-adapter": "workspace:*",
         "@velloo/shadcn-snapshot": "workspace:*",
-        "ts-morph": "28.0.0",
       },
       "devDependencies": {
         "@types/react": "19.2.14",
@@ -197,9 +194,7 @@
         "@velloo/shadcn-snapshot": "workspace:*",
         "culori": "4.0.2",
         "hono": "4.12.27",
-        "lucide-react": "1.14.0",
         "tailwindcss": "4.3.0",
-        "ts-morph": "28.0.0",
         "zod": "4.4.3",
       },
       "devDependencies": {
@@ -207,24 +202,6 @@
         "@types/react": "19.2.14",
         "playwright-core": "1.59.1",
         "react": "19.2.6",
-      },
-    },
-    "packages/shadcn-adapter": {
-      "name": "@velloo/shadcn-adapter",
-      "version": "0.1.0",
-      "dependencies": {
-        "class-variance-authority": "0.7.1",
-        "clsx": "2.1.1",
-        "echarts": "6.1.0",
-        "lucide-react": "1.16.0",
-        "radix-ui": "1.4.3",
-        "react": "19.2.6",
-        "react-dom": "19.2.6",
-        "tailwind-merge": "3.6.0",
-      },
-      "devDependencies": {
-        "@types/react": "19.2.14",
-        "@types/react-dom": "19.2.3",
       },
     },
     "packages/shadcn-snapshot": {
@@ -598,8 +575,6 @@
     "@velloo/schema": ["@velloo/schema@workspace:packages/schema"],
 
     "@velloo/server": ["@velloo/server@workspace:packages/server"],
-
-    "@velloo/shadcn-adapter": ["@velloo/shadcn-adapter@workspace:packages/shadcn-adapter"],
 
     "@velloo/shadcn-snapshot": ["@velloo/shadcn-snapshot@workspace:packages/shadcn-snapshot"],
 
@@ -1046,8 +1021,6 @@
     "@velloo/codegen/@biomejs/biome": ["@biomejs/biome@2.4.15", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.4.15", "@biomejs/cli-darwin-x64": "2.4.15", "@biomejs/cli-linux-arm64": "2.4.15", "@biomejs/cli-linux-arm64-musl": "2.4.15", "@biomejs/cli-linux-x64": "2.4.15", "@biomejs/cli-linux-x64-musl": "2.4.15", "@biomejs/cli-win32-arm64": "2.4.15", "@biomejs/cli-win32-x64": "2.4.15" }, "bin": { "biome": "bin/biome" } }, "sha512-j5VH3a/h/HXTKBM50MDMxRCzkeLv9S2XJcW2WgnZT1+xyisi+0bISrXR82gCX+8S9lvK0skEvHJRN+3Ktr2hlw=="],
 
     "@velloo/codegen/tailwind-merge": ["tailwind-merge@3.5.0", "", {}, "sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A=="],
-
-    "@velloo/server/lucide-react": ["lucide-react@1.14.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-+1mdWcfSJVUsaTIjN9zoezmUhfXo5l0vP7ekBMPo3jcS/aIkxHnXqAPsByszMZx/Y8oQBRJxJx5xg+RH3urzxA=="],
 
     "aria-hidden/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 

@@ -7,7 +7,6 @@
     { "path": "./packages/shadcn-snapshot" },
     { "path": "./packages/provider-none" },
     { "path": "./packages/provider-mui" },
-    { "path": "./packages/shadcn-adapter" },
     { "path": "./packages/provider-shadcn-upstream" },
     { "path": "./packages/renderer" },
     { "path": "./packages/canvas" },

@@ -38,7 +38,6 @@ const MUTATION_STATUS: Record<MutationError["kind"], ErrorStatus> = {
   BadRequest: 400,
   LastScreen: 409,
   LastBoard: 409,
-  ScreenInUse: 409,
   SnippetInUse: 409,
   IdConflict: 409,
   AnnotationConflict: 409,

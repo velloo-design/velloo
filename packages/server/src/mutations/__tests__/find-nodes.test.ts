@@ -65,7 +65,6 @@ function ctxOf(): MutationContext {
     folder,
     providers: { default: provider },
     defaultProvider: provider,
-    provider,
     broadcast: () => {},
   };
 }

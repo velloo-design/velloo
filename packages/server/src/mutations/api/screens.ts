@@ -11,7 +11,6 @@ import {
   type RemoveScreenArgs,
   type RemoveScreenResult,
   removeScreen as removeScreenImpl,
-  removeScreenStrict as removeScreenStrictImpl,
 } from "../remove-screen.ts";
 import {
   type UpdateScreenArgs,
@@ -30,12 +29,6 @@ export function removeScreen(
   args: RemoveScreenArgs,
 ): Promise<Result<RemoveScreenResult, MutationError>> {
   return withScreenLock(args.screenId, () => removeScreenImpl(ctx, args));
-}
-export function removeScreenStrict(
-  ctx: MutationContext,
-  args: RemoveScreenArgs,
-): Promise<Result<RemoveScreenResult, MutationError>> {
-  return withScreenLock(args.screenId, () => removeScreenStrictImpl(ctx, args));
 }
 export function updateScreen(
   ctx: MutationContext,

@@ -243,7 +243,6 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     folder,
     providers,
     defaultProvider,
-    provider: defaultProvider,
     broadcast,
   };
   const app = createApp(() => ctx, jit, bundler, canvasBundler, opts.auth);

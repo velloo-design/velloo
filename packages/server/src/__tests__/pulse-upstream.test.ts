@@ -68,9 +68,7 @@ describe("Pulse renders against shadcn-upstream", () => {
           failures.push({
             screen: screen.id,
             ref: err.ref,
-            error:
-              `Pulse references "${err.ref}" — add it to the upstream provider's registry or ` +
-              `@velloo/shadcn-adapter's adaptation map.`,
+            error: `Pulse references "${err.ref}" — add it to the upstream provider's registry.`,
           });
         } else {
           failures.push({

@@ -70,7 +70,6 @@ beforeEach(async () => {
     folder,
     providers: { shadcn, mui: createMuiProvider() },
     defaultProvider: shadcn,
-    provider: shadcn,
     broadcast: () => undefined,
   };
 });

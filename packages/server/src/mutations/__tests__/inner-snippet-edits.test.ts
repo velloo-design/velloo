@@ -63,7 +63,6 @@ function ctxOf(root: string): { ctx: MutationContext; screen: Screen } {
       folder,
       providers: { default: provider },
       defaultProvider: provider,
-      provider,
       broadcast: () => {},
     },
     screen,

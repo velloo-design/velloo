@@ -63,8 +63,9 @@ export function createAnnotationsRouter(ctxFor: () => MutationContext): Hono {
 /**
  * Canvas-facing CRUD for free-positioned per-board notes.
  *
- * Notes are designer-only — never exposed via MCP. Each board has its own
- * notes file at `boards/<id>.notes.json`.
+ * Also exposed to agents via the MCP note tools (add_note / list_notes /
+ * update_note / remove_note). Each board has its own notes file at
+ * `boards/<id>.notes.json`.
  */
 export function createNotesRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();

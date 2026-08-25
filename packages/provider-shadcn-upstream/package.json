@@ -4,16 +4,13 @@
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "Velloo provider that fetches shadcn components from upstream at a pinned version and bundles them with the canvas-safe adapter layer",
+  "description": "Velloo shadcn-upstream provider: reuses the shadcn-snapshot canvas registry; a real vanilla-shadcn install in the user's app is delegated to `npx shadcn add` at handoff",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
     "@velloo/provider": "workspace:*",
-    "@velloo/schema": "workspace:*",
-    "@velloo/shadcn-adapter": "workspace:*",
-    "@velloo/shadcn-snapshot": "workspace:*",
-    "ts-morph": "28.0.0"
+    "@velloo/shadcn-snapshot": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "19.2.14",

@@ -2,7 +2,6 @@ import { dirname, join } from "node:path";
 import type { Extension, HostApp } from "@velloo/schema";
 import {
   aliasPairs,
-  type BundleError,
   type BundleResult,
   bundleComponents,
   EMPTY_MODULE,
@@ -76,11 +75,6 @@ export class LiveBundler {
   /** Monotonic counter bumped on every invalidate — used to cache-bust the iframe. */
   get version(): number {
     return this._version;
-  }
-
-  /** Last build's errors (null until first build). */
-  lastError(): BundleError[] | null {
-    return this.cached?.errors ?? null;
   }
 
   /**

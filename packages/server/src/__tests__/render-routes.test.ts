@@ -99,7 +99,6 @@ beforeEach(async () => {
     folder,
     providers: { default: provider },
     defaultProvider: provider,
-    provider,
     broadcast: () => undefined,
   };
   app = createApp(() => ctx, jit, bundler, canvasBundler);

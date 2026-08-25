@@ -13,7 +13,6 @@ export type MutationError =
   | { kind: "InvalidMove"; reason: string }
   | { kind: "LastScreen"; screenId: string }
   | { kind: "LastBoard"; boardId: string }
-  | { kind: "ScreenInUse"; screenId: string; usage: { boardId: string; frameIds: string[] }[] }
   | { kind: "ScreenIdConflict"; screenId: string; hint?: string }
   | { kind: "ScreenIdExhausted"; base: string }
   | { kind: "BoardIdConflict"; boardId: string }
@@ -98,14 +97,6 @@ export const lastScreen = (screenId: string): MutationError => ({
 export const lastBoard = (boardId: string): MutationError => ({
   kind: "LastBoard",
   boardId,
-});
-export const screenInUse = (
-  screenId: string,
-  usage: { boardId: string; frameIds: string[] }[],
-): MutationError => ({
-  kind: "ScreenInUse",
-  screenId,
-  usage,
 });
 export const screenIdConflict = (screenId: string): MutationError => ({
   kind: "ScreenIdConflict",

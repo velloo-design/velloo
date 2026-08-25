@@ -347,7 +347,6 @@ describe("the generate_asset tool", () => {
       folder,
       providers: { "shadcn-react": provider },
       defaultProvider: provider,
-      provider,
       broadcast: () => {},
     };
     const mcp = new McpServer({ name: "velloo", version: "0.1.0" });

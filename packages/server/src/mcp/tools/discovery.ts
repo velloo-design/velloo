@@ -107,7 +107,7 @@ async function loadManifestForCtx(ctx: MutationContext): Promise<Manifest> {
     const raw = await readFile(onDisk, "utf8");
     return JSON.parse(raw) as Manifest;
   } catch {
-    return ctx.provider.loadManifest();
+    return ctx.defaultProvider.loadManifest();
   }
 }
 
@@ -136,7 +136,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         name: screen.name,
         ...(include_tree ? { tree: screen.tree } : {}),
       }));
-      return jsonResult({ snapshotVersion: ctx.provider.version, screens });
+      return jsonResult({ snapshotVersion: ctx.defaultProvider.version, screens });
     },
   );
 

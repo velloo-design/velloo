@@ -1,6 +1,6 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { MutationContext } from "./context.ts";
-import { lastScreen, type MutationError, screenInUse } from "./errors.ts";
+import { lastScreen, type MutationError } from "./errors.ts";
 import { getScreen } from "./lookup.ts";
 import { deletePersistedScreen, persistBoard } from "./persist.ts";
 
@@ -45,31 +45,5 @@ export async function removeScreen(
     await deletePersistedScreen(ctx.folder, args.screenId);
     ctx.broadcast({ type: "screen-changed", screenId: args.screenId });
     return { removedScreenId: args.screenId, removedFrames };
-  });
-}
-
-/** Stricter variant: refuses if any frame still references the screen. */
-export async function removeScreenStrict(
-  ctx: MutationContext,
-  args: RemoveScreenArgs,
-): Promise<Result<RemoveScreenResult, MutationError>> {
-  return DoAsync<RemoveScreenResult, MutationError>(async function* () {
-    yield* $(getScreen(ctx, args.screenId));
-    if (ctx.folder.screens.size <= 1) {
-      return yield* $(err(lastScreen(args.screenId)));
-    }
-    const usage: { boardId: string; frameIds: string[] }[] = [];
-    for (const [boardId, board] of ctx.folder.boards) {
-      const referencing = board.frames.filter((f) => f.screen === args.screenId);
-      if (referencing.length > 0) {
-        usage.push({ boardId, frameIds: referencing.map((f) => f.id) });
-      }
-    }
-    if (usage.length > 0) {
-      return yield* $(err(screenInUse(args.screenId, usage)));
-    }
-    await deletePersistedScreen(ctx.folder, args.screenId);
-    ctx.broadcast({ type: "screen-changed", screenId: args.screenId });
-    return { removedScreenId: args.screenId, removedFrames: [] };
   });
 }

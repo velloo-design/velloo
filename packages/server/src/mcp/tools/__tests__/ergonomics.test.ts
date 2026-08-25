@@ -87,7 +87,6 @@ beforeEach(async () => {
     folder,
     providers: { default: provider },
     defaultProvider: provider,
-    provider,
     broadcast: (e) => events.push(e),
   };
 });

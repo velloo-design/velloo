@@ -81,9 +81,4 @@ export class HistoryManager {
   truncateUndoTo(undoDepth: number): void {
     while (this.undoStack.length > undoDepth) this.undoStack.pop();
   }
-
-  clear(): void {
-    this.undoStack.length = 0;
-    this.redoStack.length = 0;
-  }
 }

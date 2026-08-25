@@ -1,23 +1,11 @@
 /**
- * `@velloo/provider-shadcn-upstream` — fetches shadcn components from
- * upstream at a pinned version, weaves canvas-safe behavior in through
- * `@velloo/shadcn-adapter`, and exposes the result as a
- * `ComponentProvider`.
+ * `@velloo/provider-shadcn-upstream` — the `shadcn-upstream` ComponentProvider.
  *
- * Currently exposes the fetcher + manifest pieces; the bundler and the
- * actual `createProvider()` factory are still to come.
+ * A pragmatic hybrid: the canvas runtime reuses the `@velloo/shadcn-snapshot`
+ * registry (avoiding a 25+ `@radix-ui/*` bundle), while a real vanilla-shadcn
+ * install in the user's app is delegated to `npx shadcn@latest add` at handoff.
+ * The provider reads a per-cache `manifest.json` when one is present and falls
+ * back to the snapshot manifest otherwise.
  */
-export { SHADCN_COMPONENT_IDS, type ShadcnComponentId } from "./components.ts";
-export {
-  type FetchOptions,
-  type FetchResult,
-  fetchShadcn,
-  LIB_UTILS_CONTENT,
-  SHADCN_REGISTRY_VERSION,
-  type ShadcnRegistryItem,
-  verifyCache,
-} from "./fetcher.ts";
-export { type InstallOptions, type InstallResult, installShadcnUpstream } from "./install.ts";
-export { aggregateDependencies, hashContent, type ShadcnUpstreamLock } from "./lock.ts";
-export { generateManifest, readManifest, writeManifest } from "./manifest.ts";
+export { readManifest } from "./manifest.ts";
 export { type CreateUpstreamProviderOptions, createProvider } from "./provider.ts";
