@@ -1,0 +1,38 @@
+# CI: typecheck + lint + tests on every push/PR. The Playwright/Chromium
+# suites detect a missing browser and skip themselves (they're the local
+# `VELLOO_E2E=1` / installed-chromium opt-ins), so CI needs no browser
+# download and stays fast.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Tests load the snapshot's generated manifest at runtime.
+      - name: Build shadcn snapshot manifest
+        run: bun run build
+        working-directory: packages/shadcn-snapshot
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun test

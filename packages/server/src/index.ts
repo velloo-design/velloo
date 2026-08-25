@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { extname, join } from "node:path";
+import { extname, join, sep } from "node:path";
 import { canvasDistPath } from "@velloo/canvas";
 import { keyframesToCss } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
@@ -150,11 +150,23 @@ async function serveFolderAsset(req: Request, folderRoot: string): Promise<Respo
   const url = new URL(req.url);
   if (!url.pathname.startsWith("/assets/")) return null;
   const fsPath = join(folderRoot, decodeURIComponent(url.pathname));
-  if (!fsPath.startsWith(join(folderRoot, "assets"))) return null;
+  if (!fsPath.startsWith(join(folderRoot, "assets") + sep)) return null;
   const file = Bun.file(fsPath);
   if (!(await file.exists())) return null;
   const type = MIME[extname(fsPath)] ?? "application/octet-stream";
-  return new Response(file, { headers: { "Content-Type": type } });
+  const headers: Record<string, string> = {
+    "Content-Type": type,
+    "X-Content-Type-Options": "nosniff",
+  };
+  // Assets share the canvas origin, and an SVG *navigated to directly* is a
+  // document whose scripts would run there. `<img>`/CSS embedding never runs
+  // script, so a script-inert CSP costs nothing and closes the direct path —
+  // for cloud-generated art (sanitized upstream, re-checked in
+  // cloud-generate.ts) and anything else that lands in assets/.
+  if (type === "image/svg+xml") {
+    headers["Content-Security-Policy"] = "script-src 'none'";
+  }
+  return new Response(file, { headers });
 }
 
 async function serveSpaFallback(): Promise<Response> {

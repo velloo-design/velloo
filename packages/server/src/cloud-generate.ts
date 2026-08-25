@@ -114,6 +114,26 @@ function cloudMessage(body: unknown, status: number): string {
 
 const DATA_URL = /^data:image\/(png|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/;
 
+/**
+ * Defense-in-depth on the cloud's sanitized SVG. Generated markup is remote
+ * input that ends up executing-capable in two local spots: inlined into the
+ * canvas via `<SVG content>` (dangerouslySetInnerHTML) and served from the
+ * canvas origin under /assets/ (script-inert CSP there, see server/index.ts).
+ * The cloud sanitizes before returning; this gate REFUSES anything that still
+ * looks active rather than trying to repair it — a false positive just means
+ * regenerating or authoring locally.
+ */
+const ACTIVE_SVG = [
+  /<\s*script[\s>]/i,
+  /<\s*foreignObject[\s>]/i,
+  /\son[a-z]+\s*=/i, // onload= / onclick= / …
+  /(?:href|src)\s*=\s*["']?\s*(?:javascript:|data:text\/html)/i,
+];
+
+export function svgLooksActive(markup: string): boolean {
+  return ACTIVE_SVG.some((re) => re.test(markup));
+}
+
 export async function generateAsset(
   root: string,
   cloud: CloudAuth,
@@ -175,6 +195,13 @@ export async function generateAsset(
   }
   const ext = match[1] === "png" ? "png" : "svg";
   const bytes = Buffer.from(match[2] as string, "base64");
+  if (ext === "svg" && svgLooksActive(bytes.toString("utf8"))) {
+    return err({
+      kind: "BadResponse",
+      message:
+        "velloo-cloud returned SVG containing active content (script/event handlers) — refusing to store it. Retry the generation, or author the asset yourself with `upload_asset`.",
+    });
+  }
   const stem = req.filename?.replace(/\.(png|svg)$/i, "") ?? payload.id;
   const stored = await storeAsset(root, `${stem}.${ext}`, bytes);
 

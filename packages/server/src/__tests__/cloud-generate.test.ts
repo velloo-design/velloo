@@ -7,7 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { Server } from "bun";
-import { formatDollars, generateAsset } from "../cloud-generate.ts";
+import { formatDollars, generateAsset, svgLooksActive } from "../cloud-generate.ts";
 import { loadDesignFolder } from "../design-folder.ts";
 import { registerGenerateTools } from "../mcp/tools/generate.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -274,6 +274,34 @@ test("a malformed dataUrl is rejected without writing anything", async () => {
   const r = await generateAsset(tmp, cloud(), { prompt: "x", kind: "image" });
   expect(r.ok).toBe(false);
   if (!r.ok) expect(r.error.kind).toBe("BadResponse");
+});
+
+describe("active-SVG defense in depth", () => {
+  test("svgLooksActive flags scripts, handlers, foreignObject, javascript: URLs", () => {
+    expect(svgLooksActive("<svg><script>alert(1)</script></svg>")).toBe(true);
+    expect(svgLooksActive('<svg onload="alert(1)"><rect/></svg>')).toBe(true);
+    expect(svgLooksActive("<svg><foreignObject><body/></foreignObject></svg>")).toBe(true);
+    expect(svgLooksActive('<svg><a href="javascript:alert(1)"><rect/></a></svg>')).toBe(true);
+    expect(svgLooksActive('<svg><a href=" javascript:alert(1)"><rect/></a></svg>')).toBe(true);
+    expect(svgLooksActive(SVG_MARKUP)).toBe(false);
+    expect(svgLooksActive('<svg><path d="M0 0h24v24H0z" stroke="none"/></svg>')).toBe(false);
+    expect(svgLooksActive('<svg><a href="#anchor"><text>only once</text></a></svg>')).toBe(false);
+  });
+
+  test("generated SVG that still carries a script is refused, nothing written", async () => {
+    const active = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
+    stub.body = {
+      ...svgSuccess(),
+      dataUrl: `data:image/svg+xml;base64,${Buffer.from(active).toString("base64")}`,
+    };
+    const r = await generateAsset(tmp, cloud(), { prompt: "a mark", kind: "svg" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.kind).toBe("BadResponse");
+      expect(r.error.message).toContain("refusing");
+    }
+    expect(await readFile(join(tmp, "assets", "gen_ef56ab78.svg")).catch(() => null)).toBeNull();
+  });
 });
 
 describe("the generate_asset tool", () => {

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -59,7 +59,10 @@ export async function clearCredentials(): Promise<number> {
 
 async function writeAll(all: CredentialsFile): Promise<string> {
   const path = credentialsPath();
-  await mkdir(dirname(path), { recursive: true });
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, `${JSON.stringify(all, null, 2)}\n`, { mode: 0o600 });
+  // writeFile's mode only applies when it creates the file — re-assert so a
+  // pre-existing looser credentials file tightens to owner-only on every write.
+  await chmod(path, 0o600);
   return path;
 }
