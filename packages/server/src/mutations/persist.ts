@@ -113,7 +113,9 @@ export async function persistNamedTheme(
   theme: Theme,
 ): Promise<Theme> {
   if (name === "default") return persistTheme(folder, theme);
-  const validated = ThemeSchema.parse(theme);
+  // Clone-on-write copies of the default theme arrive with name "default";
+  // the file's internal name must always match its stem.
+  const validated = ThemeSchema.parse({ ...theme, name });
   await writeJsonAtomic(join(folder.root, "theme", `${name}.json`), validated);
   folder.themes.set(name, validated);
   return validated;

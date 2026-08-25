@@ -168,16 +168,22 @@ export interface FrameOverflow {
  * screen's rendered content — i.e. the board view clips them below the fold.
  * `screenshot`/`compare_to_url` render the full natural height (`fullPage`), so
  * this is the only signal an agent gets that a placement needs resizing.
+ *
+ * Content height is width-dependent (a 390px render is far taller than the
+ * same screen at 1440px), so only frames whose width matches the capture
+ * viewport are considered — fitting a desktop frame to a mobile capture's
+ * height would mis-grow it.
  */
 export function framesShorterThan(
   ctx: MutationContext,
   screenId: string,
   contentHeight: number,
+  viewportW: number,
 ): FrameOverflow[] {
   const out: FrameOverflow[] = [];
   for (const board of ctx.folder.boards.values()) {
     for (const frame of board.frames) {
-      if (frame.screen === screenId && frame.h < contentHeight) {
+      if (frame.screen === screenId && frame.w === viewportW && frame.h < contentHeight) {
         out.push({
           board: board.id,
           frame: frame.id,

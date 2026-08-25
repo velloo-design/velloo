@@ -70,7 +70,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame whose fixed height clips this screen below the fold, so you know which placements to resize. fitFrames: true auto-resizes those clipping frames to the content height in the same call (returns `fittedFrames`) instead of just reporting them.',
+        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame at this capture width whose fixed height clips this screen below the fold, so you know which placements to resize (content height is width-dependent, so frames at other widths are never flagged or fitted). fitFrames: true auto-resizes those clipping frames to the content height in the same call (returns `fittedFrames`) instead of just reporting them.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -317,7 +317,7 @@ export function registerScreenshotCaptureTool(
             });
             buf = capture.png;
             const contentHeight = contentHeightFromRects(capture.nodeRects);
-            const shortFrames = framesShorterThan(ctx, screenId, contentHeight);
+            const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
             const fitted =
               fitFrames && shortFrames.length
                 ? await fitFramesToContent(ctx, shortFrames, contentHeight)

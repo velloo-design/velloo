@@ -256,7 +256,7 @@ export function registerCompareToUrlTool(
             ? urlCapture.pageError
             : "it shows a login form";
         const contentHeight = contentHeightFromRects(velloo.nodeRects);
-        const shortFrames = framesShorterThan(ctx, screenId, contentHeight);
+        const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
         // Fit against the Velloo render's height — independent of whether the
         // URL capture verified, so it's safe even on an unverified diff.
         const fitted =

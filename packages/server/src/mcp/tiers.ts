@@ -2,14 +2,17 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 /**
- * Progressive disclosure for the MCP tool surface. The server registers every
- * tool, then hides the long-tail *families* below so only a lean core is
- * advertised at boot — fewer schemas in the agent's context, fewer ways to
- * mis-select. A hidden tool is both absent from `tools/list` and rejects
- * calls. The `reveal_tools` meta-tool re-enables a family on demand; the SDK's
- * `enable()` fires `tools/list_changed`, so a compliant client re-fetches the
- * larger list automatically. `VELLOO_MCP_FLAT=1` opts out entirely (advertise
- * everything up front) for clients that don't honor `list_changed`.
+ * Progressive disclosure for the MCP tool surface — OPT-IN via
+ * `VELLOO_MCP_PROGRESSIVE=1`. When enabled, the server registers every tool,
+ * then hides the long-tail *families* below so only a lean core is advertised
+ * at boot — fewer schemas in the agent's context, fewer ways to mis-select. A
+ * hidden tool is both absent from `tools/list` and rejects calls. The
+ * `reveal_tools` meta-tool re-enables a family on demand; the SDK's `enable()`
+ * fires `tools/list_changed`, so a compliant client re-fetches the larger
+ * list automatically. The DEFAULT is flat (everything advertised) because
+ * major agent clients index the tool list once at connect and never honor
+ * `list_changed` — revealed tools stay uncallable there, which strands the
+ * whole hidden surface (2026-07 gallery dogfood: all three agents hit it).
  *
  * Keep families CONSERVATIVE: a tool belongs here only if the boot
  * instructions don't steer the agent to it in the main compose→verify→emit
@@ -76,10 +79,24 @@ export const TOOL_FAMILIES = {
 
 export type FamilyName = keyof typeof TOOL_FAMILIES;
 
+const truthy = (v: string | undefined): boolean =>
+  v !== undefined && v !== "" && v !== "0" && v.toLowerCase() !== "false";
+
 /** True when `VELLOO_MCP_FLAT` is set truthy — advertise every tool up front. */
 export function flatToolsMode(env: NodeJS.ProcessEnv = process.env): boolean {
-  const v = env.VELLOO_MCP_FLAT;
-  return v !== undefined && v !== "" && v !== "0" && v.toLowerCase() !== "false";
+  return truthy(env.VELLOO_MCP_FLAT);
+}
+
+/**
+ * True when `VELLOO_MCP_PROGRESSIVE` is set truthy — hide the long-tail
+ * families until `reveal_tools`. Flat is the DEFAULT: major agent clients
+ * (Claude Code among them) index the tool list once at connect and never
+ * re-fetch on `tools/list_changed`, which leaves revealed tools uncallable —
+ * dogfooding showed every agent hitting that wall. `VELLOO_MCP_FLAT=1` still
+ * force-flattens (and wins over both env vars being set).
+ */
+export function progressiveToolsMode(env: NodeJS.ProcessEnv = process.env): boolean {
+  return truthy(env.VELLOO_MCP_PROGRESSIVE) && !flatToolsMode(env);
 }
 
 /**
@@ -199,7 +216,7 @@ export function revealInstructions(): string {
     .map((a) => `\`${a}\` (${TOOL_FAMILIES[a].summary})`)
     .join(", ");
   return [
-    `**Focused tool surface.** Velloo advertises a lean core covering the compose→verify→emit loop; less-common tools are grouped into families that stay hidden until you call \`reveal_tools({ area })\`, which unlocks them (your client re-fetches the tool list automatically). Families: ${families}.`,
-    "If this guide names a tool you don't see in your tool list (e.g. `remove_screen`, `apply_preset`, `add_annotation`), it's behind `reveal_tools` — unlock its family, then call it. (Set `VELLOO_MCP_FLAT=1` to advertise every tool up front instead.)",
+    `**Focused tool surface (VELLOO_MCP_PROGRESSIVE).** Velloo is advertising a lean core covering the compose→verify→emit loop; less-common tools are grouped into families that stay hidden until you call \`reveal_tools({ area })\`, which unlocks them (requires a client that re-fetches the tool list on \`tools/list_changed\`). Families: ${families}.`,
+    "If this guide names a tool you don't see in your tool list (e.g. `remove_screen`, `apply_preset`, `add_annotation`), it's behind `reveal_tools` — unlock its family, then call it. If revealed tools stay uncallable, your client doesn't refresh its tool index: unset `VELLOO_MCP_PROGRESSIVE` (the default advertises every tool up front).",
   ].join(" ");
 }

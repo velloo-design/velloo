@@ -107,4 +107,30 @@ describe("derivePaletteFromColor", () => {
     const onDisk = await diskTheme();
     expect(onDisk.colors.primary).toEqual(primary as never);
   });
+
+  test("a named derive writes theme/<name>.json and never touches the default", async () => {
+    const before = await diskTheme();
+    const r = unwrap(await derivePaletteFromColor(ctx, "#7c3aed", "brand"));
+    expect(r.theme.name).toBe("brand");
+
+    const named = JSON.parse(await readFile(join(tmp, "theme/brand.json"), "utf8")) as Theme;
+    expect(named.name).toBe("brand");
+    expect(named.colors.primary).toEqual(r.theme.colors.primary as never);
+
+    // The default theme — on disk and in memory — is untouched.
+    expect(await diskTheme()).toEqual(before);
+    expect(folder.theme.name).toBe("default");
+    expect(folder.themes.get("brand")).toBeDefined();
+  });
+});
+
+describe("named-theme clone-on-write", () => {
+  test("setToken on a missing named theme creates it with its own name, not 'default'", async () => {
+    unwrap(await setToken(ctx, "colors.background", "oklch(0.2 0 0)", "midnight"));
+    const named = JSON.parse(await readFile(join(tmp, "theme/midnight.json"), "utf8")) as Theme;
+    expect(named.name).toBe("midnight");
+    expect(named.colors.background).toBe("oklch(0.2 0 0)");
+    // Clone-on-write: the default is the base but stays unchanged.
+    expect((await diskTheme()).colors.background).toBe("oklch(1 0 0)");
+  });
 });

@@ -94,7 +94,12 @@ export const AddBoardBody = z.object({
 });
 export const UpdateBoardBody = z.object({
   boardId: z.string().min(1),
-  patch: z.object({ name: z.string().min(1).optional() }),
+  // Mirrors the MCP update_board schema: theme pins a named theme for the
+  // board's frames; null clears back to the folder default.
+  patch: z.object({
+    name: z.string().min(1).optional(),
+    theme: z.string().min(1).nullable().optional(),
+  }),
 });
 export const RemoveBoardBody = z.object({
   boardId: z.string().min(1),

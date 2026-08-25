@@ -8,15 +8,17 @@ A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`
 
 ## Tool surface
 
-### Progressive disclosure
+### Progressive disclosure (opt-in)
 
-The server advertises a lean **core** surface (the compose→verify→emit loop) and hides long-tail tool *families* until the agent asks for them, so fewer schemas sit in context and there are fewer ways to mis-select. A hidden tool is absent from `tools/list` and rejects calls.
+**The default surface is flat — every tool advertised up front.** Progressive disclosure is opt-in via `VELLOO_MCP_PROGRESSIVE=1`: the server then advertises a lean **core** surface (the compose→verify→emit loop) and hides long-tail tool *families* until the agent asks for them, so fewer schemas sit in context and there are fewer ways to mis-select. A hidden tool is absent from `tools/list` and rejects calls.
+
+Flat is the default because it requires a client that re-fetches the tool list on `tools/list_changed` — and major agent clients (Claude Code among them) index tools once at connect and never refresh, which leaves revealed tools permanently uncallable (2026-07 gallery dogfood: every agent hit this). `VELLOO_MCP_FLAT=1` still force-flattens and wins if both vars are set.
 
 | Tool | Args | Notes |
 |---|---|---|
-| `reveal_tools` | `area: "theme-authoring" \| "lifecycle" \| "annotations-write" \| "all"` | Unlock a hidden family. Fires `tools/list_changed` (compliant clients re-fetch the larger list automatically) and returns the now-callable tool names + that family's guidance. Idempotent |
+| `reveal_tools` | `area: "theme-authoring" \| "lifecycle" \| "annotations-write" \| "all"` | Progressive mode only. Unlock a hidden family. Fires `tools/list_changed` (compliant clients re-fetch the larger list automatically) and returns the now-callable tool names + that family's guidance. Idempotent |
 
-Hidden families (default): **theme-authoring** (`add_theme`, `apply_preset`, `score_theme_contrast`, `list_themes`), **lifecycle** (the `remove_*` for boards/frames/groups/screens/snippets/extensions + `update_board`/`update_group`/`update_screen`/`update_extension`), **annotations-write** (`add_annotation`, `remove_annotation`). Everything else — including reads (`list_annotations`), node deletes (`remove_node`), frame edits (`update_frame`), `import_theme`, and `derive_palette_from_color` — stays core. Set `VELLOO_MCP_FLAT=1` to advertise every tool up front (for clients that don't honor `list_changed`).
+Hidden families (progressive mode): **theme-authoring** (`add_theme`, `apply_preset`, `score_theme_contrast`, `list_themes`), **lifecycle** (the `remove_*` for boards/frames/groups/screens/snippets/extensions + `update_board`/`update_group`/`update_screen`/`update_extension`), **annotations-write** (`add_annotation`, `remove_annotation`). Everything else — including reads (`list_annotations`), node deletes (`remove_node`), frame edits (`update_frame`), `import_theme`, and `derive_palette_from_color` — stays core.
 
 ### Discovery
 

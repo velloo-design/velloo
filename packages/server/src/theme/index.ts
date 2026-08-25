@@ -1,7 +1,7 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
-import { persistNamedTheme, persistTheme } from "../mutations/persist.ts";
+import { persistNamedTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import {
@@ -145,7 +145,8 @@ export async function derivePaletteFromColor(
   return withThemeLock(() =>
     DoAsync<DeriveResult, ThemeError>(async function* () {
       const result = yield* $(derivePalette(seedColor, ctx.folder.theme, name));
-      const persisted = await persistTheme(ctx.folder, result.theme);
+      // A named derive writes theme/<name>.json — never the default theme.
+      const persisted = await persistNamedTheme(ctx.folder, name ?? "default", result.theme);
       broadcastThemeChanged(ctx);
       return { ...result, theme: persisted };
     }),

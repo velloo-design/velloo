@@ -16,8 +16,8 @@ import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import {
   applyDefaultTiers,
-  flatToolsMode,
   instrumentTools,
+  progressiveToolsMode,
   registerRevealTool,
   revealInstructions,
 } from "./tiers.ts";
@@ -205,7 +205,7 @@ function buildMcpServer(
   cloud?: CloudAuth,
 ): McpServer {
   const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled);
-  const tiered = !flatToolsMode();
+  const tiered = progressiveToolsMode();
   const channelKind = styleChannelOf(
     ctx.defaultProvider,
     ctx.folder.config.styling?.framework,
@@ -251,10 +251,12 @@ function buildMcpServer(
   registerCommentTools(mcp, ctx, cloud ?? { url: "" });
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
-  // Progressive disclosure: advertise a lean core and reveal the long-tail
-  // families on demand via `reveal_tools`. VELLOO_MCP_FLAT opts out. Disabling
-  // here is silent (the server isn't connected yet, so no list_changed fires —
-  // the first tools/list simply reflects the hidden state).
+  // Progressive disclosure is OPT-IN (VELLOO_MCP_PROGRESSIVE=1): major agent
+  // clients index tools/list once at connect and ignore list_changed, leaving
+  // revealed tools uncallable — so the default advertises everything.
+  // Disabling here is silent (the server isn't connected yet, so no
+  // list_changed fires — the first tools/list simply reflects the hidden
+  // state).
   if (tiered) {
     registerRevealTool(mcp, registry);
     const { missing } = applyDefaultTiers(registry);

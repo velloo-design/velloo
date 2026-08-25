@@ -7,6 +7,7 @@ import {
   type FamilyName,
   flatToolsMode,
   instrumentTools,
+  progressiveToolsMode,
   revealFamily,
   TOOL_FAMILIES,
   type ToolRegistry,
@@ -102,17 +103,44 @@ describe("revealFamily", () => {
 });
 
 describe("flatToolsMode", () => {
-  test("truthy values opt out of tiering", () => {
+  test("truthy values force flat", () => {
     for (const v of ["1", "true", "yes", "on"]) {
       expect(flatToolsMode({ VELLOO_MCP_FLAT: v } as NodeJS.ProcessEnv)).toBe(true);
     }
   });
 
-  test("unset / falsy values keep tiering on", () => {
+  test("unset / falsy values do not force flat", () => {
     expect(flatToolsMode({} as NodeJS.ProcessEnv)).toBe(false);
     for (const v of ["", "0", "false", "FALSE"]) {
       expect(flatToolsMode({ VELLOO_MCP_FLAT: v } as NodeJS.ProcessEnv)).toBe(false);
     }
+  });
+});
+
+describe("progressiveToolsMode", () => {
+  test("default (no env) is flat — progressive off", () => {
+    expect(progressiveToolsMode({} as NodeJS.ProcessEnv)).toBe(false);
+  });
+
+  test("VELLOO_MCP_PROGRESSIVE=1 opts into tiering", () => {
+    for (const v of ["1", "true", "yes", "on"]) {
+      expect(progressiveToolsMode({ VELLOO_MCP_PROGRESSIVE: v } as NodeJS.ProcessEnv)).toBe(true);
+    }
+  });
+
+  test("falsy VELLOO_MCP_PROGRESSIVE stays flat", () => {
+    for (const v of ["", "0", "false", "FALSE"]) {
+      expect(progressiveToolsMode({ VELLOO_MCP_PROGRESSIVE: v } as NodeJS.ProcessEnv)).toBe(false);
+    }
+  });
+
+  test("VELLOO_MCP_FLAT wins over VELLOO_MCP_PROGRESSIVE", () => {
+    expect(
+      progressiveToolsMode({
+        VELLOO_MCP_PROGRESSIVE: "1",
+        VELLOO_MCP_FLAT: "1",
+      } as NodeJS.ProcessEnv),
+    ).toBe(false);
   });
 });
 
@@ -137,7 +165,7 @@ describe("buildInstructions tiering hint", () => {
     expect(buildInstructions(false, undefined, false)).not.toContain("reveal_tools");
     const tiered = buildInstructions(false, undefined, true);
     expect(tiered).toContain("reveal_tools");
-    expect(tiered).toContain("VELLOO_MCP_FLAT");
+    expect(tiered).toContain("VELLOO_MCP_PROGRESSIVE");
     // Every family is named so the agent knows what's behind the gate.
     for (const name of Object.keys(TOOL_FAMILIES) as FamilyName[]) {
       expect(tiered).toContain(name);
