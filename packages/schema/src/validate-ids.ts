@@ -6,7 +6,7 @@ import { isComponentNode, isSnippetInstance, type Node, nodeId } from "./node.ts
  * instance's own `$id` is recorded but the walker never descends into
  * snippet bodies (those ids belong to a different addressing scope).
  */
-export function collectIds(root: Node): Map<string, number[][]> {
+function collectIds(root: Node): Map<string, number[][]> {
   const out = new Map<string, number[][]>();
   function walk(node: Node, path: number[]): void {
     const id = nodeId(node);

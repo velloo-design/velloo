@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
@@ -178,7 +177,6 @@ async function writeScaffold(
   scaffold: Scaffold,
   plan: InstallPlan,
   answers: WizardAnswers,
-  projectId: string,
 ): Promise<void> {
   // Point the live-island bundler at the host app. `scanRoot` is the React
   // app root (the app itself, even when nested under a monorepo `appRoot`);
@@ -200,7 +198,6 @@ async function writeScaffold(
   const stack = stackById(answers.stack);
   const config = buildDefaultConfig({
     library: plan.library,
-    projectId,
     defaultScreen: defaultScreenForScaffold(scaffold),
     ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
     ...(answers.feedback ? { feedback: answers.feedback } : {}),
@@ -741,7 +738,6 @@ export default defineCommand({
       );
     }
 
-    const projectId = randomUUID();
     let plan: InstallPlan;
     try {
       plan = planInstall(answers);
@@ -756,7 +752,7 @@ export default defineCommand({
     } catch (err) {
       fail("init", (err as Error).message);
     }
-    await writeScaffold(folder, scaffold, plan, answers, projectId);
+    await writeScaffold(folder, scaffold, plan, answers);
 
     // Echo for non-interactive callers that grep the output for
     // "scaffolded" — keeps the existing CLI test passing.

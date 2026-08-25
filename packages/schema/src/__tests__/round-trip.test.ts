@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   type Board,
   BoardSchema,
-  collectIds,
   type Frame,
   FrameSchema,
   findDuplicateIds,
@@ -145,24 +144,6 @@ describe("schema rejects malformed input", () => {
 });
 
 describe("id collection + duplicate detection", () => {
-  test("collectIds finds every id and its path", () => {
-    const tree = {
-      $ref: "Card",
-      $id: "root",
-      children: [
-        { $ref: "Text", $id: "a" },
-        {
-          $ref: "Card",
-          children: [{ $ref: "Button", $id: "b" }],
-        },
-      ],
-    } as unknown as Node;
-    const ids = collectIds(tree);
-    expect(ids.get("root")).toEqual([[]]);
-    expect(ids.get("a")).toEqual([[0]]);
-    expect(ids.get("b")).toEqual([[1, 0]]);
-  });
-
   test("findDuplicateIds reports collisions", () => {
     const tree = {
       $ref: "Card",

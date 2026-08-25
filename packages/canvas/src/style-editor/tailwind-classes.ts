@@ -416,6 +416,3 @@ export function serializeClasses({ model, extra }: ParsedClasses): string {
 }
 
 /** Toggle a class in `extra` (used by the raw chip list). */
-export function withExtra(parsed: ParsedClasses, extra: string[]): ParsedClasses {
-  return { model: parsed.model, extra };
-}

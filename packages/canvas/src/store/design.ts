@@ -27,6 +27,13 @@ export interface DesignSlice {
   currentBoardId: string | null;
   currentScreenId: string | null;
   screenVersion: number;
+  /**
+   * Per-screen render version, bumped only for the screen that changed. The
+   * frame iframe cache-buster keys on this so editing one screen reloads only
+   * its own frames' iframes — not every frame on the board (which the global
+   * `screenVersion` would do).
+   */
+  screenVersions: Record<string, number>;
   components: Manifest | null;
   /** Default library's native style channel — drives the inspector's style editor. */
   styleChannel: StyleChannel | null;
@@ -67,6 +74,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   currentBoardId: null,
   currentScreenId: null,
   screenVersion: 0,
+  screenVersions: {},
   components: null,
   styleChannel: null,
   channelsByLibrary: {},
@@ -158,6 +166,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       set((s) => ({
         screens: { ...s.screens, [screenId]: screen },
         screenVersion: s.screenVersion + 1,
+        screenVersions: { ...s.screenVersions, [screenId]: (s.screenVersions[screenId] ?? 0) + 1 },
       }));
       return screen;
     } catch {
@@ -236,6 +245,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       set((s) => ({
         screens: { ...s.screens, [screenId]: screen },
         screenVersion: s.screenVersion + 1,
+        screenVersions: { ...s.screenVersions, [screenId]: (s.screenVersions[screenId] ?? 0) + 1 },
       }));
       if (screenId === get().currentScreenId) await get().refreshAnnotations();
     } catch {

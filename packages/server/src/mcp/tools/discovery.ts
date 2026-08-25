@@ -11,6 +11,7 @@ import {
   type Screen,
 } from "@velloo/schema";
 import { z } from "zod";
+import { orderedBoards } from "../../design-folder.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
 
@@ -171,7 +172,9 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       inputSchema: { include_frames: z.boolean().optional() },
     },
     async ({ include_frames }) => {
-      const boards = [...ctx.folder.boards.entries()].map(([id, board]) => ({
+      // Honor config.boardOrder so the agent sees the same order as the canvas
+      // + /api/design (reorder_boards' effect would otherwise be invisible here).
+      const boards = orderedBoards(ctx.folder).map(([id, board]) => ({
         id,
         name: board.name,
         frameCount: board.frames.length,

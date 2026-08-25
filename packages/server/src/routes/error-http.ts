@@ -1,4 +1,3 @@
-import type { CodegenError } from "@velloo/codegen";
 import type { Context } from "hono";
 import type { MutationError } from "../mutations/errors.ts";
 import type { ThemeError } from "../theme/errors.ts";
@@ -52,20 +51,10 @@ const THEME_STATUS: Record<ThemeError["kind"], ErrorStatus> = {
   BadRequest: 400,
 };
 
-const CODEGEN_STATUS: Record<CodegenError["kind"], ErrorStatus> = {
-  ScreenNotFound: 404,
-  SnippetNotFound: 404,
-  UnknownComponent: 422,
-};
-
 export function mutationToHttp(c: Context, error: MutationError): Response {
   return c.json({ error }, MUTATION_STATUS[error.kind]);
 }
 
 export function themeToHttp(c: Context, error: ThemeError): Response {
   return c.json({ error }, THEME_STATUS[error.kind]);
-}
-
-export function codegenToHttp(c: Context, error: CodegenError): Response {
-  return c.json({ error }, CODEGEN_STATUS[error.kind]);
 }

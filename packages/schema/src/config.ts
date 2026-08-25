@@ -44,8 +44,6 @@ export const LibrarySchema = z.object({
   source: z.string().min(1),
   /** Where the components live, relative to the design folder root. */
   componentsPath: z.string().min(1),
-  /** Set when the source is experimental. */
-  experimental: z.enum(["shared"]).optional(),
 });
 
 export type Library = z.infer<typeof LibrarySchema>;
@@ -89,12 +87,6 @@ export const ConfigSchema = z
   .object({
     schemaVersion: z.literal(1),
     toolVersion: z.string().min(1),
-    /**
-     * Stable project id (UUID). Used to key external-cache locations
-     * (`~/.velloo/<projectId>/...`) so a moved or renamed folder still
-     * resolves its cached components.
-     */
-    projectId: z.string().min(1).optional(),
     /**
      * Legacy single-library shape. Older folders carry this field;
      * the server migrates them in-memory at load.

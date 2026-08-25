@@ -143,4 +143,25 @@ describe("LruMap", () => {
     expect(m.get("a")).toBe(10);
     expect(m.get("c")).toBe(3);
   });
+
+  test("evicts by byte budget when a sizeOf is supplied", () => {
+    // High count cap, tight byte budget: eviction is driven by bytes.
+    const m = new LruMap<{ bytes: number }>(100, {
+      maxBytes: 250,
+      sizeOf: (v) => v.bytes,
+    });
+    m.set("a", { bytes: 100 });
+    m.set("b", { bytes: 100 });
+    m.set("c", { bytes: 100 }); // total 300 > 250 → evicts "a"
+    expect(m.get("a")).toBeUndefined();
+    expect(m.get("b")).toBeDefined();
+    expect(m.get("c")).toBeDefined();
+  });
+
+  test("keeps the just-inserted entry even if it alone exceeds the budget", () => {
+    const m = new LruMap<{ bytes: number }>(100, { maxBytes: 50, sizeOf: (v) => v.bytes });
+    m.set("big", { bytes: 999 });
+    expect(m.get("big")).toBeDefined();
+    expect(m.size).toBe(1);
+  });
 });

@@ -33,10 +33,6 @@ export function pushToast(input: {
   return String(id);
 }
 
-export function dismissToast(id: string): void {
-  sonner.dismiss(id);
-}
-
 export function toastError(err: unknown, fallback: string): string {
   const msg = err instanceof Error ? err.message : typeof err === "string" ? err : fallback;
   return pushToast({ kind: "error", message: msg || fallback });

@@ -101,6 +101,7 @@ export const createLibrarySlice: StateCreator<CanvasState, [], [], LibrarySlice>
       return {
         screens: { ...s.screens, [screenId]: screen },
         screenVersion: s.screenVersion + 1,
+        screenVersions: { ...s.screenVersions, [screenId]: (s.screenVersions[screenId] ?? 0) + 1 },
       };
     });
   },

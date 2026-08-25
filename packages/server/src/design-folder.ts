@@ -276,6 +276,23 @@ export function themeByName(folder: DesignFolder, name?: string | null): Theme {
   return folder.themes.get(name) ?? folder.theme;
 }
 
+/**
+ * Strict theme resolution for the MCP boundary: an unknown *named* theme is an
+ * error (listing the known names) rather than a silent fall-back to the default
+ * — a typo'd `theme:"brnad"` otherwise yields a default-theme capture the agent
+ * trusts as the named one. An omitted name still resolves to the default.
+ */
+export function resolveNamedTheme(
+  folder: DesignFolder,
+  name: string | undefined,
+): { ok: true; theme: Theme } | { ok: false; message: string } {
+  if (!name) return { ok: true, theme: folder.theme };
+  const theme = folder.themes.get(name);
+  if (theme) return { ok: true, theme };
+  const known = [...folder.themes.keys()].join(", ") || "(none)";
+  return { ok: false, message: `Unknown theme "${name}". Known themes: ${known}.` };
+}
+
 async function readCustomCss(root: string): Promise<string> {
   try {
     return await readFile(join(root, "theme", "custom.css"), "utf8");

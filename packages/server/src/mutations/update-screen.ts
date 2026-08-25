@@ -1,9 +1,9 @@
-import { $, DoAsync, type Result } from "@velloo/result";
+import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Screen } from "@velloo/schema";
 import { cloneScreen } from "./clone.ts";
 import type { MutationContext } from "./context.ts";
-import type { MutationError } from "./errors.ts";
-import { getScreen } from "./lookup.ts";
+import { badRequest, type MutationError } from "./errors.ts";
+import { getScreen, isSnippetTreeId } from "./lookup.ts";
 import { persistScreen } from "./persist.ts";
 
 export interface UpdateScreenArgs {
@@ -25,6 +25,18 @@ export async function updateScreen(
   args: UpdateScreenArgs,
 ): Promise<Result<UpdateScreenResult, MutationError>> {
   return DoAsync<UpdateScreenResult, MutationError>(async function* () {
+    // `getScreen` synthesizes a virtual screen for a `snippet:<id>` tree id, and
+    // persistScreen would then write a bogus `screens/snippet:<id>.json`. Snippet
+    // metadata is edited via update_snippet, not update_screen.
+    if (isSnippetTreeId(args.screenId)) {
+      return yield* $(
+        err(
+          badRequest(
+            `${args.screenId} is a snippet body, not a screen — rename it with update_snippet.`,
+          ),
+        ),
+      );
+    }
     const screen = yield* $(getScreen(ctx, args.screenId));
     const next = cloneScreen(screen);
     if (args.patch.name !== undefined) next.name = args.patch.name;

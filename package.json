@@ -13,6 +13,7 @@
     "typecheck": "tsc -b",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "lint:dead": "knip",
     "format": "biome format --write .",
     "test": "bun test",
     "velloo": "bun packages/cli/src/cli.ts",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.2",
     "@types/bun": "latest",
+    "knip": "6.24.0",
     "typescript": "6.0.3"
   },
   "engines": {

@@ -19,7 +19,7 @@ import {
   updateProps,
   updatePropsBulk,
 } from "./api/tree.ts";
-import type { MutationContext } from "./context.ts";
+import { type MutationContext, withBoardLock, withScreenLock, withSnippetLock } from "./context.ts";
 import { badRequest, type MutationError, scalarChildrenHint } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 
@@ -310,31 +310,51 @@ export async function runBatch(
     });
   }
 
+  // Restore one resource under its per-resource lock, so a concurrent canvas
+  // mutation on the same screen/board/snippet can't interleave with the
+  // rollback's file+memory writes (annotations lock on their screen id, notes
+  // on their board id).
+  function withResourceLock<T>(kind: ResourceKind, id: string, fn: () => Promise<T>): Promise<T> {
+    switch (kind) {
+      case "board":
+      case "notes":
+        return withBoardLock(id, fn);
+      case "snippet":
+        return withSnippetLock(id, fn);
+      default:
+        return withScreenLock(id, fn);
+    }
+  }
+
   async function rollback(): Promise<void> {
     for (const res of created) {
       // A created resource that was also snapshotted pre-existed (the
       // create would have conflicted) — snapshot restore handles it.
       if (snapshots.has(`${res.kind}:${res.id}`)) continue;
-      deleteResourceMemory(ctx.folder, res.kind, res.id);
-      await rm(resourceFile(ctx.folder, res.kind, res.id), { force: true });
+      await withResourceLock(res.kind, res.id, async () => {
+        deleteResourceMemory(ctx.folder, res.kind, res.id);
+        await rm(resourceFile(ctx.folder, res.kind, res.id), { force: true });
+      });
     }
     for (const snap of snapshots.values()) {
-      if (!snap.existed) {
-        deleteResourceMemory(ctx.folder, snap.kind, snap.id);
-        await rm(resourceFile(ctx.folder, snap.kind, snap.id), { force: true });
-        continue;
-      }
-      writeResourceMemory(ctx.folder, snap.kind, snap.id, structuredClone(snap.value));
-      // Sidecar files (notes, annotations) have no on-disk presence when empty.
-      if (
-        (snap.kind === "notes" || snap.kind === "annotations") &&
-        Array.isArray(snap.value) &&
-        snap.value.length === 0
-      ) {
-        await rm(resourceFile(ctx.folder, snap.kind, snap.id), { force: true });
-      } else {
-        await writeJsonAtomic(resourceFile(ctx.folder, snap.kind, snap.id), snap.value);
-      }
+      await withResourceLock(snap.kind, snap.id, async () => {
+        if (!snap.existed) {
+          deleteResourceMemory(ctx.folder, snap.kind, snap.id);
+          await rm(resourceFile(ctx.folder, snap.kind, snap.id), { force: true });
+          return;
+        }
+        writeResourceMemory(ctx.folder, snap.kind, snap.id, structuredClone(snap.value));
+        // Sidecar files (notes, annotations) have no on-disk presence when empty.
+        if (
+          (snap.kind === "notes" || snap.kind === "annotations") &&
+          Array.isArray(snap.value) &&
+          snap.value.length === 0
+        ) {
+          await rm(resourceFile(ctx.folder, snap.kind, snap.id), { force: true });
+        } else {
+          await writeJsonAtomic(resourceFile(ctx.folder, snap.kind, snap.id), snap.value);
+        }
+      });
     }
     ctx.folder.history.truncateUndoTo(undoDepth);
   }

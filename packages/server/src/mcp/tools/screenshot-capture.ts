@@ -11,7 +11,7 @@ import {
 } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import { z } from "zod";
-import { themeByName } from "../../design-folder.ts";
+import { resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -49,6 +49,8 @@ interface Baseline {
 }
 
 const BASELINE_CAP = 20;
+/** Cap the baseline cache's total PNG bytes (~64MB) so many large shots can't grow unbounded. */
+const BASELINE_MAX_BYTES = 64 * 1024 * 1024;
 
 export function registerScreenshotCaptureTool(
   mcp: McpServer,
@@ -64,7 +66,10 @@ export function registerScreenshotCaptureTool(
   // Diff baselines per render-parameter key, LRU-capped. Deliberately in-memory
   // only: a restart means components/themes may have changed underneath, and a
   // stale baseline produces confusing phantom diffs.
-  const baselines = new LruMap<Baseline>(BASELINE_CAP);
+  const baselines = new LruMap<Baseline>(BASELINE_CAP, {
+    maxBytes: BASELINE_MAX_BYTES,
+    sizeOf: (b) => b.png.byteLength,
+  });
 
   mcp.registerTool(
     "screenshot",
@@ -140,7 +145,9 @@ export function registerScreenshotCaptureTool(
       if (diff) {
         try {
           const snapshotCss = await jit.build();
-          const resolvedTheme = themeByName(ctx.folder, theme);
+          const _themeRes = resolveNamedTheme(ctx.folder, theme);
+          if (!_themeRes.ok) return errorResult(_themeRes.message);
+          const resolvedTheme = _themeRes.theme;
           const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");
           const { html } = await renderScreen(screen, resolvedTheme, {
             viewport,
@@ -243,7 +250,9 @@ export function registerScreenshotCaptureTool(
       try {
         const snapshotCss = await jit.build();
         const screenRegistry = registryForScreen(ctx, screen);
-        const resolvedTheme = themeByName(ctx.folder, theme);
+        const _themeRes = resolveNamedTheme(ctx.folder, theme);
+        if (!_themeRes.ok) return errorResult(_themeRes.message);
+        const resolvedTheme = _themeRes.theme;
         // A MUI pass projects the theme differently per mode, so light and dark
         // each need their own (undefined for Tailwind frameworks — cheap).
         const screenPassLight = renderPassForScreen(ctx, screen, resolvedTheme, false);

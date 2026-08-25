@@ -10,12 +10,10 @@
   },
   "dependencies": {
     "@biomejs/biome": "2.4.15",
-    "@velloo/renderer": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
     "diff": "9.0.0",
-    "tailwind-merge": "3.5.0",
-    "typescript": "6.0.3"
+    "tailwind-merge": "3.5.0"
   },
   "devDependencies": {
     "@types/diff": "8.0.0",

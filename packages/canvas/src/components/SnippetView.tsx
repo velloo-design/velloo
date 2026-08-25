@@ -44,7 +44,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const closeSnippetEditor = useCanvas((s) => s.closeSnippetEditor);
   const themeVersion = useCanvas((s) => s.themeVersion);
   const designMode = useCanvas((s) => s.designMode);
-  const screenVersion = useCanvas((s) => s.screenVersion);
+  const screenRev = useCanvas((s) => s.screenVersions[`snippet:${snippetId}`] ?? 0);
   const refreshDesignSummary = useCanvas((s) => s.refreshDesignSummary);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
@@ -112,7 +112,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const [viewport, setViewport] = useState<ViewportPreset>(initialPreset);
 
   const previewModeQs = designMode === "dark" ? "&mode=dark" : "";
-  const previewUrl = `/api/render/snippet-body/${encodeURIComponent(snippetId)}?w=${viewport.w}&h=${viewport.h}&v=${themeVersion}.${screenVersion}${previewModeQs}`;
+  const previewUrl = `/api/render/snippet-body/${encodeURIComponent(snippetId)}?w=${viewport.w}&h=${viewport.h}&v=${themeVersion}.${screenRev}${previewModeQs}`;
 
   // Per-iframe channel so clicks in the snippet preview report paths
   // into the body (not collapsed to the snippet-instance root, which
@@ -244,7 +244,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
         <div className="border-t flex-1 overflow-y-auto">
           <SectionLabel>Body</SectionLabel>
           {syntheticScreen ? (
-            <Tree screen={syntheticScreen} />
+            <Tree key={syntheticScreen.id} screen={syntheticScreen} />
           ) : (
             <div className="px-4 py-3 text-xs text-muted-foreground">No body to display.</div>
           )}

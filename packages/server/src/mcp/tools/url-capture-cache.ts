@@ -70,23 +70,46 @@ export function planUrlCache(opts: {
 
 /**
  * A least-recently-used map: inserting (or re-inserting) a key marks it newest;
- * size is bounded by `cap`, evicting the oldest on overflow. Backs the
- * in-memory, session-scoped capture caches.
+ * size is bounded by `cap` (entry count) and, optionally, by a total byte
+ * budget when a `sizeOf` is supplied — evicting the oldest until both hold.
+ * Backs the in-memory, session-scoped capture caches, whose values are multi-MB
+ * PNG buffers, so a count cap alone leaves memory unbounded at scale.
  */
 export class LruMap<V> {
   private readonly entries = new Map<string, V>();
-  constructor(private readonly cap: number) {}
+  private bytes = 0;
+  private readonly maxBytes: number | undefined;
+  private readonly sizeOf: (v: V) => number;
+
+  constructor(
+    private readonly cap: number,
+    opts: { maxBytes?: number; sizeOf?: (v: V) => number } = {},
+  ) {
+    this.maxBytes = opts.maxBytes;
+    this.sizeOf = opts.sizeOf ?? (() => 0);
+  }
 
   get(key: string): V | undefined {
     return this.entries.get(key);
   }
 
   set(key: string, value: V): void {
+    const prev = this.entries.get(key);
+    if (prev !== undefined) this.bytes -= this.sizeOf(prev);
     this.entries.delete(key);
     this.entries.set(key, value);
-    if (this.entries.size > this.cap) {
+    this.bytes += this.sizeOf(value);
+    // Evict oldest until within both the count cap and the byte budget (keep
+    // at least the just-inserted entry even if it alone exceeds the budget).
+    while (
+      this.entries.size > this.cap ||
+      (this.maxBytes !== undefined && this.bytes > this.maxBytes && this.entries.size > 1)
+    ) {
       const oldest = this.entries.keys().next().value;
-      if (oldest !== undefined) this.entries.delete(oldest);
+      if (oldest === undefined) break;
+      const v = this.entries.get(oldest);
+      if (v !== undefined) this.bytes -= this.sizeOf(v);
+      this.entries.delete(oldest);
     }
   }
 

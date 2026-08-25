@@ -10,11 +10,6 @@ interface DefaultConfigOpts {
   /** Default board id to open on first load. */
   defaultBoard?: string;
   /**
-   * Stable project id, used to key external-cache provider paths. Left
-   * optional for now so existing folders don't need rewriting.
-   */
-  projectId?: string;
-  /**
    * Host app location for the live-island bundler — set at init so
    * `render:"live"` extensions resolve against the user's app (their real
    * recharts &c.) without a manual config edit. See `HostApp`.
@@ -59,7 +54,6 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ],
     ...(opts.defaultScreen ? { defaultScreen: opts.defaultScreen } : {}),
     ...(opts.defaultBoard ? { defaultBoard: opts.defaultBoard } : {}),
-    ...(opts.projectId ? { projectId: opts.projectId } : {}),
     ...(opts.hostApp ? { hostApp: opts.hostApp } : {}),
     ...(opts.feedback ? { feedback: opts.feedback } : {}),
     ...(opts.styling ? { styling: opts.styling } : {}),

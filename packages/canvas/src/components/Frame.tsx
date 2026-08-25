@@ -42,6 +42,9 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   const screen = useCanvas((s) => s.screens[frame.screen]);
   const boardTheme = useCanvas((s) => s.boards[boardId]?.theme);
   const screenVersion = useCanvas((s) => s.screenVersion);
+  // Per-screen version for the iframe cache-buster — editing another screen
+  // must not reload this frame's iframe (only its own screen's edits should).
+  const screenRev = useCanvas((s) => s.screenVersions[frame.screen] ?? 0);
   const themeVersion = useCanvas((s) => s.themeVersion);
   const selection = useCanvas((s) => s.selection);
   const hover = useCanvas((s) => s.hover);
@@ -294,7 +297,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
             <iframe
               ref={iframeRef}
               title={`${screen.name} (${frame.id})`}
-              src={`${renderUrl(frame.screen, w, h, boardTheme)}&mode=${designMode}&v=${screenVersion}.${themeVersion}`}
+              src={`${renderUrl(frame.screen, w, h, boardTheme)}&mode=${designMode}&v=${screenRev}.${themeVersion}`}
               width={w}
               height={h}
               className="velloo-frame-iframe border rounded-md bg-white"

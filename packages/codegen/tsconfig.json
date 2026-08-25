@@ -19,9 +19,6 @@
       "path": "../schema"
     },
     {
-      "path": "../renderer"
-    },
-    {
       "path": "../provider-none"
     },
     {

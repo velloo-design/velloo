@@ -351,7 +351,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             aria-disabled={cursorMode === "hand"}
           >
             {currentScreen ? (
-              <Tree screen={currentScreen} />
+              <Tree key={currentScreen.id} screen={currentScreen} />
             ) : (
               <div className="px-4 py-2 text-xs text-muted-foreground">
                 Pick a screen above to see its tree.

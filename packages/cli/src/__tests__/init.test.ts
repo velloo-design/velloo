@@ -105,7 +105,7 @@ describe("velloo init", () => {
     expect(stderr).toContain("not empty");
   }, 30_000);
 
-  test("writes a projectId, a README, and the binary source vocabulary", async () => {
+  test("writes a README and the binary source vocabulary", async () => {
     const { exitCode } = await runInit(tmp);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -114,8 +114,6 @@ describe("velloo init", () => {
     );
     expect(config.library?.source).toBe("binary");
     expect(config.library?.componentsPath).toBe("binary");
-    expect(typeof config.projectId).toBe("string");
-    expect(config.projectId?.length ?? 0).toBeGreaterThan(0);
 
     const readme = await readFile(join(design, "README.md"), "utf8");
     expect(readme).toContain("Velloo design folder");

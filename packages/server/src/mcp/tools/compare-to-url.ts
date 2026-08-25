@@ -11,7 +11,7 @@ import {
 } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import { z } from "zod";
-import { themeByName } from "../../design-folder.ts";
+import { resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -34,6 +34,8 @@ import {
 import { type CachedUrlCapture, LruMap, planUrlCache, urlCacheKey } from "./url-capture-cache.ts";
 
 const URL_CACHE_CAP = 20;
+/** Cap the URL-capture cache's total PNG bytes (~64MB) against unbounded growth. */
+const URL_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const DEFAULT_URL_CACHE_TTL_MS = 300_000; // 5 min
 
 /** Mirrors the renderer's {@link UrlCookie} — `satisfies` keeps the two in lockstep. */
@@ -60,7 +62,10 @@ export function registerCompareToUrlTool(
   // *dynamic* page diff against one stable reference instead of re-fetching
   // drifting content. In-memory + session-scoped: a restart may mean the target
   // app changed underneath.
-  const urlCaptures = new LruMap<CachedUrlCapture>(URL_CACHE_CAP);
+  const urlCaptures = new LruMap<CachedUrlCapture>(URL_CACHE_CAP, {
+    maxBytes: URL_CACHE_MAX_BYTES,
+    sizeOf: (c) => c.result.png.byteLength,
+  });
 
   mcp.registerTool(
     "compare_to_url",
@@ -177,7 +182,9 @@ export function registerCompareToUrlTool(
 
       try {
         const snapshotCss = await jit.build();
-        const resolvedTheme = themeByName(ctx.folder, theme);
+        const _themeRes = resolveNamedTheme(ctx.folder, theme);
+        if (!_themeRes.ok) return errorResult(_themeRes.message);
+        const resolvedTheme = _themeRes.theme;
         const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");
         const { html } = await renderScreen(screen, resolvedTheme, {
           viewport,

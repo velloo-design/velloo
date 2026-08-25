@@ -61,8 +61,6 @@ const PaletteSchema = z.record(
   z.string().min(1),
 );
 
-export type Palette = z.infer<typeof PaletteSchema>;
-
 /**
  * Structured typography slots — what Velloo's codegen + renderer actually
  * read. Each sub-shape is .passthrough()-equivalent (extra keys allowed)
@@ -91,8 +89,6 @@ export const TypographySchema = z.object({
   letterSpacing: z.record(z.string(), NumOrCssLen).optional(),
 });
 
-export type Typography = z.infer<typeof TypographySchema>;
-
 /**
  * Structured radius slots. `md` is what emit_theme picks up as `--radius`.
  * Additional named sizes go into the record without losing the named ones.
@@ -110,8 +106,6 @@ export const RadiusSchema = z
   })
   .partial();
 
-export type Radius = z.infer<typeof RadiusSchema>;
-
 /**
  * The host app's Tailwind `container` settings, captured so `class="container"`
  * centers / pads / caps the same way it does in the app. Tailwind's stock
@@ -126,8 +120,6 @@ export const ContainerSchema = z.object({
   /** Largest max-width cap, e.g. "1320px". */
   maxWidth: z.string().min(1).optional(),
 });
-
-export type Container = z.infer<typeof ContainerSchema>;
 
 export const ThemeSchema = z.object({
   name: z.string().min(1),

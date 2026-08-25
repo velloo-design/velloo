@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo/renderer";
 import type { Screen, Viewport } from "@velloo/schema";
 import { z } from "zod";
-import { themeByName } from "../../design-folder.ts";
+import { resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -78,7 +78,9 @@ export function registerRenderSnippetTool(
         // ext placeholders still merge in.
         const syntheticScreen = { ...screen, library: snippet.library };
         const screenRegistry = registryForScreen(ctx, syntheticScreen);
-        const resolvedTheme = themeByName(ctx.folder, theme);
+        const _themeRes = resolveNamedTheme(ctx.folder, theme);
+        if (!_themeRes.ok) return errorResult(_themeRes.message);
+        const resolvedTheme = _themeRes.theme;
         const screenPassLight = renderPassForScreen(ctx, syntheticScreen, resolvedTheme, false);
         const screenPassDark = renderPassForScreen(ctx, syntheticScreen, resolvedTheme, true);
         const [canvasLight, canvasDark] = await Promise.all([
