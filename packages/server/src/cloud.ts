@@ -25,3 +25,19 @@ export interface CanvasAuth {
   /** Log out — remove the saved credential for this cloud. */
   logout(): Promise<void>;
 }
+
+const LOOPBACK_CLOUD_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * A cloud URL is safe to send the `vlk_` bearer to only over HTTPS, or over
+ * plain HTTP to a loopback host (local dev). Mirrors the CLI's guard.
+ */
+export function isSecureCloudUrl(cloudUrl: string): boolean {
+  try {
+    const u = new URL(cloudUrl);
+    if (u.protocol === "https:") return true;
+    return u.protocol === "http:" && LOOPBACK_CLOUD_HOSTS.has(u.hostname);
+  } catch {
+    return false;
+  }
+}

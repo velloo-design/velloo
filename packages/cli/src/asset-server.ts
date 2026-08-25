@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 /**
  * Ephemeral static server for headless capture passes (`velloo publish`,
@@ -24,7 +24,9 @@ export async function withAssetServer<T>(
       }
       if (url.pathname.startsWith("/assets/")) {
         const fsPath = join(folder, decodeURIComponent(url.pathname));
-        if (fsPath.startsWith(assetsRoot)) {
+        // Trailing sep so `/assets/../assets-foo/x` can't escape into a sibling
+        // directory whose name is prefixed "assets".
+        if (fsPath.startsWith(assetsRoot + sep)) {
           const file = Bun.file(fsPath);
           if (await file.exists()) return new Response(file);
         }

@@ -1,4 +1,4 @@
-import type { Viewport } from "@velloo/schema";
+import { neutralizeCssText, sanitizeGoogleFontSpec, type Viewport } from "@velloo/schema";
 import { CANVAS_RUNTIME } from "./canvas-runtime.ts";
 import { IFRAME_RUNTIME } from "./iframe-runtime.ts";
 import { LIVE_RUNTIME } from "./live-runtime.ts";
@@ -88,16 +88,20 @@ export function buildDocument(opts: DocumentOptions): string {
         // `%40`/`%2C`, which css2 reads as literal characters, so Google can't
         // find the family and the font silently never loads. Only a stray
         // literal space needs folding to `+` (mirrors emit-theme/globals-css).
-        `\n    <link rel="preconnect" href="https://fonts.googleapis.com" />\n    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?${googleFonts
-          .map((f) => `family=${f.replace(/ /g, "+")}`)
-          .join("&")}&display=swap" />`
+        `\n    <link rel="preconnect" href="https://fonts.googleapis.com" />\n    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n    <link rel="stylesheet" href="${escapeHtml(
+          `https://fonts.googleapis.com/css2?${googleFonts
+            .map((f) => `family=${sanitizeGoogleFontSpec(f)}`)
+            .join("&")}&display=swap`,
+        )}" />`
       : "";
   const adapterStyle =
     adapterCss && adapterCss.trim() !== ""
-      ? `\n    <style data-velloo-adapter>${adapterCss}</style>`
+      ? `\n    <style data-velloo-adapter>${neutralizeCssText(adapterCss)}</style>`
       : "";
   const customStyle =
-    customCss && customCss.trim() !== "" ? `\n    <style>${customCss}</style>` : "";
+    customCss && customCss.trim() !== ""
+      ? `\n    <style>${neutralizeCssText(customCss)}</style>`
+      : "";
   // Defeat password managers and form-fillers (LastPass / 1Password / Bitwarden
   // / native browser autofill) so design Input components stay clean.
   const antiAutofill =
@@ -110,7 +114,7 @@ export function buildDocument(opts: DocumentOptions): string {
     <meta name="viewport" content="width=${viewport.w}, initial-scale=1" />
     <title>${escapeHtml(title)}</title>${fontLinks}
     <style>${snapshotCss}</style>
-    <style>${themeCss}</style>${adapterStyle}${customStyle}
+    <style>${neutralizeCssText(themeCss)}</style>${adapterStyle}${customStyle}
   </head>
   <body ${antiAutofill}>${body}${runtime}${live}${canvas}</body>
 </html>`;

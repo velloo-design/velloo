@@ -10,6 +10,9 @@ describe("svgLooksActive", () => {
     expect(svgLooksActive('<svg><a href="javascript:alert(1)"><rect/></a></svg>')).toBe(true);
     expect(svgLooksActive('<svg><a href=" javascript:alert(1)"><rect/></a></svg>')).toBe(true);
     expect(svgLooksActive('<svg><set attributeName="onload" to="alert(1)"/></svg>')).toBe(true);
+    // Handler abutting a preceding attribute's closing quote (no whitespace) or a `/`.
+    expect(svgLooksActive('<rect class="x"onclick="alert(1)"/>')).toBe(true);
+    expect(svgLooksActive("<a href=#/onmouseover=alert(1)><rect/></a>")).toBe(true);
   });
 
   test("passes static drawing content", () => {
@@ -46,6 +49,15 @@ describe("sanitizeSvgMarkup", () => {
     expect(out).not.toContain("foreignObject");
     expect(out).not.toContain("<set");
     expect(out.toLowerCase()).not.toContain("javascript:");
+    expect(svgLooksActive(out)).toBe(false);
+  });
+
+  test("strips a handler that abuts a preceding attribute quote", () => {
+    const out = sanitizeSvgMarkup('<rect class="x"onclick="alert(1)"/>');
+    expect(out).not.toContain("onclick");
+    expect(out).not.toContain("alert(1)");
+    // The preceding attribute stays terminated (its closing quote survives).
+    expect(out).toContain('class="x"');
     expect(svgLooksActive(out)).toBe(false);
   });
 

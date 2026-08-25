@@ -1,6 +1,6 @@
 import { err, ok, type Result } from "@velloo/result";
 import { svgLooksActive } from "@velloo/schema";
-import type { CloudAuth } from "./cloud.ts";
+import { type CloudAuth, isSecureCloudUrl } from "./cloud.ts";
 import { storeAsset } from "./fs.ts";
 
 /**
@@ -145,6 +145,14 @@ export async function generateAsset(
       kind: "LoggedOut",
       message:
         "Not signed in to velloo-cloud — run `velloo login`, then restart the server. Until then, author the artwork yourself and store it with `upload_asset`.",
+    });
+  }
+
+  // Never send the bearer token over a cleartext channel (https or loopback only).
+  if (!isSecureCloudUrl(cloud.url)) {
+    return err({
+      kind: "Unreachable",
+      message: `Refusing to send credentials to a non-HTTPS cloud URL (${cloud.url}). Use https:// or a loopback host.`,
     });
   }
 

@@ -45,3 +45,25 @@ describe("storeAsset — SVG sanitization (FIX 2)", () => {
     expect(stored.bytes).toBe(png.length);
   });
 });
+
+describe("storeAsset — extension allowlist", () => {
+  test("refuses to write a non-image/font asset (e.g. .html)", async () => {
+    await expect(
+      storeAsset(root, "pwn.html", Buffer.from("<script>alert(1)</script>", "utf8")),
+    ).rejects.toThrow(/not an allowed/);
+  });
+
+  test("refuses a .js asset", async () => {
+    await expect(storeAsset(root, "x.js", Buffer.from("alert(1)", "utf8"))).rejects.toThrow(
+      /not an allowed/,
+    );
+  });
+
+  test("allows image + font extensions", async () => {
+    const bytes = Buffer.from("data");
+    for (const name of ["a.png", "b.jpg", "c.webp", "d.woff2", "e.ttf"]) {
+      const stored = await storeAsset(root, name, bytes);
+      expect(stored.url).toBe(`/assets/${name}`);
+    }
+  });
+});

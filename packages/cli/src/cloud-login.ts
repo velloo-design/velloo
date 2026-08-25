@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { assertSecureCloudUrl, isSecureCloudUrl } from "./cloud.ts";
 
 interface DeviceCodeResponse {
   device_code: string;
@@ -21,6 +22,8 @@ export interface DeviceLoginResult {
  * logged in" instead of re-running the device flow.
  */
 export async function verifyCredential(cloudUrl: string, token: string): Promise<string | null> {
+  // Never transmit the token over an insecure URL; treat as unverifiable.
+  if (!isSecureCloudUrl(cloudUrl)) return null;
   const res = await fetch(`${cloudUrl}/v1/me`, {
     headers: { authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(8000),
@@ -74,6 +77,8 @@ export async function performDeviceLogin(
   onPrompt: (info: { verificationUrl: string; userCode: string }) => void | Promise<void>,
   signal?: AbortSignal,
 ): Promise<DeviceLoginResult> {
+  // The flow receives + returns the vlk_ token; refuse a cleartext channel.
+  assertSecureCloudUrl(cloudUrl);
   const configRes = await fetch(`${cloudUrl}/v1/auth/config`).catch(() => null);
   if (!configRes?.ok) throw new Error(`cannot reach ${cloudUrl} — is velloo-cloud up?`);
   const { issuer, clientId } = (await configRes.json()) as { issuer: string; clientId: string };

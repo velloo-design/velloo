@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type CodegenError,
@@ -27,6 +27,10 @@ function jsonResult(value: unknown): McpResult {
 
 function codegenErrorResult(error: CodegenError | { kind: string }): McpResult {
   return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
+}
+
+function errorResult(text: string): McpResult {
+  return { isError: true, content: [{ type: "text", text }] };
 }
 
 /**
@@ -147,6 +151,14 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     },
     async (args) => {
       const out = resolve(ctx.folder.root, args.outputDir);
+      // `apply:true` writes to disk; a relative cssPath/themePath must stay
+      // inside outputDir (no `..`/absolute escape to clobber arbitrary files).
+      for (const rel of [args.cssPath, args.themePath]) {
+        if (rel === undefined) continue;
+        if (isAbsolute(rel) || !resolve(out, rel).startsWith(out + sep)) {
+          return errorResult(`emit_theme: path must stay within outputDir (got ${rel})`);
+        }
+      }
       const theme = themeByName(ctx.folder, args.theme);
       // A framework that projects a native theme (MUI ⇒ createTheme options)
       // emits its native artifact instead of Tailwind globals.css.

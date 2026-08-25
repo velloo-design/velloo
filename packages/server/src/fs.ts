@@ -18,6 +18,55 @@ export async function writeText(path: string, body: string): Promise<void> {
   await writeFile(path, body, "utf8");
 }
 
+/**
+ * Extensions allowed in a design folder's `assets/` store. Restricted to images
+ * and fonts so a `.html`/`.js`/`.svg`-that-navigates asset can never be written
+ * and later served as active content from the canvas origin.
+ */
+export const ALLOWED_ASSET_EXTENSIONS: ReadonlySet<string> = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".svg",
+  ".ico",
+  ".bmp",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".otf",
+]);
+
+/** Content types for the allowed asset extensions (image/font only). */
+export const ASSET_MIME: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".bmp": "image/bmp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+};
+
+/** Lowercased extension (incl. dot), or "" if none. */
+function extOf(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  return dot === -1 ? "" : filename.slice(dot).toLowerCase();
+}
+
+/** True when `filename`'s extension is an allowed image/font asset type. */
+export function isAllowedAssetExt(filename: string): boolean {
+  return ALLOWED_ASSET_EXTENSIONS.has(extOf(filename));
+}
+
 /** Basename-only, no traversal, no leading dots. */
 export function sanitizeFilename(filename: string): string {
   const base = filename.split(/[/\\]/).pop() ?? "asset";
@@ -41,6 +90,11 @@ export async function storeAsset(
   bytes: Buffer,
 ): Promise<{ assetPath: string; url: string; bytes: number }> {
   const safe = sanitizeFilename(filename);
+  // Backstop: the tool handlers pre-check for a clean per-entry message, but no
+  // path may land a non-image/font file in the web-served store.
+  if (!isAllowedAssetExt(safe)) {
+    throw new Error(`storeAsset: ${safe} is not an allowed image/font asset type`);
+  }
   const dir = join(root, "assets");
   await mkdir(dir, { recursive: true });
   // SVGs are inlined via dangerouslySetInnerHTML and served from the canvas

@@ -709,11 +709,13 @@ describe("google fonts injection", () => {
     };
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html } = await renderScreen(screen, themed, opts);
+    // The href is HTML-escaped for the attribute (`&` -> `&amp;`), which the
+    // browser decodes back to `&` — while `+`/`@`/`:`/`,` are preserved (the old
+    // encodeURIComponent path corrupted spaces to %2B and axis specs to %40, so
+    // Google never resolved the family).
     expect(html).toContain(
-      "https://fonts.googleapis.com/css2?family=Cal+Sans&family=Inter:wght@400..700&display=swap",
+      "https://fonts.googleapis.com/css2?family=Cal+Sans&amp;family=Inter:wght@400..700&amp;display=swap",
     );
-    // The old encodeURIComponent path corrupted spaces (+ -> %2B) and axis
-    // specs (@ -> %40), so Google never resolved the family.
     expect(html).not.toContain("%2B");
     expect(html).not.toContain("%40");
   });

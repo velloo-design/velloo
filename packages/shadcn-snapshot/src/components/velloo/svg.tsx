@@ -48,7 +48,7 @@ function sanitizeSvgContent(markup: string): string {
       /<\s*\/?\s*(?:script|foreignObject|animate|animateTransform|animateMotion|animateColor|set)\b[^>]*>/gi,
       "",
     )
-    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/([\s/"'])on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "$1")
     .replace(
       /((?:xlink:href|href|src)\s*=\s*)(?:"\s*(?:javascript:|data:text\/html)[^"]*"|'\s*(?:javascript:|data:text\/html)[^']*'|(?:javascript:|data:text\/html)[^\s>]*)/gi,
       '$1"#"',

@@ -1,7 +1,12 @@
 import { isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { sanitizeFilename, storeAsset } from "../../fs.ts";
+import {
+  ALLOWED_ASSET_EXTENSIONS,
+  isAllowedAssetExt,
+  sanitizeFilename,
+  storeAsset,
+} from "../../fs.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 
 type McpResult = {
@@ -25,6 +30,17 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     },
     async ({ filename, data, overwrite }) => {
       const safe = sanitizeFilename(filename);
+      if (!isAllowedAssetExt(safe)) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `upload_asset: ${safe} is not an allowed asset type (${[...ALLOWED_ASSET_EXTENSIONS].join(", ")})`,
+            },
+          ],
+        };
+      }
       let bytes: Buffer;
       try {
         bytes = Buffer.from(data, "base64");
@@ -101,6 +117,10 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
           const file = Bun.file(src);
           if (!(await file.exists())) {
             results.push({ path: src, error: "not found" });
+            continue;
+          }
+          if (!isAllowedAssetExt(src)) {
+            results.push({ path: src, error: "not an allowed image/font asset type" });
             continue;
           }
           const size = file.size;

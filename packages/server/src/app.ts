@@ -19,6 +19,7 @@ import { createMutateRouter } from "./routes/mutate.ts";
 import { createInspectRouter, createRenderRouter } from "./routes/render.ts";
 import { createThemeRouter } from "./routes/theme.ts";
 import { createUndoRouter } from "./routes/undo.ts";
+import { localOnlyMiddleware } from "./security.ts";
 import type { TailwindJit } from "./styles/tailwind-jit.ts";
 
 /**
@@ -34,6 +35,11 @@ export function createApp(
 ): Hono {
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
+
+  // The daemon is unauthenticated and loopback-bound; reject anything that
+  // isn't a genuinely local request so a browser page (cross-origin POST or
+  // DNS-rebinding) can't drive the API. See security.ts.
+  app.use("*", localOnlyMiddleware());
 
   // Identity, not just liveness: `ensureDaemon` confirms a process answering
   // on a port is *our* daemon for *this* folder before attaching to it.

@@ -16,7 +16,10 @@
 const ACTIVE_SVG_PATTERNS: readonly RegExp[] = [
   /<\s*script[\s>]/i,
   /<\s*foreignObject[\s>]/i,
-  /\son[a-z]+\s*=/i, // onload= / onclick= / onerror= / …
+  // onload= / onclick= / onerror= / … — the lead char class catches a handler
+  // that abuts a preceding attribute's closing quote or a `/` (`class="x"onclick=`,
+  // `<a/onmouseover=`), not just whitespace-separated ones.
+  /[\s/"']on[a-z]+\s*=/i,
   /(?:xlink:href|href|src)\s*=\s*["']?\s*(?:javascript:|data:text\/html)/i,
   /<\s*(?:animate|animateTransform|animateMotion|animateColor|set)[\s>]/i, // SMIL
 ];
@@ -43,8 +46,10 @@ export function sanitizeSvgMarkup(markup: string): string {
         /<\s*\/?\s*(?:script|foreignObject|animate|animateTransform|animateMotion|animateColor|set)\b[^>]*>/gi,
         "",
       )
-      // Strip inline event handlers (on*="…" / on*='…' / on*=bare).
-      .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      // Strip inline event handlers (on*="…" / on*='…' / on*=bare), including
+      // ones that abut a preceding attribute's quote or a `/`. Keep the lead
+      // separator so the previous attribute stays terminated.
+      .replace(/([\s/"'])on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "$1")
       // Neutralize javascript:/data:text/html in href/src/xlink:href.
       .replace(
         /((?:xlink:href|href|src)\s*=\s*)(?:"\s*(?:javascript:|data:text\/html)[^"]*"|'\s*(?:javascript:|data:text\/html)[^']*'|(?:javascript:|data:text\/html)[^\s>]*)/gi,

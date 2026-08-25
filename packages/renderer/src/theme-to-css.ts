@@ -1,4 +1,4 @@
-import type { Colors, Theme } from "@velloo/schema";
+import { type Colors, isCssIdent, sanitizeCssTokenValue, type Theme } from "@velloo/schema";
 
 /**
  * Map theme tokens onto the shadcn CSS-variable convention so the
@@ -22,8 +22,12 @@ const COLOR_TOKEN_MAP: Record<string, string | [string, string]> = {
 };
 
 function emit(varName: string, value: string | number | undefined, lines: string[]): void {
-  if (typeof value === "string" || typeof value === "number") {
+  if (typeof value === "number") {
     lines.push(`  ${varName}: ${value};`);
+  } else if (typeof value === "string") {
+    // Untrusted theme value — strip anything that could break out of the
+    // declaration or the enclosing inline <style> element.
+    lines.push(`  ${varName}: ${sanitizeCssTokenValue(value)};`);
   }
 }
 
@@ -43,8 +47,9 @@ const SEMANTIC_COLOR_VARS: ReadonlySet<string> = new Set(
 function emitPalette(palette: Record<string, string> | undefined, lines: string[]): void {
   if (!palette) return;
   for (const [name, value] of Object.entries(palette)) {
+    if (!isCssIdent(name)) continue;
     if (SEMANTIC_COLOR_VARS.has(`--color-${name}`)) continue;
-    lines.push(`  --color-${name}: ${value};`);
+    emit(`--color-${name}`, value, lines);
   }
 }
 
@@ -54,8 +59,9 @@ function emitSpacing(spacing: Theme["spacing"], lines: string[]): void {
   for (const [name, value] of Object.entries(spacing)) {
     // Skip the numeric Tailwind scale (0/1/2/…) — built in; only named tokens need a var.
     if (!Number.isNaN(Number(name))) continue;
+    if (!isCssIdent(name)) continue;
     if (typeof value === "string" || typeof value === "number") {
-      lines.push(`  --spacing-${name}: ${value};`);
+      emit(`--spacing-${name}`, value, lines);
     }
   }
 }
@@ -64,8 +70,9 @@ function emitSpacing(spacing: Theme["spacing"], lines: string[]): void {
 function emitShadows(shadows: Theme["shadows"], lines: string[]): void {
   if (!shadows) return;
   for (const [name, value] of Object.entries(shadows)) {
+    if (!isCssIdent(name)) continue;
     if (typeof value === "string" || typeof value === "number") {
-      lines.push(`  --shadow-${name}: ${value};`);
+      emit(`--shadow-${name}`, value, lines);
     }
   }
 }
@@ -80,9 +87,9 @@ function emitContainer(container: Theme["container"], lines: string[]): void {
   const decls = ["  width: 100%;"];
   if (container.center) decls.push("  margin-inline: auto;");
   if (container.padding) {
-    decls.push(`  padding-inline: ${container.padding};`);
+    decls.push(`  padding-inline: ${sanitizeCssTokenValue(container.padding)};`);
   }
-  if (container.maxWidth) decls.push(`  max-width: ${container.maxWidth};`);
+  if (container.maxWidth) decls.push(`  max-width: ${sanitizeCssTokenValue(container.maxWidth)};`);
   lines.push("", ".container {", ...decls, "}");
 }
 
@@ -118,6 +125,7 @@ export function themeToCss(theme: Theme): string {
     // the matching `font-<role>` utility (compiled by the JIT, which
     // mirrors these tokens into its @theme — see tailwind-jit.ts).
     for (const [role, stack] of Object.entries(fontFamily)) {
+      if (!isCssIdent(role)) continue;
       emit(`--font-${role}`, stack, lines);
     }
   }
@@ -125,7 +133,8 @@ export function themeToCss(theme: Theme): string {
   // Radius: a single --radius pulled from radius.md (or radius.lg / .sm as fallback).
   const radiusValue = theme.radius.md ?? theme.radius.lg ?? theme.radius.sm;
   if (radiusValue !== undefined) {
-    const formatted = typeof radiusValue === "number" ? `${radiusValue}px` : radiusValue;
+    const formatted =
+      typeof radiusValue === "number" ? `${radiusValue}px` : sanitizeCssTokenValue(radiusValue);
     lines.push(`  --radius: ${formatted};`);
   }
 

@@ -109,6 +109,31 @@ afterEach(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
+describe("local-only guard", () => {
+  test("rejects a cross-origin request with 403", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/api/render/snippet/stat-card", {
+        headers: { origin: "https://evil.example" },
+      }),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  test("rejects a rebinding request (non-loopback host) with 403", async () => {
+    const res = await app.fetch(new Request("http://attacker.test/api/render/snippet/stat-card"));
+    expect(res.status).toBe(403);
+  });
+
+  test("allows a same-origin loopback request", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/api/render/snippet/stat-card", {
+        headers: { origin: "http://localhost" },
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("/api/render/snippet/:id (preview route)", () => {
   test("wraps the snippet in a centering Card so library previews don't pin top-left", async () => {
     const res = await app.fetch(new Request("http://localhost/api/render/snippet/stat-card"));

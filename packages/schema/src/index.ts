@@ -24,6 +24,12 @@ export {
   ViewportPresetSchema,
 } from "./config.ts";
 export {
+  isCssIdent,
+  neutralizeCssText,
+  sanitizeCssTokenValue,
+  sanitizeGoogleFontSpec,
+} from "./css-sanitize.ts";
+export {
   type Extension,
   type ExtensionPropDescriptor,
   ExtensionPropDescriptorSchema,

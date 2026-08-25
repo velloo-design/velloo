@@ -18,6 +18,7 @@ import {
   reloadSnippet,
   reloadTheme,
 } from "./design-folder.ts";
+import { ASSET_MIME } from "./fs.ts";
 import { CanvasBundler } from "./live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 import {
@@ -28,6 +29,7 @@ import {
 } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { migrateConfig, resolveProviders } from "./providers.ts";
+import { requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
 import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
@@ -86,7 +88,11 @@ async function serveStatic(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
   const fsPath = join(canvasDistPath, requested);
-  if (!fsPath.startsWith(canvasDistPath) || !existsSync(fsPath)) return null;
+  if (
+    !(fsPath === canvasDistPath || fsPath.startsWith(canvasDistPath + sep)) ||
+    !existsSync(fsPath)
+  )
+    return null;
   const file = Bun.file(fsPath);
   if (!(await file.exists())) return null;
   const type = MIME[extname(fsPath)] ?? "application/octet-stream";
@@ -153,17 +159,24 @@ async function serveFolderAsset(req: Request, folderRoot: string): Promise<Respo
   if (!fsPath.startsWith(join(folderRoot, "assets") + sep)) return null;
   const file = Bun.file(fsPath);
   if (!(await file.exists())) return null;
-  const type = MIME[extname(fsPath)] ?? "application/octet-stream";
+  // Folder assets are restricted to image/font types on write (fs.ts allowlist);
+  // anything else pre-dating the allowlist (or hand-placed) is served inert as a
+  // download, never as active content (text/html, text/javascript) from the
+  // canvas origin.
+  const assetType = ASSET_MIME[extname(fsPath).toLowerCase()];
   const headers: Record<string, string> = {
-    "Content-Type": type,
+    "Content-Type": assetType ?? "application/octet-stream",
     "X-Content-Type-Options": "nosniff",
   };
+  if (!assetType) {
+    headers["Content-Disposition"] = "attachment";
+  }
   // Assets share the canvas origin, and an SVG *navigated to directly* is a
   // document whose scripts would run there. `<img>`/CSS embedding never runs
   // script, so a script-inert CSP costs nothing and closes the direct path —
   // for cloud-generated art (sanitized upstream, re-checked in
   // cloud-generate.ts) and anything else that lands in assets/.
-  if (type === "image/svg+xml") {
+  if (assetType === "image/svg+xml") {
     headers["Content-Security-Policy"] = "script-src 'none'";
   }
   return new Response(file, { headers });
@@ -271,6 +284,11 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       const url = new URL(req.url);
 
       if (url.pathname === "/ws") {
+        // Same loopback guard as the API: a cross-origin page must not be able
+        // to open the broadcast channel and observe design-change events.
+        if (!requestIsLocal({ host: url.host, origin: req.headers.get("origin") })) {
+          return new Response("forbidden", { status: 403 });
+        }
         if (srv.upgrade(req, { data: {} })) return undefined;
         return new Response("expected websocket upgrade", { status: 400 });
       }

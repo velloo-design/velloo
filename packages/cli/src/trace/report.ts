@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 /**
  * Offline reader + HTML renderer for a recorded MCP session tape (written by
@@ -147,11 +147,21 @@ export function tapeStats(tape: Tape): TapeStats {
   };
 }
 
+/** A `type/subtype` media type, else a safe default — keeps it out of the src attr as a vector. */
+function safeMimeType(mime: string): string {
+  return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(mime) ? mime : "application/octet-stream";
+}
+
 function inlineImage(dir: string, asset: AssetRef): string {
   let dataUri = "";
   try {
-    const buf = readFileSync(join(dir, asset.file));
-    dataUri = `data:${asset.mimeType};base64,${buf.toString("base64")}`;
+    // Confine the read to the tape dir — a tape's `file` is untrusted input.
+    const abs = resolve(dir, asset.file);
+    if (abs !== resolve(dir) && !abs.startsWith(resolve(dir) + sep)) {
+      return `<div class="missing">out-of-tree asset: ${esc(asset.file)}</div>`;
+    }
+    const buf = readFileSync(abs);
+    dataUri = `data:${safeMimeType(asset.mimeType)};base64,${buf.toString("base64")}`;
   } catch {
     return `<div class="missing">missing asset: ${esc(asset.file)}</div>`;
   }

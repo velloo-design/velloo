@@ -156,6 +156,20 @@ export function registerCompareToUrlTool(
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
 
+      // The server navigates this URL in a real browser — restrict to http(s)
+      // so `file://`, `chrome://`, and other local schemes can't be rasterized
+      // and returned. Private/loopback hosts stay allowed (localhost is the
+      // intended target).
+      let scheme: string;
+      try {
+        scheme = new URL(url).protocol;
+      } catch {
+        return errorResult(`Invalid url: ${url}`);
+      }
+      if (scheme !== "http:" && scheme !== "https:") {
+        return errorResult(`compare_to_url: only http(s) URLs are allowed (got ${scheme})`);
+      }
+
       const defaults = defaultViewport(ctx.folder);
       const resolved = resolveViewport(w, h, vp);
       const viewport: Viewport = { w: resolved.w ?? defaults.w, h: resolved.h ?? defaults.h };

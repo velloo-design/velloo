@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Theme } from "@velloo/schema";
+import { emitGlobalsCss } from "../emit-theme/globals-css.ts";
 import { emitTheme } from "../emit-theme/index.ts";
 
 function buildDefaultTheme(): Theme {
@@ -219,5 +220,39 @@ describe("emitTheme contentGlobs", () => {
     const ts = result.files.find((f) => f.path.endsWith("tailwind.config.ts"));
     expect(ts?.contents).toContain('"./app/**/*.{ts,tsx}"');
     expect(ts?.contents).toContain('"./pages/**/*.{ts,tsx}"');
+  });
+});
+
+describe("emitGlobalsCss — injection hardening", () => {
+  test("untrusted theme values can't break out of the emitted CSS", () => {
+    const theme = buildDefaultTheme();
+    theme.name = "evil */ } body { display:none } /*";
+    theme.colors.background = "#fff; } body { background: url(//evil) } .x {";
+    theme.palette = { "brand-500": "red; } .pwn {" };
+    theme.spacing = { ...theme.spacing, gutter: "1rem;} *{color:red}" };
+    theme.shadows = { card: "0 1px 2px #000; } evil {" };
+    theme.animation = { spin: "1s linear infinite; } evil {" };
+    theme.typography.googleFonts = ['Inter")}body{ background:red } @import url("//evil'];
+    theme.keyframes = {
+      "pulse } evil {": { "0%": { opacity: "0; } .x {" } },
+    };
+
+    const css = emitGlobalsCss(theme, {
+      customCss: ".a{} </style><script>alert(1)</script>",
+    });
+
+    // The only breakout from a <style> raw-text element is the end-tag
+    // sequence — neither may survive (a literal `<script>` *opening* tag is
+    // inert inside CSS, so only the `</` forms matter).
+    expect(css).not.toContain("</style");
+    expect(css).not.toContain("</script");
+    // The malicious palette/shadow/animation values are stripped of their
+    // declaration-breakout `}` … `{` structure (comments the emitter writes
+    // legitimately contain none of these on their own value lines).
+    expect(css).not.toContain("} body {");
+    expect(css).not.toContain("} evil {");
+    expect(css).not.toContain("}body{");
+    // A hostile keyframe name that isn't a valid ident is dropped entirely.
+    expect(css).not.toContain("pulse } evil");
   });
 });
