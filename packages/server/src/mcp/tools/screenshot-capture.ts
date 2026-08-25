@@ -146,7 +146,7 @@ export function registerScreenshotCaptureTool(
             viewport,
             snapshotCss,
             registry: registryForScreen(ctx, screen),
-            renderPass: renderPassForScreen(ctx, screen, resolvedTheme),
+            renderPass: renderPassForScreen(ctx, screen, resolvedTheme, mode === "dark"),
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,
@@ -244,7 +244,10 @@ export function registerScreenshotCaptureTool(
         const snapshotCss = await jit.build();
         const screenRegistry = registryForScreen(ctx, screen);
         const resolvedTheme = themeByName(ctx.folder, theme);
-        const screenPass = renderPassForScreen(ctx, screen, resolvedTheme);
+        // A MUI pass projects the theme differently per mode, so light and dark
+        // each need their own (undefined for Tailwind frameworks — cheap).
+        const screenPassLight = renderPassForScreen(ctx, screen, resolvedTheme, false);
+        const screenPassDark = renderPassForScreen(ctx, screen, resolvedTheme, true);
         const [canvasLight, canvasDark] = await Promise.all([
           canvasBundle(screen, resolvedTheme, false),
           canvasBundle(screen, resolvedTheme, true),
@@ -255,7 +258,7 @@ export function registerScreenshotCaptureTool(
               viewport,
               snapshotCss,
               registry: screenRegistry,
-              renderPass: screenPass,
+              renderPass: screenPassLight,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
@@ -267,7 +270,7 @@ export function registerScreenshotCaptureTool(
               viewport,
               snapshotCss,
               registry: screenRegistry,
-              renderPass: screenPass,
+              renderPass: screenPassDark,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
@@ -287,7 +290,7 @@ export function registerScreenshotCaptureTool(
             viewport,
             snapshotCss,
             registry: screenRegistry,
-            renderPass: screenPass,
+            renderPass: mode === "dark" ? screenPassDark : screenPassLight,
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,

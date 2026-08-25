@@ -45,6 +45,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   const themeVersion = useCanvas((s) => s.themeVersion);
   const selection = useCanvas((s) => s.selection);
   const hover = useCanvas((s) => s.hover);
+  const nodeState = useCanvas((s) => s.nodeState);
   const designMode = useCanvas((s) => s.designMode);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const setSelection = useCanvas((s) => s.setSelection);
@@ -94,6 +95,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
   }, [frame.id, hasScreen, setFrameInset]);
 
   useEffect(() => {
+    void hasScreen; // re-run once the screen loads so a late-mounted iframe attaches
     const iframe = iframeRef.current;
     if (!iframe) return;
     const channel = new IframeChannel(iframe, {
@@ -120,6 +122,9 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
         }
         if (s.hover?.screenId === frame.screen) {
           channel.send({ type: "applyHover", path: s.hover.path });
+        }
+        if (s.nodeState !== "default" && s.selection?.screenId === frame.screen) {
+          channel.send({ type: "applyVelloState", path: s.selection.path, state: s.nodeState });
         }
         const annotated = s.annotations
           .filter((a) => a.resolved !== null)
@@ -177,7 +182,10 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       channelRef.current = null;
       clearNodeRects(frame.id);
     };
-  }, [frame.id, frame.screen, setSelection, setHover, setNodeRects, clearNodeRects]);
+    // hasScreen: a frame added to an open board first mounts as the "Loading…"
+    // placeholder (iframe null); re-run once the screen loads so the channel
+    // actually attaches and the frame becomes selectable.
+  }, [frame.id, frame.screen, hasScreen, setSelection, setHover, setNodeRects, clearNodeRects]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -198,6 +206,17 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       channel.send({ type: "clearHover" });
     }
   }, [hover, frame.screen]);
+
+  // Force-state preview: when a node on this screen is selected and the
+  // Inspector's State dropdown is off "default", drive the iframe to pin that
+  // pseudo-state (the runtime sets [data-velloo-state], styled by the snapshot
+  // CSS). Clears when nothing on this screen is selected or state is default.
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel) return;
+    const path = selection?.screenId === frame.screen ? selection.path : null;
+    channel.send({ type: "applyVelloState", path, state: path ? nodeState : "default" });
+  }, [nodeState, selection, frame.screen]);
 
   // Ask the iframe to report rects for every annotated path on this
   // screen. The channel buffers until handshake completes; once the

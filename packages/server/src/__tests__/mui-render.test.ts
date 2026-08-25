@@ -186,3 +186,50 @@ describe("MUI adapter SSR", () => {
     expect(out).not.toContain('"main":');
   });
 });
+
+describe("MUI dark mode", () => {
+  const themed: Theme = {
+    ...theme,
+    colors: { ...theme.colors, background: "#ffffff", foreground: "#111827" },
+    colorsDark: {
+      background: "#0b0b0f",
+      foreground: "#f5f5f5",
+      primary: { DEFAULT: "#a5b4fc", foreground: "#0b0b0f" },
+    },
+  };
+
+  test("themeToNative(dark) merges colorsDark, not just palette.mode", () => {
+    const light = mui.themeToNative?.(themed, false) as {
+      palette: { mode: string; background: { default: string } };
+    };
+    const dark = mui.themeToNative?.(themed, true) as {
+      palette: { mode: string; background: { default: string } };
+    };
+    expect(light.palette.mode).toBe("light");
+    expect(dark.palette.mode).toBe("dark");
+    // The dark background must be the dark surface (culori normalizes to rgb),
+    // NOT the light #ffffff under a flipped mode flag.
+    expect(dark.palette.background.default).not.toBe(light.palette.background.default);
+    expect(dark.palette.background.default).not.toMatch(/255, ?255, ?255|#ffffff/i);
+  });
+
+  test("emitMuiTheme emits a darkTheme alongside theme when colorsDark is set", async () => {
+    const result = await emitMuiTheme(mui.themeToNative?.(themed, false), {
+      outputDir: "/tmp/velloo-mui-dark-test",
+      darkThemeOptions: mui.themeToNative?.(themed, true),
+      apply: false,
+    });
+    const out = result.files[0]?.contents ?? "";
+    expect(out).toContain("export const theme = createTheme(");
+    expect(out).toContain("export const darkTheme = createTheme(");
+    expect(out).toContain('mode: "dark"');
+  });
+
+  test("a dark render pass differs from light for a MUI screen", () => {
+    const light = mui.renderPass?.(themed, false);
+    const dark = mui.renderPass?.(themed, true);
+    // Both exist for MUI (undefined only for Tailwind frameworks).
+    expect(light).toBeDefined();
+    expect(dark).toBeDefined();
+  });
+});

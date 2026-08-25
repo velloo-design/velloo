@@ -92,7 +92,8 @@ export function renderPassForScreen(
   providers: Record<string, ComponentProvider>,
   defaultProvider: ComponentProvider,
   theme: Theme,
+  dark = false,
 ): RenderPass | undefined {
   const provider = providerForScreen(screen, providers, defaultProvider) as FrameworkAdapter;
-  return provider.renderPass?.(theme);
+  return provider.renderPass?.(theme, dark);
 }

@@ -167,6 +167,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         const result = await emitMuiTheme(adapter.themeToNative(theme), {
           outputDir: out,
           ...(args.themePath ? { themePath: args.themePath } : {}),
+          ...(theme.colorsDark ? { darkThemeOptions: adapter.themeToNative(theme, true) } : {}),
           apply: args.apply ?? false,
         });
         return jsonResult({ files: result.files });

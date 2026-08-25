@@ -9,6 +9,13 @@ export interface EmitMuiThemeOptions {
   outputDir: string;
   /** Where the theme module lands, relative to `outputDir`. Default `theme.ts`. */
   themePath?: string;
+  /**
+   * The dark projection of the theme (`themeToNative(theme, true)`). When set,
+   * a second `darkTheme` is emitted alongside `theme` so the app can pair them
+   * with a mode toggle — otherwise dark mode would flip `palette.mode` over the
+   * light color values.
+   */
+  darkThemeOptions?: unknown;
   /** Whether to actually write the file. Default false → returns the diff only. */
   apply?: boolean;
 }
@@ -26,10 +33,14 @@ export async function emitMuiTheme(
   options: EmitMuiThemeOptions,
 ): Promise<EmitThemeResult> {
   const themePath = join(options.outputDir, options.themePath ?? "theme.ts");
+  const darkBlock =
+    options.darkThemeOptions !== undefined
+      ? `\nexport const darkTheme = createTheme(${jsLiteral(options.darkThemeOptions)});\n`
+      : "";
   const contents = `import { createTheme } from "@mui/material/styles";
 
 export const theme = createTheme(${jsLiteral(themeOptions)});
-`;
+${darkBlock}`;
   const diff = await diffFile(themePath, contents);
   let applied = false;
   if (options.apply && !diff.identical) {

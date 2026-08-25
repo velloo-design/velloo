@@ -259,8 +259,9 @@ export function renderPassForScreen(
   ctx: MutationContext,
   screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
   theme: Theme,
+  dark = false,
 ): RenderPass | undefined {
-  return renderPassForScreenImpl(screen, ctx.providers, ctx.defaultProvider, theme);
+  return renderPassForScreenImpl(screen, ctx.providers, ctx.defaultProvider, theme, dark);
 }
 
 /**

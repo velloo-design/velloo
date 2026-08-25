@@ -50,7 +50,9 @@ function radiusPx(theme: VellooTheme): number {
  * arbitrary CSS strings (oklch/hsl/hex); MUI's palette accepts any CSS color.
  */
 export function muiThemeOptions(theme: VellooTheme, dark = false): ThemeOptions {
-  const c = theme.colors;
+  // In dark mode, overlay the theme's dark color slots — otherwise flipping
+  // palette.mode to "dark" would keep the light color values.
+  const c = dark && theme.colorsDark ? { ...theme.colors, ...theme.colorsDark } : theme.colors;
   return {
     palette: {
       mode: dark ? "dark" : "light",

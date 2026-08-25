@@ -51,11 +51,11 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const setNodeRects = useCanvas((s) => s.setNodeRects);
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
   const selection = useCanvas((s) => s.selection);
+  const nodeState = useCanvas((s) => s.nodeState);
   const setScreen = useCanvas((s) => s.setSyntheticScreen);
   const components = useCanvas((s) => s.components);
   const loadComponents = useCanvas((s) => s.loadComponents);
 
-  void snippetMeta;
   const virtualScreenId = `snippet:${snippetId}`;
   const syntheticScreen: Screen | null = useCanvas((s) => s.screens[virtualScreenId] ?? null);
 
@@ -123,6 +123,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const frameId = `snippet-view-${snippetId}`;
 
   useEffect(() => {
+    void loading; // re-run once loading flips so the now-mounted iframe attaches
     const iframe = iframeRef.current;
     if (!iframe) return;
     const channel = new IframeChannel(iframe, {
@@ -158,7 +159,10 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
       channelRef.current = null;
       clearNodeRects(frameId);
     };
-  }, [virtualScreenId, frameId, setSelection, setHover, setNodeRects, clearNodeRects]);
+    // `loading`: the iframe isn't mounted while the "Loading snippet…"
+    // placeholder is showing, so the first run finds a null ref; re-run once
+    // loading flips so the channel attaches (else select/hover/pan are dead).
+  }, [loading, virtualScreenId, frameId, setSelection, setHover, setNodeRects, clearNodeRects]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -169,6 +173,15 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
       channel.send({ type: "clearHighlight" });
     }
   }, [selection, virtualScreenId]);
+
+  // Force-state preview (mirrors Frame): drive the body iframe's pinned
+  // pseudo-state from the Inspector's State dropdown for the selected node.
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel) return;
+    const path = selection?.screenId === virtualScreenId ? selection.path : null;
+    channel.send({ type: "applyVelloState", path, state: path ? nodeState : "default" });
+  }, [nodeState, selection, virtualScreenId]);
 
   const onPatchMeta = async (patch: Partial<Pick<Snippet, "name" | "params">>) => {
     try {
@@ -200,6 +213,16 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
 
   const showInspector = selection?.screenId === virtualScreenId;
 
+  // The local `snippet` is a one-shot fetch; `snippetMeta` (from the design
+  // summary) is refreshed on every `snippet-changed`, so overlay its name/params
+  // for the header + params panel — otherwise a rename/param-add only shows
+  // after close+reopen. The body/tree stay on the synthetic screen (also fresh).
+  const displaySnippet: Snippet = {
+    ...snippet,
+    name: snippetMeta?.name ?? snippet.name,
+    params: snippetMeta?.params ?? snippet.params,
+  };
+
   return (
     <div className="flex-1 flex min-h-0">
       <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-card">
@@ -212,9 +235,9 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
             snippet
           </Badge>
         </div>
-        <SnippetHeader snippet={snippet} onPatchName={(name) => onPatchMeta({ name })} />
+        <SnippetHeader snippet={displaySnippet} onPatchName={(name) => onPatchMeta({ name })} />
         <ParamsPanel
-          snippet={snippet}
+          snippet={displaySnippet}
           onPatchParams={(params) => onPatchMeta({ params })}
           iconNames={iconNames}
         />
@@ -233,7 +256,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
           presets={presets}
           viewport={viewport}
           setViewport={setViewport}
-          snippet={snippet}
+          snippet={displaySnippet}
         />
         <div ref={scrollWrapRef} className="flex-1 overflow-auto bg-muted/30">
           <div className="min-w-fit min-h-full flex items-center justify-center p-8">

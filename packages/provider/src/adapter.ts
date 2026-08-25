@@ -204,8 +204,13 @@ export interface FrameworkAdapter extends ComponentProvider {
   installComponent?(id: string, ctx: InstallCtx): Promise<void>;
   /** Provision the framework for a folder (npm install / CLI / cache). */
   install?(ctx: InstallCtx): Promise<InstallResult>;
-  /** A fresh server-side render pass bound to this theme (emotion/MUI). Absent ⇒ plain SSR. */
-  renderPass?(theme: Theme): RenderPass;
+  /**
+   * A fresh server-side render pass bound to this theme (emotion/MUI). Absent ⇒
+   * plain SSR. `dark` selects the dark projection of the theme (MUI reads
+   * `colorsDark` + `palette.mode`), so a dark-mode capture SSRs dark surfaces
+   * rather than light values under a flipped mode flag.
+   */
+  renderPass?(theme: Theme, dark?: boolean): RenderPass;
   /**
    * The bare module its catalog components import from in emitted code — MUI's
    * `@mui/material`, where every component is a named export. Present ⇒ codegen

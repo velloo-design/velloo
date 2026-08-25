@@ -79,7 +79,8 @@ export function registerRenderSnippetTool(
         const syntheticScreen = { ...screen, library: snippet.library };
         const screenRegistry = registryForScreen(ctx, syntheticScreen);
         const resolvedTheme = themeByName(ctx.folder, theme);
-        const screenPass = renderPassForScreen(ctx, syntheticScreen, resolvedTheme);
+        const screenPassLight = renderPassForScreen(ctx, syntheticScreen, resolvedTheme, false);
+        const screenPassDark = renderPassForScreen(ctx, syntheticScreen, resolvedTheme, true);
         const [canvasLight, canvasDark] = await Promise.all([
           canvasBundle(syntheticScreen, resolvedTheme, false),
           canvasBundle(syntheticScreen, resolvedTheme, true),
@@ -90,7 +91,7 @@ export function registerRenderSnippetTool(
               viewport: vp,
               snapshotCss,
               registry: screenRegistry,
-              renderPass: screenPass,
+              renderPass: screenPassLight,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
@@ -102,7 +103,7 @@ export function registerRenderSnippetTool(
               viewport: vp,
               snapshotCss,
               registry: screenRegistry,
-              renderPass: screenPass,
+              renderPass: screenPassDark,
               snippets: ctx.folder.snippets,
               customCss: ctx.folder.customCss,
               baseHref: assetOrigin,
@@ -122,7 +123,7 @@ export function registerRenderSnippetTool(
             viewport: vp,
             snapshotCss,
             registry: screenRegistry,
-            renderPass: screenPass,
+            renderPass: mode === "dark" ? screenPassDark : screenPassLight,
             snippets: ctx.folder.snippets,
             customCss: ctx.folder.customCss,
             baseHref: assetOrigin,

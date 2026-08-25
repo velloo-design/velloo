@@ -183,7 +183,7 @@ export function registerCompareToUrlTool(
           viewport,
           snapshotCss,
           registry: registryForScreen(ctx, screen),
-          renderPass: renderPassForScreen(ctx, screen, resolvedTheme),
+          renderPass: renderPassForScreen(ctx, screen, resolvedTheme, mode === "dark"),
           snippets: ctx.folder.snippets,
           customCss: ctx.folder.customCss,
           baseHref: assetOrigin,
