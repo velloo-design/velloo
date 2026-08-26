@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { RSABSSA } from "@cloudflare/blindrsa-ts";
 import type { CloudAuth } from "./cloud.ts";
+import { PINNED_ISSUER_KEYS } from "./feedback-issuer-pins.ts";
 import { writeJsonAtomic } from "./fs.ts";
 
 /**
@@ -19,7 +20,8 @@ import { writeJsonAtomic } from "./fs.ts";
  *      account credential. The cloud can verify "a real signed-in velloo
  *      user" and nothing more.
  *   3. Key pinning: the issuer's public key for the production cloud is
- *      committed below. A malicious issuer could otherwise tag users with
+ *      committed in feedback-issuer-pins.ts (generated + committed by the
+ *      cloud's deploy). A malicious issuer could otherwise tag users with
  *      per-user keys — pinned clients would reject those signatures.
  *
  * Tokens are issued in batches (at `velloo login` and topped up here), so a
@@ -34,16 +36,6 @@ const KEY_ALG = { name: "RSA-PSS", hash: "SHA-384" } as const;
 
 /** Tokens fetched per issuance batch (well under the cloud's monthly quota). */
 const BATCH = 10;
-
-/**
- * Pinned issuer public keys (SPKI base64) per cloud origin. The production
- * key is committed here at launch; origins not listed (dev, self-hosted)
- * fall back to trust-on-first-use — the key is remembered in the token
- * store and later issuances must present the same one.
- */
-const PINNED_ISSUER_KEYS: Record<string, string> = {
-  // "https://cloud.velloo.design": "<issuer SPKI b64 — committed at launch>",
-};
 
 interface StoredToken {
   /** Prepared token, base64 (64 bytes). */
