@@ -1,44 +1,31 @@
-import type { Frame } from "@velloo/schema";
 import { useEffect, useState } from "react";
+import {
+  CARD_WIDTH,
+  connectorGeometry,
+  FALLBACK_INSET,
+  layoutAnnotations,
+  type PlacedAnnotation,
+} from "../annotation-layout.ts";
 import { annotations as annotationsApi } from "../api.ts";
 import { type AnnotationEntry, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Markdown } from "./Markdown.tsx";
 
 /**
- * Fallback iframe inset (offset of the iframe from the frame origin, in
- * board-world units) used only before the first measurement lands: each
- * frame's real chrome is observed by a ResizeObserver in `Frame.tsx` and
- * reported into `frameInsets`, so anchors stay locked through chrome
- * edits — label wrapping, new badges, restyled headers — without this
- * constant needing to track the layout.
- */
-const FALLBACK_INSET = { x: 0, y: 20 };
-/** Distance from the right edge of the frame to the annotation card. */
-const CARD_GUTTER = 24;
-/** Annotation card width — matches the `w-60` Tailwind class below. */
-const CARD_WIDTH = 240;
-const CARD_HEIGHT_ESTIMATE = 60;
-
-interface ResolvedAnnotation {
-  annotation: AnnotationEntry;
-  frame: Frame;
-  /** Board-world rect of the targeted node, when available. */
-  nodeRect: { x: number; y: number; w: number; h: number } | null;
-  /** Position of the annotation card in board world coordinates. */
-  card: { x: number; y: number };
-}
-
-/**
  * Annotations are anchored to nodes within a screen. The iframe runtime
  * reports each annotated node's bounding rect on demand; we translate
  * that into board-world coords using the host frame's position and draw
  * a connector line from the rect's right edge to the annotation card.
+ * The placement/de-overlap/connector math lives in annotation-layout.ts
+ * (shared with velloo-cloud's read-only share viewer).
  *
  * Falls back to "next to the first matching frame, stacked vertically"
  * when no rect is available — happens on first paint before the
  * `requestRects` round-trip lands, or when the targeted node has been
- * removed since the annotation was authored.
+ * removed since the annotation was authored. The FALLBACK_INSET is only
+ * used before the first chrome measurement lands: each frame's real
+ * chrome is observed by a ResizeObserver in `Frame.tsx` and reported
+ * into `frameInsets`, so anchors stay locked through chrome edits.
  */
 export function AnnotationsLayer() {
   const visible = useCanvas((s) => s.annotationsVisible);
@@ -54,62 +41,7 @@ export function AnnotationsLayer() {
   if (!targetFrame) return null;
   const inset = frameInsets[targetFrame.id] ?? FALLBACK_INSET;
 
-  const resolved: ResolvedAnnotation[] = annotations.map((annotation, idx) => {
-    const pathStr = annotation.resolved !== null ? annotation.resolved.join(".") : null;
-    const rect = pathStr !== null ? (nodeRects[targetFrame.id]?.[pathStr] ?? null) : null;
-
-    if (rect && annotation.position === "auto") {
-      // Anchor in board coords: frame origin + iframe inset + iframe-local rect.
-      const nodeRect = {
-        x: targetFrame.x + inset.x + rect.x,
-        y: targetFrame.y + inset.y + rect.y,
-        w: rect.w,
-        h: rect.h,
-      };
-      // Card sits to the right of the frame, vertically centered on the rect.
-      const card = {
-        x: targetFrame.x + targetFrame.w + CARD_GUTTER,
-        y: Math.max(targetFrame.y, nodeRect.y + nodeRect.h / 2 - CARD_HEIGHT_ESTIMATE / 2),
-      };
-      return { annotation, frame: targetFrame, nodeRect, card };
-    }
-
-    if (typeof annotation.position === "object") {
-      return {
-        annotation,
-        frame: targetFrame,
-        nodeRect: rect
-          ? {
-              x: targetFrame.x + inset.x + rect.x,
-              y: targetFrame.y + inset.y + rect.y,
-              w: rect.w,
-              h: rect.h,
-            }
-          : null,
-        card: { x: annotation.position.x, y: annotation.position.y },
-      };
-    }
-
-    // Fallback: stack vertically next to the first frame.
-    return {
-      annotation,
-      frame: targetFrame,
-      nodeRect: null,
-      card: {
-        x: targetFrame.x + targetFrame.w + CARD_GUTTER,
-        y: targetFrame.y + 24 + idx * (CARD_HEIGHT_ESTIMATE + 16),
-      },
-    };
-  });
-
-  // De-overlap card y positions when multiple annotations anchor near
-  // the same node — keep them readable by nudging later ones down.
-  resolved.sort((a, b) => a.card.y - b.card.y);
-  let lastBottom = Number.NEGATIVE_INFINITY;
-  for (const r of resolved) {
-    if (r.card.y < lastBottom + 8) r.card.y = lastBottom + 8;
-    lastBottom = r.card.y + CARD_HEIGHT_ESTIMATE;
-  }
+  const resolved = layoutAnnotations(annotations, targetFrame, inset, nodeRects[targetFrame.id]);
 
   return (
     <>
@@ -132,73 +64,32 @@ export function AnnotationsLayer() {
  * SVG so we don't pay one SVG per annotation. Coordinates are board
  * world coords — the parent `<Board>` applies the pan/zoom transform.
  */
-function Connectors({ resolved }: { resolved: ResolvedAnnotation[] }) {
-  const items = resolved.filter(
-    (
-      r,
-    ): r is ResolvedAnnotation & {
-      nodeRect: NonNullable<ResolvedAnnotation["nodeRect"]>;
-    } => r.nodeRect !== null,
-  );
-  if (items.length === 0) return null;
-
-  // SVG canvas needs to span every line we draw. Pick a permissive
-  // bounding box so we don't clip.
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const r of items) {
-    const startX = r.nodeRect.x + r.nodeRect.w;
-    const startY = r.nodeRect.y + r.nodeRect.h / 2;
-    const endX = r.card.x;
-    const endY = r.card.y + CARD_HEIGHT_ESTIMATE / 2;
-    minX = Math.min(minX, startX, endX);
-    minY = Math.min(minY, startY, endY);
-    maxX = Math.max(maxX, startX, endX);
-    maxY = Math.max(maxY, startY, endY);
-  }
-  // Add a small margin so dashed strokes don't sit on the SVG edge.
-  const pad = 8;
-  minX -= pad;
-  minY -= pad;
-  maxX += pad;
-  maxY += pad;
-  const w = Math.max(1, maxX - minX);
-  const h = Math.max(1, maxY - minY);
+function Connectors({ resolved }: { resolved: PlacedAnnotation<AnnotationEntry>[] }) {
+  const geometry = connectorGeometry(resolved);
+  if (!geometry) return null;
+  const { box, lines } = geometry;
 
   return (
     <svg
       className="absolute pointer-events-none text-primary/50"
-      style={{ left: minX, top: minY, width: w, height: h }}
-      width={w}
-      height={h}
+      style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+      width={box.w}
+      height={box.h}
       aria-hidden="true"
     >
       <title>Annotation connectors</title>
-      {items.map((r) => {
-        const startX = r.nodeRect.x + r.nodeRect.w - minX;
-        const startY = r.nodeRect.y + r.nodeRect.h / 2 - minY;
-        const endX = r.card.x - minX;
-        const endY = r.card.y + CARD_HEIGHT_ESTIMATE / 2 - minY;
-        // Quadratic curve via a control point halfway across — gives the
-        // line a gentle arc instead of a sharp polyline kink when the
-        // card sits well above/below the rect.
-        const ctrlX = (startX + endX) / 2;
-        const path = `M ${startX} ${startY} Q ${ctrlX} ${startY} ${ctrlX} ${(startY + endY) / 2} T ${endX} ${endY}`;
-        return (
-          <g key={r.annotation.id}>
-            <path
-              d={path}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1}
-              strokeDasharray="3 3"
-            />
-            <circle cx={startX} cy={startY} r={3} fill="currentColor" />
-          </g>
-        );
-      })}
+      {lines.map((line) => (
+        <g key={line.id}>
+          <path
+            d={line.path}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+          <circle cx={line.dot.x} cy={line.dot.y} r={3} fill="currentColor" />
+        </g>
+      ))}
     </svg>
   );
 }

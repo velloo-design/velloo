@@ -1,6 +1,7 @@
 import type { Board as BoardT, ViewportPreset } from "@velloo/schema";
 import { useEffect, useMemo, useRef } from "react";
 import { notes as notesApi } from "../api.ts";
+import { fitToContent, wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { AnnotationsLayer } from "./AnnotationsLayer.tsx";
@@ -73,42 +74,17 @@ export function Board({ board }: BoardProps) {
       return;
     }
 
-    // First-time view: compute fit-to-content.
+    // First-time view: compute fit-to-content (shared with the cloud viewer).
     if (board.frames.length === 0) {
       restoredRef.current = board.id;
       return;
     }
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-    for (const f of board.frames) {
-      if (f.x < minX) minX = f.x;
-      if (f.y < minY) minY = f.y;
-      if (f.x + f.w > maxX) maxX = f.x + f.w;
-      // Allow some height for the frame header + preset chips below.
-      if (f.y + f.h + 60 > maxY) maxY = f.y + f.h + 60;
-    }
-    const boxW = Math.max(1, maxX - minX);
-    const boxH = Math.max(1, maxY - minY);
-    const boxCx = (minX + maxX) / 2;
-    const boxCy = (minY + maxY) / 2;
-
     const apply = () => {
-      const vw = el.clientWidth;
-      const vh = el.clientHeight;
-      if (vw < 50 || vh < 50) return false;
-      const margin = 80;
-      const zoomX = (vw - margin * 2) / boxW;
-      const zoomY = (vh - margin * 2) / boxH;
-      // Cap at 1.0 — never up-scale; 0.75 is the lower bound for legibility.
-      const fitZoom = Math.max(0.1, Math.min(1.0, Math.min(zoomX, zoomY)));
+      const fit = fitToContent(board.frames, el.clientWidth, el.clientHeight);
+      if (!fit) return false;
       // Reset native scroll so the transform alone positions content.
-      setZoom(fitZoom);
-      setPan({
-        x: Math.round(vw / 2 - boxCx * fitZoom),
-        y: Math.round(vh / 2 - boxCy * fitZoom),
-      });
+      setZoom(fit.zoom);
+      setPan(fit.pan);
       restoredRef.current = board.id;
       return true;
     };
@@ -152,11 +128,12 @@ export function Board({ board }: BoardProps) {
         // zoom step so the user doesn't have to re-pan after each
         // zoom in/out.
         e.preventDefault();
-        const factor = e.deltaY > 0 ? 0.95 : 1.05;
         const rect = el.getBoundingClientRect();
         const cx = e.clientX - rect.left;
         const cy = e.clientY - rect.top;
-        zoomAtPoint(cx, cy, factor, zoom, pan, setZoom, setPan);
+        const next = zoomAtPoint(cx, cy, wheelZoomFactor(e.deltaY), { zoom, pan });
+        setZoom(next.zoom);
+        setPan(next.pan);
         return;
       }
       // Plain wheel → pan via transform. We don't use native overflow
@@ -307,35 +284,6 @@ const DEFAULT_PRESETS: ViewportPreset[] = [
   { name: "Tablet", w: 768, h: 1024 },
   { name: "Desktop", w: 1440, h: 900 },
 ];
-
-/**
- * Apply a zoom step centered on a point in wrapper-local coords.
- * Keeps the world coordinate under (anchorX, anchorY) fixed across
- * the zoom transition: `cursor = pan + world * zoom` solved for the
- * new pan after zoom changes. Clamps the result to the same bounds
- * setCanvasZoom uses so we never overshoot.
- */
-function zoomAtPoint(
-  anchorX: number,
-  anchorY: number,
-  factor: number,
-  zoom: number,
-  pan: { x: number; y: number },
-  setZoom: (z: number) => void,
-  setPan: (p: { x: number; y: number }) => void,
-): void {
-  const nextZoom = Math.max(0.1, Math.min(4, zoom * factor));
-  if (nextZoom === zoom) return;
-  // world coord under the cursor before the zoom change
-  const worldX = (anchorX - pan.x) / zoom;
-  const worldY = (anchorY - pan.y) / zoom;
-  // after the zoom change, pin the same world coord under the cursor
-  setZoom(nextZoom);
-  setPan({
-    x: Math.round(anchorX - worldX * nextZoom),
-    y: Math.round(anchorY - worldY * nextZoom),
-  });
-}
 
 const VIEW_STORAGE_PREFIX = "velloo:boardView:";
 

@@ -4,9 +4,9 @@ import {
   catalogFromManifest,
   type FrameworkAdapter,
   type Manifest,
-  resolveProviderSrcDir,
   SX_PROP,
 } from "@velloo/provider";
+import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
 import { MUI_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { makeRenderPass } from "./render-pass.ts";

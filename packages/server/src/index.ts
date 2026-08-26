@@ -399,7 +399,7 @@ export {
   recordPublishedLink,
 } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
-export { loadDesignFolder } from "./design-folder.ts";
+export { loadDesignFolder, orderedBoards } from "./design-folder.ts";
 // Re-export key types and helpers for downstream consumers.
 export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";

@@ -1,4 +1,5 @@
 import type { StateCreator } from "zustand";
+import { MAX_ZOOM, MIN_ZOOM } from "../board-geometry.ts";
 import type { CanvasState } from "./index.ts";
 import type { CursorMode } from "./types.ts";
 
@@ -44,7 +45,7 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
   frameInsets: {},
 
   setCanvasZoom(canvasZoom) {
-    set({ canvasZoom: Math.max(0.1, Math.min(4, canvasZoom)) });
+    set({ canvasZoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, canvasZoom)) });
   },
 
   setCursorMode(cursorMode) {

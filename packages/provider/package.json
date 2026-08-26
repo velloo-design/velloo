@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Component provider abstraction — the interface every Velloo library entry (shadcn, MUI, no-lib, host scan) implements",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./src-dir": "./src/src-dir.ts"
   },
   "dependencies": {
     "@velloo/schema": "workspace:*"

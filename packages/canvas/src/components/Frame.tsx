@@ -1,6 +1,7 @@
 import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
 import { useEffect, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
+import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -143,7 +144,7 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       // bounding rect so zoom anchors on the cursor instead of (0,0).
       onParentZoom(deltaY, clientX, clientY) {
         const state = useCanvas.getState();
-        const factor = deltaY > 0 ? 0.95 : 1.05;
+        const factor = wheelZoomFactor(deltaY);
         const iframeEl = iframeRef.current;
         const wrapper = iframeEl?.closest<HTMLDivElement>('[data-velloo-board="true"]');
         if (!iframeEl || !wrapper) {
@@ -156,15 +157,13 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
         // `overflow-hidden`; pan is the only movement axis.
         const anchorX = iframeRect.left - wrapperRect.left + clientX * state.canvasZoom;
         const anchorY = iframeRect.top - wrapperRect.top + clientY * state.canvasZoom;
-        const nextZoom = Math.max(0.1, Math.min(4, state.canvasZoom * factor));
-        if (nextZoom === state.canvasZoom) return;
-        const worldX = (anchorX - state.pan.x) / state.canvasZoom;
-        const worldY = (anchorY - state.pan.y) / state.canvasZoom;
-        state.setCanvasZoom(nextZoom);
-        state.setPan({
-          x: Math.round(anchorX - worldX * nextZoom),
-          y: Math.round(anchorY - worldY * nextZoom),
+        const next = zoomAtPoint(anchorX, anchorY, factor, {
+          zoom: state.canvasZoom,
+          pan: state.pan,
         });
+        if (next.zoom === state.canvasZoom) return;
+        state.setCanvasZoom(next.zoom);
+        state.setPan(next.pan);
       },
       // Plain wheel/trackpad inside the iframe → pan the board. Matches
       // the parent board's own onWheel handler so panning feels the

@@ -28,7 +28,10 @@ export type {
   Manifest,
   PropDescriptor,
 } from "./manifest.ts";
-export { resolveProviderSrcDir } from "./src-dir.ts";
+// NOTE: resolveProviderSrcDir intentionally does NOT re-export here — it
+// touches node:fs/node:path, and this index must stay browser-safe (the
+// velloo-cloud share viewer imports it via the ext registry). Node-side
+// consumers import it from "@velloo/provider/src-dir".
 export {
   type ComponentProvider,
   type ComponentRegistry,
