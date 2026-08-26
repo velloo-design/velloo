@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildChartOption, renderChartSvg } from "../chart-option.ts";
+import { buildChartOption, chartSize, renderChartSvg } from "../chart-option.ts";
 
 const single = [
   { x: "Mon", y: 1200 },
@@ -65,5 +65,90 @@ describe("buildChartOption", () => {
       series: [{ data: [1] }, { data: [2] }],
     }) as { series: unknown[] };
     expect(many.series).toHaveLength(2);
+  });
+});
+
+const multi = {
+  categories: ["Q1", "Q2"],
+  series: [
+    { name: "Revenue", data: [10, 20] },
+    { name: "Refunds", data: [2, 3] },
+  ],
+};
+
+describe("stacked", () => {
+  test("bar/area multi-series carry stack: total on every series", () => {
+    for (const kind of ["bar", "area"] as const) {
+      const opt = buildChartOption({ kind, ...multi, stacked: true }) as {
+        series: { stack?: string }[];
+      };
+      expect(opt.series).toHaveLength(2);
+      for (const s of opt.series) expect(s.stack).toBe("total");
+    }
+  });
+
+  test("ignored for line/scatter kinds and for single series", () => {
+    for (const kind of ["line", "scatter"] as const) {
+      const opt = buildChartOption({ kind, ...multi, stacked: true }) as {
+        series: { stack?: string }[];
+      };
+      for (const s of opt.series) expect(s.stack).toBeUndefined();
+    }
+    const one = buildChartOption({ kind: "bar", data: single, stacked: true }) as {
+      series: { stack?: string }[];
+    };
+    for (const s of one.series) expect(s.stack).toBeUndefined();
+  });
+});
+
+describe("aspect sizing", () => {
+  test("chartSize maps a width÷height ratio onto the default width, clamped", () => {
+    expect(chartSize()).toEqual({ width: 480, height: 270 }); // 16:9 default
+    expect(chartSize(4)).toEqual({ width: 480, height: 120 });
+    expect(chartSize(1)).toEqual({ width: 480, height: 480 });
+    expect(chartSize(1000)).toEqual({ width: 480, height: 24 }); // clamped to 20
+    expect(chartSize(0.01)).toEqual({ width: 480, height: 1920 }); // clamped to 0.25
+    expect(chartSize(Number.NaN)).toEqual({ width: 480, height: 270 });
+  });
+
+  test("renderChartSvg honors the aspect-derived size", () => {
+    const svg = renderChartSvg({ kind: "line", data: single }, chartSize(4));
+    expect(svg).toContain('viewBox="0 0 480 120"');
+  });
+});
+
+describe("axes: false (sparkline mode)", () => {
+  test("hides both axes and collapses grid padding", () => {
+    const opt = buildChartOption({ kind: "line", data: single, axes: false }) as {
+      grid: { left: number; right: number; top: number; bottom: number };
+      xAxis: { show?: boolean };
+      yAxis: { show?: boolean };
+    };
+    expect(opt.xAxis.show).toBe(false);
+    expect(opt.yAxis.show).toBe(false);
+    expect(opt.grid.left).toBeLessThanOrEqual(4);
+    expect(opt.grid.right).toBeLessThanOrEqual(4);
+    expect(opt.grid.top).toBeLessThanOrEqual(4);
+    expect(opt.grid.bottom).toBeLessThanOrEqual(4);
+  });
+
+  test("rendered svg keeps the marks but drops tick labels and gridlines", () => {
+    const svg = renderChartSvg({ kind: "line", data: single, axes: false });
+    expect(svg).toContain("<path"); // marks still render
+    expect(svg).not.toContain("Mon"); // no x tick labels
+    expect(svg).not.toContain("var(--color-border)"); // no axis lines / gridlines
+  });
+});
+
+describe("palette", () => {
+  test("never auto-assigns the destructive hue to a series", () => {
+    const svg = renderChartSvg({
+      kind: "bar",
+      categories: ["a", "b"],
+      // Six series cycle the full five-entry palette.
+      series: Array.from({ length: 6 }, (_, i) => ({ name: `s${i}`, data: [i + 1, i + 2] })),
+    });
+    expect(svg).not.toContain("var(--color-destructive)");
+    expect(svg).toContain("var(--color-secondary)"); // third slot replacement
   });
 });

@@ -13,7 +13,7 @@
 // extensions emit a real `import` from their declared `importPath`.
 import type * as React from "react";
 import { cn } from "../../lib/utils.ts";
-import { renderChartSvg } from "./chart-option.ts";
+import { chartSize, renderChartSvg } from "./chart-option.ts";
 
 export type { ChartColor, ChartKind, ChartSpec, TickFormat } from "./chart-option.ts";
 
@@ -60,6 +60,12 @@ export interface ChartProps {
   color?: "primary" | "accent" | "muted";
   /** Force the legend on/off; defaults on for multi-series, off otherwise. */
   legend?: boolean;
+  /** Stack multiple bar/area series into cumulative totals; default off. */
+  stacked?: boolean;
+  /** Width÷height ratio, e.g. 4 for a wide sparkline or 1 for square; defaults to 16:9. */
+  aspect?: number;
+  /** Show axes, tick labels, and gridlines; set false for sparkline mode. */
+  axes?: boolean;
 }
 
 /**
@@ -70,6 +76,7 @@ export interface ChartProps {
  */
 export function Chart({
   className,
+  style,
   kind,
   data,
   series,
@@ -79,28 +86,49 @@ export function Chart({
   tickFormat,
   color,
   legend,
+  stacked,
+  aspect,
+  axes,
   ...rest
 }: ChartProps & React.ComponentProps<"div">) {
+  const size = chartSize(aspect);
+  // Derive the box ratio from the clamped render size so the container and
+  // the SVG geometry always agree; inline style beats the aspect-video class.
+  const boxStyle =
+    aspect === undefined ? style : { aspectRatio: size.width / size.height, ...style };
   const hasData =
     (Array.isArray(series) && series.length > 0) || (Array.isArray(data) && data.length > 0);
   if (!hasData) {
-    return <div data-slot="chart" className={cn("aspect-video w-full", className)} {...rest} />;
+    return (
+      <div
+        data-slot="chart"
+        className={cn("aspect-video w-full", className)}
+        style={boxStyle}
+        {...rest}
+      />
+    );
   }
-  const svg = renderChartSvg({
-    kind,
-    data,
-    series,
-    categories,
-    xLabel,
-    yLabel,
-    tickFormat,
-    color,
-    legend,
-  });
+  const svg = renderChartSvg(
+    {
+      kind,
+      data,
+      series,
+      categories,
+      xLabel,
+      yLabel,
+      tickFormat,
+      color,
+      legend,
+      stacked,
+      axes,
+    },
+    size,
+  );
   return (
     <div
       data-slot="chart"
       className={cn("aspect-video w-full", className)}
+      style={boxStyle}
       {...rest}
       // biome-ignore lint/security/noDangerouslySetInnerHtml: server-generated static echarts SVG (no scripts/foreignObject); see chart-option.ts
       dangerouslySetInnerHTML={{ __html: svg }}

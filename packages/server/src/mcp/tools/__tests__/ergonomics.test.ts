@@ -224,4 +224,26 @@ describe("snippet param contract", () => {
     expect(title?.required).toBe(true);
     expect(subtitle?.required).toBe(false);
   });
+
+  test("add_snippet warns when a param feeds Icon `name`; update_snippet clears it with the tree", async () => {
+    const r = await callTool("add_snippet", {
+      name: "Status Chip",
+      params: [{ name: "glyph", type: "icon" }],
+      tree: { $ref: "Icon", props: { name: { $param: "glyph" } } },
+    });
+    expect(r.isError).toBeUndefined();
+    const v = parse(r) as { snippetId: string; propWarnings?: string[] };
+    expect(v.propWarnings?.length).toBe(1);
+    expect(v.propWarnings?.[0]).toContain('param "glyph"');
+    expect(v.propWarnings?.[0]).toContain("`node` param");
+
+    // The warning tracks the RESULTING body: replacing the dynamic name
+    // with a literal clears it.
+    const u = await callTool("update_snippet", {
+      snippetId: v.snippetId,
+      patch: { tree: { $ref: "Icon", props: { name: "Check" } } },
+    });
+    expect(u.isError).toBeUndefined();
+    expect(parse(u).propWarnings).toBeUndefined();
+  });
 });

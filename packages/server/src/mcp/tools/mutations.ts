@@ -34,7 +34,11 @@ import {
   updateSnippet,
   updateSnippetArgs,
 } from "../../mutations/index.ts";
-import { propWarnings, propWarningsForTree } from "../../mutations/prop-warnings.ts";
+import {
+  dynamicIconWarningsForTree,
+  propWarnings,
+  propWarningsForTree,
+} from "../../mutations/prop-warnings.ts";
 import { pathAt } from "../../path.ts";
 import {
   InnerPathSchema,
@@ -504,7 +508,10 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         tree: NodeSchema,
       },
     },
-    async (args) => toMcp(await addSnippet(ctx, args)),
+    async (args) =>
+      toMcpWithWarnings(await addSnippet(ctx, args), async (value) =>
+        dynamicIconWarningsForTree(value.snippet.tree),
+      ),
   );
 
   mcp.registerTool(
@@ -528,7 +535,12 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         }),
       },
     },
-    async (args) => toMcp(await updateSnippet(ctx, args)),
+    async (args) =>
+      // Warn on the RESULTING tree (an update may patch the body via
+      // `tree` or `innerPatch`), not just the incoming patch.
+      toMcpWithWarnings(await updateSnippet(ctx, args), async (value) =>
+        dynamicIconWarningsForTree(value.snippet.tree),
+      ),
   );
 
   mcp.registerTool(

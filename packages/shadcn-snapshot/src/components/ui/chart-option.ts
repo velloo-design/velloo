@@ -46,6 +46,10 @@ export interface ChartSpec {
   color?: ChartColor;
   /** Force the legend on/off; defaults on for multi-series, off otherwise. */
   legend?: boolean;
+  /** Stack multiple bar/area series into cumulative totals; default off. */
+  stacked?: boolean;
+  /** Show axes, tick labels, and gridlines; set false for sparkline mode. */
+  axes?: boolean;
 }
 
 const AXIS = "var(--color-muted-foreground)";
@@ -56,10 +60,12 @@ const SINGLE: Record<ChartColor, string> = {
   muted: "var(--color-muted-foreground)",
 };
 // Distinct, theme-flipping hues for multi-series — all tokens themeToCss emits.
+// Deliberately excludes destructive: an error hue must never be auto-assigned
+// to ordinary data (a 3-series chart would paint one series alarm-red).
 const PALETTE = [
   "var(--color-primary)",
   "var(--color-accent)",
-  "var(--color-destructive)",
+  "var(--color-secondary)",
   "var(--color-muted-foreground)",
   "var(--color-foreground)",
 ];
@@ -94,6 +100,8 @@ export function buildChartOption(spec: ChartSpec): EChartsCoreOption {
   const { categories, series } = normalize(spec);
   const multi = series.length > 1;
   const showLegend = spec.legend ?? multi;
+  const showAxes = spec.axes ?? true;
+  const stacked = (spec.stacked ?? false) && multi && (kind === "bar" || kind === "area");
   const formatter = spec.tickFormat ? FORMATTERS[spec.tickFormat] : undefined;
 
   const base: Record<string, unknown> = {
@@ -141,6 +149,7 @@ export function buildChartOption(spec: ChartSpec): EChartsCoreOption {
         lineStyle: { color: tint, width: 2 },
         itemStyle: { color: tint },
         ...(kind === "area" ? { areaStyle: { color: tint, opacity: 0.18 } } : {}),
+        ...(stacked ? { stack: "total" } : {}),
       };
     }
     if (isScatter) {
@@ -156,33 +165,47 @@ export function buildChartOption(spec: ChartSpec): EChartsCoreOption {
       type: "bar",
       name: s.name,
       data: s.data,
-      itemStyle: { color: tint, borderRadius: [3, 3, 0, 0] },
+      // No rounded tops when stacked — every segment would get one, notching the seams.
+      itemStyle: { color: tint, ...(stacked ? {} : { borderRadius: [3, 3, 0, 0] }) },
+      ...(stacked ? { stack: "total" } : {}),
     };
   });
 
   return {
     ...base,
-    grid: {
-      left: spec.yLabel ? 52 : 44,
-      right: 14,
-      top: showLegend ? 30 : 16,
-      bottom: spec.xLabel ? 38 : 24,
-    },
+    grid: showAxes
+      ? {
+          left: spec.yLabel ? 52 : 44,
+          right: 14,
+          top: showLegend ? 30 : 16,
+          bottom: spec.xLabel ? 38 : 24,
+        }
+      : // Sparkline mode: marks fill the box edge-to-edge.
+        { left: 2, right: 2, top: showLegend ? 30 : 2, bottom: 2 },
     xAxis: {
       type: isScatter ? "value" : "category",
       ...(isScatter ? {} : { data: categories }),
-      ...(spec.xLabel ? { name: spec.xLabel, nameLocation: "middle", nameGap: 22 } : {}),
-      nameTextStyle: { color: AXIS, fontSize: 10 },
-      axisLabel: { color: AXIS, fontSize: 10 },
-      axisLine: { lineStyle: { color: GRID } },
-      axisTick: { show: false },
+      ...(showAxes
+        ? {
+            ...(spec.xLabel ? { name: spec.xLabel, nameLocation: "middle", nameGap: 22 } : {}),
+            nameTextStyle: { color: AXIS, fontSize: 10 },
+            axisLabel: { color: AXIS, fontSize: 10 },
+            axisLine: { lineStyle: { color: GRID } },
+            axisTick: { show: false },
+          }
+        : { show: false }),
     },
     yAxis: {
       type: "value",
-      ...(spec.yLabel ? { name: spec.yLabel } : {}),
-      nameTextStyle: { color: AXIS, fontSize: 10 },
-      axisLabel: { color: AXIS, fontSize: 10, ...(formatter ? { formatter } : {}) },
-      splitLine: { lineStyle: { color: GRID, opacity: 0.5 } },
+      ...(showAxes
+        ? {
+            ...(spec.yLabel ? { name: spec.yLabel } : {}),
+            nameTextStyle: { color: AXIS, fontSize: 10 },
+            axisLabel: { color: AXIS, fontSize: 10, ...(formatter ? { formatter } : {}) },
+            splitLine: { lineStyle: { color: GRID, opacity: 0.5 } },
+          }
+        : // `show: false` alone leaves gridlines on — splitLine needs its own off switch.
+          { show: false, splitLine: { show: false } }),
     },
     series: cartesianSeries,
   } as EChartsCoreOption;
@@ -190,6 +213,20 @@ export function buildChartOption(spec: ChartSpec): EChartsCoreOption {
 
 const DEFAULT_W = 480;
 const DEFAULT_H = 270;
+const MIN_ASPECT = 0.25;
+const MAX_ASPECT = 20;
+
+/**
+ * Render size for a width÷height `aspect` ratio, clamped to 0.25–20 so a bad
+ * value can't produce a degenerate SVG. No aspect keeps the 16:9 default.
+ */
+export function chartSize(aspect?: number): { width: number; height: number } {
+  if (aspect === undefined || !Number.isFinite(aspect)) {
+    return { width: DEFAULT_W, height: DEFAULT_H };
+  }
+  const clamped = Math.min(MAX_ASPECT, Math.max(MIN_ASPECT, aspect));
+  return { width: DEFAULT_W, height: Math.round(DEFAULT_W / clamped) };
+}
 
 /** Render a chart spec to a self-contained, responsive SVG string. */
 export function renderChartSvg(

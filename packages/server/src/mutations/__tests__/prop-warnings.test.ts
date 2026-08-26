@@ -4,7 +4,7 @@ import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot"
 import type { DesignFolder } from "../../design-folder.ts";
 import { HistoryManager } from "../../history.ts";
 import type { MutationContext } from "../index.ts";
-import { propWarnings, propWarningsForTree } from "../prop-warnings.ts";
+import { dynamicIconWarningsForTree, propWarnings, propWarningsForTree } from "../prop-warnings.ts";
 
 const provider = createShadcnProvider();
 
@@ -113,5 +113,54 @@ describe("propWarnings", () => {
     expect(w.length).toBe(2);
     expect(w[0]).toStartWith("[0] ");
     expect(w[1]).toStartWith("[1] ");
+  });
+});
+
+describe("dynamicIconWarningsForTree", () => {
+  test("an icon param wired into Icon `name` warns, path-prefixed, pointing at a node param", () => {
+    const w = dynamicIconWarningsForTree({
+      $ref: "Box",
+      children: [
+        { $ref: "Heading", props: { children: { $param: "title" } } },
+        { $ref: "Icon", props: { name: { $param: "priorityIcon" } } },
+      ],
+    });
+    expect(w.length).toBe(1);
+    expect(w[0]).toStartWith("[1] ");
+    expect(w[0]).toContain('param "priorityIcon"');
+    expect(w[0]).toContain("single static glyph");
+    expect(w[0]).toContain("`node` param");
+  });
+
+  test("a literal icon name yields no warning", () => {
+    expect(
+      dynamicIconWarningsForTree({
+        $ref: "Box",
+        children: [{ $ref: "Icon", props: { name: "ArrowRight" } }],
+      }),
+    ).toEqual([]);
+  });
+
+  test("a node-type param used as a child slot yields no warning", () => {
+    expect(
+      dynamicIconWarningsForTree({
+        $ref: "Box",
+        children: [{ $param: "icon" }, { $ref: "Text", props: { children: { $param: "label" } } }],
+      }),
+    ).toEqual([]);
+  });
+
+  test("finds an $if-driven Icon inside a node-shaped `children` prop", () => {
+    const w = dynamicIconWarningsForTree({
+      $ref: "Button",
+      props: {
+        children: {
+          $ref: "Icon",
+          props: { name: { $if: "done", then: "Check", else: "Circle" } },
+        },
+      },
+    });
+    expect(w.length).toBe(1);
+    expect(w[0]).toContain('$if on "done"');
   });
 });

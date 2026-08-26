@@ -1,3 +1,4 @@
+import { dynamicIconName } from "@velloo/codegen";
 import type { ComponentProvider, Manifest } from "@velloo/provider";
 import { isComponentNode, type Node, pascalizeIconName, type Screen } from "@velloo/schema";
 import { providerForScreen } from "../extensions/registry.ts";
@@ -160,5 +161,47 @@ export async function propWarningsForTree(
     }
   }
   await walk(root, basePath);
+  return out;
+}
+
+/**
+ * Design-time check for the dynamic-icon-param footgun: an Icon whose `name`
+ * is a `$param`/`$if` substitution renders fine on the canvas, but emit_code
+ * lowers it to a single static glyph (a lucide name must be a literal JSX
+ * tag). propWarnings deliberately skips substitution values, so this is a
+ * separate, pure walk — attached to add_snippet/update_snippet results so
+ * the agent reshapes the param while the snippet is still being designed.
+ */
+export function dynamicIconWarningsForTree(root: Node): string[] {
+  const out: string[] = [];
+  const asComponent = (v: unknown): Node | null =>
+    v !== null && typeof v === "object" && isComponentNode(v as Node) ? (v as Node) : null;
+  function walk(node: Node, path: number[]): void {
+    if (!isComponentNode(node)) return;
+    const dyn = dynamicIconName(node);
+    if (dyn) {
+      const prefix = path.length > 0 ? `[${path.join(".")}] ` : "";
+      out.push(
+        `${prefix}Icon "name" is fed by ${dyn} — emit_code lowers a dynamic icon name to a single static glyph. If each instance needs its own icon, declare a \`node\` param instead (it emits as a {slot} the caller fills).`,
+      );
+    }
+    // Icon nodes also live in a node-shaped `children` prop (a single node,
+    // or rich-text runs) — walk those like real children.
+    const propChildren = node.props?.children;
+    if (Array.isArray(propChildren)) {
+      for (let i = 0; i < propChildren.length; i++) {
+        const child = asComponent(propChildren[i]);
+        if (child) walk(child, [...path, i]);
+      }
+    } else {
+      const single = asComponent(propChildren);
+      if (single) walk(single, [...path, 0]);
+    }
+    for (let i = 0; i < (node.children?.length ?? 0); i++) {
+      const child = node.children?.[i];
+      if (child) walk(child, [...path, i]);
+    }
+  }
+  walk(root, []);
   return out;
 }

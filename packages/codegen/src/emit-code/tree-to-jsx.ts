@@ -18,6 +18,7 @@ import {
 } from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { mergeClasses } from "./classes.ts";
+import { dynamicIconName } from "./dynamic-icon.ts";
 import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
 import type { CodegenTarget } from "./target.ts";
 
@@ -79,15 +80,6 @@ export interface EmitContext {
   warnings?: string[];
   /** 2-space indentation, baked once. */
   indent(depth: number): string;
-}
-
-/** If `value` is a `$param`/`$if` substitution, describe it; else null. */
-function dynamicRefName(value: unknown): string | null {
-  if (value === null || typeof value !== "object") return null;
-  const v = value as { $param?: unknown; $if?: unknown };
-  if (typeof v.$param === "string") return `param "${v.$param}"`;
-  if (typeof v.$if === "string") return `$if on "${v.$if}"`;
-  return null;
 }
 
 /** Render a node tree (root) as a single JSX string. */
@@ -287,12 +279,11 @@ function renderComponent(
     closeTag = result.tag;
   } else if (entry?.kind === "dynamic") {
     const { jsxName, extraClasses } = entry.resolve(props);
-    // A dynamic Icon name (a $param/$if ref) can't survive lowering: the
-    // lucide name becomes the JSX tag, which must be a static identifier,
-    // so resolve() falls back to <HelpCircle> and every instance would
-    // render that same glyph. Flag it — a `node` param (emitted as a
-    // {slot}) is the right tool for a per-instance icon.
-    const dynName = node.$ref === "Icon" ? dynamicRefName(props.name) : null;
+    // A dynamic Icon name can't survive lowering (see dynamicIconName):
+    // resolve() fell back to <HelpCircle> and every instance would render
+    // that same glyph. Flag it — a `node` param (emitted as a {slot}) is
+    // the right tool for a per-instance icon.
+    const dynName = dynamicIconName(node);
     if (dynName) {
       ctx.warnings?.push(
         `Icon "name" is dynamic (${dynName}) but lowered to a static <${jsxName}> fallback — a lucide icon name must be a literal JSX tag, so every instance renders the same glyph. For a per-instance icon, declare a \`node\` param (it emits as a {slot} the caller fills) instead of an \`icon\` param, or wire a name→component map in your app.`,
