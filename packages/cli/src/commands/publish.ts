@@ -68,6 +68,47 @@ function gitCommitSha(folder: string): string | null {
   }
 }
 
+/**
+ * Normalize a git remote URL to `host/owner/repo` for display on the share
+ * card: `git@github.com:owner/repo.git`, `ssh://git@host/owner/repo`, and
+ * `https://host/owner/repo.git` all collapse to the same form. Null when the
+ * URL doesn't look like a hosted remote (e.g. a local path).
+ */
+function normalizeRemote(url: string): string | null {
+  const rest = url.trim().replace(/\.git\/?$/, "");
+  // scp-like syntax: [user@]host:path (no scheme).
+  const scp = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)(.+)$/.exec(rest);
+  if (scp?.[1] && scp[2]) return `${scp[1]}/${scp[2].replace(/^\/+/, "")}`;
+  try {
+    const parsed = new URL(rest.includes("://") ? rest : `https://${rest}`);
+    if (!parsed.hostname || !parsed.pathname || parsed.pathname === "/") return null;
+    return `${parsed.hostname}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where this publish came from, for the share card: the origin remote
+ * (normalized to host/owner/repo) and the current branch. Best-effort — a
+ * non-git folder, detached HEAD, or missing remote publishes without them.
+ */
+function gitContext(folder: string): { repo: string | null; branch: string | null } {
+  const run = (args: string[]): string | null => {
+    try {
+      return execFileSync("git", ["-C", folder, ...args], { encoding: "utf8" }).trim() || null;
+    } catch {
+      return null;
+    }
+  };
+  const branchRaw = run(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const remote = run(["remote", "get-url", "origin"]);
+  return {
+    repo: remote ? normalizeRemote(remote) : null,
+    branch: branchRaw === "HEAD" ? null : branchRaw, // "HEAD" = detached
+  };
+}
+
 export default defineCommand({
   meta: {
     name: "publish",
@@ -325,6 +366,12 @@ export default defineCommand({
 
     const commitSha = gitCommitSha(folder);
     if (commitSha) form.append("commitSha", commitSha);
+    // Repo + branch provenance for the share card. Unlike commitSha these
+    // travel even from a dirty tree — they name where the design lives, not
+    // an exact state.
+    const git = gitContext(folder);
+    if (git.repo) form.append("gitRepo", git.repo);
+    if (git.branch) form.append("gitBranch", git.branch);
 
     // The folder's cloud identity — the cloud reuses the folder's existing
     // link (200) or creates one carrying it (201).

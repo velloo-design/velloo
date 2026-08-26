@@ -220,6 +220,14 @@ cpSync(join(repoRoot, "plugins"), join(distDir, "plugins"), { recursive: true })
 //     JIT scans, the snapshot manifest, and codegen's biome config. Each
 //     package's path module resolves `<dist>/pkgs/<name>` when bundled.
 step("copying package assets → dist/pkgs");
+// The snapshot manifest is a build product, not checked in — a fresh clone or
+// worktree hasn't generated it yet. Build it on demand (same treatment as the
+// canvas SPA above) instead of failing the install with "missing asset".
+const snapshotPkg = join(repoRoot, "packages", "shadcn-snapshot");
+if (!existsSync(join(snapshotPkg, "dist", "manifest.json"))) {
+  step("building shadcn-snapshot manifest…");
+  run(["bun", "run", "build"], snapshotPkg);
+}
 const PKG_ASSETS: { pkg: string; paths: string[] }[] = [
   { pkg: "shadcn-snapshot", paths: ["src", join("dist", "manifest.json")] },
   { pkg: "provider-none", paths: ["src"] },
