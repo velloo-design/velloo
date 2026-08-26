@@ -10,4 +10,7 @@
  * every open-source client verifies against the same value — tagged tokens
  * simply fail. A change to this file is a key rotation; review it like one.
  */
-export const PINNED_ISSUER_KEYS: Record<string, string> = {};
+export const PINNED_ISSUER_KEYS: Record<string, string> = {
+  "https://api.velloo.ai":
+    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs54VddkMfc1b0S+2i8GOouyseMo4mb6+zPYBv/Omu1sZQfTYFVFttZOWO0vw6ObT8EVBC/4qCgZPa1d8To55rNe6ZSWJkvXFuoEeOaVDlfDhxduFnVFa5QelxEwVXAFpVSSdPwcFicoCNxuhHTbezPQl3yKLZVwIUncMNhpwsjXVyrKEtSp+5cAY1SH2axLBpqPT1nReH5HAZmAmUcZFvJND45htig2o2tvFSTkOCurFt6lw9HiCWjNE1L1C3Y/VuGkvIVbQShNipyBvgn1ZtJxFvkY4M4ULUj9G9JMb6pYtUupUddPLfpROXSPFvbDk22JOOP2VWtv5r9mXeTCAIQIDAQAB",
+};

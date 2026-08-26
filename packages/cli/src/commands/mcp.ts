@@ -81,7 +81,19 @@ export default defineCommand({
       await close?.();
       process.exit(0);
     };
-    const proxy = await runStdioMcpProxy(rec.mcpUrl, () => void shutdown());
+    const proxy = await runStdioMcpProxy(rec.mcpUrl, {
+      onExit: () => void shutdown(),
+      // A crashed daemon respawns on new ephemeral ports; re-run the ensure
+      // flow (lockfile → health check → spawn if dead) to find or revive it.
+      rediscover: async () => {
+        try {
+          const fresh = await ensureDaemon(folder, { preferredPort, host: args.host });
+          return fresh.mcpUrl;
+        } catch {
+          return null;
+        }
+      },
+    });
     process.on("SIGINT", () => void shutdown(proxy.close));
     process.on("SIGTERM", () => void shutdown(proxy.close));
     process.stdin.on("end", () => void shutdown(proxy.close));
