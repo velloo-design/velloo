@@ -146,6 +146,8 @@ Two frames pointing at the same screen always render the same underlying tree at
 
 Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop) is a UI affordance, not a data constraint — the underlying `w`/`h` is just a number.
 
+**Themes attach to boards, never to screens or frames.** A theme is a property of the *viewing context*, not of the content: a screen's tree references semantic tokens (`bg-primary`, `text-muted-foreground`) and is theme-portable by construction. A board may pin a named theme via its optional `theme` field (absent = the folder default); every frame on that board renders with it. The same screen framed on two differently-pinned boards renders in both palettes with edits syncing to both — the mechanism behind side-by-side theme candidates. This mirrors the viewport rule (a frame property, not a screen property) and deliberately contrasts with `screen.library`, which *is* per-screen because a library changes what the tree's `$ref`s mean (content), whereas a theme only changes how its tokens bind (context). Server-side capture tools (`screenshot`, `compare_to_url`) resolve the same way the canvas does: explicit `theme:` arg, else the hosting board's pin (`pinnedThemeForScreen` — conflicting pins across hosting boards are an error, never a guess), else the folder default.
+
 ### Config
 
 ```json

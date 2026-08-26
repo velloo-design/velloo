@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadDesignFolder, reloadScreen, reloadTheme, themeByName } from "../design-folder.ts";
+import {
+  loadDesignFolder,
+  pinnedThemeForScreen,
+  reloadScreen,
+  reloadTheme,
+  themeByName,
+} from "../design-folder.ts";
 
 const config = {
   schemaVersion: 1,
@@ -137,5 +143,55 @@ describe("named themes", () => {
     await writeJson(join(tmp, "theme", "neon.json"), { ...theme, name: "neon" });
     await reloadTheme(folder);
     expect(themeByName(folder, "neon").name).toBe("neon");
+  });
+});
+
+describe("pinnedThemeForScreen", () => {
+  function board(id: string, screens: string[], boardTheme?: string) {
+    return {
+      id,
+      name: id,
+      ...(boardTheme ? { theme: boardTheme } : {}),
+      frames: screens.map((s, i) => ({
+        id: `f-${id}-${i}`,
+        screen: s,
+        x: 0,
+        y: 0,
+        w: 100,
+        h: 100,
+      })),
+      groups: [],
+    };
+  }
+
+  test("a single hosting board's pin wins; unhosted screens fall to default", async () => {
+    await mkdir(join(tmp, "boards"), { recursive: true });
+    await writeJson(join(tmp, "boards", "a.json"), board("a", ["landing"], "midnight"));
+    const folder = await loadDesignFolder(tmp);
+    expect(pinnedThemeForScreen(folder, "landing")).toEqual({ ok: true, name: "midnight" });
+    expect(pinnedThemeForScreen(folder, "elsewhere")).toEqual({ ok: true, name: undefined });
+  });
+
+  test("agreeing boards resolve; an unpinned host resolves to the default", async () => {
+    await mkdir(join(tmp, "boards"), { recursive: true });
+    await writeJson(join(tmp, "boards", "a.json"), board("a", ["landing"], "midnight"));
+    await writeJson(join(tmp, "boards", "b.json"), board("b", ["landing"], "midnight"));
+    await writeJson(join(tmp, "boards", "c.json"), board("c", ["signup"]));
+    const folder = await loadDesignFolder(tmp);
+    expect(pinnedThemeForScreen(folder, "landing")).toEqual({ ok: true, name: "midnight" });
+    expect(pinnedThemeForScreen(folder, "signup")).toEqual({ ok: true, name: undefined });
+  });
+
+  test("boards disagreeing (including an unpinned host) is an error naming each side", async () => {
+    await mkdir(join(tmp, "boards"), { recursive: true });
+    await writeJson(join(tmp, "boards", "a.json"), board("a", ["landing"], "midnight"));
+    await writeJson(join(tmp, "boards", "b.json"), board("b", ["landing"]));
+    const folder = await loadDesignFolder(tmp);
+    const res = pinnedThemeForScreen(folder, "landing");
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.message).toContain('"midnight" (a)');
+      expect(res.message).toContain('"default" (b)');
+    }
   });
 });

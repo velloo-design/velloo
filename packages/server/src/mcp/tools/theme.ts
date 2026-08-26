@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { containerClasses, parseTailwindContainer, SEMANTIC_SLOTS } from "@velloo/codegen";
 import type { Result } from "@velloo/result";
 import { z } from "zod";
-import type { DesignFolder } from "../../design-folder.ts";
+import { type DesignFolder, resolveNamedTheme } from "../../design-folder.ts";
 import { chartLibsInDeps } from "../../theme/chart-libs.ts";
 import type { ThemeError } from "../../theme/errors.ts";
 import {
@@ -411,21 +411,30 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "score_theme_contrast",
     {
       description:
-        'Score WCAG contrast ratios for the active theme\'s salient color pairs (foreground/background, primary/primary-foreground, …) in BOTH light and dark palettes — each result carries mode: "light" | "dark". Returns ratio + tier (AAA / AA / AAlarge / Fail). Pass mode to score one palette only. Use after a derive/preset or any dark-token tuning to confirm accessibility before shipping.',
+        'Score WCAG contrast ratios for a theme\'s salient color pairs (foreground/background, primary/primary-foreground, …) in BOTH light and dark palettes — each result carries mode: "light" | "dark". Returns ratio + tier (AAA / AA / AAlarge / Fail). Pass mode to score one palette only; pass theme to score a named theme instead of the default. Use after a derive/preset or any dark-token tuning to confirm accessibility before shipping.',
       inputSchema: {
         mode: z
           .enum(["light", "dark"])
           .optional()
           .describe("Score only this palette; default both"),
+        theme: z.string().optional().describe('Named theme to score; default "default"'),
       },
     },
     async (args) => {
+      const resolved = resolveNamedTheme(ctx.folder, args.theme);
+      if (!resolved.ok) {
+        return themeErrorResult({ kind: "BadRequest", message: resolved.message });
+      }
       const results = args.mode
-        ? scoreThemeContrast(ctx.folder.theme, args.mode)
-        : scoreThemeContrastBoth(ctx.folder.theme);
+        ? scoreThemeContrast(resolved.theme, args.mode)
+        : scoreThemeContrastBoth(resolved.theme);
       const fails = results.filter((r) => r.tier === "Fail").length;
       const passes = results.length - fails;
-      return jsonResult({ summary: { total: results.length, passes, fails }, results });
+      return jsonResult({
+        theme: args.theme ?? "default",
+        summary: { total: results.length, passes, fails },
+        results,
+      });
     },
   );
 }

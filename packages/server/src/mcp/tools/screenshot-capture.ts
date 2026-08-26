@@ -11,7 +11,7 @@ import {
 } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import { z } from "zod";
-import { resolveNamedTheme } from "../../design-folder.ts";
+import { pinnedThemeForScreen, resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -75,7 +75,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme. diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame at this capture width whose fixed height clips this screen below the fold, so you know which placements to resize (content height is width-dependent, so frames at other widths are never flagged or fitted). fitFrames: true auto-resizes those clipping frames to the content height in the same call (returns `fittedFrames`) instead of just reporting them.',
+        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme — omitted, it defaults to what the canvas shows (the hosting board\'s pinned theme; boards disagreeing is an error asking for an explicit theme). diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame at this capture width whose fixed height clips this screen below the fold, so you know which placements to resize (content height is width-dependent, so frames at other widths are never flagged or fitted). fitFrames: true auto-resizes those clipping frames to the content height in the same call (returns `fittedFrames`) instead of just reporting them.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -89,7 +89,9 @@ export function registerScreenshotCaptureTool(
         path: PathSchema.optional().describe(
           'Capture only this node — path array or "@id" (not with mode: "compare"). Omit it (or pass "@root"/[]) to capture the whole screen, which is the default.',
         ),
-        theme: ThemeNameSchema,
+        theme: ThemeNameSchema.describe(
+          "Named theme to render with; default = the hosting board's pin, else the folder default",
+        ),
         diff: z.boolean().optional().describe("Compare against the previous same-params capture"),
         resetBaseline: z.boolean().optional(),
         fitFrames: z
@@ -118,6 +120,14 @@ export function registerScreenshotCaptureTool(
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
       ({ w, h } = resolveViewport(w, h, vp));
 
+      // Match what the canvas shows: no explicit theme → the hosting board's pin.
+      let themeName = theme;
+      if (themeName === undefined) {
+        const pinned = pinnedThemeForScreen(ctx.folder, screenId);
+        if (!pinned.ok) return errorResult(pinned.message);
+        themeName = pinned.name;
+      }
+
       if (diff && (mode === "compare" || path !== undefined)) {
         return errorResult('screenshot: diff cannot combine with mode: "compare" or path');
       }
@@ -145,7 +155,7 @@ export function registerScreenshotCaptureTool(
       if (diff) {
         try {
           const snapshotCss = await jit.build();
-          const _themeRes = resolveNamedTheme(ctx.folder, theme);
+          const _themeRes = resolveNamedTheme(ctx.folder, themeName);
           if (!_themeRes.ok) return errorResult(_themeRes.message);
           const resolvedTheme = _themeRes.theme;
           const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");
@@ -172,7 +182,7 @@ export function registerScreenshotCaptureTool(
             w: viewport.w,
             h: viewport.h,
             mode,
-            theme,
+            theme: themeName,
             fullPage: fullPage ?? true,
             scale: scale ?? 1,
           });
@@ -250,7 +260,7 @@ export function registerScreenshotCaptureTool(
       try {
         const snapshotCss = await jit.build();
         const screenRegistry = registryForScreen(ctx, screen);
-        const _themeRes = resolveNamedTheme(ctx.folder, theme);
+        const _themeRes = resolveNamedTheme(ctx.folder, themeName);
         if (!_themeRes.ok) return errorResult(_themeRes.message);
         const resolvedTheme = _themeRes.theme;
         // A MUI pass projects the theme differently per mode, so light and dark
@@ -336,6 +346,7 @@ export function registerScreenshotCaptureTool(
                 : [];
             contentText = JSON.stringify({
               contentHeight,
+              theme: themeName ?? "default",
               viewport: { w: viewport.w, h: viewport.h },
               ...(fitted.length
                 ? { fittedFrames: fitted }

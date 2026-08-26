@@ -11,7 +11,7 @@ import {
 } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import { z } from "zod";
-import { resolveNamedTheme } from "../../design-folder.ts";
+import { pinnedThemeForScreen, resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -83,7 +83,9 @@ export function registerCompareToUrlTool(
         mode: z.enum(["light", "dark"]).optional(),
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional().describe("Default 0.5"),
-        theme: ThemeNameSchema,
+        theme: ThemeNameSchema.describe(
+          "Named theme for the Velloo side; default = the hosting board's pin, else the folder default",
+        ),
         storageStatePath: z
           .string()
           .optional()
@@ -161,6 +163,14 @@ export function registerCompareToUrlTool(
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
 
+      // Match what the canvas shows: no explicit theme → the hosting board's pin.
+      let themeName = theme;
+      if (themeName === undefined) {
+        const pinned = pinnedThemeForScreen(ctx.folder, screenId);
+        if (!pinned.ok) return errorResult(pinned.message);
+        themeName = pinned.name;
+      }
+
       // The server navigates this URL in a real browser — restrict to http(s)
       // so `file://`, `chrome://`, and other local schemes can't be rasterized
       // and returned. Private/loopback hosts stay allowed (localhost is the
@@ -182,7 +192,7 @@ export function registerCompareToUrlTool(
 
       try {
         const snapshotCss = await jit.build();
-        const _themeRes = resolveNamedTheme(ctx.folder, theme);
+        const _themeRes = resolveNamedTheme(ctx.folder, themeName);
         if (!_themeRes.ok) return errorResult(_themeRes.message);
         const resolvedTheme = _themeRes.theme;
         const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");

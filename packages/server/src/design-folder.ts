@@ -293,6 +293,40 @@ export function resolveNamedTheme(
   return { ok: false, message: `Unknown theme "${name}". Known themes: ${known}.` };
 }
 
+/**
+ * Effective theme name for a screen when the caller passes none: what the
+ * canvas itself renders — the hosting board's pin, unpinned boards counting
+ * as "default". Themes attach to boards (the viewing context), never to
+ * screens or frames, so this is the only screen→theme inference there is.
+ * Boards disagreeing is an error rather than a guess: a capture silently
+ * mistinted relative to the canvas is exactly what this resolution prevents.
+ */
+export function pinnedThemeForScreen(
+  folder: DesignFolder,
+  screenId: string,
+): { ok: true; name: string | undefined } | { ok: false; message: string } {
+  const boardsByTheme = new Map<string, string[]>();
+  for (const board of folder.boards.values()) {
+    if (!board.frames.some((f) => f.screen === screenId)) continue;
+    const name = board.theme ?? "default";
+    const hosts = boardsByTheme.get(name) ?? [];
+    hosts.push(board.id);
+    boardsByTheme.set(name, hosts);
+  }
+  if (boardsByTheme.size === 0) return { ok: true, name: undefined };
+  if (boardsByTheme.size === 1) {
+    const [only] = boardsByTheme.keys();
+    return { ok: true, name: only === "default" ? undefined : only };
+  }
+  const list = [...boardsByTheme.entries()]
+    .map(([name, hosts]) => `"${name}" (${hosts.join(", ")})`)
+    .join(", ");
+  return {
+    ok: false,
+    message: `Screen "${screenId}" is hosted by boards with different themes: ${list}. Pass theme: to pick the one to render.`,
+  };
+}
+
 async function readCustomCss(root: string): Promise<string> {
   try {
     return await readFile(join(root, "theme", "custom.css"), "utf8");

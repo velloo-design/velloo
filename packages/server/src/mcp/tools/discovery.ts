@@ -11,7 +11,7 @@ import {
   type Screen,
 } from "@velloo/schema";
 import { z } from "zod";
-import { orderedBoards } from "../../design-folder.ts";
+import { orderedBoards, resolveNamedTheme } from "../../design-folder.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
 
@@ -257,10 +257,19 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "get_theme",
     {
-      description: "Return the active theme token tree.",
-      inputSchema: {},
+      description:
+        "Return a theme token tree — the default, or a named theme via theme (see list_themes).",
+      inputSchema: {
+        theme: z.string().optional().describe('Named theme to read; default "default"'),
+      },
     },
-    async () => jsonResult(ctx.folder.theme),
+    async (args) => {
+      const resolved = resolveNamedTheme(ctx.folder, args.theme);
+      if (!resolved.ok) {
+        return { isError: true as const, ...jsonResult({ message: resolved.message }) };
+      }
+      return jsonResult(resolved.theme);
+    },
   );
 
   mcp.registerTool(
