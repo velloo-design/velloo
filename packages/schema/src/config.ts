@@ -88,6 +88,17 @@ export const ConfigSchema = z
     schemaVersion: z.literal(1),
     toolVersion: z.string().min(1),
     /**
+     * Stable folder identity for velloo-cloud (a UUID). Published share links
+     * carry it server-side, so every clone of the folder finds its links (and
+     * their comments) by id — no committed link records. `init` generates it;
+     * pre-existing folders get one lazily on their first `velloo publish`.
+     * Optional because it's meaningless until the folder touches the cloud.
+     */
+    folderId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{8,64}$/)
+      .optional(),
+    /**
      * Legacy single-library shape. Older folders carry this field;
      * the server migrates them in-memory at load.
      */

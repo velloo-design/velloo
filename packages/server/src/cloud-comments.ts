@@ -19,58 +19,18 @@ import type { WatchEvent } from "./watcher.ts";
  * resolved in the cloud UI removes its local annotation.
  *
  * Persistence:
- *  - `.design/links.json` — the publish record (slug + share URL per publish).
- *    Written by `velloo publish`; the slug-keyed pull reads it. Committed with
- *    the folder so every machine knows its links.
+ *  - The durable folder↔link association lives in the CLOUD, keyed by the
+ *    folder's `config.folderId`: `velloo publish` stamps it on the
+ *    link, and the pull passes it so the server resolves the folder's links —
+ *    any clone of the folder syncs comments with no local link state at all.
  *  - `.design/cache/comments.json` — machine-local sync state: the `since`
  *    cursor plus the commentId ↔ annotationId map. Losing it never duplicates
  *    annotations (each pulled annotation carries `cloud.commentId`, which the
  *    pull re-adopts), it only forgets pre-wipe local deletions.
  *
- * Everything here is offline-tolerant by construction: logged out, no links,
- * or an unreachable cloud are quiet no-ops with a summary status.
+ * Everything here is offline-tolerant by construction: logged out, never
+ * published, or an unreachable cloud are quiet no-ops with a summary status.
  */
-
-// ── Publish record (.design/links.json) ─────────────────────────────────────
-
-export interface PublishedLink {
-  slug: string;
-  /** Canonical share URL (no access token — that only prints to the terminal). */
-  url: string;
-  /** velloo-cloud base URL the slug lives on. */
-  cloudUrl: string;
-  /** Board ids included in the publish ([] = the whole folder). */
-  boards: string[];
-  publishedAt: string;
-}
-
-interface LinksFile {
-  version: 1;
-  links: PublishedLink[];
-}
-
-const linksPath = (root: string) => join(root, ".design", "links.json");
-
-export async function readPublishedLinks(root: string): Promise<PublishedLink[]> {
-  try {
-    const raw = JSON.parse(await readFile(linksPath(root), "utf8")) as LinksFile;
-    if (raw.version === 1 && Array.isArray(raw.links)) return raw.links;
-  } catch {
-    // missing or corrupt — treat as never published
-  }
-  return [];
-}
-
-/** Upsert one published link (keyed slug + cloudUrl). Called by `velloo publish`. */
-export async function recordPublishedLink(
-  root: string,
-  link: Omit<PublishedLink, "publishedAt">,
-): Promise<void> {
-  const links = await readPublishedLinks(root);
-  const rest = links.filter((l) => !(l.slug === link.slug && l.cloudUrl === link.cloudUrl));
-  rest.push({ ...link, publishedAt: new Date().toISOString() });
-  await writeJsonAtomic(linksPath(root), { version: 1, links: rest } satisfies LinksFile);
-}
 
 // ── Sync state (.design/cache/comments.json) ────────────────────────────────
 
@@ -85,7 +45,11 @@ interface CommentSyncState {
   version: 1;
   /** The cloud's `now` from the last pull — passed back as `?since=`. */
   since?: string;
-  /** Slug set of the last pull; a slug we haven't seen forces a full pull. */
+  /**
+   * The folder's link slugs as of the last pull. A slug the cloud returns
+   * that isn't here (a link published from another clone) forces one full
+   * re-pull, since its comments may predate the cursor.
+   */
   slugs: string[];
   comments: Record<string, CommentMapping>;
 }
@@ -106,8 +70,6 @@ async function readState(root: string): Promise<CommentSyncState> {
 
 // ── The pull ─────────────────────────────────────────────────────────────────
 
-/** Cloud limit on GET /v1/comments. */
-const MAX_SLUGS = 200;
 const FETCH_TIMEOUT_MS = 10_000;
 
 interface CloudComment {
@@ -205,12 +167,14 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
     links: {} as Record<string, LinkStatus>,
   });
 
-  const links = (await readPublishedLinks(root)).filter((l) => l.cloudUrl === cloud.url);
-  if (links.length === 0) {
+  // The folder's cloud identity resolves its links server-side — no local
+  // link records. A folder without one has never been published.
+  const folderId = ctx.folder.config.folderId;
+  if (!folderId) {
     return {
       status: "no-links",
       ...zero(),
-      note: "This folder has no published share links — `velloo publish` creates one.",
+      note: "This folder has never been published — `velloo publish` assigns its cloud id and creates a share link.",
     };
   }
   if (!cloud.token) {
@@ -222,23 +186,34 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
   }
 
   const state = await readState(root);
-  const slugs = links.map((l) => l.slug).slice(0, MAX_SLUGS);
-  // A slug we've never pulled may carry comments older than the cursor
-  // (published elsewhere, links.json synced via git) — do one full pull.
-  const since = slugs.every((s) => state.slugs.includes(s)) ? state.since : undefined;
 
-  let payload: CommentsResponse;
-  try {
-    const query = new URLSearchParams({ slugs: slugs.join(",") });
-    if (since) query.set("since", since);
+  const fetchComments = async (
+    sinceParam: string | undefined,
+  ): Promise<{ payload: CommentsResponse } | { fail: string }> => {
+    const query = new URLSearchParams({ folderId });
+    if (sinceParam) query.set("since", sinceParam);
     const res = await fetch(`${cloud.url}/v1/comments?${query}`, {
       headers: { authorization: `Bearer ${cloud.token}` },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (!res.ok) {
-      return { status: "error", ...zero(), note: `comment fetch failed (${res.status})` };
+    if (!res.ok) return { fail: `comment fetch failed (${res.status})` };
+    return { payload: (await res.json()) as CommentsResponse };
+  };
+
+  let payload: CommentsResponse;
+  try {
+    const first = await fetchComments(state.since);
+    if ("fail" in first) return { status: "error", ...zero(), note: first.fail };
+    payload = first.payload;
+    // The cloud can surface links this machine has never seen (published from
+    // another clone) whose comments predate the cursor — one full re-pull
+    // picks them up. A failed re-pull keeps the incremental payload; the next
+    // cycle retries because the new slugs land in state.slugs only on success.
+    if (state.since && Object.keys(payload.links ?? {}).some((s) => !state.slugs.includes(s))) {
+      const full = await fetchComments(undefined);
+      if ("fail" in full) return { status: "error", ...zero(), note: full.fail };
+      payload = full.payload;
     }
-    payload = (await res.json()) as CommentsResponse;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { status: "error", ...zero(), note: `couldn't reach velloo-cloud (${msg})` };
@@ -344,7 +319,7 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
   await writeJsonAtomic(statePath(root), {
     version: 1,
     ...(nextSince ? { since: nextSince } : {}),
-    slugs,
+    slugs: Object.keys(payload.links ?? {}),
     comments: map,
   } satisfies CommentSyncState);
 

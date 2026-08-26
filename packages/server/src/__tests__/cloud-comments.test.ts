@@ -8,8 +8,6 @@ import {
   type CommentSyncContext,
   countUnresolvedPulledComments,
   pullComments,
-  readPublishedLinks,
-  recordPublishedLink,
 } from "../cloud-comments.ts";
 import { loadDesignFolder } from "../design-folder.ts";
 import { persistAnnotations } from "../mutations/persist.ts";
@@ -32,9 +30,13 @@ interface StubComment {
   resolved: boolean;
 }
 
+// The default folder is cloud-published: it carries a folderId, which is the
+// only thing the pull needs (the cloud resolves the folder's links from it).
+const FOLDER_ID = "folder-uuid-1234";
 const config = {
   schemaVersion: 1,
   toolVersion: "test",
+  folderId: FOLDER_ID,
   library: { id: "shadcn-react", version: "test", source: "binary", componentsPath: "binary" },
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
@@ -116,28 +118,9 @@ async function makeCtx(): Promise<CommentSyncContext & { events: WatchEvent[] }>
   return { folder, events, broadcast: (e) => events.push(e) };
 }
 
-async function publishLink(slug = "demo"): Promise<void> {
-  await recordPublishedLink(tmp, {
-    slug,
-    url: `${base}/s/${slug}/`,
-    cloudUrl: base,
-    boards: [],
-  });
-}
-
 const cloud = () => ({ url: base, token: "vlk_test" });
 
-test("recordPublishedLink upserts by slug into .design/links.json", async () => {
-  await publishLink();
-  await publishLink();
-  await recordPublishedLink(tmp, { slug: "other", url: "u", cloudUrl: base, boards: ["b1"] });
-  const links = await readPublishedLinks(tmp);
-  expect(links.map((l) => l.slug).sort()).toEqual(["demo", "other"]);
-  expect(links.find((l) => l.slug === "other")?.boards).toEqual(["b1"]);
-});
-
 test("logged out is a silent no-op — no requests, no annotations", async () => {
-  await publishLink();
   const ctx = await makeCtx();
   const summary = await pullComments(ctx, { url: base });
   expect(summary.status).toBe("logged-out");
@@ -146,30 +129,61 @@ test("logged out is a silent no-op — no requests, no annotations", async () =>
   expect(ctx.folder.annotations.get("home")).toEqual([]);
 });
 
-test("a folder with no published links is a no-op without touching the network", async () => {
+test("a never-published folder (no folderId) is a no-op without touching the network", async () => {
+  const { folderId: _dropped, ...unpublished } = config;
+  await writeFile(join(tmp, ".design", "config.json"), JSON.stringify(unpublished));
   const ctx = await makeCtx();
   const summary = await pullComments(ctx, cloud());
   expect(summary.status).toBe("no-links");
   expect(stub.queries.length).toBe(0);
 });
 
-test("an unreachable cloud reports an error without breaking anything", async () => {
-  const dead = "http://127.0.0.1:1";
-  await recordPublishedLink(tmp, {
-    slug: "demo",
-    url: `${dead}/s/demo/`,
-    cloudUrl: dead,
-    boards: [],
-  });
+test("the pull is keyed by folderId alone", async () => {
+  stub.comments = [
+    { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "hi", resolved: false },
+  ];
   const ctx = await makeCtx();
-  const summary = await pullComments(ctx, { url: dead, token: "vlk_test" });
+  const summary = await pullComments(ctx, cloud());
+  expect(summary.status).toBe("ok");
+  expect(summary.pulled).toBe(1);
+  const query = stub.queries[0];
+  expect(query?.get("folderId")).toBe(FOLDER_ID);
+  expect(query?.get("slugs")).toBeNull();
+});
+
+test("a folder-discovered link triggers one full re-pull, then the cursor resumes", async () => {
+  const ctx = await makeCtx();
+  await pullComments(ctx, cloud()); // records the cursor + known slugs
+  expect(stub.queries.length).toBe(1);
+
+  // The cloud now reveals a link this machine never pulled (published from
+  // another clone) with a comment older than the cursor.
+  stub.links = { demo: "ok", elsewhere: "ok" };
+  stub.comments = [
+    { id: "c9", slug: "elsewhere", screenId: "home", nodePath: "0", body: "old", resolved: false },
+  ];
+  const second = await pullComments(ctx, cloud());
+  expect(second.pulled).toBe(1);
+  // Incremental pull + the full re-pull it triggered.
+  expect(stub.queries.length).toBe(3);
+  expect(stub.queries[1]?.get("since")).not.toBeNull();
+  expect(stub.queries[2]?.get("since")).toBeNull();
+
+  // The discovered slug is now known — the next pull stays incremental.
+  await pullComments(ctx, cloud());
+  expect(stub.queries.length).toBe(4);
+  expect(stub.queries[3]?.get("since")).not.toBeNull();
+});
+
+test("an unreachable cloud reports an error without breaking anything", async () => {
+  const ctx = await makeCtx();
+  const summary = await pullComments(ctx, { url: "http://127.0.0.1:1", token: "vlk_test" });
   expect(summary.status).toBe("error");
   expect(summary.note).toContain("velloo-cloud");
 });
 
 describe("pull → annotations", () => {
   test("lands new unresolved comments as anchored annotations, idempotently", async () => {
-    await publishLink();
     stub.comments = [
       {
         id: "c1",
@@ -227,11 +241,10 @@ describe("pull → annotations", () => {
     expect((ctx.folder.annotations.get("home") ?? []).length).toBe(3);
     expect(stub.queries[0]?.get("since")).toBeNull();
     expect(stub.queries[1]?.get("since")).toBe(stub.now);
-    expect(stub.queries[1]?.get("slugs")).toBe("demo");
+    expect(stub.queries[1]?.get("folderId")).toBe(FOLDER_ID);
   });
 
   test("state loss does not duplicate — annotations are re-adopted by comment id", async () => {
-    await publishLink();
     stub.comments = [
       { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "hi", resolved: false },
     ];
@@ -242,25 +255,10 @@ describe("pull → annotations", () => {
     expect(again.pulled).toBe(0);
     expect((ctx.folder.annotations.get("home") ?? []).length).toBe(1);
   });
-
-  test("a new slug forces a full pull (no since)", async () => {
-    await publishLink();
-    const ctx = await makeCtx();
-    await pullComments(ctx, cloud());
-    expect(stub.queries[0]?.get("since")).toBeNull();
-    await publishLink("fresh");
-    await pullComments(ctx, cloud());
-    expect(stub.queries[1]?.get("since")).toBeNull();
-    expect(stub.queries[1]?.get("slugs")).toBe("demo,fresh");
-    // Slug set now known — the third pull resumes the cursor.
-    await pullComments(ctx, cloud());
-    expect(stub.queries[2]?.get("since")).toBe(stub.now);
-  });
 });
 
 describe("resolution round-trip", () => {
   test("cloud-resolved comments remove their local annotation (down)", async () => {
-    await publishLink();
     stub.comments = [
       { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
     ];
@@ -280,7 +278,6 @@ describe("resolution round-trip", () => {
   });
 
   test("locally deleted pulled annotations PATCH the comment resolved (up)", async () => {
-    await publishLink();
     stub.comments = [
       { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
       { id: "c2", slug: "demo", screenId: "home", nodePath: null, body: "keep", resolved: false },
@@ -308,7 +305,6 @@ describe("resolution round-trip", () => {
 });
 
 test("revoked links surface in the summary", async () => {
-  await publishLink();
   stub.links = { demo: "revoked" };
   const ctx = await makeCtx();
   const summary = await pullComments(ctx, cloud());
@@ -320,7 +316,6 @@ test("revoked links surface in the summary", async () => {
 
 describe("unresolved waiting count", () => {
   test("pull reports unresolvedTotal; a local annotation delete drops the count immediately", async () => {
-    await publishLink();
     stub.comments = [
       { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
       { id: "c2", slug: "demo", screenId: "home", nodePath: null, body: "also", resolved: false },
@@ -357,7 +352,6 @@ describe("unresolved waiting count", () => {
   });
 
   test("logged-out and no-links summaries still report the local count", async () => {
-    await publishLink();
     stub.comments = [
       { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
     ];
@@ -368,14 +362,17 @@ describe("unresolved waiting count", () => {
     expect(loggedOut.status).toBe("logged-out");
     expect(loggedOut.unresolvedTotal).toBe(1);
 
-    await rm(join(tmp, ".design", "links.json"));
-    const noLinks = await pullComments(ctx, cloud());
+    // A clone whose config predates the publish (no folderId) still reports
+    // the annotations that already live on disk.
+    const { folderId: _dropped, ...unpublished } = config;
+    await writeFile(join(tmp, ".design", "config.json"), JSON.stringify(unpublished));
+    const fresh = await makeCtx();
+    const noLinks = await pullComments(fresh, cloud());
     expect(noLinks.status).toBe("no-links");
     expect(noLinks.unresolvedTotal).toBe(1);
   });
 
   test("a cloud-side resolve removes the annotation and the count follows", async () => {
-    await publishLink();
     stub.comments = [
       { id: "c1", slug: "demo", screenId: "home", nodePath: "0", body: "fix", resolved: false },
     ];
@@ -392,7 +389,6 @@ describe("unresolved waiting count", () => {
 });
 
 test("comments for screens that no longer exist are skipped, not fatal", async () => {
-  await publishLink();
   stub.comments = [
     { id: "cx", slug: "demo", screenId: "gone", nodePath: null, body: "??", resolved: false },
   ];

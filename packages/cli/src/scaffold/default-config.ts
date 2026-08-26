@@ -43,6 +43,9 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
   return {
     schemaVersion: 1,
     toolVersion: TOOL_VERSION,
+    // Stable cloud identity: share links carry it server-side, so any clone
+    // of the folder finds its published links (and their comments) by id.
+    folderId: crypto.randomUUID(),
     library: opts.library ?? {
       id: "shadcn-react",
       version: snapshotVersion,

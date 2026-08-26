@@ -392,11 +392,8 @@ export type { CanvasAuth, CloudAuth } from "./cloud.ts";
 export {
   type CommentSyncContext,
   countUnresolvedPulledComments,
-  type PublishedLink,
   type PullCommentsSummary,
   pullComments,
-  readPublishedLinks,
-  recordPublishedLink,
 } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { loadDesignFolder, orderedBoards } from "./design-folder.ts";
