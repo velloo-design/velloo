@@ -45,6 +45,12 @@ export async function writeAgentConfig(
     case "continue-config":
       content = mergeContinueConfig(existing, entry, path);
       break;
+    case "opencode-json":
+      content = mergeOpencodeJson(existing, entry, path);
+      break;
+    case "vscode-json":
+      content = mergeVscodeJson(existing, entry, path);
+      break;
   }
 
   await mkdir(dirname(path), { recursive: true });
@@ -74,6 +80,52 @@ function mergeJson(existing: string | null, entry: Record<string, unknown>, path
       ? (parsed.mcpServers as Record<string, unknown>)
       : {};
   const merged = { ...parsed, mcpServers: { ...servers, velloo: entry } };
+  return `${JSON.stringify(merged, null, 2)}\n`;
+}
+
+/**
+ * opencode's `opencode.json` (opencode.ai/config.json schema): MCP servers
+ * live under a top-level `mcp` map. Replace only `mcp.velloo`; a fresh file
+ * gets the $schema pointer so editors validate it.
+ */
+function mergeOpencodeJson(
+  existing: string | null,
+  entry: Record<string, unknown>,
+  path: string,
+): string {
+  let parsed: Record<string, unknown> = { $schema: "https://opencode.ai/config.json" };
+  if (existing !== null) {
+    try {
+      parsed = JSON.parse(existing) as Record<string, unknown>;
+    } catch (err) {
+      throw invalidConfig(path, "JSON", err);
+    }
+  }
+  const mcp =
+    parsed.mcp && typeof parsed.mcp === "object" ? (parsed.mcp as Record<string, unknown>) : {};
+  const merged = { ...parsed, mcp: { ...mcp, velloo: entry } };
+  return `${JSON.stringify(merged, null, 2)}\n`;
+}
+
+/** VS Code `.vscode/mcp.json` (Copilot agent mode): a `servers` map, not `mcpServers`. */
+function mergeVscodeJson(
+  existing: string | null,
+  entry: Record<string, unknown>,
+  path: string,
+): string {
+  let parsed: Record<string, unknown> = {};
+  if (existing !== null) {
+    try {
+      parsed = JSON.parse(existing) as Record<string, unknown>;
+    } catch (err) {
+      throw invalidConfig(path, "JSON", err);
+    }
+  }
+  const servers =
+    parsed.servers && typeof parsed.servers === "object"
+      ? (parsed.servers as Record<string, unknown>)
+      : {};
+  const merged = { ...parsed, servers: { ...servers, velloo: entry } };
   return `${JSON.stringify(merged, null, 2)}\n`;
 }
 

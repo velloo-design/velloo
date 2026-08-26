@@ -26,6 +26,7 @@ import {
   AGENTS,
   type ConnectResult,
   connect,
+  detectInstalledAgents,
   GLOBAL_AGENT_IDS,
   globallyWiredAgents,
   MANUAL_AGENT_ID,
@@ -36,6 +37,7 @@ import {
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
+import { openUrl } from "../open-url.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { findMuiTheme, importThemeFromMui } from "../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
@@ -325,11 +327,21 @@ function printSummary(
   }
 }
 
-/** How init's agent-wiring step ended — feeds the wired/next-steps output. */
-type WireOutcome = ConnectResult | "already-global" | undefined;
+/**
+ * How init's agent-wiring step ended: what was written this run, plus every
+ * agent id known to carry velloo for this project (pre-existing global wires
+ * included) — the launch offers downstream must only name wired agents.
+ */
+interface WireOutcome {
+  connected?: ConnectResult;
+  wiredIds: string[];
+}
 
-function printWired(connected: WireOutcome): void {
-  if (connected === "already-global" || !connected || connected.configs.length === 0) return;
+const NOT_WIRED: WireOutcome = { wiredIds: [] };
+
+function printWired(outcome: WireOutcome): void {
+  const connected = outcome.connected;
+  if (!connected || connected.configs.length === 0) return;
   const wired = connected.configs.map((c) => c.agent).join(" + ");
   console.log("");
   console.log(pc.bold("  Agents wired"));
@@ -345,11 +357,11 @@ function printWired(connected: WireOutcome): void {
   if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
 }
 
-function printNextSteps(folder: string, connected: WireOutcome): void {
+function printNextSteps(folder: string, outcome: WireOutcome): void {
   console.log("");
   console.log(pc.bold("  Next steps"));
   let n = 1;
-  if (connected !== "already-global" && (!connected || connected.configs.length === 0)) {
+  if (outcome.wiredIds.length === 0) {
     console.log(
       `    ${n++}. ${pc.cyan(`velloo connect ${folder}`)} ${pc.dim("(wire your AI agent's MCP config + guidance)")}`,
     );
@@ -410,11 +422,52 @@ async function editPrompt(prompt: string): Promise<string | null> {
  * Agent CLIs the handoff step can launch straight into the task. Only agents
  * velloo can also wire (see connect/agents.ts) belong here — launching an
  * agent that can't carry the velloo MCP hands the user a tool-less session.
+ * `agentIds` ties each launcher to its wiring targets: a launcher is offered
+ * only when installed AND one of those ids actually got (or already was) wired.
  */
 const AGENT_LAUNCHERS = [
-  { bin: "claude", label: "Claude Code", argv: (p: string) => ["claude", p] },
-  { bin: "cursor-agent", label: "Cursor CLI", argv: (p: string) => ["cursor-agent", p] },
-  { bin: "codex", label: "Codex CLI", argv: (p: string) => ["codex", p] },
+  {
+    bin: "claude",
+    label: "Claude Code",
+    agentIds: ["claude-code", "claude-code-global"],
+    argv: (p: string) => ["claude", p],
+  },
+  {
+    bin: "cursor-agent",
+    label: "Cursor CLI",
+    agentIds: ["cursor", "cursor-global"],
+    argv: (p: string) => ["cursor-agent", p],
+  },
+  {
+    bin: "codex",
+    label: "Codex CLI",
+    agentIds: ["codex", "codex-global"],
+    argv: (p: string) => ["codex", p],
+  },
+  {
+    bin: "opencode",
+    label: "opencode",
+    agentIds: ["opencode", "opencode-global"],
+    argv: (p: string) => ["opencode", "--prompt", p],
+  },
+  {
+    bin: "droid",
+    label: "Droid",
+    agentIds: ["droid-global"],
+    argv: (p: string) => ["droid", p],
+  },
+  {
+    bin: "cline",
+    label: "Cline",
+    agentIds: ["cline-global"],
+    argv: (p: string) => ["cline", p],
+  },
+  {
+    bin: "gemini",
+    label: "Gemini CLI",
+    agentIds: ["gemini", "gemini-global"],
+    argv: (p: string) => ["gemini", "-i", p],
+  },
 ] as const;
 type AgentLauncher = (typeof AGENT_LAUNCHERS)[number];
 
@@ -439,15 +492,19 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 /**
  * Print the agent handoff (scan only) and — interactively — offer to start
- * velloo and launch an installed agent CLI straight into the task, or copy
- * the prompt for any other agent. Deliberately does NOT open the canvas in a
- * browser: the launched agent asks for MCP approval right here in the
- * terminal, and yanking the user away to a browser makes them miss it.
+ * velloo and launch a wired, installed agent CLI straight into the task, or
+ * copy the prompt for any other agent. Launch options are limited to agents
+ * that actually carry the velloo MCP (`wiredIds`): launching an unwired agent
+ * hands the user a tool-less session. After the user picks an agent, they
+ * choose whether to open the canvas in the browser — watching the design
+ * build is half the demo, but the agent's MCP-approval prompt lands in the
+ * terminal, so it stays an explicit opt-in rather than an automatic yank.
  */
 async function printAgentHandoff(
   answers: WizardAnswers,
   scaffold: Scaffold,
   interactive: boolean,
+  wiredIds: string[],
 ): Promise<void> {
   if (answers.initialContent !== "scan") return;
 
@@ -468,12 +525,14 @@ async function printAgentHandoff(
   console.log("");
 
   if (!interactive) return;
-  const launchers = AGENT_LAUNCHERS.filter((l) => Bun.which(l.bin));
+  const launchers = AGENT_LAUNCHERS.filter(
+    (l) => Bun.which(l.bin) && l.agentIds.some((id) => wiredIds.includes(id)),
+  );
   const first = launchers[0];
   const action = await select<string>({
     message: first
       ? "Start velloo and launch your agent to do this now?"
-      : "No supported agent CLI found on PATH — what next?",
+      : "No wired agent CLI to launch — what next?",
     options: [
       ...launchers.map((l) => ({
         value: `launch:${l.bin}`,
@@ -551,8 +610,15 @@ async function printAgentHandoff(
     );
     return;
   }
+  // Watching the agent design on the board is the best first-run demo — offer
+  // it, but warn that the approval prompt is about to land in THIS terminal.
+  const openCanvas = await confirm({
+    message: `Open the board in your browser to watch? (${launcher.label} will still ask for MCP approval here first)`,
+    initialValue: true,
+  });
+  if (!isCancel(openCanvas) && openCanvas) await openUrl(canvasUrl);
   console.log("");
-  console.log(`  Canvas running at ${pc.cyan(canvasUrl)} — open it to watch the design build.`);
+  console.log(`  Canvas running at ${pc.cyan(canvasUrl)}.`);
   console.log(
     pc.dim(
       `  Launching ${launcher.label} here — it may ask you to approve the velloo MCP server first.`,
@@ -567,39 +633,42 @@ async function printAgentHandoff(
 
 /**
  * Wire the velloo MCP into the user's agents. Interactively, ask which
- * (checkboxes, global Claude Code + Cursor pre-selected — one wire covers
- * every project). Global configs that already carry velloo are noted and
- * hidden from the list; the question is skipped only when EVERY global
- * default is covered — a lone wired Cursor must not silently leave Claude
- * Code unwired (the agent handoff would then launch a claude without velloo).
- * Non-interactively, wire the project agents. Returns undefined when skipped.
+ * (checkboxes; the agents detected on this machine are pre-selected — one
+ * global wire covers every project). Global configs that already carry velloo
+ * are noted and hidden from the list; the question is skipped only when every
+ * DETECTED agent is covered — a lone wired Codex must not silently leave an
+ * installed Claude Code unwired (the agent handoff would then launch a claude
+ * without velloo). Non-interactively, wire the project agents.
  */
 async function wireAgents(
   folder: string,
   interactive: boolean,
   enabled: boolean,
 ): Promise<WireOutcome> {
-  if (!enabled) return undefined;
+  if (!enabled) return NOT_WIRED;
   let agents: string[] = PROJECT_AGENT_IDS;
   let manual = false;
+  let wired: string[] = [];
   if (interactive) {
-    const wired = await globallyWiredAgents();
-    const unwiredDefaults = GLOBAL_AGENT_IDS.filter((id) => !wired.includes(id));
+    wired = await globallyWiredAgents();
+    const detected = detectInstalledAgents();
+    const wanted = detected.length > 0 ? detected : GLOBAL_AGENT_IDS;
+    const missing = wanted.filter((id) => !wired.includes(id));
     if (wired.length > 0) {
       const labels = wired.map((id) => AGENTS[id]?.label ?? id).join(", ");
       console.log("");
-      if (unwiredDefaults.length === 0) {
+      if (missing.length === 0) {
         console.log(
           `  ${pc.green("✓")} velloo is already wired globally — ${labels} ${pc.dim("(covers this project; skipping agent setup)")}`,
         );
-        return "already-global";
+        return { wiredIds: wired };
       }
       console.log(
         `  ${pc.green("✓")} Already wired globally: ${labels} ${pc.dim("(covers this project)")}`,
       );
     }
-    const picked = await pickAgents({ exclude: wired, initial: unwiredDefaults });
-    if (picked === null) return undefined;
+    const picked = await pickAgents({ exclude: wired, initial: missing });
+    if (picked === null) return { wiredIds: wired };
     manual = picked.includes(MANUAL_AGENT_ID);
     agents = picked.filter((id) => id !== MANUAL_AGENT_ID);
   }
@@ -616,7 +685,10 @@ async function wireAgents(
     console.log(pc.bold("  Manual MCP setup"));
     for (const line of manualSetupText().split("\n")) console.log(`  ${line}`);
   }
-  return result;
+  return {
+    connected: result,
+    wiredIds: [...wired, ...(result?.configs.map((c) => c.agent) ?? [])],
+  };
 }
 
 /**
@@ -774,9 +846,9 @@ export default defineCommand({
           return;
         }
         if (action === "connect") {
-          const connected = await wireAgents(existing, true, true);
-          printWired(connected);
-          printNextSteps(existing, connected);
+          const wireOutcome = await wireAgents(existing, true, true);
+          printWired(wireOutcome);
+          printNextSteps(existing, wireOutcome);
           return;
         }
         allowNonEmpty = true; // overwrite → fall through to the normal wizard
@@ -859,6 +931,10 @@ export default defineCommand({
       fail("init", (err as Error).message);
     }
 
+    // The wizard's last prompt otherwise cuts straight to silence while the
+    // theme import + scaffold writes run — say what's happening.
+    if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
+
     const { theme, importedFrom } = resolveTheme(answers);
     let scaffold: Scaffold;
     try {
@@ -884,10 +960,10 @@ export default defineCommand({
 
     // Ask which agents to wire (interactive) or wire the project defaults, then
     // check the screenshot browser, then hand off to the agent for scans.
-    const connected = await wireAgents(folder, interactive, cliArgs.connect !== false);
-    printWired(connected);
+    const wireOutcome = await wireAgents(folder, interactive, cliArgs.connect !== false);
+    printWired(wireOutcome);
     await printScreenshotReadiness(interactive);
-    await printAgentHandoff(answers, scaffold, interactive);
-    printNextSteps(folder, connected);
+    await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
+    printNextSteps(folder, wireOutcome);
   },
 });

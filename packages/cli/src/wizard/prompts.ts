@@ -195,10 +195,17 @@ async function promptShareAndFeedback(): Promise<{
 
   // Anonymous feedback spends blind-signed tokens; pre-fetch a batch NOW so
   // a later send doesn't time-correlate with its issuance. Best-effort — the
-  // send path tops up on demand.
+  // send path tops up on demand. The blind-RSA round trips take a moment, so
+  // show a spinner rather than letting the wizard look frozen.
   if (choice === "yes") {
     const cred = await loadCredential(cloudUrl);
-    if (cred) await topUpTokens({ url: cloudUrl, token: cred.token }, 10).catch(() => {});
+    if (cred) {
+      const spin = spinner();
+      spin.start("Stocking anonymous feedback tokens");
+      await topUpTokens({ url: cloudUrl, token: cred.token }, 10)
+        .then(() => spin.stop("Anonymous feedback tokens ready"))
+        .catch(() => spin.stop("Feedback enabled — tokens will be fetched on first send"));
+    }
   }
   return { feedback: { enabled: true, contactOk: choice === "yes-contact" } };
 }

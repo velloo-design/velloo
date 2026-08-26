@@ -297,6 +297,162 @@ describe("connect", () => {
     expect(cfg.mcpServers).toEqual([{ name: "velloo", type: "stdio", ...GLOBAL_STDIO }]);
   });
 
+  test("opencode writes an `mcp` map with an argv-array command (project + global)", async () => {
+    const fakeHome = join(tmp, "home");
+    await connect({
+      designFolder: design,
+      agents: ["opencode", "opencode-global"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const proj = JSON.parse(await readFile(join(tmp, "opencode.json"), "utf8"));
+    expect(proj.$schema).toBe("https://opencode.ai/config.json");
+    expect(proj.mcp.velloo).toEqual({
+      type: "local",
+      command: ["velloo", "mcp", "design"],
+      enabled: true,
+    });
+    const glob = JSON.parse(
+      await readFile(join(fakeHome, ".config", "opencode", "opencode.json"), "utf8"),
+    );
+    expect(glob.mcp.velloo).toEqual({ type: "local", command: ["velloo", "mcp"], enabled: true });
+  });
+
+  test("opencode merge preserves the user's providers and other mcp entries", async () => {
+    await writeFile(
+      join(tmp, "opencode.json"),
+      JSON.stringify({
+        $schema: "https://opencode.ai/config.json",
+        provider: { lmstudio: { name: "LM Studio" } },
+        mcp: { other: { type: "remote", url: "http://x/mcp" } },
+      }),
+    );
+    const r = await connect({ designFolder: design, agents: ["opencode"], installSkill: false });
+    expect(r.configs[0]?.action).toBe("updated");
+    const cfg = JSON.parse(await readFile(join(tmp, "opencode.json"), "utf8"));
+    expect(cfg.provider.lmstudio.name).toBe("LM Studio");
+    expect(cfg.mcp.other).toEqual({ type: "remote", url: "http://x/mcp" });
+    expect(cfg.mcp.velloo.type).toBe("local");
+  });
+
+  test("opencode --http wires a remote entry", async () => {
+    await connect({
+      designFolder: design,
+      agents: ["opencode"],
+      transport: "http",
+      installSkill: false,
+    });
+    const cfg = JSON.parse(await readFile(join(tmp, "opencode.json"), "utf8"));
+    expect(cfg.mcp.velloo).toEqual({ type: "remote", url: MCP, enabled: true });
+  });
+
+  test("droid writes ~/.factory/mcp.json with an explicit stdio type", async () => {
+    const fakeHome = join(tmp, "home");
+    await connect({
+      designFolder: design,
+      agents: ["droid-global"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const cfg = JSON.parse(await readFile(join(fakeHome, ".factory", "mcp.json"), "utf8"));
+    // Matches what `droid mcp add` itself writes.
+    expect(cfg.mcpServers.velloo).toEqual({ type: "stdio", ...GLOBAL_STDIO, disabled: false });
+  });
+
+  test("cline writes ~/.cline/data/settings/cline_mcp_settings.json", async () => {
+    const fakeHome = join(tmp, "home");
+    await connect({
+      designFolder: design,
+      agents: ["cline-global"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const cfg = JSON.parse(
+      await readFile(
+        join(fakeHome, ".cline", "data", "settings", "cline_mcp_settings.json"),
+        "utf8",
+      ),
+    );
+    expect(cfg.mcpServers.velloo).toEqual(GLOBAL_STDIO);
+  });
+
+  test("gemini writes settings.json; --http uses httpUrl (streamable HTTP)", async () => {
+    const fakeHome = join(tmp, "home");
+    await connect({
+      designFolder: design,
+      agents: ["gemini"],
+      installSkill: false,
+    });
+    const proj = JSON.parse(await readFile(join(tmp, ".gemini", "settings.json"), "utf8"));
+    expect(proj.mcpServers.velloo).toEqual(STDIO);
+    await connect({
+      designFolder: design,
+      agents: ["gemini-global"],
+      transport: "http",
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const glob = JSON.parse(await readFile(join(fakeHome, ".gemini", "settings.json"), "utf8"));
+    expect(glob.mcpServers.velloo).toEqual({ httpUrl: MCP });
+  });
+
+  test("windsurf writes ~/.codeium/windsurf/mcp_config.json", async () => {
+    const fakeHome = join(tmp, "home");
+    await connect({
+      designFolder: design,
+      agents: ["windsurf-global"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const cfg = JSON.parse(
+      await readFile(join(fakeHome, ".codeium", "windsurf", "mcp_config.json"), "utf8"),
+    );
+    expect(cfg.mcpServers.velloo).toEqual(GLOBAL_STDIO);
+  });
+
+  test("VS Code writes .vscode/mcp.json under a `servers` key with explicit type", async () => {
+    await connect({ designFolder: design, agents: ["vscode"], installSkill: false });
+    const cfg = JSON.parse(await readFile(join(tmp, ".vscode", "mcp.json"), "utf8"));
+    expect(cfg.servers.velloo).toEqual({ type: "stdio", ...STDIO });
+    expect(cfg.mcpServers).toBeUndefined();
+  });
+
+  test("Claude Desktop gets an absolute command and a pinned absolute folder", async () => {
+    const fakeHome = join(tmp, "home");
+    const r = await connect({
+      designFolder: design,
+      agents: ["claude-desktop"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    // GUI apps have no shell PATH (`#!/usr/bin/env bun` would fail) and no
+    // meaningful cwd — the entry must be runnable from anywhere.
+    const path = r.configs[0]?.path as string;
+    expect(path).toContain("Claude");
+    expect(path.endsWith("claude_desktop_config.json")).toBe(true);
+    const cfg = JSON.parse(await readFile(path, "utf8"));
+    const entry = cfg.mcpServers.velloo as { command: string; args: string[] };
+    expect(entry.command).toBe(process.execPath);
+    expect(entry.args.slice(-2)).toEqual(["mcp", design]);
+  });
+
+  test("Claude Desktop merge preserves the app's own preferences", async () => {
+    const fakeHome = join(tmp, "home");
+    const { claudeDesktopConfigPath } = await import("../connect/agents.ts");
+    const cfgPath = claudeDesktopConfigPath(fakeHome);
+    await mkdir(join(cfgPath, ".."), { recursive: true });
+    await writeFile(cfgPath, JSON.stringify({ preferences: { menuBarEnabled: false } }));
+    await connect({
+      designFolder: design,
+      agents: ["claude-desktop"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const cfg = JSON.parse(await readFile(cfgPath, "utf8"));
+    expect(cfg.preferences).toEqual({ menuBarEnabled: false });
+    expect(cfg.mcpServers.velloo).toBeDefined();
+  });
+
   test("installs the Claude Code skills when requested", async () => {
     const r = await connect({ designFolder: design, agents: ["claude-code"], installSkill: true });
     expect(r.skills?.length).toBeGreaterThan(0);

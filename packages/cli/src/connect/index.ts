@@ -1,14 +1,27 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { relative } from "node:path";
+import { relative, resolve } from "node:path";
 import { isCancel, multiselect } from "@clack/prompts";
-import { AGENTS, type AgentConfigFormat, GLOBAL_AGENT_IDS, type McpConnection } from "./agents.ts";
+import {
+  AGENTS,
+  type AgentConfigFormat,
+  type AgentTarget,
+  detectInstalledAgents,
+  GLOBAL_AGENT_IDS,
+  type McpConnection,
+} from "./agents.ts";
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import { installSkills, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 
-export { AGENT_IDS, AGENTS, GLOBAL_AGENT_IDS, PROJECT_AGENT_IDS } from "./agents.ts";
+export {
+  AGENT_IDS,
+  AGENTS,
+  detectInstalledAgents,
+  GLOBAL_AGENT_IDS,
+  PROJECT_AGENT_IDS,
+} from "./agents.ts";
 export type { WriteResult } from "./write-config.ts";
 
 /** Default velloo MCP endpoint for `--http` connections — matches `velloo mcp --http`. */
@@ -42,11 +55,12 @@ export function manualSetupText(): string {
 }
 
 /**
- * Interactive agent checklist (global scope first + preselected — one wire
- * covers every project), plus a "manual / other agent" row that resolves to
+ * Interactive agent checklist (global scope first — one wire covers every
+ * project), plus a "manual / other agent" row that resolves to
  * MANUAL_AGENT_ID. Shared by `velloo connect` and the init wizard. `exclude`
- * hides agents that are already wired; `initial` overrides the preselection
- * (defaults to the global pair). Returns the chosen ids, or null on cancel.
+ * hides agents that are already wired; `initial` overrides the preselection —
+ * by default the agents detected on this machine (falling back to the global
+ * claude+cursor pair when none are). Returns the chosen ids, or null on cancel.
  */
 export async function pickAgents(opts?: {
   exclude?: string[];
@@ -56,7 +70,10 @@ export async function pickAgents(opts?: {
   const agents = Object.values(AGENTS)
     .filter((a) => !exclude.has(a.id))
     .sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "global" ? -1 : 1));
-  const initial = (opts?.initial ?? GLOBAL_AGENT_IDS).filter((id) => !exclude.has(id));
+  const detected = detectInstalledAgents();
+  const initial = (opts?.initial ?? (detected.length > 0 ? detected : GLOBAL_AGENT_IDS)).filter(
+    (id) => !exclude.has(id),
+  );
   const picked = await multiselect<string>({
     message: "Wire the velloo MCP into which agents?",
     options: [
@@ -98,6 +115,14 @@ function hasVellooEntry(content: string, format: AgentConfigFormat): boolean {
               s !== null && typeof s === "object" && (s as { name?: unknown }).name === "velloo",
           )
         );
+      }
+      case "opencode-json": {
+        const parsed = JSON.parse(content) as { mcp?: Record<string, unknown> };
+        return Boolean(parsed.mcp && "velloo" in parsed.mcp);
+      }
+      case "vscode-json": {
+        const parsed = JSON.parse(content) as { servers?: Record<string, unknown> };
+        return Boolean(parsed.servers && "velloo" in parsed.servers);
       }
     }
   } catch {
@@ -161,14 +186,28 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
 
   // stdio: project-scoped configs pin the folder relative to the project root
   // (the cwd the agent spawns `velloo mcp` from); global configs omit it so a
-  // single entry resolves the folder per-project from the cwd.
+  // single entry resolves the folder per-project from the cwd. GUI apps
+  // (Claude Desktop) get neither the user's shell PATH nor a meaningful cwd:
+  // `velloo`'s `#!/usr/bin/env bun` shebang would fail to find bun, and a
+  // cwd-resolved folder would resolve nowhere — so wire the absolute bun +
+  // cli script and pin the design folder absolutely.
   const designRel = relative(projectRoot, opts.designFolder) || ".";
-  const connectionFor = (scope: "project" | "global"): McpConnection => {
+  const connectionFor = (agent: AgentTarget): McpConnection => {
     if (transport === "http") return { transport: "http", url: opts.mcpUrl ?? DEFAULT_MCP_URL };
+    if (agent.gui) {
+      const script = process.argv[1] ? resolve(process.argv[1]) : Bun.which("velloo");
+      return script
+        ? {
+            transport: "stdio",
+            command: process.execPath,
+            args: [script, "mcp", resolve(opts.designFolder)],
+          }
+        : { transport: "stdio", command: "velloo", args: ["mcp", resolve(opts.designFolder)] };
+    }
     return {
       transport: "stdio",
       command: "velloo",
-      args: scope === "project" ? ["mcp", designRel] : ["mcp"],
+      args: agent.scope === "project" ? ["mcp", designRel] : ["mcp"],
     };
   };
 
@@ -180,7 +219,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
       unknownAgents.push(id);
       continue;
     }
-    configs.push(await writeAgentConfig(projectRoot, agent, connectionFor(agent.scope), homeDir));
+    configs.push(await writeAgentConfig(projectRoot, agent, connectionFor(agent), homeDir));
   }
 
   // Per-agent guidance: the Claude skill for the claude-code family, a project

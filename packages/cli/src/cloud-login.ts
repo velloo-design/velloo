@@ -19,14 +19,19 @@ export interface DeviceLoginResult {
  * Whether a stored CLI token is still accepted by `cloudUrl`. Returns the
  * account email when the cloud validates it (`GET /v1/me`), else null — token
  * revoked/expired, or the cloud unreachable. Lets `login` / `init` say "already
- * logged in" instead of re-running the device flow.
+ * logged in" instead of re-running the device flow. `timeoutMs` caps the wait
+ * (status-style callers want a snappier check than the default).
  */
-export async function verifyCredential(cloudUrl: string, token: string): Promise<string | null> {
+export async function verifyCredential(
+  cloudUrl: string,
+  token: string,
+  timeoutMs = 8000,
+): Promise<string | null> {
   // Never transmit the token over an insecure URL; treat as unverifiable.
   if (!isSecureCloudUrl(cloudUrl)) return null;
   const res = await fetch(`${cloudUrl}/v1/me`, {
     headers: { authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(timeoutMs),
   }).catch(() => null);
   if (!res?.ok) return null;
   const body = (await res.json().catch(() => null)) as { email?: string } | null;
