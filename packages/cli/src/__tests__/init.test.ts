@@ -39,6 +39,10 @@ async function runInit(appRoot: string, extraArgs: string[] = []) {
     cwd: resolve(import.meta.dir, "../../../.."),
     stdout: "pipe",
     stderr: "pipe",
+    // Isolate $HOME: the default agent wiring installs the Claude plugin
+    // under ~/.velloo and registers it in ~/.claude/settings.json — tests
+    // must never write into the developer's real home.
+    env: { ...process.env, HOME: join(appRoot, "fake-home") },
   });
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();

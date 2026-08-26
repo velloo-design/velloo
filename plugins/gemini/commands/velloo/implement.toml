@@ -1,0 +1,9 @@
+description = "Turn a Velloo design into production code"
+
+prompt = """
+Use the velloo-implement skill to implement: {{args}}
+
+Emit order is theme → snippets → screens. Treat a non-empty `warnings` array on
+any emit result as a blocker, not a footnote. Verify each implemented page with
+`compare_to_url` against the running app before calling it done.
+"""

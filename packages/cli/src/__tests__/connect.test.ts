@@ -453,19 +453,129 @@ describe("connect", () => {
     expect(cfg.mcpServers.velloo).toBeDefined();
   });
 
-  test("installs the Claude Code skills when requested", async () => {
-    const r = await connect({ designFolder: design, agents: ["claude-code"], installSkill: true });
-    expect(r.skills?.length).toBeGreaterThan(0);
-    expect(r.skills?.map((s) => s.name)).toContain("velloo-design");
-    const skillBody = await readFile(
-      join(tmp, ".claude", "skills", "velloo-design", "SKILL.md"),
-      "utf8",
+  test("claude-code + installSkill materializes the local plugin marketplace", async () => {
+    const fakeHome = join(tmp, "home");
+    const r = await connect({
+      designFolder: design,
+      agents: ["claude-code"],
+      installSkill: true,
+      homeDir: fakeHome,
+    });
+    expect(r.plugin).toBeDefined();
+    const mDir = join(fakeHome, ".velloo", "claude-plugins");
+    expect(r.plugin?.marketplaceDir).toBe(mDir);
+
+    const marketplace = JSON.parse(
+      await readFile(join(mDir, ".claude-plugin", "marketplace.json"), "utf8"),
     );
-    expect(skillBody).toContain("name: velloo-design");
+    expect(marketplace.name).toBe("velloo");
+    expect(marketplace.plugins[0]).toMatchObject({ name: "velloo", source: "./plugins/velloo" });
+
+    // The plugin carries manifest + skills + commands + subagents.
+    const pluginDir = join(mDir, "plugins", "velloo");
+    const manifest = JSON.parse(
+      await readFile(join(pluginDir, ".claude-plugin", "plugin.json"), "utf8"),
+    );
+    expect(manifest.name).toBe("velloo");
+    const skill = await readFile(join(pluginDir, "skills", "velloo-design", "SKILL.md"), "utf8");
+    expect(skill).toContain("name: velloo-design");
+    expect(await Bun.file(join(pluginDir, "commands", "design.md")).exists()).toBe(true);
+    expect(await Bun.file(join(pluginDir, "agents", "velloo-designer.md")).exists()).toBe(true);
+
+    // Registered + enabled in the user's Claude settings — no /plugin gesture.
+    const settings = JSON.parse(await readFile(join(fakeHome, ".claude", "settings.json"), "utf8"));
+    expect(settings.extraKnownMarketplaces.velloo.source).toEqual({
+      source: "directory",
+      path: mDir,
+    });
+    expect(settings.enabledPlugins["velloo@velloo"]).toBe(true);
   });
 
-  test("does not install skills for a non-claude agent", async () => {
-    const r = await connect({ designFolder: design, agents: ["cursor"], installSkill: true });
+  test("plugin registration preserves existing Claude settings", async () => {
+    const fakeHome = join(tmp, "home");
+    await mkdir(join(fakeHome, ".claude"), { recursive: true });
+    await writeFile(
+      join(fakeHome, ".claude", "settings.json"),
+      JSON.stringify({
+        model: "opus",
+        enabledPlugins: { "other@somewhere": true },
+        extraKnownMarketplaces: { corp: { source: { source: "github", repo: "corp/plugins" } } },
+      }),
+    );
+    await connect({
+      designFolder: design,
+      agents: ["claude-code"],
+      installSkill: true,
+      homeDir: fakeHome,
+    });
+    const settings = JSON.parse(await readFile(join(fakeHome, ".claude", "settings.json"), "utf8"));
+    expect(settings.model).toBe("opus");
+    expect(settings.enabledPlugins["other@somewhere"]).toBe(true);
+    expect(settings.enabledPlugins["velloo@velloo"]).toBe(true);
+    expect(settings.extraKnownMarketplaces.corp).toEqual({
+      source: { source: "github", repo: "corp/plugins" },
+    });
+  });
+
+  test("SKILL.md-capable agents get the neutral .agents/skills copies", async () => {
+    const fakeHome = join(tmp, "home");
+    const r = await connect({
+      designFolder: design,
+      agents: ["opencode"],
+      installSkill: true,
+      homeDir: fakeHome,
+    });
+    expect(r.skills?.map((s) => s.name)).toContain("velloo-implement");
+    const skill = await readFile(
+      join(tmp, ".agents", "skills", "velloo-design", "SKILL.md"),
+      "utf8",
+    );
+    expect(skill).toContain("name: velloo-design");
+    // opencode is not claude — no plugin, no cursor rule.
+    expect(r.plugin).toBeUndefined();
+    expect(r.cursorRules).toBeUndefined();
+  });
+
+  test("gemini gets the extension materialized under ~/.velloo (unlinked in tests)", async () => {
+    const fakeHome = join(tmp, "home");
+    const r = await connect({
+      designFolder: design,
+      agents: ["gemini-global"],
+      installSkill: true,
+      homeDir: fakeHome,
+    });
+    expect(r.geminiExtension?.dir).toBe(join(fakeHome, ".velloo", "gemini-extension"));
+    // Linking only ever runs against the real home dir.
+    expect(r.geminiExtension?.linked).toBe(false);
+    const manifest = JSON.parse(
+      await readFile(
+        join(fakeHome, ".velloo", "gemini-extension", "gemini-extension.json"),
+        "utf8",
+      ),
+    );
+    expect(manifest.name).toBe("velloo");
+    expect(manifest.mcpServers.velloo).toEqual({ command: "velloo", args: ["mcp"] });
+    expect(
+      await Bun.file(
+        join(fakeHome, ".velloo", "gemini-extension", "skills", "velloo-design", "SKILL.md"),
+      ).exists(),
+    ).toBe(true);
+    expect(
+      await Bun.file(join(fakeHome, ".velloo", "gemini-extension", "GEMINI.md")).exists(),
+    ).toBe(true);
+  });
+
+  test("cursor alone gets neither the plugin nor .agents skills", async () => {
+    const fakeHome = join(tmp, "home");
+    const r = await connect({
+      designFolder: design,
+      agents: ["cursor"],
+      installSkill: true,
+      homeDir: fakeHome,
+    });
     expect(r.skills).toBeUndefined();
+    expect(r.plugin).toBeUndefined();
+    expect(r.geminiExtension).toBeUndefined();
+    expect(r.cursorRules?.installed).toBe(true);
   });
 });

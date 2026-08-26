@@ -19,7 +19,7 @@ function resolveSkillsRoot(): string {
   return candidates.find((p) => existsSync(p)) ?? dev;
 }
 
-const SKILLS_ROOT = resolveSkillsRoot();
+export const SKILLS_ROOT = resolveSkillsRoot();
 
 export interface SkillResult {
   name: string;
@@ -29,14 +29,19 @@ export interface SkillResult {
 }
 
 /**
- * Copy every bundled skill into `<projectRoot>/.claude/skills/<name>/`. A skill
- * is any directory under the skills root that contains a `SKILL.md`; the whole
- * directory is copied so a skill can ship supporting files beside it. Skills
- * are Claude Code-shaped; callers install them only when claude-code is a
- * target. A missing skills root (e.g. a bundle that didn't ship them) degrades
- * to an empty list, never an error.
+ * Copy every bundled skill into `<projectRoot>/<baseDir>/skills/<name>/`. A
+ * skill is any directory under the skills root that contains a `SKILL.md`; the
+ * whole directory is copied so a skill can ship supporting files beside it.
+ * `baseDir` defaults to `.agents` — the neutral SKILL.md location the growing
+ * skills ecosystem (opencode and friends) reads; Claude Code gets its skills
+ * through the velloo plugin instead (see plugin.ts). A missing skills root
+ * (e.g. a bundle that didn't ship them) degrades to an empty list, never an
+ * error.
  */
-export async function installSkills(projectRoot: string): Promise<SkillResult[]> {
+export async function installSkills(
+  projectRoot: string,
+  baseDir = ".agents",
+): Promise<SkillResult[]> {
   let entries: Dirent[];
   try {
     entries = await readdir(SKILLS_ROOT, { withFileTypes: true });
@@ -53,7 +58,7 @@ export async function installSkills(projectRoot: string): Promise<SkillResult[]>
     } catch {
       continue; // a directory without a SKILL.md is not a skill
     }
-    const destDir = join(projectRoot, ".claude", "skills", name);
+    const destDir = join(projectRoot, baseDir, "skills", name);
     await mkdir(dirname(destDir), { recursive: true });
     await cp(srcDir, destDir, { recursive: true });
     results.push({ name, installed: true, path: join(destDir, "SKILL.md") });

@@ -109,8 +109,22 @@ export default defineCommand({
     for (const c of result.configs) {
       console.log(`    ${c.action === "created" ? "wrote   " : "updated "} ${pc.cyan(c.path)}`);
     }
+    if (result.plugin) {
+      console.log(
+        `    plugin   ${pc.cyan("velloo@velloo")} ${pc.dim(`(skills + commands + subagents — local marketplace at ${result.plugin.marketplaceDir})`)}`,
+      );
+    }
     for (const s of result.skills ?? []) {
       console.log(`    skill    ${pc.cyan(s.path ?? s.name)}`);
+    }
+    if (result.geminiExtension) {
+      console.log(
+        `    gemini   ${pc.cyan(result.geminiExtension.dir)} ${
+          result.geminiExtension.linked
+            ? pc.dim("(linked)")
+            : pc.dim(`(link it: gemini extensions link ${result.geminiExtension.dir})`)
+        }`,
+      );
     }
     if (result.cursorRules?.installed && result.cursorRules.path) {
       console.log(`    rule     ${pc.cyan(result.cursorRules.path)}`);

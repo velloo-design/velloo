@@ -1,15 +1,15 @@
 ---
 name: velloo-design
 description: >-
-  Design and implement UI through Velloo, a local code-shaped design canvas
-  whose components are the project's real shadcn library. Use when the user
-  wants to design a screen, lay out a UI, port an existing page onto the
-  canvas, or turn a Velloo design into production code. Triggers: "design a
-  screen in velloo", "lay this out", "port this page into velloo", "implement
-  the velloo design", "build the page from the design".
+  Design UI through Velloo, a local code-shaped design canvas whose components
+  are the project's real shadcn library. Use when the user wants to design a
+  screen, lay out a UI, or port an existing page onto the canvas. Triggers:
+  "design a screen in velloo", "lay this out", "port this page into velloo".
+  For turning a finished design into production code, use the velloo-implement
+  skill instead.
 ---
 
-# Designing and implementing with Velloo
+# Designing with Velloo
 
 Velloo is a local design canvas where **you, the agent, are the designer**. You
 compose screens from the project's own component library through an MCP server,
@@ -87,26 +87,11 @@ an advisory warning — fix those.
 
 ## Implement loop (design → code)
 
-Velloo's emit is **honest IR, not a paste-ready file**: library identifiers and
-Tailwind classes verbatim, no imports, no formatter. You write the real file.
-
-1. **`emit_theme { outputDir, apply: true }`** writes a Tailwind v4 `globals.css`
-   (the `@theme` block, `.dark` overrides, base layer). This one *is* a direct
-   artifact — wire it into the app's entry CSS; it's the whole color system.
-2. **`emit_snippet`** per reusable piece → a component. The JSX has `{param}` holes
-   where the typed params were; turn each snippet into a real component, mapping
-   holes to your props/data. Classes transfer verbatim — that's what makes the
-   result match the design.
-3. **`emit_code`** per screen → the layout skeleton. Wrap it in your framework's
-   page/route, then add the parts Velloo doesn't own: state, routing, event
-   handlers, data.
-4. **Read the `warnings` array on every emit result.** A non-empty `warnings`
-   means something couldn't be expressed faithfully (e.g. a dynamic icon-name
-   param baked to its fallback) — handle it, don't ship it blind. Per-snippet
-   warnings ride on `snippetsUsed[].warnings`.
-5. **`compare_to_url`** against the running app at the same viewport once a page is
-   built. 0.85+ similarity is a faithful structural port; the per-region node refs
-   point at what's off. Don't chase 1.0 — fonts and live data legitimately differ.
+When the design is ready to become real code, switch to the **velloo-implement**
+skill — it covers the emit order (theme → snippets → screens), the
+framework-native IR, warnings handling, and verifying the implementation with
+`compare_to_url`. The short version: emit is honest IR (identifiers + classes
+verbatim, no imports, no formatter); you write the real files.
 
 ## Porting an existing app onto the canvas
 

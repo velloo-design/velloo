@@ -210,6 +210,11 @@ cpSync(canvasDist, join(distDir, "canvas"), { recursive: true });
 step("copying skills → dist/skills");
 cpSync(join(repoRoot, "skills"), join(distDir, "skills"), { recursive: true });
 
+// 4b². Ship the plugin assets — the Claude Code plugin + Gemini extension
+//      sources (plugin.ts resolves `<here>/plugins`).
+step("copying plugins → dist/plugins");
+cpSync(join(repoRoot, "plugins"), join(distDir, "plugins"), { recursive: true });
+
 // 4c. Ship the on-disk runtime assets that bundled @velloo/* packages read
 //     relative to their source — the Tailwind entry CSS + component sources the
 //     JIT scans, the snapshot manifest, and codegen's biome config. Each
@@ -277,7 +282,7 @@ const manifest = {
   ],
   bin: { velloo: "./cli.js" },
   engines: { bun: ">=1.3.0" },
-  files: ["cli.js", "canvas", "skills", "pkgs", "NOTICE", "THIRD-PARTY-NOTICES.md"],
+  files: ["cli.js", "canvas", "skills", "plugins", "pkgs", "NOTICE", "THIRD-PARTY-NOTICES.md"],
   dependencies,
   ...(Object.keys(optionalDependencies).length ? { optionalDependencies } : {}),
 };

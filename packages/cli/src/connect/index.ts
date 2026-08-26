@@ -11,6 +11,12 @@ import {
   type McpConnection,
 } from "./agents.ts";
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
+import {
+  type ClaudePluginResult,
+  type GeminiExtensionResult,
+  installClaudePlugin,
+  installGeminiExtension,
+} from "./plugin.ts";
 import { resolveProjectRoot } from "./project-root.ts";
 import { installSkills, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
@@ -171,7 +177,12 @@ export interface ConnectResult {
   projectRoot: string;
   transport: "stdio" | "http";
   configs: WriteResult[];
+  /** Neutral `.agents/skills/` copies, installed for the SKILL.md ecosystem. */
   skills?: SkillResult[];
+  /** The velloo Claude Code plugin (local-path marketplace), for claude targets. */
+  plugin?: ClaudePluginResult;
+  /** The velloo Gemini CLI extension, materialized when gemini is a target. */
+  geminiExtension?: GeminiExtensionResult;
   /** Cursor project rule, installed when cursor is a target. */
   cursorRules?: CursorRulesResult;
   /** Requested agent ids that aren't recognized. */
@@ -222,17 +233,52 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
     configs.push(await writeAgentConfig(projectRoot, agent, connectionFor(agent), homeDir));
   }
 
-  // Per-agent guidance: the Claude skill for the claude-code family, a project
-  // rule for the cursor family. Both are gated on installSkill (the "wire
-  // guidance too" flag) and keyed on family so global targets count too.
+  // Per-agent guidance, gated on installSkill (the "wire guidance too" flag)
+  // and keyed on family/id so global targets count too:
+  //   - claude-code family → the velloo PLUGIN (skills + commands + subagents
+  //     via a local-path marketplace; one install covers every project).
+  //   - the SKILL.md ecosystem (opencode, droid, cline, gemini, codex) →
+  //     project `.agents/skills/` copies, the neutral location.
+  //   - cursor family → a project rule.
+  //   - gemini → additionally the Gemini CLI extension (context + commands).
   const hasFamily = (family: "claude-code" | "cursor") =>
     opts.agents.some((id) => AGENTS[id]?.family === family);
+  const hasAny = (...ids: string[]) => opts.agents.some((id) => ids.includes(id));
+  const plugin =
+    opts.installSkill && hasFamily("claude-code")
+      ? ((await installClaudePlugin(homeDir)) ?? undefined)
+      : undefined;
   const skills =
-    opts.installSkill && hasFamily("claude-code") ? await installSkills(projectRoot) : undefined;
+    opts.installSkill &&
+    hasAny(
+      "opencode",
+      "opencode-global",
+      "droid-global",
+      "cline-global",
+      "gemini",
+      "gemini-global",
+      "codex",
+      "codex-global",
+    )
+      ? await installSkills(projectRoot)
+      : undefined;
+  const geminiExtension =
+    opts.installSkill && hasAny("gemini", "gemini-global")
+      ? ((await installGeminiExtension(homeDir)) ?? undefined)
+      : undefined;
   const cursorRules =
     opts.installSkill && hasFamily("cursor")
       ? await installCursorRules(projectRoot, opts.designFolder)
       : undefined;
 
-  return { projectRoot, transport, configs, skills, cursorRules, unknownAgents };
+  return {
+    projectRoot,
+    transport,
+    configs,
+    skills,
+    plugin,
+    geminiExtension,
+    cursorRules,
+    unknownAgents,
+  };
 }

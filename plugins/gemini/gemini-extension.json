@@ -1,0 +1,9 @@
+{
+  "name": "velloo",
+  "version": "0.1.0",
+  "description": "Velloo — a local, code-shaped design canvas your agent designs on. Wires the velloo MCP tools plus design/implement workflows.",
+  "mcpServers": {
+    "velloo": { "command": "velloo", "args": ["mcp"] }
+  },
+  "contextFileName": "GEMINI.md"
+}

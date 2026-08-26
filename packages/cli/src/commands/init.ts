@@ -348,10 +348,18 @@ function printWired(outcome: WireOutcome): void {
   console.log(
     `    ${pc.green("✓")} ${wired} ${pc.dim(`(MCP config under ${connected.projectRoot})`)}`,
   );
+  if (connected.plugin)
+    console.log(pc.dim("    + Claude Code plugin (skills · commands · subagents)"));
   if (connected.skills?.length)
     console.log(
       pc.dim(
-        `    + ${connected.skills.length} Claude Code skill${connected.skills.length === 1 ? "" : "s"}`,
+        `    + ${connected.skills.length} agent skill${connected.skills.length === 1 ? "" : "s"} (.agents/skills)`,
+      ),
+    );
+  if (connected.geminiExtension)
+    console.log(
+      pc.dim(
+        `    + Gemini extension${connected.geminiExtension.linked ? "" : ` (link it: gemini extensions link ${connected.geminiExtension.dir})`}`,
       ),
     );
   if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
