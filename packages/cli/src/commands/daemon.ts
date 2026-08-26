@@ -28,6 +28,7 @@ function portFree(port: number, host: string): boolean {
 export default defineCommand({
   meta: {
     name: "__daemon",
+    hidden: true,
     description:
       "(internal) Run the persistent canvas daemon. Spawned by `velloo run` / `velloo mcp`.",
   },

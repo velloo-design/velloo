@@ -22,6 +22,7 @@ import { writeJsonAtomic, writeText } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import { completionsInstalled, detectShell, installCompletions } from "../completions/install.ts";
 import {
   AGENTS,
   type ConnectResult,
@@ -743,6 +744,41 @@ async function printScreenshotReadiness(interactive: boolean): Promise<void> {
   console.log("");
 }
 
+/**
+ * Offer shell TAB completion for `velloo` — once. Skipped silently when the
+ * shell is unsupported/undetected or completions are already installed, so
+ * repeat inits don't nag.
+ */
+async function promptShellCompletions(interactive: boolean): Promise<void> {
+  if (!interactive) return;
+  const shell = detectShell();
+  if (!shell || completionsInstalled(undefined, shell)) return;
+  const proceed = await confirm({
+    message: `Install shell completions now? (TAB completion for velloo commands in ${shell})`,
+    initialValue: true,
+  });
+  if (isCancel(proceed) || !proceed) {
+    console.log(pc.dim(`  Anytime later:  ${pc.cyan("velloo completions --install")}`));
+    return;
+  }
+  try {
+    const r = await installCompletions(shell);
+    console.log(
+      `  ${pc.green("✓")} ${shell} completions installed ${pc.dim(
+        shell === "fish"
+          ? "— new fish sessions pick them up."
+          : `— restart your shell (or \`source ${r.rcPath}\`).`,
+      )}`,
+    );
+  } catch (err) {
+    console.log(
+      pc.dim(
+        `  Couldn't install completions (${(err as Error).message}) — try \`velloo completions --install\` later.`,
+      ),
+    );
+  }
+}
+
 export default defineCommand({
   meta: {
     name: "init",
@@ -971,6 +1007,7 @@ export default defineCommand({
     const wireOutcome = await wireAgents(folder, interactive, cliArgs.connect !== false);
     printWired(wireOutcome);
     await printScreenshotReadiness(interactive);
+    await promptShellCompletions(interactive);
     await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
     printNextSteps(folder, wireOutcome);
   },
