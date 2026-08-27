@@ -241,20 +241,30 @@ Every client drives the same tool surface — agent edits and human edits are op
 
 Components come from the **active component provider** (`@velloo/provider`). The design folder doesn't ship a `components/` directory.
 
-The provider interface is the contract every library entry implements:
+The provider contract is `FrameworkAdapter` (`packages/provider/src/adapter.ts`) — a base
+`ComponentProvider` (id, version, componentsDir, styleEntryPath, registry, loadManifest)
+plus optional capabilities an adapter takes over from the defaults:
 
 ```ts
-interface ComponentProvider {
-  id: string;                       // "shadcn-upstream", "none", "mui"
-  version: string;
-  componentsDir: string;            // Tailwind JIT scan target
-  styleEntryPath: string;           // Tailwind v4 @theme entry
-  registry: ComponentRegistry;      // $ref → React component
-  loadManifest(): Promise<Manifest>;
+interface FrameworkAdapter extends ComponentProvider {
+  styleChannel?/styleChannels?      // the native styling channel(s): tailwind-classname | sx | style
+  registryForChannel?(kind)         // per-channel runtime registry (none: Tailwind vs inline)
+  catalog?()/installComponent?()    // component catalog with installed-status + per-component install
+  renderPass?(theme, dark)          // SSR provider wrapping + critical CSS (MUI: emotion)
+  codegenModule?                    // bare module emitted imports come from ("@mui/material")
+  themeToNative?(theme, dark)       // velloo tokens → the framework's theme options POJO
+  themeModule?                      // module shape for the native theme artifact (imports + factory)
+  canvasBundleSpec?                 // client-mount bundle of the host app's installed components
+  mcpIntro?(channel)                // framework framing prepended to the MCP instructions
 }
 ```
 
-The renderer, the Tailwind JIT, MCP discovery, codegen — every consumer reads through this. The server's `MutationContext` carries one resolved `provider` instance per design folder, looked up at boot via a `ProviderLoader` (`packages/server/src/providers.ts`).
+The renderer, the Tailwind JIT, MCP discovery, codegen — every consumer reads through this,
+resolved **per screen** (`providerForScreen`). The server registers one factory per id in
+`packages/server/src/providers.ts`. **The full authoring walkthrough — every registration
+point for a new framework — is `docs/providers.md`.** Host/app components that exist only
+in the user's codebase are not providers: a node carries `$emitAs` and codegen emits the
+real import (the design-time render approximates with primitives).
 
 Components are not put on disk in the design folder: two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) would make the source of truth unclear to AI agents. The provider abstraction keeps the design folder pure data while still letting different libraries take the active slot.
 
@@ -272,7 +282,7 @@ The snapshot's `snapshotVersion` (`2026.05.22`) records the upstream shadcn pull
 
 **Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the shared `@velloo/helpers` sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
 
-Tailwind v4 stays embedded in the velloo binary regardless of which provider is active. Per-instance overrides (`apply_classes`) are always Tailwind classes; codegen translates them to the user's styling system at emit time (verbatim for shadcn/no-lib; converted to `sx` props for MUI). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
+Tailwind v4 stays embedded in the velloo binary regardless of which provider is active. Per-instance styling goes through the screen's **style channel** (`set_style`): Tailwind `className` for shadcn/no-lib, an `sx` object for MUI, an inline `style` object for none/none — authored natively at design time, never translated at emit time. Codegen serializes whatever the channel holds (`className="…"` / `sx={{…}}` / `style={{…}}`). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
 
 ### Customizing components
 
@@ -314,7 +324,7 @@ Default mode users see no traces of this in their flow — it's a flag, not a ti
 
 ### Framework adapters
 
-Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Chakra, Mantine, Ant Design) fall back to the no-framework (div-backed) provider via scan detection.
+Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Mantine, NextUI, …) fall back to the no-framework provider via scan detection — the agent approximates their components with primitives and preserves the real imports via `$emitAs`.
 
 ## Theme model
 

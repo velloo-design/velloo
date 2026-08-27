@@ -50,11 +50,14 @@ export async function buildCanvasBundle(
     return r.path;
   };
 
+  // Only the "emotion" style runtime is implemented today; a new framework
+  // with a different runtime adds a union member + a branch here.
+  const runtime = spec.styleRuntime;
   const reactPath = need("react");
   const reactDomClientPath = need("react-dom/client");
   const emotionCachePath = need("@emotion/cache");
   const emotionReactPath = need("@emotion/react");
-  const stylesPath = need(spec.stylesModule);
+  const stylesPath = need(runtime.stylesModule);
   if (!reactPath || !reactDomClientPath || !emotionCachePath || !emotionReactPath || !stylesPath) {
     return { code: "export function mountScreen() {}\n", errors };
   }
@@ -75,7 +78,7 @@ export async function buildCanvasBundle(
     emotionCachePath,
     emotionReactPath,
     stylesPath,
-    emotionKey: spec.emotionKey,
+    emotionKey: runtime.cacheKey,
     components: resolved,
     overlayIds: spec.overlayIds,
   });

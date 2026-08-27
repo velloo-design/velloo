@@ -79,21 +79,12 @@ export const CSS_FRAMEWORK_CHANNEL: Record<CssFramework, StyleChannelKind> = {
 
 // --- component catalog + installed-status (so the MCP can install on demand) ---
 
-/**
- * How a component reaches the canvas + codegen. `library` = a real installed component;
- * `snippet` = a user composition; `host` = a scanned app component the design agent resolves into
- * a real velloo subtree (Phase 4/5); `div-stub` = a plain element for unsupported frameworks.
- */
-export type RenderStrategy = "library" | "snippet" | "host" | "div-stub";
-
 export interface CatalogEntry {
   id: string;
-  descriptor: ComponentDescriptor;
   /** false → not present in the project yet; the MCP can offer `install_component`. */
   installed: boolean;
   /** Where codegen imports this component from. */
   importPath: string;
-  renderStrategy: RenderStrategy;
 }
 
 /**
@@ -105,14 +96,12 @@ export interface CatalogEntry {
  */
 export function catalogFromManifest(
   manifest: ComponentDescriptor[],
-  opts: { importPath: string; installed?: boolean; renderStrategy?: RenderStrategy },
+  opts: { importPath: string; installed?: boolean },
 ): CatalogEntry[] {
   return manifest.map((descriptor) => ({
     id: descriptor.id,
-    descriptor,
     installed: opts.installed ?? true,
     importPath: opts.importPath,
-    renderStrategy: opts.renderStrategy ?? "library",
   }));
 }
 
@@ -133,6 +122,42 @@ export interface InstallResult {
   installed: string[];
   location: string;
   notes?: string;
+}
+
+// --- native theme artifact (frameworks whose theme isn't Tailwind CSS) ---
+
+/**
+ * A value that must serialize as a bare identifier expression in emitted
+ * code rather than a JSON value — e.g. Ant Design's `theme.darkAlgorithm`.
+ * Produce one with {@link identifierRef}; `ThemeModuleSpec.importLines`
+ * must bring the identifier into scope. Codegen's serializer recognizes
+ * the shape.
+ */
+export interface IdentifierRef {
+  $identifier: string;
+}
+
+/** Wrap an identifier path (e.g. `"theme.darkAlgorithm"`) for native-theme emit. */
+export function identifierRef(path: string): IdentifierRef {
+  if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(path)) {
+    throw new Error(`identifierRef: "${path}" is not a bare identifier path`);
+  }
+  return { $identifier: path };
+}
+
+/**
+ * Declares how the native theme artifact is written, paired with
+ * `themeToNative`. Codegen's generic `emitNativeTheme` serializes the
+ * projected options into a module shaped by this spec — no framework
+ * import ever appears outside the provider's own package.
+ */
+export interface ThemeModuleSpec {
+  /** Import lines at the top of the module, e.g. `import { createTheme } from "@mui/material/styles";` */
+  importLines: string[];
+  /** Factory wrapping the serialized options (`createTheme(...)`); null ⇒ a bare object literal. */
+  factory: string | null;
+  /** Default artifact path relative to the output dir, e.g. `theme.ts`. */
+  defaultPath: string;
 }
 
 // --- server-side render pass (for frameworks whose styles aren't Tailwind classes) ---
@@ -159,6 +184,21 @@ export interface RenderPass {
  * data — the server's bundler reads it + the host root and runs `Bun.build`.
  * Absent ⇒ the canvas uses in-process SSR (today's path) only.
  */
+/**
+ * How the bundled components get their styles at client-mount time. A
+ * discriminated union so non-emotion frameworks can join: the adapter declares
+ * pure data here, and the server's bundle-entry builder implements each kind
+ * (adding a framework with a new runtime = a new union member + a builder
+ * branch — see docs/providers.md).
+ */
+export type CanvasStyleRuntime = {
+  kind: "emotion";
+  /** emotion cache key prefix (MUI uses `vmui`). */
+  cacheKey: string;
+  /** Module exporting `ThemeProvider` + `createTheme`, e.g. `@mui/material/styles`. */
+  stylesModule: string;
+};
+
 export interface CanvasBundleSpec {
   /** Bare module the components import from, e.g. `@mui/material`. */
   moduleBase: string;
@@ -166,10 +206,8 @@ export interface CanvasBundleSpec {
   componentIds: string[];
   /** Overlay ids the bundle renders via inline canvas-safe shims (Dialog/Menu/…). */
   overlayIds: string[];
-  /** emotion cache key prefix (MUI uses `vmui`). */
-  emotionKey: string;
-  /** Module exporting `ThemeProvider` + `createTheme`, e.g. `@mui/material/styles`. */
-  stylesModule: string;
+  /** The style runtime the bundle wires up around the mounted tree. */
+  styleRuntime: CanvasStyleRuntime;
 }
 
 // --- the adapter ---
@@ -224,10 +262,24 @@ export interface FrameworkAdapter extends ComponentProvider {
    * Project velloo's token tree onto this framework's native theme shape — for
    * MUI, the `ThemeOptions` POJO passed to `createTheme`. Returned as `unknown`
    * so the contract doesn't depend on any framework's types; codegen serializes
-   * it to the native theme artifact (`emitMuiTheme`). Absent ⇒ the Tailwind
-   * globals.css path. Pairs with `codegenModule` for MUI-like frameworks.
+   * it to the native theme artifact via `emitNativeTheme` + `themeModule`.
+   * Values that must emit as identifiers use {@link identifierRef}. Absent ⇒
+   * the Tailwind globals.css path.
    */
   themeToNative?(theme: Theme, dark?: boolean): unknown;
+  /**
+   * The module shape for the native theme artifact `themeToNative` feeds.
+   * Required for the native emit path — `emit_theme` uses the Tailwind
+   * globals.css path unless BOTH are present.
+   */
+  themeModule?: ThemeModuleSpec;
+  /**
+   * Framework framing prepended to the MCP instructions (the rest of the
+   * instruction text is shadcn/Tailwind-tuned; this tells the agent what
+   * differs). Receives the folder's resolved style channel so multi-channel
+   * providers can frame each channel. Absent ⇒ the default shadcn framing.
+   */
+  mcpIntro?(channel: StyleChannelKind): string[] | undefined;
   /**
    * How to bundle this framework's installed components for the canvas (#18).
    * Present ⇒ the server can build a `mountScreen` bundle from the host's

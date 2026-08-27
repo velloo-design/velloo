@@ -18,8 +18,7 @@ const MUI_SPEC: CanvasBundleSpec = {
   moduleBase: "@mui/material",
   componentIds: ["Box", "Paper", "Card", "CardContent", "Button", "Typography", "DialogTitle"],
   overlayIds: ["Dialog", "Menu", "Popover", "Drawer", "Snackbar"],
-  emotionKey: "vmui",
-  stylesModule: "@mui/material/styles",
+  styleRuntime: { kind: "emotion", cacheKey: "vmui", stylesModule: "@mui/material/styles" },
 };
 
 describe("buildCanvasBundle", () => {

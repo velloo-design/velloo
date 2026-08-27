@@ -127,13 +127,7 @@ async function main(): Promise<void> {
       return total;
     };
 
-    const instructions = buildInstructions(
-      false,
-      undefined,
-      true,
-      "tailwind-classname",
-      provider.id,
-    );
+    const instructions = buildInstructions(false, undefined, true);
     const instrTokens = tokens(instructions);
     console.log(`instructions: ~${instrTokens} tokens (${instructions.length} chars)`);
 

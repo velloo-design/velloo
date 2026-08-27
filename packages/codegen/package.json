@@ -14,7 +14,8 @@
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
     "diff": "9.0.0",
-    "tailwind-merge": "3.5.0"
+    "tailwind-merge": "3.5.0",
+    "@velloo/provider": "workspace:*"
   },
   "devDependencies": {
     "@types/diff": "8.0.0",

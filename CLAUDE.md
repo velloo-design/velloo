@@ -82,4 +82,5 @@ The CLI test (`packages/cli/src/__tests__/init.test.ts`) spawns `velloo init` as
 ## Where to read more
 
 - `docs/architecture.md` — full runtime architecture: design-folder format, providers/adapters, renderer, codegen, the canvas daemon.
+- `docs/providers.md` — adding a framework provider: every registration point, the adapter capabilities, the canvas-safe contract.
 - `docs/mcp.md` — MCP tool catalogue + handshake.

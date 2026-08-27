@@ -51,7 +51,10 @@ export function createApp(
   app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/live", createLiveRouter(bundler));
-  app.route("/api/canvas", createCanvasRouter(canvasBundler));
+  app.route(
+    "/api/canvas",
+    createCanvasRouter(canvasBundler, () => ctxFor().folder.config.defaultLibrary),
+  );
   app.route("/api/components", createComponentsRouter(ctxFor));
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));

@@ -10,7 +10,7 @@ import {
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoLibProvider } from "@velloo/provider-none";
 import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
-import type { Config, Library } from "@velloo/schema";
+import type { Config, HostApp, Library } from "@velloo/schema";
 
 /**
  * Build the loader the server uses to resolve `Library` → provider.
@@ -18,7 +18,15 @@ import type { Config, Library } from "@velloo/schema";
  * the binary (real components install into the host app); `"none"` and
  * `"mui"` are fully bundled.
  */
-export function createServerProviderLoader(folderRoot?: string): ProviderLoader {
+export function createServerProviderLoader(folderRoot?: string, hostApp?: HostApp): ProviderLoader {
+  // The upstream provider installs into (and reads installed-status from) the
+  // host app. Absent `hostApp.root` ⇒ the conventional `<appRoot>/velloo`
+  // layout puts the app one level above the design folder.
+  const hostAppRoot = folderRoot
+    ? hostApp?.root
+      ? resolve(folderRoot, hostApp.root)
+      : resolve(folderRoot, "..")
+    : undefined;
   return createProviderLoader({
     none: () => createNoLibProvider(),
     // MUI is a first-class FrameworkAdapter: real MUI components SSR'd
@@ -31,9 +39,11 @@ export function createServerProviderLoader(folderRoot?: string): ProviderLoader 
     // the install location.
     "shadcn-upstream": (library) => {
       const cacheDir = resolveUpstreamCacheDir(library, folderRoot);
-      return createUpstreamProvider(
-        cacheDir ? { cacheDir, version: library.version } : { version: library.version },
-      );
+      return createUpstreamProvider({
+        version: library.version,
+        ...(cacheDir ? { cacheDir } : {}),
+        ...(hostAppRoot ? { hostAppRoot } : {}),
+      });
     },
   });
 }
@@ -71,7 +81,7 @@ export async function resolveProviders(
   folderRoot: string,
   loader?: ProviderLoader,
 ): Promise<{ providers: Record<string, ComponentProvider>; defaultProvider: ComponentProvider }> {
-  const effective = loader ?? createServerProviderLoader(folderRoot);
+  const effective = loader ?? createServerProviderLoader(folderRoot, config.hostApp);
   const providers: Record<string, ComponentProvider> = {};
   for (const [libraryId, library] of Object.entries(config.libraries)) {
     try {

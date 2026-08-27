@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import type { Screen, Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
@@ -11,10 +12,28 @@ import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/index.ts";
 
 /**
- * The canvas bundle (#18) is built from the DEFAULT provider's components, so a
- * non-default-library screen in a multi-library folder must NOT get the bundle
- * (it would mount the wrong components) — it keeps SSR. Guards makeCanvasBundle.
+ * Canvas bundles (#18) are per-library: a non-default-library (MUI) screen in a
+ * shadcn-default folder gets ITS OWN library's bundle (`?lib=mui`), while a
+ * screen whose adapter declares no `canvasBundleSpec` keeps SSR. Guards
+ * makeCanvasBundle's per-library scoping — the real Bun.build path is covered
+ * by canvas-bundle.test.ts, so the positive case records build() calls instead
+ * of re-bundling MUI (which is slow and fd-hungry under the full suite).
  */
+
+class RecordingBundler extends CanvasBundler {
+  calls: string[] = [];
+  constructor() {
+    super(
+      "/tmp",
+      () => undefined,
+      () => undefined,
+    );
+  }
+  override async build(libraryId: string): Promise<{ code: string; errors: [] }> {
+    this.calls.push(libraryId);
+    return { code: "export function mountScreen() {}\n", errors: [] };
+  }
+}
 
 const theme: Theme = {
   name: "t",
@@ -74,19 +93,29 @@ beforeEach(async () => {
   };
 });
 
-describe("makeCanvasBundle multi-library guard", () => {
-  test("a non-default-library (MUI) screen in a shadcn-default folder gets no bundle", async () => {
+describe("makeCanvasBundle per-library scoping", () => {
+  test("a non-default-library (MUI) screen gets its own library's bundle", async () => {
+    const bundler = new RecordingBundler();
+    const thunk = makeCanvasBundle(ctx, bundler);
+    const mui = await thunk(muiScreen, theme, false);
+    expect(mui).toBeDefined();
+    expect(mui?.url).toContain("lib=mui");
+    expect(mui?.themeOptions).toBeDefined();
+    expect(bundler.calls).toEqual(["mui"]);
+    // The default-library shadcn screen has no bundle — its adapter declares
+    // no canvasBundleSpec, so the spec check returns BEFORE any build.
+    expect(await thunk(shadcnScreen, theme, false)).toBeUndefined();
+    expect(bundler.calls).toEqual(["mui"]);
+  });
+
+  test("a bundler that cannot build the library's spec keeps the capture on SSR", async () => {
+    // No resolvable host (tmp folder has no node_modules) → build errors → SSR.
     const bundler = new CanvasBundler(
       folder.root,
       () => undefined,
-      () => undefined,
+      (libraryId) => (ctx.providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec,
     );
     const thunk = makeCanvasBundle(ctx, bundler);
-    // The MUI screen's provider isn't the default (shadcn) → guard returns
-    // undefined BEFORE any build, so the capture keeps SSR.
     expect(await thunk(muiScreen, theme, false)).toBeUndefined();
-    // The default-library shadcn screen also has no bundle (shadcn declares no
-    // canvasBundleSpec), but via the spec check, not a wrong-bundle mount.
-    expect(await thunk(shadcnScreen, theme, false)).toBeUndefined();
   });
 });

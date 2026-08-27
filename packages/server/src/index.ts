@@ -210,7 +210,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const canvasBundler = new CanvasBundler(
     folder.root,
     () => folder.config.hostApp,
-    () => (defaultProvider as FrameworkAdapter).canvasBundleSpec,
+    (libraryId) => (providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec,
   );
   const jit = new TailwindJit(
     Object.values(providers),

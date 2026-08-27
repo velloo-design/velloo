@@ -3,16 +3,10 @@ import { relative, resolve } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
 import { CHROMIUM_INSTALL_ARGV, CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
-  type Annotation,
-  type Board,
   BoardSchema,
-  type CanvasNote,
-  type Config,
   ConfigSchema,
   type HostApp,
-  type Screen,
   ScreenSchema,
-  type Snippet,
   SnippetSchema,
   type Theme,
   ThemeSchema,
@@ -39,14 +33,7 @@ import { hasDesignConfig } from "../folder.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { findMuiTheme, importThemeFromMui } from "../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
-import { buildMuiBoards, buildMuiScreens, buildMuiSnippets } from "../scaffold/mui-sample.ts";
-import {
-  buildNoLibBoards,
-  buildNoLibScreens,
-  buildNoLibSnippets,
-} from "../scaffold/nolib-sample.ts";
-import { buildSampleBoards, buildSampleScreens } from "../scaffold/sample-page.ts";
-import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
+import type { Scaffold } from "../scaffold/scaffold.ts";
 import { buildPresetTheme, presetById } from "../scaffold/theme-presets.ts";
 import { buildVibeTheme, vibeById } from "../scaffold/vibes.ts";
 import { detectHost } from "../scan/detect.ts";
@@ -61,9 +48,17 @@ import { dirExists } from "../scan/walk.ts";
 import type { WizardAnswers } from "../wizard/answers.ts";
 import { answersFromArgs, type InitCliArgs, shouldRunWizard } from "../wizard/args.ts";
 import { printAgentHandoff } from "../wizard/handoff-print.ts";
-import { type InstallPlan, planInstall } from "../wizard/install.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
+import {
+  DEFAULT_LIBRARY_ID,
+  type InstallPlan,
+  LIBRARY_IDS,
+  planInstall,
+  sampleScaffold,
+  scanAdoption,
+  WIZARD_PROVIDERS,
+} from "../wizard/provider-registry.ts";
 import { renderDesignReadme } from "../wizard/readme.ts";
 import { stackById } from "../wizard/stacks.ts";
 
@@ -75,15 +70,6 @@ async function isEmptyOrMissing(path: string): Promise<boolean> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return true;
     throw err;
   }
-}
-
-interface Scaffold {
-  theme: Theme;
-  screens: Screen[];
-  boards: Board[];
-  snippets: Snippet[];
-  annotations: { screenId: string; entries: Annotation[] }[];
-  notes: { boardId: string; entries: CanvasNote[] }[];
 }
 
 function blankScaffold(theme: Theme): Scaffold {
@@ -129,54 +115,23 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
   if (answers.initialContent === "scan") {
     // One screen per chosen route. The interactive wizard pre-filters to the
     // screens the user picked; non-interactive scan uses every detected route.
-    // The library only affects the placeholder tree's Badge (shadcn) vs Text
-    // (no-lib) choice.
+    // The library only affects the placeholder tree — each provider's entry
+    // carries its options (Badge vs Text, MUI components).
     const routes = answers.selectedRoutes ?? (await scanAppRoutes(answers.scanRoot)).routes;
     if (routes.length === 0) {
       // Don't abort init — fall back to a blank board. init prints why.
       return blankScaffold(theme);
     }
-    const hasBadge = answers.library !== "none";
-    const screens = buildScreensFromScan({ routes, hasBadge, mui: answers.library === "mui" });
+    const screens = buildScreensFromScan({
+      routes,
+      ...WIZARD_PROVIDERS[answers.library].scanScreenOpts,
+    });
     const boards = buildBoardsFromScan({ routes });
     return { theme, screens, boards, snippets: [], annotations: [], notes: [] };
   }
 
-  // No-library Pulse doesn't exist (Avatar / Tabs / Accordion / Chart
-  // have no no-lib equivalents). Ship a smaller two-screen welcome
-  // sample that demonstrates the primitive set instead.
-  if (answers.library === "none") {
-    return {
-      theme,
-      screens: buildNoLibScreens(),
-      boards: buildNoLibBoards(),
-      snippets: buildNoLibSnippets(),
-      annotations: [],
-      notes: [],
-    };
-  }
-
-  // Pulse isn't ported to MUI (its shadcn composition would need a full
-  // redesign). Ship a two-screen MUI welcome sample (sx styling) instead.
-  if (answers.library === "mui") {
-    return {
-      theme,
-      screens: buildMuiScreens(),
-      boards: buildMuiBoards(),
-      snippets: buildMuiSnippets(),
-      annotations: [],
-      notes: [],
-    };
-  }
-
-  return {
-    theme,
-    screens: buildSampleScreens(answers.productSurface),
-    boards: buildSampleBoards(answers.productSurface),
-    snippets: buildSampleSnippets(),
-    annotations: [],
-    notes: [],
-  };
+  // The provider's own welcome sample, or the shadcn Pulse default.
+  return sampleScaffold(answers, theme);
 }
 
 function defaultScreenForScaffold(scaffold: Scaffold): string | undefined {
@@ -213,13 +168,9 @@ async function writeScaffold(
     }
   }
   // CSS framework (the styling axis): only the no-framework library has a real
-  // choice — shadcn carries Tailwind and MUI carries `sx` intrinsically. For a
-  // `none` folder, detect Tailwind in the host (config/dep) ⇒ "tailwind",
-  // otherwise ⇒ "none" (inline styles, no build step).
-  const styling: Config["styling"] =
-    plan.library.id === "none"
-      ? { framework: answers.detected?.tailwindMajor ? "tailwind" : "none" }
-      : undefined;
+  // choice — shadcn carries Tailwind and MUI carries `sx` intrinsically. Each
+  // provider's registry entry decides.
+  const styling = WIZARD_PROVIDERS[answers.library].stylingFor(answers);
   // The stack prompt's one output: emit_code mentions imports under the
   // alias the user's app actually resolves.
   const stack = stackById(answers.stack);
@@ -564,7 +515,7 @@ export default defineCommand({
     },
     library: {
       type: "string",
-      description: "Component library: shadcn-upstream | none | mui (default shadcn-upstream)",
+      description: `Component library: ${LIBRARY_IDS.join(" | ")} (default ${DEFAULT_LIBRARY_ID})`,
     },
     componentsDir: {
       type: "string",
@@ -684,21 +635,13 @@ export default defineCommand({
       // The "existing project" flow: when the user didn't pin a library, adopt
       // the framework the app actually uses so the scan renders + emits in the
       // host's framework (a MUI app → the MUI adapter), not a default mismatch.
-      // An unsupported framework (Chakra/Mantine/…) → the no-framework adapter:
-      // the agent approximates with div-backed primitives + preserves real
-      // imports via $emitAs.
-      if (!cliArgs.library && answers.detected.uiLibrary) {
-        answers.library = answers.detected.uiLibrary === "mui" ? "mui" : "shadcn-upstream";
+      // Which provider claims what — including the unsupported-framework
+      // (Chakra/Mantine/…) → no-framework fallback — lives in the registry.
+      const adopted = cliArgs.library ? undefined : scanAdoption(answers.detected);
+      if (adopted) {
+        answers.library = adopted.library;
         answers.source = "binary";
-        console.log(pc.dim(`  Detected ${answers.detected.uiLibrary} — using that library.`));
-      } else if (!cliArgs.library && answers.detected.unsupportedUi) {
-        answers.library = "none";
-        answers.source = "binary";
-        console.log(
-          pc.dim(
-            `  Detected ${answers.detected.unsupportedUi} (no velloo adapter yet) — using the no-framework adapter; approximate its components and preserve their imports with emit-as.`,
-          ),
-        );
+        console.log(pc.dim(`  ${adopted.note}`));
       }
     }
 

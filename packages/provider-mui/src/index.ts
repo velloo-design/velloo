@@ -7,6 +7,7 @@ import {
   SX_PROP,
 } from "@velloo/provider";
 import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
+import { MUI_INTRO } from "./intro.ts";
 import { MUI_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { makeRenderPass } from "./render-pass.ts";
@@ -50,9 +51,15 @@ export function createProvider(): FrameworkAdapter {
       ),
     styleChannel: SX_PROP,
     styleChannels: ["sx"],
+    mcpIntro: () => [...MUI_INTRO],
     renderPass: (theme, dark) => makeRenderPass(theme, dark ?? false),
     codegenModule: "@mui/material",
     themeToNative: (theme, dark) => muiThemeOptions(theme, dark),
+    themeModule: {
+      importLines: ['import { createTheme } from "@mui/material/styles";'],
+      factory: "createTheme",
+      defaultPath: "theme.ts",
+    },
     canvasBundleSpec: {
       moduleBase: "@mui/material",
       // Only the MUI-source components bundle from `@mui/material`; the reused
@@ -60,8 +67,7 @@ export function createProvider(): FrameworkAdapter {
       // exact-installed client mount is the MUI surface.
       componentIds: MUI_MANIFEST.filter((c) => c.source === "mui").map((c) => c.id),
       overlayIds: ["Dialog", "Menu", "Popover", "Drawer", "Snackbar"],
-      emotionKey: "vmui",
-      stylesModule: "@mui/material/styles",
+      styleRuntime: { kind: "emotion", cacheKey: "vmui", stylesModule: "@mui/material/styles" },
     },
   };
 }

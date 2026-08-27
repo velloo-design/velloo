@@ -15,7 +15,7 @@ export {
   type EmitThemeResult,
   emitTheme,
 } from "./emit-theme/index.ts";
-export { type EmitMuiThemeOptions, emitMuiTheme } from "./emit-theme/mui-theme.ts";
+export { type EmitNativeThemeOptions, emitNativeTheme } from "./emit-theme/native-theme.ts";
 export type { CodegenError } from "./errors.ts";
 export type { FormatError, FormatResult } from "./format.ts";
 export {

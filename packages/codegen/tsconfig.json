@@ -12,6 +12,7 @@
   },
   "include": ["src/**/*"],
   "references": [
+    { "path": "../provider" },
     {
       "path": "../result"
     },

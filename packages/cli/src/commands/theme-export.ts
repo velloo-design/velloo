@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import { colorizeDiff, type EmitThemeResult, emitMuiTheme, emitTheme } from "@velloo/codegen";
+import { colorizeDiff, type EmitThemeResult, emitNativeTheme, emitTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
 import { loadDesignFolder, resolveProviders } from "@velloo/server";
@@ -35,12 +35,14 @@ async function themeEmitter(
   const design = await loadDesignFolder(folderRoot);
   const { defaultProvider } = await resolveProviders(design.config, folderRoot);
   const adapter = defaultProvider as FrameworkAdapter;
-  if (adapter.codegenModule && adapter.themeToNative) {
+  if (adapter.themeToNative && adapter.themeModule) {
     const toNative = adapter.themeToNative.bind(adapter);
+    const spec = adapter.themeModule;
     return {
       native: true,
       produce: (apply) =>
-        emitMuiTheme(toNative(theme), {
+        emitNativeTheme(toNative(theme), {
+          spec,
           outputDir: outDir,
           apply,
           ...(theme.colorsDark ? { darkThemeOptions: toNative(theme, true) } : {}),

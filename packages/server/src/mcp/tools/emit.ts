@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type CodegenTarget,
   emitCode,
-  emitMuiTheme,
+  emitNativeTheme,
   emitSnippet,
   emitTheme,
   moduleTarget,
@@ -143,10 +143,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
       }
       const theme = themeByName(ctx.folder, args.theme);
       // A framework that projects a native theme (MUI ⇒ createTheme options)
-      // emits its native artifact instead of Tailwind globals.css.
+      // emits its native artifact instead of Tailwind globals.css. The module
+      // shape comes from the adapter, so no framework is special-cased here.
       const adapter = ctx.defaultProvider as FrameworkAdapter;
-      if (adapter.codegenModule && adapter.themeToNative) {
-        const result = await emitMuiTheme(adapter.themeToNative(theme), {
+      if (adapter.themeToNative && adapter.themeModule) {
+        const result = await emitNativeTheme(adapter.themeToNative(theme), {
+          spec: adapter.themeModule,
           outputDir: out,
           ...(args.themePath ? { themePath: args.themePath } : {}),
           ...(theme.colorsDark ? { darkThemeOptions: adapter.themeToNative(theme, true) } : {}),

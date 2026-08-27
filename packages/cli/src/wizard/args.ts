@@ -3,6 +3,7 @@ import { PRODUCT_SURFACES, type ProductSurface } from "../scaffold/sample-page.t
 import { isValidPreset } from "../scaffold/theme-presets.ts";
 import { isValidVibe } from "../scaffold/vibes.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
+import { DEFAULT_LIBRARY_ID, LIBRARY_IDS, WIZARD_PROVIDERS } from "./provider-registry.ts";
 import { isValidStack } from "./stacks.ts";
 
 /**
@@ -37,7 +38,7 @@ export interface InitCliArgs {
 }
 
 export function isValidLibraryId(v: string): v is LibraryId {
-  return v === "shadcn-upstream" || v === "none" || v === "mui";
+  return (LIBRARY_IDS as string[]).includes(v);
 }
 
 export function isValidContent(v: string): v is InitialContent {
@@ -65,7 +66,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
   // than an error.
   if (args.library && !isValidLibraryId(args.library)) {
     throw new Error(
-      `unknown --library ${JSON.stringify(args.library)}. Valid: shadcn-upstream | none | mui.`,
+      `unknown --library ${JSON.stringify(args.library)}. Valid: ${LIBRARY_IDS.join(" | ")}.`,
     );
   }
   if (args.start && !isValidStart(args.start)) {
@@ -96,7 +97,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
 
   const appRoot = resolve(args.folder ?? ".");
   const folder = resolve(appRoot, args.designFolder ?? "velloo");
-  const library: LibraryId = (args.library as LibraryId | undefined) ?? "shadcn-upstream";
+  const library: LibraryId = (args.library as LibraryId | undefined) ?? DEFAULT_LIBRARY_ID;
 
   const scan = args.start === "scan" || args.initialContent === "scan";
   const initialContent: InitialContent = scan
@@ -110,8 +111,9 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     );
   }
   // The surface picks a slice of the shadcn Pulse sample — meaningless (so
-  // loudly rejected) for other libraries or non-sample content.
-  if (surface && (library === "none" || library === "mui")) {
+  // loudly rejected) for libraries without product surfaces or non-sample
+  // content.
+  if (surface && !WIZARD_PROVIDERS[library].hasProductSurfaces) {
     throw new Error(`--surface only applies to the shadcn sample, not --library=${library}.`);
   }
   if (surface && initialContent !== "sample") {
@@ -122,7 +124,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
 
   // Upstream components live in the app (written post-init); everything else
   // renders from the bundled snapshot. Init writes nothing to the app.
-  const source: LibrarySource = library === "shadcn-upstream" ? "in-repo" : "binary";
+  const source: LibrarySource = WIZARD_PROVIDERS[library].defaultSource;
 
   return {
     appRoot,

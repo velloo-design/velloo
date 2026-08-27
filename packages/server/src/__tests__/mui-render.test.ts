@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { emitCode, emitMuiTheme, moduleTarget } from "@velloo/codegen";
+import { emitCode, emitNativeTheme, moduleTarget } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-mui";
 import { renderScreen } from "@velloo/renderer";
@@ -102,9 +102,7 @@ describe("MUI adapter SSR", () => {
     const button = catalog.find((e) => e.id === "Button");
     expect(button?.installed).toBe(true); // the whole MUI set is bundled
     expect(button?.importPath).toBe("@mui/material");
-    expect(button?.renderStrategy).toBe("library");
     // Every entry carries its descriptor (so list/install can show props).
-    expect(catalog.every((e) => e.descriptor.id === e.id)).toBe(true);
   });
 
   test("overlay components render open + inline (Dialog content is visible in SSR)", async () => {
@@ -171,7 +169,12 @@ describe("MUI adapter SSR", () => {
     const adapter = mui as FrameworkAdapter;
     expect(adapter.themeToNative).toBeDefined();
     const native = adapter.themeToNative?.(theme);
-    const { files } = await emitMuiTheme(native, {
+    const { files } = await emitNativeTheme(native, {
+      spec: {
+        importLines: ['import { createTheme } from "@mui/material/styles";'],
+        factory: "createTheme",
+        defaultPath: "theme.ts",
+      },
       outputDir: "/tmp/velloo-mui-theme",
       apply: false,
     });
@@ -213,8 +216,11 @@ describe("MUI dark mode", () => {
     expect(dark.palette.background.default).not.toMatch(/255, ?255, ?255|#ffffff/i);
   });
 
-  test("emitMuiTheme emits a darkTheme alongside theme when colorsDark is set", async () => {
-    const result = await emitMuiTheme(mui.themeToNative?.(themed, false), {
+  test("emitNativeTheme emits a darkTheme alongside theme when colorsDark is set", async () => {
+    const muiSpec = (mui as import("@velloo/provider").FrameworkAdapter).themeModule;
+    if (!muiSpec) throw new Error("mui adapter must declare themeModule");
+    const result = await emitNativeTheme(mui.themeToNative?.(themed, false), {
+      spec: muiSpec,
       outputDir: "/tmp/velloo-mui-dark-test",
       darkThemeOptions: mui.themeToNative?.(themed, true),
       apply: false,

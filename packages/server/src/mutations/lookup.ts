@@ -224,6 +224,20 @@ export function getExtensions(ctx: MutationContext): Record<string, Extension> {
  * means use the default. Snippet bodies inherit their snippet's
  * library (not the embedding screen's).
  */
+/**
+ * The library id a screen resolves to — its own `library` when registered,
+ * else the folder default. The id (not just the provider instance) matters
+ * to per-library caches like the canvas bundler.
+ */
+export function libraryIdForScreen(
+  ctx: Pick<MutationContext, "folder">,
+  screen: Pick<Screen, "library">,
+): string {
+  const id = screen.library;
+  if (id && ctx.folder.config.libraries?.[id]) return id;
+  return ctx.folder.config.defaultLibrary;
+}
+
 export function providerForScreen(
   ctx: MutationContext,
   screen: Pick<Screen, "library"> | Pick<Snippet, "library">,

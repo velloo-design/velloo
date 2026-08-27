@@ -1,6 +1,7 @@
 import { relative } from "node:path";
 import type { Board, Screen } from "@velloo/schema";
 import type { WizardAnswers } from "./answers.ts";
+import { WIZARD_PROVIDERS } from "./provider-registry.ts";
 
 /**
  * Stands in for the screen list in the handoff prompt so the human-facing
@@ -10,9 +11,7 @@ import type { WizardAnswers } from "./answers.ts";
 export const SCREENS_PLACEHOLDER = "{{screens}}";
 
 function libraryLabel(library: WizardAnswers["library"]): string {
-  if (library === "mui") return "Material UI";
-  if (library === "none") return "velloo primitive";
-  return "shadcn";
+  return WIZARD_PROVIDERS[library].handoffComponentsLabel;
 }
 
 /**

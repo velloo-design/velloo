@@ -8,7 +8,7 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { type StyleChannelKind, styleChannelOf } from "@velloo/provider";
+import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { CloudAuth } from "../cloud.ts";
 import { countUnresolvedPulledComments } from "../cloud-comments.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
@@ -129,68 +129,21 @@ const FEEDBACK_INSTRUCTION =
   "**Sending product feedback**: this folder opted into the `send_feedback` tool. Reach for it when you hit friction with **Velloo itself** — a confusing instruction, a missing capability, a tool that misbehaved, a bug — or when the user asks to send feedback. ALWAYS show the user the exact `body` and get their go-ahead before calling; never send unprompted, even when you originated the idea. Fire sparingly — one report per distinct issue, never repeated. NEVER include the user's design content, code, or file/repo paths; describe the issue in your own words. This is feedback about Velloo, not about the design.";
 
 /**
- * Prepended for a MUI (sx-channel) folder so the agent is framed for Material UI
- * FIRST — the rest of INSTRUCTION_PARTS is shadcn/Tailwind-tuned, and this tells
- * the agent which of that guidance to ignore. (shadcn / no-lib folders use the
- * default Tailwind-shaped parts unchanged.)
- */
-const MUI_INTRO = [
-  "You are working on a **Material UI** Velloo design folder. Components are real MUI: `Box`/`Stack`/`Container`/`Paper` for layout, `Card`/`CardContent`/`CardHeader`/`CardActions`, `Typography` (ALL text — pick `variant` for the type scale; this is MUI's Heading+Text), `Button`/`IconButton`, `TextField`, `Chip`, `Divider`, `Avatar`, `List`/`ListItem`, `Table*`, `Tabs`/`Tab`, `Alert`, `Tooltip`, and the overlay surface `Dialog`/`Menu`/`Popover`/`Drawer`/`Snackbar` (rendered open + inline in design mode). Call `list_components` for the full set + per-component `example` props, and `get_theme` for the tokens. Designs are static — handlers/routing/forms are no-op.",
-  "",
-  '**Style with the `sx` object, not Tailwind classes.** Use `set_style { style: { display: "flex", alignItems: "center", gap: 2, p: 3, color: "primary.main" } }` — an object (merges shallowly; an inner `null` drops a key; `style: null` clears). `sx` keys are MUI system props; spacing is theme units (`p: 2` = 16px). `emit_code` emits idiomatic `<Component sx={{…}} />` importing from `@mui/material`; `emit_theme` emits a `createTheme(...)` module. **The Tailwind-specific guidance in the rest of these instructions — `className`, semantic utility tokens (`bg-background`, `text-muted-foreground`) and the `audit` tool — is for shadcn folders and does NOT apply here.** Style via `sx` + the shared theme tokens (`get_theme`); the same abstract palette/spacing/radius/typography projects onto MUI.',
-  "",
-];
-
-/**
- * Prepended for a no-framework (`none`) folder so the agent isn't told it has a
- * "shadcn snapshot": it's bare primitives + velloo helpers on Tailwind classes,
- * no shadcn component set. The rest of INSTRUCTION_PARTS (Box/Card layout,
- * Tailwind styling, audit) still applies — `none` is a Tailwind framework, only
- * the "shadcn snapshot" framing is corrected.
- */
-const NONE_INTRO = [
-  'You are working on a **no-framework** Velloo design folder — bare primitives, no component library. Despite mentions of "shadcn" below, THIS folder has only `Box`/`Stack`/`Container` for layout, `Card`, `Button`, `Input`, plus the velloo helpers (`Heading`/`Text`, `Image`, `Gradient`, `Layer`, `SVG`, `Divider`, `Placeholder`, `Icon`) — all wrapping plain HTML, styled with **Tailwind classes**. Call `list_components` for the exact set: there is NO shadcn surface (no `Badge`/`Avatar`/`Tabs`/`Dialog`/etc.), so build those from primitives or define snippets. The Box/Card layout + Tailwind styling guidance below all applies.',
-  "",
-];
-
-/**
- * Prepended for a no-framework folder whose CSS framework is also `none` (the
- * inline-`style` channel). Same primitives as NONE_INTRO, but styling is plain
- * inline `style` objects with no Tailwind — so the Tailwind/className/audit
- * guidance below must be ignored.
- */
-const NONE_INLINE_INTRO = [
-  "You are working on a **no-framework** Velloo design folder with **no CSS framework** — bare primitives + velloo helpers (`Box`/`Stack`/`Container`, `Card`, `Button`, `Input`, `Heading`/`Text`, `Image`, `Icon`, `SVG`, `Divider`, `Gradient`, `Layer`, `Placeholder`) wrapping plain HTML, styled with **inline `style` objects** — there is no Tailwind here. Call `list_components` for the exact set; there is NO shadcn surface (no `Badge`/`Avatar`/`Tabs`/`Dialog`/etc.), so build those from primitives or snippets.",
-  "",
-  '**Style with the `style` object, not Tailwind classes.** Use `set_style { style: { display: "flex", gap: "16px", padding: "24px", borderRadius: "8px", color: "var(--color-foreground)" } }` — a plain React style object (merges shallowly; an inner `null` drops a key; `style: null` clears). Reference theme tokens as CSS variables (`var(--color-primary)`, `var(--color-muted-foreground)`, `var(--radius)`) from `get_theme` so the design stays themable. `emit_code` emits `style={{…}}` on plain elements (no imports, no Tailwind). **The Tailwind-specific guidance in the rest of these instructions — `className`, utility tokens (`bg-background`, `text-muted-foreground`) and the `audit` tool — does NOT apply here; ignore it.**',
-  "",
-];
-
-/**
  * The instructions string. `canvasUrl` (when the MCP boots alongside a canvas)
  * is surfaced so the agent can hand the user a URL to watch — important under
  * the stdio transport, where the canvas binds an ephemeral port the user can't
- * predict. The feedback paragraph is appended only when opted in. `channelKind`
- * + `providerId` frame the agent for the folder's framework (MUI ⇒ sx; no-lib ⇒
- * bare primitives; shadcn ⇒ the default framing). `unresolvedComments` (pulled
+ * predict. The feedback paragraph is appended only when opted in. `intro` is the
+ * adapter-supplied framework framing (`FrameworkAdapter.mcpIntro`, resolved for
+ * the folder's style channel; empty ⇒ the default shadcn framing). `unresolvedComments` (pulled
  * share-link comments waiting locally as annotations) adds ONE line when > 0.
  */
 export function buildInstructions(
   feedbackEnabled: boolean,
   canvasUrl?: string,
   tiered = false,
-  channelKind?: StyleChannelKind,
-  providerId?: string,
+  intro: readonly string[] = [],
   unresolvedComments = 0,
 ): string {
-  const intro =
-    channelKind === "sx"
-      ? MUI_INTRO
-      : providerId === "none"
-        ? channelKind === "style"
-          ? NONE_INLINE_INTRO
-          : NONE_INTRO
-        : [];
   const parts = [...intro, ...INSTRUCTION_PARTS];
   if (tiered) parts.push("", revealInstructions());
   if (canvasUrl) {
@@ -221,10 +174,13 @@ function buildMcpServer(
 ): McpServer {
   const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled);
   const tiered = progressiveToolsMode();
+  // Framework framing comes from the adapter itself (its style channel picks
+  // the variant for multi-channel providers) — no provider ids here.
   const channelKind = styleChannelOf(
     ctx.defaultProvider,
     ctx.folder.config.styling?.framework,
   ).kind;
+  const intro = (ctx.defaultProvider as FrameworkAdapter).mcpIntro?.(channelKind) ?? [];
   // Waiting-comments count for the instructions, from LOCAL state only —
   // initialize never touches the network. The daemon's boot + interval pulls
   // (and any pull_comments call) keep `folder.annotations` fresh; each new
@@ -239,8 +195,7 @@ function buildMcpServer(
         feedbackEnabled,
         assetOrigin?.replace(/\/+$/, ""),
         tiered,
-        channelKind,
-        ctx.defaultProvider.id,
+        intro,
         unresolvedComments,
       ),
     },

@@ -54,17 +54,18 @@ export function createLiveRouter(bundler: LiveBundler): Hono {
 /**
  * Serve the framework-native canvas bundle (#18) the iframe loads to client-
  * render a screen against the host app's actually-installed components (exact
- * version). One folder-scoped `mountScreen` module; the iframe cache-busts with
- * `?v=<bundler.version>`. A build error (framework not installed, resolve
+ * version). One `mountScreen` module per library (`?lib=<libraryId>`, default
+ * library when omitted); the iframe cache-busts with `?v=<bundler.version>`. A build error (framework not installed, resolve
  * failure) still serves a valid module — the empty `mountScreen` stub — so the
  * client cleanly keeps the SSR render. `Access-Control-Allow-Origin: *` for the
  * same Playwright-`setContent` reason as the live bundle (see api-live.ts).
  */
-export function createCanvasRouter(bundler: CanvasBundler): Hono {
+export function createCanvasRouter(bundler: CanvasBundler, defaultLibraryId: () => string): Hono {
   const r = new Hono();
 
   r.get("/bundle.js", async (c) => {
-    const { code, errors } = await bundler.build();
+    const lib = c.req.query("lib") || defaultLibraryId();
+    const { code, errors } = await bundler.build(lib);
     const body = errors.length
       ? `${code}\nexport const __velloo_canvas_error = ${JSON.stringify(errors)};\n`
       : code;

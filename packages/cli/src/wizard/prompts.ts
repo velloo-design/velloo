@@ -22,6 +22,11 @@ import { detectHost } from "../scan/detect.ts";
 import { type AppsScanResult, primaryApp, scanApps } from "../scan/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
+import {
+  DEFAULT_LIBRARY_ID,
+  interactiveLibraryChoices,
+  WIZARD_PROVIDERS,
+} from "./provider-registry.ts";
 import { STACKS } from "./stacks.ts";
 
 function isAborted(value: unknown): value is symbol {
@@ -374,7 +379,7 @@ export async function runInteractive(ctx: {
         folder,
         // Scan renders against the bundled snapshot runtime and imports the
         // host theme; it never writes into the app (source: "binary").
-        library: "shadcn-upstream",
+        library: DEFAULT_LIBRARY_ID,
         source: "binary",
         componentsRelative: "src/components/ui",
         initialContent: "scan",
@@ -390,28 +395,17 @@ export async function runInteractive(ctx: {
 
   const library = await select<LibraryId>({
     message: "Component library",
-    options: [
-      {
-        value: "shadcn-upstream",
-        label: "shadcn",
-        hint: "Vanilla shadcn added to your app. Recommended.",
-      },
-      {
-        value: "none",
-        label: "No library",
-        hint: "Box / Stack / Text primitives.",
-      },
-    ],
-    initialValue: "shadcn-upstream",
+    options: interactiveLibraryChoices(),
+    initialValue: DEFAULT_LIBRARY_ID,
   });
   if (isAborted(library)) return abort();
+  const provider = WIZARD_PROVIDERS[library];
 
   // Source is derived from the library: upstream lives in the app (written
   // post-init), everything else renders from the bundled snapshot.
-  let source: LibrarySource = "binary";
+  const source: LibrarySource = provider.defaultSource;
   let componentsRelative = "src/components/ui";
-  if (library === "shadcn-upstream") {
-    source = "in-repo";
+  if (provider.asksComponentsSubfolder) {
     const cr = await text({
       message: "Components subfolder inside your app",
       placeholder: "src/components/ui",
@@ -422,11 +416,12 @@ export async function runInteractive(ctx: {
   }
 
   // The product surface folds the old sample-vs-blank question into "what
-  // are you designing?" — the answer picks which slice of Pulse ships. The
-  // no-library welcome sample has no surfaces, so it keeps the plain pair.
+  // are you designing?" — the answer picks which slice of Pulse ships. A
+  // library without surfaces (its welcome sample has none) keeps the plain
+  // pair.
   let initialContent: Exclude<InitialContent, "scan">;
   let productSurface: ProductSurface | undefined;
-  if (library === "none") {
+  if (!provider.hasProductSurfaces) {
     const content = await select<Exclude<InitialContent, "scan">>({
       message: "Initial design",
       options: [
@@ -463,7 +458,7 @@ export async function runInteractive(ctx: {
 
   let themePreset: string | undefined;
   let themeVibe: string | undefined;
-  if (library === "shadcn-upstream") {
+  if (provider.asksThemePreset) {
     const preset = await select<string>({
       message: "Theme",
       options: [
@@ -496,7 +491,7 @@ export async function runInteractive(ctx: {
   // Stack → codegen import alias. Only shadcn emits aliased component
   // imports, so the question is noise for the no-library flow.
   let stack: string | undefined;
-  if (library === "shadcn-upstream") {
+  if (provider.asksStack) {
     const picked = await select<string>({
       message: "Your app's stack (sets the import alias emitted code uses)",
       options: [

@@ -1,12 +1,19 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@velloo/provider";
+import {
+  type CatalogEntry,
+  type FrameworkAdapter,
+  type InstallCtx,
+  type Manifest,
+  TAILWIND_CLASSNAME,
+} from "@velloo/provider";
 import {
   componentsDir as snapshotComponentsDir,
   entryCssPath as snapshotEntryCssPath,
   registry as snapshotRegistry,
   snapshotVersion,
 } from "@velloo/shadcn-snapshot";
+import { installedAddNames, runShadcnAdd, shadcnAddName } from "./install.ts";
 import { readManifest } from "./manifest.ts";
 
 /**
@@ -42,6 +49,12 @@ export interface CreateUpstreamProviderOptions {
   cacheDir?: string;
   /** Version string for the provider's `version` field — defaults to the snapshot's date. */
   version?: string;
+  /**
+   * Absolute path to the user's app — where `install_component` runs the
+   * shadcn CLI and where installed-status is read from. Absent ⇒ the catalog
+   * reports nothing installed and installs error with guidance.
+   */
+  hostAppRoot?: string;
 }
 
 export function createProvider(opts: CreateUpstreamProviderOptions = {}): FrameworkAdapter {
@@ -49,23 +62,62 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
   const componentsDir =
     cacheDir && existsSync(join(cacheDir, "ui")) ? join(cacheDir, "ui") : snapshotComponentsDir;
   const version = opts.version ?? snapshotVersion;
+  const hostAppRoot = opts.hostAppRoot;
+  const loadManifest = async (): Promise<Manifest> => {
+    if (cacheDir && existsSync(join(cacheDir, "manifest.json"))) {
+      return await readManifest(cacheDir);
+    }
+    // Fall back to the snapshot's manifest if no cache was generated
+    // (in-process tests, dev shortcuts).
+    const { loadManifest: snapshotManifest } = await import("@velloo/shadcn-snapshot");
+    return snapshotManifest();
+  };
   return {
     id: "shadcn-upstream",
     version,
     componentsDir,
     styleEntryPath: snapshotEntryCssPath,
     registry: snapshotRegistry,
-    loadManifest: async (): Promise<Manifest> => {
-      if (cacheDir && existsSync(join(cacheDir, "manifest.json"))) {
-        return await readManifest(cacheDir);
-      }
-      // Fall back to the snapshot's manifest if no cache was generated
-      // (in-process tests, dev shortcuts).
-      const { loadManifest } = await import("@velloo/shadcn-snapshot");
-      return loadManifest();
-    },
+    loadManifest,
     label: `shadcn (upstream @ ${version})`,
     styleChannel: TAILWIND_CLASSNAME,
     styleChannels: ["tailwind-classname"],
+    // The base instructions are already shadcn-shaped; the one thing worth
+    // framing is that components land in the USER'S APP on demand.
+    mcpIntro: () => [
+      "**Installing components into the app**: this folder's shadcn components render on the canvas from velloo's built-in runtime, but the user's app only contains what has been installed. When the design uses a component the app doesn't have yet (or you're about to emit code that imports one), call `install_component { componentId }` — it runs the official `npx shadcn@latest add` in the host app and reports the import path. `install_component` also answers installed-status for any component id.",
+      "",
+    ],
+    // Real installed-status per catalog() call: a component's shadcn family
+    // file exists in the app's ui dir. The canvas renders everything from the
+    // snapshot runtime either way — "installed" is about the USER'S APP.
+    catalog: async (): Promise<CatalogEntry[]> => {
+      const manifest = await loadManifest();
+      const shadcn = manifest.filter((c) => c.source !== "velloo");
+      const present = hostAppRoot ? installedAddNames(hostAppRoot) : new Set<string>();
+      return shadcn.map((c) => {
+        const addName = shadcnAddName(c.id);
+        return {
+          id: c.id,
+          installed: present.has(addName),
+          importPath: `@/components/ui/${addName}`,
+        };
+      });
+    },
+    installComponent: async (id: string, ctx: InstallCtx): Promise<void> => {
+      const manifest = await loadManifest();
+      const known = manifest.some((c) => c.source !== "velloo" && c.id === id);
+      if (!known) {
+        throw new Error(`"${id}" is not a shadcn component in this library's catalog.`);
+      }
+      const appRoot = ctx.hostAppRoot ?? hostAppRoot;
+      if (!appRoot || !existsSync(appRoot)) {
+        throw new Error(
+          "No host app to install into — set `hostApp.root` in .design/config.json " +
+            "(or re-run `velloo init` inside your app) so shadcn components can be added to it.",
+        );
+      }
+      await runShadcnAdd({ hostAppRoot: appRoot, addName: shadcnAddName(id) });
+    },
   };
 }

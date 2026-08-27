@@ -1,15 +1,17 @@
 export {
   type CanvasBundleSpec,
+  type CanvasStyleRuntime,
   type CatalogEntry,
   CSS_FRAMEWORK_CHANNEL,
   type CssFramework,
   catalogFromManifest,
   type FrameworkAdapter,
+  type IdentifierRef,
   type InstallCtx,
   type InstallResult,
   type InstallTarget,
+  identifierRef,
   type RenderPass,
-  type RenderStrategy,
   STYLE_CHANNELS,
   STYLE_PROP,
   type StyleChannel,
@@ -17,6 +19,7 @@ export {
   SX_PROP,
   styleChannelOf,
   TAILWIND_CLASSNAME,
+  type ThemeModuleSpec,
 } from "./adapter.ts";
 export {
   createProviderLoader,

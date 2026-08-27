@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { createProvider as createMuiProvider } from "@velloo/provider-mui";
+import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { buildInstructions } from "../mcp/server.ts";
+
+/** Resolve an adapter's intro the way buildMcpServer does. */
+const introOf = (
+  p: ReturnType<typeof createMuiProvider>,
+  channel: "sx" | "tailwind-classname" | "style",
+): readonly string[] => p.mcpIntro?.(channel) ?? [];
 
 describe("buildInstructions", () => {
   test("omits the feedback paragraph when feedback is disabled", () => {
@@ -29,7 +37,7 @@ describe("buildInstructions", () => {
   });
 
   test("a MUI (sx) folder is framed for Material UI, not shadcn/Tailwind", () => {
-    const mui = buildInstructions(false, undefined, false, "sx");
+    const mui = buildInstructions(false, undefined, false, introOf(createMuiProvider(), "sx"));
     expect(mui).toContain("Material UI");
     expect(mui).toContain("Style with the `sx` object");
     // It tells the agent the Tailwind guidance below doesn't apply here.
@@ -39,13 +47,8 @@ describe("buildInstructions", () => {
   });
 
   test("a shadcn (tailwind) folder keeps the default Tailwind-shaped framing", () => {
-    const shadcn = buildInstructions(
-      false,
-      undefined,
-      false,
-      "tailwind-classname",
-      "shadcn-upstream",
-    );
+    // shadcn-upstream declares no mcpIntro — the default framing leads.
+    const shadcn = buildInstructions(false, undefined, false, []);
     expect(shadcn).not.toContain("Style with the `sx` object");
     // No framework-specific intro prepended — the default opening leads.
     expect(shadcn).not.toContain("**no-framework** Velloo design folder");
@@ -53,7 +56,12 @@ describe("buildInstructions", () => {
   });
 
   test("a no-framework folder is framed as bare primitives, correcting the shadcn claim", () => {
-    const none = buildInstructions(false, undefined, false, "tailwind-classname", "none");
+    const none = buildInstructions(
+      false,
+      undefined,
+      false,
+      introOf(createNoneProvider(), "tailwind-classname"),
+    );
     expect(none).toContain("no-framework");
     expect(none).toContain("NO shadcn surface");
     // Still Tailwind-shaped (no sx), and the correction leads.
@@ -61,21 +69,32 @@ describe("buildInstructions", () => {
     expect(none.indexOf("no-framework")).toBeLessThan(none.indexOf("pinned shadcn snapshot"));
   });
 
+  test("a none/none folder is framed for inline styles (channel picks the variant)", () => {
+    const inline = buildInstructions(
+      false,
+      undefined,
+      false,
+      introOf(createNoneProvider(), "style"),
+    );
+    expect(inline).toContain("no CSS framework");
+    expect(inline).toContain("Style with the `style` object");
+  });
+
   test("surfaces waiting share-link comments as one line when the count is positive", () => {
-    const text = buildInstructions(false, undefined, false, undefined, undefined, 3);
+    const text = buildInstructions(false, undefined, false, [], 3);
     expect(text).toContain(
       "**3 unresolved share-link comments are waiting as annotations** — read them via `list_annotations`; refresh with `pull_comments`.",
     );
   });
 
   test("the waiting-comments line reads correctly for a single comment", () => {
-    const text = buildInstructions(false, undefined, false, undefined, undefined, 1);
+    const text = buildInstructions(false, undefined, false, [], 1);
     expect(text).toContain("**1 unresolved share-link comment is waiting as an annotation**");
   });
 
   test("omits the waiting-comments line at zero (and by default)", () => {
     expect(buildInstructions(false)).not.toContain("waiting as annotation");
-    expect(buildInstructions(false, undefined, false, undefined, undefined, 0)).not.toContain(
+    expect(buildInstructions(false, undefined, false, [], 0)).not.toContain(
       "waiting as annotation",
     );
   });

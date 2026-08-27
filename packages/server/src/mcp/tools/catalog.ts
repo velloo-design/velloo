@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { type CatalogEntry, catalogFromManifest, type FrameworkAdapter } from "@velloo/provider";
 import { z } from "zod";
+import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { unknownComponent } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
@@ -65,6 +66,7 @@ export function registerCatalogTools(mcp: McpServer, ctx: MutationContext): void
         try {
           await provider.installComponent(entry.id, {
             folderRoot: ctx.folder.root,
+            hostAppRoot: hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp),
             target: "app",
           });
           return jsonResult({

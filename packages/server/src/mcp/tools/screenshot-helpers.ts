@@ -12,6 +12,7 @@ import { type LiveBundler, liveExtensions } from "../../live/component-bundler.t
 import { updateFrame } from "../../mutations/api/frames.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import {
+  libraryIdForScreen,
   providerForScreen,
   registryForScreen,
   renderPassForScreen,
@@ -89,7 +90,8 @@ export type CanvasBundleFor = (
  * screen — the installed-component `mountScreen` URL (root-relative; resolved
  * against the screenshot's `<base href>` like the live bundle) + native theme
  * options — or undefined when the screen's adapter declares no bundle spec OR
- * the build failed (framework not installed). Both keep the capture on SSR.
+ * the build failed (framework not installed). Both keep the capture on SSR;
+ * bundles are per-library, so non-default-library screens mount too.
  * Awaits the cached build so a build miss never embeds a dead URL.
  */
 export function makeCanvasBundle(
@@ -98,15 +100,12 @@ export function makeCanvasBundle(
 ): CanvasBundleFor {
   return async (screen, theme, dark) => {
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-    // The bundler builds the DEFAULT provider's components, so only a screen on
-    // the default library can mount against it — a non-default-library screen in
-    // a multi-library folder keeps SSR (the bundle wouldn't have its components).
-    if (provider !== ctx.defaultProvider) return undefined;
     if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
-    const { errors } = await canvasBundler.build();
+    const libraryId = libraryIdForScreen(ctx, screen);
+    const { errors } = await canvasBundler.build(libraryId);
     if (errors.length > 0) return undefined;
     return {
-      url: `/api/canvas/bundle.js?v=${canvasBundler.version}`,
+      url: `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}`,
       themeOptions: provider.themeToNative(theme, dark),
     };
   };

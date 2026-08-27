@@ -8,7 +8,12 @@ import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import { liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
-import { providerForScreen, registryForScreen, renderPassForScreen } from "../mutations/lookup.ts";
+import {
+  libraryIdForScreen,
+  providerForScreen,
+  registryForScreen,
+  renderPassForScreen,
+} from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -39,7 +44,8 @@ export function createRenderRouter(
    * The framework-native canvas bundle wiring for a screen (#18): the
    * installed-component `mountScreen` URL + native theme options, or undefined
    * when the screen's adapter declares no `canvasBundleSpec` OR the build
-   * failed (framework not installed) — both keep the canvas on SSR. Awaits the
+   * failed (framework not installed) — both keep the canvas on SSR. Bundles are
+   * per-library, so non-default-library screens client-mount too. Awaits the
    * (cached) build so a build miss never embeds a dead bundle URL.
    */
   const canvasBundleFor = async (
@@ -49,15 +55,12 @@ export function createRenderRouter(
     dark: boolean,
   ): Promise<{ url: string; themeOptions: unknown } | undefined> => {
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-    // The bundler builds the default provider's components, so only a
-    // default-library screen can mount against it (a non-default-library screen
-    // in a multi-library folder keeps SSR — see makeCanvasBundle).
-    if (provider !== ctx.defaultProvider) return undefined;
     if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
-    const { errors } = await canvasBundler.build();
+    const libraryId = libraryIdForScreen(ctx, screen);
+    const { errors } = await canvasBundler.build(libraryId);
     if (errors.length > 0) return undefined;
     return {
-      url: `/api/canvas/bundle.js?v=${canvasBundler.version}`,
+      url: `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}`,
       themeOptions: provider.themeToNative(theme, dark),
     };
   };
