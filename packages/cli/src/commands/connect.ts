@@ -49,7 +49,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesignFolder(args.folder, "connect");
+    const folder = await resolveDesignFolder(args.folder, "connect", { interactive: true });
     const interactive = Boolean(process.stdin.isTTY);
 
     // Explicit --agent wins; otherwise ask interactively (init's wiring

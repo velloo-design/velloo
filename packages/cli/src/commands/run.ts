@@ -33,7 +33,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesignFolder(args.folder, "run");
+    const folder = await resolveDesignFolder(args.folder, "run", { interactive: true });
     const preferredPort = args.port ? Number(args.port) : undefined;
     if (preferredPort !== undefined && (!Number.isFinite(preferredPort) || preferredPort < 0)) {
       fail("run", `invalid --port ${JSON.stringify(args.port)}`);

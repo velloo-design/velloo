@@ -26,6 +26,7 @@ import {
 } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
+import { registerProject } from "../manifest.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import { findMuiTheme, importThemeFromMui } from "../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
@@ -511,6 +512,11 @@ export default defineCommand({
       description:
         "Your app's stack — sets the emitted import alias: nextjs | vite | astro (@/components/ui) | remix (~/components/ui)",
     },
+    project: {
+      type: "string",
+      description:
+        "Project name to register in the repo's velloo.json (default: derived from the folder path)",
+    },
   },
   async run({ args }) {
     const cliArgs = args as InitCliArgs;
@@ -650,6 +656,22 @@ export default defineCommand({
     // Echo for non-interactive callers that grep the output for
     // "scaffolded" — keeps the existing CLI test passing.
     console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
+
+    // Name the folder in the repo manifest so a second design folder in the
+    // same repo stays resolvable. The scaffold already succeeded — a manifest
+    // problem is a warning to fix by hand, not a failed init.
+    try {
+      const reg = await registerProject(folder, answers.appRoot, cliArgs.project);
+      if (reg.created) {
+        console.log(
+          pc.dim(
+            `  Registered as project "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
+          ),
+        );
+      }
+    } catch (err) {
+      console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
+    }
     if (importedFrom) {
       console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
     }

@@ -104,6 +104,24 @@ describe("velloo init", () => {
     expect(await Bun.file(join(tmp, "design", ".design/config.json")).exists()).toBe(true);
   }, 30_000);
 
+  test("registers the folder in the repo's velloo.json and merges a second project", async () => {
+    const first = await runInit(tmp, ["--initial-content=blank"]);
+    expect(first.exitCode).toBe(0);
+    const manifestPath = join(tmp, "velloo.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    expect(Object.values(manifest.projects)).toEqual(["velloo"]);
+
+    const second = await runInit(tmp, [
+      "--design-folder=brand",
+      "--project=brand",
+      "--initial-content=blank",
+    ]);
+    expect(second.exitCode).toBe(0);
+    const merged = JSON.parse(await readFile(manifestPath, "utf8"));
+    expect(merged.projects.brand).toBe("brand");
+    expect(Object.keys(merged.projects)).toHaveLength(2);
+  }, 60_000);
+
   test("refuses to scaffold over a non-empty design folder without --force", async () => {
     await Bun.write(join(designDir(tmp), "marker.txt"), "stay");
     const { exitCode, stderr } = await runInit(tmp);

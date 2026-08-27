@@ -35,6 +35,8 @@ export interface InitCliArgs {
   vibe?: string;
   /** App stack: nextjs | vite | astro | remix — sets codegen.componentsAlias. */
   stack?: string;
+  /** Project name for the repo's velloo.json (default: derived from the folder path). */
+  project?: string;
 }
 
 export function isValidLibraryId(v: string): v is LibraryId {

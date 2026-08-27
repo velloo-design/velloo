@@ -1,9 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { isCancel, multiselect, select } from "@clack/prompts";
 import { BoardSchema, ScreenSchema } from "@velloo/schema";
 import { findDesignConfig } from "./design-config.ts";
 import { fail } from "./fail.ts";
+import { type FoundManifest, findManifest, pickProject } from "./manifest.ts";
 
 const DEFAULT_FOLDER = "velloo";
 
@@ -22,13 +23,39 @@ export interface ResolveDesignFolderOptions {
   requireConfig?: boolean;
   /** Abort override — `velloo ci` exits 2 for operational errors, not fail()'s 1. */
   onFail?: (message: string) => never;
+  /**
+   * Offer a picker when the repo manifest lists several projects and nothing
+   * disambiguates (TTY only). Commands that own stdio (mcp) or run headless
+   * (ci) must leave this off.
+   */
+  interactive?: boolean;
+  /** Resolution base (default: process.cwd()) — injectable so tests avoid chdir. */
+  cwd?: string;
+}
+
+/** A manifest entry must point at a real design folder — fail loud on a stale path. */
+async function manifestProject(
+  repo: FoundManifest,
+  name: string,
+  abort: (message: string) => never,
+): Promise<string> {
+  const folder = repo.folders.get(name) as string;
+  if (!(await hasDesignConfig(folder))) {
+    abort(
+      `project ${JSON.stringify(name)} in ${repo.path} points at ${folder}, which is not a velloo design folder (no .design/config.json).`,
+    );
+  }
+  return folder;
 }
 
 /**
- * Resolve the design folder for a command. An explicit arg wins; otherwise
- * default to `./velloo`, then the cwd, then walk up for a `.design/config.json`
- * (so the command works from inside the folder or the app root). Fails with
- * guidance when nothing is found.
+ * Resolve the design folder for a command. An explicit arg wins — a repo
+ * manifest (`velloo.json`) project name, else a path. Without an arg, a
+ * manifest drives resolution (cwd containment → the only project →
+ * defaultProject → picker/fail); repos without one keep the convention chain:
+ * `./velloo`, then the cwd, then walk up for a `.design/config.json` (so the
+ * command works from inside the folder or the app root). Fails with guidance
+ * when nothing is found.
  */
 export async function resolveDesignFolder(
   arg: string | undefined,
@@ -36,17 +63,60 @@ export async function resolveDesignFolder(
   opts: ResolveDesignFolderOptions = {},
 ): Promise<string> {
   const abort: (message: string) => never = opts.onFail ?? ((m) => fail(cmd, m));
+  const cwd = resolve(opts.cwd ?? ".");
+
+  let repo: FoundManifest | null = null;
+  try {
+    repo = await findManifest(cwd);
+  } catch (err) {
+    abort((err as Error).message);
+  }
+
   if (arg) {
-    const explicit = resolve(arg);
-    if (opts.requireConfig && !(await hasDesignConfig(explicit))) {
+    if (repo && !arg.includes(sep) && repo.folders.has(arg)) {
+      return manifestProject(repo, arg, abort);
+    }
+    const explicit = resolve(cwd, arg);
+    if (await hasDesignConfig(explicit)) return explicit;
+    if (opts.requireConfig) {
       abort(`${explicit} is not a velloo design folder (no .design/config.json).`);
+    }
+    // A bare name that matches nothing is a typo'd project, not a folder path.
+    if (repo && !arg.includes(sep)) {
+      abort(
+        `unknown project ${JSON.stringify(arg)} — ${repo.path} lists: ${[...repo.folders.keys()].join(", ")}. Pass a project name or a folder path.`,
+      );
     }
     return explicit;
   }
-  const here = resolve(DEFAULT_FOLDER);
+
+  if (repo && repo.folders.size > 0) {
+    // Standing inside a design folder beats the manifest — you cd'd here.
+    if (await hasDesignConfig(cwd)) return cwd;
+    const picked = pickProject(repo, cwd);
+    if (picked) return manifestProject(repo, picked, abort);
+    const names = [...repo.folders.keys()];
+    if (opts.interactive && process.stdin.isTTY) {
+      const chosen = await select<string>({
+        message: "Which project?",
+        options: names.map((n) => ({
+          value: n,
+          label: n,
+          hint: relative(cwd, repo.folders.get(n) as string),
+        })),
+      });
+      if (isCancel(chosen)) abort("cancelled.");
+      return manifestProject(repo, chosen as string, abort);
+    }
+    abort(
+      `${repo.path} lists several projects: ${names.join(", ")}. Pass one (e.g. \`velloo ${cmd} ${names[0]}\`) or set "defaultProject".`,
+    );
+  }
+
+  const here = join(cwd, DEFAULT_FOLDER);
   if (await hasDesignConfig(here)) return here;
-  if (await hasDesignConfig(resolve("."))) return resolve(".");
-  const found = await findDesignConfig(resolve("."));
+  if (await hasDesignConfig(cwd)) return cwd;
+  const found = await findDesignConfig(cwd);
   if (found) return found.folder;
   abort(
     `no design folder found. Pass one (e.g. \`velloo ${cmd} ./velloo\`), run from a folder that contains a Velloo design, or \`velloo init\` first.`,
