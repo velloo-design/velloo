@@ -29,11 +29,11 @@ const theme: Theme = {
 };
 
 const config = {
-  schemaVersion: 1 as const,
+  schemaVersion: 2 as const,
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {
-      id: "shadcn-react" as const,
+      id: "shadcn-upstream" as const,
       version: "t",
       source: "binary",
       componentsPath: "binary",

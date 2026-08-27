@@ -372,9 +372,9 @@ export async function runInteractive(ctx: {
         appRoot: ctx.appRoot,
         scanRoot,
         folder,
-        // Scan renders against the bundled snapshot and imports the host theme;
-        // it never writes into the app.
-        library: "shadcn-react",
+        // Scan renders against the bundled snapshot runtime and imports the
+        // host theme; it never writes into the app (source: "binary").
+        library: "shadcn-upstream",
         source: "binary",
         componentsRelative: "src/components/ui",
         initialContent: "scan",
@@ -393,13 +393,8 @@ export async function runInteractive(ctx: {
     options: [
       {
         value: "shadcn-upstream",
-        label: "shadcn (upstream)",
+        label: "shadcn",
         hint: "Vanilla shadcn added to your app. Recommended.",
-      },
-      {
-        value: "shadcn-react",
-        label: "shadcn (vendored snapshot)",
-        hint: "Bundled with velloo — shadcn is NOT downloaded.",
       },
       {
         value: "none",
@@ -468,7 +463,7 @@ export async function runInteractive(ctx: {
 
   let themePreset: string | undefined;
   let themeVibe: string | undefined;
-  if (library === "shadcn-upstream" || library === "shadcn-react") {
+  if (library === "shadcn-upstream") {
     const preset = await select<string>({
       message: "Theme",
       options: [
@@ -501,7 +496,7 @@ export async function runInteractive(ctx: {
   // Stack → codegen import alias. Only shadcn emits aliased component
   // imports, so the question is noise for the no-library flow.
   let stack: string | undefined;
-  if (library === "shadcn-upstream" || library === "shadcn-react") {
+  if (library === "shadcn-upstream") {
     const picked = await select<string>({
       message: "Your app's stack (sets the import alias emitted code uses)",
       options: [

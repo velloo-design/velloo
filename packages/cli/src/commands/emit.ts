@@ -4,7 +4,7 @@ import { stdout } from "node:process";
 import { type CodegenTarget, emitCode, moduleTarget } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { type Screen, ScreenSchema } from "@velloo/schema";
-import { loadDesignFolder, migrateConfig, resolveProviders } from "@velloo/server";
+import { loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
@@ -25,8 +25,7 @@ async function folderEmitContext(
   const found = await findDesignConfig(screenPath);
   if (!found) return {};
   const design = await loadDesignFolder(found.folder);
-  const config = migrateConfig(design.config);
-  const { providers, defaultProvider } = await resolveProviders(config, found.folder);
+  const { providers, defaultProvider } = await resolveProviders(design.config, found.folder);
   const provider = (screen.library && providers[screen.library]) || defaultProvider;
   const adapter = provider as FrameworkAdapter;
   let target: CodegenTarget | undefined;
@@ -37,10 +36,10 @@ async function folderEmitContext(
       adapter.codegenModule,
     );
   }
-  const inlineStyle = styleChannelOf(provider, config.styling?.framework).kind === "style";
+  const inlineStyle = styleChannelOf(provider, design.config.styling?.framework).kind === "style";
   return {
     snippets: design.snippets,
-    ...(config.extensions ? { extensions: config.extensions } : {}),
+    ...(design.config.extensions ? { extensions: design.config.extensions } : {}),
     ...(target ? { target } : {}),
     ...(inlineStyle ? { inlineStyle: true } : {}),
   };

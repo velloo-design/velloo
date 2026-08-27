@@ -89,7 +89,7 @@ async function scaffold(design: string, withLive: boolean): Promise<void> {
   await writeFile(
     join(design, ".design", "config.json"),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       toolVersion: "0.0.1",
       libraries: {
         default: { id: "none", version: "0.1.0", source: "binary", componentsPath: "binary" },

@@ -1,7 +1,6 @@
 import { isAbsolute, resolve, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  type CodegenError,
   type CodegenTarget,
   emitCode,
   emitMuiTheme,
@@ -13,25 +12,10 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { Screen, Snippet } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
-
-type McpResult = {
-  content: { type: "text"; text: string }[];
-  isError?: true;
-};
-
-function jsonResult(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
-
-function codegenErrorResult(error: CodegenError | { kind: string }): McpResult {
-  return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
-}
-
-function errorResult(text: string): McpResult {
-  return { isError: true, content: [{ type: "text", text }] };
-}
+import { errorResult, jsonResult } from "./result.ts";
 
 /**
  * The codegen target for a screen/snippet's framework: when its provider
@@ -83,8 +67,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     },
     async (args) => {
       const screen = ctx.folder.screens.get(args.screenId);
-      if (!screen)
-        return codegenErrorResult({ kind: "ScreenNotFound", screenId: args.screenId } as never);
+      if (!screen) return errorResult(screenNotFound(args.screenId));
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, screen);
       const result = await emitCode(screen, {
@@ -94,7 +77,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         ...(target ? { target } : {}),
         ...(isInlineStyle(ctx, screen) ? { inlineStyle: true } : {}),
       });
-      if (!result.ok) return codegenErrorResult(result.error);
+      if (!result.ok) return errorResult(result.error);
       return jsonResult(result.value);
     },
   );
@@ -111,8 +94,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     },
     async (args) => {
       const snippet = ctx.folder.snippets.get(args.snippetId);
-      if (!snippet)
-        return codegenErrorResult({ kind: "SnippetNotFound", snippetId: args.snippetId } as never);
+      if (!snippet) return errorResult(snippetNotFound(args.snippetId));
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, snippet);
       const result = await emitSnippet(snippet, {
@@ -122,7 +104,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         ...(target ? { target } : {}),
         ...(isInlineStyle(ctx, snippet) ? { inlineStyle: true } : {}),
       });
-      if (!result.ok) return codegenErrorResult(result.error);
+      if (!result.ok) return errorResult(result.error);
       return jsonResult(result.value);
     },
   );

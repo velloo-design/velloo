@@ -3,10 +3,7 @@ import { z } from "zod";
 import type { MutationContext } from "../../mutations/index.ts";
 import { validateClassNames } from "../../styles/class-validation.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
-
-function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
+import { jsonResult } from "./result.ts";
 
 export function registerValidateTools(
   mcp: McpServer,

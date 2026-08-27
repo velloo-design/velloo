@@ -7,7 +7,7 @@ const BASE: WizardAnswers = {
   appRoot: "/home/me/proj",
   scanRoot: "/home/me/proj",
   folder: "/home/me/proj/velloo",
-  library: "shadcn-react",
+  library: "shadcn-upstream",
   source: "binary",
   componentsRelative: "src/components/ui",
   initialContent: "scan",

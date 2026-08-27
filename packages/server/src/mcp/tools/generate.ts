@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
 import { generateAsset, IMAGE_SIZES } from "../../cloud-generate.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { errorResult, jsonResult } from "./result.ts";
 
 /**
  * `generate_asset` — hosted, credit-metered image/SVG generation via
@@ -46,13 +47,8 @@ export function registerGenerateTools(
         model,
         filename,
       });
-      if (!r.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `generate_asset: ${r.error.message}` }],
-        };
-      }
-      return { content: [{ type: "text" as const, text: JSON.stringify(r.value) }] };
+      if (!r.ok) return errorResult(`generate_asset: ${r.error.message}`);
+      return jsonResult(r.value);
     },
   );
 }

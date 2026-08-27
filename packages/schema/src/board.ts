@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FrameSchema } from "./frame.ts";
+import { ResourceIdSchema } from "./ids.ts";
 
 /**
  * A visual group on a Board — a colored region label that ties related
@@ -7,7 +8,7 @@ import { FrameSchema } from "./frame.ts";
  * group id; the group itself just defines name + color.
  */
 export const BoardGroupSchema = z.object({
-  id: z.string().min(1),
+  id: ResourceIdSchema,
   name: z.string().min(1),
   /** CSS color value; canvas uses it for the group region tint and tag chip. */
   color: z.string().optional(),
@@ -25,7 +26,7 @@ export type BoardGroup = z.infer<typeof BoardGroupSchema>;
  * the underlying screen propagate to every frame everywhere.
  */
 export const BoardSchema = z.object({
-  id: z.string().min(1),
+  id: ResourceIdSchema,
   name: z.string().min(1),
   /**
    * Named theme (stem of `theme/<name>.json`) the canvas applies when

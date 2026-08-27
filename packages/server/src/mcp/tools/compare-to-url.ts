@@ -5,7 +5,6 @@ import {
   captureUrlScreenshot,
   classifyCapture,
   diffPngs,
-  renderScreen,
   sideBySidePng,
   type UrlCookie,
 } from "@velloo/renderer";
@@ -15,21 +14,20 @@ import { pinnedThemeForScreen, resolveNamedTheme } from "../../design-folder.ts"
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { registryForScreen, renderPassForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { errorResult, type McpResult } from "./result.ts";
 import { resolveViewport, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  errorResult,
   fitFramesToContent,
   framesShorterThan,
-  type McpResult,
   makeCanvasBundle,
   makeLiveUrl,
   regionNode,
+  renderForCapture,
 } from "./screenshot-helpers.ts";
 import { type CachedUrlCapture, LruMap, planUrlCache, urlCacheKey } from "./url-capture-cache.ts";
 
@@ -194,24 +192,18 @@ export function registerCompareToUrlTool(
         const snapshotCss = await jit.build();
         const _themeRes = resolveNamedTheme(ctx.folder, themeName);
         if (!_themeRes.ok) return errorResult(_themeRes.message);
-        const resolvedTheme = _themeRes.theme;
-        const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");
-        const { html } = await renderScreen(screen, resolvedTheme, {
+        // renderForCapture mounts live-island extensions and the installed-
+        // component canvas bundle on the Velloo side too — without them the
+        // fidelity diff would run against static placeholders instead of the
+        // user's real charts/components.
+        const html = await renderForCapture(ctx, screen, {
+          theme: _themeRes.theme,
+          dark: mode === "dark",
           viewport,
           snapshotCss,
-          registry: registryForScreen(ctx, screen),
-          renderPass: renderPassForScreen(ctx, screen, resolvedTheme, mode === "dark"),
-          snippets: ctx.folder.snippets,
-          customCss: ctx.folder.customCss,
-          baseHref: assetOrigin,
-          // Mount live-island extensions (real host charts &c.) on the Velloo
-          // side too — without this the fidelity diff is against static
-          // placeholders, which `screenshot`/`render_snippet` already avoid.
-          liveBundleUrl: liveUrl(),
-          dark: mode === "dark",
-          // Compare against the user's EXACT installed components when available
-          // (#18) — apples-to-apples fidelity vs the live app.
-          ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
+          liveUrl,
+          canvasBundle,
+          assetOrigin,
         });
         const resolvedStorageState =
           storageStatePath === undefined

@@ -9,10 +9,12 @@ import {
   CanvasNoteSchema,
   type Config,
   ConfigSchema,
+  CURRENT_SCHEMA_VERSION,
   type Screen,
   ScreenSchema,
   type Snippet,
   SnippetSchema,
+  schemaVersionOf,
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
@@ -150,6 +152,21 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   const root = resolve(folder);
   const configRaw = await readJson(join(root, ".design", "config.json"));
   const themeRaw = await readJson(join(root, "theme", "default.json"));
+  // Format-version gate, BEFORE schema validation so the user gets a
+  // versioning message rather than a wall of zod issues.
+  const version = schemaVersionOf(configRaw);
+  if (version > CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `velloo: ${root} uses design-folder schema version ${version}, but this velloo ` +
+        `only knows version ${CURRENT_SCHEMA_VERSION}. Upgrade velloo to open it.`,
+    );
+  }
+  if (version < CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `velloo: ${root} uses design-folder schema version ${version} ` +
+        `(current: ${CURRENT_SCHEMA_VERSION}). Run \`velloo upgrade\` to migrate it.`,
+    );
+  }
   const config = ConfigSchema.parse(configRaw);
   const theme = ThemeSchema.parse(themeRaw);
 

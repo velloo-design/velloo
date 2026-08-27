@@ -28,7 +28,7 @@ import {
   type StdioMcpServerHandle,
 } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
-import { migrateConfig, resolveProviders } from "./providers.ts";
+import { resolveProviders } from "./providers.ts";
 import { requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -200,10 +200,6 @@ const COMMENT_SYNC_INTERVAL_MS = 5 * 60_000;
 
 export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const folder: DesignFolder = await loadDesignFolder(opts.folder);
-  // Promote legacy single-library configs to the Sprint-Y multi-library
-  // shape in-memory so older Pulse folders keep working without
-  // rewriting their config on disk. See providers.ts#migrateConfig.
-  folder.config = migrateConfig(folder.config);
   const { providers, defaultProvider } = await resolveProviders(folder.config, folder.root);
   const broadcaster = new Broadcaster();
   const bundler = new LiveBundler(
@@ -410,13 +406,7 @@ export {
   type DarkModeAuditResult,
   darkModeAuditTree,
 } from "./mutations/dark-mode-audit.ts";
-export {
-  createServerProviderLoader,
-  DEFAULT_LEGACY_LIBRARY_ID,
-  migrateConfig,
-  migrateLibrarySource,
-  resolveProviders,
-} from "./providers.ts";
+export { createServerProviderLoader, resolveProviders } from "./providers.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";

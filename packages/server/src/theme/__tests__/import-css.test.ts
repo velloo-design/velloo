@@ -9,14 +9,17 @@ import type { WatchEvent } from "../../watcher.ts";
 import { importThemeCss, type ThemeContext } from "../index.ts";
 
 const sampleConfig = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
-  library: {
-    id: "shadcn-react" as const,
-    version: "test",
-    source: "registry:shadcn",
-    componentsPath: "components/ui",
+  libraries: {
+    default: {
+      id: "shadcn-upstream" as const,
+      version: "test",
+      source: "binary",
+      componentsPath: "components/ui",
+    },
   },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
 };
 const sampleTheme: Theme = {

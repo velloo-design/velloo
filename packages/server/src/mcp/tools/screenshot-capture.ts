@@ -4,7 +4,6 @@ import {
   captureScreenshot,
   cropPng,
   diffPngs,
-  renderScreen,
   screenshotBuffer,
   screenshotCompareBuffer,
   unionRegion,
@@ -15,12 +14,9 @@ import { pinnedThemeForScreen, resolveNamedTheme } from "../../design-folder.ts"
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import {
-  registryForScreen,
-  renderPassForScreen,
-  resolve as resolveLocator,
-} from "../../mutations/lookup.ts";
+import { resolve as resolveLocator } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { errorResult, type McpResult } from "./result.ts";
 import {
   PathSchema,
   RenderModeSchema,
@@ -33,13 +29,12 @@ import {
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  errorResult,
   fitFramesToContent,
   framesShorterThan,
-  type McpResult,
   makeCanvasBundle,
   makeLiveUrl,
   regionNode,
+  renderForCapture,
 } from "./screenshot-helpers.ts";
 import { LruMap } from "./url-capture-cache.ts";
 
@@ -157,19 +152,14 @@ export function registerScreenshotCaptureTool(
           const snapshotCss = await jit.build();
           const _themeRes = resolveNamedTheme(ctx.folder, themeName);
           if (!_themeRes.ok) return errorResult(_themeRes.message);
-          const resolvedTheme = _themeRes.theme;
-          const canvasOpt = await canvasBundle(screen, resolvedTheme, mode === "dark");
-          const { html } = await renderScreen(screen, resolvedTheme, {
+          const html = await renderForCapture(ctx, screen, {
+            theme: _themeRes.theme,
+            dark: mode === "dark",
             viewport,
             snapshotCss,
-            registry: registryForScreen(ctx, screen),
-            renderPass: renderPassForScreen(ctx, screen, resolvedTheme, mode === "dark"),
-            snippets: ctx.folder.snippets,
-            customCss: ctx.folder.customCss,
-            baseHref: assetOrigin,
-            liveBundleUrl: liveUrl(),
-            dark: mode === "dark",
-            ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
+            liveUrl,
+            canvasBundle,
+            assetOrigin,
           });
           const capture = await captureScreenshot({
             html,
@@ -259,66 +249,29 @@ export function registerScreenshotCaptureTool(
       let contentText: string | null = null;
       try {
         const snapshotCss = await jit.build();
-        const screenRegistry = registryForScreen(ctx, screen);
         const _themeRes = resolveNamedTheme(ctx.folder, themeName);
         if (!_themeRes.ok) return errorResult(_themeRes.message);
-        const resolvedTheme = _themeRes.theme;
-        // A MUI pass projects the theme differently per mode, so light and dark
-        // each need their own (undefined for Tailwind frameworks — cheap).
-        const screenPassLight = renderPassForScreen(ctx, screen, resolvedTheme, false);
-        const screenPassDark = renderPassForScreen(ctx, screen, resolvedTheme, true);
-        const [canvasLight, canvasDark] = await Promise.all([
-          canvasBundle(screen, resolvedTheme, false),
-          canvasBundle(screen, resolvedTheme, true),
-        ]);
+        const base = {
+          theme: _themeRes.theme,
+          viewport,
+          snapshotCss,
+          liveUrl,
+          canvasBundle,
+          assetOrigin,
+        };
         if (mode === "compare") {
-          const [light, dark] = await Promise.all([
-            renderScreen(screen, resolvedTheme, {
-              viewport,
-              snapshotCss,
-              registry: screenRegistry,
-              renderPass: screenPassLight,
-              snippets: ctx.folder.snippets,
-              customCss: ctx.folder.customCss,
-              baseHref: assetOrigin,
-              liveBundleUrl: liveUrl(),
-              dark: false,
-              ...(canvasLight ? { canvasBundle: canvasLight } : {}),
-            }),
-            renderScreen(screen, resolvedTheme, {
-              viewport,
-              snapshotCss,
-              registry: screenRegistry,
-              renderPass: screenPassDark,
-              snippets: ctx.folder.snippets,
-              customCss: ctx.folder.customCss,
-              baseHref: assetOrigin,
-              liveBundleUrl: liveUrl(),
-              dark: true,
-              ...(canvasDark ? { canvasBundle: canvasDark } : {}),
-            }),
+          const [lightHtml, darkHtml] = await Promise.all([
+            renderForCapture(ctx, screen, { ...base, dark: false }),
+            renderForCapture(ctx, screen, { ...base, dark: true }),
           ]);
           buf = await screenshotCompareBuffer({
-            leftHtml: light.html,
-            rightHtml: dark.html,
+            leftHtml: lightHtml,
+            rightHtml: darkHtml,
             viewport,
             ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
-          const { html } = await renderScreen(screen, resolvedTheme, {
-            viewport,
-            snapshotCss,
-            registry: screenRegistry,
-            renderPass: mode === "dark" ? screenPassDark : screenPassLight,
-            snippets: ctx.folder.snippets,
-            customCss: ctx.folder.customCss,
-            baseHref: assetOrigin,
-            liveBundleUrl: liveUrl(),
-            dark: mode === "dark",
-            ...((mode === "dark" ? canvasDark : canvasLight)
-              ? { canvasBundle: mode === "dark" ? canvasDark : canvasLight }
-              : {}),
-          });
+          const html = await renderForCapture(ctx, screen, { ...base, dark: mode === "dark" });
           if (clipSelector) {
             buf = await screenshotBuffer({
               html,

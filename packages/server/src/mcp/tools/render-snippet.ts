@@ -1,20 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { renderScreen, screenshotBuffer, screenshotCompareBuffer } from "@velloo/renderer";
+import { screenshotBuffer, screenshotCompareBuffer } from "@velloo/renderer";
 import type { Screen, Viewport } from "@velloo/schema";
 import { z } from "zod";
 import { resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { registryForScreen, renderPassForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { errorResult } from "./result.ts";
 import { RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
   captureTimeoutMessage,
-  errorResult,
   makeCanvasBundle,
   makeLiveUrl,
+  renderForCapture,
 } from "./screenshot-helpers.ts";
 
 export function registerRenderSnippetTool(
@@ -77,63 +77,31 @@ export function registerRenderSnippetTool(
         // default. Wrap the synthetic screen with the snippet's library so
         // ext placeholders still merge in.
         const syntheticScreen = { ...screen, library: snippet.library };
-        const screenRegistry = registryForScreen(ctx, syntheticScreen);
         const _themeRes = resolveNamedTheme(ctx.folder, theme);
         if (!_themeRes.ok) return errorResult(_themeRes.message);
-        const resolvedTheme = _themeRes.theme;
-        const screenPassLight = renderPassForScreen(ctx, syntheticScreen, resolvedTheme, false);
-        const screenPassDark = renderPassForScreen(ctx, syntheticScreen, resolvedTheme, true);
-        const [canvasLight, canvasDark] = await Promise.all([
-          canvasBundle(syntheticScreen, resolvedTheme, false),
-          canvasBundle(syntheticScreen, resolvedTheme, true),
-        ]);
+        const base = {
+          theme: _themeRes.theme,
+          viewport: vp,
+          snapshotCss,
+          liveUrl,
+          canvasBundle,
+          assetOrigin,
+        };
         if (mode === "compare") {
-          const [light, dark] = await Promise.all([
-            renderScreen(syntheticScreen, resolvedTheme, {
-              viewport: vp,
-              snapshotCss,
-              registry: screenRegistry,
-              renderPass: screenPassLight,
-              snippets: ctx.folder.snippets,
-              customCss: ctx.folder.customCss,
-              baseHref: assetOrigin,
-              liveBundleUrl: liveUrl(),
-              dark: false,
-              ...(canvasLight ? { canvasBundle: canvasLight } : {}),
-            }),
-            renderScreen(syntheticScreen, resolvedTheme, {
-              viewport: vp,
-              snapshotCss,
-              registry: screenRegistry,
-              renderPass: screenPassDark,
-              snippets: ctx.folder.snippets,
-              customCss: ctx.folder.customCss,
-              baseHref: assetOrigin,
-              liveBundleUrl: liveUrl(),
-              dark: true,
-              ...(canvasDark ? { canvasBundle: canvasDark } : {}),
-            }),
+          const [lightHtml, darkHtml] = await Promise.all([
+            renderForCapture(ctx, syntheticScreen, { ...base, dark: false }),
+            renderForCapture(ctx, syntheticScreen, { ...base, dark: true }),
           ]);
           buf = await screenshotCompareBuffer({
-            leftHtml: light.html,
-            rightHtml: dark.html,
+            leftHtml: lightHtml,
+            rightHtml: darkHtml,
             viewport: vp,
             ...(scale ? { deviceScaleFactor: scale } : {}),
           });
         } else {
-          const { html } = await renderScreen(syntheticScreen, resolvedTheme, {
-            viewport: vp,
-            snapshotCss,
-            registry: screenRegistry,
-            renderPass: mode === "dark" ? screenPassDark : screenPassLight,
-            snippets: ctx.folder.snippets,
-            customCss: ctx.folder.customCss,
-            baseHref: assetOrigin,
-            liveBundleUrl: liveUrl(),
+          const html = await renderForCapture(ctx, syntheticScreen, {
+            ...base,
             dark: mode === "dark",
-            ...((mode === "dark" ? canvasDark : canvasLight)
-              ? { canvasBundle: mode === "dark" ? canvasDark : canvasLight }
-              : {}),
           });
           buf = await screenshotBuffer({
             html,

@@ -12,10 +12,10 @@ describe("shouldRunWizard", () => {
 });
 
 describe("answersFromArgs", () => {
-  test("defaults: cwd app root, velloo design folder, shadcn-react binary, sample", () => {
+  test("defaults: cwd app root, velloo design folder, shadcn-upstream in-repo, sample", () => {
     const a = answersFromArgs({});
-    expect(a.library).toBe("shadcn-react");
-    expect(a.source).toBe("binary");
+    expect(a.library).toBe("shadcn-upstream");
+    expect(a.source).toBe("in-repo");
     expect(a.initialContent).toBe("sample");
     expect(a.appRoot).toBe(resolve("."));
     expect(a.folder).toBe(resolve(".", "velloo"));
@@ -56,10 +56,11 @@ describe("answersFromArgs", () => {
     expect(a.themePreset).toBe("violet");
   });
 
-  test("--start=scan sets scan content; non-upstream stays binary", () => {
+  test("--start=scan sets scan content; non-upstream libraries stay binary", () => {
     const a = answersFromArgs({ start: "scan" });
     expect(a.initialContent).toBe("scan");
-    expect(a.source).toBe("binary");
+    expect(a.source).toBe("in-repo");
+    expect(answersFromArgs({ start: "scan", library: "none" }).source).toBe("binary");
   });
 
   test("blank theme preset is treated as unset", () => {

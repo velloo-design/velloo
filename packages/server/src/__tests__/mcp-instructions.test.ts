@@ -39,7 +39,13 @@ describe("buildInstructions", () => {
   });
 
   test("a shadcn (tailwind) folder keeps the default Tailwind-shaped framing", () => {
-    const shadcn = buildInstructions(false, undefined, false, "tailwind-classname", "shadcn-react");
+    const shadcn = buildInstructions(
+      false,
+      undefined,
+      false,
+      "tailwind-classname",
+      "shadcn-upstream",
+    );
     expect(shadcn).not.toContain("Style with the `sx` object");
     // No framework-specific intro prepended — the default opening leads.
     expect(shadcn).not.toContain("**no-framework** Velloo design folder");

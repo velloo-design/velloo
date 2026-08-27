@@ -37,7 +37,7 @@ export interface InitCliArgs {
 }
 
 export function isValidLibraryId(v: string): v is LibraryId {
-  return v === "shadcn-react" || v === "shadcn-upstream" || v === "none" || v === "mui";
+  return v === "shadcn-upstream" || v === "none" || v === "mui";
 }
 
 export function isValidContent(v: string): v is InitialContent {
@@ -65,7 +65,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
   // than an error.
   if (args.library && !isValidLibraryId(args.library)) {
     throw new Error(
-      `unknown --library ${JSON.stringify(args.library)}. Valid: shadcn-upstream | shadcn-react | none | mui.`,
+      `unknown --library ${JSON.stringify(args.library)}. Valid: shadcn-upstream | none | mui.`,
     );
   }
   if (args.start && !isValidStart(args.start)) {
@@ -96,7 +96,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
 
   const appRoot = resolve(args.folder ?? ".");
   const folder = resolve(appRoot, args.designFolder ?? "velloo");
-  const library: LibraryId = (args.library as LibraryId | undefined) ?? "shadcn-react";
+  const library: LibraryId = (args.library as LibraryId | undefined) ?? "shadcn-upstream";
 
   const scan = args.start === "scan" || args.initialContent === "scan";
   const initialContent: InitialContent = scan

@@ -33,9 +33,17 @@ function ctxOf(root: string): { ctx: MutationContext; screen: Screen } {
   const folder = {
     root,
     config: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       toolVersion: "test",
-      library: { id: "shadcn-react", version: "t", source: "binary", componentsPath: "binary" },
+      libraries: {
+        default: {
+          id: "shadcn-upstream",
+          version: "t",
+          source: "binary",
+          componentsPath: "binary",
+        },
+      },
+      defaultLibrary: "default",
       viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
     },
     theme: {

@@ -46,9 +46,17 @@ async function scaffoldFolder(): Promise<string> {
   const writeJson = (p: string, v: unknown) =>
     writeFile(p, `${JSON.stringify(v, null, 2)}\n`, "utf8");
   await writeJson(join(tmp, ".design/config.json"), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     toolVersion: "0.1.0",
-    library: { id: "shadcn-react", version: "test", source: "binary", componentsPath: "binary" },
+    libraries: {
+      default: {
+        id: "shadcn-upstream",
+        version: "test",
+        source: "binary",
+        componentsPath: "binary",
+      },
+    },
+    defaultLibrary: "default",
     viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
   });
   await writeJson(join(tmp, "theme/default.json"), {

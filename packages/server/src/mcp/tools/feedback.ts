@@ -3,15 +3,7 @@ import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
 import { sendAnonymousFeedback } from "../../feedback-tokens.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-
-type McpResult = {
-  content: { type: "text"; text: string }[];
-  isError?: true;
-};
-
-function jsonResult(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
+import { jsonResult } from "./result.ts";
 
 /**
  * Soft cap on sends per server lifetime — a misbehaving agent shouldn't be

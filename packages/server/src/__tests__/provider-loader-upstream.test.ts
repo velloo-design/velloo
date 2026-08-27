@@ -3,26 +3,13 @@ import type { Library } from "@velloo/schema";
 import { createServerProviderLoader } from "../providers.ts";
 
 /**
- * The loader knows about `shadcn-upstream` alongside the
- * legacy providers. Existing folders that still declare
- * `library.id: "shadcn-react"` resolve to the vendored snapshot
- * (back-compat). New folders that declare `shadcn-upstream` resolve
- * to the upstream provider.
+ * The loader resolves the schema-v2 library ids: `shadcn-upstream`
+ * (rendering from the bundled snapshot registry), `none`, and `mui`.
+ * The retired `shadcn-react` id no longer resolves — pre-v2 folders
+ * go through `velloo upgrade` before they reach the loader.
  */
 
 describe("createServerProviderLoader", () => {
-  test("shadcn-react resolves to the vendored snapshot (back-compat)", async () => {
-    const loader = createServerProviderLoader();
-    const library: Library = {
-      id: "shadcn-react",
-      version: "2026.05.22",
-      source: "binary",
-      componentsPath: "binary",
-    };
-    const provider = await loader(library);
-    expect(provider.id).toBe("shadcn-react");
-  });
-
   test("shadcn-upstream resolves to the upstream provider", async () => {
     const loader = createServerProviderLoader();
     const library: Library = {

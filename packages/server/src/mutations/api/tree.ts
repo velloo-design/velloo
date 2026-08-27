@@ -36,49 +36,49 @@ export function addNode(
   ctx: MutationContext,
   args: AddNodeArgs,
 ): Promise<Result<AddNodeResult, MutationError>> {
-  return withScreenLock(args.screenId, () => addNodeImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => addNodeImpl(ctx, args));
 }
 export function updateProps(
   ctx: MutationContext,
   args: UpdatePropsArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withScreenLock(args.screenId, () => updatePropsImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => updatePropsImpl(ctx, args));
 }
 export function moveNode(
   ctx: MutationContext,
   args: MoveNodeArgs,
 ): Promise<Result<MoveNodeResult, MutationError>> {
-  return withScreenLock(args.screenId, () => moveNodeImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => moveNodeImpl(ctx, args));
 }
 export function removeNode(
   ctx: MutationContext,
   args: RemoveNodeArgs,
 ): Promise<Result<RemoveNodeResult, MutationError>> {
-  return withScreenLock(args.screenId, () => removeNodeImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => removeNodeImpl(ctx, args));
 }
 export function applyClasses(
   ctx: MutationContext,
   args: ApplyClassesArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withScreenLock(args.screenId, () => applyClassesImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => applyClassesImpl(ctx, args));
 }
 export function updatePropsBulk(
   ctx: MutationContext,
   args: UpdatePropsBulkArgs,
 ): Promise<Result<UpdatePropsBulkResult, MutationError>> {
-  return withScreenLock(args.screenId, () => updatePropsBulkImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => updatePropsBulkImpl(ctx, args));
 }
 export function setNodeId(
   ctx: MutationContext,
   args: SetNodeIdArgs,
 ): Promise<Result<SetNodeIdResult, MutationError>> {
-  return withScreenLock(args.screenId, () => setNodeIdImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => setNodeIdImpl(ctx, args));
 }
 export function setStyle(
   ctx: MutationContext,
   args: SetStyleArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withScreenLock(args.screenId, () => setStyleImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => setStyleImpl(ctx, args));
 }
 
 export type {
@@ -102,6 +102,6 @@ export function overrideSnippetProps(
   ctx: MutationContext,
   args: OverrideSnippetPropsArgs,
 ): Promise<Result<OverrideSnippetPropsResult, MutationError>> {
-  return withScreenLock(args.screenId, () => overrideSnippetPropsImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => overrideSnippetPropsImpl(ctx, args));
 }
 export type { OverrideSnippetPropsArgs, OverrideSnippetPropsResult };

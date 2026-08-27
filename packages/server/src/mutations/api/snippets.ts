@@ -32,31 +32,31 @@ export function addSnippet(
   ctx: MutationContext,
   args: AddSnippetArgs,
 ): Promise<Result<AddSnippetResult, MutationError>> {
-  return withSnippetLock(args.id ?? args.name, () => addSnippetImpl(ctx, args));
+  return withSnippetLock(ctx.folder, args.id ?? args.name, () => addSnippetImpl(ctx, args));
 }
 export function updateSnippet(
   ctx: MutationContext,
   args: UpdateSnippetArgs,
 ): Promise<Result<UpdateSnippetResult, MutationError>> {
-  return withSnippetLock(args.snippetId, () => updateSnippetImpl(ctx, args));
+  return withSnippetLock(ctx.folder, args.snippetId, () => updateSnippetImpl(ctx, args));
 }
 export function removeSnippet(
   ctx: MutationContext,
   args: RemoveSnippetArgs,
 ): Promise<Result<RemoveSnippetResult, MutationError>> {
-  return withSnippetLock(args.snippetId, () => removeSnippetImpl(ctx, args));
+  return withSnippetLock(ctx.folder, args.snippetId, () => removeSnippetImpl(ctx, args));
 }
 export function instantiateSnippet(
   ctx: MutationContext,
   args: InstantiateSnippetArgs,
 ): Promise<Result<InstantiateSnippetResult, MutationError>> {
-  return withScreenLock(args.screenId, () => instantiateSnippetImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => instantiateSnippetImpl(ctx, args));
 }
 export function updateSnippetArgs(
   ctx: MutationContext,
   args: UpdateSnippetArgsArgs,
 ): Promise<Result<UpdateSnippetArgsResult, MutationError>> {
-  return withScreenLock(args.screenId, () => updateSnippetArgsImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => updateSnippetArgsImpl(ctx, args));
 }
 
 export type {

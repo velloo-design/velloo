@@ -4,23 +4,19 @@ import {
   CHROMIUM_INSTALL_CMD,
   type DiffRegion,
   isCaptureTimeout,
+  renderScreen,
 } from "@velloo/renderer";
 import { isComponentNode, nodeId, type Screen, type Theme, type Viewport } from "@velloo/schema";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import { updateFrame } from "../../mutations/api/frames.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { providerForScreen } from "../../mutations/lookup.ts";
+import {
+  providerForScreen,
+  registryForScreen,
+  renderPassForScreen,
+} from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
-
-export type McpResult = {
-  content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
-  isError?: true;
-};
-
-export function errorResult(text: string): McpResult {
-  return { isError: true, content: [{ type: "text", text }] };
-}
 
 function playwrightMissingMessage(msg: string): string {
   return `screenshot: Playwright is not installed. Run \`${CHROMIUM_INSTALL_CMD}\`, then retry — no server restart needed. Underlying error: ${msg}`;
@@ -82,6 +78,12 @@ export function makeLiveUrl(ctx: MutationContext, bundler: LiveBundler): () => s
       : undefined;
 }
 
+export type CanvasBundleFor = (
+  screen: Pick<Screen, "library">,
+  theme: Theme,
+  dark: boolean,
+) => Promise<{ url: string; themeOptions: unknown } | undefined>;
+
 /**
  * A thunk yielding the framework-native canvas-bundle render option (#18) for a
  * screen — the installed-component `mountScreen` URL (root-relative; resolved
@@ -93,11 +95,7 @@ export function makeLiveUrl(ctx: MutationContext, bundler: LiveBundler): () => s
 export function makeCanvasBundle(
   ctx: MutationContext,
   canvasBundler: CanvasBundler,
-): (
-  screen: Pick<Screen, "library">,
-  theme: Theme,
-  dark: boolean,
-) => Promise<{ url: string; themeOptions: unknown } | undefined> {
+): CanvasBundleFor {
   return async (screen, theme, dark) => {
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
     // The bundler builds the DEFAULT provider's components, so only a screen on
@@ -112,6 +110,43 @@ export function makeCanvasBundle(
       themeOptions: provider.themeToNative(theme, dark),
     };
   };
+}
+
+export interface CaptureRenderOptions {
+  theme: Theme;
+  dark: boolean;
+  viewport: Viewport;
+  snapshotCss: string;
+  liveUrl: () => string | undefined;
+  canvasBundle: CanvasBundleFor;
+  assetOrigin?: string | undefined;
+}
+
+/**
+ * The one renderScreen call behind `screenshot` / `compare_to_url` /
+ * `render_snippet`: resolves the screen's registry + render pass + canvas
+ * bundle for the requested variant ONLY — a compare capture calls it twice
+ * (light, dark) instead of every path paying for both.
+ */
+export async function renderForCapture(
+  ctx: MutationContext,
+  screen: Screen,
+  opts: CaptureRenderOptions,
+): Promise<string> {
+  const canvasOpt = await opts.canvasBundle(screen, opts.theme, opts.dark);
+  const { html } = await renderScreen(screen, opts.theme, {
+    viewport: opts.viewport,
+    snapshotCss: opts.snapshotCss,
+    registry: registryForScreen(ctx, screen),
+    renderPass: renderPassForScreen(ctx, screen, opts.theme, opts.dark),
+    snippets: ctx.folder.snippets,
+    customCss: ctx.folder.customCss,
+    baseHref: opts.assetOrigin,
+    liveBundleUrl: opts.liveUrl(),
+    dark: opts.dark,
+    ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
+  });
+  return html;
 }
 
 /** Region → deepest node mapping. Rects are CSS px; regions are image px. */

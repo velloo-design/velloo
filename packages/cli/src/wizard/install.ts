@@ -44,27 +44,20 @@ export function planInstall(answers: WizardAnswers): InstallPlan {
     };
   }
 
+  // answers.library === "shadcn-upstream" — the only remaining id.
   const library: Library = {
     id: answers.library,
     version: snapshotVersion,
     source: "binary",
     componentsPath: "binary",
   };
-
-  if (answers.library === "shadcn-upstream") {
-    const targetDir = resolve(answers.appRoot, answers.componentsRelative);
-    return {
-      library,
-      summary: {
-        name: "shadcn (upstream)",
-        location: `canvas uses the bundled snapshot; real components added to ${answers.componentsRelative} on setup`,
-      },
-      pendingUpstream: { targetDir, relative: answers.componentsRelative },
-    };
-  }
-
+  const targetDir = resolve(answers.appRoot, answers.componentsRelative);
   return {
     library,
-    summary: { name: `shadcn (${snapshotVersion})`, location: "bundled with velloo" },
+    summary: {
+      name: "shadcn (upstream)",
+      location: `canvas uses the bundled snapshot; real components added to ${answers.componentsRelative} on setup`,
+    },
+    pendingUpstream: { targetDir, relative: answers.componentsRelative },
   };
 }

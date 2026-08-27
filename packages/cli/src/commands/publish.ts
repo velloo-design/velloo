@@ -9,7 +9,6 @@ import {
   LiveBundler,
   liveExtensions,
   loadDesignFolder,
-  migrateConfig,
   orderedBoards,
   registryForScreen,
   renderPassForScreen,
@@ -183,7 +182,9 @@ export default defineCommand({
       : [...design.screens.values()];
     if (screens.length === 0) fail("publish", "the selected boards have no screens.");
 
-    const config = migrateConfig(design.config);
+    // loadDesignFolder guarantees a schema-v2 config (older folders are
+    // refused with a `velloo upgrade` hint), so no migration happens here.
+    const config = design.config;
     const { providers, defaultProvider } = await resolveProviders(config, folder);
 
     // Live-island bundle: when the folder declares render:"live" extensions

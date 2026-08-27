@@ -32,43 +32,43 @@ export function addFrame(
   ctx: MutationContext,
   args: AddFrameArgs,
 ): Promise<Result<AddFrameResult, MutationError>> {
-  return withBoardLock(args.boardId, () => addFrameImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => addFrameImpl(ctx, args));
 }
 export function updateFrame(
   ctx: MutationContext,
   args: UpdateFrameArgs,
 ): Promise<Result<UpdateFrameResult, MutationError>> {
-  return withBoardLock(args.boardId, () => updateFrameImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => updateFrameImpl(ctx, args));
 }
 export function updateFrames(
   ctx: MutationContext,
   args: UpdateFramesArgs,
 ): Promise<Result<UpdateFramesResult, MutationError>> {
-  return withBoardLock(args.boardId, () => updateFramesImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => updateFramesImpl(ctx, args));
 }
 export function removeFrame(
   ctx: MutationContext,
   args: RemoveFrameArgs,
 ): Promise<Result<RemoveFrameResult, MutationError>> {
-  return withBoardLock(args.boardId, () => removeFrameImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => removeFrameImpl(ctx, args));
 }
 export function addGroup(
   ctx: MutationContext,
   args: AddGroupArgs,
 ): Promise<Result<AddGroupResult, MutationError>> {
-  return withBoardLock(args.boardId, () => addGroupImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => addGroupImpl(ctx, args));
 }
 export function updateGroup(
   ctx: MutationContext,
   args: UpdateGroupArgs,
 ): Promise<Result<UpdateGroupResult, MutationError>> {
-  return withBoardLock(args.boardId, () => updateGroupImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => updateGroupImpl(ctx, args));
 }
 export function removeGroup(
   ctx: MutationContext,
   args: RemoveGroupArgs,
 ): Promise<Result<RemoveGroupResult, MutationError>> {
-  return withBoardLock(args.boardId, () => removeGroupImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => removeGroupImpl(ctx, args));
 }
 
 export type {

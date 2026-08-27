@@ -12,11 +12,7 @@ export type ProviderFactory = (library: Library) => Promise<ComponentProvider> |
 /**
  * Build a `ProviderLoader` from a map of `library.id → factory`. The
  * server constructs one of these at boot time with the providers the
- * binary knows about (today: shadcn; later: no-lib, MUI, host).
- *
- * Aliases let multiple library ids resolve to the same factory — e.g.
- * the legacy `"shadcn-react"` id still resolves to the shadcn factory
- * even after we move the canonical id to `"shadcn"`.
+ * binary knows about (shadcn-upstream, none, mui).
  */
 export function createProviderLoader(factories: Record<string, ProviderFactory>): ProviderLoader {
   return async (library) => {

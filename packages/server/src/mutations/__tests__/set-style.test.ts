@@ -28,16 +28,16 @@ const sampleTheme: Theme = {
 };
 
 const config = {
-  schemaVersion: 1 as const,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {
-      id: "shadcn-react" as const,
+      id: "shadcn-upstream",
       version: "test",
       source: "binary",
       componentsPath: "binary",
     },
-    mui: { id: "mui" as const, version: "6", source: "binary", componentsPath: "binary" },
+    mui: { id: "mui", version: "6", source: "binary", componentsPath: "binary" },
   },
   defaultLibrary: "shadcn",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],

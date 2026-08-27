@@ -281,7 +281,7 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
   }
 
   for (const screenId of new Set([...adds.keys(), ...removes.keys()])) {
-    await withScreenLock(screenId, async () => {
+    await withScreenLock(ctx.folder, screenId, async () => {
       const current = ctx.folder.annotations.get(screenId) ?? [];
       const drop = removes.get(screenId);
       const next = [

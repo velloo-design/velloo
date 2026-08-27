@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ResourceIdSchema } from "./ids.ts";
 import { NodeSchema } from "./node.ts";
 
 /**
@@ -86,7 +87,7 @@ export type SnippetParam = z.infer<typeof SnippetParamSchema>;
  * substituted with the corresponding arg at render time.
  */
 export const SnippetSchema = z.object({
-  id: z.string().min(1),
+  id: ResourceIdSchema,
   name: z.string().min(1),
   params: z.array(SnippetParamSchema),
   /**

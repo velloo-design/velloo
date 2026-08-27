@@ -32,17 +32,17 @@ const sampleTheme: Theme = {
 };
 
 const multiLibraryConfig = {
-  schemaVersion: 1 as const,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {
-      id: "shadcn-react" as const,
+      id: "shadcn-upstream",
       version: "test",
       source: "binary",
       componentsPath: "binary",
     },
     marketing: {
-      id: "none" as const,
+      id: "none",
       version: "0.1.0",
       source: "binary",
       componentsPath: "binary",
@@ -123,6 +123,7 @@ describe("multi-library resolver", () => {
     expect(screen).toBeDefined();
     if (!screen) return;
     const provider = providerForScreen(ctx, screen);
+    expect(provider).toBe(noLibProvider);
     expect(provider.id).toBe("none");
   });
 
@@ -131,19 +132,19 @@ describe("multi-library resolver", () => {
     expect(screen).toBeDefined();
     if (!screen) return;
     const provider = providerForScreen(ctx, screen);
-    expect(provider.id).toBe("shadcn-react");
+    expect(provider).toBe(shadcnProvider);
   });
 
   test("a screen with no library field falls back to the default provider", () => {
     const screen: Screen = { id: "x", name: "X", tree: { $ref: "Card" } };
     const provider = providerForScreen(ctx, screen);
-    expect(provider.id).toBe("shadcn-react");
+    expect(provider).toBe(shadcnProvider);
   });
 
   test("a screen with an unknown library id falls back to the default provider", () => {
     const screen: Screen = { id: "x", name: "X", library: "ghosted", tree: { $ref: "Card" } };
     const provider = providerForScreen(ctx, screen);
-    expect(provider.id).toBe("shadcn-react");
+    expect(provider).toBe(shadcnProvider);
   });
 
   test("registryForScreen exposes only the picked library's components", () => {

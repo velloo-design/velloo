@@ -151,14 +151,14 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 ### Config
 
 ```json
-// .design/config.json (multi-library shape)
+// .design/config.json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "toolVersion": "0.1.0",
-  "projectId": "01J9C8N3M2X4Z6Y7K",
+  "folderId": "9f2c1a7e-4b3d-4f7e-a1c2-0d9e8b7a6f5e",
   "libraries": {
     "shadcn": {
-      "id": "shadcn-react",
+      "id": "shadcn-upstream",
       "version": "2026.05.22",
       "source": "binary",
       "componentsPath": "binary"
@@ -194,13 +194,13 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 }
 ```
 
-The `libraries` map declares every library this folder uses; each screen pins one via its own `library` field. `defaultLibrary` names the entry used when a screen doesn't specify. The legacy single-library shape (`library: Library` at the top level) still parses for backward compat — the server normalizes it to `libraries: { default: Library }` in-memory at load time.
+The `libraries` map declares every library this folder uses; each screen pins one via its own `library` field. `defaultLibrary` names the entry used when a screen doesn't specify. Both are required — the pre-v2 single-library shape no longer parses; `velloo upgrade` migrates old folders on disk.
 
 The `extensions` map holds user-declared custom components — agent-registered via the `add_extension` MCP tool. Each entry records the bare `importPath` codegen emits, a hand-authored prop schema, and an `origin` tag (`"agent"` or `"manual"`). Extensions are folder-global: every screen in every library sees them. Extension ids shadow library components with the same name.
 
-`source` is the canonical vocabulary for "where do the components live" — `"binary"` (default: shipped with the velloo binary, the embedded shadcn snapshot today), `"cache"` (`~/.velloo/<projectId>/...`), `"in-repo"` (the user's app folder), or `"shared:<path>"` (experimental — designed but not yet implemented). Legacy `"embedded:shadcn"` and `"registry:shadcn"` values are normalized in-memory at folder load.
+`source` is an enum answering "where do the components live" — `"binary"` (shipped with the velloo binary: the shadcn-upstream canvas runtime, all of none/mui), `"cache"` (`~/.velloo/…`), or `"in-repo"` (the user's app folder).
 
-`projectId` (optional) is a stable id used to key external-cache paths. Existing folders without one fall back to a path-derived hash.
+`folderId` (optional) is the folder's stable cloud identity (a UUID) — published share links carry it so any clone of the folder finds its links and comments. Meaningless until the folder first touches velloo-cloud.
 
 `defaultBoard` + `defaultScreen` are optional hints the canvas uses on first load. `codegen.componentsAlias` lets the design folder declare the import prefix `emit_code` should suggest (`@/components/ui` for Next.js, `~/components/ui` for Astro, etc.).
 
@@ -396,11 +396,10 @@ Total size: ~25–40MB. Same shape as `gh`, `bun`, `tailwindcss`.
 
 ## Versioning and reproducibility
 
-The design folder's `.design/config.json` records two things:
+The design folder's `.design/config.json` records three version facts:
 
-- `toolVersion` — the binary version that created the folder
-- `library.version` — the library version pulled at init (or last upgrade)
+- `schemaVersion` — the on-disk format version, and the only one that gates loading. The loader refuses a folder on any other version: older folders are migrated **on disk** by `velloo upgrade` (ordered pure migrations in `@velloo/schema`'s `migrate.ts`; the command stops the folder's daemon, rewrites config + sidecars, then re-validates the whole folder); newer folders need a newer binary.
+- `toolVersion` — the binary version that created (or last upgraded) the folder. Informational.
+- `library.version` — the library version recorded at init. Informational.
 
-The components themselves are on disk inside the folder, so **git is the lock for design content**. The folder, including its components, restores byte-identically from any commit. Velloo only needs to track its own tool version, not the components.
-
-The global tool reads the config on `run`. If the running binary is newer than the recorded `toolVersion`, it offers an upgrade path with a diff. The `library.version` field is informational — actual restoration is git's job.
+The design content itself is plain JSON in git, so **git is the lock for design content** — a folder restores byte-identically from any commit, and only `schemaVersion` decides whether this binary can read it.

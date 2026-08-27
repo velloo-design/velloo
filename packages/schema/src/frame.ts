@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ResourceIdSchema } from "./ids.ts";
 
 /**
  * A Frame is a placement of a Screen on the Board: position, size, optional
@@ -10,7 +11,7 @@ import { z } from "zod";
  * UI affordance; the underlying w/h is just a number.
  */
 export const FrameSchema = z.object({
-  id: z.string().min(1),
+  id: ResourceIdSchema,
   /** The Screen id this frame renders. */
   screen: z.string().min(1),
   x: z.number(),

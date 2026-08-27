@@ -564,8 +564,7 @@ export default defineCommand({
     },
     library: {
       type: "string",
-      description:
-        "Component library: shadcn-upstream | shadcn-react | none | mui (default shadcn-react)",
+      description: "Component library: shadcn-upstream | none | mui (default shadcn-upstream)",
     },
     componentsDir: {
       type: "string",
@@ -689,7 +688,7 @@ export default defineCommand({
       // the agent approximates with div-backed primitives + preserves real
       // imports via $emitAs.
       if (!cliArgs.library && answers.detected.uiLibrary) {
-        answers.library = answers.detected.uiLibrary === "mui" ? "mui" : "shadcn-react";
+        answers.library = answers.detected.uiLibrary === "mui" ? "mui" : "shadcn-upstream";
         answers.source = "binary";
         console.log(pc.dim(`  Detected ${answers.detected.uiLibrary} — using that library.`));
       } else if (!cliArgs.library && answers.detected.unsupportedUi) {

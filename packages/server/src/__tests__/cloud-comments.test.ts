@@ -34,10 +34,13 @@ interface StubComment {
 // only thing the pull needs (the cloud resolves the folder's links from it).
 const FOLDER_ID = "folder-uuid-1234";
 const config = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   toolVersion: "test",
   folderId: FOLDER_ID,
-  library: { id: "shadcn-react", version: "test", source: "binary", componentsPath: "binary" },
+  libraries: {
+    default: { id: "shadcn-upstream", version: "test", source: "binary", componentsPath: "binary" },
+  },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
 

@@ -2,11 +2,9 @@ import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { containerClasses, parseTailwindContainer, SEMANTIC_SLOTS } from "@velloo/codegen";
-import type { Result } from "@velloo/result";
 import { z } from "zod";
 import { type DesignFolder, resolveNamedTheme } from "../../design-folder.ts";
 import { chartLibsInDeps } from "../../theme/chart-libs.ts";
-import type { ThemeError } from "../../theme/errors.ts";
 import {
   addTheme,
   applyPreset,
@@ -19,27 +17,12 @@ import {
   scoreThemeContrastBoth,
   setCustomCss,
   setFonts,
-  setToken,
+  setTokens,
   type ThemeContext,
+  type TokenEntry,
 } from "../../theme/index.ts";
+import { errorResult, jsonResult, toMcp } from "./result.ts";
 import { singleOrBulkError } from "./schemas.ts";
-
-type McpResult = {
-  content: { type: "text"; text: string }[];
-  isError?: true;
-};
-
-function jsonResult(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
-
-function themeErrorResult(error: ThemeError): McpResult {
-  return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
-}
-
-function toMcp<T>(result: Result<T, ThemeError>): McpResult {
-  return result.ok ? jsonResult(result.value) : themeErrorResult(result.error);
-}
 
 const TW_CONFIG_NAMES = [
   "tailwind.config.ts",
@@ -170,28 +153,27 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     },
     async (args) => {
       if (args.tokens !== undefined && (args.path !== undefined || args.value !== undefined)) {
-        return themeErrorResult({
+        return errorResult({
           kind: "BadRequest",
           message: singleOrBulkError.both("set_token", "path+value", "tokens"),
         });
       }
-      const entries: Array<[string, string | number]> = args.tokens
-        ? Object.entries(args.tokens)
+      const entries: TokenEntry[] = args.tokens
+        ? Object.entries(args.tokens).map(([path, value]) => ({ path, value }))
         : args.path !== undefined && args.value !== undefined
-          ? [[args.path, args.value]]
+          ? [{ path: args.path, value: args.value }]
           : [];
       if (entries.length === 0) {
-        return themeErrorResult({
+        return errorResult({
           kind: "BadRequest",
           message: singleOrBulkError.missing("set_token", "path+value", "tokens"),
         });
       }
-      const applied: string[] = [];
-      for (const [path, value] of entries) {
-        const r = await setToken(ctx, path, value, args.theme);
-        if (!r.ok) return themeErrorResult(r.error);
-        applied.push(path);
-      }
+      // One lock + one validation pass + one persist + one broadcast for the
+      // whole batch; all-or-nothing with a per-entry report on failure.
+      const r = await setTokens(ctx, entries, args.theme);
+      if (!r.ok) return errorResult(r.error);
+      const applied = r.value.applied;
       // A palette token named after a semantic slot would emit a duplicate
       // `--color-<name>` — the emit paths skip it, so warn at the source.
       const warnings: string[] = [];
@@ -334,7 +316,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       let cssResolvedPath: string | undefined;
       if (css === undefined) {
         if (args.cssPath === undefined) {
-          return themeErrorResult({
+          return errorResult({
             kind: "BadRequest",
             message: "pass either `css` text or a `cssPath`",
           });
@@ -364,7 +346,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
           }
         }
         if (css === undefined) {
-          return themeErrorResult({
+          return errorResult({
             kind: "BadRequest",
             message:
               `could not read "${args.cssPath}" — tried ${tried.map((t) => `"${t}"`).join(", ")}. ` +
@@ -385,7 +367,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         ...(args.apply !== undefined ? { apply: args.apply } : {}),
         ...(tailwindConfig !== null ? { tailwindConfig } : {}),
       });
-      if (!r.ok) return themeErrorResult(r.error);
+      if (!r.ok) return errorResult(r.error);
       const { changes, warnings, applied } = r.value;
       const container = detectContainer(tailwindConfig);
       const detectedChartLibs = await detectChartLibs(ctx.folder, cssResolvedPath);
@@ -423,7 +405,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     async (args) => {
       const resolved = resolveNamedTheme(ctx.folder, args.theme);
       if (!resolved.ok) {
-        return themeErrorResult({ kind: "BadRequest", message: resolved.message });
+        return errorResult({ kind: "BadRequest", message: resolved.message });
       }
       const results = args.mode
         ? scoreThemeContrast(resolved.theme, args.mode)

@@ -11,14 +11,17 @@ import {
 } from "../design-folder.ts";
 
 const config = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   toolVersion: "test",
-  library: {
-    id: "shadcn-react",
-    version: "test",
-    source: "binary",
-    componentsPath: "binary",
+  libraries: {
+    default: {
+      id: "shadcn-upstream",
+      version: "test",
+      source: "binary",
+      componentsPath: "binary",
+    },
   },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
 
@@ -79,6 +82,16 @@ describe("loadDesignFolder", () => {
   test("an unparseable config fails the load", async () => {
     await writeFile(join(tmp, ".design", "config.json"), "{ not json", "utf8");
     await expect(loadDesignFolder(tmp)).rejects.toThrow();
+  });
+
+  test("an older schema version is refused with a `velloo upgrade` hint", async () => {
+    await writeJson(join(tmp, ".design", "config.json"), { ...config, schemaVersion: 1 });
+    await expect(loadDesignFolder(tmp)).rejects.toThrow(/velloo upgrade/);
+  });
+
+  test("a newer schema version is refused with an upgrade-velloo hint", async () => {
+    await writeJson(join(tmp, ".design", "config.json"), { ...config, schemaVersion: 3 });
+    await expect(loadDesignFolder(tmp)).rejects.toThrow(/Upgrade velloo/);
   });
 });
 

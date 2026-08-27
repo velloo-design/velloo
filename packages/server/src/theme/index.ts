@@ -1,6 +1,7 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
+import { createLockMap } from "../locks.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
@@ -18,20 +19,30 @@ import {
 } from "./import-css.ts";
 import { PRESET_NAMES, PRESETS } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
-import { setToken as setTokenImpl } from "./set-token.ts";
+import {
+  setToken as setTokenImpl,
+  setTokens as setTokensImpl,
+  type TokenEntry,
+} from "./set-token.ts";
 
 export interface ThemeContext {
   folder: DesignFolder;
   broadcast: (e: WatchEvent) => void;
 }
 
-let pending: Promise<unknown> = Promise.resolve();
+const themeLocks = createLockMap();
 
-/** Serialize theme writes against one another (a single theme per folder). */
-function withThemeLock<T>(fn: () => Promise<T>): Promise<T> {
-  const next = pending.then(fn, fn);
-  pending = next.catch(() => undefined);
-  return next;
+/**
+ * Serialize theme writes per design folder — keyed by `folder.root` so two
+ * folders served by one daemon never contend, with drained chains evicted.
+ * Exported for the lock-isolation tests; mutation code goes through the
+ * theme operations below rather than taking this directly.
+ */
+export function withThemeLock<T>(
+  folder: Pick<DesignFolder, "root">,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return themeLocks.run(folder.root, fn);
 }
 
 function broadcastThemeChanged(ctx: ThemeContext): void {
@@ -44,8 +55,25 @@ export async function setToken(
   value: string | number,
   themeName?: string,
 ): Promise<Result<Theme, ThemeError>> {
-  return withThemeLock(async () => {
+  return withThemeLock(ctx.folder, async () => {
     const r = await setTokenImpl(ctx.folder, path, value, themeName);
+    if (r.ok) broadcastThemeChanged(ctx);
+    return r;
+  });
+}
+
+/**
+ * Bulk token write: all entries under ONE lock acquisition, one validation
+ * pass, one persist, one broadcast. All-or-nothing — see {@link setTokensImpl}
+ * for the `BulkTokensInvalid` partial report on failure.
+ */
+export async function setTokens(
+  ctx: ThemeContext,
+  entries: TokenEntry[],
+  themeName?: string,
+): Promise<Result<{ theme: Theme; applied: string[] }, ThemeError>> {
+  return withThemeLock(ctx.folder, async () => {
+    const r = await setTokensImpl(ctx.folder, entries, themeName);
     if (r.ok) broadcastThemeChanged(ctx);
     return r;
   });
@@ -56,7 +84,7 @@ export async function setFonts(
   fonts: FontSpec[],
   themeName?: string,
 ): Promise<Result<Theme, ThemeError>> {
-  return withThemeLock(async () => {
+  return withThemeLock(ctx.folder, async () => {
     const r = await setFontsImpl(ctx.folder, fonts, themeName);
     if (r.ok) broadcastThemeChanged(ctx);
     return r;
@@ -70,7 +98,7 @@ export async function addTheme(
   from?: string,
   overwrite = false,
 ): Promise<Result<{ name: string; theme: Theme }, ThemeError>> {
-  return withThemeLock(async () => {
+  return withThemeLock(ctx.folder, async () => {
     if (!/^[a-z][a-z0-9-]*$/.test(name) || name === "default") {
       return {
         ok: false as const,
@@ -113,7 +141,7 @@ export async function setCustomCss(
   ctx: ThemeContext,
   css: string,
 ): Promise<Result<CustomCssResult, ThemeError>> {
-  return withThemeLock(async () => {
+  return withThemeLock(ctx.folder, async () => {
     const r = await setCustomCssImpl(ctx.folder, css);
     if (r.ok) broadcastThemeChanged(ctx);
     return r;
@@ -130,7 +158,7 @@ export async function applyPreset(
   ctx: ThemeContext,
   presetName: string,
 ): Promise<Result<Theme, ThemeError>> {
-  return withThemeLock(async () => {
+  return withThemeLock(ctx.folder, async () => {
     const r = await applyPresetImpl(ctx.folder, presetName);
     if (r.ok) broadcastThemeChanged(ctx);
     return r;
@@ -142,7 +170,7 @@ export async function derivePaletteFromColor(
   seedColor: string,
   name?: string,
 ): Promise<Result<DeriveResult, ThemeError>> {
-  return withThemeLock(() =>
+  return withThemeLock(ctx.folder, () =>
     DoAsync<DeriveResult, ThemeError>(async function* () {
       const result = yield* $(derivePalette(seedColor, ctx.folder.theme, name));
       // A named derive writes theme/<name>.json — never the default theme.
@@ -158,7 +186,7 @@ export async function importThemeCss(
   css: string,
   opts: { themeName?: string; apply?: boolean; tailwindConfig?: string } = {},
 ): Promise<Result<ImportThemeCssResult, ThemeError>> {
-  return withThemeLock(async () => {
+  return withThemeLock(ctx.folder, async () => {
     const r = await importThemeCssImpl(ctx.folder, css, opts);
     if (r.ok && r.value.applied) broadcastThemeChanged(ctx);
     return r;
@@ -175,5 +203,5 @@ export {
 } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
-export type { ImportThemeCssResult, ThemeTokenChange };
+export type { ImportThemeCssResult, ThemeTokenChange, TokenEntry };
 export { PRESET_NAMES, PRESETS };

@@ -6,6 +6,7 @@ import {
   removeExtension,
   updateExtension,
 } from "../../mutations/index.ts";
+import { toMcp } from "./result.ts";
 
 const PropControlSchema = z.enum(["boolean", "number", "string", "color", "enum", "icon"]);
 
@@ -17,17 +18,6 @@ const ExtensionPropArg = z.object({
   defaultValue: z.string().optional(),
   enumValues: z.array(z.union([z.string(), z.number()])).optional(),
 });
-
-function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
-
-function errorResult(value: unknown): {
-  isError: true;
-  content: { type: "text"; text: string }[];
-} {
-  return { isError: true, content: [{ type: "text", text: JSON.stringify(value) }] };
-}
 
 /**
  * Sprint-Y extension lifecycle: three tools the user's agent calls to
@@ -91,11 +81,7 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
           ),
       },
     },
-    async (args) => {
-      const r = await addExtension(ctx, args);
-      if (r.ok) return jsonResult(r.value);
-      return errorResult(r.error);
-    },
+    async (args) => toMcp(await addExtension(ctx, args)),
   );
 
   mcp.registerTool(
@@ -121,11 +107,7 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
         }),
       },
     },
-    async (args) => {
-      const r = await updateExtension(ctx, args);
-      if (r.ok) return jsonResult(r.value);
-      return errorResult(r.error);
-    },
+    async (args) => toMcp(await updateExtension(ctx, args)),
   );
 
   mcp.registerTool(
@@ -141,10 +123,6 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
       ].join("\n"),
       inputSchema: { id: z.string().min(1) },
     },
-    async (args) => {
-      const r = await removeExtension(ctx, args);
-      if (r.ok) return jsonResult(r.value);
-      return errorResult(r.error);
-    },
+    async (args) => toMcp(await removeExtension(ctx, args)),
   );
 }

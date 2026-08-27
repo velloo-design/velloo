@@ -14,34 +14,20 @@ export type ViewportPreset = z.infer<typeof ViewportPresetSchema>;
  * design folder is built against (see `@velloo/provider`). `source`
  * tells the loader where the components live for that provider:
  *
- *   "binary"           — components ship with the velloo binary (default
- *                        for the embedded shadcn snapshot, today).
- *   "cache"            — components live in `~/.velloo/...` keyed by
- *                        `projectId` (file-copy libs in external mode;
- *                        always-cache libs like MUI).
- *   "in-repo"          — components live inside the user's app folder.
- *                        `componentsPath` is the resolved location.
- *   "registry:shadcn"  — legacy alias for "binary" with the shadcn
- *                        snapshot, kept for round-tripping older
- *                        config files.
- *   "embedded:shadcn"  — legacy alias for "binary", same reason.
- *   "shared:<path>"    — experimental "point at the user's app components".
- *                        Designed in architecture.md; not yet implemented.
- *
- * `source` stays a free-form string so providers can introduce their own
- * vocabularies (e.g. host-repo scan modes) without churning this schema.
+ *   "binary"   — components ship with the velloo binary (the canvas
+ *                runtime for shadcn-upstream, and all of none/mui).
+ *   "cache"    — components live under `~/.velloo/…`.
+ *   "in-repo"  — components live inside the user's app folder.
+ *                `componentsPath` is the resolved location.
  */
 export const LibrarySchema = z.object({
   /**
-   * Component provider id. Legacy folders use `"shadcn-react"`
-   * (the vendored snapshot); new folders default to
-   * `"shadcn-upstream"` (fetched from upstream). Other providers add
-   * their own ids ("none", "mui", …). The server's provider loader
-   * maps ids to factories.
+   * Component provider id. The server's provider loader maps ids to
+   * factories; `"shadcn-upstream"` is the default for new folders.
    */
-  id: z.enum(["shadcn-react", "shadcn-upstream", "none", "mui"]),
+  id: z.enum(["shadcn-upstream", "none", "mui"]),
   version: z.string().min(1),
-  source: z.string().min(1),
+  source: z.enum(["binary", "cache", "in-repo"]),
   /** Where the components live, relative to the design folder root. */
   componentsPath: z.string().min(1),
 });
@@ -78,14 +64,13 @@ export type HostApp = z.infer<typeof HostAppSchema>;
  * and pins one as the default; each screen optionally declares which
  * library it uses (`screen.library`), falling back to `defaultLibrary`.
  *
- * For backward compat the legacy single-library shape (`library:
- * Library`, no `libraries` / `defaultLibrary`) still parses. The
- * server's `migrateConfig` normalizes legacy configs in-memory so the
- * rest of the codebase only sees the multi-library shape.
+ * `schemaVersion` gates loading: the server refuses folders on any
+ * other version (older ⇒ `velloo upgrade` migrates them on disk — see
+ * `migrate.ts`; newer ⇒ the binary is too old).
  */
 export const ConfigSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     toolVersion: z.string().min(1),
     /**
      * Stable folder identity for velloo-cloud (a UUID). Published share links
@@ -99,19 +84,14 @@ export const ConfigSchema = z
       .regex(/^[A-Za-z0-9_-]{8,64}$/)
       .optional(),
     /**
-     * Legacy single-library shape. Older folders carry this field;
-     * the server migrates them in-memory at load.
+     * Map of `libraryId → Library`. Library ids are free-form strings
+     * the user picks (e.g. "shadcn", "marketing", "internal"); the
+     * `Library.id` field inside each entry still names the provider
+     * implementation.
      */
-    library: LibrarySchema.optional(),
-    /**
-     * Multi-library shape. Map of `libraryId → Library`.
-     * Library ids are free-form strings the user picks (e.g.
-     * "shadcn", "marketing", "internal"); the `Library.id` field
-     * inside each entry still names the provider implementation.
-     */
-    libraries: z.record(z.string().min(1), LibrarySchema).optional(),
+    libraries: z.record(z.string().min(1), LibrarySchema),
     /** Library id used when a screen doesn't declare one. */
-    defaultLibrary: z.string().min(1).optional(),
+    defaultLibrary: z.string().min(1),
     /**
      * User-declared custom components. The agent adds these via the
      * `add_extension` MCP tool when a screen needs a component the
@@ -166,26 +146,8 @@ export const ConfigSchema = z
      */
     feedback: z.object({ enabled: z.boolean(), contactOk: z.boolean().optional() }).optional(),
   })
-  .refine(
-    (c) => {
-      const hasLegacy = c.library !== undefined;
-      const hasMulti = c.libraries !== undefined || c.defaultLibrary !== undefined;
-      // Exactly one shape must be present. Both forms together is ambiguous;
-      // neither leaves the folder unable to render anything.
-      if (hasLegacy && hasMulti) return false;
-      if (!hasLegacy && !hasMulti) return false;
-      // Multi-library form: both `libraries` and `defaultLibrary` required, and
-      // `defaultLibrary` must refer to a registered entry.
-      if (hasMulti) {
-        if (!c.libraries || !c.defaultLibrary) return false;
-        if (!(c.defaultLibrary in c.libraries)) return false;
-      }
-      return true;
-    },
-    {
-      message:
-        "Config must declare exactly one library shape: either legacy `library` OR (`libraries` + `defaultLibrary` where defaultLibrary names a registered entry).",
-    },
-  );
+  .refine((c) => c.defaultLibrary in c.libraries, {
+    message: "`defaultLibrary` must name an entry in `libraries`.",
+  });
 
 export type Config = z.infer<typeof ConfigSchema>;

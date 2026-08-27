@@ -19,14 +19,17 @@ import { addNode, applyClasses, type MutationContext } from "../index.ts";
  */
 
 const sampleConfig = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
-  library: {
-    id: "shadcn-react" as const,
-    version: "test",
-    source: "binary",
-    componentsPath: "binary",
+  libraries: {
+    default: {
+      id: "shadcn-upstream",
+      version: "test",
+      source: "binary",
+      componentsPath: "binary",
+    },
   },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
 

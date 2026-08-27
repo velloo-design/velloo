@@ -37,6 +37,15 @@ export {
 } from "./extension.ts";
 export { type Frame, FrameSchema } from "./frame.ts";
 export { pascalizeIconName } from "./icon-name.ts";
+export { type ResourceId, ResourceIdSchema } from "./ids.ts";
+export {
+  CURRENT_SCHEMA_VERSION,
+  FOLDER_MIGRATIONS,
+  type FolderMigration,
+  type MigrationRun,
+  planMigration,
+  schemaVersionOf,
+} from "./migrate.ts";
 export {
   type ComponentNode,
   isComponentNode,

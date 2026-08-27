@@ -28,13 +28,13 @@ export function removeScreen(
   ctx: MutationContext,
   args: RemoveScreenArgs,
 ): Promise<Result<RemoveScreenResult, MutationError>> {
-  return withScreenLock(args.screenId, () => removeScreenImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => removeScreenImpl(ctx, args));
 }
 export function updateScreen(
   ctx: MutationContext,
   args: UpdateScreenArgs,
 ): Promise<Result<UpdateScreenResult, MutationError>> {
-  return withScreenLock(args.screenId, () => updateScreenImpl(ctx, args));
+  return withScreenLock(ctx.folder, args.screenId, () => updateScreenImpl(ctx, args));
 }
 
 export type {

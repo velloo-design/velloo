@@ -22,7 +22,7 @@ export interface AddAnnotationArgs {
   body: string;
   position?: { x: number; y: number } | "auto";
   collapsed?: boolean;
-  /** Authorship marker — the MCP layer forces "agent". Absent = "user". */
+  /** Authorship marker — the MCP layer forces "agent"; defaults to "user". */
   author?: "user" | "agent";
 }
 
@@ -58,7 +58,7 @@ export async function addAnnotation(
       position: args.position ?? "auto",
       body: args.body,
       ...(args.collapsed !== undefined ? { collapsed: args.collapsed } : {}),
-      ...(args.author !== undefined ? { author: args.author } : {}),
+      author: args.author ?? "user",
     };
     const next = [...existing, annotation];
     await persistAnnotations(ctx.folder, args.screenId, next);

@@ -6,17 +6,27 @@ import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
-import { applyPreset, derivePaletteFromColor, setToken, type ThemeContext } from "../index.ts";
+import {
+  applyPreset,
+  derivePaletteFromColor,
+  setToken,
+  setTokens,
+  type ThemeContext,
+  withThemeLock,
+} from "../index.ts";
 
 const sampleConfig = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
-  library: {
-    id: "shadcn-react" as const,
-    version: "test",
-    source: "registry:shadcn",
-    componentsPath: "components/ui",
+  libraries: {
+    default: {
+      id: "shadcn-upstream" as const,
+      version: "test",
+      source: "binary",
+      componentsPath: "components/ui",
+    },
   },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
 };
 const sampleTheme: Theme = {
@@ -93,6 +103,64 @@ describe("setToken", () => {
     const r = await setToken(ctx, "colors.primary.DEFAULT", "");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.kind).toBe("InvalidThemePath");
+  });
+});
+
+describe("setTokens (bulk)", () => {
+  test("applies every entry with one persist and one broadcast", async () => {
+    const r = unwrap(
+      await setTokens(ctx, [
+        { path: "colors.background", value: "oklch(0.98 0 0)" },
+        { path: "colors.foreground", value: "oklch(0.2 0 0)" },
+        { path: "colors.primary.foreground", value: "oklch(0.99 0 0)" },
+      ]),
+    );
+    expect(r.applied).toEqual([
+      "colors.background",
+      "colors.foreground",
+      "colors.primary.foreground",
+    ]);
+    const onDisk = await diskTheme();
+    expect(onDisk.colors.background).toBe("oklch(0.98 0 0)");
+    expect(onDisk.colors.foreground).toBe("oklch(0.2 0 0)");
+    // The whole batch broadcast exactly once, not per entry.
+    expect(events).toEqual([{ type: "theme-changed" }]);
+  });
+
+  test("any bad entry fails the batch with a per-entry report and persists nothing", async () => {
+    const before = await diskTheme();
+    const r = await setTokens(ctx, [
+      { path: "colors.background", value: "oklch(0.5 0 0)" },
+      { path: "colors.primary.DEFAULT", value: "" },
+      { path: "", value: "x" },
+    ]);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.error.kind === "BulkTokensInvalid") {
+      expect(r.error.applied).toEqual(["colors.background"]);
+      expect(r.error.failed.map((f) => f.path)).toEqual(["colors.primary.DEFAULT", ""]);
+      expect(r.error.failed[0]?.reason).toContain("colors.primary.DEFAULT");
+    } else if (!r.ok) {
+      throw new Error(`expected BulkTokensInvalid, got ${r.error.kind}`);
+    }
+    // All-or-nothing: the valid first entry did NOT land on disk, and no
+    // theme-changed event fired.
+    expect(await diskTheme()).toEqual(before);
+    expect(events).toEqual([]);
+  });
+});
+
+describe("withThemeLock", () => {
+  test("two folders do not share a theme lock chain", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const held = withThemeLock({ root: "/tmp/velloo-theme-lock-a" }, () => gate);
+    // Would deadlock (until the test timeout) if both folders chained on one lock.
+    const other = await withThemeLock({ root: "/tmp/velloo-theme-lock-b" }, async () => "ran");
+    expect(other).toBe("ran");
+    release();
+    await held;
   });
 });
 

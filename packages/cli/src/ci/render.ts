@@ -7,7 +7,6 @@ import {
   extraThemeBlock,
   findHostTailwindConfig,
   loadDesignFolder,
-  migrateConfig,
   registryForScreen,
   renderPassForScreen,
   resolveProviders,
@@ -41,7 +40,7 @@ export interface FolderPipeline {
 /** Load a design folder and everything a headless render of it needs. */
 export async function loadPipeline(folderPath: string): Promise<FolderPipeline> {
   const design = await loadDesignFolder(folderPath);
-  const config = migrateConfig(design.config);
+  const config = design.config;
   const { providers, defaultProvider } = await resolveProviders(config, folderPath);
   const jit = new TailwindJit(
     Object.values(providers),

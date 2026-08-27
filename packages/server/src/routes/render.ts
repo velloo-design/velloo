@@ -1,7 +1,7 @@
 import type { FrameworkAdapter } from "@velloo/provider";
 import { renderScreen, resolveSnippetBodyForEdit, UnknownComponentError } from "@velloo/renderer";
-import type { Node, Screen, Theme, Viewport } from "@velloo/schema";
-import { Hono } from "hono";
+import type { Node, Screen, Snippet, Theme, Viewport } from "@velloo/schema";
+import { type Context, Hono } from "hono";
 import { themeByName } from "../design-folder.ts";
 import { buildShowcaseTree } from "../library/showcases.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
@@ -62,6 +62,59 @@ export function createRenderRouter(
     };
   };
 
+  const parseViewport = (c: Context, dw: number, dh: number): Viewport => ({
+    w: Number(c.req.query("w")) || dw,
+    h: Number(c.req.query("h")) || dh,
+  });
+
+  /**
+   * The shared tail of every preview route: JIT css → theme (`?theme`) →
+   * dark (`?mode`) → renderScreen → HTML, with UnknownComponentError as a 422.
+   * `libraryOf` picks the registry/pass owner when it isn't the rendered
+   * screen (snippet previews resolve their snippet's library); `withBundles`
+   * mounts the live-island + installed-component bundles (screen frames only —
+   * snippet/component tiles keep the lean SSR path).
+   */
+  const renderPreview = async (
+    c: Context,
+    opts: {
+      ctx: MutationContext;
+      screen: Screen;
+      viewport: Viewport;
+      libraryOf?: Pick<Screen, "library"> | Pick<Snippet, "library">;
+      withBundles?: boolean;
+    },
+  ): Promise<Response> => {
+    const { ctx, screen, viewport } = opts;
+    const f = ctx.folder;
+    const owner = opts.libraryOf ?? screen;
+    try {
+      const dark = c.req.query("mode") === "dark";
+      const snapshotCss = await jit.build();
+      const theme = themeByName(f, c.req.query("theme"));
+      const canvasBundle = opts.withBundles
+        ? await canvasBundleFor(ctx, screen, theme, dark)
+        : undefined;
+      const { html } = await renderScreen(screen, theme, {
+        viewport,
+        snapshotCss,
+        registry: registryForScreen(ctx, owner),
+        renderPass: renderPassForScreen(ctx, owner, theme, dark),
+        snippets: f.snippets,
+        customCss: f.customCss,
+        dark,
+        ...(opts.withBundles ? { liveBundleUrl: liveBundleUrl(ctx) } : {}),
+        ...(canvasBundle ? { canvasBundle } : {}),
+      });
+      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
+    } catch (err) {
+      if (err instanceof UnknownComponentError) {
+        return c.json({ error: err.message, ref: err.ref }, 422);
+      }
+      throw err;
+    }
+  };
+
   /**
    * Render a snippet in isolation as live HTML. Wraps the snippet in a
    * synthetic single-node screen (mirroring how the MCP render_snippet
@@ -80,9 +133,7 @@ export function createRenderRouter(
     const snippet = f.snippets.get(c.req.param("snippetId"));
     if (!snippet) return c.json({ error: "snippet not found" }, 404);
 
-    const w = Number(c.req.query("w")) || 480;
-    const h = Number(c.req.query("h")) || 320;
-    const viewport: Viewport = { w, h };
+    const viewport = parseViewport(c, 480, 320);
 
     /**
      * Fill required params (no default) with friendly placeholders so
@@ -119,26 +170,7 @@ export function createRenderRouter(
       },
     };
 
-    try {
-      const dark = c.req.query("mode") === "dark";
-      const snapshotCss = await jit.build();
-      const theme = themeByName(f, c.req.query("theme"));
-      const { html } = await renderScreen(screen, theme, {
-        viewport,
-        snapshotCss,
-        registry: registryForScreen(ctx, snippet),
-        renderPass: renderPassForScreen(ctx, snippet, theme, dark),
-        snippets: f.snippets,
-        customCss: f.customCss,
-        dark,
-      });
-      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
-    } catch (err) {
-      if (err instanceof UnknownComponentError) {
-        return c.json({ error: err.message, ref: err.ref }, 422);
-      }
-      throw err;
-    }
+    return renderPreview(c, { ctx, screen, viewport, libraryOf: snippet });
   });
 
   /**
@@ -156,9 +188,7 @@ export function createRenderRouter(
     const snippet = f.snippets.get(c.req.param("snippetId"));
     if (!snippet) return c.json({ error: "snippet not found" }, 404);
 
-    const w = Number(c.req.query("w")) || 480;
-    const h = Number(c.req.query("h")) || 320;
-    const viewport: Viewport = { w, h };
+    const viewport = parseViewport(c, 480, 320);
 
     const paramDefaults: Record<string, unknown> = {};
     for (const p of snippet.params) {
@@ -184,26 +214,7 @@ export function createRenderRouter(
       tree,
     };
 
-    try {
-      const dark = c.req.query("mode") === "dark";
-      const snapshotCss = await jit.build();
-      const theme = themeByName(f, c.req.query("theme"));
-      const { html } = await renderScreen(screen, theme, {
-        viewport,
-        snapshotCss,
-        registry: registryForScreen(ctx, snippet),
-        renderPass: renderPassForScreen(ctx, snippet, theme, dark),
-        snippets: f.snippets,
-        customCss: f.customCss,
-        dark,
-      });
-      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
-    } catch (err) {
-      if (err instanceof UnknownComponentError) {
-        return c.json({ error: err.message, ref: err.ref }, 422);
-      }
-      throw err;
-    }
+    return renderPreview(c, { ctx, screen, viewport, libraryOf: snippet });
   });
 
   /**
@@ -218,12 +229,9 @@ export function createRenderRouter(
    */
   r.get("/component/:componentId", async (c) => {
     const ctx = ctxFor();
-    const f = ctx.folder;
     const componentId = c.req.param("componentId");
 
-    const w = Number(c.req.query("w")) || 480;
-    const h = Number(c.req.query("h")) || 200;
-    const viewport: Viewport = { w, h };
+    const viewport = parseViewport(c, 480, 200);
 
     const rawProps = c.req.query("props");
     let propOverrides: Record<string, unknown> | undefined;
@@ -258,28 +266,9 @@ export function createRenderRouter(
       tree,
     };
 
-    try {
-      const dark = c.req.query("mode") === "dark";
-      const snapshotCss = await jit.build();
-      // Component previews render against the folder default library —
-      // showcases live in the default-provider's surface today.
-      const theme = themeByName(f, c.req.query("theme"));
-      const { html } = await renderScreen(screen, theme, {
-        viewport,
-        snapshotCss,
-        registry: registryForScreen(ctx, screen),
-        renderPass: renderPassForScreen(ctx, screen, theme, dark),
-        snippets: f.snippets,
-        customCss: f.customCss,
-        dark,
-      });
-      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
-    } catch (err) {
-      if (err instanceof UnknownComponentError) {
-        return c.json({ error: err.message, ref: err.ref }, 422);
-      }
-      throw err;
-    }
+    // Component previews render against the folder default library —
+    // showcases live in the default-provider's surface today.
+    return renderPreview(c, { ctx, screen, viewport });
   });
 
   r.get("/:screenId", async (c) => {
@@ -289,33 +278,9 @@ export function createRenderRouter(
     if (!screen) return c.json({ error: "screen not found" }, 404);
 
     const preset = f.config.viewportPresets[0] ?? { name: "default", w: 1440, h: 900 };
-    const w = Number(c.req.query("w")) || preset.w;
-    const h = Number(c.req.query("h")) || preset.h;
-    const viewport: Viewport = { w, h };
+    const viewport = parseViewport(c, preset.w, preset.h);
 
-    try {
-      const dark = c.req.query("mode") === "dark";
-      const snapshotCss = await jit.build();
-      const theme = themeByName(f, c.req.query("theme"));
-      const canvasBundle = await canvasBundleFor(ctx, screen, theme, dark);
-      const { html } = await renderScreen(screen, theme, {
-        viewport,
-        snapshotCss,
-        registry: registryForScreen(ctx, screen),
-        renderPass: renderPassForScreen(ctx, screen, theme, dark),
-        snippets: f.snippets,
-        customCss: f.customCss,
-        dark,
-        liveBundleUrl: liveBundleUrl(ctx),
-        ...(canvasBundle ? { canvasBundle } : {}),
-      });
-      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
-    } catch (err) {
-      if (err instanceof UnknownComponentError) {
-        return c.json({ error: err.message, ref: err.ref }, 422);
-      }
-      throw err;
-    }
+    return renderPreview(c, { ctx, screen, viewport, withBundles: true });
   });
 
   return r;

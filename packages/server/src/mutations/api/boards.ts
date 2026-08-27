@@ -27,13 +27,13 @@ export function updateBoard(
   ctx: MutationContext,
   args: UpdateBoardArgs,
 ): Promise<Result<UpdateBoardResult, MutationError>> {
-  return withBoardLock(args.boardId, () => updateBoardImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => updateBoardImpl(ctx, args));
 }
 export function removeBoard(
   ctx: MutationContext,
   args: RemoveBoardArgs,
 ): Promise<Result<RemoveBoardResult, MutationError>> {
-  return withBoardLock(args.boardId, () => removeBoardImpl(ctx, args));
+  return withBoardLock(ctx.folder, args.boardId, () => removeBoardImpl(ctx, args));
 }
 // Reorder writes folder config (not a single board file), so a per-board
 // lock wouldn't serialize it against anything. Mirrors addBoard.

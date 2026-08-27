@@ -280,247 +280,125 @@ describe("BoardSchema", () => {
 });
 
 describe("ConfigSchema", () => {
-  test("accepts a valid config", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-react",
-        version: "2.3.4",
-        source: "binary",
+  const base = {
+    schemaVersion: 2,
+    toolVersion: "0.1.0",
+    libraries: {
+      default: {
+        id: "shadcn-upstream" as const,
+        version: "2026.05.22",
+        source: "binary" as const,
         componentsPath: "binary",
       },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(true);
+    },
+    defaultLibrary: "default",
+    viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+  };
+
+  test("accepts a valid config", () => {
+    expect(ConfigSchema.safeParse(base).success).toBe(true);
   });
 
   test("accepts and round-trips the optional feedback opt-in", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-react",
-        version: "2.3.4",
-        source: "binary",
-        componentsPath: "binary",
-      },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-      feedback: { enabled: true, contactOk: true },
-    };
+    const config = { ...base, feedback: { enabled: true, contactOk: true } };
     const parsed = ConfigSchema.safeParse(config);
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.feedback).toEqual({ enabled: true, contactOk: true });
 
     // contactOk is optional; enabled alone parses.
-    expect(ConfigSchema.safeParse({ ...config, feedback: { enabled: false } }).success).toBe(true);
+    expect(ConfigSchema.safeParse({ ...base, feedback: { enabled: false } }).success).toBe(true);
   });
 
-  test("accepts legacy embedded:shadcn source for backward compat", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-react",
-        version: "2.3.4",
-        source: "embedded:shadcn",
-        componentsPath: "embedded:shadcn",
-      },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(true);
-  });
-
-  test("accepts the reserved provider ids", () => {
-    const baseViewports = [{ name: "Mobile", w: 390, h: 844 }];
-    for (const id of ["none", "mui"] as const) {
+  test("accepts every provider id", () => {
+    for (const id of ["shadcn-upstream", "none", "mui"] as const) {
       const config = {
-        schemaVersion: 1,
-        toolVersion: "0.1.0",
-        library: { id, version: "0.1.0", source: "binary", componentsPath: "binary" },
-        viewportPresets: baseViewports,
+        ...base,
+        libraries: {
+          default: { id, version: "0.1.0", source: "binary" as const, componentsPath: "binary" },
+        },
       };
       expect(ConfigSchema.safeParse(config).success).toBe(true);
     }
   });
 
-  test("accepts the Sprint-Z shadcn-upstream id", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-upstream",
-        version: "2026.05.26",
-        source: "cache",
-        componentsPath: "~/.velloo/providers/shadcn-upstream@2026.05.26",
-      },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  test("accepts every source enum value", () => {
+    for (const source of ["binary", "cache", "in-repo"] as const) {
+      const config = {
+        ...base,
+        libraries: { default: { ...base.libraries.default, source, componentsPath: "x" } },
+      };
+      expect(ConfigSchema.safeParse(config).success).toBe(true);
+    }
   });
 
-  test("accepts experimental shared source", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-react",
-        version: "2.3.4",
-        source: "shared:../apps/web/components",
-        componentsPath: "../apps/web/components",
-        experimental: "shared",
-      },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+  test("rejects the retired shadcn-react id and the legacy source aliases", () => {
+    const retired = {
+      ...base,
+      libraries: { default: { ...base.libraries.default, id: "shadcn-react" } },
     };
-    expect(ConfigSchema.safeParse(config).success).toBe(true);
+    expect(ConfigSchema.safeParse(retired).success).toBe(false);
+    const alias = {
+      ...base,
+      libraries: { default: { ...base.libraries.default, source: "embedded:shadcn" } },
+    };
+    expect(ConfigSchema.safeParse(alias).success).toBe(false);
   });
 
   test("rejects an unknown provider id", () => {
     const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-vue",
-        version: "2.3.4",
-        source: "binary",
-        componentsPath: "binary",
-      },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
+      ...base,
+      libraries: { default: { ...base.libraries.default, id: "shadcn-vue" } },
     };
     expect(ConfigSchema.safeParse(config).success).toBe(false);
   });
 
-  test("rejects schemaVersion other than 1", () => {
-    const config = {
-      schemaVersion: 2,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-react",
-        version: "2.3.4",
-        source: "binary",
-        componentsPath: "binary",
-      },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(false);
+  test("rejects any schemaVersion but the current one", () => {
+    expect(ConfigSchema.safeParse({ ...base, schemaVersion: 1 }).success).toBe(false);
+    expect(ConfigSchema.safeParse({ ...base, schemaVersion: 3 }).success).toBe(false);
   });
 
-  test("accepts an optional projectId", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      projectId: "01J9C8N3M2X4Z6Y7K",
-      library: {
-        id: "shadcn-react",
-        version: "2.3.4",
-        source: "binary",
-        componentsPath: "binary",
-      },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  test("rejects the legacy single-library shape", () => {
+    const { libraries: _libs, defaultLibrary: _dl, ...rest } = base;
+    const legacy = { ...rest, library: base.libraries.default };
+    expect(ConfigSchema.safeParse(legacy).success).toBe(false);
   });
 
-  test("accepts the new multi-library shape", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      libraries: {
-        shadcn: {
-          id: "shadcn-react" as const,
-          version: "2026.05.22",
-          source: "binary",
-          componentsPath: "binary",
-        },
-        marketing: {
-          id: "none" as const,
-          version: "0.1.0",
-          source: "binary",
-          componentsPath: "binary",
-        },
-      },
-      defaultLibrary: "shadcn",
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(true);
-  });
-
-  test("rejects a config that mixes legacy library with new multi-library shape", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      library: {
-        id: "shadcn-react" as const,
-        version: "2.3.4",
-        source: "binary",
-        componentsPath: "binary",
-      },
-      libraries: {
-        shadcn: {
-          id: "shadcn-react" as const,
-          version: "2026.05.22",
-          source: "binary",
-          componentsPath: "binary",
-        },
-      },
-      defaultLibrary: "shadcn",
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(false);
-  });
-
-  test("rejects a config with neither library nor multi-library", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(false);
+  test("rejects a config without libraries", () => {
+    const { libraries: _libs, defaultLibrary: _dl, ...rest } = base;
+    expect(ConfigSchema.safeParse(rest).success).toBe(false);
   });
 
   test("rejects when defaultLibrary doesn't match any registered library", () => {
-    const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
-      libraries: {
-        shadcn: {
-          id: "shadcn-react" as const,
-          version: "2026.05.22",
-          source: "binary",
-          componentsPath: "binary",
-        },
-      },
-      defaultLibrary: "marketing",
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-    };
-    expect(ConfigSchema.safeParse(config).success).toBe(false);
+    expect(ConfigSchema.safeParse({ ...base, defaultLibrary: "marketing" }).success).toBe(false);
   });
 
-  test("accepts an extensions map alongside multi-library", () => {
+  test("accepts a multi-library map", () => {
     const config = {
-      schemaVersion: 1,
-      toolVersion: "0.1.0",
+      ...base,
       libraries: {
-        shadcn: {
-          id: "shadcn-react" as const,
-          version: "2026.05.22",
-          source: "binary",
+        shadcn: base.libraries.default,
+        marketing: {
+          id: "none" as const,
+          version: "0.1.0",
+          source: "binary" as const,
           componentsPath: "binary",
         },
       },
       defaultLibrary: "shadcn",
+    };
+    expect(ConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  test("accepts an extensions map", () => {
+    const config = {
+      ...base,
       extensions: {
         DataTable: {
           importPath: "@/components/data-table",
           category: "ui" as const,
           description: "Sortable table component",
           props: [
-            {
-              name: "data",
-              type: "any[]",
-              optional: false,
-              control: "string" as const,
-            },
+            { name: "data", type: "any[]", optional: false, control: "string" as const },
             {
               name: "sortable",
               type: "boolean | undefined",
@@ -530,7 +408,6 @@ describe("ConfigSchema", () => {
           ],
         },
       },
-      viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
     };
     expect(ConfigSchema.safeParse(config).success).toBe(true);
   });
@@ -649,6 +526,7 @@ describe("AnnotationSchema", () => {
       id: "a1",
       target: { locator: "@hero-cta" },
       body: "**Important** — make this land harder.",
+      author: "user",
     });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -664,8 +542,16 @@ describe("AnnotationSchema", () => {
       position: { x: -200, y: 40 },
       body: "x",
       collapsed: true,
+      author: "agent",
     });
     expect(parsed.success).toBe(true);
+  });
+
+  test("rejects an annotation without an author", async () => {
+    const { AnnotationSchema } = await import("../annotation.ts");
+    expect(
+      AnnotationSchema.safeParse({ id: "a5", target: { locator: [0] }, body: "x" }).success,
+    ).toBe(false);
   });
 
   test("rejects malformed @id locators", async () => {

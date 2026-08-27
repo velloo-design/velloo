@@ -12,14 +12,17 @@ import type { MutationContext } from "../index.ts";
 const provider = createShadcnProvider();
 
 const sampleConfig = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
-  library: {
-    id: "shadcn-react" as const,
-    version: "test",
-    source: "binary",
-    componentsPath: "binary",
+  libraries: {
+    default: {
+      id: "shadcn-upstream",
+      version: "test",
+      source: "binary",
+      componentsPath: "binary",
+    },
   },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
 
@@ -246,7 +249,13 @@ describe("runBatch", () => {
     expect(setup.completed).toBe(3);
 
     // Seed an annotation sidecar on the screen we'll remove.
-    const annotation = { id: "a1", target: { locator: [] }, position: "auto" as const, body: "hi" };
+    const annotation = {
+      id: "a1",
+      target: { locator: [] },
+      position: "auto" as const,
+      body: "hi",
+      author: "user" as const,
+    };
     folder.annotations.set("promo", [annotation]);
     await writeJson(join(tmp, "screens", "promo.annotations.json"), [annotation]);
 

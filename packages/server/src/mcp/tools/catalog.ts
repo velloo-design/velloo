@@ -1,17 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { type CatalogEntry, catalogFromManifest, type FrameworkAdapter } from "@velloo/provider";
 import { z } from "zod";
+import { unknownComponent } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
-
-type McpResult = { content: { type: "text"; text: string }[]; isError?: true };
-const jsonResult = (value: unknown): McpResult => ({
-  content: [{ type: "text", text: JSON.stringify(value) }],
-});
-const errorResult = (value: unknown): McpResult => ({
-  isError: true,
-  content: [{ type: "text", text: JSON.stringify(value) }],
-});
+import { errorResult, jsonResult } from "./result.ts";
 
 /** The active library's catalog with installed-status — adapter `catalog()` or a manifest fallback. */
 async function catalogFor(provider: FrameworkAdapter): Promise<CatalogEntry[]> {
@@ -51,10 +44,13 @@ export function registerCatalogTools(mcp: McpServer, ctx: MutationContext): void
       const catalog = await catalogFor(provider);
       const entry = catalog.find((e) => e.id === args.componentId);
       if (!entry) {
-        return errorResult({
-          error: `Unknown component "${args.componentId}" in library "${provider.id}".`,
-          available: catalog.map((e) => e.id),
-        });
+        return errorResult(
+          unknownComponent(
+            args.componentId,
+            catalog.map((e) => e.id),
+            `Unknown component "${args.componentId}" in library "${provider.id}".`,
+          ),
+        );
       }
       if (entry.installed) {
         return jsonResult({
@@ -78,9 +74,9 @@ export function registerCatalogTools(mcp: McpServer, ctx: MutationContext): void
             importPath: entry.importPath,
           });
         } catch (err) {
-          return errorResult({
-            error: `install of "${entry.id}" failed: ${err instanceof Error ? err.message : String(err)}`,
-          });
+          return errorResult(
+            `install of "${entry.id}" failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
       return jsonResult({

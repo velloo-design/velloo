@@ -8,7 +8,17 @@ export type ThemeError =
   | { kind: "InvalidColor"; reason: string; hint?: string }
   | { kind: "InvalidThemePath"; reason: string; hint?: string }
   | { kind: "UnknownPreset"; presetName: string; hint?: string }
-  | { kind: "BadRequest"; message: string; issues?: unknown };
+  | { kind: "BadRequest"; message: string; issues?: unknown }
+  | {
+      kind: "BulkTokensInvalid";
+      /**
+       * Paths that validated cleanly, in application order. The batch is
+       * all-or-nothing — when any entry fails, NOTHING is persisted, so these
+       * report what *would* have applied, not a half-written state.
+       */
+      applied: string[];
+      failed: { path: string; reason: string }[];
+    };
 
 // Constructor helpers.
 export const invalidColor = (reason: string, hint?: string): ThemeError => ({

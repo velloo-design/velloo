@@ -8,11 +8,7 @@ import {
   storeAsset,
 } from "../../fs.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-
-type McpResult = {
-  content: { type: "text"; text: string }[];
-  isError?: true;
-};
+import { errorResult, jsonResult } from "./result.ts";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -31,45 +27,27 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     async ({ filename, data, overwrite }) => {
       const safe = sanitizeFilename(filename);
       if (!isAllowedAssetExt(safe)) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `upload_asset: ${safe} is not an allowed asset type (${[...ALLOWED_ASSET_EXTENSIONS].join(", ")})`,
-            },
-          ],
-        };
+        return errorResult(
+          `upload_asset: ${safe} is not an allowed asset type (${[...ALLOWED_ASSET_EXTENSIONS].join(", ")})`,
+        );
       }
       let bytes: Buffer;
       try {
         bytes = Buffer.from(data, "base64");
       } catch {
-        return {
-          isError: true,
-          content: [{ type: "text", text: "upload_asset: data is not valid base64" }],
-        };
+        return errorResult("upload_asset: data is not valid base64");
       }
       if (bytes.length === 0 || bytes.length > MAX_BYTES) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `upload_asset: decoded size ${bytes.length} bytes is outside (0, ${MAX_BYTES}]`,
-            },
-          ],
-        };
+        return errorResult(
+          `upload_asset: decoded size ${bytes.length} bytes is outside (0, ${MAX_BYTES}]`,
+        );
       }
       const abs = join(ctx.folder.root, "assets", safe);
       if (overwrite === false && (await Bun.file(abs).exists())) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `upload_asset: ${safe} exists (overwrite: false)` }],
-        };
+        return errorResult(`upload_asset: ${safe} exists (overwrite: false)`);
       }
       const result = await storeAsset(ctx.folder.root, safe, bytes);
-      return { content: [{ type: "text", text: JSON.stringify(result) }] } as McpResult;
+      return jsonResult(result);
     },
   );
 
@@ -145,11 +123,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
       }
 
       const imported = results.filter((r) => "url" in r).length;
-      return {
-        content: [
-          { type: "text", text: JSON.stringify({ imported, matched: sources.length, results }) },
-        ],
-      } as McpResult;
+      return jsonResult({ imported, matched: sources.length, results });
     },
   );
 }

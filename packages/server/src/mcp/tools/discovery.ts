@@ -12,12 +12,10 @@ import {
 } from "@velloo/schema";
 import { z } from "zod";
 import { orderedBoards, resolveNamedTheme } from "../../design-folder.ts";
+import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
-
-function jsonResult(value: unknown): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
+import { errorResult, jsonResult } from "./result.ts";
 
 /**
  * Snippets mark a param required by the *absence* of `default`/`optional`. Agents reliably
@@ -153,12 +151,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     },
     async ({ screenId, mode }) => {
       const screen = ctx.folder.screens.get(screenId);
-      if (!screen) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `Screen not found: ${screenId}` }],
-        };
-      }
+      if (!screen) return errorResult(screenNotFound(screenId));
       if (mode === "outline") return jsonResult(toOutline(screen));
       return jsonResult(screen);
     },
@@ -193,12 +186,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     },
     async ({ boardId }) => {
       const board = ctx.folder.boards.get(boardId);
-      if (!board) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `Board not found: ${boardId}` }],
-        };
-      }
+      if (!board) return errorResult(boardNotFound(boardId));
       return jsonResult(board);
     },
   );
@@ -266,7 +254,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     async (args) => {
       const resolved = resolveNamedTheme(ctx.folder, args.theme);
       if (!resolved.ok) {
-        return { isError: true as const, ...jsonResult({ message: resolved.message }) };
+        return errorResult({ kind: "BadRequest", message: resolved.message });
       }
       return jsonResult(resolved.theme);
     },
@@ -298,12 +286,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     },
     async ({ snippetId }) => {
       const snippet = ctx.folder.snippets.get(snippetId);
-      if (!snippet) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `Snippet not found: ${snippetId}` }],
-        };
-      }
+      if (!snippet) return errorResult(snippetNotFound(snippetId));
       return jsonResult({ ...snippet, params: snippet.params.map(withRequiredFlag) });
     },
   );

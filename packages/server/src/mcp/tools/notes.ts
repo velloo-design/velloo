@@ -1,27 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Result } from "@velloo/result";
 import { z } from "zod";
+import { badRequest } from "../../mutations/errors.ts";
 import {
   addAnnotation,
   addNote,
   type MutationContext,
-  type MutationError,
   removeAnnotation,
   removeNote,
   updateNote,
 } from "../../mutations/index.ts";
+import { errorResult, toMcp } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
-
-type McpResult = {
-  content: { type: "text"; text: string }[];
-  isError?: true;
-};
-
-function toMcp<T>(result: Result<T, MutationError>): McpResult {
-  return result.ok
-    ? { content: [{ type: "text", text: JSON.stringify(result.value) }] }
-    : { isError: true, content: [{ type: "text", text: JSON.stringify(result.error) }] };
-}
 
 /**
  * Canvas sticky notes — board-level free-floating commentary in board
@@ -114,18 +103,11 @@ export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
     async ({ screenId, annotationId }) => {
       const existing = ctx.folder.annotations.get(screenId)?.find((a) => a.id === annotationId);
       if (existing && existing.author !== "agent") {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                kind: "BadRequest",
-                message: `Annotation ${annotationId} is user-authored — agents may only remove their own.`,
-              }),
-            },
-          ],
-        };
+        return errorResult(
+          badRequest(
+            `Annotation ${annotationId} is user-authored — agents may only remove their own.`,
+          ),
+        );
       }
       return toMcp(await removeAnnotation(ctx, { screenId, annotationId }));
     },

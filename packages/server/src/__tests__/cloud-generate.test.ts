@@ -36,9 +36,12 @@ let stub: {
 };
 
 const config = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   toolVersion: "test",
-  library: { id: "shadcn-react", version: "test", source: "binary", componentsPath: "binary" },
+  libraries: {
+    default: { id: "shadcn-upstream", version: "test", source: "binary", componentsPath: "binary" },
+  },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
 
@@ -345,7 +348,7 @@ describe("the generate_asset tool", () => {
     const folder = await loadDesignFolder(tmp);
     const ctx: MutationContext = {
       folder,
-      providers: { "shadcn-react": provider },
+      providers: { default: provider },
       defaultProvider: provider,
       broadcast: () => {},
     };

@@ -318,11 +318,11 @@ export async function runBatch(
     switch (kind) {
       case "board":
       case "notes":
-        return withBoardLock(id, fn);
+        return withBoardLock(ctx.folder, id, fn);
       case "snippet":
-        return withSnippetLock(id, fn);
+        return withSnippetLock(ctx.folder, id, fn);
       default:
-        return withScreenLock(id, fn);
+        return withScreenLock(ctx.folder, id, fn);
     }
   }
 

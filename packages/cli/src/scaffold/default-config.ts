@@ -1,9 +1,9 @@
-import type { Config, HostApp, Library } from "@velloo/schema";
+import { type Config, CURRENT_SCHEMA_VERSION, type HostApp, type Library } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { TOOL_VERSION } from "../version.ts";
 
 interface DefaultConfigOpts {
-  /** Library declaration. Defaults to the embedded shadcn-react provider. */
+  /** Library declaration. Defaults to shadcn-upstream on the snapshot runtime. */
   library?: Library;
   /** Default screen id to focus on first load. */
   defaultScreen?: string;
@@ -41,21 +41,22 @@ interface DefaultConfigOpts {
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
   return {
-    schemaVersion: 1,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     toolVersion: TOOL_VERSION,
     // Stable cloud identity: share links carry it server-side, so any clone
     // of the folder finds its published links (and their comments) by id.
     folderId: crypto.randomUUID(),
-    library: opts.library ?? {
-      id: "shadcn-react",
-      version: snapshotVersion,
-      // "binary" is the canonical source vocabulary: the components
-      // live inside the velloo binary, not on disk in the design
-      // folder. The migration shim in @velloo/server still
-      // accepts the legacy `"embedded:shadcn"` form for back-compat.
-      source: "binary",
-      componentsPath: "binary",
+    libraries: {
+      default: opts.library ?? {
+        id: "shadcn-upstream",
+        version: snapshotVersion,
+        // "binary": the canvas renders from the snapshot runtime inside
+        // the velloo binary; real components install into the app later.
+        source: "binary",
+        componentsPath: "binary",
+      },
     },
+    defaultLibrary: "default",
     viewportPresets: [
       { name: "Mobile", w: 390, h: 844 },
       { name: "Tablet", w: 768, h: 1024 },

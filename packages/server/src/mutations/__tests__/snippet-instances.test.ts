@@ -40,14 +40,17 @@ function makeFolder(screens: Screen[], snippets: Snippet[]): DesignFolder {
   return {
     root: "/tmp",
     config: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       toolVersion: "test",
-      library: {
-        id: "shadcn-react",
-        version: "test",
-        source: "embedded:shadcn",
-        componentsPath: "embedded:shadcn",
+      libraries: {
+        default: {
+          id: "shadcn-upstream",
+          version: "test",
+          source: "binary",
+          componentsPath: "binary",
+        },
       },
+      defaultLibrary: "default",
       viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
     },
     theme: blankTheme(),

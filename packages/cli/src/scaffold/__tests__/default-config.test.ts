@@ -2,6 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { ConfigSchema } from "@velloo/schema";
 import { buildDefaultConfig } from "../default-config.ts";
 
+describe("buildDefaultConfig — schema v2 shape", () => {
+  test("emits a v2 multi-library config with the shadcn-upstream default", () => {
+    const config = buildDefaultConfig();
+    expect(config.schemaVersion).toBe(2);
+    expect(config.defaultLibrary).toBe("default");
+    expect(config.libraries.default?.id).toBe("shadcn-upstream");
+    expect(config.libraries.default?.source).toBe("binary");
+    expect(ConfigSchema.parse(config)).toBeTruthy();
+  });
+});
+
 describe("buildDefaultConfig — styling axis", () => {
   test("omits styling by default (library default channel)", () => {
     const config = buildDefaultConfig();

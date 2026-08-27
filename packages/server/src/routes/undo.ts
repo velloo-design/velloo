@@ -56,7 +56,7 @@ async function applyRevert(
     const back: HistoryEntry = { kind: "screen", screenId: entry.screenId, screen: current };
     if (pushOpposite === "redo") folder.history.pushRedo(back);
     else folder.history.pushUndoSilent(back);
-    await withScreenLock(entry.screenId, async () => {
+    await withScreenLock(folder, entry.screenId, async () => {
       if (entry.screen === null) {
         await deleteScreen(folder, entry.screenId);
       } else {
@@ -72,7 +72,7 @@ async function applyRevert(
     const back: HistoryEntry = { kind: "board", boardId: entry.boardId, board: current };
     if (pushOpposite === "redo") folder.history.pushRedo(back);
     else folder.history.pushUndoSilent(back);
-    await withBoardLock(entry.boardId, async () => {
+    await withBoardLock(folder, entry.boardId, async () => {
       if (entry.board === null) {
         await deleteBoard(folder, entry.boardId);
       } else {
@@ -88,7 +88,7 @@ async function applyRevert(
     const back: HistoryEntry = { kind: "snippet", snippetId: entry.snippetId, snippet: current };
     if (pushOpposite === "redo") folder.history.pushRedo(back);
     else folder.history.pushUndoSilent(back);
-    await withSnippetLock(entry.snippetId, async () => {
+    await withSnippetLock(folder, entry.snippetId, async () => {
       if (entry.snippet === null) {
         await deleteSnippet(folder, entry.snippetId);
       } else {

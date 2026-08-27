@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { ResourceIdSchema } from "./ids.ts";
 
 /**
  * Two annotation primitives, deliberately split:
  *
  *  - **CanvasNote**: free-positioned markdown in board coordinate space.
- *    Pure designer scratchpad. Lives in `board.notes.json` at the folder
- *    root. Not exposed to the agent.
+ *    Pure designer scratchpad. Lives per board in `boards/<id>.notes.json`.
+ *    Not exposed to the agent.
  *
  *  - **Annotation**: tied to a specific node in a Screen via `locator`.
  *    The screen id is implied by the sidecar filename
@@ -39,7 +40,7 @@ export type AnnotationTarget = z.infer<typeof AnnotationTargetSchema>;
 const PositionSchema = z.union([z.object({ x: z.number(), y: z.number() }), z.literal("auto")]);
 
 export const AnnotationSchema = z.object({
-  id: z.string().min(1),
+  id: ResourceIdSchema,
   target: AnnotationTargetSchema,
   /**
    * Canvas placement. `"auto"` lets the canvas position it to the left of
@@ -52,12 +53,12 @@ export const AnnotationSchema = z.object({
   /** Persisted collapsed state. Optional — undefined means "use canvas default". */
   collapsed: z.boolean().optional(),
   /**
-   * Who wrote it. Absent = "user" (pre-existing annotations predate the
-   * field). Agents may create annotations (questions pinned to a node,
-   * review remarks) but may only edit/remove their own — user-authored
-   * annotations remain the protected designer→agent channel.
+   * Who wrote it. Agents may create annotations (questions pinned to a
+   * node, review remarks) but may only edit/remove their own —
+   * user-authored annotations remain the protected designer→agent
+   * channel.
    */
-  author: z.enum(["user", "agent"]).optional(),
+  author: z.enum(["user", "agent"]),
   /**
    * Provenance for an annotation pulled from a velloo-cloud share-link
    * comment (the `pull_comments` sync). `commentId` keys idempotent
@@ -77,7 +78,7 @@ export const AnnotationSchema = z.object({
 export type Annotation = z.infer<typeof AnnotationSchema>;
 
 export const CanvasNoteSchema = z.object({
-  id: z.string().min(1),
+  id: ResourceIdSchema,
   x: z.number(),
   y: z.number(),
   /**

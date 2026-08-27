@@ -49,6 +49,7 @@ const THEME_STATUS: Record<ThemeError["kind"], ErrorStatus> = {
   InvalidColor: 400,
   InvalidThemePath: 400,
   BadRequest: 400,
+  BulkTokensInvalid: 400,
 };
 
 export function mutationToHttp(c: Context, error: MutationError): Response {

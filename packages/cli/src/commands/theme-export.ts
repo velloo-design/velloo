@@ -5,7 +5,7 @@ import { createInterface } from "node:readline/promises";
 import { colorizeDiff, type EmitThemeResult, emitMuiTheme, emitTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
-import { loadDesignFolder, migrateConfig, resolveProviders } from "@velloo/server";
+import { loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
@@ -33,8 +33,7 @@ async function themeEmitter(
   cssOnly: boolean,
 ): Promise<{ native: boolean; produce: (apply: boolean) => Promise<EmitThemeResult> }> {
   const design = await loadDesignFolder(folderRoot);
-  const config = migrateConfig(design.config);
-  const { defaultProvider } = await resolveProviders(config, folderRoot);
+  const { defaultProvider } = await resolveProviders(design.config, folderRoot);
   const adapter = defaultProvider as FrameworkAdapter;
   if (adapter.codegenModule && adapter.themeToNative) {
     const toNative = adapter.themeToNative.bind(adapter);

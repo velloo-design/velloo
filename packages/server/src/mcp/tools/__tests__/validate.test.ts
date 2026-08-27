@@ -7,19 +7,21 @@ import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { type DesignFolder, loadDesignFolder } from "../../../design-folder.ts";
 import type { MutationContext } from "../../../mutations/index.ts";
-import { migrateConfig } from "../../../providers.ts";
 import { TailwindJit } from "../../../styles/tailwind-jit.ts";
 import { registerValidateTools } from "../validate.ts";
 
 const sampleConfig = {
-  schemaVersion: 1 as const,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
-  library: {
-    id: "shadcn-react" as const,
-    version: "test",
-    source: "binary",
-    componentsPath: "binary",
+  libraries: {
+    default: {
+      id: "shadcn-upstream",
+      version: "test",
+      source: "binary",
+      componentsPath: "binary",
+    },
   },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
 
@@ -88,7 +90,6 @@ beforeEach(async () => {
     "utf8",
   );
   folder = await loadDesignFolder(tmp);
-  folder.config = migrateConfig(folder.config);
   ctx = {
     folder,
     providers: { default: provider },

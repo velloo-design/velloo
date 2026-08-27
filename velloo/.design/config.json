@@ -1,12 +1,6 @@
 {
-  "schemaVersion": 1,
-  "toolVersion": "0.0.1 (179a446 · 2026-06-26)",
-  "library": {
-    "id": "shadcn-react",
-    "version": "2026.05.22",
-    "source": "binary",
-    "componentsPath": "binary"
-  },
+  "schemaVersion": 2,
+  "toolVersion": "0.1.0",
   "viewportPresets": [
     {
       "name": "Mobile",
@@ -28,5 +22,14 @@
   "hostApp": {
     "root": "../packages/canvas"
   },
-  "folderId": "ad1bf0c9-b546-498d-8a42-66b8d57d997d"
+  "folderId": "ad1bf0c9-b546-498d-8a42-66b8d57d997d",
+  "libraries": {
+    "default": {
+      "id": "shadcn-upstream",
+      "version": "2026.05.22",
+      "source": "binary",
+      "componentsPath": "binary"
+    }
+  },
+  "defaultLibrary": "default"
 }

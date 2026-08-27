@@ -4,29 +4,24 @@ import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError } from "./errors.ts";
 
+export interface TokenEntry {
+  path: string;
+  value: string | number;
+}
+
 /**
- * Apply a single token at a dot-path. Creates intermediate objects as needed.
- * The full theme is schema-validated by `persistTheme` so invalid paths or
- * value types are caught at persistence time.
+ * Apply one dot-path write to a plain theme object in place, creating
+ * intermediate objects as needed. Returns a failure reason, or null.
  */
-export async function setToken(
-  folder: DesignFolder,
+function applyPath(
+  target: Record<string, unknown>,
   path: string,
   value: string | number,
-  themeName = "default",
-): Promise<Result<Theme, ThemeError>> {
-  if (!path) return err(invalidThemePath("path is required"));
+): string | null {
+  if (!path) return "path is required";
   const segments = path.split(".");
-  if (segments.some((s) => s === "")) {
-    return err(invalidThemePath(`bad path: ${JSON.stringify(path)}`));
-  }
-
-  // Deep-clone the current theme so we don't mutate the cached object.
-  const next = JSON.parse(JSON.stringify(themeByName(folder, themeName))) as Record<
-    string,
-    unknown
-  >;
-  let cursor: Record<string, unknown> = next;
+  if (segments.some((s) => s === "")) return `bad path: ${JSON.stringify(path)}`;
+  let cursor: Record<string, unknown> = target;
   for (let i = 0; i < segments.length - 1; i++) {
     const k = segments[i] as string;
     const existing = cursor[k];
@@ -36,28 +31,72 @@ export async function setToken(
     cursor = cursor[k] as Record<string, unknown>;
   }
   cursor[segments[segments.length - 1] as string] = value;
+  return null;
+}
 
-  // Validate here rather than relying on persistTheme to throw — the
-  // error then names the offending path before any write is attempted.
-  const parsed = ThemeSchema.safeParse(next);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    const where = issue?.path.join(".") || path;
-    return err(
-      invalidThemePath(
-        `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme at "${where}": ${issue?.message ?? "schema mismatch"}`,
-      ),
-    );
+/**
+ * Apply a batch of token writes: every entry lands on ONE in-memory copy,
+ * validated entry-by-entry (so a failure names the offending path), then the
+ * result is persisted ONCE. All-or-nothing: any bad entry means nothing is
+ * written — the `BulkTokensInvalid` error reports which entries validated
+ * cleanly (`applied`) and which failed and why (`failed`).
+ */
+export async function setTokens(
+  folder: DesignFolder,
+  entries: TokenEntry[],
+  themeName = "default",
+): Promise<Result<{ theme: Theme; applied: string[] }, ThemeError>> {
+  // Deep-clone the current theme so we never mutate the cached object.
+  let working = JSON.parse(JSON.stringify(themeByName(folder, themeName))) as Theme;
+  const applied: string[] = [];
+  const failed: { path: string; reason: string }[] = [];
+
+  for (const { path, value } of entries) {
+    // Each entry lands on its own candidate so a bad one is discarded without
+    // undoing earlier valid entries (and the report can cover ALL failures).
+    const candidate = JSON.parse(JSON.stringify(working)) as Record<string, unknown>;
+    const pathError = applyPath(candidate, path, value);
+    if (pathError !== null) {
+      failed.push({ path, reason: pathError });
+      continue;
+    }
+    const parsed = ThemeSchema.safeParse(candidate);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const where = issue?.path.join(".") || path;
+      failed.push({
+        path,
+        reason: `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme at "${where}": ${issue?.message ?? "schema mismatch"}`,
+      });
+      continue;
+    }
+    working = parsed.data;
+    applied.push(path);
   }
 
+  if (failed.length > 0) {
+    return err({ kind: "BulkTokensInvalid", applied, failed });
+  }
+
+  const finalTheme = working;
   const persisted = await tryCatchAsync(
-    () => persistNamedTheme(folder, themeName, parsed.data),
-    (e) =>
-      invalidThemePath(
-        `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme: ${
-          (e as Error).message
-        }`,
-      ),
+    () => persistNamedTheme(folder, themeName, finalTheme),
+    (e) => invalidThemePath(`Persisting theme "${themeName}" failed: ${(e as Error).message}`),
   );
-  return persisted.ok ? ok(persisted.value) : persisted;
+  return persisted.ok ? ok({ theme: persisted.value, applied }) : persisted;
+}
+
+/** Apply a single token at a dot-path — the one-entry case of {@link setTokens}. */
+export async function setToken(
+  folder: DesignFolder,
+  path: string,
+  value: string | number,
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  const r = await setTokens(folder, [{ path, value }], themeName);
+  if (r.ok) return ok(r.value.theme);
+  if (r.error.kind === "BulkTokensInvalid") {
+    return err(invalidThemePath(r.error.failed[0]?.reason ?? "invalid token"));
+  }
+  return r;
 }

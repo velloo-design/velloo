@@ -40,6 +40,7 @@ import {
   propWarningsForTree,
 } from "../../mutations/prop-warnings.ts";
 import { pathAt } from "../../path.ts";
+import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
 import {
   InnerPathSchema,
   jsonTolerant,
@@ -48,23 +49,6 @@ import {
   PathSchema,
   singleOrBulkError,
 } from "./schemas.ts";
-
-type McpResult = {
-  content: { type: "text"; text: string }[];
-  isError?: true;
-};
-
-function jsonResult(value: unknown): McpResult {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
-
-function mutationErrorResult(error: MutationError): McpResult {
-  return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
-}
-
-function toMcp<T>(result: Result<T, MutationError>): McpResult {
-  return result.ok ? jsonResult(result.value) : mutationErrorResult(result.error);
-}
 
 /**
  * Like toMcp, but on success attaches advisory `propWarnings` (typo'd
@@ -75,7 +59,7 @@ async function toMcpWithWarnings<T>(
   result: Result<T, MutationError>,
   warn: (value: T) => Promise<string[]>,
 ): Promise<McpResult> {
-  if (!result.ok) return mutationErrorResult(result.error);
+  if (!result.ok) return errorResult(result.error);
   const propWarnings = await warn(result.value).catch(() => [] as string[]);
   return jsonResult(propWarnings.length > 0 ? { ...result.value, propWarnings } : result.value);
 }
@@ -112,7 +96,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     },
     async (args) => {
       if (typeof args.children === "string" || typeof args.children === "number") {
-        return mutationErrorResult(
+        return errorResult(
           badRequest("add_node: `children` must be an array of nodes.", [
             { code: "invalid_type", expected: "array", path: ["children"] },
           ]),
@@ -177,7 +161,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         });
       }
       if (args.path === undefined || propPatch === undefined) {
-        return mutationErrorResult(
+        return errorResult(
           badRequest(singleOrBulkError.missing("update_props", "path+propPatch", "patches")),
         );
       }
@@ -431,7 +415,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         return toMcp(await updateFrames(ctx, { boardId: args.boardId, patches }));
       }
       if (args.frameId === undefined || args.patch === undefined) {
-        return mutationErrorResult(
+        return errorResult(
           badRequest(singleOrBulkError.missing("update_frame", "frameId+patch", "patches")),
         );
       }

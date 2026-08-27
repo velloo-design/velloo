@@ -7,7 +7,7 @@
 import type { ProductSurface } from "../scaffold/sample-page.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
-export type LibraryId = "shadcn-react" | "shadcn-upstream" | "none" | "mui";
+export type LibraryId = "shadcn-upstream" | "none" | "mui";
 
 /**
  * Where the library's component sources live.

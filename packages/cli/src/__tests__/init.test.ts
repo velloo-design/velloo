@@ -64,7 +64,9 @@ describe("velloo init", () => {
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
-    expect(config.library?.id).toBe("shadcn-react");
+    expect(config.schemaVersion).toBe(2);
+    expect(config.defaultLibrary).toBe("default");
+    expect(config.libraries.default?.id).toBe("shadcn-upstream");
     expect(config.defaultBoard).toBeUndefined();
     expect(config.defaultScreen).toBeDefined();
 
@@ -116,8 +118,8 @@ describe("velloo init", () => {
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
-    expect(config.library?.source).toBe("binary");
-    expect(config.library?.componentsPath).toBe("binary");
+    expect(config.libraries.default?.source).toBe("binary");
+    expect(config.libraries.default?.componentsPath).toBe("binary");
 
     const readme = await readFile(join(design, "README.md"), "utf8");
     expect(readme).toContain("Velloo design folder");
@@ -207,8 +209,8 @@ describe("velloo init", () => {
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
-    expect(config.library?.id).toBe("shadcn-upstream");
-    expect(config.library?.source).toBe("binary");
+    expect(config.libraries.default?.id).toBe("shadcn-upstream");
+    expect(config.libraries.default?.source).toBe("binary");
 
     const readme = await readFile(join(design, "README.md"), "utf8");
     expect(readme).toContain("Bringing shadcn into your app");
@@ -221,8 +223,8 @@ describe("velloo init", () => {
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
-    expect(config.library?.id).toBe("mui");
-    expect(config.library?.source).toBe("binary");
+    expect(config.libraries.default?.id).toBe("mui");
+    expect(config.libraries.default?.source).toBe("binary");
 
     const screenFiles = await jsonFiles(join(design, "screens"));
     expect(screenFiles).toContain("welcome.json");
@@ -248,8 +250,8 @@ describe("velloo init", () => {
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
-    expect(config.library?.id).toBe("none");
-    expect(config.library?.source).toBe("binary");
+    expect(config.libraries.default?.id).toBe("none");
+    expect(config.libraries.default?.source).toBe("binary");
 
     const screenFiles = await jsonFiles(join(design, "screens"));
     expect(screenFiles).toContain("welcome.json");
@@ -269,8 +271,8 @@ describe("velloo init", () => {
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(designDir(tmp), ".design/config.json"), "utf8")),
     );
-    expect(config.library?.id).toBe("shadcn-upstream");
-    expect(config.library?.source).toBe("binary");
+    expect(config.libraries.default?.id).toBe("shadcn-upstream");
+    expect(config.libraries.default?.source).toBe("binary");
   }, 30_000);
 
   test("--start=scan generates one screen per Next.js app-router route", async () => {

@@ -14,7 +14,6 @@ import {
   removeExtension,
   updateExtension,
 } from "../../../mutations/index.ts";
-import { migrateConfig } from "../../../providers.ts";
 import type { WatchEvent } from "../../../watcher.ts";
 
 /**
@@ -26,14 +25,17 @@ import type { WatchEvent } from "../../../watcher.ts";
  */
 
 const sampleConfig = {
-  schemaVersion: 1 as const,
+  schemaVersion: 2,
   toolVersion: "0.1.0",
-  library: {
-    id: "shadcn-react" as const,
-    version: "test",
-    source: "binary",
-    componentsPath: "binary",
+  libraries: {
+    default: {
+      id: "shadcn-upstream",
+      version: "test",
+      source: "binary",
+      componentsPath: "binary",
+    },
   },
+  defaultLibrary: "default",
   viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
 };
 
@@ -75,7 +77,6 @@ beforeEach(async () => {
   await writeJson(join(tmp, "theme/default.json"), sampleTheme);
   await writeJson(join(tmp, "screens/dashboard.json"), sampleScreen);
   folder = await loadDesignFolder(tmp);
-  folder.config = migrateConfig(folder.config);
   events = [];
   ctx = {
     folder,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ResourceIdSchema } from "./ids.ts";
 import { NodeSchema } from "./node.ts";
 
 /**
@@ -14,7 +15,7 @@ import { NodeSchema } from "./node.ts";
  * fork, no background sync.
  */
 export const ScreenSchema = z.object({
-  id: z.string().min(1),
+  id: ResourceIdSchema,
   name: z.string().min(1),
   /**
    * Library id (key in `Config.libraries`) this screen renders against.
