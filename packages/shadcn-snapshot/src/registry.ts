@@ -1,3 +1,15 @@
+import {
+  Box,
+  Divider,
+  Gradient,
+  Heading,
+  Icon,
+  Layer,
+  Placeholder,
+  SVG,
+  Text,
+  Image as VImage,
+} from "@velloo/helpers";
 import type { ComponentType } from "react";
 import {
   Accordion,
@@ -151,16 +163,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./components/ui/tooltip.tsx";
-import { Box } from "./components/velloo/box.tsx";
-import { Divider } from "./components/velloo/divider.tsx";
-import { Gradient } from "./components/velloo/gradient.tsx";
-import { Heading } from "./components/velloo/heading.tsx";
-import { Icon } from "./components/velloo/icon.tsx";
-import { Image as VImage } from "./components/velloo/image.tsx";
-import { Layer } from "./components/velloo/layer.tsx";
-import { Placeholder } from "./components/velloo/placeholder.tsx";
-import { SVG } from "./components/velloo/svg.tsx";
-import { Text } from "./components/velloo/text.tsx";
 
 // biome-ignore lint/suspicious/noExplicitAny: registry is heterogeneous by design
 export const registry: Record<string, ComponentType<any>> = {

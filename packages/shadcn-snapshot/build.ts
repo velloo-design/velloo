@@ -12,6 +12,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { HELPER_DESCRIPTORS } from "@velloo/helpers";
 import {
   type InterfaceDeclaration,
   Node,
@@ -28,26 +29,6 @@ import { registry } from "./src/registry.ts";
 const here = dirname(fileURLToPath(import.meta.url));
 const distDir = join(here, "dist");
 const componentsDir = join(here, "src", "components");
-
-function categorize(
-  filePath: string,
-  id: string,
-): {
-  source: "shadcn" | "velloo";
-  category: "ui" | "typography";
-} {
-  const rel = filePath.startsWith(componentsDir)
-    ? filePath.slice(componentsDir.length).replace(/^\/+/, "")
-    : filePath;
-  if (rel.startsWith("velloo/")) {
-    // Typography helpers are `Text` and `Heading`. Everything else
-    // under `velloo/` (Icon, Placeholder, SVG, Image, Layer, Divider,
-    // Gradient, …) is a UI primitive.
-    const isTypography = id === "Text" || id === "Heading";
-    return { source: "velloo", category: isTypography ? "typography" : "ui" };
-  }
-  return { source: "shadcn", category: "ui" };
-}
 
 /**
  * Pull the list of lucide icon names. We exec a tiny script under bun so
@@ -219,9 +200,27 @@ async function buildManifest(): Promise<void> {
   project.addSourceFilesAtPaths(`${componentsDir}/**/*.tsx`);
 
   const lucideNames = await loadLucideIconNames();
+  const helperById = new Map(HELPER_DESCRIPTORS.map((d) => [d.id, d]));
   const components: ComponentDescriptor[] = [];
 
   for (const id of Object.keys(registry).sort()) {
+    // The velloo helpers live in `@velloo/helpers` (outside this package's
+    // component sources), and their canonical descriptors ship with them —
+    // splice those in rather than ts-morph-extracting. `Icon.name` gets the
+    // live lucide name list so the inspector's typeahead never drifts from
+    // the installed lucide-react.
+    const helperDescriptor = helperById.get(id);
+    if (helperDescriptor) {
+      const descriptor = structuredClone(helperDescriptor);
+      if (id === "Icon") {
+        for (const p of descriptor.props) {
+          if (p.name === "name") p.enumValues = lucideNames;
+        }
+      }
+      components.push(descriptor);
+      continue;
+    }
+
     // Word-bounded match so e.g. "Text" doesn't accidentally hit
     // "Textarea" in another file. Anchor on the identifier boundary.
     const identifierRe = new RegExp(`export\\s+(?:const|function)\\s+${id}\\b`);
@@ -231,7 +230,8 @@ async function buildManifest(): Promise<void> {
       continue;
     }
 
-    const { source, category } = categorize(srcFile.getFilePath(), id);
+    const source = "shadcn" as const;
+    const category = "ui" as const;
     const propsInterface = srcFile.getInterface(`${id}Props`);
     let props: PropDescriptor[] = [];
 
@@ -257,29 +257,12 @@ async function buildManifest(): Promise<void> {
       }
     }
 
-    // Icon.name is a free-form string at the type level, but we want the
-    // inspector to surface a typeahead picker over the live lucide set.
-    let designModeNotes: string | undefined;
-    if (id === "Icon") {
-      for (const p of props) {
-        if (p.name === "name") {
-          p.control = "icon";
-          p.enumValues = lucideNames;
-          if (!p.defaultValue) p.defaultValue = "Heart";
-        }
-      }
-      designModeNotes =
-        "`name` accepts any lucide-react icon, PascalCase (ArrowRight) or kebab-case (arrow-right); full list at lucide.dev (the enumValues here are sampled). " +
-        "`size` sets width/height in px, but a Tailwind sizing class in `className` (e.g. `size-4`) wins via CSS — pass one or the other, not both expecting `size` to apply.";
-    }
-
     const example = COMPONENT_EXAMPLES[id];
     components.push({
       id,
       category,
       source,
       props,
-      ...(designModeNotes ? { designModeNotes } : {}),
       ...(example ? { example } : {}),
     });
   }

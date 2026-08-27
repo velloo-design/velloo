@@ -4,7 +4,7 @@
 // codegen so the user can swap in a real `<img>` / `<Image>` / `<Avatar>`
 // after export.
 import type * as React from "react";
-import { cn } from "../../lib/utils.ts";
+import { cn } from "./cn.ts";
 
 export interface PlaceholderProps extends React.HTMLAttributes<HTMLDivElement> {
   /**

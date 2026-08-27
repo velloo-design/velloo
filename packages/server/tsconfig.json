@@ -16,6 +16,7 @@
     { "path": "../result" },
     { "path": "../schema" },
     { "path": "../provider" },
+    { "path": "../helpers" },
     { "path": "../shadcn-snapshot" },
     { "path": "../provider-none" },
     { "path": "../provider-mui" },

@@ -7,7 +7,7 @@
 
 import type * as React from "react";
 import { createElement } from "react";
-import { cn } from "../../lib/utils.ts";
+import { cn } from "./cn.ts";
 
 // Restrict `as` to a lowercase HTML tag name. Anything else (a component
 // reference, an injection attempt) falls back to div. Rendering the real tag

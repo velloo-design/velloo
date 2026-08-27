@@ -9,13 +9,8 @@
     "emitDeclarationOnly": true,
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["bun", "react"]
+    "types": ["bun", "react", "react-dom"]
   },
   "include": ["src/**/*"],
-  "references": [
-    { "path": "../helpers" },
-    { "path": "../provider" },
-    { "path": "../schema" },
-    { "path": "../renderer" }
-  ]
+  "references": [{ "path": "../provider" }, { "path": "../schema" }]
 }

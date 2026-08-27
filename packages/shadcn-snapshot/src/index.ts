@@ -2,7 +2,6 @@ import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@vello
 import { componentsDir, entryCssPath, manifestPath, snapshotVersion } from "./paths.ts";
 import { registry } from "./registry.ts";
 
-export { type InstalledSnapshot, installSnapshot } from "./install.ts";
 export type { ComponentDescriptor, Manifest, PropDescriptor } from "./manifest.ts";
 export { componentsDir, entryCssPath, snapshotVersion } from "./paths.ts";
 export { registry } from "./registry.ts";

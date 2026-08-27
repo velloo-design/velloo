@@ -9,6 +9,15 @@
  *    or will after `pnpm add`).
  */
 
+import {
+  CONTAINER_WIDTH_CLASS,
+  HEADING_BY_LEVEL,
+  PLACEHOLDER_ASPECT_CLASS,
+  PLACEHOLDER_AVATAR_SIZE_CLASS,
+  STACK_ALIGN_CLASS,
+  STACK_JUSTIFY_CLASS,
+  TEXT_VARIANT_CLASSES,
+} from "@velloo/helpers";
 import { pascalizeIconName, sanitizeSvgMarkup } from "@velloo/schema";
 
 export type LoweredEntry = {
@@ -48,60 +57,10 @@ export type DynamicEntry = {
 
 export type RegistryEntry = LoweredEntry | ShadcnEntry | DynamicEntry;
 
-// Keep in sync with packages/shadcn-snapshot/src/components/velloo/heading.tsx.
-const HEADING_BY_LEVEL: Record<number, string> = {
-  1: "text-5xl font-bold tracking-tight leading-tight",
-  2: "text-4xl font-bold tracking-tight leading-tight",
-  3: "text-3xl font-semibold tracking-tight",
-  4: "text-2xl font-semibold tracking-tight",
-  5: "text-xl font-semibold tracking-tight",
-  6: "text-lg font-semibold tracking-tight",
-};
-
-const TEXT_VARIANT_CLASSES: Record<string, string> = {
-  default: "text-base text-foreground leading-7",
-  muted: "text-sm text-muted-foreground",
-  small: "text-sm font-medium leading-none",
-  lead: "text-xl text-muted-foreground",
-};
-
-const PLACEHOLDER_ASPECT_CLASS: Record<string, string> = {
-  "1/1": "aspect-square",
-  "4/3": "aspect-[4/3]",
-  "3/4": "aspect-[3/4]",
-  "16/9": "aspect-video",
-  "21/9": "aspect-[21/9]",
-};
-
-// Avatar size ladder — keep in sync with packages/shadcn-snapshot/.../placeholder.tsx.
-const PLACEHOLDER_AVATAR_SIZE_CLASS: Record<string, string> = {
-  sm: "size-8 text-xs",
-  md: "size-10 text-sm",
-  lg: "size-14 text-base",
-  xl: "size-20 text-lg",
-};
-
-// Keep in sync with packages/provider-none/src/components.tsx.
-const STACK_ALIGN_CLASS: Record<string, string> = {
-  start: "items-start",
-  center: "items-center",
-  end: "items-end",
-  stretch: "items-stretch",
-};
-const STACK_JUSTIFY_CLASS: Record<string, string> = {
-  start: "justify-start",
-  center: "justify-center",
-  end: "justify-end",
-  between: "justify-between",
-  around: "justify-around",
-};
-const CONTAINER_WIDTH_CLASS: Record<string, string> = {
-  sm: "max-w-screen-sm",
-  md: "max-w-screen-md",
-  lg: "max-w-screen-lg",
-  xl: "max-w-screen-xl",
-  full: "max-w-full",
-};
+// The lowering class tables (HEADING_BY_LEVEL, TEXT_VARIANT_CLASSES,
+// PLACEHOLDER_*, STACK_*, CONTAINER_WIDTH_CLASS) live in
+// packages/helpers/src/lowering.ts, co-located with the components they
+// mirror — imported above so codegen can't drift from the runtime classes.
 
 const shadcn = (jsxName: string, importFile: string): ShadcnEntry => ({
   kind: "shadcn",

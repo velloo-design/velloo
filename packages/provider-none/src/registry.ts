@@ -1,14 +1,13 @@
+import { helpersRegistry } from "@velloo/helpers";
 import type { ComponentRegistry } from "@velloo/provider";
-import { registry as snapshotRegistry } from "@velloo/shadcn-snapshot";
 import { Box, Button, Card, Container, Input, Stack } from "./components.tsx";
 
 /**
- * Components from `@velloo/shadcn-snapshot` that are framework-neutral
- * (no portals, no providers, no shadcn idioms) and useful in no-lib
- * designs. Reused verbatim instead of forking — these helpers haven't
- * needed to change in a year.
+ * Framework-neutral velloo helpers (no portals, no providers, no shadcn
+ * idioms) useful in no-lib designs. Reused verbatim from `@velloo/helpers`
+ * instead of forking — these helpers haven't needed to change in a year.
  */
-const REUSED_HELPER_IDS = [
+export const REUSED_HELPER_IDS = [
   "Heading",
   "Text",
   "Icon",
@@ -19,15 +18,6 @@ const REUSED_HELPER_IDS = [
   "Gradient",
   "Placeholder",
 ] as const;
-
-function reusedHelpers(): ComponentRegistry {
-  const out: ComponentRegistry = {};
-  for (const id of REUSED_HELPER_IDS) {
-    const component = snapshotRegistry[id];
-    if (component) out[id] = component;
-  }
-  return out;
-}
 
 /**
  * The no-library provider's runtime registry. Five bare primitives
@@ -44,5 +34,5 @@ export const registry: ComponentRegistry = {
   Card,
   Button,
   Input,
-  ...reusedHelpers(),
+  ...helpersRegistry(REUSED_HELPER_IDS),
 };

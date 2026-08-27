@@ -2,22 +2,11 @@
 // "icon" control with the full lucide name set; codegen lowers <Icon name="X"/>
 // to `<X />` from "lucide-react" so the emitted code has zero Velloo runtime
 // dependencies.
+
+import { pascalizeIconName } from "@velloo/schema";
 import * as Lucide from "lucide-react";
 import type * as React from "react";
-import { cn } from "../../lib/utils.ts";
-
-// Inline twin of @velloo/schema's pascalizeIconName — this file is copied
-// into user apps by installSnapshot, so it can't import @velloo/* packages.
-function pascalizeIconName(name: string): string {
-  const trimmed = name.trim();
-  if (trimmed === "") return trimmed;
-  if (!/[-_\s]/.test(trimmed)) return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-  return trimmed
-    .split(/[-_\s]+/)
-    .filter((part) => part !== "")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
-}
+import { cn } from "./cn.ts";
 
 export interface IconProps extends React.SVGAttributes<SVGSVGElement> {
   /** Lucide icon name — PascalCase ("ChevronRight") or kebab-case ("chevron-right"). */

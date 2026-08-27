@@ -1,5 +1,5 @@
+import { helpersRegistry } from "@velloo/helpers";
 import type { ComponentRegistry } from "@velloo/provider";
-import { registry as snapshotRegistry } from "@velloo/shadcn-snapshot";
 import { Box, Button, Card, Container, Heading, Input, Stack, Text } from "./components-inline.tsx";
 
 /**
@@ -8,18 +8,9 @@ import { Box, Button, Card, Container, Heading, Input, Stack, Text } from "./com
  * inline-styled variants so they paint with the JIT off. The remaining helpers
  * are structural (an SVG, an image, a gradient layer) — they carry no Tailwind
  * visual defaults that the inline channel would lose — so they're reused
- * verbatim from the snapshot, same as the Tailwind registry.
+ * verbatim from `@velloo/helpers`, same as the Tailwind registry.
  */
 const REUSED_HELPER_IDS = ["Icon", "SVG", "Image", "Layer", "Divider", "Gradient", "Placeholder"];
-
-function reusedHelpers(): ComponentRegistry {
-  const out: ComponentRegistry = {};
-  for (const id of REUSED_HELPER_IDS) {
-    const component = snapshotRegistry[id];
-    if (component) out[id] = component;
-  }
-  return out;
-}
 
 export const inlineRegistry: ComponentRegistry = {
   Box,
@@ -30,5 +21,5 @@ export const inlineRegistry: ComponentRegistry = {
   Input,
   Heading,
   Text,
-  ...reusedHelpers(),
+  ...helpersRegistry(REUSED_HELPER_IDS),
 };

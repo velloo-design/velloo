@@ -6,11 +6,9 @@
  * carry executing-capable content: `<script>`, `<foreignObject>`, inline `on*=`
  * handlers, `javascript:`/`data:text/html` URLs, and SMIL animation elements
  * (`<set>`/`<animate>` can script). This module is the single source of that
- * logic — the render boundary, codegen emit, and the asset store all route
- * through it so no path inlines unsanitized SVG.
- *
- * `svg.tsx` (copied verbatim into user apps by `installSnapshot`) keeps an
- * inline twin of `sanitizeSvgMarkup` because it cannot import `@velloo/*`.
+ * logic — the render boundary (`@velloo/helpers`' SVG component), codegen
+ * emit, and the asset store all route through it so no path inlines
+ * unsanitized SVG.
  */
 
 const ACTIVE_SVG_PATTERNS: readonly RegExp[] = [

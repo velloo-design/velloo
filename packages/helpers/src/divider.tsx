@@ -3,7 +3,7 @@
 // marketing pages. Divider adds variant styles (dotted, gradient,
 // pinched) and a label slot for "OR" / "section break" usage.
 import type * as React from "react";
-import { cn } from "../../lib/utils.ts";
+import { cn } from "./cn.ts";
 
 export interface DividerProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "solid" | "dotted" | "dashed" | "gradient" | "pinched";

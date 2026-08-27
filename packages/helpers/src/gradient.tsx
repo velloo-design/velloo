@@ -3,7 +3,7 @@
 // branded hero background without remembering Tailwind arbitrary-value
 // syntax. Composes via className for fine-tuning.
 import type * as React from "react";
-import { cn } from "../../lib/utils.ts";
+import { cn } from "./cn.ts";
 
 export interface GradientProps extends React.HTMLAttributes<HTMLDivElement> {
   /**

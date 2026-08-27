@@ -59,6 +59,14 @@ describe("TailwindJit.build", () => {
     const css = await mixed.build(["bg-primary"]);
     expect(css.length).toBeGreaterThan(0);
   });
+
+  // The velloo helpers live in @velloo/helpers, outside every provider's
+  // componentsDir — their structural default classes (Heading's `text-5xl`,
+  // no screen needs to reference it) must still land in the compiled CSS.
+  test("helper default classes compile from the @velloo/helpers scan", async () => {
+    const css = await jit.build();
+    expect(css).toContain(".text-5xl");
+  });
 });
 
 describe("TailwindJit host @config (Tailwind v3 support)", () => {

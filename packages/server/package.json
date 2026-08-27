@@ -15,6 +15,7 @@
     "@tailwindcss/oxide": "4.3.0",
     "@velloo/canvas": "workspace:*",
     "@velloo/codegen": "workspace:*",
+    "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
     "@velloo/provider-mui": "workspace:*",
     "@velloo/provider-none": "workspace:*",

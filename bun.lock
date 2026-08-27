@@ -66,6 +66,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@biomejs/biome": "2.4.15",
+        "@velloo/helpers": "workspace:*",
         "@velloo/result": "workspace:*",
         "@velloo/schema": "workspace:*",
         "diff": "9.0.0",
@@ -76,6 +77,23 @@
         "@types/react": "19.2.14",
         "@velloo/provider-none": "workspace:*",
         "@velloo/shadcn-snapshot": "workspace:*",
+      },
+    },
+    "packages/helpers": {
+      "name": "@velloo/helpers",
+      "version": "0.1.0",
+      "dependencies": {
+        "@velloo/provider": "workspace:*",
+        "@velloo/schema": "workspace:*",
+        "clsx": "2.1.1",
+        "lucide-react": "1.16.0",
+        "react": "19.2.6",
+        "tailwind-merge": "3.6.0",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.14",
+        "@types/react-dom": "19.2.3",
+        "react-dom": "19.2.6",
       },
     },
     "packages/provider": {
@@ -101,9 +119,9 @@
         "@emotion/server": "11.11.0",
         "@emotion/styled": "11.14.1",
         "@mui/material": "^6",
+        "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
         "@velloo/schema": "workspace:*",
-        "@velloo/shadcn-snapshot": "workspace:*",
         "culori": "4.0.2",
         "react": "19.2.6",
         "react-dom": "19.2.6",
@@ -118,8 +136,8 @@
       "name": "@velloo/provider-none",
       "version": "0.1.0",
       "dependencies": {
+        "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
-        "@velloo/shadcn-snapshot": "workspace:*",
         "clsx": "2.1.1",
         "react": "19.2.6",
         "tailwindcss": "4.3.0",
@@ -183,6 +201,7 @@
         "@tailwindcss/oxide": "4.3.0",
         "@velloo/canvas": "workspace:*",
         "@velloo/codegen": "workspace:*",
+        "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
         "@velloo/provider-mui": "workspace:*",
         "@velloo/provider-none": "workspace:*",
@@ -207,6 +226,7 @@
       "name": "@velloo/shadcn-snapshot",
       "version": "0.1.0",
       "dependencies": {
+        "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
         "class-variance-authority": "0.7.1",
         "clsx": "2.1.1",
@@ -638,6 +658,8 @@
     "@velloo/cli": ["@velloo/cli@workspace:packages/cli"],
 
     "@velloo/codegen": ["@velloo/codegen@workspace:packages/codegen"],
+
+    "@velloo/helpers": ["@velloo/helpers@workspace:packages/helpers"],
 
     "@velloo/provider": ["@velloo/provider@workspace:packages/provider"],
 

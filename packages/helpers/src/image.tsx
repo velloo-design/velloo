@@ -7,7 +7,7 @@
 // The `src` is preserved verbatim in codegen — point at `assets/`,
 // arbitrary URLs, or whatever the host app convention is.
 import type * as React from "react";
-import { cn } from "../../lib/utils.ts";
+import { cn } from "./cn.ts";
 
 export interface ImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, "loading"> {
   /**

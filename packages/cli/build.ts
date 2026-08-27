@@ -229,6 +229,7 @@ if (!existsSync(join(snapshotPkg, "dist", "manifest.json"))) {
   run(["bun", "run", "build"], snapshotPkg);
 }
 const PKG_ASSETS: { pkg: string; paths: string[] }[] = [
+  { pkg: "helpers", paths: ["src"] },
   { pkg: "shadcn-snapshot", paths: ["src", join("dist", "manifest.json")] },
   { pkg: "provider-none", paths: ["src"] },
   { pkg: "provider-mui", paths: ["src"] },

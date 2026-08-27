@@ -1,6 +1,6 @@
 // Velloo-owned typography primitive — no shadcn equivalent exists.
 import * as React from "react";
-import { cn } from "../../lib/utils.ts";
+import { cn } from "./cn.ts";
 
 export interface HeadingProps extends React.HTMLAttributes<HTMLHeadingElement> {
   /** Heading level 1–6. Maps to h1..h6. */

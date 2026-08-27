@@ -12,5 +12,5 @@
     "types": ["bun", "react", "react-dom"]
   },
   "include": ["src/**/*", "build.ts", "package.json"],
-  "references": [{ "path": "../provider" }]
+  "references": [{ "path": "../helpers" }, { "path": "../provider" }]
 }

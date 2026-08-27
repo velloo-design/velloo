@@ -19,6 +19,9 @@
       "path": "../schema"
     },
     {
+      "path": "../helpers"
+    },
+    {
       "path": "../provider-none"
     },
     {

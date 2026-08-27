@@ -4,6 +4,7 @@
     { "path": "./packages/result" },
     { "path": "./packages/schema" },
     { "path": "./packages/provider" },
+    { "path": "./packages/helpers" },
     { "path": "./packages/shadcn-snapshot" },
     { "path": "./packages/provider-none" },
     { "path": "./packages/provider-mui" },

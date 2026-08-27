@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "[legacy — see provider-shadcn-upstream] Pinned shadcn snapshot — vendored components, Tailwind v4 entry CSS, prop manifest",
+  "description": "[internal] Canvas design-mode runtime for provider-shadcn-upstream — pinned shadcn snapshot, Tailwind v4 entry CSS, prop manifest. Not a user-facing provider.",
   "snapshotVersion": "2026.05.22",
   "exports": {
     ".": "./src/index.ts",
@@ -15,6 +15,7 @@
     "build": "bun run build.ts"
   },
   "dependencies": {
+    "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

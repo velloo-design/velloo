@@ -6,7 +6,7 @@
 // Marked with data-slot="layer" so the canvas can flag heavy usage in
 // inspect_design_quality later — Layer is a "use sparingly" tool.
 import type * as React from "react";
-import { cn } from "../../lib/utils.ts";
+import { cn } from "./cn.ts";
 
 export interface LayerProps extends React.HTMLAttributes<HTMLDivElement> {
   /**

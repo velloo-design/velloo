@@ -245,7 +245,7 @@ The provider interface is the contract every library entry implements:
 
 ```ts
 interface ComponentProvider {
-  id: string;                       // "shadcn-react", "none", "mui", "host"
+  id: string;                       // "shadcn-upstream", "none", "mui"
   version: string;
   componentsDir: string;            // Tailwind JIT scan target
   styleEntryPath: string;           // Tailwind v4 @theme entry
@@ -258,21 +258,19 @@ The renderer, the Tailwind JIT, MCP discovery, codegen — every consumer reads 
 
 Components are not put on disk in the design folder: two `button.tsx` files in the repo (one in the design folder, one in `apps/web/`) would make the source of truth unclear to AI agents. The provider abstraction keeps the design folder pure data while still letting different libraries take the active slot.
 
-### shadcn providers (two flavors)
+### The shadcn provider
 
-**`shadcn-upstream` (default for new folders).** Fetches components from the official shadcn registry at a pinned version and deposits byte-identical vanilla shadcn into the user's app (or `~/.velloo/providers/shadcn-upstream-<projectId>/`). No Velloo modifications visible in the user's files — `npx shadcn add <component>` works alongside it. The canvas-safe contract (Radix portal replacements, runtime-state fakes for Calendar/Chart/Carousel) is applied through `@velloo/shadcn-adapter`'s wrap-at-render-time adapter layer.
+**`shadcn-upstream` is the shadcn provider** — the default for new folders, and (since design-folder format v2) the only user-facing shadcn library id; the config shim migrates older `shadcn-react` folders to it. It's a pragmatic hybrid: the **canvas runtime reuses `@velloo/shadcn-snapshot`** — the internal, hand-vendored canvas-safe snapshot (avoiding a 25+ `@radix-ui/*` bundle) — while a real vanilla-shadcn install in the user's app is delegated to `npx shadcn@latest add <component>` at agent handoff. It reads a per-cache `manifest.json` when present, else the snapshot's generated manifest. The snapshot package is not a user-facing provider; its internal `id: "shadcn-react"` is a self-identity string only.
 
-**`shadcn-react` (legacy, back-compat).** The hand-vendored snapshot in `@velloo/shadcn-snapshot`. Older folders default to this; existing folders keep working unchanged through the migration shim. The snapshot stays registered and is on a deprecation path toward being collapsed into a shim around the upstream provider.
+The registry ships ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus the 10 framework-neutral Velloo helpers from `@velloo/helpers` (`<Box>`, `<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`) — the helpers every other provider also reuses.
 
-Both ship ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus 9 Velloo helpers (`<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<SVG>`, `<Text>`).
+Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see the snapshot's `canvas-portal.tsx`. Calendar / Chart / Carousel are static fakes for the same reason.
 
-Overlay components (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select, Tooltip, Sonner) have their Portal swapped for an inline pinned-open `<div>` in design mode — see `packages/shadcn-adapter/src/lib/canvas-portal.tsx` (or the legacy snapshot's `canvas-portal.tsx`). Calendar / Chart / Carousel are static fakes for the same reason.
-
-The snapshot's `snapshotVersion` (`2026.05.22`) is the legacy provider's `version`. The upstream provider's `version` reflects the date the cache was fetched.
+The snapshot's `snapshotVersion` (`2026.05.22`) records the upstream shadcn pull the vendored components mirror; the upstream provider's `version` reflects the date its cache was fetched (defaulting to the snapshot's date).
 
 ### Tailwind is a canvas concern, not a provider concern
 
-**Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
+**Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the shared `@velloo/helpers` sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
 
 Tailwind v4 stays embedded in the velloo binary regardless of which provider is active. Per-instance overrides (`apply_classes`) are always Tailwind classes; codegen translates them to the user's styling system at emit time (verbatim for shadcn/no-lib; converted to `sx` props for MUI). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
 
@@ -282,7 +280,7 @@ How do users customize when the components are baked in?
 
 - **Per-instance className** (`apply_classes`) and **per-instance props** (`update_props`) handle most needs.
 - **Snippets** are the supported "your version of a primitive" layer. A snippet wraps one or more components with typed params; every instance stays in sync.
-- The **experimental shared-components mode** (below) is the escape hatch when neither of those is enough.
+- A **shared-components mode** (a future direction, not yet in the format — see below) would be the escape hatch when neither of those is enough.
 
 ### Editing a snippet body
 
@@ -294,29 +292,13 @@ The renderer ships two snippet routes: `/api/render/snippet/:id` wraps the snipp
 
 Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-mode behavior** declarations: most are placeable with stub providers; a few are documented as not-renderable in canvas. These declarations live in the manifest (embedded alongside the components).
 
-## Experimental: shared-components mode
+## Future direction: shared-components mode
 
-The design folder owning its own components is the supported model. But for users with an existing app, having two copies of `button.tsx` floating around — one in `design/components/ui` and one in `apps/web/components/ui` — invites drift. An explicit, opt-in experimental mode lets the design folder point at the user's app components instead.
+> **Not implemented.** Nothing below exists in the current format: the v2 `library.source` enum has no `shared:<path>` value (a config claiming one is rejected), and there is no `--experimental-shared` init flag. This section records the design intent.
 
-```bash
-velloo init ./design --library shadcn --experimental-shared ../apps/web/components
-```
+The design folder consuming provider-embedded components is the supported model. But for users with an existing app, the canvas rendering a vendored copy of `button.tsx` while `apps/web/components/ui` holds the real one invites drift. The envisioned opt-in mode would let the design folder point at the user's app components instead: the canvas would mount components from the user's app folder directly — no edits in the design folder, no copies, one source of truth. (The live-island extension mechanism already exercises a narrow slice of this: bundling a real host component into the canvas.)
 
-`.design/config.json` records the choice:
-
-```json
-"library": {
-  "id": "shadcn-react",
-  "version": "2.3.4",
-  "source": "shared:../apps/web/components",
-  "componentsPath": "../apps/web/components",
-  "experimental": "shared"
-}
-```
-
-In shared mode, the canvas mounts components from the user's app folder directly. **No edits in the design folder; no copies; one source of truth.**
-
-This is gated as experimental because the failure modes are real and not all in Velloo's control. The supported behavior is *good error reporting* — never silent failure — so the user knows exactly what to fix:
+The mode would ship gated as experimental because the failure modes are real and not all in Velloo's control. The supported behavior is *good error reporting* — never silent failure — so the user knows exactly what to fix:
 
 | Failure | Diagnostic |
 |---|---|
@@ -381,7 +363,7 @@ npm install -g velloo                      # Node-based fallback
 Binary embeds:
 
 - Pre-built canvas (static React app)
-- A cached copy of the latest first-party library entries (shadcn-react today) so `velloo init` works offline
+- A cached copy of the latest first-party library entries (the shadcn snapshot runtime + helpers today) so `velloo init` works offline
 - HTTP/MCP server
 - All Node-equivalent runtime (via Bun)
 

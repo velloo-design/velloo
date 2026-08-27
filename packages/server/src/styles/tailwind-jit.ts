@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { compile } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
+import { helpersComponentsDir } from "@velloo/helpers";
 import { type ComponentProvider, type CssFramework, styleChannelOf } from "@velloo/provider";
 
 type Compiler = Awaited<ReturnType<typeof compile>>;
@@ -118,7 +119,13 @@ export class TailwindJit {
   /** Scan the providers' components + the page/snippet JSON for class candidates. */
   private scanCandidates(): string[] {
     if (this.cachedCandidates !== null) return this.cachedCandidates;
-    const dedupedDirs = Array.from(new Set(this.tailwindProviders.map((p) => p.componentsDir)));
+    // The framework-neutral velloo helpers live outside every provider's
+    // `componentsDir` (in @velloo/helpers) but ship in every Tailwind-channel
+    // registry, so their structural default classes (Heading's size ladder,
+    // Placeholder's aspect classes, …) must always be scanned.
+    const dedupedDirs = Array.from(
+      new Set([...this.tailwindProviders.map((p) => p.componentsDir), helpersComponentsDir]),
+    );
     const hostDirs = Array.from(new Set(this.extraSourceDirs?.() ?? []));
     const scanner = new Scanner({
       sources: [

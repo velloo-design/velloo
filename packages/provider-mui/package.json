@@ -14,9 +14,9 @@
     "@emotion/server": "11.11.0",
     "@emotion/styled": "11.14.1",
     "@mui/material": "^6",
+    "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
     "@velloo/schema": "workspace:*",
-    "@velloo/shadcn-snapshot": "workspace:*",
     "culori": "4.0.2",
     "react": "19.2.6",
     "react-dom": "19.2.6"

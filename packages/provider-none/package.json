@@ -10,8 +10,8 @@
     "./tailwind-entry.css": "./src/tailwind-entry.css"
   },
   "dependencies": {
+    "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
-    "@velloo/shadcn-snapshot": "workspace:*",
     "clsx": "2.1.1",
     "react": "19.2.6",
     "tailwindcss": "4.3.0"
