@@ -17,6 +17,13 @@ export const BoardGroupSchema = z.object({
 export type BoardGroup = z.infer<typeof BoardGroupSchema>;
 
 /**
+ * Cap on board names, enforced at the mutation boundary (add/update), not
+ * here in the on-disk schema — a pre-existing folder with a longer name
+ * must still load. Ids are safe regardless (slugify caps them at 48).
+ */
+export const MAX_BOARD_NAME_LENGTH = 80;
+
+/**
  * A Board is one infinite canvas with its own collection of frames + groups.
  * A design folder has many Boards (one per "flow" — onboarding, settings,
  * pricing, etc.). Each Board persists as `boards/<id>.json`.

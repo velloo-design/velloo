@@ -45,7 +45,13 @@ export interface DesignSlice {
   history: HistoryDepths;
   wsConnected: boolean;
 
-  loadDesign(): Promise<void>;
+  /**
+   * Boot the store from the server. `seed` carries the URL's board/screen
+   * (`?board=…&screen=…`) so a shared link selects its board directly —
+   * selecting the default first and switching after would flash the wrong
+   * board and eagerly load its screens for nothing.
+   */
+  loadDesign(seed?: { boardId?: string | null; screenId?: string | null }): Promise<void>;
   refreshHistory(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
   /**
@@ -61,6 +67,12 @@ export interface DesignSlice {
   selectBoard(boardId: string): Promise<void>;
   loadBoard(boardId: string): Promise<Board | null>;
   refreshBoard(boardId: string): Promise<void>;
+  /**
+   * Drop a deleted board from local state: the summary list, the loaded-board
+   * cache, and — when it was the active board — the selection, which moves to
+   * the first remaining board.
+   */
+  pruneBoard(boardId: string): Promise<void>;
   selectScreen(screenId: string): Promise<void>;
   loadScreen(screenId: string): Promise<Screen | null>;
   refreshScreen(screenId: string): Promise<void>;
@@ -93,18 +105,24 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     }
   },
 
-  async loadDesign() {
+  async loadDesign(seed) {
     const design = await fetchDesign();
     set({ design });
-    // Boards: pick default, else first.
+    // Boards: URL seed (when it still exists) beats default beats first.
+    const seedBoard =
+      seed?.boardId && design.boards.some((b) => b.id === seed.boardId) ? seed.boardId : null;
     const prefersBoard =
       design.defaultBoard && design.boards.some((b) => b.id === design.defaultBoard)
         ? design.defaultBoard
         : null;
-    const nextBoardId = get().currentBoardId ?? prefersBoard ?? design.boards[0]?.id ?? null;
+    const nextBoardId =
+      seedBoard ?? get().currentBoardId ?? prefersBoard ?? design.boards[0]?.id ?? null;
     // selectBoard handles screen coercion: if the current screen isn't
     // placed on the new board, it switches to the board's first frame.
     if (nextBoardId) await get().selectBoard(nextBoardId);
+    const seedScreen =
+      seed?.screenId && design.screens.some((s) => s.id === seed.screenId) ? seed.screenId : null;
+    if (seedScreen && seedScreen !== get().currentScreenId) await get().selectScreen(seedScreen);
     // Only fall back to the global default screen if no board ended up
     // scoping the tree (no boards at all, or selectBoard failed). The
     // configured `defaultScreen` may not live on the active board —
@@ -193,12 +211,59 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   async refreshBoard(boardId: string) {
     try {
       const board = await fetchBoard(boardId);
-      set((s) => ({ boards: { ...s.boards, [boardId]: board } }));
+      // Sync the summary's meta too — the sidebar reads name + frame count
+      // from `design.boards`, and a rename or frame change only broadcasts
+      // `board-changed`.
+      set((s) => ({
+        boards: { ...s.boards, [boardId]: board },
+        design: s.design
+          ? {
+              ...s.design,
+              boards: s.design.boards.map((b) =>
+                b.id === boardId ? { ...b, name: board.name, frameCount: board.frames.length } : b,
+              ),
+            }
+          : s.design,
+      }));
       for (const f of board.frames) {
         if (!get().screens[f.screen]) await get().loadScreen(f.screen);
       }
     } catch {
-      /* ignore */
+      // A deleted board also broadcasts `board-changed`, so this fetch 404s.
+      // Confirm against a fresh summary before pruning so a transient
+      // failure doesn't drop a live board.
+      try {
+        const design = await fetchDesign();
+        set({ design });
+        if (!design.boards.some((b) => b.id === boardId)) await get().pruneBoard(boardId);
+      } catch {
+        /* ignore */
+      }
+    }
+  },
+
+  async pruneBoard(boardId: string) {
+    set((s) => {
+      const { [boardId]: _removed, ...boards } = s.boards;
+      return {
+        boards,
+        design: s.design
+          ? { ...s.design, boards: s.design.boards.filter((b) => b.id !== boardId) }
+          : s.design,
+      };
+    });
+    if (get().currentBoardId !== boardId) return;
+    const next = get().design?.boards[0]?.id ?? null;
+    if (next) {
+      await get().selectBoard(next);
+    } else {
+      set({
+        currentBoardId: null,
+        currentScreenId: null,
+        annotations: [],
+        editingMarkupId: null,
+        notes: [],
+      });
     }
   },
 

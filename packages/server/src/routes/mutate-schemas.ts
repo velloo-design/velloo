@@ -1,4 +1,9 @@
-import { NodeIdSchema, NodeSchema, SnippetParamSchema } from "@velloo/schema";
+import {
+  MAX_BOARD_NAME_LENGTH,
+  NodeIdSchema,
+  NodeSchema,
+  SnippetParamSchema,
+} from "@velloo/schema";
 import { z } from "zod";
 
 const Path = z.array(z.number().int().nonnegative());
@@ -48,8 +53,15 @@ export const SetNodeIdBody = z.object({
 
 // ── Board lifecycle ────────────────────────────────────────────────────
 export const AddBoardBody = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH),
   id: z.string().min(1).optional(),
+});
+export const UpdateBoardBody = z.object({
+  boardId: z.string().min(1),
+  patch: z.object({
+    name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH).optional(),
+    theme: z.string().min(1).nullable().optional(),
+  }),
 });
 export const RemoveBoardBody = z.object({
   boardId: z.string().min(1),

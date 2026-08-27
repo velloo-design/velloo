@@ -7,6 +7,7 @@ import {
   removeFrame,
   reorderBoards,
   setNodeId,
+  updateBoard,
   updateFrame,
   updateProps,
   updateSnippet,
@@ -19,6 +20,7 @@ import {
   RemoveFrameBody,
   ReorderBoardsBody,
   SetNodeIdBody,
+  UpdateBoardBody,
   UpdateFrameBody,
   UpdatePropsBody,
   UpdateSnippetArgsBody,
@@ -54,6 +56,10 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/add_board",
     route(AddBoardBody, (a, ctx) => addBoard(ctx, a)),
+  );
+  r.post(
+    "/update_board",
+    route(UpdateBoardBody, (a, ctx) => updateBoard(ctx, a)),
   );
   r.post(
     "/remove_board",

@@ -1,10 +1,23 @@
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
-import type { Board } from "@velloo/schema";
+import { type Board, MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
-import { boardIdConflict, boardIdExhausted, lastBoard, type MutationError } from "./errors.ts";
+import {
+  badRequest,
+  boardIdConflict,
+  boardIdExhausted,
+  lastBoard,
+  type MutationError,
+} from "./errors.ts";
 import { getBoard } from "./lookup.ts";
 import { deletePersistedBoard, persistBoard, persistConfig } from "./persist.ts";
 import { slugify } from "./slugify.ts";
+
+function boardNameTooLong(name: string): MutationError | null {
+  if (name.length <= MAX_BOARD_NAME_LENGTH) return null;
+  return badRequest(
+    `board name too long (${name.length} chars) — max ${MAX_BOARD_NAME_LENGTH} characters`,
+  );
+}
 
 export interface AddBoardArgs {
   name: string;
@@ -21,6 +34,8 @@ export async function addBoard(
   args: AddBoardArgs,
 ): Promise<Result<AddBoardResult, MutationError>> {
   return DoAsync<AddBoardResult, MutationError>(async function* () {
+    const tooLong = boardNameTooLong(args.name);
+    if (tooLong) return yield* $(err(tooLong));
     const baseId = args.id ?? slugify(args.name, "board");
     if (args.id !== undefined && ctx.folder.boards.has(args.id)) {
       return yield* $(err(boardIdConflict(args.id)));
@@ -57,6 +72,10 @@ export async function updateBoard(
   args: UpdateBoardArgs,
 ): Promise<Result<UpdateBoardResult, MutationError>> {
   return DoAsync<UpdateBoardResult, MutationError>(async function* () {
+    if (args.patch.name !== undefined) {
+      const tooLong = boardNameTooLong(args.patch.name);
+      if (tooLong) return yield* $(err(tooLong));
+    }
     const board = yield* $(getBoard(ctx, args.boardId));
     const next: Board = { ...board };
     if (args.patch.name !== undefined) next.name = args.patch.name;

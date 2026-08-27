@@ -1,8 +1,10 @@
+import { MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import {
   ChevronDown,
   ChevronRight,
   LayoutDashboard,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -22,12 +24,14 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog.tsx";
 import { Button } from "./ui/button.tsx";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu.tsx";
+import { Input } from "./ui/input.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
 interface Props {
@@ -82,14 +86,41 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     name: string;
   } | null>(null);
 
-  const onCreateBoard = async () => {
-    const name = window.prompt("Board name", "New board");
-    if (!name) return;
-    try {
-      const r = await mutate.addBoard({ name });
-      void selectBoard(r.boardId);
-    } catch (err) {
-      toastError(err, "Could not create board");
+  // One dialog serves create and rename — same shape (a name input), only
+  // the title and the mutation differ.
+  const [nameDialog, setNameDialog] = useState<
+    { mode: "create" } | { mode: "rename"; boardId: string } | null
+  >(null);
+  const [boardName, setBoardName] = useState("");
+
+  const openCreateDialog = () => {
+    setBoardName("New board");
+    setNameDialog({ mode: "create" });
+  };
+
+  const openRenameDialog = (b: BoardMeta) => {
+    setBoardName(b.name);
+    setNameDialog({ mode: "rename", boardId: b.id });
+  };
+
+  const submitNameDialog = async () => {
+    const name = boardName.trim();
+    if (!name || !nameDialog) return;
+    const dialog = nameDialog;
+    setNameDialog(null);
+    if (dialog.mode === "create") {
+      try {
+        const r = await mutate.addBoard({ name });
+        void selectBoard(r.boardId);
+      } catch (err) {
+        toastError(err, "Could not create board");
+      }
+    } else {
+      try {
+        await mutate.updateBoard({ boardId: dialog.boardId, patch: { name } });
+      } catch (err) {
+        toastError(err, "Could not rename board");
+      }
     }
   };
 
@@ -97,7 +128,16 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     if (!pendingBoardDelete) return;
     const { id } = pendingBoardDelete;
     setPendingBoardDelete(null);
-    void mutate.removeBoard({ boardId: id }).catch((e) => toastError(e, "Could not delete board"));
+    void (async () => {
+      try {
+        await mutate.removeBoard({ boardId: id });
+        // The `board-changed` broadcast also reconciles, but pruning here
+        // keeps the initiator's sidebar honest even if the WS is down.
+        await useCanvas.getState().pruneBoard(id);
+      } catch (e) {
+        toastError(e, "Could not delete board");
+      }
+    })();
   };
 
   // ── Board drag-and-drop reordering ─────────────────────────────────────
@@ -223,7 +263,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
               <span className="normal-case opacity-60">({boards.length})</span>
             ) : null}
           </button>
-          <Button variant="ghost" size="icon-xs" onClick={onCreateBoard} title="New board">
+          <Button variant="ghost" size="icon-xs" onClick={openCreateDialog} title="New board">
             <Plus />
           </Button>
         </div>
@@ -285,6 +325,10 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => openRenameDialog(b)}>
+                        <Pencil />
+                        Rename board
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
                         disabled={boards.length <= 1}
@@ -360,6 +404,46 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
           </div>
         )}
       </section>
+
+      <Dialog
+        open={nameDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setNameDialog(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {nameDialog?.mode === "rename" ? "Rename board" : "New board"}
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitNameDialog();
+            }}
+          >
+            <Input
+              autoFocus
+              value={boardName}
+              onChange={(e) => setBoardName(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              maxLength={MAX_BOARD_NAME_LENGTH}
+              placeholder="Board name"
+              aria-label="Board name"
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setNameDialog(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={boardName.trim().length === 0}>
+                {nameDialog?.mode === "rename" ? "Rename" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={pendingBoardDelete !== null}

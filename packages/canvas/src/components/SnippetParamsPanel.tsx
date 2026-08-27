@@ -3,6 +3,16 @@ import { Pencil, Save, X } from "lucide-react";
 import { useState } from "react";
 import { useIconNames } from "../hooks/useIconNames.ts";
 import { pushToast } from "../toast.ts";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";
@@ -23,6 +33,7 @@ interface SnippetParamsPanelProps {
  */
 export function SnippetParamsPanel({ snippet, onPatchParams }: SnippetParamsPanelProps) {
   const [editingParam, setEditingParam] = useState<number | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<number | null>(null);
   const iconNames = useIconNames();
 
   const updateParam = (index: number, next: SnippetParam) => {
@@ -31,14 +42,10 @@ export function SnippetParamsPanel({ snippet, onPatchParams }: SnippetParamsPane
     onPatchParams(list);
   };
 
-  const remove = (index: number) => {
-    if (
-      !confirm(
-        `Remove parameter "${snippet.params[index]?.name}"? Existing instances will lose this arg.`,
-      )
-    )
-      return;
-    onPatchParams(snippet.params.filter((_, i) => i !== index));
+  const confirmRemove = () => {
+    if (pendingRemove === null) return;
+    onPatchParams(snippet.params.filter((_, i) => i !== pendingRemove));
+    setPendingRemove(null);
   };
 
   const addParam = () => {
@@ -83,12 +90,43 @@ export function SnippetParamsPanel({ snippet, onPatchParams }: SnippetParamsPane
                   onCancel={() => setEditingParam(null)}
                 />
               ) : (
-                <ParamRow param={p} onEdit={() => setEditingParam(i)} onRemove={() => remove(i)} />
+                <ParamRow
+                  param={p}
+                  onEdit={() => setEditingParam(i)}
+                  onRemove={() => setPendingRemove(i)}
+                />
               )}
             </li>
           ))}
         </ul>
       )}
+
+      <AlertDialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove parameter</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingRemove !== null
+                ? `Remove parameter "${snippet.params[pendingRemove]?.name}"? Existing instances will lose this arg.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemove}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

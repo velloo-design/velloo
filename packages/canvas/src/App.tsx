@@ -27,8 +27,6 @@ export function App() {
     currentBoardId ? (s.boards[currentBoardId] ?? null) : null,
   );
   const loadDesign = useCanvas((s) => s.loadDesign);
-  const selectBoard = useCanvas((s) => s.selectBoard);
-  const selectScreen = useCanvas((s) => s.selectScreen);
   const setSelection = useCanvas((s) => s.setSelection);
   const initialized = useRef(false);
   const spaceHeldRef = useRef<"select" | "hand" | "note" | "annotate" | null>(null);
@@ -38,21 +36,7 @@ export function App() {
     initialized.current = true;
     const seed = readUrlState();
     void (async () => {
-      await loadDesign();
-      if (seed.boardId) {
-        try {
-          await selectBoard(seed.boardId);
-        } catch {
-          /* board removed */
-        }
-      }
-      if (seed.screenId) {
-        try {
-          await selectScreen(seed.screenId);
-        } catch {
-          /* screen removed */
-        }
-      }
+      await loadDesign({ boardId: seed.boardId, screenId: seed.screenId });
       if (seed.selection) setSelection(seed.selection);
       if (seed.view === "library") {
         useCanvas.getState().openLibrary(seed.libraryItem);
@@ -62,7 +46,7 @@ export function App() {
     })();
     const stop = connectWs();
     return stop;
-  }, [loadDesign, selectBoard, selectScreen, setSelection]);
+  }, [loadDesign, setSelection]);
 
   useUrlState();
   useApplyAppTheme();
@@ -190,7 +174,7 @@ export function App() {
           ) : currentBoard ? (
             <EmptyState
               title={`Board "${currentBoard.name}" is empty`}
-              hint="Add a frame to place a screen here, or pick another board."
+              hint="Ask your agent to design something here — it places screens on boards through the velloo MCP tools. Or pick another board."
             />
           ) : (
             <EmptyState

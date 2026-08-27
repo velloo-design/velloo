@@ -21,6 +21,9 @@ export const mutate = {
   addBoard(args: { name: string; id?: string }) {
     return postMutate<{ boardId: string; board: unknown }>("add_board", args);
   },
+  updateBoard(args: { boardId: string; patch: { name?: string; theme?: string | null } }) {
+    return postMutate<{ board: unknown }>("update_board", args);
+  },
   removeBoard(args: { boardId: string }) {
     return postMutate<{ removedBoardId: string }>("remove_board", args);
   },

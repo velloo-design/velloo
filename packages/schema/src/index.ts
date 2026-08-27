@@ -11,6 +11,7 @@ export {
   type BoardGroup,
   BoardGroupSchema,
   BoardSchema,
+  MAX_BOARD_NAME_LENGTH,
 } from "./board.ts";
 export {
   type CodegenConfig,

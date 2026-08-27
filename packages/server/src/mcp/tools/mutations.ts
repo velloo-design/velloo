@@ -1,6 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Result } from "@velloo/result";
-import { isComponentNode, type Node, NodeSchema, SnippetParamSchema } from "@velloo/schema";
+import {
+  isComponentNode,
+  MAX_BOARD_NAME_LENGTH,
+  type Node,
+  NodeSchema,
+  SnippetParamSchema,
+} from "@velloo/schema";
 import { z } from "zod";
 import { badRequest } from "../../mutations/errors.ts";
 import {
@@ -319,7 +325,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     {
       description:
         "Create a new empty board. A board is one infinite canvas with its own frames + groups; a design folder can have many.",
-      inputSchema: { name: z.string(), id: z.string().optional() },
+      inputSchema: { name: z.string().max(MAX_BOARD_NAME_LENGTH), id: z.string().optional() },
     },
     async (args) => toMcp(await addBoard(ctx, args)),
   );
@@ -332,7 +338,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: {
         boardId: z.string(),
         patch: z.object({
-          name: z.string().optional(),
+          name: z.string().max(MAX_BOARD_NAME_LENGTH).optional(),
           theme: z.string().nullable().optional(),
         }),
       },
