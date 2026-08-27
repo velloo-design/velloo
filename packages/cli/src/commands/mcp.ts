@@ -1,10 +1,56 @@
 import { join } from "node:path";
-import { runStdioMcpProxy } from "@velloo/server";
+import { runStdioFormatGate, runStdioMcpProxy } from "@velloo/server";
 import { defineCommand } from "citty";
-import { ensureDaemon } from "../daemon/runtime.ts";
-import { fail } from "../fail.ts";
+import {
+  DesignFolderFormatError,
+  daemonRoot,
+  ensureDaemon,
+  stopDaemon,
+} from "../daemon/runtime.ts";
 import { resolveDesignFolder } from "../folder.ts";
 import { traceEnabled } from "../trace/env.ts";
+import { upgradeFolder } from "../upgrade-folder.ts";
+
+/**
+ * The agent that spawned us can't read a failed process's stderr — it would
+ * just see a dead MCP server. So a design-folder format mismatch doesn't exit:
+ * it serves a minimal MCP session whose instructions explain the mismatch and
+ * (for a folder older than this binary) expose `upgrade_design_folder`, so the
+ * agent can migrate the folder and reconnect.
+ */
+async function serveFormatGate(err: DesignFolderFormatError): Promise<never> {
+  console.error(`velloo mcp: ${err.message.slice("velloo: ".length)}`);
+  console.error("velloo mcp: serving the upgrade gate over MCP instead of the design tools.");
+
+  let closing = false;
+  const shutdown = async (close?: () => Promise<void>) => {
+    if (closing) return;
+    closing = true;
+    await close?.();
+    process.exit(0);
+  };
+  const gate = await runStdioFormatGate({
+    root: err.root,
+    found: err.found,
+    current: err.current,
+    upgrade:
+      err.found < err.current
+        ? async () => {
+            // Same order as `velloo upgrade`: a live daemon (an older binary
+            // still reading this format) would race the rewrite — stop it first.
+            await stopDaemon(daemonRoot(err.root));
+            return upgradeFolder(err.root);
+          }
+        : undefined,
+    onExit: () => void shutdown(),
+  });
+  process.on("SIGINT", () => void shutdown(gate.close));
+  process.on("SIGTERM", () => void shutdown(gate.close));
+  process.stdin.on("end", () => void shutdown(gate.close));
+  process.stdin.on("close", () => void shutdown(gate.close));
+
+  return await new Promise<never>(() => {});
+}
 
 export default defineCommand({
   meta: {
@@ -50,7 +96,9 @@ export default defineCommand({
         },
       });
     } catch (err) {
-      fail("mcp", (err as Error).message);
+      if (err instanceof DesignFolderFormatError && !args.http) await serveFormatGate(err);
+      // Anything else (and --http mode) surfaces as one clean CLI error line.
+      throw err;
     }
 
     // Diagnostics to stderr only (stdout is the JSON-RPC stream). The recorder

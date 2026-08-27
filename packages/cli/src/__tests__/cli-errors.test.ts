@@ -45,6 +45,18 @@ async function runPublish(folder: string, env: Record<string, string> = {}) {
   return { exitCode, stderr };
 }
 
+async function runRun(folder: string) {
+  const proc = Bun.spawn(["bun", cliPath, "run", folder, "--no-open"], {
+    cwd: tmp,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, VELLOO_DAEMONS_PATH: join(tmp, "daemons.json") },
+  });
+  const exitCode = await proc.exited;
+  const stderr = await new Response(proc.stderr).text();
+  return { exitCode, stderr };
+}
+
 describe("cli error presentation", () => {
   test("a crafted error (schema-version gate) prints one clean line, no stack", async () => {
     const folder = await writeV1Folder();
@@ -73,5 +85,26 @@ describe("cli error presentation", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("schema version 1");
     expect(stderr).toMatch(/at /);
+  }, 30_000);
+
+  test("run refuses an outdated folder up front instead of timing out on the daemon", async () => {
+    const folder = await writeV1Folder();
+    const { exitCode, stderr } = await runRun(folder);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("velloo run:");
+    expect(stderr).toContain("Run `velloo upgrade` to migrate it.");
+    expect(stderr).not.toContain("didn't come up");
+  }, 30_000);
+
+  test("run quotes a daemon that dies at boot instead of the blind health timeout", async () => {
+    // Passes the pre-spawn format gate (v2) but the daemon dies loading the
+    // folder — theme/default.json is missing.
+    const folder = join(tmp, "velloo-broken");
+    await mkdir(join(folder, ".design"), { recursive: true });
+    await writeFile(join(folder, ".design", "config.json"), JSON.stringify({ schemaVersion: 2 }));
+    const { exitCode, stderr } = await runRun(folder);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("exited during startup");
+    expect(stderr).not.toContain("didn't come up");
   }, 30_000);
 });

@@ -398,6 +398,11 @@ export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts
 export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
+export {
+  type FormatGateUpgradeResult,
+  runStdioFormatGate,
+  type StdioFormatGateHandle,
+} from "./mcp/format-gate.ts";
 export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";
 // Verification cores (dark-mode audit / class validation / contrast) — the
 // same checks the MCP audit + validate_classes tools run, exported for

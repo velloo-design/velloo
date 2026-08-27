@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import {
+  assertFolderFormatCurrent,
   type DaemonRecord,
+  DesignFolderFormatError,
   daemonRoot,
+  ensureDaemon,
   readLock,
   registryRemove,
   registryUpsert,
@@ -74,5 +78,43 @@ describe("daemon runtime", () => {
   test("daemonRoot resolves an existing path to its realpath", () => {
     // tmp exists, so it resolves (macOS maps /var → /private/var, etc.).
     expect(daemonRoot(root)).toContain("design");
+  });
+});
+
+describe("design-folder format gate", () => {
+  const writeConfig = (config: unknown) =>
+    writeFile(join(root, ".design", "config.json"), JSON.stringify(config));
+
+  test("an outdated folder is refused with the upgrade hint", async () => {
+    await writeConfig({ schemaVersion: 1 });
+    expect(() => assertFolderFormatCurrent(root)).toThrow(/Run `velloo upgrade`/);
+    try {
+      assertFolderFormatCurrent(root);
+      throw new Error("expected the gate to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(DesignFolderFormatError);
+      expect((err as DesignFolderFormatError).found).toBe(1);
+      expect((err as DesignFolderFormatError).current).toBe(CURRENT_SCHEMA_VERSION);
+    }
+  });
+
+  test("a folder from a newer velloo is refused with the update-velloo hint", async () => {
+    await writeConfig({ schemaVersion: CURRENT_SCHEMA_VERSION + 1 });
+    expect(() => assertFolderFormatCurrent(root)).toThrow(/Upgrade velloo/);
+  });
+
+  test("a current folder and a missing config both pass (the daemon owns the rest)", async () => {
+    expect(() => assertFolderFormatCurrent(root)).not.toThrow(); // no config.json yet
+    await writeConfig({ schemaVersion: CURRENT_SCHEMA_VERSION });
+    expect(() => assertFolderFormatCurrent(root)).not.toThrow();
+  });
+
+  test("ensureDaemon refuses an outdated folder before spawning anything", async () => {
+    await writeConfig({ schemaVersion: 1 });
+    const start = Date.now();
+    await expect(ensureDaemon(root)).rejects.toThrow(/Run `velloo upgrade`/);
+    // The pre-spawn gate, not the 15s health timeout.
+    expect(Date.now() - start).toBeLessThan(2000);
+    expect(await readLock(root)).toBeNull();
   });
 });

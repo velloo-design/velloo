@@ -10,6 +10,7 @@ import {
   manualSetupText,
   PROJECT_AGENT_IDS,
 } from "../connect/index.ts";
+import { assertFolderFormatCurrent, DesignFolderFormatError } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
 
@@ -50,6 +51,15 @@ export default defineCommand({
   },
   async run({ args }) {
     const folder = await resolveDesignFolder(args.folder, "connect", { interactive: true });
+    // Wiring an agent config is format-independent, so an out-of-date folder
+    // only warns — but warn NOW, or the first thing the wired agent meets is
+    // the MCP upgrade gate instead of the design tools.
+    try {
+      assertFolderFormatCurrent(folder);
+    } catch (err) {
+      if (!(err instanceof DesignFolderFormatError)) throw err;
+      console.log(pc.yellow(`⚠ ${err.message.slice("velloo: ".length)}`));
+    }
     const interactive = Boolean(process.stdin.isTTY);
 
     // Explicit --agent wins; otherwise ask interactively (init's wiring

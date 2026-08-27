@@ -41,20 +41,17 @@ export default defineCommand({
 
     // Attach to the folder's persistent canvas daemon, spawning a detached one
     // if none is alive. It outlives this command (and any agent session) and
-    // auto-stops only after 5 min with nothing connected (no canvas tab, no agent).
+    // auto-stops only after 5 min with nothing connected (no canvas tab, no
+    // agent). A failure (format gate, daemon dying at boot) escapes to the
+    // registry guard, which prints it as one clean `velloo run:` line.
     let spawned = false;
-    let rec: Awaited<ReturnType<typeof ensureDaemon>>;
-    try {
-      rec = await ensureDaemon(folder, {
-        preferredPort,
-        host: args.host,
-        onSpawn: () => {
-          spawned = true;
-        },
-      });
-    } catch (err) {
-      fail("run", (err as Error).message);
-    }
+    const rec = await ensureDaemon(folder, {
+      preferredPort,
+      host: args.host,
+      onSpawn: () => {
+        spawned = true;
+      },
+    });
 
     const folderArg = args.folder ? ` ${args.folder}` : "";
     console.log(`velloo: canvas at ${rec.canvasUrl}`);

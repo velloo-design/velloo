@@ -255,3 +255,13 @@ Server returns the standard MCP `initialize` response with concrete agent nudges
 - **One tree per screen.** Viewport size is a property of each `frame` placement. Different viewport renderings of the same screen → multiple frames pointing at the same screen (edits sync). Different layouts per breakpoint → separate screens with their own frames.
 - **`screenshot mode: "compare"`** renders light + dark side-by-side in one PNG — the fastest signal that the design actually adapts.
 - **Annotations are guidance.** `list_annotations(screenId)` returns markdown notes the designer attached to specific nodes. Each annotation carries a `resolved` path (null when the targeted node has been removed — low-priority, the note is stale). Read-only.
+
+## Format gate (folder needs migration)
+
+When the design folder's on-disk format doesn't match the binary (`schemaVersion` in `.design/config.json` vs `CURRENT_SCHEMA_VERSION`), the canvas daemon refuses to boot — so `velloo mcp` (stdio) serves a **degraded gate session** instead of dying, because the spawning agent can't read a dead process's stderr. Implementation: `packages/server/src/mcp/format-gate.ts`, wired in `packages/cli/src/commands/mcp.ts`.
+
+- `initialize` succeeds; `instructions` explain the mismatch and how to resolve it.
+- Folder **older** than the binary: one tool is advertised, `upgrade_design_folder`, which runs the same migration as `velloo upgrade` (stops any daemon, rewrites, validates). Its result tells the agent to reconnect the MCP server to load the real design tools.
+- Folder **newer** than the binary: no tool — the instructions say the velloo CLI itself must be updated, then reconnect.
+
+The same version check runs *before* any daemon spawn (`assertFolderFormatCurrent` in `packages/cli/src/daemon/runtime.ts`), so `velloo run` fails immediately with the `velloo upgrade` hint instead of waiting out the daemon health timeout.

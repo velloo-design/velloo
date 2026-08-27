@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readFileSync,
   realpathSync,
   statSync,
   unlinkSync,
@@ -11,6 +12,7 @@ import {
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { CURRENT_SCHEMA_VERSION, schemaVersionOf } from "@velloo/schema";
 import { writeJsonAtomic } from "@velloo/server";
 import { TOOL_VERSION } from "../version.ts";
 
@@ -50,6 +52,44 @@ export function daemonRoot(folder: string): string {
   // Resolve symlinks so two paths to the same folder map to one daemon.
   const abs = resolve(folder);
   return existsSync(abs) ? realpathSync(abs) : abs;
+}
+
+/** The folder's on-disk format doesn't match this binary — see {@link assertFolderFormatCurrent}. */
+export class DesignFolderFormatError extends Error {
+  constructor(
+    message: string,
+    readonly root: string,
+    readonly found: number,
+    readonly current: number,
+  ) {
+    super(message);
+    this.name = "DesignFolderFormatError";
+  }
+}
+
+/**
+ * Refuse a folder whose on-disk format this binary can't serve — a spawned
+ * daemon would only exit into the same refusal, and the caller would burn the
+ * whole health timeout learning it. Mirrors the loadDesignFolder gate (same
+ * wording); a missing/unreadable config is NOT gated here — the daemon owns
+ * reporting that (it may be a legit not-a-design-folder error).
+ */
+export function assertFolderFormatCurrent(root: string): void {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(join(root, ".design", "config.json"), "utf8"));
+  } catch {
+    return;
+  }
+  const found = schemaVersionOf(raw);
+  if (found === CURRENT_SCHEMA_VERSION) return;
+  const message =
+    found > CURRENT_SCHEMA_VERSION
+      ? `velloo: ${root} uses design-folder schema version ${found}, but this velloo ` +
+        `only knows version ${CURRENT_SCHEMA_VERSION}. Upgrade velloo to open it.`
+      : `velloo: ${root} uses design-folder schema version ${found} ` +
+        `(current: ${CURRENT_SCHEMA_VERSION}). Run \`velloo upgrade\` to migrate it.`;
+  throw new DesignFolderFormatError(message, root, found, CURRENT_SCHEMA_VERSION);
 }
 
 export async function readLock(root: string): Promise<DaemonRecord | null> {
@@ -140,8 +180,24 @@ function daemonSpawnCmd(root: string, preferredPort: number | undefined, host: s
   return existsSync(entry) ? [process.execPath, entry, ...args] : [process.execPath, ...args];
 }
 
-function spawnDetached(root: string, preferredPort: number | undefined, host: string): void {
+interface SpawnedDaemon {
+  exited: Promise<number>;
+  /** Log size before this spawn — the child's own output starts here. */
+  logStart: number;
+}
+
+function spawnDetached(
+  root: string,
+  preferredPort: number | undefined,
+  host: string,
+): SpawnedDaemon {
   mkdirSync(cacheDir(root), { recursive: true });
+  let logStart = 0;
+  try {
+    logStart = statSync(logPath(root)).size;
+  } catch {
+    // first spawn — no log yet
+  }
   const log = openSync(logPath(root), "a");
   const proc = Bun.spawn(daemonSpawnCmd(root, preferredPort, host), {
     stdin: "ignore",
@@ -150,6 +206,7 @@ function spawnDetached(root: string, preferredPort: number | undefined, host: st
   });
   // Let this process exit without waiting for — or killing — the daemon.
   proc.unref();
+  return { exited: proc.exited, logStart };
 }
 
 /** Try to claim the spawn mutex; returns true if we own it and must spawn. */
@@ -182,11 +239,39 @@ function releaseMutex(root: string): void {
   }
 }
 
-async function waitForHealthy(root: string): Promise<DaemonRecord> {
+/**
+ * The spawned daemon exited before turning healthy. Quote what it appended to
+ * the log (its stdout/stderr was redirected there) so the caller sees the
+ * actual refusal instead of a generic pointer at the file.
+ */
+function startupFailure(root: string, logStart: number): string {
+  let appended = "";
+  try {
+    appended = readFileSync(logPath(root), "utf8").slice(logStart);
+  } catch {
+    // log unreadable — fall through to the generic pointer
+  }
+  const lines = appended
+    .split("\n")
+    .map((l) => l.replace(/^velloo __daemon: /, "").trimEnd())
+    .filter((l) => l.trim().length > 0)
+    .slice(-8);
+  if (lines.length === 0) {
+    return `velloo: the canvas daemon for ${root} exited during startup with no output — see ${logPath(root)}`;
+  }
+  return `velloo: the canvas daemon for ${root} exited during startup:\n  ${lines.join("\n  ")}`;
+}
+
+async function waitForHealthy(root: string, spawned?: SpawnedDaemon): Promise<DaemonRecord> {
   const deadline = Date.now() + HEALTHY_TIMEOUT_MS;
+  let died = false;
+  if (spawned) void spawned.exited.then(() => (died = true));
   while (Date.now() < deadline) {
     const rec = await readLock(root);
     if (rec && (await isLive(rec))) return rec;
+    // A healthy daemon never exits, so our child dying first is a startup
+    // failure — report its own words now instead of polling out the timeout.
+    if (died) throw new Error(startupFailure(root, spawned?.logStart ?? 0));
     await new Promise((r) => setTimeout(r, 150));
   }
   throw new Error(`velloo: canvas daemon for ${root} didn't come up — see ${logPath(root)}`);
@@ -214,6 +299,7 @@ export async function ensureDaemon(
   opts: EnsureOptions = {},
 ): Promise<DaemonRecord> {
   const root = daemonRoot(folder);
+  assertFolderFormatCurrent(root);
   const host = opts.host ?? "127.0.0.1";
   mkdirSync(cacheDir(root), { recursive: true }); // mutex + lockfile live here
   const deadline = Date.now() + HEALTHY_TIMEOUT_MS + 5000;
@@ -231,9 +317,9 @@ export async function ensureDaemon(
         // Re-check inside the mutex: someone may have just finished spawning.
         const again = await readLock(root);
         if (again && (await isLive(again)) && again.version === TOOL_VERSION) return again;
-        spawnDetached(root, opts.preferredPort, host);
+        const spawned = spawnDetached(root, opts.preferredPort, host);
         opts.onSpawn?.();
-        return await waitForHealthy(root);
+        return await waitForHealthy(root, spawned);
       } finally {
         releaseMutex(root);
       }
