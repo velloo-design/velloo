@@ -1,6 +1,7 @@
 import { isComponentNode, isSnippetInstance, nodeId } from "@velloo/schema";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { mutate } from "../api.ts";
+import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
 import { pathFromString } from "../path.ts";
 import { selectedNode, useCanvas } from "../store.ts";
 import { CopyField } from "./CopyField.tsx";
@@ -35,7 +36,22 @@ export function Inspector() {
     return components.find((c) => c.id === node.$ref) ?? null;
   }, [node, components]);
 
-  const debouncePropTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The payload captures screenId/path at edit time, so a selection change
+  // inside the debounce window can't redirect a pending commit.
+  const pushProp = useDebouncedCommit<{
+    screenId: string;
+    path: string;
+    name: string;
+    value: unknown;
+  }>(DEBOUNCE_MS, (p) => {
+    void mutate
+      .updateProps({
+        screenId: p.screenId,
+        path: pathFromString(p.path),
+        propPatch: { [p.name]: p.value === undefined ? null : p.value },
+      })
+      .catch(() => undefined);
+  });
 
   if (!selection) {
     return (
@@ -65,19 +81,8 @@ export function Inspector() {
     );
   }
 
-  const commitProp = (name: string, value: unknown) => {
-    if (debouncePropTimer.current) clearTimeout(debouncePropTimer.current);
-    debouncePropTimer.current = setTimeout(() => {
-      const path = pathFromString(selection.path);
-      void mutate
-        .updateProps({
-          screenId: selection.screenId,
-          path,
-          propPatch: { [name]: value === undefined ? null : value },
-        })
-        .catch(() => undefined);
-    }, DEBOUNCE_MS);
-  };
+  const commitProp = (name: string, value: unknown) =>
+    pushProp({ screenId: selection.screenId, path: selection.path, name, value });
 
   // The active library's native style channel drives the editor: Tailwind
   // classes (shadcn / no-lib) vs an `sx` / `style` object (MUI). Resolve it for

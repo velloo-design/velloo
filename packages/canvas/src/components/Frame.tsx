@@ -1,5 +1,5 @@
 import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { IframeChannel } from "../iframe-channel.ts";
@@ -22,7 +22,12 @@ import {
 interface FrameProps {
   boardId: string;
   frame: FrameT;
-  otherFrames: FrameT[];
+  /**
+   * The board's full frame list (stable per design refresh). The collision
+   * set is derived here rather than passed pre-filtered so Board's props stay
+   * referentially stable and `memo` can skip Frames on pan/zoom ticks.
+   */
+  frames: FrameT[];
   presets: ViewportPreset[];
   sharedCount: number;
 }
@@ -35,8 +40,18 @@ interface FrameProps {
  * When the canvas cursor is in `hand` or `note` mode, the iframe's
  * pointer-events are disabled so the parent can capture drag/click through
  * the frame.
+ *
+ * Memoized: pan/zoom ticks re-render only Board's transform wrapper, so a
+ * Frame reconciles only when its own props or store subscriptions change.
  */
-export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: FrameProps) {
+export const Frame = memo(function Frame({
+  boardId,
+  frame,
+  frames,
+  presets,
+  sharedCount,
+}: FrameProps) {
+  const otherFrames = useMemo(() => frames.filter((f) => f.id !== frame.id), [frames, frame.id]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const chromeHostRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
@@ -357,4 +372,4 @@ export function Frame({ boardId, frame, otherFrames, presets, sharedCount }: Fra
       </AlertDialog>
     </div>
   );
-}
+});

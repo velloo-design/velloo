@@ -1,13 +1,11 @@
 import type { Snippet, SnippetInstance, SnippetParam } from "@velloo/schema";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchSnippet, mutate, type SnippetMeta } from "../api.ts";
+import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
+import { useIconNames } from "../hooks/useIconNames.ts";
 import { pathFromString } from "../path.ts";
 import { type Selection, useCanvas } from "../store.ts";
-import { IconPicker } from "./IconPicker.tsx";
-import { Checkbox } from "./ui/checkbox.tsx";
-import { Input } from "./ui/input.tsx";
-import { Label } from "./ui/label.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
+import { ValueField, type ValueKind } from "./ValueField.tsx";
 
 const DEBOUNCE_MS = 200;
 
@@ -24,14 +22,8 @@ interface Props {
  */
 export function SnippetInspector({ selection, node }: Props) {
   const design = useCanvas((s) => s.design);
-  const components = useCanvas((s) => s.components);
   const snippetMeta: SnippetMeta | undefined = design?.snippets.find((s) => s.id === node.$snippet);
-
-  const lucideIconNames = useMemo<string[]>(() => {
-    const icon = components?.find((c) => c.id === "Icon");
-    const name = icon?.props.find((p) => p.name === "name");
-    return Array.isArray(name?.enumValues) ? (name.enumValues as string[]) : [];
-  }, [components]);
+  const lucideIconNames = useIconNames();
 
   const [snippet, setSnippet] = useState<Snippet | null>(null);
   useEffect(() => {
@@ -47,20 +39,25 @@ export function SnippetInspector({ selection, node }: Props) {
   }, [node.$snippet]);
 
   const params = snippet?.params ?? snippetMeta?.params ?? [];
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const commitArg = (name: string, value: unknown) => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      void mutate
-        .updateSnippetArgs({
-          screenId: selection.screenId,
-          path: pathFromString(selection.path),
-          argPatch: { [name]: value === undefined ? null : value },
-        })
-        .catch(() => undefined);
-    }, DEBOUNCE_MS);
-  };
+  // The payload captures screenId/path at edit time, so a selection change
+  // inside the debounce window can't redirect a pending commit.
+  const pushArg = useDebouncedCommit<{
+    screenId: string;
+    path: string;
+    name: string;
+    value: unknown;
+  }>(DEBOUNCE_MS, (p) => {
+    void mutate
+      .updateSnippetArgs({
+        screenId: p.screenId,
+        path: pathFromString(p.path),
+        argPatch: { [p.name]: p.value === undefined ? null : p.value },
+      })
+      .catch(() => undefined);
+  });
+  const commitArg = (name: string, value: unknown) =>
+    pushArg({ screenId: selection.screenId, path: selection.path, name, value });
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -207,136 +204,39 @@ interface ArgFieldProps {
   lucideIconNames: string[];
 }
 
+function argKind(param: SnippetParam): ValueKind {
+  switch (param.type) {
+    case "boolean":
+    case "number":
+    case "icon":
+    case "color":
+      return param.type;
+    case "enum":
+      return Array.isArray(param.enum) && param.enum.length > 0 ? "enum" : "string";
+    default:
+      // `node` args are edited as raw text here, matching the historical field.
+      return "string";
+  }
+}
+
 function ArgField({ param, initialValue, onChange, lucideIconNames }: ArgFieldProps) {
-  const [value, setValue] = useState<string>(() => {
-    if (initialValue === undefined || initialValue === null) return "";
-    if (typeof initialValue === "string") return initialValue;
-    return JSON.stringify(initialValue);
-  });
-  const id = `snip-arg-${param.name}`;
-
-  if (param.type === "boolean") {
-    const checked = initialValue === true;
-    return (
-      <div
-        className="flex items-center justify-between gap-3"
-        title={param.description ?? undefined}
-      >
-        <Label htmlFor={id} className="text-xs">
-          {param.name}
-        </Label>
-        <Checkbox id={id} defaultChecked={checked} onCheckedChange={(c) => onChange(Boolean(c))} />
-      </div>
-    );
-  }
-
-  if (param.type === "number") {
-    return (
-      <div className="flex flex-col gap-1.5" title={param.description ?? undefined}>
-        <Label htmlFor={id} className="text-xs">
-          {param.name}
-        </Label>
-        <Input
-          id={id}
-          type="number"
-          value={value}
-          min={param.min}
-          max={param.max}
-          step={param.step ?? 1}
-          onChange={(e) => {
-            setValue(e.target.value);
-            const n = Number(e.target.value);
-            if (Number.isFinite(n)) onChange(n);
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (param.type === "icon") {
-    return (
-      <div className="flex flex-col gap-1.5" title={param.description ?? undefined}>
-        <Label className="text-xs">{param.name}</Label>
-        <IconPicker
-          value={typeof initialValue === "string" ? initialValue : ""}
-          options={lucideIconNames}
-          onChange={(name) => onChange(name)}
-        />
-      </div>
-    );
-  }
-
-  if (param.type === "enum" && Array.isArray(param.enum) && param.enum.length > 0) {
-    return (
-      <div className="flex flex-col gap-1.5" title={param.description ?? undefined}>
-        <Label htmlFor={id} className="text-xs">
-          {param.name}
-        </Label>
-        <Select
-          value={value}
-          onValueChange={(v) => {
-            setValue(v);
-            onChange(v);
-          }}
-        >
-          <SelectTrigger id={id} size="sm" className="text-sm">
-            <SelectValue placeholder="(choose)" />
-          </SelectTrigger>
-          <SelectContent>
-            {param.enum.map((opt) => (
-              <SelectItem key={opt} value={opt}>
-                {opt}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    );
-  }
-
-  if (param.type === "color") {
-    return (
-      <div className="flex flex-col gap-1.5" title={param.description ?? undefined}>
-        <Label className="text-xs">{param.name}</Label>
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            aria-label={`${param.name} color picker`}
-            className="h-7 w-9 cursor-pointer rounded-md border border-input bg-transparent"
-            value={value.startsWith("#") ? value : "#000000"}
-            onChange={(e) => {
-              setValue(e.target.value);
-              onChange(e.target.value);
-            }}
-          />
-          <Input
-            type="text"
-            value={value}
-            className="flex-1 font-mono"
-            onChange={(e) => {
-              setValue(e.target.value);
-              onChange(e.target.value);
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
-
+  const kind = argKind(param);
   return (
-    <div className="flex flex-col gap-1.5" title={param.description ?? undefined}>
-      <Label htmlFor={id} className="text-xs">
-        {param.name}
-      </Label>
-      <Input
-        id={id}
-        type="text"
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-          onChange(e.target.value);
-        }}
-      />
-    </div>
+    <ValueField
+      kind={kind}
+      id={`snip-arg-${param.name}`}
+      name={param.name}
+      label={param.name}
+      labelClassName="text-xs"
+      title={param.description ?? undefined}
+      initialValue={initialValue}
+      onCommit={onChange}
+      enumValues={param.enum}
+      iconNames={lucideIconNames}
+      min={param.min}
+      max={param.max}
+      step={param.step ?? 1}
+      placeholder={kind === "enum" ? "(choose)" : undefined}
+    />
   );
 }

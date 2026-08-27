@@ -2,6 +2,22 @@ import { ChevronDown, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 
+/** The em-dash "unset" sentinel shared by every style-editor MiniSelect. */
+export const NONE = "—";
+
+/** Build a MiniSelect option list with a leading "unset" entry, and inject the
+ *  current value if it isn't already one of the presets (so arbitrary values
+ *  aren't silently dropped on the next edit). */
+export function withNone(
+  opts: Array<[string, string?]>,
+  current: string | number | undefined,
+): Array<[string, string?]> {
+  const cur = current === undefined ? undefined : String(current);
+  const all = [[NONE, NONE] as [string, string?], ...opts];
+  if (cur !== undefined && !opts.some(([v]) => v === cur)) all.push([cur, cur]);
+  return all;
+}
+
 /** A collapsible inspector section: uppercase label + chevron, then a body. */
 export function Section({
   title,

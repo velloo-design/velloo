@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowRight, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { mutate } from "../../api.ts";
+import { useDebouncedCommit } from "../../hooks/useDebouncedCommit.ts";
 import { pathFromString } from "../../path.ts";
 import {
   type ParsedSx,
@@ -18,10 +19,12 @@ import {
   ColorField,
   FieldRow,
   MiniSelect,
+  NONE,
   NumberField,
   Section,
   Segmented,
   type Side,
+  withNone,
 } from "./controls.tsx";
 
 interface Props {
@@ -72,18 +75,6 @@ const TEXT_ALIGN = [
   { value: "justify", label: "J" },
 ];
 
-const NONE = "—";
-
-function withNone(
-  opts: Array<[string, string?]>,
-  current: SxVal | undefined,
-): Array<[string, string?]> {
-  const cur = current === undefined ? undefined : String(current);
-  const all = [[NONE, NONE] as [string, string?], ...opts];
-  if (cur !== undefined && !opts.some(([v]) => v === cur)) all.push([cur, cur]);
-  return all;
-}
-
 const str = (v: SxVal | undefined) => (v === undefined ? "" : String(v));
 function toVal(s: string): SxVal | undefined {
   const t = s.trim();
@@ -103,28 +94,20 @@ function spSet(s: string): SxVal | undefined {
 export function SxStyleEditor({ initialValue, prop, screenId, path, debounceMs }: Props) {
   const [parsed, setParsed] = useState<ParsedSx>(() => parseSx(initialValue));
   const [adding, setAdding] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
+  const push = useDebouncedCommit<ParsedSx>(debounceMs, (next) => {
+    const obj = serializeSx(next);
+    void mutate
+      .updateProps({
+        screenId,
+        path: pathFromString(path),
+        propPatch: { [prop]: Object.keys(obj).length ? obj : null },
+      })
+      .catch(() => undefined);
+  });
   const commit = (next: ParsedSx) => {
     setParsed(next);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      const obj = serializeSx(next);
-      void mutate
-        .updateProps({
-          screenId,
-          path: pathFromString(path),
-          propPatch: { [prop]: Object.keys(obj).length ? obj : null },
-        })
-        .catch(() => undefined);
-    }, debounceMs);
+    push(next);
   };
 
   const m = parsed.model;

@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowRight, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { mutate } from "../../api.ts";
+import { useDebouncedCommit } from "../../hooks/useDebouncedCommit.ts";
 import { pathFromString } from "../../path.ts";
 import {
   argToPx,
@@ -18,10 +19,12 @@ import {
   ColorField,
   FieldRow,
   MiniSelect,
+  NONE,
   NumberField,
   Section,
   Segmented,
   type Side,
+  withNone,
 } from "./controls.tsx";
 
 interface Props {
@@ -114,20 +117,6 @@ const SIZING: Array<[string, string?]> = [
   ["max"],
 ];
 
-const NONE = "—"; // an em-dash sentinel for "unset"
-
-/** Build a MiniSelect option list with a leading "unset" entry, and inject the
- *  current value if it isn't already one of the presets (so arbitrary values
- *  aren't silently dropped on the next edit). */
-function withNone(
-  opts: Array<[string, string?]>,
-  current: string | undefined,
-): Array<[string, string?]> {
-  const all = [[NONE, NONE] as [string, string?], ...opts];
-  if (current !== undefined && !opts.some(([v]) => v === current)) all.push([current, current]);
-  return all;
-}
-
 function sidesDisplay(sides: BoxSides): Record<Side, string> {
   const one = (a?: string) => {
     const px = argToPx(a);
@@ -153,23 +142,15 @@ function sideToArg(value: string): string | undefined {
 export function TailwindStyleEditor({ initialValue, screenId, path, debounceMs }: Props) {
   const [parsed, setParsed] = useState<ParsedClasses>(() => parseClasses(initialValue));
   const [adding, setAdding] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
+  const push = useDebouncedCommit<ParsedClasses>(debounceMs, (next) => {
+    void mutate
+      .applyClasses({ screenId, path: pathFromString(path), classes: serializeClasses(next) })
+      .catch(() => undefined);
+  });
   const commit = (next: ParsedClasses) => {
     setParsed(next);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      void mutate
-        .applyClasses({ screenId, path: pathFromString(path), classes: serializeClasses(next) })
-        .catch(() => undefined);
-    }, debounceMs);
+    push(next);
   };
 
   const m = parsed.model;

@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowLeftRight, ArrowRight, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { mutate } from "../../api.ts";
+import { useDebouncedCommit } from "../../hooks/useDebouncedCommit.ts";
 import { pathFromString } from "../../path.ts";
 import {
   type CssVal,
@@ -15,10 +16,12 @@ import {
   ColorField,
   FieldRow,
   MiniSelect,
+  NONE,
   NumberField,
   Section,
   Segmented,
   type Side,
+  withNone,
 } from "./controls.tsx";
 
 interface Props {
@@ -61,18 +64,8 @@ const TEXT_ALIGN = [
   { value: "justify", label: "J" },
 ];
 const UNITS = ["px", "rem", "em", "%", "vh", "vw", "—"];
-const NONE = "—";
 
 const str = (v: CssVal | undefined) => (v === undefined ? "" : String(v));
-function withNone(
-  opts: Array<[string, string?]>,
-  current: CssVal | undefined,
-): Array<[string, string?]> {
-  const cur = current === undefined ? undefined : String(current);
-  const all = [[NONE, NONE] as [string, string?], ...opts];
-  if (cur !== undefined && !opts.some(([v]) => v === cur)) all.push([cur, cur]);
-  return all;
-}
 
 /** Split a CSS value into a numeric part + unit for the unit-aware field. */
 function splitUnit(v: CssVal | undefined): { num: string; unit: string } {
@@ -107,28 +100,20 @@ function parseDecl(raw: string): unknown {
 export function StyleObjectEditor({ initialValue, prop, screenId, path, debounceMs }: Props) {
   const [parsed, setParsed] = useState<ParsedStyle>(() => parseStyle(initialValue));
   const [adding, setAdding] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
+  const push = useDebouncedCommit<ParsedStyle>(debounceMs, (next) => {
+    const obj = serializeStyle(next);
+    void mutate
+      .updateProps({
+        screenId,
+        path: pathFromString(path),
+        propPatch: { [prop]: Object.keys(obj).length ? obj : null },
+      })
+      .catch(() => undefined);
+  });
   const commit = (next: ParsedStyle) => {
     setParsed(next);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      const obj = serializeStyle(next);
-      void mutate
-        .updateProps({
-          screenId,
-          path: pathFromString(path),
-          propPatch: { [prop]: Object.keys(obj).length ? obj : null },
-        })
-        .catch(() => undefined);
-    }, debounceMs);
+    push(next);
   };
 
   const m = parsed.model;

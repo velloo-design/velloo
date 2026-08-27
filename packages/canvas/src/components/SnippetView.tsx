@@ -1,19 +1,17 @@
-import type { Screen, Snippet, SnippetParam, ViewportPreset } from "@velloo/schema";
-import { ArrowLeft, Pencil, Save, Sparkles, X } from "lucide-react";
+import type { Screen, Snippet, ViewportPreset } from "@velloo/schema";
+import { ArrowLeft, Pencil, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { postMutate } from "../api/http.ts";
 import { fetchSnippet, type SnippetMeta } from "../api.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
-import { pushToast, toastError } from "../toast.ts";
-import { IconPicker } from "./IconPicker.tsx";
+import { toastError } from "../toast.ts";
 import { Inspector } from "./Inspector.tsx";
+import { SnippetParamsPanel } from "./SnippetParamsPanel.tsx";
 import { Tree } from "./Tree.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
-import { Checkbox } from "./ui/checkbox.tsx";
 import { Input } from "./ui/input.tsx";
-import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
 interface Props {
@@ -53,20 +51,15 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const selection = useCanvas((s) => s.selection);
   const nodeState = useCanvas((s) => s.nodeState);
   const setScreen = useCanvas((s) => s.setSyntheticScreen);
-  const components = useCanvas((s) => s.components);
   const loadComponents = useCanvas((s) => s.loadComponents);
 
   const virtualScreenId = `snippet:${snippetId}`;
   const syntheticScreen: Screen | null = useCanvas((s) => s.screens[virtualScreenId] ?? null);
 
+  // The params panel needs the manifest (icon names); load it up front.
   useEffect(() => {
     void loadComponents();
   }, [loadComponents]);
-
-  const iconNames: string[] =
-    (components?.find((c) => c.id === "Icon")?.props.find((p) => p.name === "name")?.enumValues as
-      | string[]
-      | undefined) ?? [];
 
   const [snippet, setSnippet] = useState<Snippet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -236,10 +229,9 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
           </Badge>
         </div>
         <SnippetHeader snippet={displaySnippet} onPatchName={(name) => onPatchMeta({ name })} />
-        <ParamsPanel
+        <SnippetParamsPanel
           snippet={displaySnippet}
           onPatchParams={(params) => onPatchMeta({ params })}
-          iconNames={iconNames}
         />
         <div className="border-t flex-1 overflow-y-auto">
           <SectionLabel>Body</SectionLabel>
@@ -402,423 +394,5 @@ function PreviewToolbar({ snippet, presets, viewport, setViewport }: PreviewTool
         </SelectContent>
       </Select>
     </header>
-  );
-}
-
-interface ParamsPanelProps {
-  snippet: Snippet;
-  onPatchParams: (params: SnippetParam[]) => void;
-  iconNames: string[];
-}
-
-function ParamsPanel({ snippet, onPatchParams, iconNames }: ParamsPanelProps) {
-  const [editingParam, setEditingParam] = useState<number | null>(null);
-
-  const updateParam = (index: number, next: SnippetParam) => {
-    const list = [...snippet.params];
-    list[index] = next;
-    onPatchParams(list);
-  };
-
-  const remove = (index: number) => {
-    if (
-      !confirm(
-        `Remove parameter "${snippet.params[index]?.name}"? Existing instances will lose this arg.`,
-      )
-    )
-      return;
-    onPatchParams(snippet.params.filter((_, i) => i !== index));
-  };
-
-  const addParam = () => {
-    const existing = new Set(snippet.params.map((p) => p.name));
-    let name = "param";
-    let i = 1;
-    while (existing.has(name)) name = `param${++i}`;
-    onPatchParams([...snippet.params, { name, type: "string" }]);
-    pushToast({ kind: "success", message: `Added param "${name}"` });
-  };
-
-  return (
-    <section className="border-b flex flex-col gap-1 px-3 pt-3 pb-2">
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-          Params
-        </div>
-        <Button variant="ghost" size="xs" onClick={addParam} className="h-6 text-xs px-1.5">
-          + add
-        </Button>
-      </div>
-      {snippet.params.length === 0 ? (
-        <div className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-          No params yet. Add one above, then reference it in the body as{" "}
-          <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-muted">
-            {"{$param:name}"}
-          </code>
-          .
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {snippet.params.map((p, i) => (
-            <li key={p.name} className="rounded-md border bg-background">
-              {editingParam === i ? (
-                <ParamEditor
-                  initial={p}
-                  iconNames={iconNames}
-                  onSave={(next) => {
-                    setEditingParam(null);
-                    updateParam(i, next);
-                  }}
-                  onCancel={() => setEditingParam(null)}
-                />
-              ) : (
-                <ParamRow param={p} onEdit={() => setEditingParam(i)} onRemove={() => remove(i)} />
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function ParamRow({
-  param,
-  onEdit,
-  onRemove,
-}: {
-  param: SnippetParam;
-  onEdit: () => void;
-  onRemove: () => void;
-}) {
-  const summary = formatDefaultSummary(param);
-  return (
-    <div className="flex items-center gap-1.5 px-2 py-1">
-      <div className="flex-1 min-w-0 flex items-center gap-1.5">
-        <span className="font-mono text-[11px] truncate">{param.name}</span>
-        <Badge variant="outline" className="text-[9px] font-mono shrink-0">
-          {param.type}
-        </Badge>
-        {summary ? (
-          <span className="text-[10px] text-muted-foreground truncate">{summary}</span>
-        ) : (
-          <span className="text-[10px] text-amber-600 dark:text-amber-400">required</span>
-        )}
-      </div>
-      <Button variant="ghost" size="xs" onClick={onEdit} className="h-5 px-1">
-        <Pencil size={10} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="xs"
-        onClick={onRemove}
-        className="h-5 px-1 text-destructive hover:bg-destructive/10"
-      >
-        <X size={10} />
-      </Button>
-    </div>
-  );
-}
-
-function formatDefaultSummary(param: SnippetParam): string | null {
-  if (param.default === undefined) return null;
-  if (typeof param.default === "string") return `= "${param.default}"`;
-  if (typeof param.default === "number" || typeof param.default === "boolean")
-    return `= ${param.default}`;
-  return "= …";
-}
-
-function ParamEditor({
-  initial,
-  iconNames,
-  onSave,
-  onCancel,
-}: {
-  initial: SnippetParam;
-  iconNames: string[];
-  onSave: (next: SnippetParam) => void;
-  onCancel: () => void;
-}) {
-  const [draft, setDraft] = useState<SnippetParam>(initial);
-  const required = draft.default === undefined;
-  const types: SnippetParam["type"][] = [
-    "string",
-    "number",
-    "boolean",
-    "node",
-    "icon",
-    "color",
-    "enum",
-  ];
-
-  const setRequired = (req: boolean) => {
-    if (req) {
-      const { default: _omit, ...rest } = draft;
-      void _omit;
-      setDraft(rest);
-    } else {
-      // Re-add a default appropriate for the type.
-      setDraft({ ...draft, default: defaultValueForType(draft.type, draft.enum) });
-    }
-  };
-
-  return (
-    <div className="p-2 flex flex-col gap-2">
-      <div className="grid grid-cols-2 gap-1.5">
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px]">name</Label>
-          <Input
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            className="h-7 font-mono text-xs"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px]">type</Label>
-          <Select
-            value={draft.type}
-            onValueChange={(v) => {
-              const nextType = v as SnippetParam["type"];
-              // Reset default to a sensible value for the new type so
-              // the user doesn't end up with e.g. number default after
-              // switching to "icon".
-              const next: SnippetParam = { ...draft, type: nextType };
-              if (next.default !== undefined) {
-                next.default = defaultValueForType(nextType, next.enum);
-              }
-              setDraft(next);
-            }}
-          >
-            <SelectTrigger size="sm" className="text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {types.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {draft.type === "enum" ? (
-        <EnumValuesField
-          value={draft.enum ?? []}
-          onChange={(enumValues) => setDraft({ ...draft, enum: enumValues })}
-        />
-      ) : null}
-
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="param-required"
-          checked={required}
-          onCheckedChange={(c) => setRequired(Boolean(c))}
-        />
-        <Label htmlFor="param-required" className="text-[11px]">
-          Required (no default — instances must supply a value)
-        </Label>
-      </div>
-
-      {!required ? (
-        <DefaultField
-          param={draft}
-          iconNames={iconNames}
-          onChange={(value) => setDraft({ ...draft, default: value })}
-        />
-      ) : null}
-
-      <div className="flex gap-1.5 justify-end">
-        <Button variant="ghost" size="xs" onClick={onCancel} className="h-6 text-xs">
-          Cancel
-        </Button>
-        <Button size="xs" onClick={() => onSave(draft)} className="h-6 text-xs">
-          <Save size={11} /> Save
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function defaultValueForType(type: SnippetParam["type"], enumValues?: string[]): unknown {
-  switch (type) {
-    case "string":
-      return "";
-    case "number":
-      return 0;
-    case "boolean":
-      return false;
-    case "icon":
-      return "Sparkles";
-    case "color":
-      return "#7c3aed";
-    case "enum":
-      return enumValues?.[0] ?? "";
-    case "node":
-      return { $ref: "Text", props: { children: "node default" } };
-    default:
-      return null;
-  }
-}
-
-function DefaultField({
-  param,
-  iconNames,
-  onChange,
-}: {
-  param: SnippetParam;
-  iconNames: string[];
-  onChange: (value: unknown) => void;
-}) {
-  const id = `param-default-${param.name}`;
-  switch (param.type) {
-    case "string":
-      return (
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={id} className="text-[10px]">
-            default
-          </Label>
-          <Input
-            id={id}
-            value={typeof param.default === "string" ? param.default : ""}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="default text"
-            className="h-7 text-xs"
-          />
-        </div>
-      );
-    case "number":
-      return (
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={id} className="text-[10px]">
-            default
-          </Label>
-          <Input
-            id={id}
-            type="number"
-            value={typeof param.default === "number" ? param.default : 0}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              onChange(Number.isFinite(n) ? n : 0);
-            }}
-            className="h-7 text-xs"
-          />
-        </div>
-      );
-    case "boolean":
-      return (
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id={id}
-            checked={Boolean(param.default)}
-            onCheckedChange={(c) => onChange(Boolean(c))}
-          />
-          <Label htmlFor={id} className="text-[11px]">
-            default {param.default ? "true" : "false"}
-          </Label>
-        </div>
-      );
-    case "icon": {
-      const current = typeof param.default === "string" ? param.default : "Sparkles";
-      return (
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px]">default icon</Label>
-          <IconPicker value={current} options={iconNames} onChange={(name) => onChange(name)} />
-        </div>
-      );
-    }
-    case "color": {
-      const current = typeof param.default === "string" ? param.default : "#7c3aed";
-      return (
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px]">default color</Label>
-          <div className="flex gap-1.5">
-            <input
-              type="color"
-              aria-label="default color"
-              value={current.startsWith("#") ? current : "#7c3aed"}
-              onChange={(e) => onChange(e.target.value)}
-              className="h-7 w-9 rounded border border-input bg-transparent"
-            />
-            <Input
-              value={current}
-              onChange={(e) => onChange(e.target.value)}
-              className="flex-1 h-7 font-mono text-xs"
-            />
-          </div>
-        </div>
-      );
-    }
-    case "enum": {
-      const current = typeof param.default === "string" ? param.default : "";
-      return (
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px]">default</Label>
-          <Select value={current || undefined} onValueChange={(v) => onChange(v)}>
-            <SelectTrigger size="sm" className="text-xs">
-              <SelectValue placeholder="(pick one)" />
-            </SelectTrigger>
-            <SelectContent>
-              {(param.enum ?? []).map((v) => (
-                <SelectItem key={v} value={v}>
-                  {v}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      );
-    }
-    case "node":
-      return (
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px]">default (JSON node)</Label>
-          <Input
-            value={JSON.stringify(param.default ?? null)}
-            onChange={(e) => {
-              try {
-                onChange(JSON.parse(e.target.value));
-              } catch {
-                // Keep the previous default if the JSON is malformed —
-                // the user is mid-edit. We don't show a control here
-                // because the input is uncontrolled-by-content.
-              }
-            }}
-            className="h-7 font-mono text-[10px]"
-            placeholder='{"$ref":"Text","props":{"children":"..."}}'
-          />
-        </div>
-      );
-    default:
-      return null;
-  }
-}
-
-function EnumValuesField({
-  value,
-  onChange,
-}: {
-  value: string[];
-  onChange: (next: string[]) => void;
-}) {
-  const [draft, setDraft] = useState(value.join(", "));
-  return (
-    <div className="flex flex-col gap-1">
-      <Label className="text-[10px]">enum (comma-separated)</Label>
-      <Input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          const parsed = draft
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-          onChange(parsed);
-        }}
-        className="h-7 font-mono text-xs"
-        placeholder="solid, ghost, outline"
-      />
-    </div>
   );
 }
