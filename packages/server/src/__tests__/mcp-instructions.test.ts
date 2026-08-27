@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createProvider as createAntdProvider } from "@velloo/provider-antd";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { buildInstructions } from "../mcp/server.ts";
@@ -44,6 +45,16 @@ describe("buildInstructions", () => {
     expect(mui).toContain("does NOT apply here");
     // The MUI frame leads (before the shadcn-tuned base parts).
     expect(mui.indexOf("Material UI")).toBeLessThan(mui.indexOf("pinned shadcn snapshot"));
+  });
+
+  test("an antd (style) folder is framed for Ant Design + inline styles, not shadcn/Tailwind", () => {
+    const antd = buildInstructions(false, undefined, false, introOf(createAntdProvider(), "style"));
+    expect(antd).toContain("Ant Design");
+    expect(antd).toContain("Style with the inline `style` object");
+    // It tells the agent the Tailwind guidance below doesn't apply here.
+    expect(antd).toContain("does NOT apply here");
+    // The antd frame leads (before the shadcn-tuned base parts).
+    expect(antd.indexOf("Ant Design")).toBeLessThan(antd.indexOf("pinned shadcn snapshot"));
   });
 
   test("a shadcn (tailwind) folder keeps the default Tailwind-shaped framing", () => {

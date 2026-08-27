@@ -18,6 +18,7 @@
     "@clack/prompts": "1.4.0",
     "@velloo/codegen": "workspace:*",
     "@velloo/provider": "workspace:*",
+    "@velloo/provider-antd": "workspace:*",
     "@velloo/provider-mui": "workspace:*",
     "@velloo/provider-none": "workspace:*",
     "@velloo/renderer": "workspace:*",

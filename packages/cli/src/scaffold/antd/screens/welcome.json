@@ -1,0 +1,64 @@
+{
+  "id": "welcome",
+  "name": "Welcome",
+  "tree": {
+    "$ref": "Flex",
+    "props": {
+      "vertical": true,
+      "gap": "large",
+      "style": { "maxWidth": 960, "margin": "0 auto", "padding": "64px 24px" }
+    },
+    "children": [
+      {
+        "$ref": "TypographyTitle",
+        "props": { "level": 1, "children": "Designs that ship" }
+      },
+      {
+        "$ref": "TypographyParagraph",
+        "props": {
+          "type": "secondary",
+          "style": { "fontSize": 18 },
+          "children": "This is the Ant Design starter — real antd components, inline style objects, a cssinjs-rendered canvas."
+        }
+      },
+      {
+        "$ref": "Flex",
+        "props": { "gap": "middle" },
+        "children": [
+          {
+            "$ref": "Button",
+            "props": { "type": "primary", "size": "large", "children": "Get started" }
+          },
+          { "$ref": "Button", "props": { "size": "large", "children": "View docs" } }
+        ]
+      },
+      {
+        "$ref": "Card",
+        "props": { "title": "What's in this provider", "style": { "marginTop": 16 } },
+        "children": [
+          {
+            "$ref": "Flex",
+            "props": { "vertical": true, "gap": "middle" },
+            "children": [
+              {
+                "$ref": "TypographyParagraph",
+                "props": {
+                  "type": "secondary",
+                  "children": "Flex, Space, Row/Col, Card, Button, Input, Select, TypographyTitle/Text/Paragraph, Tag, Table, Tabs, Steps, Menu — the antd component set, styled with inline style objects."
+                }
+              },
+              { "$ref": "Divider", "props": {} },
+              {
+                "$ref": "TypographyParagraph",
+                "props": {
+                  "type": "secondary",
+                  "children": "Ask your AI agent: “add a pricing section with three plans” and watch the canvas update."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

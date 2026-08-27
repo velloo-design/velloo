@@ -44,6 +44,21 @@ describe("detectHost uiLibrary", () => {
     expect(detectHost(tmp).uiLibrary).toBe("mui");
   });
 
+  test("an antd dependency ⇒ antd (a concrete install, like MUI)", async () => {
+    await writePkg({ antd: "^5.20.0", react: "19.2.6" });
+    const d = detectHost(tmp);
+    expect(d.uiLibrary).toBe("antd");
+    expect(d.unsupportedUi).toBeUndefined();
+  });
+
+  test("antd (a real dependency) wins over a stray components.json; MUI wins over antd", async () => {
+    await writePkg({ antd: "^5.20.0", react: "19.2.6" });
+    await writeFile(join(tmp, "components.json"), JSON.stringify({ style: "default" }), "utf8");
+    expect(detectHost(tmp).uiLibrary).toBe("antd");
+    await writePkg({ antd: "^5.20.0", "@mui/material": "^6", react: "19.2.6" });
+    expect(detectHost(tmp).uiLibrary).toBe("mui");
+  });
+
   test("neither ⇒ undefined (caller keeps the default library)", async () => {
     await writePkg({ react: "19.2.6" });
     const d = detectHost(tmp);

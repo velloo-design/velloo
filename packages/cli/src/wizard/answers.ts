@@ -7,7 +7,7 @@
 import type { ProductSurface } from "../scaffold/sample-page.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
-export type LibraryId = "shadcn-upstream" | "none" | "mui";
+export type LibraryId = "shadcn-upstream" | "none" | "mui" | "antd";
 
 /**
  * Where the library's component sources live.
@@ -35,13 +35,14 @@ export interface DetectedHost {
   globalsCssPath?: string;
   /**
    * The host's UI framework, inferred from dependencies — drives which adapter
-   * a scanned folder defaults to (the "existing project" flow). `mui` ⇒ MUI is
-   * installed; `shadcn` ⇒ a shadcn `components.json` is present; undefined ⇒
-   * neither, so the caller keeps the explicit/default library.
+   * a scanned folder defaults to (the "existing project" flow). `mui` / `antd`
+   * ⇒ that framework is installed; `shadcn` ⇒ a shadcn `components.json` is
+   * present; undefined ⇒ none of them, so the caller keeps the
+   * explicit/default library.
    */
-  uiLibrary?: "shadcn" | "mui";
+  uiLibrary?: "shadcn" | "mui" | "antd";
   /**
-   * A UI framework velloo doesn't adapt yet (Chakra, Mantine, Ant Design, …),
+   * A UI framework velloo doesn't adapt yet (Chakra, Mantine, NextUI, …),
    * by display name. Set only when no supported framework was found. The scan
    * flow falls back to the no-framework adapter (div-backed primitives) — the
    * agent approximates the app's components and preserves their real imports

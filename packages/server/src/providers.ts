@@ -7,6 +7,7 @@ import {
   styleChannelOf,
   UnknownProviderError,
 } from "@velloo/provider";
+import { createProvider as createAntdProvider } from "@velloo/provider-antd";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoLibProvider } from "@velloo/provider-none";
 import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
@@ -32,6 +33,9 @@ export function createServerProviderLoader(folderRoot?: string, hostApp?: HostAp
     // MUI is a first-class FrameworkAdapter: real MUI components SSR'd
     // in-process, sx styling, emotion render pass.
     mui: () => createMuiProvider(),
+    // Ant Design v5, same stance: real antd components SSR'd in-process,
+    // inline-`style` channel, cssinjs render pass.
+    antd: () => createAntdProvider(),
     // shadcn-upstream — components fetched from the official
     // registry, deposited at the user's chosen location, and the canvas
     // renders against the cached manifest. `componentsPath` resolves to

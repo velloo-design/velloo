@@ -143,6 +143,49 @@ function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
   };
 }
 
+/**
+ * antd placeholder tree — the antd registry has no `Heading`/`Text`/`Badge`
+ * (it's `TypographyTitle`/`TypographyText`/`Tag`), so the shadcn/no-lib
+ * placeholder above won't resolve on an antd folder. Uses only Flex /
+ * Typography* / Tag / Card + inline `style`, all in the antd registry.
+ */
+function buildAntdPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+  return {
+    $ref: "Flex",
+    props: {
+      vertical: true,
+      align: "center",
+      gap: "large",
+      style: { padding: "64px 24px", textAlign: "center" },
+    },
+    children: [
+      { $ref: "Tag", props: { children: route.routePath } },
+      { $ref: "TypographyTitle", props: { level: 2, children: route.name } },
+      {
+        $ref: "TypographyParagraph",
+        props: {
+          type: "secondary",
+          style: { maxWidth: 520 },
+          children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+        },
+      },
+      {
+        $ref: "Card",
+        props: {
+          title: "Detected from",
+          style: { width: "100%", maxWidth: 640, textAlign: "left", marginTop: 16 },
+        },
+        children: [
+          {
+            $ref: "TypographyText",
+            props: { code: true, children: route.sourceFile },
+          },
+        ],
+      },
+    ],
+  };
+}
+
 interface BuildScreensOpts {
   routes: ScannedRoute[];
   /**
@@ -150,15 +193,24 @@ interface BuildScreensOpts {
    * When false, the placeholder tree uses a Text node instead of a Badge.
    */
   hasBadge: boolean;
-  /** MUI folder ⇒ emit a MUI-native placeholder (Typography/sx) instead. */
-  mui?: boolean;
+  /**
+   * Framework-native folder ⇒ emit that framework's placeholder
+   * (MUI: Typography + sx; antd: TypographyTitle/Tag + inline style) instead
+   * of the shadcn/no-lib one. Absent ⇒ the shared Box/Heading/Text placeholder.
+   */
+  tree?: "mui" | "antd";
 }
 
 export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
+  const buildTree = (route: ScannedRoute): Screen["tree"] => {
+    if (opts.tree === "mui") return buildMuiPlaceholderTree(route);
+    if (opts.tree === "antd") return buildAntdPlaceholderTree(route);
+    return buildPlaceholderTree(route, opts.hasBadge);
+  };
   return opts.routes.map((route) => ({
     id: route.id,
     name: route.name,
-    tree: opts.mui ? buildMuiPlaceholderTree(route) : buildPlaceholderTree(route, opts.hasBadge),
+    tree: buildTree(route),
   }));
 }
 

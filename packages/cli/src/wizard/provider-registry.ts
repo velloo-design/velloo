@@ -1,8 +1,10 @@
 import { resolve } from "node:path";
+import { ANTD_VERSION } from "@velloo/provider-antd";
 import { MUI_VERSION } from "@velloo/provider-mui";
 import { noLibVersion } from "@velloo/provider-none";
 import type { Config, Library, Theme } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
+import { buildAntdBoards, buildAntdScreens, buildAntdSnippets } from "../scaffold/antd-sample.ts";
 import { buildMuiBoards, buildMuiScreens, buildMuiSnippets } from "../scaffold/mui-sample.ts";
 import {
   buildNoLibBoards,
@@ -67,7 +69,7 @@ export interface WizardProviderEntry {
    */
   hasProductSurfaces: boolean;
   /** Placeholder-tree options for screens scaffolded from a scan. */
-  scanScreenOpts: { hasBadge: boolean; mui: boolean };
+  scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" };
   /** Resolve the wizard's answers into this provider's library declaration. */
   planInstall(answers: WizardAnswers): InstallPlan;
   /**
@@ -114,7 +116,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     asksThemePreset: true,
     asksStack: true,
     hasProductSurfaces: true,
-    scanScreenOpts: { hasBadge: true, mui: false },
+    scanScreenOpts: { hasBadge: true },
     planInstall(answers) {
       const library: Library = {
         id: "shadcn-upstream",
@@ -163,7 +165,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     asksThemePreset: false,
     asksStack: false,
     hasProductSurfaces: false,
-    scanScreenOpts: { hasBadge: false, mui: false },
+    scanScreenOpts: { hasBadge: false },
     planInstall: () => ({
       library: { id: "none", version: noLibVersion, source: "binary", componentsPath: "binary" },
       summary: {
@@ -202,13 +204,13 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     // Not offered in the wizard select — reachable via --library=mui and
     // scan detection of a MUI host only.
     interactive: false,
-    order: 2,
+    order: 3,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
     asksThemePreset: false,
     asksStack: false,
     hasProductSurfaces: false,
-    scanScreenOpts: { hasBadge: true, mui: true },
+    scanScreenOpts: { hasBadge: true, tree: "mui" },
     // Framework-native: MUI is a first-class adapter bundled with velloo
     // (@mui/material + emotion are velloo deps; components SSR in-process).
     planInstall: () => ({
@@ -245,6 +247,57 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       "Once installed, velloo can also client-render the canvas against your",
       "app's exact MUI version. Style nodes with the `sx` editor (canvas) or",
       "`set_style` (agent).",
+      "",
+    ],
+  },
+  antd: {
+    label: "Ant Design",
+    hint: "Real antd v5, inline style objects.",
+    interactive: true,
+    order: 2,
+    defaultSource: "binary",
+    asksComponentsSubfolder: false,
+    asksThemePreset: false,
+    asksStack: false,
+    hasProductSurfaces: false,
+    scanScreenOpts: { hasBadge: true, tree: "antd" },
+    // Framework-native like MUI: antd is a first-class adapter bundled with
+    // velloo (antd + @ant-design/cssinjs are velloo deps; components SSR
+    // in-process).
+    planInstall: () => ({
+      library: { id: "antd", version: ANTD_VERSION, source: "binary", componentsPath: "binary" },
+      summary: { name: `Ant Design v${ANTD_VERSION}`, location: "bundled with velloo" },
+    }),
+    // Pulse isn't ported to antd (its shadcn composition would need a full
+    // redesign) — a two-screen antd welcome sample (inline styles) instead.
+    buildSampleScaffold: (theme) => ({
+      theme,
+      screens: buildAntdScreens(),
+      boards: buildAntdBoards(),
+      snippets: buildAntdSnippets(),
+      annotations: [],
+      notes: [],
+    }),
+    // The style channel is intrinsic (inline `style`, like MUI's `sx`) — the
+    // CSS-framework axis doesn't apply, so no `config.styling` is written.
+    stylingFor: () => undefined,
+    scanMatch: (detected) => detected.uiLibrary === "antd",
+    scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
+    handoffComponentsLabel: "Ant Design",
+    readmeComponentsSection: () => [
+      "## Ant Design in your app",
+      "",
+      "The canvas renders **real Ant Design** components (bundled with velloo,",
+      "cssinjs-rendered) — no files were written to your app. When you implement",
+      "a screen, `emit_code` emits idiomatic antd (inline `style` objects +",
+      "`antd` imports) and `emit_theme` emits a ConfigProvider `ThemeConfig`",
+      "module. For that code to build, install the runtime dep in your app:",
+      "",
+      "```bash",
+      "npm install antd",
+      "```",
+      "",
+      "Style nodes with the inline-style editor (canvas) or `set_style` (agent).",
       "",
     ],
   },

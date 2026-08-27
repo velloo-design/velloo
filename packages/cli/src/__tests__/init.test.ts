@@ -243,6 +243,37 @@ describe("velloo init", () => {
     expect(readme).toContain("npm install @mui/material @emotion/react @emotion/styled");
   }, 30_000);
 
+  test("--library=antd scaffolds an antd folder with a two-screen inline-style sample", async () => {
+    const { exitCode } = await runInit(tmp, ["--library=antd"]);
+    expect(exitCode).toBe(0);
+    const design = designDir(tmp);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("antd");
+    expect(config.libraries.default?.source).toBe("binary");
+    // The style channel is intrinsic (inline style) — no CSS-framework axis.
+    expect(config.styling).toBeUndefined();
+
+    const screenFiles = await jsonFiles(join(design, "screens"));
+    expect(screenFiles).toContain("welcome.json");
+    expect(screenFiles).toContain("signup.json");
+    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+
+    // The sample uses antd component ids + inline style objects, not shadcn
+    // refs/classNames or sx.
+    const welcome = JSON.parse(await readFile(join(design, "screens/welcome.json"), "utf8"));
+    const json = JSON.stringify(welcome);
+    expect(json).toContain('"TypographyTitle"');
+    expect(json).toContain('"style"');
+    expect(json).not.toContain('"className"');
+    expect(json).not.toContain('"sx"');
+
+    // The README hands off the app-level antd install (for the emitted code).
+    const readme = await readFile(join(design, "README.md"), "utf8");
+    expect(readme).toContain("npm install antd");
+  }, 30_000);
+
   test("--library=none ships bare primitives with a two-screen sample", async () => {
     const { exitCode } = await runInit(tmp, ["--library=none"]);
     expect(exitCode).toBe(0);

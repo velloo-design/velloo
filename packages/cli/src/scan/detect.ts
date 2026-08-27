@@ -49,15 +49,17 @@ export function detectHost(appRoot: string): DetectedHost {
   const shadcnStyle =
     typeof componentsJson?.style === "string" ? (componentsJson.style as string) : undefined;
 
-  // UI framework inference for the "existing project" flow. MUI is the strong
-  // signal (a real npm dependency); shadcn is inferred from `components.json`.
-  // MUI wins if both somehow appear — a `@mui/material` install is concrete,
-  // a stray components.json is not.
+  // UI framework inference for the "existing project" flow. MUI and antd are
+  // the strong signals (real npm dependencies); shadcn is inferred from
+  // `components.json`. A concrete install wins over a stray components.json,
+  // and MUI wins over antd if both somehow appear.
   const uiLibrary: DetectedHost["uiLibrary"] = depRange(deps, "@mui/material")
     ? "mui"
-    : shadcn
-      ? "shadcn"
-      : undefined;
+    : depRange(deps, "antd")
+      ? "antd"
+      : shadcn
+        ? "shadcn"
+        : undefined;
 
   // A UI framework velloo doesn't adapt — only relevant when no supported one
   // was found, so the scan can fall back to the no-framework (div) adapter.
@@ -78,8 +80,6 @@ function detectUnsupportedUi(deps: Record<string, unknown>): string | undefined 
   const known: Array<[string, string]> = [
     ["@chakra-ui/react", "Chakra UI"],
     ["@mantine/core", "Mantine"],
-    ["antd", "Ant Design"],
-    ["@ant-design/web3", "Ant Design"],
     ["@nextui-org/react", "NextUI"],
     ["@heroui/react", "HeroUI"],
     ["react-bootstrap", "React Bootstrap"],

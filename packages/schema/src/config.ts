@@ -25,7 +25,7 @@ export const LibrarySchema = z.object({
    * Component provider id. The server's provider loader maps ids to
    * factories; `"shadcn-upstream"` is the default for new folders.
    */
-  id: z.enum(["shadcn-upstream", "none", "mui"]),
+  id: z.enum(["shadcn-upstream", "none", "mui", "antd"]),
   version: z.string().min(1),
   source: z.enum(["binary", "cache", "in-repo"]),
   /** Where the components live, relative to the design folder root. */

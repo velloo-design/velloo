@@ -1,0 +1,26 @@
+{
+  "name": "@velloo/provider-antd",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "Ant Design v5 provider for Velloo — a first-class FrameworkAdapter (inline style channel, cssinjs SSR, antd ConfigProvider theme).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ant-design/cssinjs": "1.24.0",
+    "@velloo/helpers": "workspace:*",
+    "@velloo/provider": "workspace:*",
+    "@velloo/schema": "workspace:*",
+    "antd": "5.29.3",
+    "culori": "4.0.2",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/culori": "4.0.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3"
+  }
+}
