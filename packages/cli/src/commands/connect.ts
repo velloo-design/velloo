@@ -3,12 +3,12 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import {
   AGENT_IDS,
+  askAgentWiring,
   connect,
   DEFAULT_MCP_URL,
   MANUAL_AGENT_ID,
   manualSetupText,
   PROJECT_AGENT_IDS,
-  pickAgents,
 } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
@@ -52,8 +52,8 @@ export default defineCommand({
     const folder = await resolveDesignFolder(args.folder, "connect");
     const interactive = Boolean(process.stdin.isTTY);
 
-    // Explicit --agent wins; otherwise ask interactively (init's checklist),
-    // falling back to the project defaults when there's no TTY.
+    // Explicit --agent wins; otherwise ask interactively (init's wiring
+    // question), falling back to the project defaults when there's no TTY.
     let agents: string[];
     let manual = false;
     if (args.agent) {
@@ -62,14 +62,14 @@ export default defineCommand({
         .map((s) => s.trim())
         .filter(Boolean);
     } else if (interactive) {
-      const picked = await pickAgents();
-      if (picked === null) fail("connect", "cancelled.");
-      if (picked.length === 0) {
+      const wiring = await askAgentWiring();
+      if (wiring === null) fail("connect", "cancelled.");
+      if (wiring.agents.length === 0 && !wiring.manual) {
         console.log(pc.dim("No agents selected — nothing wired."));
         return;
       }
-      manual = picked.includes(MANUAL_AGENT_ID);
-      agents = picked.filter((id) => id !== MANUAL_AGENT_ID);
+      manual = wiring.manual;
+      agents = wiring.agents;
     } else {
       agents = PROJECT_AGENT_IDS;
     }

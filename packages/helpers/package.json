@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Framework-neutral velloo helper components (Box, Heading, Text, Icon, Image, SVG, Layer, Divider, Gradient, Placeholder) shared by every provider",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./paths": "./src/paths.ts"
   },
   "dependencies": {
     "@velloo/provider": "workspace:*",

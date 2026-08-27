@@ -1,0 +1,77 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+/**
+ * Errors that escape a command's run() must reach the user as one clean
+ * `velloo <cmd>: <reason>` line — never Bun's uncaught dump (source excerpt
+ * + call stack), which is what citty's fallback produces. The registry's
+ * guard (commands/registry.ts) owns this contract.
+ */
+
+const cliPath = resolve(import.meta.dir, "../cli.ts");
+
+let tmp: string;
+
+beforeEach(() => {
+  tmp = join(tmpdir(), `velloo-cli-err-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+});
+
+afterEach(async () => {
+  await rm(tmp, { recursive: true, force: true });
+});
+
+/** A folder that parses as design-folder schema v1 (no schemaVersion field). */
+async function writeV1Folder(config = "{}"): Promise<string> {
+  const folder = join(tmp, "velloo");
+  await mkdir(join(folder, ".design"), { recursive: true });
+  await mkdir(join(folder, "theme"), { recursive: true });
+  await writeFile(join(folder, ".design", "config.json"), config);
+  await writeFile(join(folder, "theme", "default.json"), "{}");
+  return folder;
+}
+
+async function runPublish(folder: string, env: Record<string, string> = {}) {
+  const proc = Bun.spawn(["bun", cliPath, "publish", folder], {
+    cwd: tmp,
+    stdout: "pipe",
+    stderr: "pipe",
+    // A token so publish reaches the folder load instead of failing at login.
+    env: { ...process.env, HOME: join(tmp, "home"), VELLOO_CLOUD_TOKEN: "test-token", ...env },
+  });
+  const exitCode = await proc.exited;
+  const stderr = await new Response(proc.stderr).text();
+  return { exitCode, stderr };
+}
+
+describe("cli error presentation", () => {
+  test("a crafted error (schema-version gate) prints one clean line, no stack", async () => {
+    const folder = await writeV1Folder();
+    const { exitCode, stderr } = await runPublish(folder);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("velloo publish:");
+    expect(stderr).toContain("Run `velloo upgrade` to migrate it.");
+    // No Bun uncaught dump: no stack frames, no source excerpt, no debug hint.
+    expect(stderr).not.toMatch(/at \w+ \(/);
+    expect(stderr).not.toContain("throw new Error");
+    expect(stderr).not.toContain("VELLOO_DEBUG");
+  }, 30_000);
+
+  test("an unexpected error prints the message plus the VELLOO_DEBUG hint", async () => {
+    const folder = await writeV1Folder("{ not json");
+    const { exitCode, stderr } = await runPublish(folder);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("velloo publish:");
+    expect(stderr).toContain("VELLOO_DEBUG=1");
+    expect(stderr).not.toMatch(/at \w+ \(/);
+  }, 30_000);
+
+  test("VELLOO_DEBUG=1 restores the full error for maintainers", async () => {
+    const folder = await writeV1Folder();
+    const { exitCode, stderr } = await runPublish(folder, { VELLOO_DEBUG: "1" });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("schema version 1");
+    expect(stderr).toMatch(/at /);
+  }, 30_000);
+});

@@ -34,7 +34,7 @@ describe("buildHandoffPrompt", () => {
       [board([])],
     );
     expect(prompt).toContain(SCREENS_PLACEHOLDER);
-    expect(prompt).toContain("These 2 screens");
+    expect(prompt).toContain("These screens are already scaffolded");
     expect(prompt).not.toContain("- Home");
   });
 

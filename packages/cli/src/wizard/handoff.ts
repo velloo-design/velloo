@@ -53,7 +53,7 @@ export function buildHandoffPrompt(
 
   if (screens.length > 0) {
     lines.push(
-      `These ${screens.length} screens are already scaffolded from the app's routes — design these, and only these, with the project's ${libraryLabel(answers.library)} components:`,
+      `These screens are already scaffolded from the app's routes — design these, and only these, with the project's ${libraryLabel(answers.library)} components:`,
       SCREENS_PLACEHOLDER,
     );
     if (answers.agentPicksFirst) {

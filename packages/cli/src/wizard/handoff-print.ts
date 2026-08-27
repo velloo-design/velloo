@@ -150,7 +150,7 @@ export async function printAgentHandoff(
     console.log("");
     console.log(
       pc.dim(
-        `    ${SCREENS_PLACEHOLDER} is replaced with your ${screens.length} selected screens when the prompt is sent (an agent can also discover them with list_screens).`,
+        `    ${SCREENS_PLACEHOLDER} is replaced with your selected screens when the prompt is sent (an agent can also discover them with list_screens).`,
       ),
     );
   }
@@ -245,7 +245,8 @@ export async function printAgentHandoff(
   // Watching the agent design on the board is the best first-run demo — offer
   // it, but warn that the approval prompt is about to land in THIS terminal.
   const openCanvas = await confirm({
-    message: `Open the board in your browser to watch? (${launcher.label} will still ask for MCP approval here first)`,
+    message:
+      "Open the board in your browser to watch? (your agent runs here in this terminal and may ask for MCP approval first)",
     initialValue: true,
   });
   if (!isCancel(openCanvas) && openCanvas) await openUrl(canvasUrl);

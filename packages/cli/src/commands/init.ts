@@ -17,16 +17,12 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import { completionsInstalled, detectShell, installCompletions } from "../completions/install.ts";
 import {
-  AGENTS,
+  type AgentWiring,
+  askAgentWiring,
   type ConnectResult,
   connect,
-  detectInstalledAgents,
-  GLOBAL_AGENT_IDS,
-  globallyWiredAgents,
-  MANUAL_AGENT_ID,
   manualSetupText,
   PROJECT_AGENT_IDS,
-  pickAgents,
 } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
@@ -46,7 +42,12 @@ import {
 } from "../scan/index.ts";
 import { dirExists } from "../scan/walk.ts";
 import type { WizardAnswers } from "../wizard/answers.ts";
-import { answersFromArgs, type InitCliArgs, shouldRunWizard } from "../wizard/args.ts";
+import {
+  answersFromArgs,
+  type InitCliArgs,
+  isValidLibraryId,
+  shouldRunWizard,
+} from "../wizard/args.ts";
 import { printAgentHandoff } from "../wizard/handoff-print.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
@@ -335,62 +336,28 @@ function printNextSteps(folder: string, outcome: WireOutcome): void {
 }
 
 /**
- * Wire the velloo MCP into the user's agents. Interactively, ask which
- * (checkboxes; the agents detected on this machine are pre-selected — one
- * global wire covers every project). Global configs that already carry velloo
- * are noted and hidden from the list; the question is skipped only when every
- * DETECTED agent is covered — a lone wired Codex must not silently leave an
- * installed Claude Code unwired (the agent handoff would then launch a claude
- * without velloo). Non-interactively, wire the project agents.
+ * Apply agent-wiring choices: write the MCP configs + guidance, print the
+ * manual instructions if asked. The interactive *questions* live in the
+ * wizard (`askAgentWiring`, asked before any file exists); this is the
+ * write side, run only after the scaffold landed.
  */
-async function wireAgents(
-  folder: string,
-  interactive: boolean,
-  enabled: boolean,
-): Promise<WireOutcome> {
-  if (!enabled) return NOT_WIRED;
-  let agents: string[] = PROJECT_AGENT_IDS;
-  let manual = false;
-  let wired: string[] = [];
-  if (interactive) {
-    wired = await globallyWiredAgents();
-    const detected = detectInstalledAgents();
-    const wanted = detected.length > 0 ? detected : GLOBAL_AGENT_IDS;
-    const missing = wanted.filter((id) => !wired.includes(id));
-    if (wired.length > 0) {
-      const labels = wired.map((id) => AGENTS[id]?.label ?? id).join(", ");
-      console.log("");
-      if (missing.length === 0) {
-        console.log(
-          `  ${pc.green("✓")} velloo is already wired globally — ${labels} ${pc.dim("(covers this project; skipping agent setup)")}`,
-        );
-        return { wiredIds: wired };
-      }
-      console.log(
-        `  ${pc.green("✓")} Already wired globally: ${labels} ${pc.dim("(covers this project)")}`,
-      );
-    }
-    const picked = await pickAgents({ exclude: wired, initial: missing });
-    if (picked === null) return { wiredIds: wired };
-    manual = picked.includes(MANUAL_AGENT_ID);
-    agents = picked.filter((id) => id !== MANUAL_AGENT_ID);
-  }
+async function applyAgentWiring(folder: string, wiring: AgentWiring): Promise<WireOutcome> {
   let result: ConnectResult | undefined;
-  if (agents.length > 0) {
+  if (wiring.agents.length > 0) {
     try {
-      result = await connect({ designFolder: folder, agents, installSkill: true });
+      result = await connect({ designFolder: folder, agents: wiring.agents, installSkill: true });
     } catch {
       result = undefined;
     }
   }
-  if (manual) {
+  if (wiring.manual) {
     console.log("");
     console.log(pc.bold("  Manual MCP setup"));
     for (const line of manualSetupText().split("\n")) console.log(`  ${line}`);
   }
   return {
     connected: result,
-    wiredIds: [...wired, ...(result?.configs.map((c) => c.agent) ?? [])],
+    wiredIds: [...wiring.preWired, ...(result?.configs.map((c) => c.agent) ?? [])],
   };
 }
 
@@ -583,7 +550,8 @@ export default defineCommand({
           return;
         }
         if (action === "connect") {
-          const wireOutcome = await wireAgents(existing, true, true);
+          const wiring = await askAgentWiring({ skipWhenCovered: true });
+          const wireOutcome = wiring ? await applyAgentWiring(existing, wiring) : NOT_WIRED;
           printWired(wireOutcome);
           printNextSteps(existing, wireOutcome);
           return;
@@ -598,7 +566,13 @@ export default defineCommand({
       printLogo();
       console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
       console.log("");
-      const result = await runInteractive({ appRoot, scanDir: cliArgs.scanDir });
+      const result = await runInteractive({
+        appRoot,
+        scanDir: cliArgs.scanDir,
+        connectEnabled: cliArgs.connect !== false,
+        pinnedLibrary:
+          cliArgs.library && isValidLibraryId(cliArgs.library) ? cliArgs.library : undefined,
+      });
       if (!result) {
         // The wizard already printed its cancellation notice.
         process.exit(1);
@@ -687,9 +661,16 @@ export default defineCommand({
 
     printSummary(folder, scaffold, plan, answers, importedFrom);
 
-    // Ask which agents to wire (interactive) or wire the project defaults, then
-    // check the screenshot browser, then hand off to the agent for scans.
-    const wireOutcome = await wireAgents(folder, interactive, cliArgs.connect !== false);
+    // Apply the wiring chosen in the wizard (or the project defaults when
+    // non-interactive), then check the screenshot browser, then hand off to
+    // the agent for scans.
+    let wireOutcome = NOT_WIRED;
+    if (cliArgs.connect !== false) {
+      const wiring = interactive
+        ? answers.agentWiring
+        : { agents: PROJECT_AGENT_IDS, manual: false, preWired: [] };
+      if (wiring) wireOutcome = await applyAgentWiring(folder, wiring);
+    }
     printWired(wireOutcome);
     await printScreenshotReadiness(interactive);
     await promptShellCompletions(interactive);

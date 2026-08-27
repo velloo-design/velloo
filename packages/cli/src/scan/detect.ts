@@ -86,6 +86,12 @@ function detectUnsupportedUi(deps: Record<string, unknown>): string | undefined 
     ["@heroui/react", "HeroUI"],
     ["react-bootstrap", "React Bootstrap"],
     ["@fluentui/react-components", "Fluent UI"],
+    // Untitled UI ships as copy-paste sources (no component dep) — its icon
+    // packages are the reliable install signal. Listed before the react-aria
+    // base it builds on so the more specific name wins.
+    ["@untitledui/icons", "Untitled UI"],
+    ["@untitledui/file-icons", "Untitled UI"],
+    ["react-aria-components", "React Aria"],
   ];
   for (const [pkg, label] of known) if (depRange(deps, pkg)) return label;
   return undefined;

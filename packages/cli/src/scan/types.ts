@@ -25,6 +25,7 @@ export type Framework =
   | "next-app"
   | "next-pages"
   | "tanstack-router"
+  | "react-router"
   | "vite"
   | "astro"
   | "sveltekit"

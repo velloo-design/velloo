@@ -4,6 +4,7 @@
  * `--flag` in non-interactive mode.
  */
 
+import type { AgentWiring } from "../connect/index.ts";
 import type { ProductSurface } from "../scaffold/sample-page.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
@@ -118,4 +119,11 @@ export interface WizardAnswers {
    * Absent ⇒ feedback disabled (and always so on the non-interactive path).
    */
   feedback?: { enabled: boolean; contactOk: boolean };
+  /**
+   * Agent-wiring choices, asked early in the wizard (config before content)
+   * but applied by init only after the scaffold is written — cancelling the
+   * wizard must still mean no files were touched. Absent under --no-connect
+   * and on the non-interactive path (which wires the project defaults).
+   */
+  agentWiring?: AgentWiring;
 }

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { compile } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
-import { helpersComponentsDir } from "@velloo/helpers";
+import { helpersComponentsDir } from "@velloo/helpers/paths";
 import { type ComponentProvider, type CssFramework, styleChannelOf } from "@velloo/provider";
 
 type Compiler = Awaited<ReturnType<typeof compile>>;

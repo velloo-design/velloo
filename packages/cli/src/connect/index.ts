@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { relative, resolve } from "node:path";
-import { isCancel, multiselect } from "@clack/prompts";
+import { isCancel, log, multiselect, select } from "@clack/prompts";
+import pc from "picocolors";
 import {
   AGENTS,
   type AgentConfigFormat,
@@ -60,13 +61,131 @@ export function manualSetupText(): string {
   ].join("\n");
 }
 
+/** The agent's display name without the "(project)" / "(global)" scope suffix. */
+function baseLabel(id: string): string {
+  return (AGENTS[id]?.label ?? id).replace(/\s*\((?:project|global)\)$/, "");
+}
+
+/** The project-scoped counterpart of an agent id, when one exists. */
+function projectVariantOf(id: string): string | undefined {
+  const agent = AGENTS[id];
+  if (!agent) return undefined;
+  if (agent.scope === "project") return id;
+  const candidate = id.replace(/-global$/, "");
+  return candidate !== id && AGENTS[candidate] ? candidate : undefined;
+}
+
 /**
- * Interactive agent checklist (global scope first — one wire covers every
- * project), plus a "manual / other agent" row that resolves to
- * MANUAL_AGENT_ID. Shared by `velloo connect` and the init wizard. `exclude`
- * hides agents that are already wired; `initial` overrides the preselection —
- * by default the agents detected on this machine (falling back to the global
- * claude+cursor pair when none are). Returns the chosen ids, or null on cancel.
+ * The interactive wiring choices, collected up front and applied later (init
+ * writes agent configs only after the scaffold lands, so cancelling the
+ * wizard never leaves files behind).
+ */
+export interface AgentWiring {
+  /** Agent ids to wire (may be empty). */
+  agents: string[];
+  /** Print the manual MCP setup text at apply time. */
+  manual: boolean;
+  /** Global agent ids that already carried velloo before this run. */
+  preWired: string[];
+}
+
+/**
+ * The agent-wiring question, split in two: first show which coding agents are
+ * installed on this machine, then ask how to wire them — globally on the
+ * detected agents (one config covers every project), per project, hand-picked
+ * from the full list, manual instructions, or not at all. Shared by
+ * `velloo connect` and the init wizard. Returns null on cancel.
+ */
+export async function askAgentWiring(opts?: {
+  /**
+   * Skip the question entirely when every detected agent already carries a
+   * global velloo entry (init re-runs shouldn't nag); `velloo connect` keeps
+   * asking so an explicit invocation can always add more.
+   */
+  skipWhenCovered?: boolean;
+}): Promise<AgentWiring | null> {
+  const preWired = await globallyWiredAgents();
+  const detected = detectInstalledAgents();
+  const fallback = detected.length === 0;
+  const wanted = fallback ? GLOBAL_AGENT_IDS : detected;
+  const missing = wanted.filter((id) => !preWired.includes(id));
+
+  if (preWired.length > 0) {
+    const labels = preWired.map(baseLabel).join(", ");
+    if (opts?.skipWhenCovered && missing.length === 0) {
+      log.success(
+        `velloo is already wired globally — ${labels} ${pc.dim("(covers this project; skipping agent setup)")}`,
+      );
+      return { agents: [], manual: false, preWired };
+    }
+    log.info(`Already wired globally: ${labels} ${pc.dim("(covers this project)")}`);
+  }
+
+  log.info(
+    fallback
+      ? `No coding agents detected on this machine — offering the defaults (${wanted.map(baseLabel).join(", ")}).`
+      : `Coding agents detected: ${detected.map(baseLabel).join(", ")}`,
+  );
+
+  // Re-offering an already-wired agent is an idempotent config merge, so when
+  // everything is covered (`velloo connect` re-run) the full set stays on offer.
+  const targets = missing.length > 0 ? missing : wanted;
+  const names = targets.map(baseLabel).join(", ");
+  const projectTargets = targets.map(projectVariantOf).filter((id): id is string => Boolean(id));
+
+  const mode = await select<"global" | "project" | "choose" | "manual" | "skip">({
+    message: "Wire the velloo MCP into your coding agents?",
+    options: [
+      {
+        value: "global",
+        label: `Install globally — ${names}`,
+        hint: "recommended — one config covers every project",
+      },
+      ...(projectTargets.length > 0
+        ? [
+            {
+              value: "project" as const,
+              label: "Install for this project only",
+              hint: projectTargets.map(baseLabel).join(", "),
+            },
+          ]
+        : []),
+      { value: "choose", label: "Let me pick agents", hint: "the full list" },
+      {
+        value: "manual",
+        label: "Manual MCP setup instructions",
+        hint: "prints the config to paste into any agent",
+      },
+      { value: "skip", label: "Don't install now", hint: "wire later with `velloo connect`" },
+    ],
+    initialValue: "global",
+  });
+  if (isCancel(mode)) return null;
+
+  if (mode === "skip") return { agents: [], manual: false, preWired };
+  if (mode === "manual") return { agents: [], manual: true, preWired };
+  if (mode === "global") return { agents: targets, manual: false, preWired };
+  if (mode === "project") return { agents: projectTargets, manual: false, preWired };
+
+  const picked = await pickAgents({
+    exclude: opts?.skipWhenCovered ? preWired : [],
+    initial: targets,
+  });
+  if (picked === null) return null;
+  return {
+    agents: picked.filter((id) => id !== MANUAL_AGENT_ID),
+    manual: picked.includes(MANUAL_AGENT_ID),
+    preWired,
+  };
+}
+
+/**
+ * The "let me pick" checklist behind `askAgentWiring` (global scope first —
+ * one wire covers every project), plus a "manual / other agent" row that
+ * resolves to MANUAL_AGENT_ID. `exclude` hides agents that are already wired;
+ * `initial` overrides the preselection — by default the agents detected on
+ * this machine (falling back to the global claude+cursor pair when none
+ * are). Returns the chosen ids, or null on cancel.
  */
 export async function pickAgents(opts?: {
   exclude?: string[];

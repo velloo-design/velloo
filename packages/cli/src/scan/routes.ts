@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
+import { scanReactRouter } from "./react-router.ts";
 import { idFromRoutePath, nameFromRoutePath } from "./route-names.ts";
 import { scanServerRoutes } from "./server-routes.ts";
 import type { Framework, ScannedRoute, ScanResult } from "./types.ts";
@@ -259,6 +260,10 @@ async function detectFramework(appRoot: string): Promise<Framework> {
   ) {
     return "tanstack-router";
   }
+  // Config-based React Router (createBrowserRouter / <Routes>) — its route
+  // tree lives in code, so a pages-dir walk would surface whatever components
+  // happen to live in src/pages/ as fake screens.
+  if ("react-router-dom" in deps || "react-router" in deps) return "react-router";
   if ("vite" in deps) return "vite";
   return "unknown";
 }
@@ -325,6 +330,11 @@ export async function scanAppRoutes(appRoot: string): Promise<ScanResult> {
         return { framework, routes: await scanTanstackRouter(dir), routesRoot: dir };
       }
     }
+  }
+  if (framework === "react-router") {
+    const result = await scanReactRouter(appRoot);
+    if (result && result.routes.length > 0) return result;
+    // No parsable router config — fall through to the generic dir walk.
   }
 
   // Vite or unknown: try common patterns.

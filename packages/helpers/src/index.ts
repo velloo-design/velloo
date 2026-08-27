@@ -15,7 +15,6 @@ export {
   STACK_JUSTIFY_CLASS,
   TEXT_VARIANT_CLASSES,
 } from "./lowering.ts";
-export { helpersComponentsDir } from "./paths.ts";
 export { Placeholder, type PlaceholderProps } from "./placeholder.tsx";
 export { helpersRegistry } from "./registry.ts";
 export { SVG, type SVGProps } from "./svg.tsx";

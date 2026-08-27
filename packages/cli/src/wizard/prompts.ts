@@ -15,16 +15,24 @@ import pc from "picocolors";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential, saveCredential } from "../cloud-credentials.ts";
 import { performDeviceLogin, verifyCredential } from "../cloud-login.ts";
+import { type AgentWiring, askAgentWiring } from "../connect/index.ts";
 import type { ProductSurface } from "../scaffold/sample-page.ts";
 import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
 import { VIBES } from "../scaffold/vibes.ts";
 import { detectHost } from "../scan/detect.ts";
 import { type AppsScanResult, primaryApp, scanApps } from "../scan/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
-import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
+import type {
+  DetectedHost,
+  InitialContent,
+  LibraryId,
+  LibrarySource,
+  WizardAnswers,
+} from "./answers.ts";
 import {
   DEFAULT_LIBRARY_ID,
   interactiveLibraryChoices,
+  scanAdoption,
   WIZARD_PROVIDERS,
 } from "./provider-registry.ts";
 import { STACKS } from "./stacks.ts";
@@ -46,11 +54,34 @@ function swatch(hex: string): string {
   return `\x1b[48;2;${r};${g};${b}m  \x1b[0m`;
 }
 
-function describeDetected(d: ReturnType<typeof detectHost>): string {
+const UI_LIBRARY_NAMES: Record<NonNullable<DetectedHost["uiLibrary"]>, string> = {
+  shadcn: "shadcn",
+  mui: "Material UI",
+  antd: "Ant Design",
+  chakra: "Chakra UI",
+};
+
+/**
+ * The "Detected in your app" box: leads with the UI framework and what velloo
+ * will do about it — a supported one becomes the folder's adapter, an
+ * unsupported one (Mantine, Untitled UI, …) falls back to the no-framework
+ * primitives, and none at all means velloo's shadcn default.
+ */
+function describeDetected(d: DetectedHost): string {
+  let ui: string;
+  if (d.uiLibrary) {
+    const name = UI_LIBRARY_NAMES[d.uiLibrary];
+    const style = d.uiLibrary === "shadcn" && d.shadcnStyle ? ` (${d.shadcnStyle})` : "";
+    ui = `${name}${style} — velloo designs with ${d.uiLibrary === "shadcn" ? "its own shadcn components" : `real ${name} components`}`;
+  } else if (d.unsupportedUi) {
+    ui = `${d.unsupportedUi} — no velloo adapter yet; the no-framework primitives stand in`;
+  } else {
+    ui = "no compatible UI framework detected — velloo's shadcn components will be used";
+  }
   const lines = [
-    `shadcn:    ${d.shadcn ? `yes${d.shadcnStyle ? ` (${d.shadcnStyle})` : ""}` : "not detected"}`,
-    `Tailwind:  ${d.tailwindMajor ? `v${d.tailwindMajor}` : "not detected"}`,
-    `theme css: ${d.globalsCssPath ?? "not found — will use a preset"}`,
+    `UI library: ${ui}`,
+    `Tailwind:   ${d.tailwindMajor ? `v${d.tailwindMajor}` : "not detected"}`,
+    `theme css:  ${d.globalsCssPath ?? "not found — will use a preset"}`,
   ];
   return lines.join("\n");
 }
@@ -289,12 +320,16 @@ async function promptSignIn(cloudUrl: string): Promise<boolean | null> {
 
 /**
  * Interactive prompts for `velloo init`. `appRoot` is the user's app (where
- * Velloo installs); the flow asks scratch-vs-scan first, then only the
- * questions that choice needs.
+ * Velloo installs). Config comes first — design folder, then agent wiring —
+ * so the scan flow runs straight into handing its screens to a wired agent.
  */
 export async function runInteractive(ctx: {
   appRoot: string;
   scanDir?: string;
+  /** Ask the agent-wiring question (false under --no-connect). */
+  connectEnabled: boolean;
+  /** A valid --library flag pins the library — scan adoption won't override it. */
+  pinnedLibrary?: LibraryId;
 }): Promise<WizardAnswers | null> {
   const folderInput = await text({
     message: "Where should the design folder live?",
@@ -307,6 +342,16 @@ export async function runInteractive(ctx: {
   });
   if (isAborted(folderInput)) return abort();
   const folder = resolve(ctx.appRoot, folderInput || "velloo");
+
+  // Agent wiring is asked up front (config before content) but only applied
+  // after the scaffold is written — cancelling anywhere below this still
+  // means no files were touched.
+  let agentWiring: AgentWiring | undefined;
+  if (ctx.connectEnabled) {
+    const wiring = await askAgentWiring({ skipWhenCovered: true });
+    if (wiring === null) return abort();
+    agentWiring = wiring;
+  }
 
   // An empty app root has nothing to scan, so scratch leads; anywhere with
   // real content defaults to mirroring what's there.
@@ -373,19 +418,24 @@ export async function runInteractive(ctx: {
 
       const share = await promptShareAndFeedback();
       if (share === null) return abort();
+      // The "existing project" flow: design in the framework the app actually
+      // uses (a MUI host → the MUI adapter, an unsupported framework → the
+      // no-framework primitives) unless --library pinned one.
+      const adopted = ctx.pinnedLibrary ? undefined : scanAdoption(detected);
       return {
         appRoot: ctx.appRoot,
         scanRoot,
         folder,
-        // Scan renders against the bundled snapshot runtime and imports the
-        // host theme; it never writes into the app (source: "binary").
-        library: DEFAULT_LIBRARY_ID,
+        // Scan renders against runtimes bundled with the velloo binary and
+        // imports the host theme; it never writes into the app (source: "binary").
+        library: ctx.pinnedLibrary ?? adopted?.library ?? DEFAULT_LIBRARY_ID,
         source: "binary",
         componentsRelative: "src/components/ui",
         initialContent: "scan",
         detected,
         selectedRoutes: picked.routes,
         agentPicksFirst: picked.agentPicksFirst,
+        ...(agentWiring ? { agentWiring } : {}),
         ...share,
       };
     }
@@ -396,7 +446,7 @@ export async function runInteractive(ctx: {
   const library = await select<LibraryId>({
     message: "Component library",
     options: interactiveLibraryChoices(),
-    initialValue: DEFAULT_LIBRARY_ID,
+    initialValue: ctx.pinnedLibrary ?? DEFAULT_LIBRARY_ID,
   });
   if (isAborted(library)) return abort();
   const provider = WIZARD_PROVIDERS[library];
@@ -521,6 +571,7 @@ export async function runInteractive(ctx: {
     themePreset,
     themeVibe,
     stack,
+    ...(agentWiring ? { agentWiring } : {}),
     ...share,
   };
 }
