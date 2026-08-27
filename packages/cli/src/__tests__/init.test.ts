@@ -274,6 +274,37 @@ describe("velloo init", () => {
     expect(readme).toContain("npm install antd");
   }, 30_000);
 
+  test("--library=chakra scaffolds a chakra folder with a two-screen sx sample", async () => {
+    const { exitCode } = await runInit(tmp, ["--library=chakra"]);
+    expect(exitCode).toBe(0);
+    const design = designDir(tmp);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("chakra");
+    expect(config.libraries.default?.source).toBe("binary");
+    // The style channel is intrinsic (sx, like MUI) — no CSS-framework axis.
+    expect(config.styling).toBeUndefined();
+
+    const screenFiles = await jsonFiles(join(design, "screens"));
+    expect(screenFiles).toContain("welcome.json");
+    expect(screenFiles).toContain("signup.json");
+    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+
+    // The sample uses chakra component ids + sx objects, not shadcn
+    // refs/classNames or inline styles.
+    const welcome = JSON.parse(await readFile(join(design, "screens/welcome.json"), "utf8"));
+    const json = JSON.stringify(welcome);
+    expect(json).toContain('"Heading"');
+    expect(json).toContain('"sx"');
+    expect(json).not.toContain('"className"');
+    expect(json).not.toContain('"style"');
+
+    // The README hands off the app-level chakra install (for the emitted code).
+    const readme = await readFile(join(design, "README.md"), "utf8");
+    expect(readme).toContain("npm install @chakra-ui/react@2 @emotion/react @emotion/styled");
+  }, 30_000);
+
   test("--library=none ships bare primitives with a two-screen sample", async () => {
     const { exitCode } = await runInit(tmp, ["--library=none"]);
     expect(exitCode).toBe(0);

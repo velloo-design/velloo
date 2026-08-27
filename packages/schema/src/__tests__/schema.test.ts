@@ -310,7 +310,7 @@ describe("ConfigSchema", () => {
   });
 
   test("accepts every provider id", () => {
-    for (const id of ["shadcn-upstream", "none", "mui", "antd"] as const) {
+    for (const id of ["shadcn-upstream", "none", "mui", "antd", "chakra"] as const) {
       const config = {
         ...base,
         libraries: {

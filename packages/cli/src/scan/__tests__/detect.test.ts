@@ -66,15 +66,30 @@ describe("detectHost uiLibrary", () => {
     expect(d.unsupportedUi).toBeUndefined();
   });
 
-  test("a Chakra app ⇒ unsupportedUi (no supported lib) for the no-framework fallback", async () => {
+  test("a @chakra-ui/react dependency ⇒ chakra (adopted, no longer 'unsupported')", async () => {
     await writePkg({ "@chakra-ui/react": "^2.8.0", react: "19.2.6" });
     const d = detectHost(tmp);
+    expect(d.uiLibrary).toBe("chakra");
+    expect(d.unsupportedUi).toBeUndefined();
+  });
+
+  test("chakra (a real dependency) wins over a stray components.json; antd wins over chakra", async () => {
+    await writePkg({ "@chakra-ui/react": "^2.8.0", react: "19.2.6" });
+    await writeFile(join(tmp, "components.json"), JSON.stringify({ style: "default" }), "utf8");
+    expect(detectHost(tmp).uiLibrary).toBe("chakra");
+    await writePkg({ antd: "^5.20.0", "@chakra-ui/react": "^2.8.0", react: "19.2.6" });
+    expect(detectHost(tmp).uiLibrary).toBe("antd");
+  });
+
+  test("an unadapted framework still ⇒ unsupportedUi for the no-framework fallback", async () => {
+    await writePkg({ "@mantine/core": "^7.0.0", react: "19.2.6" });
+    const d = detectHost(tmp);
     expect(d.uiLibrary).toBeUndefined();
-    expect(d.unsupportedUi).toBe("Chakra UI");
+    expect(d.unsupportedUi).toBe("Mantine");
   });
 
   test("a supported lib suppresses the unsupported signal", async () => {
-    await writePkg({ "@mui/material": "^6", "@chakra-ui/react": "^2", react: "19.2.6" });
+    await writePkg({ "@mui/material": "^6", "@mantine/core": "^7", react: "19.2.6" });
     const d = detectHost(tmp);
     expect(d.uiLibrary).toBe("mui");
     expect(d.unsupportedUi).toBeUndefined();

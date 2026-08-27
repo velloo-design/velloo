@@ -1,0 +1,21 @@
+/*
+ * Chakra styles components via emotion (the extendTheme tokens + the `sx`
+ * prop), not Tailwind utility classes — so this entry mostly exists to
+ * satisfy the JIT contract. It still imports Tailwind + declares the token
+ * @theme so any stray utility class resolves, and the canvas base reads themed.
+ */
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.145 0 0);
+  --color-primary: oklch(0.205 0 0);
+  --color-primary-foreground: oklch(0.985 0 0);
+  --font-sans: system-ui, -apple-system, sans-serif;
+}
+
+html, body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}

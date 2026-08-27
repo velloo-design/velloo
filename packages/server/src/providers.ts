@@ -8,6 +8,7 @@ import {
   UnknownProviderError,
 } from "@velloo/provider";
 import { createProvider as createAntdProvider } from "@velloo/provider-antd";
+import { createProvider as createChakraProvider } from "@velloo/provider-chakra";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoLibProvider } from "@velloo/provider-none";
 import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
@@ -36,6 +37,9 @@ export function createServerProviderLoader(folderRoot?: string, hostApp?: HostAp
     // Ant Design v5, same stance: real antd components SSR'd in-process,
     // inline-`style` channel, cssinjs render pass.
     antd: () => createAntdProvider(),
+    // Chakra UI v2, same stance: real chakra components SSR'd in-process,
+    // `sx` channel, emotion render pass.
+    chakra: () => createChakraProvider(),
     // shadcn-upstream — components fetched from the official
     // registry, deposited at the user's chosen location, and the canvas
     // renders against the cached manifest. `componentsPath` resolves to

@@ -19,6 +19,7 @@
     "@velloo/codegen": "workspace:*",
     "@velloo/provider": "workspace:*",
     "@velloo/provider-antd": "workspace:*",
+    "@velloo/provider-chakra": "workspace:*",
     "@velloo/provider-mui": "workspace:*",
     "@velloo/provider-none": "workspace:*",
     "@velloo/renderer": "workspace:*",

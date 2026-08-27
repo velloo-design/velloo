@@ -1,10 +1,16 @@
 import { resolve } from "node:path";
 import { ANTD_VERSION } from "@velloo/provider-antd";
+import { CHAKRA_VERSION } from "@velloo/provider-chakra";
 import { MUI_VERSION } from "@velloo/provider-mui";
 import { noLibVersion } from "@velloo/provider-none";
 import type { Config, Library, Theme } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot";
 import { buildAntdBoards, buildAntdScreens, buildAntdSnippets } from "../scaffold/antd-sample.ts";
+import {
+  buildChakraBoards,
+  buildChakraScreens,
+  buildChakraSnippets,
+} from "../scaffold/chakra-sample.ts";
 import { buildMuiBoards, buildMuiScreens, buildMuiSnippets } from "../scaffold/mui-sample.ts";
 import {
   buildNoLibBoards,
@@ -69,7 +75,7 @@ export interface WizardProviderEntry {
    */
   hasProductSurfaces: boolean;
   /** Placeholder-tree options for screens scaffolded from a scan. */
-  scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" };
+  scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" | "chakra" };
   /** Resolve the wizard's answers into this provider's library declaration. */
   planInstall(answers: WizardAnswers): InstallPlan;
   /**
@@ -204,7 +210,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     // Not offered in the wizard select — reachable via --library=mui and
     // scan detection of a MUI host only.
     interactive: false,
-    order: 3,
+    order: 4,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
     asksThemePreset: false,
@@ -298,6 +304,62 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       "```",
       "",
       "Style nodes with the inline-style editor (canvas) or `set_style` (agent).",
+      "",
+    ],
+  },
+  chakra: {
+    label: "Chakra UI",
+    hint: "Real Chakra v2, sx styling.",
+    interactive: true,
+    order: 3,
+    defaultSource: "binary",
+    asksComponentsSubfolder: false,
+    asksThemePreset: false,
+    asksStack: false,
+    hasProductSurfaces: false,
+    scanScreenOpts: { hasBadge: true, tree: "chakra" },
+    // Framework-native like MUI: chakra is a first-class adapter bundled with
+    // velloo (@chakra-ui/react + emotion are velloo deps; components SSR
+    // in-process).
+    planInstall: () => ({
+      library: {
+        id: "chakra",
+        version: CHAKRA_VERSION,
+        source: "binary",
+        componentsPath: "binary",
+      },
+      summary: { name: `Chakra UI v${CHAKRA_VERSION}`, location: "bundled with velloo" },
+    }),
+    // Pulse isn't ported to chakra (its shadcn composition would need a full
+    // redesign) — a two-screen chakra welcome sample (sx styling) instead.
+    buildSampleScaffold: (theme) => ({
+      theme,
+      screens: buildChakraScreens(),
+      boards: buildChakraBoards(),
+      snippets: buildChakraSnippets(),
+      annotations: [],
+      notes: [],
+    }),
+    // The style channel is intrinsic (`sx`, like MUI) — the CSS-framework
+    // axis doesn't apply, so no `config.styling` is written.
+    stylingFor: () => undefined,
+    scanMatch: (detected) => detected.uiLibrary === "chakra",
+    scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
+    handoffComponentsLabel: "Chakra UI",
+    readmeComponentsSection: () => [
+      "## Chakra UI in your app",
+      "",
+      "The canvas renders **real Chakra UI v2** components (bundled with velloo,",
+      "emotion-rendered) — no files were written to your app. When you implement",
+      "a screen, `emit_code` emits idiomatic chakra (`sx` props +",
+      "`@chakra-ui/react` imports) and `emit_theme` emits an `extendTheme(...)`",
+      "module. For that code to build, install the runtime deps in your app:",
+      "",
+      "```bash",
+      "npm install @chakra-ui/react@2 @emotion/react @emotion/styled framer-motion",
+      "```",
+      "",
+      "Style nodes with the `sx` editor (canvas) or `set_style` (agent).",
       "",
     ],
   },

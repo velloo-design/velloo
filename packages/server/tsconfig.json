@@ -21,6 +21,7 @@
     { "path": "../provider-none" },
     { "path": "../provider-mui" },
     { "path": "../provider-antd" },
+    { "path": "../provider-chakra" },
     { "path": "../provider-shadcn-upstream" },
     { "path": "../renderer" },
     { "path": "../codegen" }

@@ -18,6 +18,7 @@
     "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
     "@velloo/provider-antd": "workspace:*",
+    "@velloo/provider-chakra": "workspace:*",
     "@velloo/provider-mui": "workspace:*",
     "@velloo/provider-none": "workspace:*",
     "@velloo/provider-shadcn-upstream": "workspace:*",

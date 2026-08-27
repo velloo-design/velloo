@@ -186,6 +186,72 @@ function buildAntdPlaceholderTree(route: ScannedRoute): Screen["tree"] {
   };
 }
 
+/**
+ * Chakra placeholder tree — chakra shares the shadcn ids (`Heading`/`Text`/
+ * `Badge`/`Card`) but not the Tailwind `className` channel, so the shadcn
+ * placeholder's classes would be inert. Uses only Container / Stack / Badge /
+ * Heading / Text / Card / CardBody + `sx`, all in the chakra registry.
+ */
+function buildChakraPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+  return {
+    $ref: "Container",
+    props: { maxW: "4xl", sx: { py: 16 } },
+    children: [
+      {
+        $ref: "Stack",
+        props: { spacing: 6, sx: { alignItems: "center", textAlign: "center" } },
+        children: [
+          { $ref: "Badge", props: { variant: "outline", children: route.routePath } },
+          { $ref: "Heading", props: { size: "xl", children: route.name } },
+          {
+            $ref: "Text",
+            props: {
+              sx: { maxW: "xl", color: "chakra-subtle-text" },
+              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+            },
+          },
+          {
+            $ref: "Card",
+            props: { variant: "outline", sx: { mt: 2, w: "100%", textAlign: "left" } },
+            children: [
+              {
+                $ref: "CardBody",
+                children: [
+                  {
+                    $ref: "Stack",
+                    props: { spacing: 1 },
+                    children: [
+                      {
+                        $ref: "Text",
+                        props: {
+                          sx: {
+                            fontSize: "xs",
+                            textTransform: "uppercase",
+                            letterSpacing: "wider",
+                            color: "chakra-subtle-text",
+                          },
+                          children: "Detected from",
+                        },
+                      },
+                      {
+                        $ref: "Text",
+                        props: {
+                          sx: { fontFamily: "mono", fontSize: "sm" },
+                          children: route.sourceFile,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 interface BuildScreensOpts {
   routes: ScannedRoute[];
   /**
@@ -195,16 +261,18 @@ interface BuildScreensOpts {
   hasBadge: boolean;
   /**
    * Framework-native folder ⇒ emit that framework's placeholder
-   * (MUI: Typography + sx; antd: TypographyTitle/Tag + inline style) instead
-   * of the shadcn/no-lib one. Absent ⇒ the shared Box/Heading/Text placeholder.
+   * (MUI: Typography + sx; antd: TypographyTitle/Tag + inline style; chakra:
+   * Heading/Text + sx) instead of the shadcn/no-lib one. Absent ⇒ the shared
+   * Box/Heading/Text placeholder.
    */
-  tree?: "mui" | "antd";
+  tree?: "mui" | "antd" | "chakra";
 }
 
 export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
   const buildTree = (route: ScannedRoute): Screen["tree"] => {
     if (opts.tree === "mui") return buildMuiPlaceholderTree(route);
     if (opts.tree === "antd") return buildAntdPlaceholderTree(route);
+    if (opts.tree === "chakra") return buildChakraPlaceholderTree(route);
     return buildPlaceholderTree(route, opts.hasBadge);
   };
   return opts.routes.map((route) => ({

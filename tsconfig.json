@@ -9,6 +9,7 @@
     { "path": "./packages/provider-none" },
     { "path": "./packages/provider-mui" },
     { "path": "./packages/provider-antd" },
+    { "path": "./packages/provider-chakra" },
     { "path": "./packages/provider-shadcn-upstream" },
     { "path": "./packages/renderer" },
     { "path": "./packages/canvas" },

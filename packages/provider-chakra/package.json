@@ -1,0 +1,30 @@
+{
+  "name": "@velloo/provider-chakra",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "Chakra UI v2 provider for Velloo — a first-class FrameworkAdapter (sx styling, emotion SSR, extendTheme).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "2.10.10",
+    "@emotion/cache": "11.14.0",
+    "@emotion/react": "11.14.0",
+    "@emotion/server": "11.11.0",
+    "@emotion/styled": "11.14.1",
+    "@velloo/helpers": "workspace:*",
+    "@velloo/provider": "workspace:*",
+    "@velloo/schema": "workspace:*",
+    "culori": "4.0.2",
+    "framer-motion": "12.42.2",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/culori": "4.0.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3"
+  }
+}
