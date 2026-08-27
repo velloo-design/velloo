@@ -22,11 +22,17 @@ See [`docs/`](./docs) for the architecture and the MCP reference.
 
 ## Quickstart
 
-Velloo runs on the [Bun](https://bun.sh) runtime (≥ 1.3.0). From inside your app:
+Velloo isn't on npm yet — install the hosted build (it runs on the [Bun](https://bun.sh) runtime, ≥ 1.3.0; the installer offers to set that up too):
+
+```bash
+curl -fsSL https://get.velloo.dev/install.sh | bash
+```
+
+Then, from inside your app:
 
 ```bash
 cd ~/code/my-shadcn-app
-bunx velloo init
+velloo init
 ```
 
 The interactive wizard creates the design folder (default `velloo/`) and wires up your AI agent — **Claude Code** (`.mcp.json` + the `velloo-design` skill) and **Cursor** (`.cursor/mcp.json` + a project rule); restart the agent so it loads the new config. **Start from scratch** (pick a component library + a sample or blank board) or **scan what you have**: scan detects your shadcn + Tailwind versions, imports your real theme from `globals.css`, and builds one screen per route, so the canvas opens in your brand colors. `init` never writes into your app's source — it only creates the design folder (plus the agent config).
@@ -34,13 +40,13 @@ The interactive wizard creates the design folder (default `velloo/`) and wires u
 Then start it:
 
 ```bash
-bunx velloo run velloo      # the design folder you just created
+velloo run velloo      # the design folder you just created
 ```
 
 - **Canvas:** http://localhost:7300
 - **MCP server (for your AI agent):** http://localhost:7301/mcp
 
-`Ctrl-C` stops the server. Prefer a resident command? `bun add -g velloo` puts `velloo` on your `PATH`; `bun remove -g velloo` uninstalls.
+`Ctrl-C` stops the server. Re-run the install command anytime to update to the latest build; `bun remove -g velloo` uninstalls.
 
 ### Screenshots — the one optional extra
 
