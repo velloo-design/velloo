@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
 import { assertSecureCloudUrl, isSecureCloudUrl } from "./cloud.ts";
+import { openUrl } from "./open-url.ts";
 
 interface DeviceCodeResponse {
   device_code: string;
@@ -36,16 +36,6 @@ export async function verifyCredential(
   if (!res?.ok) return null;
   const body = (await res.json().catch(() => null)) as { email?: string } | null;
   return body?.email ?? null;
-}
-
-function openBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  try {
-    spawn(cmd, [url], { stdio: "ignore", detached: true }).unref();
-  } catch {
-    // printing the URL is the fallback
-  }
 }
 
 const sleepCancelable = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -99,7 +89,9 @@ export async function performDeviceLogin(
   // Await the prompt so a caller can confirm (e.g. "press Enter") before we open
   // the browser; the browser opens only once it resolves.
   await onPrompt({ verificationUrl: device.verification_uri_complete, userCode: device.user_code });
-  openBrowser(device.verification_uri_complete);
+  // Fire-and-forget: polling must start now, and the printed URL is the
+  // fallback — never wait on the opener (some block until the browser closes).
+  void openUrl(device.verification_uri_complete);
 
   const deadline = Date.now() + device.expires_in * 1000;
   let intervalMs = Math.max(1, device.interval) * 1000;

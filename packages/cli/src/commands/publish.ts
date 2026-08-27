@@ -21,23 +21,14 @@ import { defineCommand } from "citty";
 import { withAssetServer } from "../asset-server.ts";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
+import {
+  CloudUnreachableError,
+  type LinkUploadOutcome,
+  uploadLinkBundle,
+} from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
 import { pickBoards, resolveDesignFolder } from "../folder.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
-
-interface CreatedLink {
-  slug: string;
-  accessToken: string | null;
-}
-
-interface UploadResult {
-  files: number;
-  bytes: number;
-  url: string;
-  /** Effective plan + version retention, from folderId-aware clouds. */
-  tier?: string;
-  history?: { retained: boolean; versions: number; pruned: number };
-}
 
 /**
  * The folder's stable cloud identity (config.json `folderId`). Pre-folderId
@@ -377,59 +368,31 @@ export default defineCommand({
     // link (200) or creates one carrying it (201).
     const folderId = await ensureFolderId(folder, design.config.folderId);
 
-    const authorized = { authorization: `Bearer ${token}` };
-    let link: CreatedLink;
-    let createdHere = false;
-    const createRes = await fetch(`${baseUrl}/v1/links`, {
-      method: "POST",
-      headers: authorized,
-      body: JSON.stringify({
-        ...(args.slug ? { slug: args.slug } : {}),
-        folderId,
-        title,
-        visibility,
-      }),
-    }).catch((error: unknown) => {
-      fail(
-        "publish",
-        `cannot reach ${baseUrl} (${error instanceof Error ? error.message : String(error)}). Is velloo-cloud up? (bun cloud:up)`,
-      );
-    });
-    if (createRes.status === 201) {
-      link = (await createRes.json()) as CreatedLink;
-      createdHere = true;
-    } else if (createRes.status === 200) {
-      // The folder's existing link — this publish updates the same share URL.
-      link = (await createRes.json()) as CreatedLink;
-    } else {
-      const body = (await createRes.json().catch(() => ({}))) as { message?: string };
-      fail("publish", `link creation failed (${createRes.status}): ${body.message ?? "unknown"}`);
-    }
-
-    const uploadRes = await fetch(`${baseUrl}/v1/links/${link.slug}/versions`, {
-      method: "POST",
-      headers: authorized,
-      body: form,
-    });
-    if (uploadRes.status !== 201) {
-      const body = (await uploadRes.json().catch(() => ({}))) as { message?: string };
-      // A link with no version is a dead /s/ page. If we just created it (this
-      // run), delete it so a failed publish — e.g. over the size limit — doesn't
-      // leave a broken board in the user's home.
-      if (createdHere) {
-        await fetch(`${baseUrl}/v1/links/${link.slug}`, {
-          method: "DELETE",
-          headers: authorized,
-        }).catch(() => {});
+    let upload: LinkUploadOutcome;
+    try {
+      upload = await uploadLinkBundle({
+        baseUrl,
+        token,
+        link: {
+          ...(args.slug ? { slug: args.slug } : {}),
+          folderId,
+          title,
+          visibility,
+        },
+        form,
+      });
+    } catch (error) {
+      if (error instanceof CloudUnreachableError) {
+        fail(
+          "publish",
+          `cannot reach ${baseUrl} (${error.message}). Is velloo-cloud up? (bun cloud:up)`,
+        );
       }
-      fail("publish", `upload failed (${uploadRes.status}): ${body.message ?? "unknown"}`);
+      fail("publish", error instanceof Error ? error.message : String(error));
     }
-    const upload = (await uploadRes.json()) as UploadResult;
 
-    // The cloud returns the canonical share URL — absolute (the share domain) in
-    // prod, or relative in dev, which we join with the API base.
-    const shareLink = upload.url.startsWith("http") ? upload.url : `${baseUrl}${upload.url}`;
-    const key = link.accessToken ? `?k=${link.accessToken}` : "";
+    const shareLink = upload.shareUrl;
+    const key = upload.link.accessToken ? `?k=${upload.link.accessToken}` : "";
 
     console.log(
       `velloo publish: ${upload.files} files, ${Math.round(upload.bytes / 1024)} KB${shots ? `, ${shots.files.length} screenshots` : ""}${commitSha ? `, commit ${commitSha.slice(0, 7)}` : ""}`,

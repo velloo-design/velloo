@@ -17,21 +17,38 @@ export async function hasDesignConfig(dir: string): Promise<boolean> {
   }
 }
 
+export interface ResolveDesignFolderOptions {
+  /** Reject an explicit arg that isn't a design folder (default: accept it unchecked). */
+  requireConfig?: boolean;
+  /** Abort override — `velloo ci` exits 2 for operational errors, not fail()'s 1. */
+  onFail?: (message: string) => never;
+}
+
 /**
  * Resolve the design folder for a command. An explicit arg wins; otherwise
  * default to `./velloo`, then the cwd, then walk up for a `.design/config.json`
  * (so the command works from inside the folder or the app root). Fails with
  * guidance when nothing is found.
  */
-export async function resolveDesignFolder(arg: string | undefined, cmd: string): Promise<string> {
-  if (arg) return resolve(arg);
+export async function resolveDesignFolder(
+  arg: string | undefined,
+  cmd: string,
+  opts: ResolveDesignFolderOptions = {},
+): Promise<string> {
+  const abort: (message: string) => never = opts.onFail ?? ((m) => fail(cmd, m));
+  if (arg) {
+    const explicit = resolve(arg);
+    if (opts.requireConfig && !(await hasDesignConfig(explicit))) {
+      abort(`${explicit} is not a velloo design folder (no .design/config.json).`);
+    }
+    return explicit;
+  }
   const here = resolve(DEFAULT_FOLDER);
   if (await hasDesignConfig(here)) return here;
   if (await hasDesignConfig(resolve("."))) return resolve(".");
   const found = await findDesignConfig(resolve("."));
   if (found) return found.folder;
-  fail(
-    cmd,
+  abort(
     `no design folder found. Pass one (e.g. \`velloo ${cmd} ./velloo\`), run from a folder that contains a Velloo design, or \`velloo init\` first.`,
   );
 }
