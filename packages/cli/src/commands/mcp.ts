@@ -7,7 +7,7 @@ import {
   ensureDaemon,
   stopDaemon,
 } from "../daemon/runtime.ts";
-import { resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { traceEnabled } from "../trace/env.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
 
@@ -62,7 +62,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Design folder (default: ./velloo, else the nearest .design above the cwd)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     http: {
       type: "boolean",

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, resolve } from "node:path";
+import { extname, isAbsolute, resolve } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
 import {
   BrowserMissingError,
@@ -14,8 +14,9 @@ import { registryForScreen, renderPassForScreen, writeText } from "@velloo/serve
 import { defineCommand } from "citty";
 import { withAssetServer } from "../asset-server.ts";
 import { loadPipeline } from "../ci/render.ts";
+import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
-import { pickScreen, resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, pickScreen, resolveDesignFolder } from "../folder.ts";
 
 export default defineCommand({
   meta: {
@@ -30,7 +31,7 @@ export default defineCommand({
     },
     folder: {
       type: "string",
-      description: "Design folder (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     to: {
       type: "string",
@@ -52,7 +53,22 @@ export default defineCommand({
     let screenPath: string;
     if (looksLikePath && screenArg) {
       screenPath = resolve(screenArg);
-      folder = args.folder ? resolve(args.folder) : dirname(dirname(screenPath));
+      // The folder still resolves in manifest terms: an explicit --folder may
+      // be a velloo.json project name; otherwise walk up from the screen file
+      // to its containing design folder (blind ../.. broke on nested paths and
+      // failed cryptically inside the pipeline).
+      if (args.folder) {
+        folder = await resolveDesignFolder(args.folder, "render");
+      } else {
+        const found = await findDesignConfig(screenPath);
+        if (!found) {
+          fail(
+            "render",
+            `${screenPath} is not inside a velloo design folder (no .design/config.json above it). Pass --folder with a project name or a path.`,
+          );
+        }
+        folder = found.folder;
+      }
     } else {
       folder = await resolveDesignFolder(args.folder, "render");
       screenPath = (await pickScreen(folder, screenArg, interactive, "render")).path;

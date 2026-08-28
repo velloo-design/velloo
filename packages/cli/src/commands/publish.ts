@@ -18,7 +18,7 @@ import {
 } from "@velloo/server";
 import { defineCommand } from "citty";
 import { withAssetServer } from "../asset-server.ts";
-import { defaultCloudUrl } from "../cloud.ts";
+import { checkCloudHealth, defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import {
   CloudUnreachableError,
@@ -26,7 +26,7 @@ import {
   uploadLinkBundle,
 } from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
-import { pickBoards, resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, pickBoards, resolveDesignFolder } from "../folder.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
 
 /**
@@ -108,7 +108,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Design folder (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     url: {
       type: "string",
@@ -158,6 +158,17 @@ export default defineCommand({
       w: args.w ? Number(args.w) : 1440,
       h: args.h ? Number(args.h) : 900,
     };
+
+    // Fail fast on a dead or degraded cloud: the upload's fate is
+    // knowable from /health before any of the expensive screenshot/bundle work.
+    const health = await checkCloudHealth(baseUrl);
+    if (health.status === "unreachable") {
+      fail(
+        "publish",
+        `cannot reach ${baseUrl} (${health.reason}). Is velloo-cloud up? (bun cloud:up)`,
+      );
+    }
+    if (health.status === "unhealthy") fail("publish", health.detail);
 
     const design = await loadDesignFolder(folder);
     if (design.screens.size === 0) {

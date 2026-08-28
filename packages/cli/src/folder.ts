@@ -8,6 +8,14 @@ import { type FoundManifest, findManifest, pickProject } from "./manifest.ts";
 
 const DEFAULT_FOLDER = "velloo";
 
+/**
+ * Shared help text for every folder-taking command, so the root model reads
+ * the same everywhere: `velloo.json` marks the repo root and names design
+ * folders as projects; `.design/config.json` marks a design folder.
+ */
+export const FOLDER_ARG_DESCRIPTION =
+  "A velloo.json project name or a design-folder path (default: resolve via velloo.json, else ./velloo or the nearest design folder above the cwd)";
+
 /** True when `dir` already holds a Velloo design (has `.design/config.json`). */
 export async function hasDesignConfig(dir: string): Promise<boolean> {
   try {
@@ -78,14 +86,15 @@ export async function resolveDesignFolder(
     }
     const explicit = resolve(cwd, arg);
     if (await hasDesignConfig(explicit)) return explicit;
-    if (opts.requireConfig) {
-      abort(`${explicit} is not a velloo design folder (no .design/config.json).`);
-    }
-    // A bare name that matches nothing is a typo'd project, not a folder path.
+    // A bare name that matches nothing is a typo'd project, not a folder path —
+    // suggest the real names even for commands that require a config.
     if (repo && !arg.includes(sep)) {
       abort(
         `unknown project ${JSON.stringify(arg)} — ${repo.path} lists: ${[...repo.folders.keys()].join(", ")}. Pass a project name or a folder path.`,
       );
+    }
+    if (opts.requireConfig) {
+      abort(`${explicit} is not a velloo design folder (no .design/config.json).`);
     }
     return explicit;
   }

@@ -93,6 +93,27 @@ export function pickProject(found: FoundManifest, cwd: string): string | null {
   return found.manifest.defaultProject ?? null;
 }
 
+/**
+ * Describe a design folder in manifest terms for display: when an
+ * enclosing `velloo.json` registers it, "name — rel/path (in /repo/root)";
+ * null otherwise (callers fall back to the raw path). Display-only, so a
+ * broken manifest degrades to the fallback instead of failing the caller.
+ */
+export async function projectLabel(folder: string): Promise<string | null> {
+  const abs = resolve(folder);
+  let found: FoundManifest | null;
+  try {
+    found = await findManifest(abs);
+  } catch {
+    return null;
+  }
+  if (!found) return null;
+  const entry = [...found.folders].find(([, path]) => path === abs);
+  if (!entry) return null;
+  const rel = relative(found.dir, abs) || ".";
+  return `${entry[0]} — ${rel} (in ${found.dir})`;
+}
+
 /** Walk up from `start` for a `.git` entry (dir, or file for worktrees). */
 async function findGitRoot(start: string): Promise<string | null> {
   let dir = resolve(start);

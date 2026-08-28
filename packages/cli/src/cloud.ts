@@ -42,3 +42,43 @@ export function assertSecureCloudUrl(cloudUrl: string): void {
     );
   }
 }
+
+export type CloudHealth =
+  | { status: "ok" }
+  | { status: "unreachable"; reason: string }
+  | { status: "unhealthy"; detail: string };
+
+/**
+ * GET `<cloud>/health` before expensive work: a publish that will die at
+ * upload time is knowable up front (the cloud's health report already names
+ * the dead dependency). Distinguishes unreachable (network error) from
+ * unhealthy (the cloud answered `ok: false`). Anything else — a 404 from a
+ * cloud without /health, a non-JSON proxy page — passes as ok: the gate must
+ * never block a publish that might succeed.
+ */
+export async function checkCloudHealth(baseUrl: string): Promise<CloudHealth> {
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(8_000) });
+  } catch (error) {
+    return {
+      status: "unreachable",
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+  const body = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    db?: { ok?: boolean };
+    blob?: { ok?: boolean };
+  } | null;
+  if (!body || typeof body.ok !== "boolean" || body.ok) return { status: "ok" };
+  const down = [
+    body.db?.ok === false ? "database" : null,
+    body.blob?.ok === false ? "storage backend" : null,
+  ].filter((part): part is string => part !== null);
+  const what = down.length > 0 ? down.join(" and ") : "a dependency";
+  return {
+    status: "unhealthy",
+    detail: `the cloud's ${what} is unavailable — publishes and share links are down; try again later.`,
+  };
+}

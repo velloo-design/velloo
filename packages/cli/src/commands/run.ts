@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { defineCommand } from "citty";
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
-import { resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
 import { traceEnabled } from "../trace/env.ts";
 
@@ -16,7 +16,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Design folder (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     port: {
       type: "string",

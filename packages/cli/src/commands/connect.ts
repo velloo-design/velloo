@@ -12,7 +12,7 @@ import {
 } from "../connect/index.ts";
 import { assertFolderFormatCurrent, DesignFolderFormatError } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
-import { resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 
 export default defineCommand({
   meta: {
@@ -23,7 +23,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Design folder (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     agent: {
       type: "string",

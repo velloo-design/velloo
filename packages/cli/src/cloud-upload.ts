@@ -10,6 +10,11 @@
 
 export class CloudUnreachableError extends Error {}
 
+// A 5xx is the cloud's trouble, not the user's bundle — say so instead of
+// leaving a bare "internal error".
+const serverTroubleHint = (status: number): string =>
+  status >= 500 ? " — the cloud is having trouble; check its status or try again later" : "";
+
 export interface CloudLinkRequest {
   slug?: string;
   folderId?: string;
@@ -50,7 +55,9 @@ export async function uploadLinkBundle(opts: {
   // gets updated.
   if (createRes.status !== 200 && createRes.status !== 201) {
     const body = (await createRes.json().catch(() => ({}))) as { message?: string };
-    throw new Error(`link creation failed (${createRes.status}): ${body.message ?? "unknown"}`);
+    throw new Error(
+      `link creation failed (${createRes.status}): ${body.message ?? "unknown"}${serverTroubleHint(createRes.status)}`,
+    );
   }
   const created = createRes.status === 201;
   const link = (await createRes.json()) as { slug: string; accessToken: string | null };
@@ -70,7 +77,9 @@ export async function uploadLinkBundle(opts: {
         headers: authorized,
       }).catch(() => {});
     }
-    throw new Error(`upload failed (${uploadRes.status}): ${body.message ?? "unknown"}`);
+    throw new Error(
+      `upload failed (${uploadRes.status}): ${body.message ?? "unknown"}${serverTroubleHint(uploadRes.status)}`,
+    );
   }
   const upload = (await uploadRes.json()) as {
     files: number;

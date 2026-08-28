@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { defineCommand } from "citty";
 import { fail } from "../fail.ts";
-import { resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
 import { loadTape, renderReport } from "../trace/report.ts";
 import { serveLiveReport } from "../trace/serve.ts";
@@ -17,7 +17,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Design folder (default: ./velloo, else the nearest .design above the cwd)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     dir: {
       type: "string",

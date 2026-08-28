@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveDesignFolder } from "../folder.ts";
-import { findManifest, pickProject, registerProject } from "../manifest.ts";
+import { findManifest, pickProject, projectLabel, registerProject } from "../manifest.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 
 let tmp: string;
@@ -66,7 +66,39 @@ describe("findManifest", () => {
   });
 });
 
+describe("projectLabel", () => {
+  test("a registered folder reads as project + repo-root-relative path", async () => {
+    await writeManifest(tmp, { projects: { web: "apps/web/velloo" } });
+    const folder = join(tmp, "apps/web/velloo");
+    await makeDesignFolder(folder);
+    expect(await projectLabel(folder)).toBe(`web — apps/web/velloo (in ${tmp})`);
+  });
+
+  test("null without a manifest, and for a folder the manifest doesn't list", async () => {
+    const stray = join(tmp, "stray");
+    await makeDesignFolder(stray);
+    expect(await projectLabel(stray)).toBeNull();
+    await writeManifest(tmp, { projects: { web: "apps/web/velloo" } });
+    expect(await projectLabel(stray)).toBeNull();
+  });
+
+  test("a broken manifest degrades to null — display must not fail a listing", async () => {
+    await writeFile(join(tmp, "velloo.json"), "{ nope", "utf8");
+    const folder = join(tmp, "velloo");
+    await makeDesignFolder(folder);
+    expect(await projectLabel(folder)).toBeNull();
+  });
+});
+
 describe("resolveDesignFolder with a manifest", () => {
+  test("requireConfig still suggests project names on a typo'd bare name", async () => {
+    await writeManifest(tmp, { projects: { web: "apps/web/velloo" } });
+    await makeDesignFolder(join(tmp, "apps/web/velloo"));
+    expect(
+      resolveDesignFolder("wbe", "ci", { cwd: tmp, onFail, requireConfig: true }),
+    ).rejects.toThrow(/unknown project "wbe".*lists: web/);
+  });
+
   test("a project name arg resolves to its folder", async () => {
     await writeManifest(tmp, { projects: { web: "apps/web/velloo", site: "apps/site/velloo" } });
     await makeDesignFolder(join(tmp, "apps/web/velloo"));

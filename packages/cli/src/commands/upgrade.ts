@@ -2,7 +2,7 @@ import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import { defineCommand } from "citty";
 import { daemonRoot, stopDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
-import { resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
 
 export default defineCommand({
@@ -14,7 +14,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Design folder (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     "dry-run": {
       type: "boolean",

@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { daemonRoot, listDaemons, stopDaemon } from "../daemon/runtime.ts";
-import { resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 
 export default defineCommand({
   meta: {
@@ -11,7 +11,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: "Design folder (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     all: {
       type: "boolean",

@@ -43,6 +43,8 @@ Then start it:
 velloo run velloo      # the design folder you just created
 ```
 
+Two files define the model: a repo-root **`velloo.json`** names each design folder as a project (`init` registers it — several can coexist in a monorepo), and **`.design/config.json`** marks a directory as a design folder. Every folder-taking command (`run`, `stop`, `publish`, `emit`, …) accepts a project name or a path, and resolves via `velloo.json` when you pass nothing.
+
 - **Canvas:** http://localhost:7300
 - **MCP server (for your AI agent):** http://localhost:7301/mcp
 

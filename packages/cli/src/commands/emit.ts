@@ -15,7 +15,7 @@ import { hostAppRootFrom, loadDesignFolder, resolveProviders } from "@velloo/ser
 import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
-import { pickScreen, resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, pickScreen, resolveDesignFolder } from "../folder.ts";
 
 /**
  * Load the emit context a screen needs from its containing design folder:
@@ -65,7 +65,7 @@ export default defineCommand({
     },
     folder: {
       type: "string",
-      description: "Design folder (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     to: {
       type: "string",

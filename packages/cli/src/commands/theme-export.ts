@@ -7,7 +7,7 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
 import { loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
-import { resolveDesignFolder } from "../folder.ts";
+import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { detectHost } from "../scan/detect.ts";
 
 /** Read a file if it exists, else undefined. */
@@ -77,7 +77,7 @@ export default defineCommand({
     },
     folder: {
       type: "string",
-      description: "Design folder to read the theme from (default: ./velloo)",
+      description: FOLDER_ARG_DESCRIPTION,
     },
     theme: {
       type: "string",
