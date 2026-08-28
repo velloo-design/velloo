@@ -1,8 +1,9 @@
 /**
  * Pinned anonymous-feedback issuer public keys (SPKI base64) per cloud
- * origin. GENERATED — velloo-cloud's deploy_vultr.sh rewrites and commits
- * this file when the production issuer key is created or a new cloud origin
- * is deployed; do not edit by hand. Origins not listed (dev, self-hosted)
+ * origin. A pin is committed once, when a production origin's issuer key is
+ * first created; velloo-cloud's deploy pipeline (scripts/fly-up.sh) refuses
+ * a prod deploy whose FEEDBACK_ISSUER_PRIVATE_KEY doesn't match the pin
+ * here. Origins not listed (the dev environment, self-hosted) intentionally
  * fall back to trust-on-first-use in feedback-tokens.ts.
  *
  * Why pinning matters: a malicious issuer could hand each user a different

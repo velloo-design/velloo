@@ -44,4 +44,14 @@ cd "$(mktemp -d)" && bun init -y && bun add /path/to/velloo/velloo-X.Y.Z.tgz
 ```
 
 `bun run cli:install` installs the same artifact globally (localhost cloud
-default); `bun run cli:prod` bakes the hosted cloud URL like the release build.
+default); `bun run cli:prod` bakes the hosted cloud URL like the release build,
+and `bun run cli:dev` bakes the dev environment (`https://api.dev.velloo.ai`).
+
+## Dogfood channel
+
+`bun run cli:release` (prod) / `bun run cli:release:dev` build the bundle with
+the environment's cloud URL baked in and upload `install.sh` + the tarball to
+that environment's R2 bucket under `downloads/` — velloo-cloud serves them at
+`get.velloo.dev` / `get.dev.velloo.dev`. Credentials come from the sibling
+velloo-cloud checkout's `.env.prod` / `.env.dev` (override the checkout with
+`VELLOO_CLOUD_DIR`, or pass `BLOB_*` directly).
