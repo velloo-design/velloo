@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { runBatch } from "../batch.ts";
@@ -41,7 +42,7 @@ const sampleTheme: Theme = {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");

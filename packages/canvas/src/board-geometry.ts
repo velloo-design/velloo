@@ -84,6 +84,34 @@ export function fitToContent(
  * blown up. Null when the viewport hasn't laid out yet. Used by "jump to
  * frame" navigation (search).
  */
+/**
+ * Camera view that centers an arbitrary board-space rect (a node's box) in a
+ * `vw`×`vh` viewport. Like focusFrame but without the frame-chrome allowance,
+ * and with a caller-set zoom ceiling — locating a small button shouldn't blow
+ * it up to fill the screen, just center it at a readable zoom.
+ */
+export function focusRect(
+  rect: FrameBox,
+  vw: number,
+  vh: number,
+  margin = 120,
+  maxZoom = 1,
+): PanZoom | null {
+  if (vw < 50 || vh < 50) return null;
+  const zoomX = (vw - margin * 2) / Math.max(1, rect.w);
+  const zoomY = (vh - margin * 2) / Math.max(1, rect.h);
+  const zoom = Math.max(MIN_ZOOM, Math.min(maxZoom, zoomX, zoomY));
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  return {
+    zoom,
+    pan: {
+      x: Math.round(vw / 2 - cx * zoom),
+      y: Math.round(vh / 2 - cy * zoom),
+    },
+  };
+}
+
 export function focusFrame(
   frame: FrameBox,
   vw: number,

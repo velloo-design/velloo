@@ -1,4 +1,5 @@
 import type { Result } from "@velloo/result";
+import { tracked } from "../../activity.ts";
 import { type AddNodeArgs, type AddNodeResult, addNode as addNodeImpl } from "../add-node.ts";
 import { type ApplyClassesArgs, applyClasses as applyClassesImpl } from "../apply-classes.ts";
 import type { MutationContext } from "../context.ts";
@@ -36,49 +37,83 @@ export function addNode(
   ctx: MutationContext,
   args: AddNodeArgs,
 ): Promise<Result<AddNodeResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => addNodeImpl(ctx, args));
+  return tracked(
+    ctx,
+    "add_node",
+    (v) => ({ screenId: args.screenId, path: v.path }),
+    () => withScreenLock(ctx.folder, args.screenId, () => addNodeImpl(ctx, args)),
+  );
 }
 export function updateProps(
   ctx: MutationContext,
   args: UpdatePropsArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => updatePropsImpl(ctx, args));
+  return tracked(
+    ctx,
+    "update_props",
+    (v) => ({ screenId: args.screenId, path: v.path }),
+    () => withScreenLock(ctx.folder, args.screenId, () => updatePropsImpl(ctx, args)),
+  );
 }
 export function moveNode(
   ctx: MutationContext,
   args: MoveNodeArgs,
 ): Promise<Result<MoveNodeResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => moveNodeImpl(ctx, args));
+  return tracked(
+    ctx,
+    "move_node",
+    (v) => ({ screenId: args.screenId, path: v.newPath }),
+    () => withScreenLock(ctx.folder, args.screenId, () => moveNodeImpl(ctx, args)),
+  );
 }
 export function removeNode(
   ctx: MutationContext,
   args: RemoveNodeArgs,
 ): Promise<Result<RemoveNodeResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => removeNodeImpl(ctx, args));
+  return tracked(ctx, "remove_node", { screenId: args.screenId }, () =>
+    withScreenLock(ctx.folder, args.screenId, () => removeNodeImpl(ctx, args)),
+  );
 }
 export function applyClasses(
   ctx: MutationContext,
   args: ApplyClassesArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => applyClassesImpl(ctx, args));
+  return tracked(
+    ctx,
+    "apply_classes",
+    (v) => ({ screenId: args.screenId, path: v.path }),
+    () => withScreenLock(ctx.folder, args.screenId, () => applyClassesImpl(ctx, args)),
+  );
 }
 export function updatePropsBulk(
   ctx: MutationContext,
   args: UpdatePropsBulkArgs,
 ): Promise<Result<UpdatePropsBulkResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => updatePropsBulkImpl(ctx, args));
+  return tracked(ctx, "update_props_bulk", { screenId: args.screenId }, () =>
+    withScreenLock(ctx.folder, args.screenId, () => updatePropsBulkImpl(ctx, args)),
+  );
 }
 export function setNodeId(
   ctx: MutationContext,
   args: SetNodeIdArgs,
 ): Promise<Result<SetNodeIdResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => setNodeIdImpl(ctx, args));
+  return tracked(
+    ctx,
+    "set_node_id",
+    (v) => ({ screenId: args.screenId, path: v.path }),
+    () => withScreenLock(ctx.folder, args.screenId, () => setNodeIdImpl(ctx, args)),
+  );
 }
 export function setStyle(
   ctx: MutationContext,
   args: SetStyleArgs,
 ): Promise<Result<UpdatePropsResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => setStyleImpl(ctx, args));
+  return tracked(
+    ctx,
+    "set_style",
+    (v) => ({ screenId: args.screenId, path: v.path }),
+    () => withScreenLock(ctx.folder, args.screenId, () => setStyleImpl(ctx, args)),
+  );
 }
 
 export type {
@@ -102,6 +137,11 @@ export function overrideSnippetProps(
   ctx: MutationContext,
   args: OverrideSnippetPropsArgs,
 ): Promise<Result<OverrideSnippetPropsResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => overrideSnippetPropsImpl(ctx, args));
+  return tracked(
+    ctx,
+    "override_snippet_props",
+    (v) => ({ screenId: args.screenId, path: v.path }),
+    () => withScreenLock(ctx.folder, args.screenId, () => overrideSnippetPropsImpl(ctx, args)),
+  );
 }
 export type { OverrideSnippetPropsArgs, OverrideSnippetPropsResult };

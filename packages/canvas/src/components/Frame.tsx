@@ -74,6 +74,9 @@ export const Frame = memo(function Frame({
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
   const setFrameInset = useCanvas((s) => s.setFrameInset);
   const annotations = useCanvas((s) => s.annotations);
+  const activityFlash = useCanvas((s) => s.activityFlash[frame.screen]);
+  const glowNonce = useCanvas((s) => s.frameGlow[frame.id]);
+  const [glowing, setGlowing] = useState(false);
 
   const { draftPos, draftSize, startDrag, startResize } = useFrameInteractions({
     boardId,
@@ -232,6 +235,49 @@ export const Frame = memo(function Frame({
     channel.send({ type: "applyHighlight", path: reveal.path, scroll: true });
   }, [reveal, frame.screen]);
 
+  // Agent-activity node flash: a node an agent just touched pulses in
+  // every frame showing that screen — no scroll, and the user's selection
+  // highlight is restored (never stolen) when the pulse ends. The nonce
+  // coalesces bursts: each bump extends the pulse instead of strobing.
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel || !activityFlash || activityFlash.path === null) return;
+    channel.send({ type: "applyHighlight", path: activityFlash.path });
+    const timer = setTimeout(() => {
+      const sel = useCanvas.getState().selection;
+      if (sel?.screenId === frame.screen) {
+        channel.send({ type: "applyHighlight", path: sel.path });
+      } else {
+        channel.send({ type: "clearHighlight" });
+      }
+    }, 1100);
+    return () => clearTimeout(timer);
+  }, [activityFlash, frame.screen]);
+
+  // Frame-level glow for screen-, frame-, and theme-level agent ops.
+  useEffect(() => {
+    if (!glowNonce) return;
+    setGlowing(true);
+    const timer = setTimeout(() => setGlowing(false), 1400);
+    return () => clearTimeout(timer);
+  }, [glowNonce]);
+
+  // One-shot geometry probe for fly-to-node navigation: answer with the
+  // probed path's rect (plus the annotated paths, since a rects response
+  // replaces this frame's whole registry entry).
+  const rectProbe = useCanvas((s) => s.rectProbe);
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel || !rectProbe || rectProbe.frameId !== frame.id) return;
+    const annotatedPaths = annotations
+      .filter((a) => a.resolved !== null)
+      .map((a) => (a.resolved ?? []).join("."));
+    channel.send({
+      type: "requestRects",
+      paths: [...new Set([rectProbe.path, ...annotatedPaths])],
+    });
+  }, [rectProbe, frame.id, annotations]);
+
   useEffect(() => {
     const channel = channelRef.current;
     if (!channel) return;
@@ -334,7 +380,16 @@ export const Frame = memo(function Frame({
             Loading {frame.screen}…
           </div>
         ) : (
-          <div ref={chromeHostRef} className="relative" style={{ width: w, height: h }}>
+          <div
+            ref={chromeHostRef}
+            className={
+              "relative" +
+              (glowing
+                ? " rounded-md ring-2 ring-primary/70 shadow-[0_0_18px_2px] shadow-primary/25 transition-shadow duration-300"
+                : "")
+            }
+            style={{ width: w, height: h }}
+          >
             <iframe
               ref={iframeRef}
               title={`${screen.name} (${frame.id})`}

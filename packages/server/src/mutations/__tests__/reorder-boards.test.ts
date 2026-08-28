@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder, orderedBoards } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { type MutationContext, removeBoard, reorderBoards } from "../index.ts";
@@ -45,7 +46,7 @@ function board(id: string) {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -87,7 +88,7 @@ describe("reorder_boards", () => {
     expect(result.order).toEqual(["gamma", "alpha", "beta"]);
     expect(folder.config.boardOrder).toEqual(["gamma", "alpha", "beta"]);
     expect(orderedBoards(folder).map(([id]) => id)).toEqual(["gamma", "alpha", "beta"]);
-    expect(events).toEqual([{ type: "config-changed" }]);
+    expect(events.filter((e) => e.type !== "activity")).toEqual([{ type: "config-changed" }]);
   });
 
   test("drops unknown ids and de-duplicates", async () => {

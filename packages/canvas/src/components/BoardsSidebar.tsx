@@ -57,6 +57,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const toggleBoardsCollapsed = useCanvas((s) => s.toggleBoardsCollapsed);
   const toggleTreeCollapsed = useCanvas((s) => s.toggleTreeCollapsed);
   const reorderBoardsLocal = useCanvas((s) => s.reorderBoardsLocal);
+  const boardPulse = useCanvas((s) => s.boardPulse);
   const currentScreen = useCanvas((s) =>
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
   );
@@ -79,8 +80,15 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
       const meta = byId.get(f.screen);
       if (meta) out.push(meta);
     }
+    // A selection can land on a screen this board doesn't place (activity-feed
+    // or search navigation) — keep it pickable so the Select never renders a
+    // blank value for a real, open screen.
+    if (currentScreenId && !seen.has(currentScreenId)) {
+      const meta = byId.get(currentScreenId);
+      if (meta) out.push(meta);
+    }
     return out;
-  }, [currentBoard, screens]);
+  }, [currentBoard, screens, currentScreenId]);
 
   const [pendingBoardDelete, setPendingBoardDelete] = useState<{
     id: string;
@@ -304,7 +312,16 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                         : "hover:bg-muted text-foreground")
                     }
                   >
-                    <div className="font-medium truncate">{b.name}</div>
+                    <div className="font-medium truncate">
+                      {b.name}
+                      {!active && boardPulse[b.id] ? (
+                        <span
+                          data-board-pulse={b.id}
+                          title="An agent edited this board recently"
+                          className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle"
+                        />
+                      ) : null}
+                    </div>
                     <div
                       className={
                         "text-xs " +

@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { collectActivity, emitGroupedActivity } from "../../activity.ts";
 import { BATCH_TOOLS, runBatch } from "../../mutations/batch.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 
@@ -22,7 +23,11 @@ export function registerBatchTool(mcp: McpServer, ctx: MutationContext): void {
       },
     },
     async ({ calls, atomic }) => {
-      const result = await runBatch(ctx, calls, { atomic });
+      // Inner calls collect their activity; the burst publishes as ONE grouped
+      // event — and nothing at all when an atomic batch rolled back (the
+      // canvas must not flash changes that no longer exist). See activity.ts.
+      const { value: result, ops } = await collectActivity(() => runBatch(ctx, calls, { atomic }));
+      if (!result.rolledBack) emitGroupedActivity(ctx, "batch", ops);
       const failed = result.results.some((r) => !r.ok);
       return {
         ...(failed ? { isError: true as const } : {}),

@@ -1,4 +1,5 @@
 import type { Result } from "@velloo/result";
+import { tracked } from "../../activity.ts";
 import {
   type AddBoardArgs,
   type AddBoardResult,
@@ -21,19 +22,28 @@ export function addBoard(
   ctx: MutationContext,
   args: AddBoardArgs,
 ): Promise<Result<AddBoardResult, MutationError>> {
-  return addBoardImpl(ctx, args);
+  return tracked(
+    ctx,
+    "add_board",
+    (v) => ({ boardId: v.boardId }),
+    () => addBoardImpl(ctx, args),
+  );
 }
 export function updateBoard(
   ctx: MutationContext,
   args: UpdateBoardArgs,
 ): Promise<Result<UpdateBoardResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => updateBoardImpl(ctx, args));
+  return tracked(ctx, "update_board", { boardId: args.boardId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => updateBoardImpl(ctx, args)),
+  );
 }
 export function removeBoard(
   ctx: MutationContext,
   args: RemoveBoardArgs,
 ): Promise<Result<RemoveBoardResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => removeBoardImpl(ctx, args));
+  return tracked(ctx, "remove_board", { boardId: args.boardId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => removeBoardImpl(ctx, args)),
+  );
 }
 // Reorder writes folder config (not a single board file), so a per-board
 // lock wouldn't serialize it against anything. Mirrors addBoard.
@@ -41,7 +51,7 @@ export function reorderBoards(
   ctx: MutationContext,
   args: ReorderBoardsArgs,
 ): Promise<Result<ReorderBoardsResult, MutationError>> {
-  return reorderBoardsImpl(ctx, args);
+  return tracked(ctx, "reorder_boards", {}, () => reorderBoardsImpl(ctx, args));
 }
 
 export type {

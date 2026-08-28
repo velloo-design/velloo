@@ -1,5 +1,6 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
+import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { createLockMap } from "../locks.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
@@ -27,7 +28,8 @@ import {
 
 export interface ThemeContext {
   folder: DesignFolder;
-  broadcast: (e: WatchEvent) => void;
+  /** WatchEvents drive refresh; activity events are presentation metadata. */
+  broadcast: (e: WatchEvent | ActivityEvent) => void;
 }
 
 const themeLocks = createLockMap();
@@ -57,7 +59,10 @@ export async function setToken(
 ): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await setTokenImpl(ctx.folder, path, value, themeName);
-    if (r.ok) broadcastThemeChanged(ctx);
+    if (r.ok) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "set_token", { token: path, ...(themeName ? { themeName } : {}) });
+    }
     return r;
   });
 }
@@ -74,7 +79,13 @@ export async function setTokens(
 ): Promise<Result<{ theme: Theme; applied: string[] }, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await setTokensImpl(ctx.folder, entries, themeName);
-    if (r.ok) broadcastThemeChanged(ctx);
+    if (r.ok) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "set_tokens", {
+        ...(entries[0] ? { token: entries[0].path } : {}),
+        ...(themeName ? { themeName } : {}),
+      });
+    }
     return r;
   });
 }
@@ -86,7 +97,10 @@ export async function setFonts(
 ): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await setFontsImpl(ctx.folder, fonts, themeName);
-    if (r.ok) broadcastThemeChanged(ctx);
+    if (r.ok) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "set_fonts", themeName ? { themeName } : {});
+    }
     return r;
   });
 }
@@ -121,6 +135,7 @@ export async function addTheme(
     const cloned: Theme = JSON.parse(JSON.stringify({ ...source, name }));
     const persisted = await persistNamedTheme(ctx.folder, name, cloned);
     broadcastThemeChanged(ctx);
+    emitActivity(ctx, "add_theme", { themeName: name });
     return { ok: true as const, value: { name, theme: persisted } };
   });
 }
@@ -143,7 +158,10 @@ export async function setCustomCss(
 ): Promise<Result<CustomCssResult, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await setCustomCssImpl(ctx.folder, css);
-    if (r.ok) broadcastThemeChanged(ctx);
+    if (r.ok) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "custom_css", {});
+    }
     return r;
   });
 }
@@ -160,7 +178,10 @@ export async function applyPreset(
 ): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await applyPresetImpl(ctx.folder, presetName);
-    if (r.ok) broadcastThemeChanged(ctx);
+    if (r.ok) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "apply_preset", {});
+    }
     return r;
   });
 }
@@ -176,6 +197,7 @@ export async function derivePaletteFromColor(
       // A named derive writes theme/<name>.json — never the default theme.
       const persisted = await persistNamedTheme(ctx.folder, name ?? "default", result.theme);
       broadcastThemeChanged(ctx);
+      emitActivity(ctx, "derive_palette_from_color", name ? { themeName: name } : {});
       return { ...result, theme: persisted };
     }),
   );
@@ -188,7 +210,10 @@ export async function importThemeCss(
 ): Promise<Result<ImportThemeCssResult, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await importThemeCssImpl(ctx.folder, css, opts);
-    if (r.ok && r.value.applied) broadcastThemeChanged(ctx);
+    if (r.ok && r.value.applied) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "import_theme", opts.themeName ? { themeName: opts.themeName } : {});
+    }
     return r;
   });
 }

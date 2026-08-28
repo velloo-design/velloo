@@ -10,6 +10,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { detectTailwindMajor } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import { withActor } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { countUnresolvedPulledComments } from "../cloud-comments.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
@@ -336,7 +337,14 @@ export async function createMcpServer(
           session = { transport, server };
         }
 
-        await session.transport.handleRequest(req, res, body);
+        // Actor attribution: every mutation this request triggers is
+        // agent activity, tagged with the MCP session. AsyncLocalStorage
+        // carries it into the tool handlers without threading a param.
+        const active = session;
+        await withActor(
+          { source: "mcp", session: sessionIdStr ?? active.transport.sessionId },
+          () => active.transport.handleRequest(req, res, body),
+        );
         return;
       }
 

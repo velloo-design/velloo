@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import {
@@ -49,7 +50,7 @@ const sampleScreen = {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: ThemeContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -81,7 +82,9 @@ describe("applyPreset", () => {
     expect(t.name).toBe("violet");
     const onDisk = await diskTheme();
     expect(onDisk.name).toBe("violet");
-    expect(events.at(-1)).toEqual({ type: "theme-changed" });
+    expect(events.filter((e) => e.type !== "activity").at(-1)).toEqual({
+      type: "theme-changed",
+    });
   });
 
   test("returns UnknownPreset err on unknown preset", async () => {
@@ -96,7 +99,9 @@ describe("setToken", () => {
     unwrap(await setToken(ctx, "colors.background", "oklch(0.99 0 0)"));
     const onDisk = await diskTheme();
     expect(onDisk.colors.background).toBe("oklch(0.99 0 0)");
-    expect(events.at(-1)).toEqual({ type: "theme-changed" });
+    expect(events.filter((e) => e.type !== "activity").at(-1)).toEqual({
+      type: "theme-changed",
+    });
   });
 
   test("rejects a path that produces an invalid theme", async () => {
@@ -123,8 +128,9 @@ describe("setTokens (bulk)", () => {
     const onDisk = await diskTheme();
     expect(onDisk.colors.background).toBe("oklch(0.98 0 0)");
     expect(onDisk.colors.foreground).toBe("oklch(0.2 0 0)");
-    // The whole batch broadcast exactly once, not per entry.
-    expect(events).toEqual([{ type: "theme-changed" }]);
+    // The whole batch broadcast exactly once, not per entry (one WatchEvent
+    // + one additive activity event).
+    expect(events.filter((e) => e.type !== "activity")).toEqual([{ type: "theme-changed" }]);
   });
 
   test("any bad entry fails the batch with a per-entry report and persists nothing", async () => {

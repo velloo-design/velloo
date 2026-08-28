@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { activityLog } from "./activity.ts";
 import type { CanvasAuth } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
@@ -47,6 +48,9 @@ export function createApp(
   app.get("/api/health", (c) =>
     c.json({ ok: true, app: "velloo", root: ctxFor().folder.root, pid: process.pid }),
   );
+  // Recent agent/canvas activity — the bounded in-memory log the canvas
+  // backfills from on open; live entries ride the WS as `activity` events.
+  app.get("/api/activity", (c) => c.json({ events: activityLog(ctxFor().folder.root) }));
   app.route("/api/design", createDesignRouter(ctxFor));
   app.route("/api/screen", createScreenRouter(folder));
   app.route("/api/board", createBoardRouter(folder));

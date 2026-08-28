@@ -7,6 +7,7 @@ import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { ConfigSchema } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { ActivityEvent } from "../../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../../design-folder.ts";
 import {
   addExtension,
@@ -62,7 +63,7 @@ const shadcnProvider = createShadcnProvider();
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");

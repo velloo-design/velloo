@@ -1,4 +1,5 @@
 import type { Result } from "@velloo/result";
+import { tracked } from "../../activity.ts";
 import {
   type AddSnippetArgs,
   type AddSnippetResult,
@@ -32,31 +33,47 @@ export function addSnippet(
   ctx: MutationContext,
   args: AddSnippetArgs,
 ): Promise<Result<AddSnippetResult, MutationError>> {
-  return withSnippetLock(ctx.folder, args.id ?? args.name, () => addSnippetImpl(ctx, args));
+  return tracked(
+    ctx,
+    "add_snippet",
+    (v) => ({ snippetId: v.snippetId }),
+    () => withSnippetLock(ctx.folder, args.id ?? args.name, () => addSnippetImpl(ctx, args)),
+  );
 }
 export function updateSnippet(
   ctx: MutationContext,
   args: UpdateSnippetArgs,
 ): Promise<Result<UpdateSnippetResult, MutationError>> {
-  return withSnippetLock(ctx.folder, args.snippetId, () => updateSnippetImpl(ctx, args));
+  return tracked(ctx, "update_snippet", { snippetId: args.snippetId }, () =>
+    withSnippetLock(ctx.folder, args.snippetId, () => updateSnippetImpl(ctx, args)),
+  );
 }
 export function removeSnippet(
   ctx: MutationContext,
   args: RemoveSnippetArgs,
 ): Promise<Result<RemoveSnippetResult, MutationError>> {
-  return withSnippetLock(ctx.folder, args.snippetId, () => removeSnippetImpl(ctx, args));
+  return tracked(ctx, "remove_snippet", { snippetId: args.snippetId }, () =>
+    withSnippetLock(ctx.folder, args.snippetId, () => removeSnippetImpl(ctx, args)),
+  );
 }
 export function instantiateSnippet(
   ctx: MutationContext,
   args: InstantiateSnippetArgs,
 ): Promise<Result<InstantiateSnippetResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => instantiateSnippetImpl(ctx, args));
+  return tracked(
+    ctx,
+    "instantiate_snippet",
+    (v) => ({ screenId: args.screenId, path: v.path, snippetId: args.snippetId }),
+    () => withScreenLock(ctx.folder, args.screenId, () => instantiateSnippetImpl(ctx, args)),
+  );
 }
 export function updateSnippetArgs(
   ctx: MutationContext,
   args: UpdateSnippetArgsArgs,
 ): Promise<Result<UpdateSnippetArgsResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => updateSnippetArgsImpl(ctx, args));
+  return tracked(ctx, "update_snippet_args", { screenId: args.screenId }, () =>
+    withScreenLock(ctx.folder, args.screenId, () => updateSnippetArgsImpl(ctx, args)),
+  );
 }
 
 export type {

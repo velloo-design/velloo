@@ -1,4 +1,5 @@
 import type { ComponentProvider } from "@velloo/provider";
+import type { ActivityEvent } from "../activity.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import { createLockMap } from "../locks.ts";
 import type { WatchEvent } from "../watcher.ts";
@@ -20,7 +21,8 @@ export interface MutationContext {
   providers: Record<string, ComponentProvider>;
   /** Provider used when a screen / snippet doesn't declare a `library`. */
   defaultProvider: ComponentProvider;
-  broadcast: (e: WatchEvent) => void;
+  /** WatchEvents drive refresh; activity events are presentation metadata. */
+  broadcast: (e: WatchEvent | ActivityEvent) => void;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { type ActivitySlice, createActivitySlice } from "./activity.ts";
 import { type AnnotationsSlice, createAnnotationsSlice } from "./annotations.ts";
 import { createDesignSlice, type DesignSlice } from "./design.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
@@ -21,6 +22,7 @@ import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
  *   - inspector   — right-panel tab + previewed node state
  *   - library     — boards ↔ library ↔ snippet-editor view switching
  *   - annotations — node annotations + board sticky notes
+ *   - activity    — agent-activity events: indicator, highlights, feed
  */
 export type CanvasState = DesignSlice &
   SelectionSlice &
@@ -28,7 +30,8 @@ export type CanvasState = DesignSlice &
   ModesSlice &
   InspectorSlice &
   LibrarySlice &
-  AnnotationsSlice;
+  AnnotationsSlice &
+  ActivitySlice;
 
 export const useCanvas = create<CanvasState>()((...a) => ({
   ...createDesignSlice(...a),
@@ -38,4 +41,5 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createInspectorSlice(...a),
   ...createLibrarySlice(...a),
   ...createAnnotationsSlice(...a),
+  ...createActivitySlice(...a),
 }));

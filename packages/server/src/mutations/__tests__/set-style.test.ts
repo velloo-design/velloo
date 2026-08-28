@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import type { Screen, Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { type MutationContext, setStyle } from "../index.ts";
@@ -80,7 +81,7 @@ beforeEach(async () => {
   await writeJson(join(tmp, "screens/dashboard.json"), shadcnScreen);
   await writeJson(join(tmp, "screens/panel.json"), muiScreen);
   folder = await loadDesignFolder(tmp);
-  const events: WatchEvent[] = [];
+  const events: (WatchEvent | ActivityEvent)[] = [];
   ctx = {
     folder,
     providers: { shadcn: shadcnProvider, mui: muiProvider },

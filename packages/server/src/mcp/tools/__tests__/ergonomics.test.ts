@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
+import type { ActivityEvent } from "../../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../../design-folder.ts";
 import { runBatch } from "../../../mutations/batch.ts";
 import {
@@ -57,7 +58,7 @@ const sampleTheme: Theme = {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 const writeJson = (p: string, v: unknown) =>
   writeFile(p, `${JSON.stringify(v, null, 2)}\n`, "utf8");

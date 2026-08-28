@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { type AuthStatus, auth, redo as redoApi, undo as undoApi } from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
+import { AgentActivityIndicator } from "./ActivityFeed.tsx";
 import { LogoLockup } from "./Logo.tsx";
 import { Button } from "./ui/button.tsx";
 import {
@@ -162,6 +163,7 @@ export function TopBar() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
+          <AgentActivityIndicator />
           <SearchButton />
 
           <Separator orientation="vertical" className="mx-1 h-5" />

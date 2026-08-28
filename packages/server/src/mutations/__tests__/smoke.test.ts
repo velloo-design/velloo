@@ -7,6 +7,7 @@ import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { isComponentNode } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { addNode, applyClasses, type MutationContext } from "../index.ts";
@@ -60,7 +61,7 @@ const sampleScreen = {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -130,8 +131,11 @@ describe("mutation happy path", () => {
     expect(ir.jsx).toMatch(/<h1\b/);
 
     // 4. Confirm watcher events fired for the two mutations.
-    expect(events.length).toBeGreaterThanOrEqual(2);
-    expect(events.every((e) => e.type === "screen-changed")).toBe(true);
+    const watch = events.filter((e) => e.type !== "activity");
+    expect(watch.length).toBeGreaterThanOrEqual(2);
+    expect(watch.every((e) => e.type === "screen-changed")).toBe(true);
+    // The additive activity metadata rides alongside, one per mutation.
+    expect(events.filter((e) => e.type === "activity").length).toBe(2);
   });
 
   test("add_node emitAs sets a host facade — emit_code emits the real import", async () => {

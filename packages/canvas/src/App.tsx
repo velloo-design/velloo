@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { annotations as annotationsApi, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
+import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { Board } from "./components/Board.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
@@ -194,6 +195,7 @@ export function App() {
       </div>
       <SearchDialog />
       <ExportDialog />
+      <ActivityFeed />
       <Toaster />
     </div>
   );

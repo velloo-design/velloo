@@ -4,6 +4,7 @@ import { canvasDistPath } from "@velloo/canvas";
 import { keyframesToCss } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import type { ServerWebSocket } from "bun";
+import type { ActivityEvent } from "./activity.ts";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
 import type { CanvasAuth, CloudAuth } from "./cloud.ts";
@@ -221,7 +222,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     () => findHostTailwindConfig(folder.root, folder.config.hostApp),
     folder.config.styling?.framework,
   );
-  const broadcast = (e: WatchEvent) => {
+  const broadcast = (e: WatchEvent | ActivityEvent) => {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
       jit.invalidate();
     }

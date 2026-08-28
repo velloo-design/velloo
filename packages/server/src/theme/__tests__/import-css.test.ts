@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { importThemeCss, type ThemeContext } from "../index.ts";
@@ -84,7 +85,7 @@ export default {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: ThemeContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -141,7 +142,9 @@ describe("importThemeCss", () => {
     expect(onDisk.colors.border).toBe("hsl(240 5.9% 90%)");
     expect(onDisk.colorsDark?.background).toBe("hsl(20 14.3% 4.1%)");
     expect(onDisk.radius.md).toBe("0.75rem");
-    expect(events.at(-1)).toEqual({ type: "theme-changed" });
+    expect(events.filter((e) => e.type !== "activity").at(-1)).toEqual({
+      type: "theme-changed",
+    });
   });
 
   test("undeclared slots keep their current values", async () => {

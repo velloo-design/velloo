@@ -6,7 +6,7 @@ import {
   nodeId,
   type Screen,
 } from "@velloo/schema";
-import { PanelsTopLeft } from "lucide-react";
+import { Crosshair, PanelsTopLeft } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
@@ -166,6 +166,22 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
               {description}
             </span>
           ) : null}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void useCanvas.getState().locateNode(screenId, pathStr);
+          }}
+          className={
+            "shrink-0 inline-flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover/row:opacity-70 hover:opacity-100 transition-opacity " +
+            (isSelected ? "text-primary-foreground" : "text-muted-foreground")
+          }
+          aria-label="Locate on canvas"
+          title="Locate on canvas (centers and zooms to this node)"
+          data-locate-node={pathStr}
+        >
+          <Crosshair size={11} strokeWidth={2} />
         </button>
         {snippetRef ? (
           <button

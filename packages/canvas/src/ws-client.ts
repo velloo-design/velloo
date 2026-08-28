@@ -1,3 +1,4 @@
+import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
 
@@ -9,7 +10,9 @@ type ServerEvent =
   | { type: "annotations-changed"; screenId: string }
   | { type: "notes-changed"; boardId: string }
   | { type: "config-changed" }
-  | { type: "reload-error"; source: string; message: string };
+  | { type: "reload-error"; source: string; message: string }
+  /** Agent-activity metadata — validated separately by parseActivityEntry. */
+  | { type: "activity" };
 
 /**
  * Validate a raw WebSocket frame at the trust boundary: it must be a JSON
@@ -49,6 +52,13 @@ export function connectWs(): () => void {
     socket.onmessage = (ev) => {
       const payload = parseServerEvent(ev.data);
       if (!payload) return;
+      // Activity events are presentation-only metadata riding the same
+      // channel — they never trigger refreshes; WatchEvents do.
+      if (payload.type === "activity") {
+        const entry = parseActivityEntry(payload);
+        if (entry) useCanvas.getState().recordActivity(entry);
+        return;
+      }
       const {
         currentScreenId,
         currentBoardId,

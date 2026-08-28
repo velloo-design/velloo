@@ -1,4 +1,5 @@
 import type { Result } from "@velloo/result";
+import { tracked } from "../../activity.ts";
 import {
   type AddScreenArgs,
   type AddScreenResult,
@@ -27,25 +28,38 @@ export function addScreen(
   ctx: MutationContext,
   args: AddScreenArgs,
 ): Promise<Result<AddScreenResult, MutationError>> {
-  return addScreenImpl(ctx, args);
+  return tracked(
+    ctx,
+    "add_screen",
+    (v) => ({ screenId: v.screenId }),
+    () => addScreenImpl(ctx, args),
+  );
 }
 export function removeScreen(
   ctx: MutationContext,
   args: RemoveScreenArgs,
 ): Promise<Result<RemoveScreenResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => removeScreenImpl(ctx, args));
+  return tracked(ctx, "remove_screen", { screenId: args.screenId }, () =>
+    withScreenLock(ctx.folder, args.screenId, () => removeScreenImpl(ctx, args)),
+  );
 }
 export function updateScreen(
   ctx: MutationContext,
   args: UpdateScreenArgs,
 ): Promise<Result<UpdateScreenResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => updateScreenImpl(ctx, args));
+  return tracked(ctx, "update_screen", { screenId: args.screenId }, () =>
+    withScreenLock(ctx.folder, args.screenId, () => updateScreenImpl(ctx, args)),
+  );
 }
 export function setScreenTree(
   ctx: MutationContext,
   args: SetScreenTreeArgs,
 ): Promise<Result<SetScreenTreeResult, MutationError>> {
-  return withScreenLock(ctx.folder, args.screenId, () => setScreenTreeImpl(ctx, args));
+  // Whole-tree replace: inherently ONE screen-level activity event — the
+  // grouped shape for this verb (never a per-node flood). See activity.ts.
+  return tracked(ctx, "set_screen_tree", { screenId: args.screenId }, () =>
+    withScreenLock(ctx.folder, args.screenId, () => setScreenTreeImpl(ctx, args)),
+  );
 }
 
 export type {

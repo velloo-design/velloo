@@ -2,6 +2,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { err, type Result } from "@velloo/result";
 import type { Annotation, Board, CanvasNote, Screen, Snippet } from "@velloo/schema";
+import type { ActivityEvent } from "../activity.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import type { WatchEvent } from "../watcher.ts";
@@ -309,7 +310,7 @@ export async function runBatch(
   const atomic = opts.atomic ?? true;
   const snapshots = new Map<ResourceKey, Snapshot>();
   const created: Array<{ kind: ResourceKind; id: string }> = [];
-  const buffered: WatchEvent[] = [];
+  const buffered: (WatchEvent | ActivityEvent)[] = [];
   const undoDepth = ctx.folder.history.depths().undo;
 
   const stagedCtx: MutationContext = atomic ? { ...ctx, broadcast: (e) => buffered.push(e) } : ctx;

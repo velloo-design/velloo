@@ -1,4 +1,5 @@
 import type { Result } from "@velloo/result";
+import { tracked } from "../../activity.ts";
 import { type AddFrameArgs, type AddFrameResult, addFrame as addFrameImpl } from "../add-frame.ts";
 import type { MutationContext } from "../context.ts";
 import { withBoardLock } from "../context.ts";
@@ -32,43 +33,60 @@ export function addFrame(
   ctx: MutationContext,
   args: AddFrameArgs,
 ): Promise<Result<AddFrameResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => addFrameImpl(ctx, args));
+  return tracked(
+    ctx,
+    "add_frame",
+    (v) => ({ boardId: args.boardId, frameId: v.frame.id, screenId: v.frame.screen }),
+    () => withBoardLock(ctx.folder, args.boardId, () => addFrameImpl(ctx, args)),
+  );
 }
 export function updateFrame(
   ctx: MutationContext,
   args: UpdateFrameArgs,
 ): Promise<Result<UpdateFrameResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => updateFrameImpl(ctx, args));
+  return tracked(ctx, "update_frame", { boardId: args.boardId, frameId: args.frameId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => updateFrameImpl(ctx, args)),
+  );
 }
 export function updateFrames(
   ctx: MutationContext,
   args: UpdateFramesArgs,
 ): Promise<Result<UpdateFramesResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => updateFramesImpl(ctx, args));
+  return tracked(ctx, "update_frames", { boardId: args.boardId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => updateFramesImpl(ctx, args)),
+  );
 }
 export function removeFrame(
   ctx: MutationContext,
   args: RemoveFrameArgs,
 ): Promise<Result<RemoveFrameResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => removeFrameImpl(ctx, args));
+  return tracked(ctx, "remove_frame", { boardId: args.boardId, frameId: args.frameId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => removeFrameImpl(ctx, args)),
+  );
 }
 export function addGroup(
   ctx: MutationContext,
   args: AddGroupArgs,
 ): Promise<Result<AddGroupResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => addGroupImpl(ctx, args));
+  return tracked(ctx, "add_group", { boardId: args.boardId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => addGroupImpl(ctx, args)),
+  );
 }
 export function updateGroup(
   ctx: MutationContext,
   args: UpdateGroupArgs,
 ): Promise<Result<UpdateGroupResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => updateGroupImpl(ctx, args));
+  return tracked(ctx, "update_group", { boardId: args.boardId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => updateGroupImpl(ctx, args)),
+  );
 }
 export function removeGroup(
   ctx: MutationContext,
   args: RemoveGroupArgs,
 ): Promise<Result<RemoveGroupResult, MutationError>> {
-  return withBoardLock(ctx.folder, args.boardId, () => removeGroupImpl(ctx, args));
+  return tracked(ctx, "remove_group", { boardId: args.boardId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => removeGroupImpl(ctx, args)),
+  );
 }
 
 export type {

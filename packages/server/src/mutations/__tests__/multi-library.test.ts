@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createProvider as createNoLibProvider } from "@velloo/provider-none";
 import type { Extension, Screen, Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import { registryForScreen } from "../../extensions/registry.ts";
 import type { WatchEvent } from "../../watcher.ts";
@@ -85,7 +86,7 @@ const dataTableExtension: Extension = {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");

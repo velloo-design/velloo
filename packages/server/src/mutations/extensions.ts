@@ -7,6 +7,7 @@ import {
   isComponentNode,
   type Node,
 } from "@velloo/schema";
+import { emitActivity } from "../activity.ts";
 import { resolveLiveImportWarning } from "../live/component-bundler.ts";
 import type { MutationContext } from "./context.ts";
 import {
@@ -136,6 +137,7 @@ export async function addExtension(
   };
   await persistConfig(ctx.folder, nextConfig);
   ctx.broadcast({ type: "config-changed" });
+  emitActivity(ctx, "add_extension", { extension: args.id });
   const result: AddExtensionResult = { id: args.id, extension };
   if (shadowed) result.shadowedLibraryComponent = shadowed;
   if (extension.render === "live") {
@@ -212,6 +214,7 @@ export async function updateExtension(
   };
   await persistConfig(ctx.folder, nextConfig);
   ctx.broadcast({ type: "config-changed" });
+  emitActivity(ctx, "update_extension", { extension: args.id });
   const result: UpdateExtensionResult = { id: args.id, extension: next };
   if (next.render === "live") {
     const warning = resolveLiveImportWarning(
@@ -248,5 +251,6 @@ export async function removeExtension(
   const nextConfig = { ...ctx.folder.config, extensions };
   await persistConfig(ctx.folder, nextConfig);
   ctx.broadcast({ type: "config-changed" });
+  emitActivity(ctx, "remove_extension", { extension: args.id });
   return ok({ id: args.id });
 }

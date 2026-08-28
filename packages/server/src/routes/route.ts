@@ -1,6 +1,7 @@
 import type { Result } from "@velloo/result";
 import type { Context } from "hono";
 import type { z } from "zod";
+import { withActor } from "../activity.ts";
 import { type MutationError, badRequest as mutationBadRequest } from "../mutations/errors.ts";
 import { type ThemeError, themeBadRequest } from "../theme/errors.ts";
 import { mutationToHttp, themeToHttp } from "./error-http.ts";
@@ -42,7 +43,12 @@ function makeBoundRoute<E, Ctx>(b: Bindings<E, Ctx>) {
       if (!parsed.success) {
         return b.toHttp(c, b.badRequest("Request body failed validation.", parsed.error.issues));
       }
-      const result = await handler(parsed.data as z.infer<S>, b.ctxFor());
+      // Actor attribution: the canvas is the only client of these
+      // routes, so anything they mutate is canvas-sourced activity — which
+      // the canvas itself filters out of its own change highlights.
+      const result = await withActor({ source: "canvas" }, () =>
+        handler(parsed.data as z.infer<S>, b.ctxFor()),
+      );
       return result.ok ? c.json(result.value) : b.toHttp(c, result.error);
     };
   };

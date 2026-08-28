@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { unwrap } from "@velloo/result";
 import { MAX_BOARD_NAME_LENGTH, type Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { addBoard, type MutationContext, updateBoard } from "../index.ts";
@@ -41,7 +42,7 @@ const sampleTheme: Theme = {
 let tmp: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
-let events: WatchEvent[];
+let events: (WatchEvent | ActivityEvent)[];
 
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -79,7 +80,9 @@ describe("update_board", () => {
     const result = unwrap(await updateBoard(ctx, { boardId: "alpha", patch: { name: "Flows" } }));
     expect(result.board.name).toBe("Flows");
     expect(folder.boards.get("alpha")?.name).toBe("Flows");
-    expect(events).toEqual([{ type: "board-changed", boardId: "alpha" }]);
+    expect(events.filter((e) => e.type !== "activity")).toEqual([
+      { type: "board-changed", boardId: "alpha" },
+    ]);
     const reloaded = await loadDesignFolder(tmp);
     expect(reloaded.boards.get("alpha")?.name).toBe("Flows");
   });
