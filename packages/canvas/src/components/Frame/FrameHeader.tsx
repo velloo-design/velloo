@@ -1,4 +1,4 @@
-import { GripVertical, Library as LibraryIcon, Link2, X } from "lucide-react";
+import { Download, GripVertical, Library as LibraryIcon, Link2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface FrameHeaderProps {
@@ -14,6 +14,8 @@ interface FrameHeaderProps {
   library?: string | null;
   onPointerDownGrip: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
+  /** Open the export dialog for this frame (PNG / PDF / standalone HTML). */
+  onExport: () => void;
   /** Commit a new size from the header's inline w/h inputs. */
   onResize: (next: { w?: number; h?: number }) => void;
 }
@@ -42,6 +44,7 @@ export function FrameHeader({
   library,
   onPointerDownGrip,
   onRemove,
+  onExport,
   onResize,
 }: FrameHeaderProps) {
   return (
@@ -88,14 +91,24 @@ export function FrameHeader({
           </span>
         ) : null}
       </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-card text-muted-foreground hover:text-foreground"
-        title="Remove this frame (the underlying screen stays)"
-      >
-        <X size={11} />
-      </button>
+      <div className="flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={onExport}
+          className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-card text-muted-foreground hover:text-foreground"
+          title="Export this frame (PNG, PDF, HTML)"
+        >
+          <Download size={11} />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-card text-muted-foreground hover:text-foreground"
+          title="Remove this frame (the underlying screen stays)"
+        >
+          <X size={11} />
+        </button>
+      </div>
     </div>
   );
 }

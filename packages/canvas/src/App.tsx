@@ -3,6 +3,7 @@ import { annotations as annotationsApi, redo as redoApi, undo as undoApi } from 
 import { useApplyAppTheme } from "./app-theme.ts";
 import { Board } from "./components/Board.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
+import { ExportDialog } from "./components/ExportDialog.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
@@ -192,6 +193,7 @@ export function App() {
         {view === "boards" ? <RightPanel screenId={currentScreenId} /> : null}
       </div>
       <SearchDialog />
+      <ExportDialog />
       <Toaster />
     </div>
   );

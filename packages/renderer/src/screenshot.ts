@@ -69,7 +69,7 @@ async function settleForCapture(
  * latest CLI and downloads a Chromium revision that the pinned runtime then
  * refuses to launch. Bump both together.
  */
-export const CHROMIUM_INSTALL_ARGV = ["bunx", "playwright@1.59.1", "install", "chromium"] as const;
+export const CHROMIUM_INSTALL_ARGV = ["bunx", "playwright@1.61.1", "install", "chromium"] as const;
 export const CHROMIUM_INSTALL_CMD = CHROMIUM_INSTALL_ARGV.join(" ");
 
 const INSTALL_HINT =
@@ -586,6 +586,91 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
       return buf;
     },
   );
+}
+
+export interface PdfPageOptions {
+  html: string;
+  viewport: Viewport;
+  /**
+   * Grow the page to the full content height (fullPage semantics, mirroring the
+   * screenshot pipeline's default) so nothing clips — every frame stays a
+   * single PDF page. Pass `false` to clip at the viewport rectangle instead.
+   */
+  fullPage?: boolean;
+  /** Small name chip overlaid bottom-left (deck pages carry the frame/screen name). */
+  label?: string;
+}
+
+/**
+ * Render HTML to a single-page PDF via Chromium's native `page.pdf`. Media
+ * stays emulated as `screen` (print stylesheets would strip the design's
+ * backgrounds) and `printBackground` is on, so the page prints exactly what
+ * the screenshot path rasterizes — same settle (load + webfonts + live
+ * islands), so webfonts are resolved before printing.
+ */
+export async function pdfPageBuffer(opts: PdfPageOptions): Promise<Buffer> {
+  return withContext(
+    { viewport: { width: opts.viewport.w, height: opts.viewport.h } },
+    async (context) => {
+      const page = await context.newPage();
+      await page.emulateMedia({ media: "screen" });
+      await page.setContent(opts.html, {
+        waitUntil: "domcontentloaded",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      await settleForCapture(page, opts.html);
+      const fullPage = opts.fullPage ?? true;
+      const height = fullPage
+        ? Math.max(
+            opts.viewport.h,
+            await page
+              .evaluate(() => document.documentElement.scrollHeight)
+              .catch(() => opts.viewport.h),
+          )
+        : opts.viewport.h;
+      if (opts.label) {
+        await page.evaluate((label) => {
+          const el = document.createElement("div");
+          el.textContent = label;
+          el.style.cssText =
+            "position:fixed;left:12px;bottom:12px;z-index:2147483647;" +
+            "font:600 11px/1 ui-sans-serif,system-ui,sans-serif;color:#fafafa;" +
+            "background:rgba(24,24,27,.85);padding:6px 10px;border-radius:8px";
+          document.body.appendChild(el);
+        }, opts.label);
+      }
+      // pageRanges "1": with fullPage the measured height makes one page anyway
+      // (this guards a rounding sliver); with fullPage: false it IS the clip.
+      return await page.pdf({
+        width: `${opts.viewport.w}px`,
+        height: `${height}px`,
+        printBackground: true,
+        pageRanges: "1",
+      });
+    },
+  );
+}
+
+/**
+ * Multi-page PDF deck: one page per entry, in order, each page sized to its
+ * own viewport (a review/handoff deck — a board's frames in board order).
+ * Pages are printed individually (Chromium can't vary page size within one
+ * print job) and merged with pdf-lib, loaded lazily so plain captures never
+ * pay for it.
+ */
+export async function pdfDeckBuffer(pages: PdfPageOptions[]): Promise<Buffer> {
+  if (pages.length === 0) throw new Error("pdfDeckBuffer: no pages");
+  const parts: Buffer[] = [];
+  for (const page of pages) parts.push(await pdfPageBuffer(page));
+  if (parts.length === 1 && parts[0]) return parts[0];
+  const { PDFDocument } = await import("pdf-lib");
+  const deck = await PDFDocument.create();
+  for (const part of parts) {
+    const doc = await PDFDocument.load(part);
+    const copied = await deck.copyPages(doc, doc.getPageIndices());
+    for (const p of copied) deck.addPage(p);
+  }
+  return Buffer.from(await deck.save());
 }
 
 export interface ScreenshotCompareOptions {

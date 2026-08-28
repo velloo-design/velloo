@@ -296,6 +296,14 @@ export const Frame = memo(function Frame({
       .catch((err) => toastError(err, "Could not resize frame"));
   };
 
+  const onExport = () => {
+    useCanvas.getState().setExportTarget({
+      kind: "frame",
+      id: frame.id,
+      name: frame.label ?? screen?.name ?? frame.screen,
+    });
+  };
+
   const passThrough = cursorMode === "hand" || cursorMode === "note";
 
   return (
@@ -314,6 +322,7 @@ export const Frame = memo(function Frame({
           library={screen?.library ?? null}
           onPointerDownGrip={startDrag}
           onRemove={onRemove}
+          onExport={onExport}
           onResize={onResize}
         />
 

@@ -2,6 +2,7 @@ import { MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import {
   ChevronDown,
   ChevronRight,
+  Download,
   LayoutDashboard,
   MoreHorizontal,
   Pencil,
@@ -328,6 +329,16 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                       <DropdownMenuItem onSelect={() => openRenameDialog(b)}>
                         <Pencil />
                         Rename board
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          useCanvas
+                            .getState()
+                            .setExportTarget({ kind: "board", id: b.id, name: b.name })
+                        }
+                      >
+                        <Download />
+                        Export board…
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"

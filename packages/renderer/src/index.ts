@@ -1,4 +1,11 @@
 export {
+  BOARD_COMPOSITE_MAX_WIDTH,
+  type BoardComposite,
+  type BoardCompositeFrame,
+  type BoardCompositeOptions,
+  buildBoardComposite,
+} from "./board-composite.ts";
+export {
   type BuildTreeOptions,
   buildRoot,
   buildTree,
@@ -39,6 +46,9 @@ export {
   classifyCapture,
   closePooledBrowser,
   isCaptureTimeout,
+  type PdfPageOptions,
+  pdfDeckBuffer,
+  pdfPageBuffer,
   type ScreenshotCompareOptions,
   type ScreenshotOptions,
   screenshot,

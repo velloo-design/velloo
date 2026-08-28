@@ -393,6 +393,24 @@ export {
 } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { loadDesignFolder, orderedBoards } from "./design-folder.ts";
+export {
+  type ExportFormat,
+  type ExportMode,
+  type ExportOptions,
+  type ExportPipeline,
+  exportBoardHtml,
+  exportBoardPdf,
+  exportBoardPng,
+  exportFilename,
+  exportFrameHtml,
+  exportFramePdf,
+  exportFramePng,
+  exportScreenHtml,
+  exportScreenPdf,
+  exportScreenPng,
+  findFrame,
+} from "./export/core.ts";
+export { STANDALONE_WARN_BYTES, type StandaloneResult } from "./export/standalone.ts";
 // Re-export key types and helpers for downstream consumers.
 export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";

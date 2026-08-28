@@ -1,3 +1,4 @@
+import { buildBoardComposite } from "@velloo/renderer";
 import type { Board, Frame, Screen, Viewport } from "@velloo/schema";
 
 /**
@@ -23,10 +24,6 @@ export const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
 export const MAX_SCREENSHOT_COUNT = 120;
 /** Downscale target when a capture exceeds the byte limit. */
 export const DOWNSCALE_WIDTH = 1280;
-
-/** Pixel-width cap for board composites (frames laid out in board coords). */
-const BOARD_MAX_WIDTH = 1600;
-const BOARD_PADDING = 24;
 
 export interface ScreenshotManifest {
   cover: string;
@@ -177,52 +174,6 @@ function message(err: unknown): string {
   return msg.split("\n")[0] ?? msg;
 }
 
-/**
- * One HTML document laying the board's frames out in board coordinate space —
- * each frame is an `<iframe srcdoc>` (isolated document, same trick as the
- * light/dark compare wrapper) clipped to its frame rect, the whole canvas
- * CSS-scaled to at most BOARD_MAX_WIDTH so a sprawling board still captures
- * as one modest PNG.
- */
-export function buildBoardComposite(frames: Array<{ frame: Frame; html: string }>): {
-  html: string;
-  viewport: Viewport;
-} {
-  const minX = Math.min(...frames.map(({ frame }) => frame.x));
-  const minY = Math.min(...frames.map(({ frame }) => frame.y));
-  const maxX = Math.max(...frames.map(({ frame }) => frame.x + frame.w));
-  const maxY = Math.max(...frames.map(({ frame }) => frame.y + frame.h));
-  const w = maxX - minX + BOARD_PADDING * 2;
-  const h = maxY - minY + BOARD_PADDING * 2;
-  const scale = Math.min(1, BOARD_MAX_WIDTH / w);
-  const outW = Math.max(1, Math.round(w * scale));
-  const outH = Math.max(1, Math.round(h * scale));
-
-  const esc = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const iframes = frames
-    .map(({ frame, html }) => {
-      const left = frame.x - minX + BOARD_PADDING;
-      const top = frame.y - minY + BOARD_PADDING;
-      return (
-        `<iframe scrolling="no" srcdoc="${esc(html)}" ` +
-        `style="position:absolute;left:${left}px;top:${top}px;width:${frame.w}px;height:${frame.h}px"></iframe>`
-      );
-    })
-    .join("\n    ");
-
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8"><style>
-*{box-sizing:border-box}
-body{margin:0;background:#f4f4f5;width:${outW}px;height:${outH}px;overflow:hidden}
-.canvas{position:relative;width:${w}px;height:${h}px;transform:scale(${scale});transform-origin:0 0}
-iframe{border:1px solid #e4e4e7;background:#fff;display:block}
-</style></head>
-<body>
-  <div class="canvas">
-    ${iframes}
-  </div>
-</body></html>`;
-
-  return { html, viewport: { w: outW, h: outH } };
-}
+// The board composite builder lives in @velloo/renderer (board-composite.ts),
+// shared with the server export core so publish screenshots
+// and user-facing board exports can never drift apart.

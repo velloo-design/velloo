@@ -20,6 +20,7 @@ const LOADERS: Record<string, LazyCommand> = {
   status: () => import("./status.ts").then((m) => m.default),
   __daemon: () => import("./daemon.ts").then((m) => m.default),
   render: () => import("./render.ts").then((m) => m.default),
+  export: () => import("./export.ts").then((m) => m.default),
   upgrade: () => import("./upgrade.ts").then((m) => m.default),
   publish: () => import("./publish.ts").then((m) => m.default),
   ci: () => import("./ci.ts").then((m) => m.default),

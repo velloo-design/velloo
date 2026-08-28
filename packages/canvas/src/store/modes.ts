@@ -41,12 +41,23 @@ export interface ModesSlice {
   treeCollapsed: boolean;
   /** Ctrl/Cmd+K search dialog visibility (session-only, not persisted). */
   searchOpen: boolean;
+  /** Export dialog target (session-only); null = closed. */
+  exportTarget: ExportTarget | null;
 
   setAppTheme(t: AppTheme): void;
   setDesignMode(m: DesignMode): void;
   toggleBoardsCollapsed(): void;
   toggleTreeCollapsed(): void;
   setSearchOpen(open: boolean): void;
+  setExportTarget(target: ExportTarget | null): void;
+}
+
+/** What the export dialog is pointed at — a frame or a whole board. */
+export interface ExportTarget {
+  kind: "frame" | "board";
+  id: string;
+  /** Display name for the dialog title + default filename. */
+  name: string;
 }
 
 export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (set) => ({
@@ -55,6 +66,7 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
   boardsCollapsed: readLeftPanels().boards,
   treeCollapsed: readLeftPanels().tree,
   searchOpen: false,
+  exportTarget: null,
 
   setAppTheme(appTheme) {
     set({ appTheme });
@@ -75,6 +87,10 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
 
   setSearchOpen(searchOpen) {
     set({ searchOpen });
+  },
+
+  setExportTarget(exportTarget) {
+    set({ exportTarget });
   },
 
   toggleTreeCollapsed() {

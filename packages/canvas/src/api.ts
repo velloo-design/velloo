@@ -22,6 +22,12 @@ export {
   type SnippetMeta,
 } from "./api/discovery.ts";
 export {
+  downloadExport,
+  type ExportFormat,
+  type ExportMode,
+  type ExportRequest,
+} from "./api/export.ts";
+export {
   fetchHistory,
   type HistoryDepths,
   type HistoryResponse,

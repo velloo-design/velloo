@@ -34,6 +34,7 @@
   "devDependencies": {
     "@types/culori": "4.0.1",
     "@types/react": "19.2.17",
+    "pdf-lib": "1.17.1",
     "playwright-core": "1.61.1",
     "react": "19.2.7"
   }

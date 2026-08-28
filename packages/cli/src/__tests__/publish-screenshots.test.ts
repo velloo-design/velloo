@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { buildBoardComposite } from "@velloo/renderer";
 import type { Board, Screen } from "@velloo/schema";
 import {
-  buildBoardComposite,
   type CaptureFn,
   type CaptureRequest,
   captureBundleScreenshots,

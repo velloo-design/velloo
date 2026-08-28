@@ -13,6 +13,7 @@ import {
   createScreenRouter,
   createSnippetsRouter,
 } from "./routes/design.ts";
+import { createExportRouter } from "./routes/export.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createRenderRouter } from "./routes/render.ts";
@@ -52,6 +53,7 @@ export function createApp(
   app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/search", createSearchRouter(folder));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
+  app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/live", createLiveRouter(bundler));
   app.route(
     "/api/canvas",

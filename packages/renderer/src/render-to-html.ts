@@ -73,6 +73,12 @@ export interface RenderOptions {
    * miss or mount failure is invisible.
    */
   canvasBundle?: { url: string; themeOptions: unknown };
+  /**
+   * Include the canvas iframe runtime script (selection channel). Defaults
+   * true; standalone exports pass false — the document must carry no
+   * canvas-facing behavior.
+   */
+  includeRuntime?: boolean;
 }
 
 /**
@@ -123,6 +129,7 @@ export async function renderScreen(
     dark: options.dark,
     liveBundleUrl: options.liveBundleUrl,
     canvasBundle,
+    ...(options.includeRuntime !== undefined ? { includeRuntime: options.includeRuntime } : {}),
   });
 
   return { html, bodyHtml, themeCss };
