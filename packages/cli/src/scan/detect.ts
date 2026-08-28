@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { detectTailwindMajor } from "@velloo/codegen";
 import type { DetectedHost } from "../wizard/answers.ts";
 
 function readJson(path: string): Record<string, unknown> | null {
@@ -15,13 +16,6 @@ function depRange(deps: Record<string, unknown>, name: string): string | undefin
   return typeof v === "string" ? v : undefined;
 }
 
-/** Major version parsed from a semver range like `^4.0.0` / `~3.4.1` / `4`. */
-function majorOf(range: string | undefined): number | null {
-  if (!range) return null;
-  const m = range.match(/(\d+)/);
-  return m ? Number(m[1]) : null;
-}
-
 /**
  * Inspect the host app to decide what `scan` is working with: its shadcn
  * style and Tailwind major version, plus the global stylesheet to import a
@@ -35,14 +29,9 @@ export function detectHost(appRoot: string): DetectedHost {
     ...((pkg.devDependencies as Record<string, unknown>) ?? {}),
   };
 
-  // Tailwind major: prefer the explicit `tailwindcss` range; fall back to the
-  // v4-only adapter packages, which imply v4 even when `tailwindcss` is pinned
-  // transitively.
-  let tailwindMajor: 3 | 4 | null = null;
-  const twMajor = majorOf(depRange(deps, "tailwindcss"));
-  if (twMajor !== null) tailwindMajor = twMajor >= 4 ? 4 : 3;
-  else if (depRange(deps, "@tailwindcss/vite") || depRange(deps, "@tailwindcss/postcss"))
-    tailwindMajor = 4;
+  // Tailwind major: shared with the codegen emit paths, which route v3/v4
+  // theme artifacts on the same signal.
+  const tailwindMajor = detectTailwindMajor(appRoot);
 
   const componentsJson = readJson(join(appRoot, "components.json"));
   const shadcn = componentsJson !== null;

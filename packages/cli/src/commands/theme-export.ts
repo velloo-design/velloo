@@ -7,7 +7,6 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
 import { loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
-import { fail } from "../fail.ts";
 import { resolveDesignFolder } from "../folder.ts";
 import { detectHost } from "../scan/detect.ts";
 
@@ -31,6 +30,7 @@ async function themeEmitter(
   theme: Theme,
   outDir: string,
   cssOnly: boolean,
+  tailwind3: boolean,
 ): Promise<{ native: boolean; produce: (apply: boolean) => Promise<EmitThemeResult> }> {
   const design = await loadDesignFolder(folderRoot);
   const { defaultProvider } = await resolveProviders(design.config, folderRoot);
@@ -58,40 +58,16 @@ async function themeEmitter(
         apply,
         cssOnly,
         ...(customCss ? { customCss } : {}),
+        ...(tailwind3 ? { tailwindMajor: 3 as const } : {}),
       }),
   };
-}
-
-/**
- * Velloo emits Tailwind v4 (`@import "tailwindcss"`, `@theme`, oklch), which
- * won't compile under v3 and whose v4 `tailwind.config.ts` would clobber a v3
- * config. Refuse on a detected v3 target with the detail an agent needs to fix
- * it, rather than writing broken output. `--force-v4` overrides.
- */
-function refuseV3(outDir: string, themePath: string): never {
-  fail(
-    "theme:export",
-    [
-      `target app at ${outDir} looks like Tailwind v3, but Velloo emits Tailwind v4.`,
-      "",
-      'The emitted globals.css uses `@import "tailwindcss"`, `@theme`, and oklch() — none',
-      "of which compile under v3 — and the v4 tailwind.config.ts would overwrite your v3 config.",
-      "",
-      "To finish (agent-actionable):",
-      `  1. Upgrade the app to Tailwind v4: \`npx @tailwindcss/upgrade\` in ${outDir}, then re-run this command; or`,
-      `  2. Hand-port: read the theme tokens at ${themePath}, convert each color to your v3`,
-      "     convention (HSL triplets in `:root`/`.dark`), and map them under",
-      "     `theme.extend.colors` in tailwind.config.js. Keep your existing `@tailwind` directives.",
-      "",
-      "Or pass --force-v4 to emit the v4 files anyway.",
-    ].join("\n"),
-  );
 }
 
 export default defineCommand({
   meta: {
     name: "theme:export",
-    description: "Export theme as Tailwind v4 globals.css (+ tailwind.config.ts) in diff mode",
+    description:
+      "Export theme as Tailwind globals.css (+ config) in diff mode — v4 @theme by default, or a velloo-theme.css + preset for a detected v3 target",
   },
   args: {
     to: {
@@ -117,7 +93,7 @@ export default defineCommand({
     },
     "force-v4": {
       type: "boolean",
-      description: "Emit v4 output even when the target app looks like Tailwind v3.",
+      description: "Emit the v4 artifacts even when the target app looks like Tailwind v3.",
     },
   },
   async run({ args }) {
@@ -128,18 +104,24 @@ export default defineCommand({
     const themeJson = JSON.parse(await readFile(themePath, "utf8"));
     const theme = ThemeSchema.parse(themeJson);
 
+    // Tailwind-major routing only applies to the Tailwind (shadcn) target — a
+    // MUI folder emits a createTheme() module, not globals.css, so v3
+    // detection is irrelevant there. A v3 target gets the v3 projection
+    // (velloo-theme.css + velloo.preset) instead of `@theme` files a v3 build
+    // can't compile; `--force-v4` restores the v4 output.
+    const tailwind3 = !args["force-v4"] && detectHost(outDir).tailwindMajor === 3;
+
     const { native, produce } = await themeEmitter(
       folderRoot,
       theme,
       outDir,
       Boolean(args["css-only"]),
+      tailwind3,
     );
-
-    // The v3/v4 guard only applies to the Tailwind (shadcn) target — a MUI
-    // folder emits a createTheme() module, not globals.css, so v3 detection
-    // is irrelevant there.
-    if (!native && !args["force-v4"] && detectHost(outDir).tailwindMajor === 3) {
-      refuseV3(outDir, themePath);
+    if (!native && tailwind3) {
+      console.log(
+        "velloo theme:export: target looks like Tailwind v3 — emitting velloo-theme.css + velloo.preset (pass --force-v4 for the v4 artifacts).",
+      );
     }
 
     const result = await produce(Boolean(args.apply));
@@ -170,6 +152,10 @@ export default defineCommand({
         stdout.write(`${rendered}\n`);
         stdout.write(`Would write to: ${file.path}\n\n`);
       }
+    }
+
+    for (const note of result.notes) {
+      console.log(`velloo theme:export: ${note}`);
     }
 
     if (!anyChange || args.apply) return;

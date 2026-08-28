@@ -2,20 +2,37 @@ import { isAbsolute, resolve, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   type CodegenTarget,
+  classNamesInJsx,
+  detectTailwindMajor,
   emitCode,
   emitNativeTheme,
   emitSnippet,
   emitTheme,
   moduleTarget,
+  type V3ClassIssue,
+  v3ClassIssues,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { Screen, Snippet } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
 import { errorResult, jsonResult } from "./result.ts";
+
+/**
+ * v4→v3 class advisory for a Tailwind-channel emit when the host app is still
+ * on Tailwind v3: the canvas compiles v4, so design classes carry v4 semantics
+ * and some need renaming (or have no v3 equivalent) in the file the agent
+ * writes. Empty when the host is v4/unknown or nothing needs attention.
+ */
+function v3CompatFor(ctx: MutationContext, classes: string[]): V3ClassIssue[] {
+  const hostRoot = hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
+  if (detectTailwindMajor(hostRoot) !== 3) return [];
+  return v3ClassIssues(classes);
+}
 
 /**
  * The codegen target for a screen/snippet's framework: when its provider
@@ -59,7 +76,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen: the JSX body (library identifiers + the screen framework's native styling — Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions (for MUI, components import from `@mui/material`).",
+        "Return agent-consumed IR for a screen: the JSX body (library identifiers + the screen framework's native styling — Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions (for MUI, components import from `@mui/material`). When the host app is on Tailwind v3, a `tailwindV3Compat` list flags classes to rename (with the v3 spelling) or that have no v3 equivalent — apply those renames while writing the file.",
       inputSchema: {
         screenId: z.string(),
         componentsAlias: z.string().optional(),
@@ -70,15 +87,27 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
       if (!screen) return errorResult(screenNotFound(args.screenId));
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, screen);
+      const inlineStyle = isInlineStyle(ctx, screen);
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
         ...(target ? { target } : {}),
-        ...(isInlineStyle(ctx, screen) ? { inlineStyle: true } : {}),
+        ...(inlineStyle ? { inlineStyle: true } : {}),
       });
       if (!result.ok) return errorResult(result.error);
-      return jsonResult(result.value);
+      // Snippet bodies are separate IRs, so their classes aren't in the
+      // screen's classesUsed — pull them from the emitted JSX.
+      const compat =
+        target || inlineStyle
+          ? []
+          : v3CompatFor(ctx, [
+              ...result.value.classesUsed,
+              ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
+            ]);
+      return jsonResult(
+        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : result.value,
+      );
     },
   );
 
@@ -97,15 +126,20 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
       if (!snippet) return errorResult(snippetNotFound(args.snippetId));
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, snippet);
+      const inlineStyle = isInlineStyle(ctx, snippet);
       const result = await emitSnippet(snippet, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
         ...(target ? { target } : {}),
-        ...(isInlineStyle(ctx, snippet) ? { inlineStyle: true } : {}),
+        ...(inlineStyle ? { inlineStyle: true } : {}),
       });
       if (!result.ok) return errorResult(result.error);
-      return jsonResult(result.value);
+      const compat =
+        target || inlineStyle ? [] : v3CompatFor(ctx, classNamesInJsx(result.value.jsx));
+      return jsonResult(
+        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : result.value,
+      );
     },
   );
 
@@ -113,7 +147,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     "emit_theme",
     {
       description:
-        "Generate the active framework's theme artifact from the active theme. shadcn ⇒ Tailwind v4 globals.css (+ optional tailwind.config.ts) at `<outputDir>/<cssPath>` (cssPath default `app/globals.css`; pass `globals.css`/`src/index.css` for Vite/Astro). MUI ⇒ a `createTheme(...)` module at `<outputDir>/<themePath>` (default `theme.ts`). Defaults to dry-run; this *is* a direct artifact (no agent translation needed).",
+        "Generate the active framework's theme artifact from the active theme. shadcn ⇒ Tailwind v4 globals.css (+ optional tailwind.config.ts) at `<outputDir>/<cssPath>` (cssPath default `app/globals.css`; pass `globals.css`/`src/index.css` for Vite/Astro). A target app detected as **Tailwind v3** instead gets `velloo-theme.css` (HSL variables, written next to the globals path — never into it) + a `velloo.preset.{ts,cjs}`; the result's `notes` carry the one-time wiring steps (an `@import` line + `presets: [...]`). MUI ⇒ a `createTheme(...)` module at `<outputDir>/<themePath>` (default `theme.ts`). Defaults to dry-run; this *is* a direct artifact (no agent translation needed).",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z
@@ -129,6 +163,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
         theme: z.string().optional().describe("Named theme to emit; default 'default'"),
+        tailwind: z
+          .union([z.literal(3), z.literal(4)])
+          .optional()
+          .describe(
+            "Force the Tailwind major of the emitted artifacts; default: detected from outputDir's package.json",
+          ),
       },
     },
     async (args) => {
@@ -156,16 +196,19 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
         });
         return jsonResult({ files: result.files });
       }
+      const tailwindMajor = args.tailwind ?? detectTailwindMajor(out);
       const result = await emitTheme(theme, {
         outputDir: out,
         ...(args.cssPath ? { cssPath: args.cssPath } : {}),
         apply: args.apply ?? false,
         cssOnly: args.cssOnly,
         customCss: ctx.folder.customCss,
+        ...(tailwindMajor === 3 ? { tailwindMajor: 3 as const } : {}),
       });
       return jsonResult({
         files: result.files,
         ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+        ...(result.notes.length > 0 ? { notes: result.notes } : {}),
       });
     },
   );

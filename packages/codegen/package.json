@@ -13,11 +13,13 @@
     "@velloo/helpers": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
+    "culori": "4.0.2",
     "diff": "9.0.0",
     "tailwind-merge": "3.5.0",
     "@velloo/provider": "workspace:*"
   },
   "devDependencies": {
+    "@types/culori": "4.0.1",
     "@types/diff": "8.0.0",
     "@types/react": "19.2.14",
     "@velloo/provider-none": "workspace:*",

@@ -1,0 +1,784 @@
+{
+  "id": "search-b-grouped",
+  "name": "Search B — Grouped with context",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative h-[900px] w-full overflow-hidden bg-zinc-100 [background-image:radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1px)] [background-size:22px_22px]"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-[90px] top-[96px] w-[430px]"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "props": {
+              "className": "mb-1.5 text-[11px] font-medium text-zinc-500",
+              "children": "checkout — desktop"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-[600px] rounded-lg border border-zinc-200 bg-white shadow-sm p-5 flex flex-col gap-4"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center justify-between"
+                },
+                "children": [
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-5 w-28 rounded"
+                    }
+                  },
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-7 w-20 rounded-md"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-32 w-full rounded-md"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-4 w-3/4 rounded"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-4 w-2/3 rounded"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-20 flex-1 rounded-md"
+                    }
+                  },
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-20 flex-1 rounded-md"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-4 w-1/2 rounded"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-24 w-full rounded-md"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-[590px] top-[150px] w-[520px]"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "props": {
+              "className": "mb-1.5 text-[11px] font-medium text-zinc-500",
+              "children": "billing settings — desktop"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-[640px] rounded-lg border border-zinc-200 bg-white shadow-sm p-5 flex flex-col gap-4"
+            },
+            "children": [
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-6 w-40 rounded"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-28 flex-1 rounded-md"
+                    }
+                  },
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-28 flex-1 rounded-md"
+                    }
+                  },
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-28 flex-1 rounded-md"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-4 w-2/3 rounded"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-40 w-full rounded-md"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-4 w-1/2 rounded"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-28 w-full rounded-md"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-[1180px] top-[70px] w-[380px]"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "props": {
+              "className": "mb-1.5 text-[11px] font-medium text-zinc-500",
+              "children": "invoice detail — desktop"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-[560px] rounded-lg border border-zinc-200 bg-white shadow-sm p-5 flex flex-col gap-4"
+            },
+            "children": [
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-5 w-32 rounded"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-36 w-full rounded-md"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-4 w-3/4 rounded"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-4 w-1/2 rounded"
+                }
+              },
+              {
+                "$ref": "Skeleton",
+                "props": {
+                  "className": "h-24 w-full rounded-md"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "overlay",
+        "props": {
+          "className": "absolute inset-0 flex items-start justify-center bg-zinc-950/40 backdrop-blur-[2px] pt-[150px]"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "dialog-b",
+            "props": {
+              "className": "w-[680px] overflow-hidden rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex h-[52px] items-center gap-3 border-b border-zinc-100 px-4"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "Search",
+                      "size": 17,
+                      "className": "text-zinc-400"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-1 items-center"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-[15px]",
+                          "children": "invoice"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "ml-0.5 h-[18px] w-px bg-zinc-800"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400",
+                      "children": "esc"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-1.5 border-b border-zinc-100 px-3 py-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "rounded-full bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white",
+                      "children": "All 8"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] text-zinc-500",
+                      "children": "Boards 1"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] text-zinc-500",
+                      "children": "Screens 2"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] text-zinc-500",
+                      "children": "Text 5"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "pb-1.5"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "px-4 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-zinc-400",
+                      "children": "Boards"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mx-1.5 flex h-10 items-center gap-3 rounded-md px-2.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "LayoutGrid",
+                          "size": 16,
+                          "className": "text-zinc-400"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-[13.5px]"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded-[3px] bg-primary/15 px-0.5 font-medium text-primary",
+                              "children": "Invoice"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "s"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "ml-auto text-[11.5px] text-zinc-400",
+                          "children": "6 frames"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "px-4 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-zinc-400",
+                      "children": "Screens"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mx-1.5 flex h-11 items-center gap-3 rounded-md px-2.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-7 w-10 shrink-0 rounded-[3px] border border-zinc-200 bg-zinc-50 p-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mb-0.5 h-1 w-1/2 rounded-sm bg-zinc-300"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "h-2.5 w-full rounded-sm bg-zinc-200"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-[13.5px]"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded-[3px] bg-primary/15 px-0.5 font-medium text-primary",
+                              "children": "Invoice"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": " detail"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "ml-auto text-[11.5px] text-zinc-400",
+                          "children": "Checkout"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mx-1.5 flex h-11 items-center gap-3 rounded-md px-2.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-7 w-10 shrink-0 rounded-[3px] border border-zinc-200 bg-zinc-50 p-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mb-0.5 h-1 w-2/3 rounded-sm bg-zinc-300"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "h-2.5 w-full rounded-sm bg-zinc-200"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-[13.5px]"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded-[3px] bg-primary/15 px-0.5 font-medium text-primary",
+                              "children": "Invoice"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": " email receipt"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "ml-auto text-[11.5px] text-zinc-400",
+                          "children": "Notifications"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "px-4 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-zinc-400",
+                      "children": "Text matches"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mx-1.5 flex flex-col justify-center gap-0.5 rounded-md bg-zinc-100 px-2.5 py-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-[13px] text-zinc-800"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": "“"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "rounded-[3px] bg-primary/15 px-0.5 font-medium text-primary",
+                                  "children": "Invoice"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": " #4021 — payment overdue”"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "ml-auto rounded border border-zinc-200 bg-white px-1.5 py-px text-[10px] text-zinc-400",
+                              "children": "↵"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[11px] text-zinc-400",
+                          "children": "Checkout › Invoice detail › Heading @title"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mx-1.5 flex flex-col justify-center gap-0.5 rounded-md px-2.5 py-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-[13px] text-zinc-800"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "“Download "
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded-[3px] bg-primary/15 px-0.5 font-medium text-primary",
+                              "children": "invoice"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": " as PDF”"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[11px] text-zinc-400",
+                          "children": "Checkout › Invoice detail › Button @download"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mx-1.5 flex flex-col justify-center gap-0.5 rounded-md px-2.5 py-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-[13px] text-zinc-800"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "“We’ll email your "
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded-[3px] bg-primary/15 px-0.5 font-medium text-primary",
+                              "children": "invoice"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": " after checkout”"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[11px] text-zinc-400",
+                          "children": "Checkout › Payment › Text @receipt-note"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "px-4 py-1.5 text-[11.5px] text-zinc-400",
+                      "children": "2 more text matches…"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex h-10 items-center gap-4 border-t border-zinc-100 px-4 text-[11px] text-zinc-400"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "rounded border border-zinc-200 bg-zinc-50 px-1 py-px text-[10px] font-medium text-zinc-500",
+                          "children": "↑↓"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "navigate"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "rounded border border-zinc-200 bg-zinc-50 px-1 py-px text-[10px] font-medium text-zinc-500",
+                          "children": "↵"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "jump to match"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "rounded border border-zinc-200 bg-zinc-50 px-1 py-px text-[10px] font-medium text-zinc-500",
+                          "children": "tab"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "switch filter"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "ml-auto",
+                      "children": "8 matches"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

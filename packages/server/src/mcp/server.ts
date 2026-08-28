@@ -8,9 +8,11 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { detectTailwindMajor } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { CloudAuth } from "../cloud.ts";
 import { countUnresolvedPulledComments } from "../cloud-comments.ts";
+import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -143,8 +145,15 @@ export function buildInstructions(
   tiered = false,
   intro: readonly string[] = [],
   unresolvedComments = 0,
+  hostTailwindMajor: 3 | 4 | null = null,
 ): string {
   const parts = [...intro, ...INSTRUCTION_PARTS];
+  if (hostTailwindMajor === 3) {
+    parts.push(
+      "",
+      "**The host app is on Tailwind v3** (the canvas itself always compiles v4). Prefer classes spelled the same in both majors; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container-query variants, `starting:`) — `validate_classes` warns per class and `emit_code` returns a `tailwindV3Compat` rename list (e.g. v4 `shadow-sm` ⇒ v3 `shadow`) to apply when writing app code. `emit_theme` detects the v3 target and emits `velloo-theme.css` + a `velloo.preset` instead of a v4 globals.css.",
+    );
+  }
   if (tiered) parts.push("", revealInstructions());
   if (canvasUrl) {
     parts.push(
@@ -176,11 +185,14 @@ function buildMcpServer(
   const tiered = progressiveToolsMode();
   // Framework framing comes from the adapter itself (its style channel picks
   // the variant for multi-channel providers) — no provider ids here.
-  const channelKind = styleChannelOf(
-    ctx.defaultProvider,
-    ctx.folder.config.styling?.framework,
-  ).kind;
+  const channel = styleChannelOf(ctx.defaultProvider, ctx.folder.config.styling?.framework);
+  const channelKind = channel.kind;
   const intro = (ctx.defaultProvider as FrameworkAdapter).mcpIntro?.(channelKind) ?? [];
+  // Tailwind-channel folders whose host app is still on v3 get the downlevel
+  // guidance up front (the canvas always compiles v4).
+  const hostTailwindMajor = channel.needsTailwindJit
+    ? detectTailwindMajor(hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp))
+    : null;
   // Waiting-comments count for the instructions, from LOCAL state only —
   // initialize never touches the network. The daemon's boot + interval pulls
   // (and any pull_comments call) keep `folder.annotations` fresh; each new
@@ -197,6 +209,7 @@ function buildMcpServer(
         tiered,
         intro,
         unresolvedComments,
+        hostTailwindMajor,
       ),
     },
   );

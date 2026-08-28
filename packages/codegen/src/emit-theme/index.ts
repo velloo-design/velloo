@@ -5,6 +5,7 @@ import { diffFile, type FileDiff } from "../diff.ts";
 import { type FormatError, formatCss } from "../format.ts";
 import { emitGlobalsCss, paletteShadowedSlots } from "./globals-css.ts";
 import { emitTailwindConfig } from "./tailwind-config.ts";
+import { emitThemeV3 } from "./v3.ts";
 
 export interface EmitThemeOptions {
   /** Directory to write into (or diff against). e.g. ../my-app */
@@ -28,6 +29,13 @@ export interface EmitThemeOptions {
   contentGlobs?: readonly string[];
   /** Folder custom.css contents — appended verbatim to globals.css. */
   customCss?: string;
+  /**
+   * Target app's Tailwind major. `3` emits the v3 projection — a
+   * `velloo-theme.css` (HSL-triplet vars next to the globals path, never the
+   * globals file itself) plus a `velloo.preset.{ts,cjs}` the user's config
+   * registers under `presets`. Default 4 (today's `@theme` globals.css).
+   */
+  tailwindMajor?: 3 | 4;
 }
 
 export interface EmitThemeFile {
@@ -42,9 +50,12 @@ export interface EmitThemeResult {
   files: EmitThemeFile[];
   /** Non-fatal notes about the emit — e.g. palette tokens shadowing semantic slots. */
   warnings: string[];
+  /** Follow-up wiring the caller/agent must do by hand (v3 preset + @import lines). */
+  notes: string[];
 }
 
 export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promise<EmitThemeResult> {
+  if (options.tailwindMajor === 3) return emitThemeV3(theme, options);
   const files: EmitThemeFile[] = [];
   const warnings: string[] = [];
   const shadowed = paletteShadowedSlots(theme);
@@ -95,5 +106,5 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
     });
   }
 
-  return { files, warnings };
+  return { files, warnings, notes: [] };
 }

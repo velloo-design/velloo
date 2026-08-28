@@ -397,6 +397,7 @@ export { loadDesignFolder, orderedBoards } from "./design-folder.ts";
 export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+export { hostAppRootFrom } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export {
   type FormatGateUpgradeResult,

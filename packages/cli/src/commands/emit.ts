@@ -1,10 +1,17 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
-import { type CodegenTarget, emitCode, moduleTarget } from "@velloo/codegen";
+import {
+  type CodegenTarget,
+  classNamesInJsx,
+  detectTailwindMajor,
+  emitCode,
+  moduleTarget,
+  v3ClassIssues,
+} from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { type Screen, ScreenSchema } from "@velloo/schema";
-import { loadDesignFolder, resolveProviders } from "@velloo/server";
+import { hostAppRootFrom, loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
@@ -106,9 +113,23 @@ export default defineCommand({
       }
     }
 
+    // Tailwind-channel emits against a v3 host app get the v4→v3 class
+    // advisory (the canvas compiles v4, so design classes carry v4 semantics).
+    const found = await findDesignConfig(screenPath);
+    const tailwindV3Compat =
+      found && !context?.target && !context?.inlineStyle
+        ? detectTailwindMajor(hostAppRootFrom(found.folder, found.config.hostApp)) === 3
+          ? v3ClassIssues([
+              ...result.value.classesUsed,
+              ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
+            ])
+          : []
+        : [];
+
     if (args.to) {
       const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
-      await writeFile(outPath, JSON.stringify(result.value, null, 2), "utf8");
+      const ir = tailwindV3Compat.length > 0 ? { ...result.value, tailwindV3Compat } : result.value;
+      await writeFile(outPath, JSON.stringify(ir, null, 2), "utf8");
       console.log(`velloo emit: wrote ${outPath}`);
       return;
     }
@@ -121,6 +142,13 @@ export default defineCommand({
     if (result.value.snippetsUsed.length > 0) {
       stdout.write(
         `// snippets: ${result.value.snippetsUsed.map((s) => `${s.componentName}(${s.id})`).join(", ")}\n`,
+      );
+    }
+    for (const issue of tailwindV3Compat) {
+      stdout.write(
+        issue.v3
+          ? `// tailwind v3 host: \`${issue.class}\` → \`${issue.v3}\` (${issue.note})\n`
+          : `// tailwind v3 host: \`${issue.class}\` — ${issue.note}\n`,
       );
     }
     stdout.write("\n");

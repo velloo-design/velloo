@@ -1,3 +1,4 @@
+export { detectTailwindMajor } from "./detect-tailwind.ts";
 export { colorizeDiff, diffFile, type FileDiff } from "./diff.ts";
 export { dynamicIconName } from "./emit-code/dynamic-icon.ts";
 export {
@@ -32,3 +33,4 @@ export {
   parseThemeExtend,
   type ThemeExtend,
 } from "./import-theme/parse-tailwind-config.ts";
+export { classNamesInJsx, type V3ClassIssue, v3ClassIssues } from "./tailwind-compat.ts";

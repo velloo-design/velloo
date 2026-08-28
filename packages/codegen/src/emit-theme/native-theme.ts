@@ -55,5 +55,9 @@ ${darkBlock}`;
     await writeFile(themePath, contents, "utf8");
     applied = true;
   }
-  return { files: [{ path: themePath, contents, diff, applied, errors: [] }], warnings: [] };
+  return {
+    files: [{ path: themePath, contents, diff, applied, errors: [] }],
+    warnings: [],
+    notes: [],
+  };
 }
