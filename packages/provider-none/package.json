@@ -13,11 +13,11 @@
     "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
     "clsx": "2.1.1",
-    "react": "19.2.6",
+    "react": "19.2.7",
     "tailwindcss": "4.3.0"
   },
   "devDependencies": {
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.17",
     "@velloo/renderer": "workspace:*",
     "@velloo/schema": "workspace:*"
   }

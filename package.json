@@ -25,10 +25,10 @@
     "cli:release:dev": "bun scripts/publish-cli.ts dev"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.2",
+    "@biomejs/biome": "2.5.4",
     "@types/bun": "latest",
     "knip": "6.24.0",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "engines": {
     "bun": ">=1.3.0"

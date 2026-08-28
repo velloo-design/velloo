@@ -33,8 +33,8 @@
   },
   "devDependencies": {
     "@types/culori": "4.0.1",
-    "@types/react": "19.2.14",
-    "playwright-core": "1.59.1",
-    "react": "19.2.6"
+    "@types/react": "19.2.17",
+    "playwright-core": "1.61.1",
+    "react": "19.2.7"
   }
 }

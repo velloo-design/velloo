@@ -91,7 +91,7 @@ beforeEach(async () => {
 
 function rootProps(screenId: string): Record<string, unknown> | undefined {
   const s = ctx.folder.screens.get(screenId);
-  return (s?.tree as { props?: Record<string, unknown> }).props;
+  return (s?.tree as { props?: Record<string, unknown> } | undefined)?.props;
 }
 
 describe("set_style — Tailwind (shadcn) channel", () => {

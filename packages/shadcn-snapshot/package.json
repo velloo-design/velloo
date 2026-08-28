@@ -20,16 +20,16 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "echarts": "6.1.0",
-    "lucide-react": "1.16.0",
-    "radix-ui": "1.4.3",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "lucide-react": "1.25.0",
+    "radix-ui": "1.6.2",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "sonner": "2.0.7",
     "tailwind-merge": "3.6.0",
     "tailwindcss": "4.3.0"
   },
   "devDependencies": {
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "ts-morph": "28.0.0"
   }

@@ -87,7 +87,7 @@ describe("TraceRecorder.record", () => {
     rec.record({ tool: "add_node", params: {}, durationMs: 3, error: new Error("boom") });
     const [line] = readLines(tmp);
     expect(line?.ok).toBe(false);
-    expect((line?.error as { message: string }).message).toBe("boom");
+    expect(line?.error).toMatchObject({ message: "boom" });
   });
 
   test("flags an isError result envelope", () => {
@@ -113,7 +113,7 @@ describe("TraceRecorder.record", () => {
       result: { content: [] },
     });
     const [line] = readLines(tmp);
-    const data = (line?.params as { data: string }).data;
+    const data = (line?.params as { data: string } | undefined)?.data ?? "";
     expect(data.length).toBeLessThan(20_000);
     expect(data).toContain("elided");
   });
@@ -149,7 +149,7 @@ describe("withCallRecording", () => {
     expect(line?.tool).toBe("get_screen");
     expect(line?.sessionId).toBe("sess-1");
     expect(line?.text).toBe("ok");
-    expect((line?.params as { screenId: string }).screenId).toBe("home");
+    expect(line?.params).toMatchObject({ screenId: "home" });
   });
 
   test("tapes and re-throws when the handler rejects", async () => {
@@ -169,7 +169,7 @@ describe("withCallRecording", () => {
     await expect(registered?.({}, {})).rejects.toThrow("kaboom");
     const [line] = readLines(tmp);
     expect(line?.ok).toBe(false);
-    expect((line?.error as { message: string }).message).toBe("kaboom");
+    expect(line?.error).toMatchObject({ message: "kaboom" });
   });
 });
 
@@ -212,6 +212,6 @@ describe("in-flight (pending) tracking", () => {
     expect(readPending(tmp)).toHaveLength(0);
     const [line] = readLines(tmp);
     expect(line?.ok).toBe(false);
-    expect((line?.error as { message: string }).message).toBe("stalled");
+    expect(line?.error).toMatchObject({ message: "stalled" });
   });
 });

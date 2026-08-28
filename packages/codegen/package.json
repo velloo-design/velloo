@@ -9,19 +9,19 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@biomejs/biome": "2.4.15",
+    "@biomejs/biome": "2.5.4",
     "@velloo/helpers": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
     "culori": "4.0.2",
     "diff": "9.0.0",
-    "tailwind-merge": "3.5.0",
+    "tailwind-merge": "3.6.0",
     "@velloo/provider": "workspace:*"
   },
   "devDependencies": {
     "@types/culori": "4.0.1",
     "@types/diff": "8.0.0",
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.17",
     "@velloo/provider-none": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*"
   }

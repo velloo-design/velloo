@@ -13,7 +13,7 @@
     "@velloo/shadcn-snapshot": "workspace:*"
   },
   "devDependencies": {
-    "@types/react": "19.2.14",
-    "react": "19.2.6"
+    "@types/react": "19.2.17",
+    "react": "19.2.7"
   }
 }
