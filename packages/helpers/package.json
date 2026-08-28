@@ -9,17 +9,20 @@
     ".": "./src/index.ts",
     "./paths": "./src/paths.ts"
   },
+  "scripts": {
+    "generate:icons": "bun scripts/generate-icon-data.ts"
+  },
   "dependencies": {
     "@velloo/provider": "workspace:*",
     "@velloo/schema": "workspace:*",
     "clsx": "2.1.1",
-    "lucide-react": "1.25.0",
     "react": "19.2.7",
     "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
+    "lucide-react": "1.25.0",
     "react-dom": "19.2.7"
   }
 }

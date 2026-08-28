@@ -12,7 +12,7 @@ import {
   ThemeSchema,
 } from "@velloo/schema";
 import { writeJsonAtomic, writeText } from "@velloo/server";
-import { snapshotVersion } from "@velloo/shadcn-snapshot";
+import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { completionsInstalled, detectShell, installCompletions } from "../completions/install.ts";

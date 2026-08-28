@@ -7,11 +7,6 @@ import {
   styleChannelOf,
   UnknownProviderError,
 } from "@velloo/provider";
-import { createProvider as createAntdProvider } from "@velloo/provider-antd";
-import { createProvider as createChakraProvider } from "@velloo/provider-chakra";
-import { createProvider as createMuiProvider } from "@velloo/provider-mui";
-import { createProvider as createNoLibProvider } from "@velloo/provider-none";
-import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
 import type { Config, HostApp, Library } from "@velloo/schema";
 
 /**
@@ -29,25 +24,30 @@ export function createServerProviderLoader(folderRoot?: string, hostApp?: HostAp
       ? resolve(folderRoot, hostApp.root)
       : resolve(folderRoot, "..")
     : undefined;
+  // Every factory dynamic-imports its provider package: a folder only pays
+  // for the frameworks it actually registers, and the bundled CLI splits each
+  // provider (antd, MUI, chakra, the shadcn snapshot) into a lazy chunk that
+  // never loads for other folders. Keep these imports dynamic — a static
+  // import here puts the whole framework back into the eager bundle.
   return createProviderLoader({
-    none: () => createNoLibProvider(),
+    none: async () => (await import("@velloo/provider-none")).createProvider(),
     // MUI is a first-class FrameworkAdapter: real MUI components SSR'd
     // in-process, sx styling, emotion render pass.
-    mui: () => createMuiProvider(),
+    mui: async () => (await import("@velloo/provider-mui")).createProvider(),
     // Ant Design v5, same stance: real antd components SSR'd in-process,
     // inline-`style` channel, cssinjs render pass.
-    antd: () => createAntdProvider(),
+    antd: async () => (await import("@velloo/provider-antd")).createProvider(),
     // Chakra UI v2, same stance: real chakra components SSR'd in-process,
     // `sx` channel, emotion render pass.
-    chakra: () => createChakraProvider(),
+    chakra: async () => (await import("@velloo/provider-chakra")).createProvider(),
     // shadcn-upstream — components fetched from the official
     // registry, deposited at the user's chosen location, and the canvas
     // renders against the cached manifest. `componentsPath` resolves to
     // the cache root so `loadManifest` and the JIT scan target follow
     // the install location.
-    "shadcn-upstream": (library) => {
+    "shadcn-upstream": async (library) => {
       const cacheDir = resolveUpstreamCacheDir(library, folderRoot);
-      return createUpstreamProvider({
+      return (await import("@velloo/provider-shadcn-upstream")).createProvider({
         version: library.version,
         ...(cacheDir ? { cacheDir } : {}),
         ...(hostAppRoot ? { hostAppRoot } : {}),

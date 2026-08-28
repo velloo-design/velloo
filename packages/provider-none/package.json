@@ -7,7 +7,8 @@
   "description": "No-library provider — bare HTML primitives (Box, Stack, Text, Heading, Button) for prototyping without a component library",
   "exports": {
     ".": "./src/index.ts",
-    "./tailwind-entry.css": "./src/tailwind-entry.css"
+    "./tailwind-entry.css": "./src/tailwind-entry.css",
+    "./version": "./src/version.ts"
   },
   "dependencies": {
     "@velloo/helpers": "workspace:*",

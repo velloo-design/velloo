@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Chakra UI v2 provider for Velloo — a first-class FrameworkAdapter (sx styling, emotion SSR, extendTheme).",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./version": "./src/version.ts"
   },
   "dependencies": {
     "@chakra-ui/react": "2.10.10",

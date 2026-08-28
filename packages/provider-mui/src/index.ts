@@ -25,7 +25,10 @@ import { muiThemeOptions } from "./theme.ts";
  * `MUI_MANIFEST` reads better than a generated dump of MUI's type surface.
  */
 
-export const MUI_VERSION = "6" as const;
+export { MUI_VERSION } from "./version.ts";
+
+import { MUI_VERSION } from "./version.ts";
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Resolve the provider src (Tailwind entry + sources), from dev + the bundled CLI. */

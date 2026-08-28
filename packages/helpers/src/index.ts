@@ -4,6 +4,14 @@ export { Divider, type DividerProps } from "./divider.tsx";
 export { Gradient, type GradientProps } from "./gradient.tsx";
 export { Heading, type HeadingProps } from "./heading.tsx";
 export { Icon, type IconProps } from "./icon.tsx";
+export {
+  ICON_ALIASES,
+  ICON_NODES,
+  type IconNode,
+  type IconNodeChild,
+  LUCIDE_SVG_ATTRIBUTES,
+  LUCIDE_VERSION,
+} from "./icon-data.ts";
 export { Image, type ImageProps } from "./image.tsx";
 export { Layer, type LayerProps } from "./layer.tsx";
 export {

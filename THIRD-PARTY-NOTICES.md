@@ -14,6 +14,9 @@ The most directly redistributed surfaces are:
   embedded in the binary and emitted into user projects.
 - The framework providers (`@velloo/provider-*`) and adapters, which build on
   the upstream component libraries below.
+- The published CLI bundle (`dist/cli.js` + `dist/chunks/*` + the canvas SPA),
+  which inlines its pure-JS runtime dependencies rather than installing them
+  from npm.
 
 ## Components
 
@@ -25,11 +28,34 @@ The most directly redistributed surfaces are:
 | Tailwind CSS | MIT | © Tailwind Labs, Inc. | https://github.com/tailwindlabs/tailwindcss |
 | MUI (`@mui/material`) | MIT | © 2014 Call-Em-All | https://github.com/mui/material-ui |
 | Emotion (`@emotion/*`) | MIT | © Emotion team and other contributors | https://github.com/emotion-js/emotion |
+| React / React DOM | MIT | © Meta Platforms, Inc. and affiliates | https://github.com/facebook/react |
+| Ant Design (`antd`, `@ant-design/*`, `rc-*`) | MIT | © Ant Design contributors | https://github.com/ant-design/ant-design |
+| Chakra UI v2 | MIT | © 2019 Segun Adebayo | https://github.com/chakra-ui/chakra-ui |
+| Framer Motion | MIT | © 2018 Framer B.V. | https://github.com/motiondivision/motion |
+| Apache ECharts | Apache-2.0 | © The Apache Software Foundation | https://github.com/apache/echarts |
+| Zod | MIT | © 2020 Colin McDonnell | https://github.com/colinhacks/zod |
+| Hono | MIT | © 2021-present Yusuke Wada | https://github.com/honojs/hono |
+| MCP TypeScript SDK | MIT | © 2024 Anthropic, PBC | https://github.com/modelcontextprotocol/typescript-sdk |
+| culori | MIT | © Dan Burzo | https://github.com/Evercoder/culori |
+| jsdiff (`diff`) | BSD-3-Clause | © 2009-2015 Kevin Decker | https://github.com/kpdecker/jsdiff |
+| sonner | MIT | © 2023 Emil Kowalski | https://github.com/emilkowalski/sonner |
+| class-variance-authority | Apache-2.0 | © Joe Bell | https://github.com/joe-bell/cva |
+| clsx | MIT | © Luke Edwards | https://github.com/lukeed/clsx |
+| tailwind-merge | MIT | © Dany Castillo | https://github.com/dcastil/tailwind-merge |
+| pixelmatch | ISC | © 2019 Mapbox | https://github.com/mapbox/pixelmatch |
+| pngjs | MIT | © pngjs contributors | https://github.com/pngjs/pngjs |
+| zustand | MIT | © 2019 Paul Henschel | https://github.com/pmndrs/zustand |
+| citty | MIT | © Pooya Parsa (unjs) | https://github.com/unjs/citty |
+| @clack/prompts | MIT | © Nate Moore | https://github.com/bombshell-dev/clack |
+| picocolors | ISC | © 2021 Alexey Raspopov | https://github.com/alexeyraspopov/picocolors |
+| @cloudflare/blindrsa-ts | Apache-2.0 | © Cloudflare, Inc. | https://github.com/cloudflare/blindrsa-ts |
 
 ## License texts
 
-The components above are distributed under the MIT or ISC license. The full
-texts follow; the copyright line of each applies as listed in the table.
+The components above are distributed under the MIT, ISC, BSD-3-Clause, or
+Apache-2.0 license. The full texts follow; the copyright line of each applies
+as listed in the table. (The Apache-2.0 text also ships as this package's own
+LICENSE file.)
 
 ### MIT License
 
@@ -68,3 +94,39 @@ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
+
+### BSD-3-Clause License
+
+```
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### Apache License 2.0
+
+Applies to Apache ECharts, class-variance-authority, and
+`@cloudflare/blindrsa-ts`. The full text is the same as this package's own
+`LICENSE` file (Apache License, Version 2.0, January 2004,
+http://www.apache.org/licenses/LICENSE-2.0).

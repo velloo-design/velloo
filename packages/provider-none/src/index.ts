@@ -11,12 +11,9 @@ export { Box, Button, Card, Container, Input, Stack } from "./components.tsx";
 export { NONE_MANIFEST } from "./manifest.ts";
 export { registry } from "./registry.ts";
 
-/**
- * Version of the no-library primitive set. Bumped on breaking changes
- * to the Box/Stack/Button surface (a renamed prop, a removed variant,
- * a behavior change).
- */
-export const noLibVersion = "0.1.0";
+export { noLibVersion } from "./version.ts";
+
+import { noLibVersion } from "./version.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 

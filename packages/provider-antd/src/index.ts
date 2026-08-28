@@ -25,7 +25,10 @@ import { antdThemeOptions } from "./theme.ts";
  * all wired.
  */
 
-export const ANTD_VERSION = "5" as const;
+export { ANTD_VERSION } from "./version.ts";
+
+import { ANTD_VERSION } from "./version.ts";
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Resolve the provider src (Tailwind entry + sources), from dev + the bundled CLI. */

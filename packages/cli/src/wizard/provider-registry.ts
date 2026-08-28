@@ -1,10 +1,13 @@
 import { resolve } from "node:path";
-import { ANTD_VERSION } from "@velloo/provider-antd";
-import { CHAKRA_VERSION } from "@velloo/provider-chakra";
-import { MUI_VERSION } from "@velloo/provider-mui";
-import { noLibVersion } from "@velloo/provider-none";
+// Version-only subpath imports: pulling these from the provider indexes would
+// drag every framework registry into the CLI's eager bundle graph — the whole
+// point of the lazy provider chunks (see packages/server/src/providers.ts).
+import { ANTD_VERSION } from "@velloo/provider-antd/version";
+import { CHAKRA_VERSION } from "@velloo/provider-chakra/version";
+import { MUI_VERSION } from "@velloo/provider-mui/version";
+import { noLibVersion } from "@velloo/provider-none/version";
 import type { Config, Library, Theme } from "@velloo/schema";
-import { snapshotVersion } from "@velloo/shadcn-snapshot";
+import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { buildAntdBoards, buildAntdScreens, buildAntdSnippets } from "../scaffold/antd-sample.ts";
 import {
   buildChakraBoards,

@@ -12,7 +12,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HELPER_DESCRIPTORS } from "@velloo/helpers";
+import { HELPER_DESCRIPTORS, ICON_ALIASES } from "@velloo/helpers";
 import {
   type InterfaceDeclaration,
   Node,
@@ -31,28 +31,16 @@ const distDir = join(here, "dist");
 const componentsDir = join(here, "src", "components");
 
 /**
- * Pull the list of lucide icon names. We exec a tiny script under bun so
- * we get the same `lucide-react` install the snapshot will ship with —
- * no need to maintain a parallel list. Filters to PascalCase function
- * exports that aren't internal helpers.
+ * Pull the list of lucide icon names from the helpers' generated icon data
+ * (the same data the Icon component resolves against, so no drift). Filters
+ * to the PascalCase names lucide-react itself exports — the alias map also
+ * carries kebab-case ids and Icon-suffixed variants, which the manifest's
+ * enum never listed.
  */
-async function loadLucideIconNames(): Promise<string[]> {
-  const proc = Bun.spawn(
-    [
-      "bun",
-      "-e",
-      "import * as L from 'lucide-react';" +
-        " const skip = new Set(['LucideProvider', 'createLucideIcon', 'LucideIcon', 'Icon']);" +
-        " const names = Object.keys(L).filter(k => /^[A-Z][A-Za-z0-9]*$/.test(k) && !k.endsWith('Icon') && !skip.has(k) && L[k]).sort();" +
-        " console.log(JSON.stringify(names));",
-    ],
-    { stdout: "pipe", stderr: "pipe", cwd: here },
-  );
-  const stdout = await new Response(proc.stdout).text();
-  const exit = await proc.exited;
-  if (exit !== 0) throw new Error("failed to enumerate lucide icons");
-  const last = stdout.trim().split("\n").pop() ?? "[]";
-  return JSON.parse(last) as string[];
+function loadLucideIconNames(): string[] {
+  return Object.keys(ICON_ALIASES)
+    .filter((k) => /^[A-Z][A-Za-z0-9]*$/.test(k) && !k.endsWith("Icon"))
+    .sort();
 }
 
 const COLOR_NAME = /^(color|background|fg|bg|theme|fill|stroke|tint|accent)/i;
@@ -199,7 +187,7 @@ async function buildManifest(): Promise<void> {
   });
   project.addSourceFilesAtPaths(`${componentsDir}/**/*.tsx`);
 
-  const lucideNames = await loadLucideIconNames();
+  const lucideNames = loadLucideIconNames();
   const helperById = new Map(HELPER_DESCRIPTORS.map((d) => [d.id, d]));
   const components: ComponentDescriptor[] = [];
 

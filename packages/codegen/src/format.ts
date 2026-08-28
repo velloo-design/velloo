@@ -24,8 +24,16 @@ export interface FormatResult {
   errors: FormatError[];
 }
 
+/** Pinned biome for the spawn below — keep in sync with the workspace's
+ * @biomejs/biome. Unpinned, an end-user install (where biome is not a velloo
+ * dependency — a ~25MB-per-platform native binary isn't worth shipping for a
+ * CSS formatting pass) would have bunx fetch *latest*, so emitted formatting
+ * could drift between machines. Pinned, bunx resolves the local install when
+ * present and caches the download otherwise. */
+const BIOME_PIN = "@biomejs/biome@2.5.4";
+
 async function runBiome(args: string[]): Promise<{ exitCode: number; stderr: string }> {
-  const proc = Bun.spawn(["bunx", "@biomejs/biome", ...args], {
+  const proc = Bun.spawn(["bunx", BIOME_PIN, ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });

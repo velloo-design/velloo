@@ -8,10 +8,16 @@
  * hand off (or `npm publish` later):
  *
  *   1. Build the canvas SPA and drop it next to the binary (`dist/canvas`).
- *   2. Bundle `cli.ts` into `dist/cli.js`, inlining every `@velloo/*` package
- *      and externalizing third-party deps (so npm resolves the platform-correct
- *      `@tailwindcss/oxide` binary, ts-morph, react, … at install time).
- *   3. Generate `dist/package.json` pinned to the exact installed versions.
+ *   2. Bundle `cli.ts` into `dist/cli.js` + lazy chunks (`dist/chunks/*`),
+ *      inlining `@velloo/*` AND every pure-JS third-party dep. Only packages
+ *      that must resolve from disk at install time stay external: the
+ *      Tailwind family (native `@tailwindcss/oxide` binary + the CSS assets
+ *      the JIT reads) and the optional `playwright-core`. Framework providers
+ *      (antd/MUI/chakra/shadcn-snapshot) are dynamic imports in
+ *      `packages/server/src/providers.ts`, so `splitting` turns each into a
+ *      chunk that only loads for folders targeting that framework.
+ *   3. Generate `dist/package.json` pinned to the exact installed versions
+ *      of the few remaining external deps.
  *
  * The Bun runtime is still required at run time (the server uses `Bun.serve`),
  * so the binary ships with a `#!/usr/bin/env bun` shebang.
@@ -75,11 +81,17 @@ const DECLARED = declaredVersions();
 // never want its absence to fail `npm install velloo`.
 const OPTIONAL = new Set(["playwright-core"]);
 
-// Peer deps that externalized packages require at runtime but the bundle never
-// imports directly, so the import-scanning externalizer wouldn't see them. MUI
-// (@mui/styled-engine) requires @emotion/styled even though velloo's code only
-// uses @emotion/react/cache/server — without this it's missing from the install.
-const FORCED_DEPS = ["@emotion/styled"];
+// The only packages that stay npm-installed. Everything else — react, zod,
+// hono, the MCP SDK, antd, MUI, chakra, echarts, radix, … — is inlined into
+// the bundle, which is what keeps `npm install velloo` at a handful of deps
+// instead of ~330MB of framework trees. Stay external here only when a
+// package can't be inlined:
+//   - @tailwindcss/oxide is a per-platform native binary npm must resolve.
+//   - @tailwindcss/node loads that binary and resolves `tailwindcss`'s
+//     on-disk CSS assets, which the JIT also reads at runtime.
+//   - playwright-core is optional AND locates browsers/assets from its own
+//     package directory.
+const EXTERNAL = new Set(["tailwindcss", "@tailwindcss/node", "@tailwindcss/oxide", ...OPTIONAL]);
 
 function step(msg: string): void {
   console.log(`\x1b[36m▸\x1b[0m ${msg}`);
@@ -156,19 +168,27 @@ if (!existsSync(join(canvasDist, "index.html"))) {
   throw new Error("canvas build produced no index.html");
 }
 
-// 3. Bundle the CLI. Inline @velloo/* source; externalize every third-party
-//    package so it installs (and resolves natively) the normal npm way.
+// 3. Bundle the CLI. Inline @velloo/* source and pure-JS third-party deps;
+//    only the EXTERNAL allowlist installs the normal npm way.
+//
+//    The plugin's filter is scoped to exactly the EXTERNAL packages — do NOT
+//    widen it to a catch-all that returns `undefined` for everything else.
+//    A matched-but-undefined onResolve breaks Bun's importer-relative
+//    resolution under the isolated linker, and `target: "bun"` then silently
+//    keeps the unresolvable bare specifier as a runtime import — the build
+//    "succeeds" while antd/MUI/react are quietly missing from the bundle
+//    (see the stray-import tripwire after the build).
 step("bundling cli.js…");
 const externals = new Set<string>();
-const externalizeThirdParty = {
-  name: "externalize-third-party",
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+const EXTERNAL_FILTER = new RegExp(`^(${[...EXTERNAL].map(escapeRe).join("|")})(/|$)`);
+const externalizeRuntimeDeps = {
+  name: "externalize-runtime-deps",
   setup(build: Bun.PluginBuilder) {
-    build.onResolve({ filter: /.*/ }, (args: { path: string }) => {
+    build.onResolve({ filter: EXTERNAL_FILTER }, (args: { path: string }) => {
       const s = args.path;
-      if (s.startsWith(".") || s.startsWith("/") || s.startsWith("@velloo/")) return undefined;
-      if (s.startsWith("node:") || s.startsWith("bun:")) return { path: s, external: true };
       const top = s.startsWith("@") ? s.split("/").slice(0, 2).join("/") : s.split("/")[0];
-      externals.add(top);
+      if (top) externals.add(top);
       return { path: s, external: true };
     });
   },
@@ -184,7 +204,14 @@ const result = await Bun.build({
   outdir: distDir,
   target: "bun",
   format: "esm",
-  plugins: [externalizeThirdParty],
+  // Each dynamic import (the framework providers) becomes a lazy chunk; a
+  // shadcn user never parses antd/MUI/chakra. Whitespace+syntax minification
+  // keeps the inlined-framework bundle a sane size; identifiers stay readable
+  // so user-facing stack traces still mean something.
+  splitting: true,
+  naming: { chunk: "chunks/[name]-[hash].[ext]" },
+  minify: { whitespace: true, syntax: true, identifiers: false },
+  plugins: [externalizeRuntimeDeps],
   define: {
     __VELLOO_BUILD_VERSION__: JSON.stringify(BUILD_VERSION),
     ...(prodCloudUrl ? { __VELLOO_DEFAULT_CLOUD_URL__: JSON.stringify(prodCloudUrl) } : {}),
@@ -201,6 +228,40 @@ if (!existsSync(cliJs)) throw new Error(`expected ${cliJs} — Bun.build emitted
 const code = readFileSync(cliJs, "utf8").replace(/^(#!.*\r?\n)+/, "");
 writeFileSync(cliJs, `#!/usr/bin/env bun\n${code}`);
 chmodSync(cliJs, 0o755);
+
+// Tripwire for the silent-corruption mode described above: a heavy package
+// that should have been inlined surviving as a REAL bare import means the
+// bundler left it to runtime resolution, where it can never resolve. Minified
+// code renders true imports as `from"antd"` / `import"antd"` (unescaped,
+// no space); the same names inside prose/codegen-template strings are quoted
+// *escaped*, so they don't match.
+step("verifying no stray bare imports…");
+const MUST_BE_INLINED = [
+  "antd",
+  "@mui/material",
+  "@chakra-ui/react",
+  "echarts",
+  "react",
+  "zod",
+  "hono",
+  "@modelcontextprotocol/sdk",
+];
+const bundleFiles = [
+  cliJs,
+  ...(existsSync(join(distDir, "chunks"))
+    ? readdirSync(join(distDir, "chunks")).map((f) => join(distDir, "chunks", f))
+    : []),
+];
+for (const file of bundleFiles) {
+  const src = readFileSync(file, "utf8");
+  for (const pkg of MUST_BE_INLINED) {
+    if (src.includes(`from"${pkg}"`) || src.includes(`import"${pkg}"`)) {
+      throw new Error(
+        `stray bare import of "${pkg}" in ${file} — the bundler externalized a package that must be inlined (broken plugin resolution?)`,
+      );
+    }
+  }
+}
 
 // 4. Ship the canvas next to the binary (server-export resolves `<here>/canvas`).
 step("copying canvas → dist/canvas");
@@ -260,9 +321,15 @@ for (const doc of ["README.md", "LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md"]) 
 
 // 5. Generate the publishable manifest, pinned to exact installed versions.
 step("writing dist/package.json");
+// Nothing imports the `tailwindcss` package directly (it would land in
+// `externals` if it did) — but the JIT resolves `@import "tailwindcss"` from
+// the shipped entry-CSS assets under dist/pkgs, and only a DIRECT dependency
+// is guaranteed to sit where that walk-up finds it (a transitive install of
+// @tailwindcss/node's copy may be nested under non-hoisting installers).
+externals.add("tailwindcss");
+
 const dependencies: Record<string, string> = {};
 const optionalDependencies: Record<string, string> = {};
-for (const pkg of FORCED_DEPS) externals.add(pkg);
 for (const pkg of [...externals].sort()) {
   const target = OPTIONAL.has(pkg) ? optionalDependencies : dependencies;
   target[pkg] = installedVersion(pkg);
@@ -293,7 +360,16 @@ const manifest = {
   ],
   bin: { velloo: "./cli.js" },
   engines: { bun: ">=1.3.0" },
-  files: ["cli.js", "canvas", "skills", "plugins", "pkgs", "NOTICE", "THIRD-PARTY-NOTICES.md"],
+  files: [
+    "cli.js",
+    "chunks",
+    "canvas",
+    "skills",
+    "plugins",
+    "pkgs",
+    "NOTICE",
+    "THIRD-PARTY-NOTICES.md",
+  ],
   dependencies,
   ...(Object.keys(optionalDependencies).length ? { optionalDependencies } : {}),
 };
@@ -305,12 +381,17 @@ run(["bun", "pm", "pack", "--destination", repoRoot], distDir);
 
 const tgz = `velloo-${VERSION}.tgz`;
 const bundleKb = Math.round(Bun.file(cliJs).size / 1024);
+const chunksDir = join(distDir, "chunks");
+const chunkFiles = existsSync(chunksDir) ? readdirSync(chunksDir) : [];
+const chunksKb = Math.round(
+  chunkFiles.reduce((sum, f) => sum + Bun.file(join(chunksDir, f)).size, 0) / 1024,
+);
 const canvasFiles = readdirSync(join(distDir, "canvas")).length;
 console.log(
   [
     "",
     `\x1b[32m✓ built velloo ${BUILD_VERSION}\x1b[0m`,
-    `  bundle:   dist/cli.js (${bundleKb} KB)`,
+    `  bundle:   dist/cli.js (${bundleKb} KB) + ${chunkFiles.length} lazy chunks (${chunksKb} KB)`,
     `  canvas:   dist/canvas/ (${canvasFiles} top-level entries)`,
     `  deps:     ${Object.keys(dependencies).length} runtime` +
       (Object.keys(optionalDependencies).length

@@ -1,5 +1,5 @@
 import { type Config, CURRENT_SCHEMA_VERSION, type HostApp, type Library } from "@velloo/schema";
-import { snapshotVersion } from "@velloo/shadcn-snapshot";
+import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { TOOL_VERSION } from "../version.ts";
 
 interface DefaultConfigOpts {

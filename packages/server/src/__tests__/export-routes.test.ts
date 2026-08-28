@@ -77,12 +77,14 @@ const aboutScreen = {
   },
 };
 
+// The two frames deliberately have DIFFERENT viewports so the board-PDF test
+// can prove each deck page keeps its own frame's size (Chromium named pages).
 const mainBoard = {
   id: "main",
   name: "Main flow",
   frames: [
     { id: "f-home", screen: "home", x: 0, y: 0, w: 480, h: 360, label: "Home / desktop" },
-    { id: "f-about", screen: "about", x: 560, y: 0, w: 480, h: 360 },
+    { id: "f-about", screen: "about", x: 560, y: 0, w: 800, h: 600 },
   ],
   groups: [],
 };
@@ -223,7 +225,7 @@ describe.if(hasChromium)("PNG/PDF export (chromium)", () => {
     expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   }, 30_000);
 
-  test("frame → single-page PDF; board → one page per frame in board order", async () => {
+  test("frame → single-page PDF; board → one page per frame in board order, each at its own frame size", async () => {
     const frameRes = await get("/api/export/frame/f-home.pdf");
     expect(frameRes.status).toBe(200);
     expect(frameRes.headers.get("content-type")).toBe("application/pdf");
@@ -235,7 +237,19 @@ describe.if(hasChromium)("PNG/PDF export (chromium)", () => {
     const boardPdf = Buffer.from(await boardRes.arrayBuffer());
     const { PDFDocument } = await import("pdf-lib");
     expect((await PDFDocument.load(framePdf)).getPageCount()).toBe(1);
-    expect((await PDFDocument.load(boardPdf)).getPageCount()).toBe(2);
+    const deck = await PDFDocument.load(boardPdf);
+    expect(deck.getPageCount()).toBe(2);
+    // The deck is a SINGLE Chromium print job with per-named-page CSS sizes;
+    // the two frames have different viewports (480×360 vs 800×600), so their
+    // pages must come out at different sizes — 0.75pt per CSS px, ±5pt slack
+    // for print rounding. Uniform pages would mean Chromium ignored the
+    // named-page sizes.
+    const first = deck.getPage(0).getSize();
+    const second = deck.getPage(1).getSize();
+    expect(first.width).toBeCloseTo(480 * 0.75, -1);
+    expect(first.height).toBeCloseTo(360 * 0.75, -1);
+    expect(second.width).toBeCloseTo(800 * 0.75, -1);
+    expect(second.height).toBeCloseTo(600 * 0.75, -1);
   }, 60_000);
 
   test("board → composite PNG", async () => {

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import type { Viewport } from "@velloo/schema";
-import type { Browser, BrowserContext, Page } from "playwright-core";
+import type { Browser, BrowserContext, Frame, Page } from "playwright-core";
 
 /** Flags the injected live/canvas runtimes set on the rendered page's window. */
 type VellooReadyFlags = {
@@ -17,10 +17,13 @@ type VellooReadyFlags = {
  * quiescence budget (LIVE_RUNTIME's DEADLINE_MS). Still bounded — a stuck
  * bundle can't stall the shot. No-op when there are no live nodes (cheap
  * string probe avoids a pointless wait on every plain screenshot).
+ *
+ * Takes a `Frame` too: composite captures (the PDF deck) render each entry in
+ * a same-origin iframe, so the flags live on the child frame's window.
  */
-async function waitForLiveIslands(page: Page, html: string): Promise<void> {
+async function waitForLiveIslands(target: Page | Frame, html: string): Promise<void> {
   if (html.includes("data-live-node")) {
-    await page
+    await target
       .waitForFunction(
         () => (window as Window & VellooReadyFlags).__velloo_live_ready === true,
         undefined,
@@ -32,7 +35,7 @@ async function waitForLiveIslands(page: Page, html: string): Promise<void> {
   // mount (or its SSR fallback) to settle before capturing. The runtime flips
   // `__velloo_canvas_ready` on success OR fallback, so this never stalls the shot.
   if (html.includes("velloo-canvas-data")) {
-    await page
+    await target
       .waitForFunction(
         () => (window as Window & VellooReadyFlags).__velloo_canvas_ready === true,
         undefined,
@@ -42,13 +45,21 @@ async function waitForLiveIslands(page: Page, html: string): Promise<void> {
   }
 }
 
+/** Bounded webfont wait — Google Fonts `<link>` loads lazily, and a slow/offline
+ *  font must not stall the shot. Works on a child frame too (the deck wrapper). */
+async function waitForFonts(target: Page | Frame): Promise<void> {
+  await target
+    .evaluate(() => Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2000))]))
+    .catch(() => {});
+}
+
 /**
  * Wait for a freshly set-content page to be ready to rasterize: the load event,
- * webfonts (Google Fonts `<link>` loads lazily — bounded so a slow/offline font
- * can't stall the shot), and any live islands. Shared by every capture path so
- * they don't drift — a missing fonts wait previously froze the fallback face on
- * the single-shot + compare paths. Pass `liveIslands: false` for composite pages
- * whose islands live in child frames, not the top document (the compare wrapper).
+ * webfonts, and any live islands. Shared by every capture path so they don't
+ * drift — a missing fonts wait previously froze the fallback face on the
+ * single-shot + compare paths. Pass `liveIslands: false` for composite pages
+ * whose islands live in child frames, not the top document (the compare and
+ * PDF-deck wrappers).
  */
 async function settleForCapture(
   page: Page,
@@ -56,9 +67,7 @@ async function settleForCapture(
   opts: { liveIslands?: boolean } = {},
 ): Promise<void> {
   await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
-  await page
-    .evaluate(() => Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2000))]))
-    .catch(() => {});
+  await waitForFonts(page);
   if (opts.liveIslands !== false) await waitForLiveIslands(page, html);
 }
 
@@ -654,23 +663,125 @@ export async function pdfPageBuffer(opts: PdfPageOptions): Promise<Buffer> {
 /**
  * Multi-page PDF deck: one page per entry, in order, each page sized to its
  * own viewport (a review/handoff deck — a board's frames in board order).
- * Pages are printed individually (Chromium can't vary page size within one
- * print job) and merged with pdf-lib, loaded lazily so plain captures never
- * pay for it.
+ * One print job: each entry's full HTML doc is embedded as a same-origin
+ * iframe in a wrapper document whose sections carry CSS *named pages*
+ * (`page: pN` + `@page pN { size … }`) — modern Chromium honors a distinct
+ * size per named page, so no per-entry print + pdf-lib merge is needed.
+ * Heights follow `fullPage` semantics: after the iframes load and settle,
+ * each iframe (and its named page) grows to its content height, so an entry
+ * is always exactly one page.
  */
 export async function pdfDeckBuffer(pages: PdfPageOptions[]): Promise<Buffer> {
-  if (pages.length === 0) throw new Error("pdfDeckBuffer: no pages");
-  const parts: Buffer[] = [];
-  for (const page of pages) parts.push(await pdfPageBuffer(page));
-  if (parts.length === 1 && parts[0]) return parts[0];
-  const { PDFDocument } = await import("pdf-lib");
-  const deck = await PDFDocument.create();
-  for (const part of parts) {
-    const doc = await PDFDocument.load(part);
-    const copied = await deck.copyPages(doc, doc.getPageIndices());
-    for (const p of copied) deck.addPage(p);
-  }
-  return Buffer.from(await deck.save());
+  const first = pages[0];
+  if (!first) throw new Error("pdfDeckBuffer: no pages");
+  if (pages.length === 1) return pdfPageBuffer(first);
+  const wrapper = buildDeckWrapper(pages);
+  const maxW = Math.max(...pages.map((p) => p.viewport.w));
+  const maxH = Math.max(...pages.map((p) => p.viewport.h));
+  return withContext({ viewport: { width: maxW, height: maxH } }, async (context) => {
+    const page = await context.newPage();
+    await page.emulateMedia({ media: "screen" });
+    await page.setContent(wrapper, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT_MS });
+    // Every entry iframe loaded (ready flags, bounded like the compare wrapper).
+    await page
+      .waitForFunction(
+        (count) => {
+          for (let i = 0; i < count; i++) {
+            const f = document.getElementById(`f${i}`);
+            if (!(f instanceof HTMLIFrameElement) || f.dataset.ready !== "1") return false;
+          }
+          return true;
+        },
+        pages.length,
+        { timeout: CAPTURE_TIMEOUT_MS },
+      )
+      .catch(() => {});
+    // Fonts + live islands live inside the child frames, not the top document.
+    await settleForCapture(page, wrapper, { liveIslands: false });
+    await Promise.all(
+      page
+        .frames()
+        .filter((f) => f !== page.mainFrame())
+        .map(async (frame) => {
+          const entry = pages[Number(frame.name().slice(1))];
+          await waitForFonts(frame);
+          if (entry) await waitForLiveIslands(frame, entry.html);
+        }),
+    );
+    // Now that content has settled, measure each iframe and size it together
+    // with its named page (same one-shot measure as pdfPageBuffer). Each
+    // section's height matches its page box exactly in CSS px, so nothing
+    // fragments onto a stray extra page.
+    await page.evaluate(
+      (entries) => {
+        const rules: string[] = [];
+        entries.forEach((e, i) => {
+          const f = document.getElementById(`f${i}`);
+          const section = document.getElementById(`s${i}`);
+          if (!(f instanceof HTMLIFrameElement) || !(section instanceof HTMLElement)) return;
+          const content = f.contentDocument?.documentElement?.scrollHeight ?? e.h;
+          const height = e.fullPage ? Math.max(e.h, content) : e.h;
+          f.height = String(height);
+          section.style.height = `${height}px`;
+          rules.push(`@page p${i}{size:${e.w}px ${height}px;margin:0}`);
+        });
+        const style = document.getElementById("deck-pages");
+        if (style) style.textContent = rules.join("\n");
+      },
+      pages.map((p) => ({ w: p.viewport.w, h: p.viewport.h, fullPage: p.fullPage ?? true })),
+    );
+    return await page.pdf({ printBackground: true, preferCSSPageSize: true });
+  });
+}
+
+/**
+ * The single-print-job deck document: one section per entry, each a
+ * same-origin srcdoc iframe on its own CSS named page. `@page` sizes here are
+ * the pre-measure viewports — `pdfDeckBuffer` rewrites `#deck-pages` after the
+ * frames settle and are measured. The label chip is *absolutely* positioned
+ * inside its section (a `position: fixed` chip would repeat on every page of
+ * the print job). Iframes start at the entry viewport height — never measure
+ * from the 150px iframe default, because viewport-bound layouts (h-screen
+ * roots) size themselves to whatever the iframe is; grow only on genuine
+ * overflow (see buildCompareWrapper for the same rationale).
+ */
+function buildDeckWrapper(pages: PdfPageOptions[]): string {
+  const styles = [
+    "*{box-sizing:border-box}",
+    "html,body{margin:0;padding:0}",
+    // Named pages alone force a break between differently named sections;
+    // break-after is belt and braces (skipping the last avoids a blank tail page).
+    "section{position:relative;overflow:hidden}",
+    "section:not(:last-of-type){break-after:page}",
+    "iframe{border:0;display:block;background:#fff}",
+    ".chip{position:absolute;left:12px;bottom:12px;z-index:2147483647;" +
+      "font:600 11px/1 ui-sans-serif,system-ui,sans-serif;color:#fafafa;" +
+      "background:rgba(24,24,27,.85);padding:6px 10px;border-radius:8px}",
+  ].join("");
+  const pageRules = pages
+    .map((p, i) => `@page p${i}{size:${p.viewport.w}px ${p.viewport.h}px;margin:0}`)
+    .join("\n");
+  const sections = pages
+    .map((p, i) => {
+      const { w, h } = p.viewport;
+      const chip = p.label ? `<div class="chip">${escapeHtml(p.label)}</div>` : "";
+      return (
+        `<section id="s${i}" style="page:p${i};width:${w}px;height:${h}px">` +
+        `<iframe id="f${i}" name="f${i}" width="${w}" height="${h}" srcdoc="${escapeHtml(p.html)}"></iframe>${chip}</section>`
+      );
+    })
+    .join("\n");
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><style>${styles}</style><style id="deck-pages">${pageRules}</style></head>
+<body>
+${sections}
+<script>
+for (let i = 0; i < ${pages.length}; i++) {
+  const f = document.getElementById("f" + i);
+  f.addEventListener("load", () => { f.dataset.ready = "1"; });
+}
+</script>
+</body></html>`;
 }
 
 export interface ScreenshotCompareOptions {
@@ -732,6 +843,16 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
   );
 }
 
+/** Escape a full HTML doc (or label text) for embedding in a srcdoc attribute
+ *  — the payload may contain double quotes. Shared by the composite wrappers. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function buildCompareWrapper(
   leftHtml: string,
   rightHtml: string,
@@ -740,9 +861,7 @@ function buildCompareWrapper(
   leftLabel: string,
   rightLabel: string,
 ): string {
-  // Escape srcdoc payloads — the HTML may contain double quotes.
-  const esc = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const esc = escapeHtml;
   const styles = [
     "*{box-sizing:border-box}",
     "body{margin:0;padding:8px;background:#f4f4f5;font-family:ui-sans-serif,system-ui,sans-serif;color:#27272a}",

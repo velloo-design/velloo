@@ -25,7 +25,10 @@ import { chakraThemeOptions } from "./theme.ts";
  * `velloo init --library=chakra`, and the catalog are all wired.
  */
 
-export const CHAKRA_VERSION = "2" as const;
+export { CHAKRA_VERSION } from "./version.ts";
+
+import { CHAKRA_VERSION } from "./version.ts";
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Resolve the provider src (Tailwind entry + sources), from dev + the bundled CLI. */

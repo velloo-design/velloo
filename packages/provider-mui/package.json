@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Material UI v6 provider for Velloo — a first-class FrameworkAdapter (sx styling, emotion SSR, MUI theme).",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./version": "./src/version.ts"
   },
   "dependencies": {
     "@emotion/cache": "11.14.0",
