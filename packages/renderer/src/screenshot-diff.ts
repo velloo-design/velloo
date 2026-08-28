@@ -16,6 +16,9 @@ export interface DiffRegion {
   y: number;
   w: number;
   h: number;
+  /** Changed pixels inside this rect — ranks regions by change magnitude, not just area.
+   *  Set by diffPngs; optional so ad-hoc rects (crop targets) don't need it. */
+  changedPixels?: number;
 }
 
 export interface DiffResult {
@@ -175,6 +178,18 @@ export function diffPngs(before: Buffer, after: Buffer, options: DiffOptions = {
     changedPixels === 0
       ? []
       : clusterRegions(mask, width, height, options.cellSize ?? 16, options.maxRegions ?? 10);
+  // Count changed pixels per region and rank by magnitude — a dense small region
+  // usually matters more than a sparse large one. (Bounding boxes may overlap, so
+  // counts can double-count a few pixels; fine for ranking.)
+  for (const r of regions) {
+    let n = 0;
+    for (let y = r.y; y < r.y + r.h; y++) {
+      const row = y * width;
+      for (let x = r.x; x < r.x + r.w; x++) n += mask[row + x] as number;
+    }
+    r.changedPixels = n;
+  }
+  regions.sort((a, b) => (b.changedPixels ?? 0) - (a.changedPixels ?? 0));
 
   // Height-normalized diff: re-run over just the overlapping rows. The padded
   // buffers are top-aligned and row-major, so the first `contentHeight` rows

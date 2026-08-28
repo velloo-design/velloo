@@ -7,6 +7,8 @@ export interface SnippetInstanceLocation {
   path: string;
   /** Whether the instance carries a per-instance className override. */
   hasOverride: boolean;
+  /** The args the instance passes — lets callers re-validate against changed params. */
+  args: Record<string, unknown>;
 }
 
 /**
@@ -31,6 +33,7 @@ export function findSnippetInstances(
           screenId: screenIdLabel,
           path: path.join("."),
           hasOverride: typeof node.$extraClassName === "string" && node.$extraClassName !== "",
+          args: node.args ?? {},
         });
       }
       // Snippet instance bodies are opaque from this walk's POV.

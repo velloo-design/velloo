@@ -27,7 +27,19 @@ export async function removeNode(
 
     const resolved = yield* $(resolve(next.tree, path, screenId));
     if (resolved.length === 0) {
-      return yield* $(err(invalidPath("Cannot remove the screen root.", resolved)));
+      // A root locator ([], "@root") means "clear the screen": agents rebuilding a
+      // scanned placeholder used to loop remove_node over shifting child indices —
+      // emptying the root's children in one call is what they were reaching for.
+      if (!isComponentNode(next.tree)) {
+        return yield* $(err(invalidPath("Cannot remove the screen root.", resolved)));
+      }
+      const cleared = next.tree.children?.length ?? 0;
+      delete next.tree.children;
+      yield* $(await commitScreen(ctx.folder, screenId, next));
+      broadcastTreeChange(ctx, screenId);
+      return {
+        removedRef: `(cleared ${cleared} child node${cleared === 1 ? "" : "s"} of the screen root — the root itself remains)`,
+      };
     }
 
     const parentInfo = parentOf(resolved);

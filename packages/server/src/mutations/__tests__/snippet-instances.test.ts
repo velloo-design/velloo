@@ -100,7 +100,7 @@ describe("findSnippetInstances", () => {
     );
     const locs = findSnippetInstances(folder, "stat-card");
     expect(locs).toHaveLength(1);
-    expect(locs[0]).toEqual({ screenId: "dashboard", path: "", hasOverride: false });
+    expect(locs[0]).toEqual({ screenId: "dashboard", path: "", hasOverride: false, args: {} });
   });
 
   test("finds nested instances at their dotted path", () => {

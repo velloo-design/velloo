@@ -8,8 +8,14 @@ import type { WatchEvent } from "../watcher.ts";
 import { addNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
 import { addFrame, addGroup, removeFrame, updateFrame } from "./api/frames.ts";
-import { addScreen, removeScreen } from "./api/screens.ts";
-import { addSnippet, instantiateSnippet, removeSnippet, updateSnippet } from "./api/snippets.ts";
+import { addScreen, removeScreen, setScreenTree } from "./api/screens.ts";
+import {
+  addSnippet,
+  instantiateSnippet,
+  removeSnippet,
+  updateSnippet,
+  updateSnippetArgs,
+} from "./api/snippets.ts";
 import {
   addNode,
   moveNode,
@@ -109,9 +115,16 @@ const addNodeBatch: BatchFn = (ctx, args) => {
   return addNode(ctx, { ...a, props: a.props ?? a.propPatch, children } as never);
 };
 
+/** Batch skips the MCP layer's zod defaults, so mirror update_snippet_args's `argPatch: {}`. */
+const updateSnippetArgsBatch: BatchFn = (ctx, args) => {
+  const a = args as Record<string, unknown> & { argPatch?: Record<string, unknown> };
+  return updateSnippetArgs(ctx, { ...a, argPatch: a.argPatch ?? {} } as never);
+};
+
 export const BATCH_TOOLS: Record<string, BatchFn> = {
   add_screen: addScreen as BatchFn,
   remove_screen: removeScreen as BatchFn,
+  set_screen_tree: setScreenTree as BatchFn,
   add_board: addBoard as BatchFn,
   add_frame: addFrame as BatchFn,
   remove_frame: removeFrame as BatchFn,
@@ -126,6 +139,7 @@ export const BATCH_TOOLS: Record<string, BatchFn> = {
   update_snippet: updateSnippet as BatchFn,
   remove_snippet: removeSnippet as BatchFn,
   instantiate_snippet: instantiateSnippet as BatchFn,
+  update_snippet_args: updateSnippetArgsBatch,
   update_frame: updateFrame as BatchFn,
   add_note: addNote as BatchFn,
 };
@@ -229,7 +243,9 @@ function touchedResources(
     case "remove_node":
     case "move_node":
     case "set_node_id":
+    case "set_screen_tree":
     case "override_snippet_props":
+    case "update_snippet_args":
     case "instantiate_snippet": {
       const screenId = a.screenId as string;
       // Snippet bodies are edited through virtual `snippet:<id>` screens.

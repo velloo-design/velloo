@@ -5,6 +5,7 @@ import {
   MAX_BOARD_NAME_LENGTH,
   type Node,
   NodeSchema,
+  resolveSnippetArgs,
   SnippetParamSchema,
 } from "@velloo/schema";
 import { z } from "zod";
@@ -29,6 +30,7 @@ import {
   removeSnippet,
   reorderBoards,
   setNodeId,
+  setScreenTree,
   setStyle,
   updateBoard,
   updateFrame,
@@ -45,6 +47,7 @@ import {
   propWarnings,
   propWarningsForTree,
 } from "../../mutations/prop-warnings.ts";
+import { findSnippetInstances } from "../../mutations/snippet-instances.ts";
 import { pathAt } from "../../path.ts";
 import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
 import {
@@ -230,7 +233,8 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "remove_node",
     {
-      description: "Remove the node at path. Cannot remove the screen root.",
+      description:
+        'Remove the node at path. A root locator ([] or "@root") clears ALL the root\'s children in one call — the fast way to empty a placeholder screen before rebuilding (or use set_screen_tree to replace the whole tree at once).',
       inputSchema: {
         screenId: z.string(),
         path: PathSchema,
@@ -277,7 +281,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_screen",
     {
       description:
-        "Create a NEW screen. Does not place it on any board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one. Note: a route-scan already scaffolds one placeholder screen per detected route (id = route slug) — don't add_screen for those (it returns ScreenIdConflict); build into the existing screen with add_node/instantiate_snippet (clear the placeholder with remove_node first). Omit `id` to auto-suffix a unique id.",
+        "Create a NEW screen. Does not place it on any board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one. Note: a route-scan already scaffolds one placeholder screen per detected route (id = route slug) — don't add_screen for those (it returns ScreenIdConflict); rebuild the existing screen with set_screen_tree (replaces the whole tree in one call), or build into it with add_node/instantiate_snippet. Omit `id` to auto-suffix a unique id.",
       inputSchema: {
         name: z.string(),
         id: z.string().optional(),
@@ -291,6 +295,24 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         const screen =
           ctx.folder.screens.get(created) ??
           [...ctx.folder.screens.values()].find((s) => s.name === args.name);
+        if (!screen) return [];
+        return propWarningsForTree(ctx, screen, screen.tree);
+      }),
+  );
+
+  mcp.registerTool(
+    "set_screen_tree",
+    {
+      description:
+        "Replace a screen's ENTIRE tree in one call — the right tool for rebuilding a route-scan placeholder from scratch (no need to remove old nodes first, and no stale-index churn). The screen keeps its id, name, frames, and annotations; only the tree changes. Undoable like any mutation. Batchable.",
+      inputSchema: {
+        screenId: z.string(),
+        tree: NodeSchema,
+      },
+    },
+    async (args) =>
+      toMcpWithWarnings(await setScreenTree(ctx, args), async () => {
+        const screen = ctx.folder.screens.get(args.screenId);
         if (!screen) return [];
         return propWarningsForTree(ctx, screen, screen.tree);
       }),
@@ -528,9 +550,31 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) =>
       // Warn on the RESULTING tree (an update may patch the body via
       // `tree` or `innerPatch`), not just the incoming patch.
-      toMcpWithWarnings(await updateSnippet(ctx, args), async (value) =>
-        dynamicIconWarningsForTree(value.snippet.tree),
-      ),
+      toMcpWithWarnings(await updateSnippet(ctx, args), async (value) => {
+        const warnings = [...(await dynamicIconWarningsForTree(value.snippet.tree))];
+        // A params change can strand existing instances (now-missing required /
+        // now-unknown args) that would otherwise only fail at render time inside
+        // screenshot/compare_to_url — surface them here, where the change was made.
+        if (args.patch.params !== undefined) {
+          const declared = new Set(value.snippet.params.map((p) => p.name));
+          for (const inst of findSnippetInstances(ctx.folder, value.snippet.id)) {
+            const { missing } = resolveSnippetArgs(value.snippet, inst.args);
+            const extras = Object.keys(inst.args).filter((k) => !declared.has(k));
+            if (missing.length === 0 && extras.length === 0) continue;
+            const parts = [
+              missing.length ? `missing required: ${missing.join(", ")}` : "",
+              extras.length ? `unknown: ${extras.join(", ")}` : "",
+            ]
+              .filter(Boolean)
+              .join("; ");
+            const at = inst.path === "" ? "the root" : `path [${inst.path.replace(/\./g, ",")}]`;
+            warnings.push(
+              `param change strands the instance on "${inst.screenId}" at ${at} (${parts}) — fix its args with update_snippet_args before rendering that screen`,
+            );
+          }
+        }
+        return warnings;
+      }),
   );
 
   mcp.registerTool(

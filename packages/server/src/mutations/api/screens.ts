@@ -13,6 +13,11 @@ import {
   removeScreen as removeScreenImpl,
 } from "../remove-screen.ts";
 import {
+  type SetScreenTreeArgs,
+  type SetScreenTreeResult,
+  setScreenTree as setScreenTreeImpl,
+} from "../set-screen-tree.ts";
+import {
   type UpdateScreenArgs,
   type UpdateScreenResult,
   updateScreen as updateScreenImpl,
@@ -36,12 +41,20 @@ export function updateScreen(
 ): Promise<Result<UpdateScreenResult, MutationError>> {
   return withScreenLock(ctx.folder, args.screenId, () => updateScreenImpl(ctx, args));
 }
+export function setScreenTree(
+  ctx: MutationContext,
+  args: SetScreenTreeArgs,
+): Promise<Result<SetScreenTreeResult, MutationError>> {
+  return withScreenLock(ctx.folder, args.screenId, () => setScreenTreeImpl(ctx, args));
+}
 
 export type {
   AddScreenArgs,
   AddScreenResult,
   RemoveScreenArgs,
   RemoveScreenResult,
+  SetScreenTreeArgs,
+  SetScreenTreeResult,
   UpdateScreenArgs,
   UpdateScreenResult,
 };
