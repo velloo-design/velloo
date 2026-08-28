@@ -1,5 +1,5 @@
 import type { StateCreator } from "zustand";
-import { MAX_ZOOM, MIN_ZOOM } from "../board-geometry.ts";
+import { focusFrame, MAX_ZOOM, MIN_ZOOM } from "../board-geometry.ts";
 import type { CanvasState } from "./index.ts";
 import type { CursorMode } from "./types.ts";
 
@@ -28,6 +28,12 @@ export interface ViewportSlice {
   setCanvasZoom(z: number): void;
   setCursorMode(m: CursorMode): void;
   setPan(p: { x: number; y: number }): void;
+  /**
+   * Center a frame of the current board in the visible canvas (search
+   * navigation). Reads the board wrapper's size from the DOM — a no-op when
+   * no board is on screen (library / snippet view).
+   */
+  centerOnFrame(frameId: string): void;
   setNodeRects(
     frameId: string,
     rects: { path: string; x: number; y: number; w: number; h: number }[],
@@ -37,7 +43,10 @@ export interface ViewportSlice {
   setFrameInset(frameId: string, inset: { x: number; y: number; chromeH: number } | null): void;
 }
 
-export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlice> = (set) => ({
+export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlice> = (
+  set,
+  get,
+) => ({
   canvasZoom: 0.75,
   cursorMode: "select",
   pan: { x: 0, y: 0 },
@@ -58,6 +67,17 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
 
   setPan(pan) {
     set({ pan });
+  },
+
+  centerOnFrame(frameId) {
+    const s = get();
+    const board = s.currentBoardId ? s.boards[s.currentBoardId] : null;
+    const frame = board?.frames.find((f) => f.id === frameId);
+    const wrapper = document.querySelector<HTMLElement>('[data-velloo-board="true"]');
+    if (!frame || !wrapper) return;
+    const view = focusFrame(frame, wrapper.clientWidth, wrapper.clientHeight);
+    if (!view) return;
+    set({ canvasZoom: view.zoom, pan: view.pan });
   },
 
   setNodeRects(frameId, rects) {

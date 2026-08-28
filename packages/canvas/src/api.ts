@@ -32,4 +32,11 @@ export {
 export type { MutateError } from "./api/http.ts";
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
+export {
+  fetchSearch,
+  type SearchBoardHit,
+  type SearchResponse,
+  type SearchScreenHit,
+  type SearchTextHit,
+} from "./api/search.ts";
 export { theme } from "./api/theme.ts";

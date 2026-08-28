@@ -8,9 +8,18 @@ import type { Selection } from "./types.ts";
 export interface SelectionSlice {
   selection: Selection | null;
   hover: Selection | null;
+  /**
+   * "Make this node visible" request, set by search jumps alongside the
+   * selection. Frames showing the screen respond by scrolling the node into
+   * view inside their iframe; `nonce` distinguishes repeated jumps to the
+   * same node. Cleared by the next plain selection change.
+   */
+  reveal: (Selection & { nonce: number }) | null;
 
   setSelection(s: Selection | null): void;
   setHover(h: Selection | null): void;
+  /** setSelection + a reveal request — the search dialog's "jump to node". */
+  revealSelection(s: Selection): void;
 }
 
 export function selectedNode(screens: Record<string, Screen>, sel: Selection | null): Node | null {
@@ -34,8 +43,10 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
 ) => ({
   selection: null,
   hover: null,
+  reveal: null,
 
   setSelection(selection) {
+    if (get().reveal) set({ reveal: null });
     // Dedupe by value (fresh object literals arrive per click) so re-selecting
     // the selected node doesn't re-render every subscriber — but still run the
     // screen-follow below, since the *current screen* may have moved on.
@@ -60,6 +71,11 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
     ) {
       void get().selectScreen(selection.screenId);
     }
+  },
+
+  revealSelection(sel) {
+    get().setSelection(sel);
+    set((s) => ({ reveal: { ...sel, nonce: (s.reveal?.nonce ?? 0) + 1 } }));
   },
 
   setHover(hover) {

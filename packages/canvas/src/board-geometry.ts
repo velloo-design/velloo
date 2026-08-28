@@ -78,6 +78,36 @@ export function fitToContent(
 }
 
 /**
+ * Camera view that centers one frame in a `vw`×`vh` viewport: zoom fits the
+ * frame (plus the chrome allowance below it, as in contentBounds) with a
+ * margin, capped at 1.0 so a small frame lands at natural size instead of
+ * blown up. Null when the viewport hasn't laid out yet. Used by "jump to
+ * frame" navigation (search).
+ */
+export function focusFrame(
+  frame: FrameBox,
+  vw: number,
+  vh: number,
+  margin = 80,
+  chromeAllowance = 60,
+): PanZoom | null {
+  if (vw < 50 || vh < 50) return null;
+  const boxH = frame.h + chromeAllowance;
+  const zoomX = (vw - margin * 2) / frame.w;
+  const zoomY = (vh - margin * 2) / boxH;
+  const zoom = Math.max(MIN_ZOOM, Math.min(1.0, zoomX, zoomY));
+  const cx = frame.x + frame.w / 2;
+  const cy = frame.y + boxH / 2;
+  return {
+    zoom,
+    pan: {
+      x: Math.round(vw / 2 - cx * zoom),
+      y: Math.round(vh / 2 - cy * zoom),
+    },
+  };
+}
+
+/**
  * Apply a zoom step centered on a point in wrapper-local coords. Keeps the
  * world coordinate under (anchorX, anchorY) fixed across the transition:
  * `cursor = pan + world * zoom` solved for the new pan after zoom changes.

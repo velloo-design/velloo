@@ -39,11 +39,14 @@ export interface ModesSlice {
   boardsCollapsed: boolean;
   /** Collapsed state of the screen tree in the boards-mode left sidebar. */
   treeCollapsed: boolean;
+  /** Ctrl/Cmd+K search dialog visibility (session-only, not persisted). */
+  searchOpen: boolean;
 
   setAppTheme(t: AppTheme): void;
   setDesignMode(m: DesignMode): void;
   toggleBoardsCollapsed(): void;
   toggleTreeCollapsed(): void;
+  setSearchOpen(open: boolean): void;
 }
 
 export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (set) => ({
@@ -51,6 +54,7 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
   designMode: "light",
   boardsCollapsed: readLeftPanels().boards,
   treeCollapsed: readLeftPanels().tree,
+  searchOpen: false,
 
   setAppTheme(appTheme) {
     set({ appTheme });
@@ -67,6 +71,10 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
       persistLeftPanels(boardsCollapsed, s.treeCollapsed);
       return { boardsCollapsed };
     });
+  },
+
+  setSearchOpen(searchOpen) {
+    set({ searchOpen });
   },
 
   toggleTreeCollapsed() {

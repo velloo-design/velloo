@@ -16,6 +16,7 @@ import {
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createRenderRouter } from "./routes/render.ts";
+import { createSearchRouter } from "./routes/search.ts";
 import { createThemeRouter } from "./routes/theme.ts";
 import { createUndoRouter } from "./routes/undo.ts";
 import { localOnlyMiddleware } from "./security.ts";
@@ -49,6 +50,7 @@ export function createApp(
   app.route("/api/screen", createScreenRouter(folder));
   app.route("/api/board", createBoardRouter(folder));
   app.route("/api/snippets", createSnippetsRouter(folder));
+  app.route("/api/search", createSearchRouter(folder));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/live", createLiveRouter(bundler));
   app.route(

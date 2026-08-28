@@ -48,7 +48,13 @@ export type ChildMessage =
   | { type: "parentPan"; deltaX: number; deltaY: number };
 
 export type ParentMessage =
-  | { type: "applyHighlight"; path: string }
+  /**
+   * `scroll` additionally scrolls the node into view inside the iframe
+   * document — set by search/reveal jumps, absent for plain click
+   * selection (the clicked node is visible by definition). Additive
+   * field, so no PROTOCOL_VERSION bump: older docs just don't scroll.
+   */
+  | { type: "applyHighlight"; path: string; scroll?: boolean }
   | { type: "clearHighlight" }
   | { type: "applyHover"; path: string }
   | { type: "clearHover" }

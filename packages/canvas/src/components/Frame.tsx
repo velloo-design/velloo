@@ -64,6 +64,7 @@ export const Frame = memo(function Frame({
   const themeVersion = useCanvas((s) => s.themeVersion);
   const selection = useCanvas((s) => s.selection);
   const hover = useCanvas((s) => s.hover);
+  const reveal = useCanvas((s) => s.reveal);
   const nodeState = useCanvas((s) => s.nodeState);
   const designMode = useCanvas((s) => s.designMode);
   const cursorMode = useCanvas((s) => s.cursorMode);
@@ -137,7 +138,14 @@ export const Frame = memo(function Frame({
       onReady() {
         const s = useCanvas.getState();
         if (s.selection?.screenId === frame.screen) {
-          channel.send({ type: "applyHighlight", path: s.selection.path });
+          // A pending reveal means this selection came from a search jump and
+          // the iframe just (re)loaded — scroll the node into view too.
+          const scroll = s.reveal?.screenId === frame.screen && s.reveal.path === s.selection.path;
+          channel.send({
+            type: "applyHighlight",
+            path: s.selection.path,
+            ...(scroll ? { scroll } : {}),
+          });
         }
         if (s.hover?.screenId === frame.screen) {
           channel.send({ type: "applyHover", path: s.hover.path });
@@ -213,6 +221,16 @@ export const Frame = memo(function Frame({
       channel.send({ type: "clearHighlight" });
     }
   }, [selection, frame.screen]);
+
+  // Search jumps: scroll the revealed node into view inside the iframe (the
+  // regular highlight effect above never scrolls — click selection is
+  // already visible). Keyed on the reveal nonce so re-jumping to the same
+  // node scrolls again after the user wandered off.
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel || !reveal || reveal.screenId !== frame.screen) return;
+    channel.send({ type: "applyHighlight", path: reveal.path, scroll: true });
+  }, [reveal, frame.screen]);
 
   useEffect(() => {
     const channel = channelRef.current;

@@ -9,6 +9,7 @@ import {
   MousePointer2,
   Plus,
   Redo2,
+  Search,
   Settings,
   StickyNote,
   Sun,
@@ -161,6 +162,10 @@ export function TopBar() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
+          <SearchButton />
+
+          <Separator orientation="vertical" className="mx-1 h-5" />
+
           <ToggleGroup
             type="single"
             variant="outline"
@@ -335,6 +340,17 @@ function SettingsMenu({
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function SearchButton() {
+  const setSearchOpen = useCanvas((s) => s.setSearchOpen);
+  return (
+    <HotkeyTip label="Search boards, screens & text" hotkey="⌘K">
+      <Button variant="outline" size="icon-sm" onClick={() => setSearchOpen(true)}>
+        <Search />
+      </Button>
+    </HotkeyTip>
   );
 }
 

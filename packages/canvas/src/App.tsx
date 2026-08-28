@@ -6,6 +6,7 @@ import { EmptyState } from "./components/EmptyState.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
+import { SearchDialog } from "./components/SearchDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
@@ -60,7 +61,11 @@ export function App() {
       const cmd = e.metaKey || e.ctrlKey;
       const state = useCanvas.getState();
 
-      if (cmd && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
+      // Cmd/Ctrl+K opens search even from inputs — standard palette behavior.
+      if (cmd && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        state.setSearchOpen(!state.searchOpen);
+      } else if (cmd && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
         if (inEditable) return;
         e.preventDefault();
         void undoApi().catch((e) => toastError(e, "Undo failed"));
@@ -186,6 +191,7 @@ export function App() {
         </main>
         {view === "boards" ? <RightPanel screenId={currentScreenId} /> : null}
       </div>
+      <SearchDialog />
       <Toaster />
     </div>
   );

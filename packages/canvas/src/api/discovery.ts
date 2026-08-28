@@ -51,7 +51,7 @@ export interface SnippetMeta {
  * attach the typed payload, same as http.ts's POST helpers — one error
  * shape across the whole API layer.
  */
-async function getJson<T>(path: string, label: string): Promise<T> {
+export async function getJson<T>(path: string, label: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: MutateError };

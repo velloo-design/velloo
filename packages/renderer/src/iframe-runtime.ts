@@ -48,11 +48,13 @@ export const IFRAME_RUNTIME = String.raw`
     document.querySelectorAll('.' + cls).forEach((el) => el.classList.remove(cls));
   }
 
-  function applyHighlight(path, cls) {
+  function applyHighlight(path, cls, scroll) {
     clearClass(cls);
     if (path === null || path === undefined) return;
     const el = document.querySelector('[data-node-path="' + path.replace(/"/g, '\\"') + '"]');
-    if (el) el.classList.add(cls);
+    if (!el) return;
+    el.classList.add(cls);
+    if (scroll) el.scrollIntoView({ block: 'center', inline: 'nearest' });
   }
 
   function applyVelloState(path, state) {
@@ -80,7 +82,7 @@ export const IFRAME_RUNTIME = String.raw`
   function handleParentMessage(ev) {
     const msg = ev.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'applyHighlight') applyHighlight(msg.path, SELECT_CLASS);
+    if (msg.type === 'applyHighlight') applyHighlight(msg.path, SELECT_CLASS, msg.scroll === true);
     else if (msg.type === 'clearHighlight') clearClass(SELECT_CLASS);
     else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS);
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
