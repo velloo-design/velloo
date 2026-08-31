@@ -43,6 +43,8 @@ export interface ModesSlice {
   searchOpen: boolean;
   /** Export dialog target (session-only); null = closed. */
   exportTarget: ExportTarget | null;
+  /** Full-screen preview target (session-only); null = closed. */
+  previewTarget: PreviewTarget | null;
 
   setAppTheme(t: AppTheme): void;
   setDesignMode(m: DesignMode): void;
@@ -50,6 +52,7 @@ export interface ModesSlice {
   toggleTreeCollapsed(): void;
   setSearchOpen(open: boolean): void;
   setExportTarget(target: ExportTarget | null): void;
+  setPreviewTarget(target: PreviewTarget | null): void;
 }
 
 /** What the export dialog is pointed at — a frame or a whole board. */
@@ -60,6 +63,17 @@ export interface ExportTarget {
   name: string;
 }
 
+/** What the full-screen preview modal shows. Read-only — never written back. */
+export interface PreviewTarget {
+  screenId: string;
+  /** Display name for the modal title. */
+  name: string;
+  /** Board theme pin, so the preview matches the frame's board. */
+  boardTheme?: string;
+  /** Starting preview width — the originating frame's width. */
+  w: number;
+}
+
 export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (set) => ({
   appTheme: readAppTheme(),
   designMode: "light",
@@ -67,6 +81,7 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
   treeCollapsed: readLeftPanels().tree,
   searchOpen: false,
   exportTarget: null,
+  previewTarget: null,
 
   setAppTheme(appTheme) {
     set({ appTheme });
@@ -91,6 +106,10 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
 
   setExportTarget(exportTarget) {
     set({ exportTarget });
+  },
+
+  setPreviewTarget(previewTarget) {
+    set({ previewTarget });
   },
 
   toggleTreeCollapsed() {

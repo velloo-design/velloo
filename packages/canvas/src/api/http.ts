@@ -4,6 +4,8 @@
  * the typed payload attached, so call-sites can `toastError(err)` and get
  * the right message + suggestions.
  */
+import { ensureConnected } from "./connection.ts";
+
 export interface MutateError {
   code: string;
   message: string;
@@ -13,6 +15,9 @@ export interface MutateError {
 }
 
 async function post<T>(url: string, body: unknown, label: string): Promise<T> {
+  // Every mutation funnels through here — gate them all while the daemon is
+  // unreachable so nothing silently no-ops or half-applies.
+  ensureConnected();
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

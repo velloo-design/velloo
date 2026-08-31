@@ -30,6 +30,8 @@ export interface ChannelHandlers {
   onParentZoom?(deltaY: number, clientX: number, clientY: number): void;
   /** Plain wheel/trackpad-scroll forwarded from the iframe (pan). */
   onParentPan?(deltaX: number, deltaY: number): void;
+  /** Debounced document scroll offset — saved for post-reload restore. */
+  onScrollPos?(x: number, y: number): void;
 }
 
 const INIT_RETRY_MS = 150;
@@ -138,6 +140,7 @@ export class IframeChannel {
     else if (msg.type === "parentZoom")
       this.handlers.onParentZoom?.(msg.deltaY, msg.clientX, msg.clientY);
     else if (msg.type === "parentPan") this.handlers.onParentPan?.(msg.deltaX, msg.deltaY);
+    else if (msg.type === "scrollPos") this.handlers.onScrollPos?.(msg.x, msg.y);
   }
 
   send(msg: ParentMessage): void {

@@ -228,8 +228,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     }
     // A live extension was added/updated/removed — rebuild the bundle and
     // bump its version so the iframe re-fetches, and rescan Tailwind so the
-    // new host component's utility classes compile.
-    if (e.type === "config-changed") {
+    // new host component's utility classes compile. A folder-wide reload
+    // (git revert-all) may have touched any of that, so it invalidates too.
+    if (e.type === "config-changed" || e.type === "folder-reloaded") {
       bundler.invalidate();
       canvasBundler.invalidate();
       jit.invalidate();

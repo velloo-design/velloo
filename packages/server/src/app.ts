@@ -18,6 +18,7 @@ import { createExportRouter } from "./routes/export.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createRenderRouter } from "./routes/render.ts";
+import { createRevertRouter } from "./routes/revert.ts";
 import { createSearchRouter } from "./routes/search.ts";
 import { createThemeRouter } from "./routes/theme.ts";
 import { createUndoRouter } from "./routes/undo.ts";
@@ -72,6 +73,10 @@ export function createApp(
   app.route(
     "/api/undo",
     createUndoRouter(folder, (e) => ctxFor().broadcast(e)),
+  );
+  app.route(
+    "/api/revert",
+    createRevertRouter(folder, (e) => ctxFor().broadcast(e)),
   );
 
   return app;

@@ -45,7 +45,14 @@ export type ChildMessage =
    * this to pan the canvas; without it the iframe absorbs the scroll
    * silently and the user can't move when their cursor is over a frame.
    */
-  | { type: "parentPan"; deltaX: number; deltaY: number };
+  | { type: "parentPan"; deltaX: number; deltaY: number }
+  /**
+   * Debounced report of the document's scroll offset. The parent keeps the
+   * last value per frame and restores it after the iframe reloads (theme
+   * toggle, theme edit, resize commit) via `restoreScroll`. Additive
+   * message — older iframe docs simply never send it, no version bump.
+   */
+  | { type: "scrollPos"; x: number; y: number };
 
 export type ParentMessage =
   /**
@@ -63,7 +70,13 @@ export type ParentMessage =
       path: string | null;
       state: "default" | "hover" | "focus" | "active" | "disabled";
     }
-  | { type: "requestRects"; paths: string[] };
+  | { type: "requestRects"; paths: string[] }
+  /**
+   * Restore a previously reported scroll offset after a reload. Sent from
+   * the parent's onReady handler unless a reveal jump is pending (the
+   * reveal's scrollIntoView must win). Additive — older docs ignore it.
+   */
+  | { type: "restoreScroll"; x: number; y: number };
 
 export const CHILD_MESSAGE_TYPES = [
   "ready",
@@ -72,6 +85,7 @@ export const CHILD_MESSAGE_TYPES = [
   "nodeRects",
   "parentZoom",
   "parentPan",
+  "scrollPos",
 ] as const;
 
 export const PARENT_MESSAGE_TYPES = [
@@ -81,6 +95,7 @@ export const PARENT_MESSAGE_TYPES = [
   "clearHover",
   "applyVelloState",
   "requestRects",
+  "restoreScroll",
 ] as const;
 
 // Compile-time pins: each array contains only union members, and no

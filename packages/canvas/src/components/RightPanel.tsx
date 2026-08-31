@@ -15,6 +15,7 @@ export function RightPanel({ screenId }: Props) {
   const theme = useCanvas((s) => s.theme);
   const presets = useCanvas((s) => s.presets);
   const cursorMode = useCanvas((s) => s.cursorMode);
+  const wsConnected = useCanvas((s) => s.wsConnected);
 
   useEffect(() => {
     if (selection) setRightTab("node");
@@ -23,7 +24,15 @@ export function RightPanel({ screenId }: Props) {
   const handMode = cursorMode === "hand";
 
   return (
-    <aside className="w-80 shrink-0 border-l bg-card flex flex-col overflow-hidden">
+    <aside
+      className={
+        "w-80 shrink-0 border-l bg-card flex flex-col overflow-hidden" +
+        // Everything in this pane edits the design — dim and disable it
+        // wholesale while the daemon is unreachable (the banner says why).
+        (wsConnected ? "" : " opacity-50 pointer-events-none select-none")
+      }
+      aria-disabled={!wsConnected}
+    >
       <div className="border-b p-2">
         <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "node" | "theme")}>
           <TabsList className="w-full h-8">

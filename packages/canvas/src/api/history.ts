@@ -1,3 +1,5 @@
+import { ensureConnected } from "./connection.ts";
+
 export interface HistoryDepths {
   undo: number;
   redo: number;
@@ -20,12 +22,14 @@ export async function fetchHistory(): Promise<HistoryDepths> {
 }
 
 export async function undo(): Promise<HistoryResponse> {
+  ensureConnected();
   const res = await fetch("/api/undo", { method: "POST" });
   if (!res.ok) throw new Error(`undo: ${res.status}`);
   return (await res.json()) as HistoryResponse;
 }
 
 export async function redo(): Promise<HistoryResponse> {
+  ensureConnected();
   const res = await fetch("/api/undo/redo", { method: "POST" });
   if (!res.ok) throw new Error(`redo: ${res.status}`);
   return (await res.json()) as HistoryResponse;

@@ -215,7 +215,7 @@ export function SearchDialog() {
           </div>
         ) : null}
 
-        <div ref={listRef} className="max-h-[380px] overflow-y-auto pb-1.5">
+        <div ref={listRef} className="max-h-[380px] overflow-y-auto scroll-stable pb-1.5">
           {!results ? (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               Type to search board names, screen names, and text inside screens.

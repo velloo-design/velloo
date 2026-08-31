@@ -39,6 +39,13 @@ export type { MutateError } from "./api/http.ts";
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
 export {
+  fetchRevertStatus,
+  type RevertFile,
+  type RevertFileStatus,
+  type RevertStatus,
+  revertAll,
+} from "./api/revert.ts";
+export {
   fetchSearch,
   type SearchBoardHit,
   type SearchResponse,

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Frame as FrameIcon,
   LayoutDashboard,
   MoreHorizontal,
   Pencil,
@@ -12,7 +13,8 @@ import {
 import { type DragEvent, useMemo, useRef, useState } from "react";
 import { type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
-import { toastError } from "../toast.ts";
+import { pushToast, toastError } from "../toast.ts";
+import { AddFrameDialog } from "./AddFrameDialog.tsx";
 import { Tree } from "./Tree.tsx";
 import {
   AlertDialog,
@@ -52,6 +54,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const selectBoard = useCanvas((s) => s.selectBoard);
   const selectScreen = useCanvas((s) => s.selectScreen);
   const cursorMode = useCanvas((s) => s.cursorMode);
+  const wsConnected = useCanvas((s) => s.wsConnected);
   const boardsCollapsed = useCanvas((s) => s.boardsCollapsed);
   const treeCollapsed = useCanvas((s) => s.treeCollapsed);
   const toggleBoardsCollapsed = useCanvas((s) => s.toggleBoardsCollapsed);
@@ -94,6 +97,8 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     id: string;
     name: string;
   } | null>(null);
+
+  const [addFrameBoardId, setAddFrameBoardId] = useState<string | null>(null);
 
   // One dialog serves create and rename — same shape (a name input), only
   // the title and the mutation differ.
@@ -150,8 +155,9 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   };
 
   // ── Board drag-and-drop reordering ─────────────────────────────────────
-  // A single board can't be reordered, so the drag affordances stay off.
-  const canReorder = boards.length > 1;
+  // A single board can't be reordered, so the drag affordances stay off —
+  // and so does everything while the daemon is unreachable.
+  const canReorder = boards.length > 1 && wsConnected;
   const [draggingId, setDraggingId] = useState<string | null>(null);
   // While a drag is in flight, `dragOrder` holds the live previewed order
   // so the list reflows under the pointer. Null when not dragging.
@@ -272,7 +278,13 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
               <span className="normal-case opacity-60">({boards.length})</span>
             ) : null}
           </button>
-          <Button variant="ghost" size="icon-xs" onClick={openCreateDialog} title="New board">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={openCreateDialog}
+            disabled={!wsConnected}
+            title={wsConnected ? "New board" : "Disconnected — edits are paused."}
+          >
             <Plus />
           </Button>
         </div>
@@ -280,7 +292,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
           <div className="px-4 pb-2 text-sm text-muted-foreground">No boards yet.</div>
         ) : (
           <ul
-            className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2 min-h-0"
+            className="flex flex-1 flex-col gap-0.5 overflow-auto scroll-stable px-2 pb-2 min-h-0"
             onDragOver={onListDragOver}
             onDrop={onListDrop}
           >
@@ -303,13 +315,30 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                   <button
                     type="button"
                     onClick={() => {
+                      // Board data comes from the daemon — switching while
+                      // disconnected would silently no-op.
+                      if (!wsConnected && !active) {
+                        pushToast({
+                          kind: "error",
+                          message:
+                            "Disconnected — board switching resumes when the daemon is back.",
+                        });
+                        return;
+                      }
                       void selectBoard(b.id);
                     }}
+                    title={
+                      !wsConnected && !active
+                        ? "Disconnected — board switching resumes when the daemon is back."
+                        : undefined
+                    }
                     className={
                       "w-full text-left px-2 py-1.5 pr-8 rounded-md text-sm transition-colors " +
                       (active
                         ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted text-foreground")
+                        : !wsConnected
+                          ? "text-muted-foreground cursor-not-allowed opacity-60"
+                          : "hover:bg-muted text-foreground")
                     }
                   >
                     <div className="font-medium truncate">
@@ -343,9 +372,19 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => openRenameDialog(b)}>
+                      <DropdownMenuItem
+                        disabled={!wsConnected}
+                        onSelect={() => openRenameDialog(b)}
+                      >
                         <Pencil />
                         Rename board
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!wsConnected}
+                        onSelect={() => setAddFrameBoardId(b.id)}
+                      >
+                        <FrameIcon />
+                        Add frame…
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() =>
@@ -359,7 +398,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
-                        disabled={boards.length <= 1}
+                        disabled={boards.length <= 1 || !wsConnected}
                         onSelect={() => setPendingBoardDelete({ id: b.id, name: b.name })}
                       >
                         <Trash2 />
@@ -417,7 +456,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
         {treeCollapsed ? null : (
           <div
             className={
-              "flex-1 overflow-auto py-1 " +
+              "flex-1 overflow-auto scroll-stable py-1 " +
               (cursorMode === "hand" ? "opacity-40 pointer-events-none select-none" : "")
             }
             aria-disabled={cursorMode === "hand"}
@@ -472,6 +511,8 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
           </form>
         </DialogContent>
       </Dialog>
+
+      <AddFrameDialog boardId={addFrameBoardId} onClose={() => setAddFrameBoardId(null)} />
 
       <AlertDialog
         open={pendingBoardDelete !== null}

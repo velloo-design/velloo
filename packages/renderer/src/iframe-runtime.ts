@@ -30,8 +30,98 @@ export const IFRAME_RUNTIME = String.raw`
   const style = document.createElement('style');
   style.textContent =
     ".__velloo-hover { box-shadow: inset 0 0 0 1px #60a5fa !important; }" +
-    ".__velloo-selected { box-shadow: inset 0 0 0 2px #2563eb !important; }";
+    ".__velloo-selected { box-shadow: inset 0 0 0 2px #2563eb !important; }" +
+    // Scrollable frames need a *visible* affordance: wheel events forward to
+    // the canvas (pan), so dragging a bar is the way to scroll — but macOS
+    // overlay scrollbars stay hidden until scrolled, and (verified in real
+    // Chrome) neither ::-webkit-scrollbar styling nor the standard
+    // properties reliably force persistent bars there. So the runtime draws
+    // its own thumb (below) whenever the native bar takes no layout space,
+    // and these rules style the native bar on platforms where it does.
+    // Standard properties gated away from engines with the webkit pseudo —
+    // in Chrome 121+ they'd override and disable the webkit styling.
+    "::-webkit-scrollbar { width: 11px; height: 11px; }" +
+    "::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }" +
+    "::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.55); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }" +
+    "::-webkit-scrollbar-thumb:hover { background: rgba(127,127,127,0.85); }" +
+    "@supports not selector(::-webkit-scrollbar) { html { scrollbar-width: thin; scrollbar-color: rgba(127,127,127,0.55) transparent; } }" +
+    ".__velloo-scrollthumb { position: fixed; right: 2px; width: 9px; border-radius: 999px;" +
+    " background: rgba(127,127,127,0.55); box-shadow: 0 0 0 1px rgba(255,255,255,0.35);" +
+    " z-index: 2147483646; display: none; }" +
+    ".__velloo-scrollthumb:hover, .__velloo-scrollthumb[data-dragging] { background: rgba(127,127,127,0.9); }";
   document.head.appendChild(style);
+
+  // Persistent scroll indicator, drawn by the runtime (design-mode only).
+  // Hidden automatically on platforms whose native scrollbar already takes
+  // layout space (classic bars are visible there — no need to double up).
+  const thumb = document.createElement('div');
+  thumb.className = '__velloo-scrollthumb';
+  thumb.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(thumb);
+
+  const TRACK_PAD = 2;
+  function scroller() {
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function syncThumb() {
+    const se = scroller();
+    const vh = window.innerHeight;
+    const sh = se.scrollHeight;
+    const nativeVisible = window.innerWidth - document.documentElement.clientWidth > 0;
+    // A few px of overflow (sub-pixel rounding, trailing margins) doesn't
+    // warrant a thumb — only show when there's meaningful scroll range.
+    if (sh - vh < 24 || nativeVisible) {
+      thumb.style.display = 'none';
+      return;
+    }
+    const trackH = vh - TRACK_PAD * 2;
+    const h = Math.max(28, trackH * (vh / sh));
+    const maxTop = trackH - h;
+    const top = TRACK_PAD + maxTop * (se.scrollTop / (sh - vh));
+    thumb.style.display = 'block';
+    thumb.style.height = h + 'px';
+    thumb.style.top = top + 'px';
+  }
+
+  window.addEventListener('scroll', syncThumb, { passive: true });
+  window.addEventListener('resize', syncThumb, { passive: true });
+  // Content height changes after fonts/images land; track the document itself.
+  if (window.ResizeObserver) {
+    new ResizeObserver(syncThumb).observe(document.documentElement);
+  }
+  syncThumb();
+
+  // Drag the thumb to scroll. stopPropagation keeps the capture-phase click
+  // reporter from treating the gesture as a selection attempt.
+  thumb.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    try {
+      thumb.setPointerCapture(ev.pointerId);
+    } catch {
+      // synthetic events carry no active pointer; drag still tracks below
+    }
+    thumb.setAttribute('data-dragging', '');
+    const se = scroller();
+    const vh = window.innerHeight;
+    const startY = ev.clientY;
+    const startTop = se.scrollTop;
+    const trackH = vh - TRACK_PAD * 2;
+    const ratio = (se.scrollHeight - vh) / Math.max(1, trackH - thumb.offsetHeight);
+    const move = (e) => {
+      se.scrollTop = startTop + (e.clientY - startY) * ratio;
+    };
+    const up = () => {
+      thumb.removeAttribute('data-dragging');
+      thumb.removeEventListener('pointermove', move);
+      thumb.removeEventListener('pointerup', up);
+      thumb.removeEventListener('pointercancel', up);
+    };
+    thumb.addEventListener('pointermove', move);
+    thumb.addEventListener('pointerup', up);
+    thumb.addEventListener('pointercancel', up);
+  });
 
   function findPath(target) {
     if (!target) return null;
@@ -88,6 +178,7 @@ export const IFRAME_RUNTIME = String.raw`
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
     else if (msg.type === 'applyVelloState') applyVelloState(msg.path, msg.state);
     else if (msg.type === 'requestRects') reportRects(msg.paths || []);
+    else if (msg.type === 'restoreScroll') window.scrollTo(msg.x || 0, msg.y || 0);
   }
 
   function send(msg) {
@@ -141,6 +232,9 @@ export const IFRAME_RUNTIME = String.raw`
   // surrounding masonry's scroll.
   window.addEventListener('wheel', (ev) => {
     if (!port) return;
+    // Alt/Option + wheel scrolls the design document itself — the only wheel
+    // path to the content, since plain wheel pans the canvas.
+    if (ev.altKey) return;
     if (ev.ctrlKey || ev.metaKey) {
       ev.preventDefault();
       send({ type: 'parentZoom', deltaY: ev.deltaY, clientX: ev.clientX, clientY: ev.clientY });
@@ -149,6 +243,20 @@ export const IFRAME_RUNTIME = String.raw`
     ev.preventDefault();
     send({ type: 'parentPan', deltaX: ev.deltaX, deltaY: ev.deltaY });
   }, { passive: false });
+
+  // Report the document scroll offset (debounced) so the parent can restore
+  // it after a reload — the iframe src embeds theme/version params, so a
+  // dark-mode toggle or theme edit is a full navigation that would otherwise
+  // reset scroll to the top.
+  let scrollTimer = 0;
+  window.addEventListener('scroll', () => {
+    if (scrollTimer) clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      scrollTimer = 0;
+      const se = document.scrollingElement || document.documentElement;
+      send({ type: 'scrollPos', x: se.scrollLeft, y: se.scrollTop });
+    }, 120);
+  }, { passive: true });
 
   // Wait for the parent to send a port via window.postMessage.
   window.addEventListener('message', (ev) => {

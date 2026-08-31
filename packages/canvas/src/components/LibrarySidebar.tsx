@@ -61,7 +61,7 @@ export function LibrarySidebar({ snippets }: Props) {
         </div>
       </section>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto scroll-stable">
         <SectionHeader icon={<ComponentIcon size={11} strokeWidth={2} />} label="Snippets" accent />
         {snippets.length === 0 ? (
           <div className="px-4 py-3 text-xs text-muted-foreground leading-relaxed">

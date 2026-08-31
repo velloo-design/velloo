@@ -11,6 +11,7 @@ import {
   type StyleModel,
   serializeStyle,
 } from "../../style-editor/style-object.ts";
+import { toastError } from "../../toast.ts";
 import {
   BoxModel,
   ColorField,
@@ -109,7 +110,7 @@ export function StyleObjectEditor({ initialValue, prop, screenId, path, debounce
         path: pathFromString(path),
         propPatch: { [prop]: Object.keys(obj).length ? obj : null },
       })
-      .catch(() => undefined);
+      .catch((err) => toastError(err, "Could not update styles"));
   });
   const commit = (next: ParsedStyle) => {
     setParsed(next);

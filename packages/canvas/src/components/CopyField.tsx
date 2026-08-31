@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mutate } from "../api.ts";
 import { pathFromString } from "../path.ts";
+import { toastError } from "../toast.ts";
 import { Label } from "./ui/label.tsx";
 import { Textarea } from "./ui/textarea.tsx";
 
@@ -33,7 +34,7 @@ export function CopyField({ initialValue, screenId, path, debounceMs }: Props) {
           path: pathFromString(path),
           propPatch: { children: value },
         })
-        .catch(() => undefined);
+        .catch((err) => toastError(err, "Could not update text"));
     }, debounceMs);
   };
 

@@ -62,7 +62,7 @@ export function IconPicker({ value, options, onChange }: Props) {
             onChange={(e) => setQuery(e.target.value)}
             className="rounded-b-none border-0 border-b shadow-none focus-visible:ring-0"
           />
-          <div className="grid max-h-64 grid-cols-8 gap-1 overflow-auto p-2">
+          <div className="grid max-h-64 grid-cols-8 gap-1 overflow-auto scroll-stable p-2">
             {filtered.length === 0 ? (
               <div className="col-span-8 px-2 py-4 text-center text-xs text-muted-foreground">
                 No matches.

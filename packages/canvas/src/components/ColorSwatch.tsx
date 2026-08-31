@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { normalizeToOklch, parseTriplet } from "../color.ts";
+import { toastError } from "../toast.ts";
 import { Input } from "./ui/input.tsx";
 import { Label } from "./ui/label.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
@@ -41,7 +42,9 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
     timer.current = setTimeout(() => {
       const oklch = normalizeToOklch(next);
       const valueToSend = oklch ?? next;
-      void themeApi.setToken(tokenPath, valueToSend).catch(() => undefined);
+      void themeApi
+        .setToken(tokenPath, valueToSend)
+        .catch((err) => toastError(err, "Could not set color token"));
     }, DEBOUNCE_MS);
   };
 

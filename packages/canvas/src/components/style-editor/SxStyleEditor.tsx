@@ -12,6 +12,7 @@ import {
   serializeSx,
   sxToPx,
 } from "../../style-editor/sx-object.ts";
+import { toastError } from "../../toast.ts";
 import {
   AddRow,
   BoxModel,
@@ -103,7 +104,7 @@ export function SxStyleEditor({ initialValue, prop, screenId, path, debounceMs }
         path: pathFromString(path),
         propPatch: { [prop]: Object.keys(obj).length ? obj : null },
       })
-      .catch(() => undefined);
+      .catch((err) => toastError(err, "Could not update styles"));
   });
   const commit = (next: ParsedSx) => {
     setParsed(next);

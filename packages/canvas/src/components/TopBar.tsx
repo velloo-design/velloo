@@ -2,6 +2,7 @@ import {
   Eye,
   EyeOff,
   Hand,
+  History,
   LogOut,
   MessageSquareText,
   Minus,
@@ -16,11 +17,19 @@ import {
   Undo2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { type AuthStatus, auth, redo as redoApi, undo as undoApi } from "../api.ts";
+import {
+  type AuthStatus,
+  auth,
+  fetchRevertStatus,
+  type RevertStatus,
+  redo as redoApi,
+  undo as undoApi,
+} from "../api.ts";
 import { type AppTheme, type CursorMode, useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { AgentActivityIndicator } from "./ActivityFeed.tsx";
 import { LogoLockup } from "./Logo.tsx";
+import { RevertDialog } from "./RevertDialog.tsx";
 import { Button } from "./ui/button.tsx";
 import {
   DropdownMenu,
@@ -279,15 +288,26 @@ function SettingsMenu({
   setAppTheme: (t: AppTheme) => void;
 }) {
   const [status, setStatus] = useState<AuthStatus | null>(null);
+  // Revert availability, refreshed each time the menu opens. Null while
+  // unknown; the item hides entirely when the folder isn't in a git repo.
+  const [revertStatus, setRevertStatus] = useState<RevertStatus | null>(null);
+  const [revertConfirm, setRevertConfirm] = useState<RevertStatus | null>(null);
   const refresh = () => {
     auth
       .status()
       .then(setStatus)
       .catch(() => setStatus({ loggedIn: false }));
+    fetchRevertStatus()
+      .then(setRevertStatus)
+      .catch(() => setRevertStatus(null));
   };
   useEffect(refresh, []);
 
   const loggedIn = status?.loggedIn ?? false;
+  const revertIsRepo =
+    revertStatus !== null &&
+    (revertStatus.available ||
+      revertStatus.reason !== "The design folder is not inside a git repository.");
 
   const onLogout = async () => {
     try {
@@ -300,48 +320,83 @@ function SettingsMenu({
   };
 
   return (
-    <DropdownMenu onOpenChange={(open) => open && refresh()}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="max-w-[12rem] text-xs"
-          title="Settings & account"
-        >
-          <Settings />
-          <span className="truncate">{loggedIn && status?.email ? status.email : "Settings"}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel className="font-normal">
+    <>
+      <DropdownMenu onOpenChange={(open) => open && refresh()}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="max-w-[12rem] text-xs"
+            title="Settings & account"
+          >
+            <Settings />
+            <span className="truncate">
+              {loggedIn && status?.email ? status.email : "Settings"}
+            </span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuLabel className="font-normal">
+            {loggedIn ? (
+              <span className="flex flex-col">
+                <span className="text-[11px] text-muted-foreground">Signed in to velloo-cloud</span>
+                <span className="truncate text-sm">{status?.email ?? "Signed in"}</span>
+              </span>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                Not signed in — run <span className="font-mono">velloo login</span>
+              </span>
+            )}
+          </DropdownMenuLabel>
           {loggedIn ? (
-            <span className="flex flex-col">
-              <span className="text-[11px] text-muted-foreground">Signed in to velloo-cloud</span>
-              <span className="truncate text-sm">{status?.email ?? "Signed in"}</span>
-            </span>
-          ) : (
-            <span className="text-[11px] text-muted-foreground">
-              Not signed in — run <span className="font-mono">velloo login</span>
-            </span>
-          )}
-        </DropdownMenuLabel>
-        {loggedIn ? (
-          <DropdownMenuItem onClick={onLogout}>
-            <LogOut />
-            Log out
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
-          App theme
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={appTheme} onValueChange={(v) => setAppTheme(v as AppTheme)}>
-          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <DropdownMenuItem onClick={onLogout}>
+              <LogOut />
+              Log out
+            </DropdownMenuItem>
+          ) : null}
+          {revertIsRepo ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={!revertStatus?.available}
+                title={revertStatus?.available ? undefined : revertStatus?.reason}
+                onSelect={() => setRevertConfirm(revertStatus)}
+              >
+                <History />
+                Revert all design changes…
+              </DropdownMenuItem>
+              {!revertStatus?.available && revertStatus?.reason ? (
+                <div className="px-2 pb-1 text-[11px] text-muted-foreground">
+                  {revertStatus.reason}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+            App theme
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={appTheme}
+            onValueChange={(v) => setAppTheme(v as AppTheme)}
+          >
+            <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <RevertDialog
+        status={revertConfirm}
+        onClose={() => {
+          setRevertConfirm(null);
+          // A successful revert changes what's revertable — refresh so the
+          // menu item disables itself next open.
+          refresh();
+        }}
+      />
+    </>
   );
 }
 

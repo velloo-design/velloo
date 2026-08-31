@@ -1,6 +1,30 @@
 import { postMutate } from "./http.ts";
 
+export interface AddedFrame {
+  id: string;
+  screen: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label?: string;
+  group?: string;
+}
+
 export const mutate = {
+  addFrame(args: {
+    boardId: string;
+    screenId: string;
+    x?: number;
+    y?: number;
+    w: number;
+    h: number;
+    label?: string;
+    group?: string;
+    id?: string;
+  }) {
+    return postMutate<{ frame: AddedFrame }>("add_frame", args);
+  },
   updateFrame(args: {
     boardId: string;
     frameId: string;

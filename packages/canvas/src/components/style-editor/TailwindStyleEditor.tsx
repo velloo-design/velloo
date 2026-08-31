@@ -12,6 +12,7 @@ import {
   serializeClasses,
   type TwModel,
 } from "../../style-editor/tailwind-classes.ts";
+import { toastError } from "../../toast.ts";
 import {
   AddRow,
   BoxModel,
@@ -146,7 +147,7 @@ export function TailwindStyleEditor({ initialValue, screenId, path, debounceMs }
   const push = useDebouncedCommit<ParsedClasses>(debounceMs, (next) => {
     void mutate
       .applyClasses({ screenId, path: pathFromString(path), classes: serializeClasses(next) })
-      .catch(() => undefined);
+      .catch((err) => toastError(err, "Could not apply classes"));
   });
   const commit = (next: ParsedClasses) => {
     setParsed(next);

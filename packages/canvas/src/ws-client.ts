@@ -1,3 +1,4 @@
+import { setApiConnected } from "./api/connection.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
@@ -10,6 +11,7 @@ type ServerEvent =
   | { type: "annotations-changed"; screenId: string }
   | { type: "notes-changed"; boardId: string }
   | { type: "config-changed" }
+  | { type: "folder-reloaded" }
   | { type: "reload-error"; source: string; message: string }
   /** Agent-activity metadata — validated separately by parseActivityEntry. */
   | { type: "activity" };
@@ -46,7 +48,17 @@ export function connectWs(): () => void {
 
     socket.onopen = () => {
       retryDelay = 250;
-      useCanvas.getState().setWsConnected(true);
+      setApiConnected(true);
+      const state = useCanvas.getState();
+      const wasDisconnected = state.wsEverConnected && !state.wsConnected;
+      state.setWsConnected(true);
+      // Recover automatically: a failed boot retries in full; an established
+      // session refetches everything that may have changed while away.
+      if (state.design === null) {
+        if (state.bootError !== null) void state.loadDesign();
+      } else if (wasDisconnected) {
+        void state.resyncAfterReconnect();
+      }
     };
 
     socket.onmessage = (ev) => {
@@ -111,6 +123,10 @@ export function connectWs(): () => void {
         // Extensions / library config changed — the Library tab reads
         // from the design summary.
         void refreshDesignSummary();
+      } else if (payload.type === "folder-reloaded") {
+        // Out-of-band rewrite of the whole folder (git revert-all): drop
+        // every cache and boot again.
+        void useCanvas.getState().reloadAll();
       } else if (payload.type === "reload-error") {
         pushToast({
           kind: "error",
@@ -122,6 +138,7 @@ export function connectWs(): () => void {
     };
 
     socket.onclose = () => {
+      setApiConnected(false);
       useCanvas.getState().setWsConnected(false);
       if (stopped) return;
       setTimeout(open, retryDelay);

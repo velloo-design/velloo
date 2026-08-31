@@ -16,6 +16,12 @@ export type WatchEvent =
    */
   | { type: "config-changed" }
   /**
+   * The whole folder was rewritten out-of-band (git revert-all) and
+   * reloaded server-side. Clients drop every cache and refetch. Emitted
+   * by the revert route, never by the watcher itself.
+   */
+  | { type: "folder-reloaded" }
+  /**
    * A watched file changed but failed to reload into memory
    * (unparseable JSON, schema violation). Emitted by the server's
    * reload pipeline rather than the watcher itself; clients surface it

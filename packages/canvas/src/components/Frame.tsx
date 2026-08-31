@@ -52,7 +52,8 @@ export const Frame = memo(function Frame({
   sharedCount,
 }: FrameProps) {
   const otherFrames = useMemo(() => frames.filter((f) => f.id !== frame.id), [frames, frame.id]);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const slotARef = useRef<HTMLIFrameElement>(null);
+  const slotBRef = useRef<HTMLIFrameElement>(null);
   const chromeHostRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<IframeChannel | null>(null);
   const screen = useCanvas((s) => s.screens[frame.screen]);
@@ -68,6 +69,7 @@ export const Frame = memo(function Frame({
   const nodeState = useCanvas((s) => s.nodeState);
   const designMode = useCanvas((s) => s.designMode);
   const cursorMode = useCanvas((s) => s.cursorMode);
+  const wsConnected = useCanvas((s) => s.wsConnected);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
@@ -89,6 +91,69 @@ export const Frame = memo(function Frame({
   const x = draftPos?.x ?? frame.x;
   const y = draftPos?.y ?? frame.y;
   const hasScreen = Boolean(screen);
+
+  // The iframe src embeds only *committed* frame size — draft (mid-drag)
+  // sizes stretch the element visually via width/height styling, so a resize
+  // gesture doesn't navigate the iframe on every pointer-move tick; the one
+  // reload happens on commit. While the daemon is unreachable the
+  // src is frozen entirely: recomputing it (theme toggle, version bumps,
+  // attempted resizes) would point the iframe at an unreachable /api/render
+  // URL and blank the frame to gray.
+  const computedSrc = `${renderUrl(frame.screen, frame.w, frame.h, boardTheme)}&mode=${designMode}&v=${screenRev}.${themeVersion}`;
+  const frozenSrcRef = useRef(computedSrc);
+  if (wsConnected) frozenSrcRef.current = computedSrc;
+  const src = frozenSrcRef.current;
+
+  // Last scroll offset the iframe reported — restored in onReady after a
+  // reload so theme toggles/edits and resize commits keep the user's place.
+  const savedScrollRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Double-buffered iframes: a src change is a full navigation, and a single
+  // iframe blanks white while the new document loads — every edit flickered.
+  // Instead the new src loads in a hidden back buffer and the slots swap on
+  // its `load`, so the previous render stays painted throughout.
+  const [buffers, setBuffers] = useState<{ srcs: [string | null, string | null]; front: 0 | 1 }>(
+    () => ({ srcs: [src, null], front: 0 }),
+  );
+  const buffersRef = useRef(buffers);
+  buffersRef.current = buffers;
+  const front = buffers.front;
+  const frontRef = front === 0 ? slotARef : slotBRef;
+
+  useEffect(() => {
+    setBuffers((b) => {
+      const back = (1 - b.front) as 0 | 1;
+      if (b.srcs[b.front] === src) {
+        // Desired src already visible — drop any stale in-flight back load.
+        if (b.srcs[back] === null) return b;
+        const srcs: [string | null, string | null] = [...b.srcs];
+        srcs[back] = null;
+        return { ...b, srcs };
+      }
+      if (b.srcs[back] === src) return b;
+      const srcs: [string | null, string | null] = [...b.srcs];
+      srcs[back] = src;
+      return { ...b, srcs };
+    });
+  }, [src]);
+
+  const onSlotLoad = (slot: 0 | 1) => {
+    const b = buffersRef.current;
+    if (slot === b.front) {
+      // First paint of the visible slot (initial mount) — start the handshake.
+      channelRef.current?.attach();
+      return;
+    }
+    if (b.srcs[slot] === null) return;
+    // Same-origin: put the fresh document at the saved scroll offset *before*
+    // it becomes visible, so the swap can't flash the top of the screen.
+    const saved = savedScrollRef.current;
+    const win = (slot === 0 ? slotARef : slotBRef).current?.contentWindow;
+    if (saved && win) win.scrollTo(saved.x, saved.y);
+    setBuffers(
+      slot === 0 ? { srcs: [b.srcs[0], null], front: 0 } : { srcs: [null, b.srcs[1]], front: 1 },
+    );
+  };
 
   // Measure the frame chrome instead of hardcoding its layout: the iframe's
   // offset from the frame origin (header row above) feeds annotation
@@ -119,7 +184,7 @@ export const Frame = memo(function Frame({
 
   useEffect(() => {
     void hasScreen; // re-run once the screen loads so a late-mounted iframe attaches
-    const iframe = iframeRef.current;
+    const iframe = frontRef.current;
     if (!iframe) return;
     const channel = new IframeChannel(iframe, {
       onSelect(path) {
@@ -138,8 +203,17 @@ export const Frame = memo(function Frame({
       // and the effects below are keyed on those values, so nothing re-sends
       // them. Re-establish everything the parent believes is true, and
       // re-request annotation rects so anchors track the fresh layout.
+      onScrollPos(sx, sy) {
+        savedScrollRef.current = { x: sx, y: sy };
+      },
       onReady() {
         const s = useCanvas.getState();
+        // Restore the pre-reload scroll offset — unless a reveal jump is
+        // pending for this screen, whose scrollIntoView must win.
+        const revealPending = s.reveal?.screenId === frame.screen;
+        if (!revealPending && savedScrollRef.current) {
+          channel.send({ type: "restoreScroll", ...savedScrollRef.current });
+        }
         if (s.selection?.screenId === frame.screen) {
           // A pending reveal means this selection came from a search jump and
           // the iframe just (re)loaded — scroll the node into view too.
@@ -171,7 +245,7 @@ export const Frame = memo(function Frame({
       onParentZoom(deltaY, clientX, clientY) {
         const state = useCanvas.getState();
         const factor = wheelZoomFactor(deltaY);
-        const iframeEl = iframeRef.current;
+        const iframeEl = iframe;
         const wrapper = iframeEl?.closest<HTMLDivElement>('[data-velloo-board="true"]');
         if (!iframeEl || !wrapper) {
           state.setCanvasZoom(state.canvasZoom * factor);
@@ -200,20 +274,29 @@ export const Frame = memo(function Frame({
       },
     });
     channelRef.current = channel;
-    const onLoad = () => channel.attach();
-    iframe.addEventListener("load", onLoad);
-    // Already loaded (hot reload, fast network, etc.) — attach now.
+    // Already loaded — the common case: a freshly promoted back buffer, or a
+    // hot-reload remount. The initial front load instead lands in onSlotLoad.
     if (iframe.contentDocument?.readyState === "complete") channel.attach();
     return () => {
-      iframe.removeEventListener("load", onLoad);
       channel.destroy();
       channelRef.current = null;
       clearNodeRects(frame.id);
     };
     // hasScreen: a frame added to an open board first mounts as the "Loading…"
     // placeholder (iframe null); re-run once the screen loads so the channel
-    // actually attaches and the frame becomes selectable.
-  }, [frame.id, frame.screen, hasScreen, setSelection, setHover, setNodeRects, clearNodeRects]);
+    // actually attaches and the frame becomes selectable. frontRef flips
+    // between the two slot refs on every buffer swap, re-binding the channel
+    // to the newly visible document.
+  }, [
+    frame.id,
+    frame.screen,
+    hasScreen,
+    frontRef,
+    setSelection,
+    setHover,
+    setNodeRects,
+    clearNodeRects,
+  ]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -350,6 +433,25 @@ export const Frame = memo(function Frame({
     });
   };
 
+  const onPreview = () => {
+    useCanvas.getState().setPreviewTarget({
+      screenId: frame.screen,
+      name: frame.label ?? screen?.name ?? frame.screen,
+      ...(boardTheme ? { boardTheme } : {}),
+      w: frame.w,
+    });
+  };
+
+  // Sibling frame of the same screen at a chosen size — auto-positioned by
+  // the server (right of the rightmost frame). Multiple frames of one screen
+  // edit-sync by design, so this is the "desktop/tablet/mobile side by side"
+  // affordance.
+  const onAddSibling = (size: { w: number; h: number }) => {
+    void mutate
+      .addFrame({ boardId, screenId: frame.screen, w: size.w, h: size.h })
+      .catch((err) => toastError(err, "Could not add frame"));
+  };
+
   const passThrough = cursorMode === "hand" || cursorMode === "note";
 
   return (
@@ -360,17 +462,35 @@ export const Frame = memo(function Frame({
       data-group-id={frame.group ?? ""}
     >
       <div className="flex flex-col gap-1">
-        <FrameHeader
-          label={frame.label ?? screen?.name ?? frame.screen}
-          w={w}
-          h={h}
-          sharedCount={sharedCount}
-          library={screen?.library ?? null}
-          onPointerDownGrip={startDrag}
-          onRemove={onRemove}
-          onExport={onExport}
-          onResize={onResize}
-        />
+        {/*
+          Counter-scale the chrome against the board zoom so the title, size
+          inputs, and menu render at a constant, readable size. The layout box
+          is sized to w×zoom and scaled back by 1/zoom, so the visual width
+          always matches the frame; origin bottom-left grows the row upward,
+          away from the iframe.
+        */}
+        <div
+          style={{
+            width: `calc(${w}px * var(--canvas-zoom, 1))`,
+            transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
+            transformOrigin: "bottom left",
+          }}
+        >
+          <FrameHeader
+            label={frame.label ?? screen?.name ?? frame.screen}
+            w={w}
+            h={h}
+            sharedCount={sharedCount}
+            library={screen?.library ?? null}
+            presets={presets}
+            onPointerDownGrip={startDrag}
+            onRemove={onRemove}
+            onExport={onExport}
+            onResize={onResize}
+            onPreview={onPreview}
+            onAddSibling={onAddSibling}
+          />
+        </div>
 
         {!screen ? (
           <div
@@ -390,19 +510,29 @@ export const Frame = memo(function Frame({
             }
             style={{ width: w, height: h }}
           >
-            <iframe
-              ref={iframeRef}
-              title={`${screen.name} (${frame.id})`}
-              src={`${renderUrl(frame.screen, w, h, boardTheme)}&mode=${designMode}&v=${screenRev}.${themeVersion}`}
-              width={w}
-              height={h}
-              className="velloo-frame-iframe border rounded-md bg-white"
-              style={{
-                width: w,
-                height: h,
-                pointerEvents: passThrough ? "none" : "auto",
-              }}
-            />
+            {([0, 1] as const).map((slot) =>
+              buffers.srcs[slot] === null ? null : (
+                <iframe
+                  key={slot}
+                  ref={slot === 0 ? slotARef : slotBRef}
+                  title={`${screen.name} (${frame.id})${slot === front ? "" : " — loading"}`}
+                  src={buffers.srcs[slot] as string}
+                  width={w}
+                  height={h}
+                  onLoad={() => onSlotLoad(slot)}
+                  aria-hidden={slot === front ? undefined : true}
+                  className={
+                    "velloo-frame-iframe absolute inset-0 border rounded-md bg-white" +
+                    (slot === front ? "" : " invisible")
+                  }
+                  style={{
+                    width: w,
+                    height: h,
+                    pointerEvents: slot === front && !passThrough ? "auto" : "none",
+                  }}
+                />
+              ),
+            )}
             {/*
               Resize handles. Faint dashed edge by default; firms up on
               hover but stays accent/40 rather than full accent so the
@@ -426,7 +556,15 @@ export const Frame = memo(function Frame({
           </div>
         )}
 
-        <FrameViewportPresets frame={frame} presets={presets} onPick={onPickPreset} />
+        <div
+          style={{
+            width: `calc(${w}px * var(--canvas-zoom, 1))`,
+            transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
+            transformOrigin: "top left",
+          }}
+        >
+          <FrameViewportPresets frame={frame} presets={presets} onPick={onPickPreset} />
+        </div>
       </div>
       <AlertDialog
         open={confirmRemove}

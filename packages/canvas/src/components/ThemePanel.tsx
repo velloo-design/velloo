@@ -92,7 +92,7 @@ export function ThemePanel({ theme, presets }: Props) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
+    <div className="flex-1 overflow-y-auto scroll-stable p-4">
       <Accordion
         type="multiple"
         value={openSections}

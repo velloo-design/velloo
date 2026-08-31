@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   addBoard,
+  addFrame,
   applyClasses,
   type MutationContext,
   removeBoard,
@@ -15,6 +16,7 @@ import {
 } from "../mutations/index.ts";
 import {
   AddBoardBody,
+  AddFrameBody,
   ApplyClassesBody,
   RemoveBoardBody,
   RemoveFrameBody,
@@ -71,6 +73,10 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   );
 
   // Frame lifecycle
+  r.post(
+    "/add_frame",
+    route(AddFrameBody, (a, ctx) => addFrame(ctx, a)),
+  );
   r.post(
     "/update_frame",
     route(UpdateFrameBody, (a, ctx) => updateFrame(ctx, a)),

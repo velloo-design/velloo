@@ -4,6 +4,7 @@ import { mutate } from "../api.ts";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
 import { pathFromString } from "../path.ts";
 import { selectedNode, useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 import { CopyField } from "./CopyField.tsx";
 import { IdField } from "./IdField.tsx";
 import { PropField } from "./PropField.tsx";
@@ -50,7 +51,7 @@ export function Inspector() {
         path: pathFromString(p.path),
         propPatch: { [p.name]: p.value === undefined ? null : p.value },
       })
-      .catch(() => undefined);
+      .catch((err) => toastError(err, "Could not update prop"));
   });
 
   if (!selection) {
@@ -113,7 +114,7 @@ export function Inspector() {
 
       <StatePreview key={selectionKey} />
 
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto scroll-stable p-4 flex flex-col gap-4">
         <IdField
           key={`${selectionKey}:id`}
           initialValue={nodeId(node) ?? ""}

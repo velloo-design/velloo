@@ -71,6 +71,18 @@ export const ReorderBoardsBody = z.object({
 });
 
 // ── Frame lifecycle ────────────────────────────────────────────────────
+export const AddFrameBody = z.object({
+  boardId: z.string().min(1),
+  screenId: z.string().min(1),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  w: z.number().int().positive(),
+  h: z.number().int().positive(),
+  label: z.string().optional(),
+  group: z.string().optional(),
+  id: z.string().min(1).optional(),
+});
+
 export const UpdateFrameBody = z.object({
   boardId: z.string().min(1),
   frameId: z.string().min(1),

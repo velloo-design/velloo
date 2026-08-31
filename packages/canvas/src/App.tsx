@@ -1,18 +1,22 @@
-import { useEffect, useRef } from "react";
+import { Plus, WifiOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { annotations as annotationsApi, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
+import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
 import { Board } from "./components/Board.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
+import { PreviewDialog } from "./components/PreviewDialog.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { SearchDialog } from "./components/SearchDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { TopBar } from "./components/TopBar.tsx";
+import { Button } from "./components/ui/button.tsx";
 import { Toaster } from "./components/ui/sonner.tsx";
 import { useCanvas } from "./store.ts";
 import { toastError } from "./toast.ts";
@@ -21,6 +25,7 @@ import { connectWs } from "./ws-client.ts";
 
 export function App() {
   const design = useCanvas((s) => s.design);
+  const bootError = useCanvas((s) => s.bootError);
   const view = useCanvas((s) => s.view);
   const libraryItem = useCanvas((s) => s.libraryItem);
   const editingSnippetId = useCanvas((s) => s.editingSnippetId);
@@ -33,6 +38,7 @@ export function App() {
   const setSelection = useCanvas((s) => s.setSelection);
   const initialized = useRef(false);
   const spaceHeldRef = useRef<"select" | "hand" | "note" | "annotate" | null>(null);
+  const [emptyBoardAddFrame, setEmptyBoardAddFrame] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -146,6 +152,24 @@ export function App() {
   }, []);
 
   if (!design) {
+    if (bootError) {
+      return (
+        <div className="h-full grid place-items-center p-8">
+          <div className="max-w-md text-center flex flex-col items-center gap-3">
+            <WifiOff className="text-muted-foreground" size={28} />
+            <div className="text-base font-medium">Can't reach the velloo daemon</div>
+            <div className="text-sm text-muted-foreground">
+              The design server isn't answering ({bootError}). Start it with{" "}
+              <span className="font-mono">velloo run</span> — the canvas reconnects automatically,
+              or retry now.
+            </div>
+            <Button variant="outline" onClick={() => void useCanvas.getState().loadDesign()}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="h-full grid place-items-center text-sm text-muted-foreground">Loading…</div>
     );
@@ -154,6 +178,7 @@ export function App() {
   return (
     <div className="h-full flex flex-col">
       <TopBar />
+      <DisconnectedBanner />
       <div className="flex-1 flex min-h-0">
         <Sidebar
           boards={design.boards}
@@ -181,7 +206,15 @@ export function App() {
           ) : currentBoard ? (
             <EmptyState
               title={`Board "${currentBoard.name}" is empty`}
-              hint="Ask your agent to design something here — it places screens on boards through the velloo MCP tools. Or pick another board."
+              hint="Ask your agent to design something here — it places screens on boards through the velloo MCP tools. Or place an existing screen yourself."
+              action={
+                design.screens.length > 0 ? (
+                  <Button variant="outline" onClick={() => setEmptyBoardAddFrame(currentBoard.id)}>
+                    <Plus />
+                    Add frame
+                  </Button>
+                ) : undefined
+              }
             />
           ) : (
             <EmptyState
@@ -195,8 +228,31 @@ export function App() {
       </div>
       <SearchDialog />
       <ExportDialog />
+      <PreviewDialog />
+      <AddFrameDialog boardId={emptyBoardAddFrame} onClose={() => setEmptyBoardAddFrame(null)} />
       <ActivityFeed />
       <Toaster />
+    </div>
+  );
+}
+
+/**
+ * Unmissable disconnected treatment: shown once the WS has been up
+ * and dropped. Loaded boards stay fully navigable — pan, zoom, select,
+ * inspect — but every mutation is gated at the API layer until reconnect,
+ * and frame iframes freeze their last good render.
+ */
+function DisconnectedBanner() {
+  const wsConnected = useCanvas((s) => s.wsConnected);
+  const wsEverConnected = useCanvas((s) => s.wsEverConnected);
+  if (wsConnected || !wsEverConnected) return null;
+  return (
+    <div
+      role="status"
+      className="shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-medium bg-destructive text-destructive-foreground"
+    >
+      <WifiOff size={13} />
+      Disconnected from the velloo daemon — designs are view-only until it comes back. Reconnecting…
     </div>
   );
 }

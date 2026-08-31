@@ -142,6 +142,50 @@ body {
 }
 
 /*
+ * Canvas chrome scrollbars. macOS overlay scrollbars only appear
+ * mid-scroll and are hard to grab; ::-webkit-scrollbar styling opts the
+ * chrome into always-visible classic bars with a comfortable thumb. The
+ * standard scrollbar-width/scrollbar-color properties must NOT be set
+ * alongside — in Chrome 121+ they take precedence and revert to auto-hiding
+ * overlay bars — so they're gated to engines without the webkit pseudo
+ * (Firefox). Both palettes read from the theme vars, so light/dark track
+ * the app theme. This stylesheet only reaches the canvas document — design
+ * iframes get their own treatment from the injected runtime.
+ */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 999px;
+  /* Transparent border + padding-box clip = a slim inset thumb with a
+   * full-width hit target. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-foreground);
+}
+
+/* Reserve the scrollbar gutter in panel scroll regions so content doesn't
+ * shift when overflow appears/disappears. Opt-in — a blanket rule would
+ * also pad overflow-hidden boxes like the board wrapper. */
+.scroll-stable {
+  scrollbar-gutter: stable;
+}
+
+/*
  * Cursor mode visuals.
  *
  * The body carries a mode class so the cursor + iframe pointer-events

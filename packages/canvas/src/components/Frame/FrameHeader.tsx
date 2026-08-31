@@ -1,5 +1,26 @@
-import { Download, GripVertical, Library as LibraryIcon, Link2, X } from "lucide-react";
+import type { ViewportPreset } from "@velloo/schema";
+import {
+  Copy,
+  Download,
+  GripVertical,
+  Library as LibraryIcon,
+  Link2,
+  Maximize2,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu.tsx";
 
 interface FrameHeaderProps {
   label: string;
@@ -12,12 +33,18 @@ interface FrameHeaderProps {
    * the extra chrome.
    */
   library?: string | null;
+  /** Viewport presets offered by the "new frame of this screen" menu. */
+  presets: ViewportPreset[];
   onPointerDownGrip: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
   /** Open the export dialog for this frame (PNG / PDF / standalone HTML). */
   onExport: () => void;
   /** Commit a new size from the header's inline w/h inputs. */
   onResize: (next: { w?: number; h?: number }) => void;
+  /** Open the full-screen preview modal for this frame's screen. */
+  onPreview: () => void;
+  /** Place a sibling frame of the same screen at the given size. */
+  onAddSibling: (size: { w: number; h: number }) => void;
 }
 
 const MIN_SIZE = 120;
@@ -42,10 +69,13 @@ export function FrameHeader({
   h,
   sharedCount,
   library,
+  presets,
   onPointerDownGrip,
   onRemove,
   onExport,
   onResize,
+  onPreview,
+  onAddSibling,
 }: FrameHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -92,22 +122,57 @@ export function FrameHeader({
         ) : null}
       </div>
       <div className="flex items-center gap-0.5">
-        <button
-          type="button"
-          onClick={onExport}
-          className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-card text-muted-foreground hover:text-foreground"
-          title="Export this frame (PNG, PDF, HTML)"
-        >
-          <Download size={11} />
-        </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="opacity-0 group-hover:opacity-100 transition-opacity h-4 w-4 grid place-items-center rounded hover:bg-card text-muted-foreground hover:text-foreground"
-          title="Remove this frame (the underlying screen stays)"
-        >
-          <X size={11} />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity h-4 w-5 grid place-items-center rounded hover:bg-card text-muted-foreground hover:text-foreground"
+              title="Frame actions"
+            >
+              <MoreHorizontal size={12} />
+            </button>
+          </DropdownMenuTrigger>
+          {/* Radix portals this to document.body — outside the board's
+              pan/zoom transform, so the menu always renders at chrome size. */}
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onPreview}>
+              <Maximize2 />
+              Full-screen preview
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Plus className="mr-2 size-4 text-muted-foreground" />
+                New frame of this screen
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {presets.map((p) => (
+                  <DropdownMenuItem key={p.name} onSelect={() => onAddSibling({ w: p.w, h: p.h })}>
+                    {p.name}
+                    <span className="ml-auto pl-3 text-xs text-muted-foreground tabular-nums">
+                      {p.w}×{p.h}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem onSelect={() => onAddSibling({ w, h })}>
+                  <Copy />
+                  Duplicate at current size
+                  <span className="ml-auto pl-3 text-xs text-muted-foreground tabular-nums">
+                    {w}×{h}
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuItem onSelect={onExport}>
+              <Download />
+              Export…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={onRemove}>
+              <Trash2 />
+              Remove frame
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

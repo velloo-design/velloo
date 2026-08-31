@@ -149,7 +149,8 @@ export async function chromiumExecutable(): Promise<string | null> {
     if (!m || !m[1] || !m[2]) return null;
     const shellRoot = join(m[1], `chromium_headless_shell-${m[2]}`);
     if (!existsSync(shellRoot)) return null;
-    const bin = process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+    const bin =
+      process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
     for (const sub of readdirSync(shellRoot)) {
       const candidate = join(shellRoot, sub, bin);
       if (existsSync(candidate)) return candidate;

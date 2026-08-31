@@ -317,11 +317,17 @@ function BoardWorld({
   return (
     <div
       className="relative origin-top-left"
-      style={{
-        width: w,
-        height: h,
-        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-      }}
+      style={
+        {
+          width: w,
+          height: h,
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          // Frame chrome (headers, preset chips) counter-scales against this
+          // so labels stay readable at any zoom — pure CSS, so zoom ticks
+          // still re-render only this wrapper, never the frames.
+          "--canvas-zoom": zoom,
+        } as React.CSSProperties
+      }
     >
       {children}
     </div>

@@ -138,7 +138,7 @@ export function LibraryHome({ snippets }: Props) {
   const previewMode = dark ? "&mode=dark" : "";
 
   return (
-    <div className="flex-1 overflow-auto bg-background">
+    <div className="flex-1 overflow-auto scroll-stable bg-background">
       <div className="mx-auto w-full max-w-6xl flex flex-col">
         <header className="px-8 pt-10 pb-5">
           <div className="flex items-baseline gap-3">

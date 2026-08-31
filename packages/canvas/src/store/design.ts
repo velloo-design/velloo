@@ -44,6 +44,14 @@ export interface DesignSlice {
   presets: string[];
   history: HistoryDepths;
   wsConnected: boolean;
+  /**
+   * True once the WS has connected at least once this session — the
+   * disconnected banner keys on it so the brief pre-handshake window at boot
+   * doesn't flash "disconnected" chrome.
+   */
+  wsEverConnected: boolean;
+  /** Boot failure message when the initial loadDesign couldn't reach the daemon. */
+  bootError: string | null;
 
   /**
    * Boot the store from the server. `seed` carries the URL's board/screen
@@ -77,6 +85,19 @@ export interface DesignSlice {
   loadScreen(screenId: string): Promise<Screen | null>;
   refreshScreen(screenId: string): Promise<void>;
   setWsConnected(b: boolean): void;
+  /**
+   * Refetch everything the canvas holds after a WS reconnect: the daemon may
+   * have restarted (fresh history) or the folder may have changed while we
+   * were away. Loaded screens/boards refresh in place, bumping their render
+   * versions so stale iframes reload.
+   */
+  resyncAfterReconnect(): Promise<void>;
+  /**
+   * Full reload after an out-of-band rewrite of the design folder (git
+   * revert-all): drop every cached board/screen and boot again, keeping the
+   * current board/screen only if they still exist.
+   */
+  reloadAll(): Promise<void>;
 }
 
 export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> = (set, get) => ({
@@ -95,6 +116,8 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   presets: [],
   history: { undo: 0, redo: 0 },
   wsConnected: false,
+  wsEverConnected: false,
+  bootError: null,
 
   async refreshHistory() {
     try {
@@ -106,8 +129,16 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   },
 
   async loadDesign(seed) {
-    const design = await fetchDesign();
-    set({ design });
+    let design: DesignSummary;
+    try {
+      design = await fetchDesign();
+    } catch (err) {
+      // Server down at boot: a clear error state with retry instead of an
+      // unhandled rejection and an empty canvas.
+      set({ bootError: err instanceof Error ? err.message : String(err) });
+      return;
+    }
+    set({ design, bootError: null });
     // Boards: URL seed (when it still exists) beats default beats first.
     const seedBoard =
       seed?.boardId && design.boards.some((b) => b.id === seed.boardId) ? seed.boardId : null;
@@ -319,6 +350,44 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   },
 
   setWsConnected(wsConnected) {
-    set({ wsConnected });
+    set((s) => ({ wsConnected, wsEverConnected: s.wsEverConnected || wsConnected }));
+  },
+
+  async resyncAfterReconnect() {
+    try {
+      await get().refreshDesignSummary();
+      await get().refreshTheme();
+      await get().refreshHistory();
+      const boardId = get().currentBoardId;
+      if (boardId) await get().refreshBoard(boardId);
+      // Refresh every real screen already in the cache (skip synthetic
+      // snippet-editor screens) so frames re-render whatever changed while
+      // the daemon was away.
+      for (const screenId of Object.keys(get().screens)) {
+        if (screenId.startsWith("snippet:")) continue;
+        await get().refreshScreen(screenId);
+      }
+      await get().refreshAnnotations();
+      await get().refreshNotes();
+    } catch {
+      // Reconnect resync is best-effort; the WS will retry on next connect.
+    }
+  },
+
+  async reloadAll() {
+    const design = await fetchDesign();
+    const boardId = get().currentBoardId;
+    const screenId = get().currentScreenId;
+    set({
+      design,
+      screens: {},
+      boards: {},
+      currentBoardId: boardId && design.boards.some((b) => b.id === boardId) ? boardId : null,
+      currentScreenId: screenId && design.screens.some((s) => s.id === screenId) ? screenId : null,
+      annotations: [],
+      editingMarkupId: null,
+      notes: [],
+    });
+    await get().loadDesign();
   },
 });

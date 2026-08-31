@@ -233,7 +233,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
           snippet={displaySnippet}
           onPatchParams={(params) => onPatchMeta({ params })}
         />
-        <div className="border-t flex-1 overflow-y-auto">
+        <div className="border-t flex-1 overflow-y-auto scroll-stable">
           <SectionLabel>Body</SectionLabel>
           {syntheticScreen ? (
             <Tree key={syntheticScreen.id} screen={syntheticScreen} />
@@ -250,7 +250,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
           setViewport={setViewport}
           snippet={displaySnippet}
         />
-        <div ref={scrollWrapRef} className="flex-1 overflow-auto bg-muted/30">
+        <div ref={scrollWrapRef} className="flex-1 overflow-auto scroll-stable bg-muted/30">
           <div className="min-w-fit min-h-full flex items-center justify-center p-8">
             <div className="flex flex-col items-center gap-3">
               <div

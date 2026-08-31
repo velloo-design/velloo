@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { type CanvasAuth, createServer, type ServerHandle } from "@velloo/server";
 import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
@@ -110,6 +111,26 @@ export default defineCommand({
     };
     process.on("SIGTERM", shutdown);
     process.on("SIGINT", shutdown);
+
+    // Folder-gone exit: deleting the design folder leaves the
+    // watcher's fs.watch handles inert on macOS and the daemon serving stale
+    // in-memory state, so poll the root directly. Two consecutive misses
+    // before shutting down rides out transient FS states (atomic renames,
+    // slow network mounts). The per-folder lockfile died with the folder —
+    // removeLock tolerates that — so only the global registry needs cleanup,
+    // which shutdown() already does.
+    let rootMissing = 0;
+    setInterval(() => {
+      if (existsSync(root)) {
+        rootMissing = 0;
+        return;
+      }
+      rootMissing += 1;
+      if (rootMissing >= 2) {
+        console.error(`velloo: design folder ${root} is gone — shutting down.`);
+        void shutdown();
+      }
+    }, 10_000);
 
     // Idle-exit: persist past a session, but don't linger forever. Reset the
     // timer whenever a canvas tab or an agent is connected.

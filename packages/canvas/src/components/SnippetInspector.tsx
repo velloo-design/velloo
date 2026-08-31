@@ -5,6 +5,7 @@ import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
 import { useIconNames } from "../hooks/useIconNames.ts";
 import { pathFromString } from "../path.ts";
 import { type Selection, useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 import { ValueField, type ValueKind } from "./ValueField.tsx";
 
 const DEBOUNCE_MS = 200;
@@ -54,7 +55,7 @@ export function SnippetInspector({ selection, node }: Props) {
         path: pathFromString(p.path),
         argPatch: { [p.name]: p.value === undefined ? null : p.value },
       })
-      .catch(() => undefined);
+      .catch((err) => toastError(err, "Could not update snippet arg"));
   });
   const commitArg = (name: string, value: unknown) =>
     pushArg({ screenId: selection.screenId, path: selection.path, name, value });
@@ -69,7 +70,7 @@ export function SnippetInspector({ selection, node }: Props) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto scroll-stable p-4 flex flex-col gap-4">
         {snippetMeta == null ? (
           <div className="text-xs text-muted-foreground">
             Snippet "{node.$snippet}" is not in the registry — the instance is dangling.
