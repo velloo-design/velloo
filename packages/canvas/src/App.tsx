@@ -60,6 +60,16 @@ export function App() {
   useUrlState();
   useApplyAppTheme();
 
+  // Browser tab: `<repo> · <board> - velloo` (middle-dot between repo/board).
+  useEffect(() => {
+    const boardName = currentBoard?.name;
+    const folderName = design?.folderName;
+    const parts: string[] = [];
+    if (folderName) parts.push(folderName);
+    if (boardName) parts.push(boardName);
+    document.title = parts.length > 0 ? `${parts.join(" · ")} - velloo` : "velloo";
+  }, [design?.folderName, currentBoard?.name]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -83,14 +93,13 @@ export function App() {
         void redoApi().catch((e) => toastError(e, "Redo failed"));
       } else if (!cmd && !inEditable && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
-        state.setCanvasZoom(state.canvasZoom + 0.1);
+        state.zoomAtViewportCenter({ factor: 1.1 });
       } else if (!cmd && !inEditable && e.key === "-") {
         e.preventDefault();
-        state.setCanvasZoom(state.canvasZoom - 0.1);
+        state.zoomAtViewportCenter({ factor: 1 / 1.1 });
       } else if (!cmd && !inEditable && e.key === "0") {
         e.preventDefault();
-        state.setCanvasZoom(1);
-        state.setPan({ x: 0, y: 0 });
+        state.zoomAtViewportCenter({ zoom: 1 });
       } else if (!cmd && !inEditable && (e.key === "v" || e.key === "V")) {
         state.setCursorMode("select");
       } else if (!cmd && !inEditable && (e.key === "h" || e.key === "H")) {
@@ -117,7 +126,12 @@ export function App() {
       if (e.key === " " && spaceHeldRef.current) {
         const prior = spaceHeldRef.current;
         spaceHeldRef.current = null;
-        useCanvas.getState().setCursorMode(prior);
+        const s = useCanvas.getState();
+        // Restoring armed annotate mode must keep its no-selection invariant:
+        // a live selection would swallow the next pick of that same node
+        // (setSelection dedupes, so the create-on-pick subscriber never fires).
+        if (prior === "annotate" && s.selection) s.setSelection(null);
+        s.setCursorMode(prior);
       }
     };
     window.addEventListener("keydown", handler);
@@ -129,10 +143,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    // Pick-a-node annotate mode: the next selection creates an annotation.
-    // Select-then-Y goes through enterAnnotateMode (never arms this mode).
+    // Pick-a-node annotate mode: only create when a node is picked *while*
+    // already armed — enterAnnotateMode handles select-then-Y itself.
     return useCanvas.subscribe((state, prev) => {
-      if (state.cursorMode !== "annotate") return;
+      if (state.cursorMode !== "annotate" || prev.cursorMode !== "annotate") return;
       const sel = state.selection;
       if (!sel) return;
       const selChanged =

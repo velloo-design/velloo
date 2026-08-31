@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   CARD_WIDTH,
   connectorGeometry,
@@ -12,6 +12,9 @@ import { type AnnotationEntry, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Markdown } from "./Markdown.tsx";
 import { Button } from "./ui/button.tsx";
+
+/** Cap for both the edit textarea and the collapsed display body. */
+const BODY_MAX_HEIGHT_PX = 160;
 
 /**
  * Annotations are anchored to nodes within a screen. The iframe runtime
@@ -132,14 +135,45 @@ function Annotation({
   const [draft, setDraft] = useState(annotation.body);
   const exitingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [overflows, setOverflows] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const stale = annotation.resolved === null;
 
   useEffect(() => {
     setDraft(annotation.body);
     exitingRef.current = false;
+    setExpanded(false);
   }, [annotation.body]);
 
+  const growTextarea = (el: HTMLTextAreaElement | null) => {
+    textareaRef.current = el;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, BODY_MAX_HEIGHT_PX)}px`;
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure overflow when the body text changes
+  useLayoutEffect(() => {
+    if (isEditing || expanded) {
+      setOverflows(false);
+      return;
+    }
+    const el = bodyRef.current;
+    if (!el) return;
+    setOverflows(el.scrollHeight > BODY_MAX_HEIGHT_PX + 1);
+  }, [annotation.body, isEditing, expanded]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-grow on each keystroke; growTextarea only touches refs
+  useLayoutEffect(() => {
+    if (!isEditing) return;
+    growTextarea(textareaRef.current);
+  }, [draft, isEditing]);
+
   const onRemove = async () => {
+    // Removing the card being edited must end the edit session too, or the
+    // markup-edit camera never restores.
+    if (useCanvas.getState().editingMarkupId === annotation.id) setEditingId(null);
     try {
       await annotationsApi.remove({ screenId, annotationId: annotation.id });
     } catch (err) {
@@ -150,7 +184,9 @@ function Annotation({
   const saveAndExit = async () => {
     if (exitingRef.current) return;
     exitingRef.current = true;
-    setEditingId(null);
+    // A deferred blur can land after another card took over editing —
+    // persist this draft but don't close the new editor.
+    if (useCanvas.getState().editingMarkupId === annotation.id) setEditingId(null);
     if (!draft.trim()) {
       await onRemove();
       return;
@@ -198,6 +234,7 @@ function Annotation({
       title={stale ? "Targeted node has been removed — this annotation is stale." : undefined}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: hotkey target
       tabIndex={0}
+      onMouseLeave={() => setExpanded(false)}
       onDoubleClick={(e) => {
         e.stopPropagation();
         exitingRef.current = false;
@@ -236,7 +273,7 @@ function Annotation({
         <textarea
           // biome-ignore lint/a11y/noAutofocus: editing flow
           autoFocus
-          className="w-full min-h-8 bg-transparent text-sm leading-snug outline-none resize-none font-mono pr-5"
+          className="w-full min-h-8 bg-transparent text-sm leading-snug outline-none resize-none font-mono pr-5 overflow-y-auto"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={onBlurSave}
@@ -250,18 +287,34 @@ function Annotation({
               void saveAndExit();
             }
           }}
-          ref={(el) => {
-            textareaRef.current = el;
-            if (!el) return;
-            el.style.height = "auto";
-            el.style.height = `${el.scrollHeight}px`;
-          }}
-          style={{ height: "auto" }}
+          ref={growTextarea}
+          style={{ height: "auto", maxHeight: BODY_MAX_HEIGHT_PX }}
         />
       ) : (
         <div className="text-sm leading-snug pr-5">
           {annotation.body ? (
-            <Markdown body={annotation.body} />
+            <>
+              <div
+                ref={bodyRef}
+                className={expanded ? undefined : "overflow-hidden"}
+                style={expanded ? undefined : { maxHeight: BODY_MAX_HEIGHT_PX }}
+              >
+                <Markdown body={annotation.body} />
+              </div>
+              {overflows && !expanded ? (
+                <button
+                  type="button"
+                  className="mt-0.5 text-xs text-primary hover:underline"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded(true);
+                  }}
+                >
+                  …more
+                </button>
+              ) : null}
+            </>
           ) : (
             <span className="opacity-50">(empty annotation)</span>
           )}

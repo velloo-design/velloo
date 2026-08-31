@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { type Manifest, type StyleChannel, styleChannelOf } from "@velloo/provider";
 import { Hono } from "hono";
 import { type DesignFolder, orderedBoards } from "../design-folder.ts";
@@ -10,6 +11,21 @@ import { findSnippetInstances } from "../mutations/snippet-instances.ts";
  * The design folder's read surface: the summary the canvas boots from plus
  * per-resource reads (screen, board, snippets) and the components manifest.
  */
+
+/**
+ * Nearest enclosing git repo's directory name — the design folder is often a
+ * subdirectory (e.g. `<repo>/velloo`), and the tab title should read the repo.
+ * Falls back to the design folder's own basename outside a repo.
+ */
+function projectNameFor(root: string): string {
+  let dir = root;
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) return basename(dir);
+    const parent = dirname(dir);
+    if (parent === dir) return basename(root);
+    dir = parent;
+  }
+}
 
 export function createDesignRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
@@ -33,6 +49,8 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
       // selector in the Library tab.
       libraries,
       defaultLibrary: f.config.defaultLibrary ?? null,
+      /** Enclosing repo (or design-folder) name — the browser tab title prefix. */
+      folderName: projectNameFor(f.root),
       theme: { name: f.theme.name },
       defaultScreen: f.config.defaultScreen ?? null,
       defaultBoard: f.config.defaultBoard ?? null,

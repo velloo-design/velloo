@@ -1,13 +1,29 @@
 import type { StateCreator } from "zustand";
-import { toastError } from "../toast.ts";
+import { pushToast, toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
+import { selectedNode } from "./selection.ts";
 import type { AnnotationEntry, CanvasNoteEntry, Selection } from "./types.ts";
 
 /** Prevents subscribe + enterAnnotateMode from double-creating on one pick. */
 let creatingAnnotation = false;
 
-function locatorForSelection(sel: Selection): number[] {
-  return sel.path === "" ? [] : sel.path.split(".").map(Number);
+/**
+ * End the edit session when the edited markup no longer exists (agent removed
+ * it mid-edit) — otherwise the markup-edit camera never restores. Unmounting
+ * the card can't do this: removing a focused element fires no blur.
+ */
+function clearVanishedEdit(get: () => CanvasState): void {
+  const id = get().editingMarkupId;
+  if (!id) return;
+  const live = get().annotations.some((a) => a.id === id) || get().notes.some((n) => n.id === id);
+  if (!live) get().setEditingMarkupId(null);
+}
+
+function locatorForSelection(sel: Selection): number[] | null {
+  if (sel.path === "") return [];
+  const parts = sel.path.split(".").map(Number);
+  if (parts.some((n) => !Number.isFinite(n) || !Number.isInteger(n) || n < 0)) return null;
+  return parts;
 }
 
 function annotationMatchesSelection(a: AnnotationEntry, sel: Selection): boolean {
@@ -30,8 +46,8 @@ export interface AnnotationsSlice {
   setAnnotationsVisible(b: boolean): void;
   setEditingMarkupId(id: string | null): void;
   /**
-   * Annotate tool entry: with a selection, create (or open) an annotation on
-   * that node immediately; otherwise arm pick-a-node mode.
+   * Annotate tool entry: with a valid selection, create (or open) an annotation
+   * on that node immediately; otherwise arm pick-a-node mode.
    */
   enterAnnotateMode(): void;
   /** Create an annotation on `sel` (or focus the existing one) and enter edit. */
@@ -65,6 +81,7 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
       const { fetchAnnotations } = await import("../api.ts");
       const lists = await Promise.all(screenIds.map((id) => fetchAnnotations(id)));
       set({ annotations: lists.flat() });
+      clearVanishedEdit(get);
     } catch {
       /* ignore */
     }
@@ -77,25 +94,36 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
       const { fetchNotes } = await import("../api.ts");
       const notes = await fetchNotes(boardId);
       set({ notes });
+      clearVanishedEdit(get);
     } catch {
       /* ignore */
     }
   },
 
   setAnnotationsVisible(annotationsVisible) {
+    // Hiding the markup layer unmounts an in-progress editor without a blur —
+    // end the session so the camera restores and the edit isn't stranded.
+    if (!annotationsVisible) get().setEditingMarkupId(null);
     set({ annotationsVisible });
   },
 
   setEditingMarkupId(editingMarkupId) {
+    const prev = get().editingMarkupId;
+    if (prev === editingMarkupId) return;
     set({ editingMarkupId });
+    if (editingMarkupId && !prev) get().zoomForMarkupEdit();
+    else if (!editingMarkupId && prev) get().restoreViewAfterMarkupEdit();
   },
 
   enterAnnotateMode() {
     const sel = get().selection;
-    if (sel) {
+    // Only auto-create when the selection still resolves on the live tree —
+    // a stale path (agent rebuild, deleted node) used to 400 on /add.
+    if (sel && selectedNode(get().screens, sel)) {
       void get().createAnnotationOnSelection(sel);
       return;
     }
+    if (sel) get().setSelection(null);
     set({ cursorMode: "annotate", hover: null });
   },
 
@@ -105,22 +133,33 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
     try {
       set({ cursorMode: "select", hover: null });
 
+      if (!selectedNode(get().screens, sel)) {
+        pushToast({ message: "That node no longer exists — pick another to annotate." });
+        get().setSelection(null);
+        set({ cursorMode: "annotate", hover: null });
+        return;
+      }
+
       const existing = get().annotations.find((a) => annotationMatchesSelection(a, sel));
       if (existing) {
-        set({ editingMarkupId: existing.id });
+        get().setEditingMarkupId(existing.id);
         return;
       }
 
       // Follow the node's screen before add so selectScreen can't clear
       // editingMarkupId after we set it.
-      if (
-        sel.screenId !== get().currentScreenId &&
-        !sel.screenId.startsWith("snippet:")
-      ) {
+      if (sel.screenId !== get().currentScreenId && !sel.screenId.startsWith("snippet:")) {
         await get().selectScreen(sel.screenId);
       }
 
       const locator = locatorForSelection(sel);
+      if (!locator) {
+        pushToast({ message: "That node can't be annotated — pick another." });
+        get().setSelection(null);
+        set({ cursorMode: "annotate", hover: null });
+        return;
+      }
+
       const { annotations: annotationsApi } = await import("../api.ts");
       try {
         const r = await annotationsApi.add({
@@ -137,13 +176,13 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
           annotations: s.annotations.some((a) => a.id === entry.id)
             ? s.annotations
             : [...s.annotations, entry],
-          editingMarkupId: entry.id,
         }));
+        get().setEditingMarkupId(entry.id);
       } catch (err) {
         const payload = (err as Error & { payload?: { kind?: string; existingId?: string } })
           .payload;
         if (payload?.kind === "AnnotationConflict" && payload.existingId) {
-          set({ editingMarkupId: payload.existingId });
+          get().setEditingMarkupId(payload.existingId);
           return;
         }
         toastError(err, "Could not add annotation");

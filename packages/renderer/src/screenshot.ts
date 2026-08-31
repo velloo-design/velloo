@@ -146,7 +146,7 @@ export async function chromiumExecutable(): Promise<string | null> {
     if (!path) return null;
     if (existsSync(path)) return path;
     const m = path.match(/^(.*)[/\\]chromium-(\d+)[/\\]/);
-    if (!m || !m[1] || !m[2]) return null;
+    if (!m?.[1] || !m[2]) return null;
     const shellRoot = join(m[1], `chromium_headless_shell-${m[2]}`);
     if (!existsSync(shellRoot)) return null;
     const bin =

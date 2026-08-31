@@ -78,11 +78,10 @@ export function TopBar() {
   const libraryItem = useCanvas((s) => s.libraryItem);
   const theme = useCanvas((s) => s.theme);
   const canvasZoom = useCanvas((s) => s.canvasZoom);
-  const setCanvasZoom = useCanvas((s) => s.setCanvasZoom);
+  const zoomAtViewportCenter = useCanvas((s) => s.zoomAtViewportCenter);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const setCursorMode = useCanvas((s) => s.setCursorMode);
   const enterAnnotateMode = useCanvas((s) => s.enterAnnotateMode);
-  const setPan = useCanvas((s) => s.setPan);
   const history = useCanvas((s) => s.history);
   const refreshHistory = useCanvas((s) => s.refreshHistory);
   const appTheme = useCanvas((s) => s.appTheme);
@@ -106,8 +105,7 @@ export function TopBar() {
   };
 
   const onZoomReset = () => {
-    setCanvasZoom(1);
-    setPan({ x: 0, y: 0 });
+    zoomAtViewportCenter({ zoom: 1 });
   };
 
   const onUndo = () => {
@@ -191,7 +189,17 @@ export function TopBar() {
           >
             {cursorOptions.map((opt) => (
               <HotkeyTip key={opt.value} label={opt.label} hotkey={opt.hotkey}>
-                <ToggleGroupItem value={opt.value} aria-label={opt.label}>
+                <ToggleGroupItem
+                  value={opt.value}
+                  aria-label={opt.label}
+                  aria-pressed={cursorMode === opt.value}
+                  data-state={cursorMode === opt.value ? "on" : "off"}
+                  className={
+                    cursorMode === opt.value
+                      ? "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground"
+                      : undefined
+                  }
+                >
                   {opt.icon}
                 </ToggleGroupItem>
               </HotkeyTip>
@@ -236,7 +244,7 @@ export function TopBar() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                onClick={() => setCanvasZoom(canvasZoom - 0.1)}
+                onClick={() => zoomAtViewportCenter({ factor: 1 / 1.1 })}
               >
                 <Minus />
               </Button>
@@ -255,7 +263,7 @@ export function TopBar() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                onClick={() => setCanvasZoom(canvasZoom + 0.1)}
+                onClick={() => zoomAtViewportCenter({ factor: 1.1 })}
               >
                 <Plus />
               </Button>

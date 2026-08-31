@@ -88,6 +88,9 @@ function Note({ note }: { note: CanvasNoteEntry }) {
 
   const onRemove = async () => {
     if (!boardId) return;
+    // Removing the note being edited must end the edit session too, or the
+    // markup-edit camera never restores.
+    if (useCanvas.getState().editingMarkupId === note.id) setEditingId(null);
     try {
       await notesApi.remove({ boardId, noteId: note.id });
     } catch (err) {
@@ -98,7 +101,9 @@ function Note({ note }: { note: CanvasNoteEntry }) {
   const saveAndExit = async () => {
     if (exitingRef.current) return;
     exitingRef.current = true;
-    setEditingId(null);
+    // A deferred blur can land after another card took over editing —
+    // persist this draft but don't close the new editor.
+    if (useCanvas.getState().editingMarkupId === note.id) setEditingId(null);
     if (!draft.trim()) {
       await onRemove();
       return;

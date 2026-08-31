@@ -82,8 +82,18 @@ export async function updateAnnotation(
   args: UpdateAnnotationArgs,
 ): Promise<Result<AnnotationResult, MutationError>> {
   return DoAsync<AnnotationResult, MutationError>(async function* () {
+    // A missing sidecar on an existing screen means "no such annotation",
+    // not "no such screen".
     const existing = ctx.folder.annotations.get(args.screenId);
-    if (!existing) return yield* $(err(screenNotFound(args.screenId)));
+    if (!existing) {
+      return yield* $(
+        err(
+          ctx.folder.screens.has(args.screenId)
+            ? annotationNotFound(args.screenId, args.annotationId)
+            : screenNotFound(args.screenId),
+        ),
+      );
+    }
     const idx = existing.findIndex((a) => a.id === args.annotationId);
     if (idx === -1) {
       return yield* $(err(annotationNotFound(args.screenId, args.annotationId)));
@@ -118,7 +128,15 @@ export async function removeAnnotation(
 ): Promise<Result<{ removedId: string }, MutationError>> {
   return DoAsync<{ removedId: string }, MutationError>(async function* () {
     const existing = ctx.folder.annotations.get(args.screenId);
-    if (!existing) return yield* $(err(screenNotFound(args.screenId)));
+    if (!existing) {
+      return yield* $(
+        err(
+          ctx.folder.screens.has(args.screenId)
+            ? annotationNotFound(args.screenId, args.annotationId)
+            : screenNotFound(args.screenId),
+        ),
+      );
+    }
     if (!existing.some((a) => a.id === args.annotationId)) {
       return yield* $(err(annotationNotFound(args.screenId, args.annotationId)));
     }

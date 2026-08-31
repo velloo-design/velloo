@@ -292,9 +292,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
         currentBoardId: null,
         currentScreenId: null,
         annotations: [],
-        editingMarkupId: null,
         notes: [],
       });
+      get().setEditingMarkupId(null);
     }
   },
 
@@ -312,7 +312,10 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     const screenIdsOnBoard = new Set(board.frames.map((f) => f.screen));
     const current = get().currentScreenId;
     if (board.frames.length === 0) {
-      if (current) set({ currentScreenId: null, annotations: [], editingMarkupId: null });
+      if (current) {
+        set({ currentScreenId: null, annotations: [] });
+        get().setEditingMarkupId(null);
+      }
     } else if (!current || !screenIdsOnBoard.has(current)) {
       const firstScreen = board.frames[0]?.screen;
       if (firstScreen) await get().selectScreen(firstScreen);
@@ -330,10 +333,10 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       if (!loaded) return;
       screen = loaded;
     }
-    set({
-      currentScreenId: screenId,
-      editingMarkupId: null,
-    });
+    // Drop in-progress markup edit when the tree context changes — routes
+    // through setEditingMarkupId so the soft-zoom restore still runs.
+    get().setEditingMarkupId(null);
+    set({ currentScreenId: screenId });
     await get().refreshAnnotations();
   },
 
@@ -389,9 +392,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       currentBoardId: boardId && design.boards.some((b) => b.id === boardId) ? boardId : null,
       currentScreenId: screenId && design.screens.some((s) => s.id === screenId) ? screenId : null,
       annotations: [],
-      editingMarkupId: null,
       notes: [],
     });
+    get().setEditingMarkupId(null);
     await get().loadDesign();
   },
 });

@@ -248,15 +248,20 @@ export const Frame = memo(function Frame({
         const iframeEl = iframe;
         const wrapper = iframeEl?.closest<HTMLDivElement>('[data-velloo-board="true"]');
         if (!iframeEl || !wrapper) {
-          state.setCanvasZoom(state.canvasZoom * factor);
+          state.zoomAtViewportCenter({ factor });
           return;
         }
         const iframeRect = iframeEl.getBoundingClientRect();
         const wrapperRect = wrapper.getBoundingClientRect();
-        // No scrollLeft/scrollTop — the board wrapper is
-        // `overflow-hidden`; pan is the only movement axis.
-        const anchorX = iframeRect.left - wrapperRect.left + clientX * state.canvasZoom;
-        const anchorY = iframeRect.top - wrapperRect.top + clientY * state.canvasZoom;
+        // Map iframe-local client coords into wrapper space. Prefer the
+        // live element scale (rect/clientWidth) over store zoom — they can
+        // diverge mid-flight during animated camera moves.
+        const scaleX =
+          iframeEl.clientWidth > 0 ? iframeRect.width / iframeEl.clientWidth : state.canvasZoom;
+        const scaleY =
+          iframeEl.clientHeight > 0 ? iframeRect.height / iframeEl.clientHeight : state.canvasZoom;
+        const anchorX = iframeRect.left - wrapperRect.left + clientX * scaleX;
+        const anchorY = iframeRect.top - wrapperRect.top + clientY * scaleY;
         const next = zoomAtPoint(anchorX, anchorY, factor, {
           zoom: state.canvasZoom,
           pan: state.pan,
@@ -310,6 +315,7 @@ export const Frame = memo(function Frame({
 
   // Annotate mode needs a pick-target cursor *inside* the iframe — parent CSS
   // can't style cross-document content, so inject a style tag into the doc.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: front/screenRev/hasScreen re-apply the style after iframe swaps/reloads
   useEffect(() => {
     const apply = (iframe: HTMLIFrameElement | null) => {
       const doc = iframe?.contentDocument;

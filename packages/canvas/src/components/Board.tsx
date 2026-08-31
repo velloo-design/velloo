@@ -184,6 +184,12 @@ export function Board({ board }: BoardProps) {
       void notesApi
         .add({ boardId, x: where.x, y: where.y, body: "" })
         .then((r) => {
+          // Insert optimistically so the editor opens now — the ws
+          // notes-changed refresh confirms it. Setting the editing id before
+          // the note exists in the store would race the vanished-edit sweep.
+          useCanvas.setState((s) => ({
+            notes: s.notes.some((n) => n.id === r.note.id) ? s.notes : [...s.notes, r.note],
+          }));
           useCanvas.getState().setEditingMarkupId(r.note.id);
         })
         .catch((err) => toastError(err, "Could not add note"));

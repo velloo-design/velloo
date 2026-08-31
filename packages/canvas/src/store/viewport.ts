@@ -1,5 +1,12 @@
 import type { StateCreator } from "zustand";
-import { focusFrame, focusRect, MAX_ZOOM, MIN_ZOOM, type PanZoom } from "../board-geometry.ts";
+import {
+  focusFrame,
+  focusRect,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  type PanZoom,
+  zoomAtPoint,
+} from "../board-geometry.ts";
 import type { CanvasState } from "./index.ts";
 import type { CursorMode } from "./types.ts";
 
@@ -13,19 +20,25 @@ export function cancelCameraFlight(): void {
   flightToken += 1;
 }
 
+/** Camera saved while editing an annotation/note — restored when edit ends. */
+let markupEditSavedView: PanZoom | null = null;
+
 const FLIGHT_MS = 450;
+const MARKUP_EDIT_FLIGHT_MS = 280;
 const easeInOutCubic = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 function animateCamera(
   set: (partial: { canvasZoom: number; pan: { x: number; y: number } }) => void,
   from: PanZoom,
   to: PanZoom,
+  ms = FLIGHT_MS,
+  onSettle?: () => void,
 ): void {
   const token = ++flightToken;
   const start = performance.now();
   const step = (now: number) => {
     if (token !== flightToken) return;
-    const t = Math.min(1, (now - start) / FLIGHT_MS);
+    const t = Math.min(1, (now - start) / ms);
     const k = easeInOutCubic(t);
     set({
       canvasZoom: from.zoom + (to.zoom - from.zoom) * k,
@@ -35,6 +48,7 @@ function animateCamera(
       },
     });
     if (t < 1) requestAnimationFrame(step);
+    else onSettle?.();
   };
   requestAnimationFrame(step);
 }
@@ -74,6 +88,18 @@ export interface ViewportSlice {
   setCursorMode(m: CursorMode): void;
   setPan(p: { x: number; y: number }): void;
   /**
+   * Zoom by `factor` (or toward an absolute zoom) anchored on the board
+   * viewport center — used by keyboard / toolbar zoom so the view doesn't
+   * drift toward the world origin.
+   */
+  zoomAtViewportCenter(opts: { factor?: number; zoom?: number }): void;
+  /**
+   * Soft-zoom to 100% for markup editing (annotation / note), remembering
+   * the prior camera so {@link restoreViewAfterMarkupEdit} can glide back.
+   */
+  zoomForMarkupEdit(): void;
+  restoreViewAfterMarkupEdit(): void;
+  /**
    * Center a frame of the current board in the visible canvas (search
    * navigation). Reads the board wrapper's size from the DOM — a no-op when
    * no board is on screen (library / snippet view).
@@ -111,18 +137,87 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
 
   setCanvasZoom(canvasZoom) {
     cancelCameraFlight();
+    // A camera move outside an edit session invalidates a saved markup-edit
+    // view (e.g. a restore glide the user interrupted).
+    if (!get().editingMarkupId) markupEditSavedView = null;
     set({ canvasZoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, canvasZoom)) });
   },
 
   setCursorMode(cursorMode) {
-    // Preserve selection when entering annotate so a selected node can be
-    // annotated immediately (App.tsx subscribe) without re-picking.
+    // Direct mode set — annotate-tool entry points should go through
+    // enterAnnotateMode, which handles an existing selection.
     set({ cursorMode, hover: null });
   },
 
   setPan(pan) {
     cancelCameraFlight();
+    if (!get().editingMarkupId) markupEditSavedView = null;
     set({ pan });
+  },
+
+  zoomAtViewportCenter(opts) {
+    const wrapper = boardWrapper();
+    if (!wrapper) {
+      if (opts.zoom !== undefined) {
+        set({ canvasZoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, opts.zoom)) });
+      } else if (opts.factor !== undefined) {
+        const z = get().canvasZoom * opts.factor;
+        set({ canvasZoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z)) });
+      }
+      return;
+    }
+    const current = { zoom: get().canvasZoom, pan: get().pan };
+    const factor =
+      opts.factor ?? (opts.zoom !== undefined && current.zoom > 0 ? opts.zoom / current.zoom : 1);
+    const next = zoomAtPoint(wrapper.clientWidth / 2, wrapper.clientHeight / 2, factor, current);
+    if (
+      next.zoom === current.zoom &&
+      next.pan.x === current.pan.x &&
+      next.pan.y === current.pan.y
+    ) {
+      return;
+    }
+    cancelCameraFlight();
+    if (!get().editingMarkupId) markupEditSavedView = null;
+    set({ canvasZoom: next.zoom, pan: next.pan });
+  },
+
+  zoomForMarkupEdit() {
+    const current = { zoom: get().canvasZoom, pan: get().pan };
+    if (!markupEditSavedView) markupEditSavedView = current;
+    if (Math.abs(current.zoom - 1) < 0.02) return;
+    const wrapper = boardWrapper();
+    if (!wrapper) {
+      set({ canvasZoom: 1 });
+      return;
+    }
+    const next = zoomAtPoint(
+      wrapper.clientWidth / 2,
+      wrapper.clientHeight / 2,
+      1 / current.zoom,
+      current,
+    );
+    animateCamera(set, current, { zoom: 1, pan: next.pan }, MARKUP_EDIT_FLIGHT_MS);
+  },
+
+  restoreViewAfterMarkupEdit() {
+    const saved = markupEditSavedView;
+    if (!saved) return;
+    const current = { zoom: get().canvasZoom, pan: get().pan };
+    if (
+      Math.abs(current.zoom - saved.zoom) < 0.001 &&
+      current.pan.x === saved.pan.x &&
+      current.pan.y === saved.pan.y
+    ) {
+      markupEditSavedView = null;
+      return;
+    }
+    // Keep the saved view until the glide settles — re-entering edit
+    // mid-flight then reuses the true pre-edit camera instead of
+    // snapshotting a tween frame.
+    animateCamera(set, current, saved, MARKUP_EDIT_FLIGHT_MS, () => {
+      markupEditSavedView = null;
+    });
   },
 
   centerOnFrame(frameId) {
