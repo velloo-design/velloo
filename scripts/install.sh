@@ -47,9 +47,15 @@ curl -fsSL "$TARBALL_URL" -o "$tmp/velloo.tgz"
 bun remove -g velloo >/dev/null 2>&1 || true
 bun install -g "$tmp/velloo.tgz"
 
-ok "✓ velloo installed — run: velloo --help"
+ok "✓ velloo installed"
+echo
+note "Get started:"
+echo "  velloo init        scaffold a design folder — run it inside your existing"
+echo "                     project (it detects your framework) or in a new folder"
+echo "  velloo run         open the canvas"
+echo "  velloo --help      everything else"
 bin="$(bun pm bin -g 2>/dev/null || true)"
 case ":$PATH:" in
   *":$bin:"*) ;;
-  *) [ -n "$bin" ] && note "Add $bin to your PATH, then: velloo --help" ;;
+  *) [ -n "$bin" ] && note "Add $bin to your PATH first: it isn't on it yet." ;;
 esac

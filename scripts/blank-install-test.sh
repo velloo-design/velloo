@@ -16,31 +16,45 @@
 # root).
 #
 # Usage:
-#   scripts/blank-install-test.sh [distro] [--arch amd64|arm64] [--cmd '<sh>']
+#   scripts/blank-install-test.sh [distro] [--arch amd64|arm64] [--publish <port>]
+#                                 [--keep] [--cmd '<sh>']
 #
-#   distro   ubuntu (default) | debian | fedora | alpine
-#   --arch   force a platform (default: your machine's native arch); amd64 on
-#            an Apple Silicon Mac exercises the x64 native binaries under
-#            emulation
-#   --cmd    run this instead of the interactive shell (CI / smoke tests;
-#            implies VELLOO_ASSUME_YES=1 so the Bun prompt doesn't block),
-#            e.g. --cmd 'velloo --version'
+#   distro     ubuntu (default) | debian | fedora | alpine
+#   --arch     force a platform (default: your machine's native arch); amd64 on
+#              an Apple Silicon Mac exercises the x64 native binaries under
+#              emulation
+#   --publish  expose a container port on your host (repeatable). To reach the
+#              canvas from your host browser, bind it to all interfaces inside:
+#                velloo run --host 0.0.0.0 --port 7300 --no-open
+#              then open http://localhost:7300 on the host. (The default
+#              127.0.0.1 bind is unreachable through Docker's port proxy.)
+#   --keep     don't wipe the box on exit (default is docker --rm: everything
+#              vanishes when the shell exits). Keeps a container named
+#              "velloo-blankbox" — resume it with `docker start -ai
+#              velloo-blankbox`, discard it with `docker rm -f velloo-blankbox`.
+#   --cmd      run this instead of the interactive shell (CI / smoke tests;
+#              implies VELLOO_ASSUME_YES=1 so the Bun prompt doesn't block),
+#              e.g. --cmd 'velloo --version'
 #
 # Other experiments worth running inside:
 #   - screenshot deps:  bunx playwright-core install --with-deps chromium
 #   - offline runtime:  re-run with docker's --network none after an install
+# A second shell into a running box: docker exec -it velloo-blankbox bash
+# (with --keep; unnamed --rm boxes: docker ps → docker exec -it <id> bash)
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
-  sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
 distro="ubuntu"
 arch=""
 cmd=""
+keep=""
+publish=()
 while [ $# -gt 0 ]; do
   case "$1" in
     ubuntu | debian | fedora | alpine) distro="$1" ;;
@@ -48,6 +62,11 @@ while [ $# -gt 0 ]; do
       arch="${2:?--arch needs amd64|arm64}"
       shift
       ;;
+    --publish)
+      publish+=("${2:?--publish needs a port}")
+      shift
+      ;;
+    --keep) keep=1 ;;
     --cmd)
       cmd="${2:?--cmd needs a shell command}"
       shift
@@ -88,10 +107,26 @@ if [ -z "$tgz" ]; then
 fi
 echo "▸ testing $(basename "$tgz") on $image${arch:+ (linux/$arch)}"
 
-docker_args=(--rm --hostname blankbox --workdir /root)
+docker_args=(--hostname blankbox --workdir /root)
+if [ -n "$keep" ]; then
+  # Named + not --rm: the box survives exit. `docker start -ai velloo-blankbox`
+  # resumes it; `docker rm -f velloo-blankbox` discards it (also required
+  # before a fresh --keep run).
+  docker_args+=(--name velloo-blankbox)
+  echo "▸ --keep: resume later with \`docker start -ai velloo-blankbox\`, discard with \`docker rm -f velloo-blankbox\`"
+else
+  docker_args+=(--rm)
+fi
 docker_args+=(-v "$tgz:/tmp/velloo.tgz:ro")
 docker_args+=(-v "$repo_root/scripts/install.sh:/tmp/install.sh:ro")
 [ -n "$arch" ] && docker_args+=(--platform "linux/$arch")
+# `:` no-op default — this line lands inside the bootstrap string, and an
+# empty value there must not be a failing command under its `set -e`.
+canvas_hint=":"
+for p in "${publish[@]+"${publish[@]}"}"; do
+  docker_args+=(-p "$p:$p")
+  canvas_hint="echo '   canvas from your host browser: velloo run --host 0.0.0.0 --port $p --no-open  →  http://localhost:$p'"
+done
 
 # `cat | bash` (not `bash /tmp/install.sh`) keeps the real pipe-from-curl
 # semantics: install.sh reads its Bun-install prompt from /dev/tty because
@@ -107,6 +142,7 @@ export PATH=\"\$HOME/.bun/bin:\$PATH\"
 echo
 echo \"── velloo \$(velloo --version) on a box that had nothing ──\"
 echo '   try: mkdir app && cd app && velloo init'
+$canvas_hint
 echo
 "
 

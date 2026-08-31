@@ -56,7 +56,7 @@ export default defineCommand({
     const folderArg = args.folder ? ` ${args.folder}` : "";
     console.log(`velloo: canvas at ${rec.canvasUrl}`);
     console.log(
-      `velloo: it keeps running in the background — awake while the canvas is open or an agent is connected; it only sleeps after 5 min with nothing attached, and the next \`velloo run\`/agent connection wakes it. Stop it anytime with \`velloo stop${folderArg}\`.`,
+      `velloo: it keeps running in the background — awake while the canvas is open or an agent is connected. Stop it anytime with \`velloo stop${folderArg}\`.`,
     );
 
     // The recorder lives in the daemon and reads VELLOO_TRACE at spawn time, so
