@@ -14,7 +14,7 @@ The most directly redistributed surfaces are:
   embedded in the binary and emitted into user projects.
 - The framework providers (`@velloo/provider-*`) and adapters, which build on
   the upstream component libraries below.
-- The published CLI bundle (`dist/cli.js` + `dist/chunks/*` + the canvas SPA),
+- The published CLI bundle (`dist/cli.js` + `dist/chunk-*.js` + the canvas SPA),
   which inlines its pure-JS runtime dependencies rather than installing them
   from npm.
 

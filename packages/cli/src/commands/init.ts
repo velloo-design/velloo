@@ -1,7 +1,7 @@
 import { mkdir, readdir } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
-import { CHROMIUM_INSTALL_ARGV, CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
+import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   BoardSchema,
   ConfigSchema,
@@ -15,6 +15,11 @@ import { writeJsonAtomic, writeText } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import {
+  BROWSER_PROMPT_DETAIL,
+  BROWSER_PROMPT_SIZE,
+  installChromiumInteractive,
+} from "../browser-setup.ts";
 import { completionsInstalled, detectShell, installCompletions } from "../completions/install.ts";
 import {
   type AgentWiring,
@@ -326,13 +331,14 @@ function printNextSteps(folder: string, outcome: WireOutcome): void {
     );
   }
   console.log(
-    `    ${n++}. Restart your AI agent so it loads the new MCP config ${pc.dim("— it starts velloo itself")}.`,
+    `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
   );
   console.log(
-    `    ${n++}. ${pc.cyan(`velloo run ${folder}`)} ${pc.dim("(optional — open the canvas; it prints the URL)")}`,
+    `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(optional — run from this folder; opens the canvas and prints the URL)")}`,
   );
   console.log("");
-  console.log(pc.dim("  Open README.md in the design folder for the full guide."));
+  const readme = join(relative(process.cwd(), folder) || ".", "README.md");
+  console.log(`  ${pc.dim("Open")} ${pc.cyan(readme)} ${pc.dim("for the full guide.")}`);
   console.log("");
 }
 
@@ -383,19 +389,17 @@ async function printScreenshotReadiness(interactive: boolean): Promise<void> {
 
   if (interactive) {
     const proceed = await confirm({
-      message: "Install the screenshot browser now? (~150MB, one-time)",
+      message: `Install the screenshot browser now? ${BROWSER_PROMPT_SIZE}\n${BROWSER_PROMPT_DETAIL}`,
       initialValue: false,
     });
     if (!isCancel(proceed) && proceed) {
-      const code = await Bun.spawn([...CHROMIUM_INSTALL_ARGV], {
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "inherit",
-      }).exited;
+      const ok = await installChromiumInteractive();
       console.log(
-        code === 0
-          ? `    ${pc.green("✓")} ${pc.dim("Browser installed.")}`
-          : pc.dim(`    Install didn't finish — run it later: ${pc.cyan(CHROMIUM_INSTALL_CMD)}`),
+        ok
+          ? `    ${pc.green("✓")} ${pc.dim("Browser installed — screenshots are ready.")}`
+          : pc.dim(
+              `    Screenshots aren't ready yet — fix per the messages above, or retry later: ${pc.cyan(CHROMIUM_INSTALL_CMD)}`,
+            ),
       );
       console.log("");
       return;

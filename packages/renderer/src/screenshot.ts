@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { Viewport } from "@velloo/schema";
 import type { Browser, BrowserContext, Frame, Page } from "playwright-core";
 
@@ -77,9 +78,34 @@ async function settleForCapture(
  * package's package.json: an unpinned `bunx playwright install` resolves the
  * latest CLI and downloads a Chromium revision that the pinned runtime then
  * refuses to launch. Bump both together.
+ *
+ * `--only-shell` fetches just the chromium-headless-shell build (~110MB
+ * download) instead of shell + full Chrome for Testing (~300MB) — velloo only
+ * ever launches headless, and playwright's headless launches use the shell.
  */
-export const CHROMIUM_INSTALL_ARGV = ["bunx", "playwright@1.61.1", "install", "chromium"] as const;
+const PLAYWRIGHT_PIN = "playwright@1.61.1";
+export const CHROMIUM_INSTALL_ARGV = [
+  "bunx",
+  PLAYWRIGHT_PIN,
+  "install",
+  "chromium",
+  "--only-shell",
+] as const;
 export const CHROMIUM_INSTALL_CMD = CHROMIUM_INSTALL_ARGV.join(" ");
+
+/**
+ * Linux only: the browser download can succeed while the host is missing the
+ * shared libraries Chromium links against (playwright prints its "Host system
+ * is missing dependencies" box but still exits 0). This installs them via the
+ * distro package manager — needs root/sudo.
+ */
+export const CHROMIUM_DEPS_INSTALL_ARGV = [
+  "bunx",
+  PLAYWRIGHT_PIN,
+  "install-deps",
+  "chromium",
+] as const;
+export const CHROMIUM_DEPS_INSTALL_CMD = CHROMIUM_DEPS_INSTALL_ARGV.join(" ");
 
 const INSTALL_HINT =
   "Velloo screenshots need a headless browser. Install it once with:\n" +
@@ -105,12 +131,30 @@ export class BrowserMissingError extends Error {
  * downloaded yet (or `playwright-core` is absent). A non-launching probe —
  * cheap enough for `velloo init` to report screenshot readiness without
  * opening a browser.
+ *
+ * Accepts either the full Chrome for Testing build or the headless-shell-only
+ * layout our `--only-shell` install produces. `chromium.executablePath()`
+ * only knows the full build (the `channel` option is ignored there), so the
+ * shell is probed by directory shape: `chromium-<rev>` ⇒
+ * `chromium_headless_shell-<rev>/<platform-dir>/chrome-headless-shell[.exe]`.
+ * Headless launches use the shell natively, so finding it means ready.
  */
 export async function chromiumExecutable(): Promise<string | null> {
   try {
     const { chromium } = await import("playwright-core");
     const path = chromium.executablePath();
-    return path && existsSync(path) ? path : null;
+    if (!path) return null;
+    if (existsSync(path)) return path;
+    const m = path.match(/^(.*)[/\\]chromium-(\d+)[/\\]/);
+    if (!m || !m[1] || !m[2]) return null;
+    const shellRoot = join(m[1], `chromium_headless_shell-${m[2]}`);
+    if (!existsSync(shellRoot)) return null;
+    const bin = process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+    for (const sub of readdirSync(shellRoot)) {
+      const candidate = join(shellRoot, sub, bin);
+      if (existsSync(candidate)) return candidate;
+    }
+    return null;
   } catch {
     return null;
   }

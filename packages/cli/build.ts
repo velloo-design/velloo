@@ -8,7 +8,8 @@
  * hand off (or `npm publish` later):
  *
  *   1. Build the canvas SPA and drop it next to the binary (`dist/canvas`).
- *   2. Bundle `cli.ts` into `dist/cli.js` + lazy chunks (`dist/chunks/*`),
+ *   2. Bundle `cli.ts` into `dist/cli.js` + lazy chunks (`dist/chunk-*.js`,
+ *      flat next to cli.js — see the naming note at the Bun.build call),
  *      inlining `@velloo/*` AND every pure-JS third-party dep. Only packages
  *      that must resolve from disk at install time stay external: the
  *      Tailwind family (native `@tailwindcss/oxide` binary + the CSS assets
@@ -208,8 +209,15 @@ const result = await Bun.build({
   // shadcn user never parses antd/MUI/chakra. Whitespace+syntax minification
   // keeps the inlined-framework bundle a sane size; identifiers stay readable
   // so user-facing stack traces still mean something.
+  //
+  // Chunks MUST land flat in dist/, next to cli.js — every inlined module
+  // that resolves shipped assets does so relative to import.meta.url
+  // (`<here>/canvas` for the SPA, `<here>/pkgs/<name>` for provider sources,
+  // `<here>/skills`, `<here>/plugins`), and after splitting, `here` is the
+  // CHUNK's directory. A chunks/ subfolder broke all of those in the
+  // installed binary ("Velloo canvas not built"). Guarded below.
   splitting: true,
-  naming: { chunk: "chunks/[name]-[hash].[ext]" },
+  naming: { chunk: "chunk-[hash].[ext]" },
   minify: { whitespace: true, syntax: true, identifiers: false },
   plugins: [externalizeRuntimeDeps],
   define: {
@@ -246,12 +254,18 @@ const MUST_BE_INLINED = [
   "hono",
   "@modelcontextprotocol/sdk",
 ];
-const bundleFiles = [
-  cliJs,
-  ...(existsSync(join(distDir, "chunks"))
-    ? readdirSync(join(distDir, "chunks")).map((f) => join(distDir, "chunks", f))
-    : []),
-];
+const chunkNames = readdirSync(distDir).filter((f) => /^chunk-.*\.js$/.test(f));
+// Flat-layout guard (see the naming comment above): a chunk in a subdirectory
+// shifts import.meta.url and breaks every `<here>/…` asset resolution.
+const strayDirs = readdirSync(distDir, { withFileTypes: true }).filter(
+  (e) => e.isDirectory() && e.name !== "canvas",
+);
+if (strayDirs.length > 0) {
+  throw new Error(
+    `bundle emitted subdirectories (${strayDirs.map((e) => e.name).join(", ")}) — chunks must sit flat next to cli.js so import.meta.url asset resolution keeps working`,
+  );
+}
+const bundleFiles = [cliJs, ...chunkNames.map((f) => join(distDir, f))];
 for (const file of bundleFiles) {
   const src = readFileSync(file, "utf8");
   for (const pkg of MUST_BE_INLINED) {
@@ -362,7 +376,7 @@ const manifest = {
   engines: { bun: ">=1.3.0" },
   files: [
     "cli.js",
-    "chunks",
+    "chunk-*.js",
     "canvas",
     "skills",
     "plugins",
@@ -381,17 +395,15 @@ run(["bun", "pm", "pack", "--destination", repoRoot], distDir);
 
 const tgz = `velloo-${VERSION}.tgz`;
 const bundleKb = Math.round(Bun.file(cliJs).size / 1024);
-const chunksDir = join(distDir, "chunks");
-const chunkFiles = existsSync(chunksDir) ? readdirSync(chunksDir) : [];
 const chunksKb = Math.round(
-  chunkFiles.reduce((sum, f) => sum + Bun.file(join(chunksDir, f)).size, 0) / 1024,
+  chunkNames.reduce((sum, f) => sum + Bun.file(join(distDir, f)).size, 0) / 1024,
 );
 const canvasFiles = readdirSync(join(distDir, "canvas")).length;
 console.log(
   [
     "",
     `\x1b[32m✓ built velloo ${BUILD_VERSION}\x1b[0m`,
-    `  bundle:   dist/cli.js (${bundleKb} KB) + ${chunkFiles.length} lazy chunks (${chunksKb} KB)`,
+    `  bundle:   dist/cli.js (${bundleKb} KB) + ${chunkNames.length} lazy chunks (${chunksKb} KB)`,
     `  canvas:   dist/canvas/ (${canvasFiles} top-level entries)`,
     `  deps:     ${Object.keys(dependencies).length} runtime` +
       (Object.keys(optionalDependencies).length
