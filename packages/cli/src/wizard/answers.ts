@@ -37,7 +37,13 @@ export type InitialContent =
   | "custom";
 
 /** Interactive start-menu goals (no full-scan). */
-export type GoalMode = "redesign-screen" | "redesign-component" | "custom" | "sample" | "blank";
+export type GoalMode =
+  | "redesign-screen"
+  | "redesign-component"
+  | "custom"
+  | "capture-site"
+  | "sample"
+  | "blank";
 
 /** What `scan` detected about the host app — surfaced to the user and the agent handoff. */
 export interface DetectedHost {
@@ -101,6 +107,14 @@ export interface WizardAnswers {
   componentDescription?: string;
   /** Free-text job for `custom` mode. */
   customRequest?: string;
+  /**
+   * A live site the user wants to design from, offered only when the repo has
+   * no UI code to scan — the one case where a running site is the only input
+   * available. Init never opens a browser itself (a login flow mid-wizard is a
+   * heavy interruption); this just carries the URL into the handoff so the
+   * agent starts with a capture session.
+   */
+  captureUrl?: string;
   /** Built-in theme preset id. Undefined → the default sample theme. */
   themePreset?: string;
   /**

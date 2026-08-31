@@ -102,6 +102,36 @@ Tailwind classes verbatim — most shadcn refs map 1:1); a presentational custom
 component becomes a snippet, a complex app component (`DataTable`, charts) becomes
 an extension via `add_extension`; verify with `compare_to_url`.
 
+## Designing from a page you can't load
+
+Behind a login, on staging, or somebody else's site — there's no source to read
+and `compare_to_url` just captures the login screen. Use a **capture session**:
+the user drives a real browser, you read what they capture.
+
+1. `start_capture_session { url }`. It opens a browser window and **returns
+   immediately with a `sessionId` — it does not wait for the session.** Don't
+   block on it and don't call it again to check.
+2. Tell the user exactly what to do: log in, then hit **Capture page** in the
+   velloo toolbar on each page worth designing from, then **Done**. Poll
+   `list_captures` until their captures appear.
+3. `get_capture` each one. You get a structural `outline` of the page,
+   `themeCss` — its real CSS custom properties, dark block included — `fonts`,
+   and downloaded image `assets`. Run `import_theme` with that CSS *before*
+   composing so the site's own tokens resolve; `upload_asset` the images you need.
+4. Build with real components. **The extract is evidence, not a tree** — a
+   scraped DOM is div soup with resolved pixel values, and transcribing it
+   node-for-node produces exactly the absolutely-positioned clone this skill
+   tells you not to build. Repeated blocks are marked in the outline: a run of
+   identical siblings is ONE component instantiated N times, so make it a
+   snippet rather than N copies.
+5. Verify with `compare_to_url { captureId }`, not `url` — the capture is past
+   the login and frozen, so it can't bounce to a login page or drift between
+   calls.
+
+The user can also make captures themselves ahead of time with `velloo capture
+<url>`; `list_captures` shows anything already stored, so check there before
+asking them to open a browser.
+
 ## What stays yours
 
 State, routing, interactivity, data — Velloo is a visual-layer compiler and the

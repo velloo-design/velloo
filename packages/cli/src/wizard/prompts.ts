@@ -317,7 +317,19 @@ export function hostGoalOptions(
       hint: "Empty canvas — you and your agent build it from nothing",
     },
   ];
-  if (!hasHostApp) return selfContained;
+  // Nothing local to read: a running site is the only real input left, so this
+  // is the one place a browser capture earns a slot in the wizard. With routes
+  // to scan it would just be a heavier path to the same place.
+  if (!hasHostApp) {
+    return [
+      {
+        value: "capture-site",
+        label: "Design from a live site",
+        hint: "Open a browser, log in if needed, capture pages — then design from them",
+      },
+      ...selfContained,
+    ];
+  }
   return [
     {
       value: "redesign-screen",
@@ -423,6 +435,34 @@ export async function runInteractive(ctx: {
     return outcome(
       await promptGoalWithAdoptedLibrary(hostCtx, folder, agentWiring, "custom", {
         customRequest: String(request).trim(),
+      }),
+    );
+  }
+  if (goal === "capture-site") {
+    const site = await text({
+      message: subtitledText(
+        "Site to design from",
+        "Init won't open it — your agent starts a capture session so you can log in first.",
+      ),
+      placeholder: "e.g. https://app.example.com/dashboard",
+      validate(value) {
+        const v = value?.trim();
+        if (!v) return "Enter the URL of the site you want to design from.";
+        try {
+          const scheme = new URL(v).protocol;
+          if (scheme !== "http:" && scheme !== "https:") return "Use an http(s) URL.";
+        } catch {
+          return "That doesn't look like a URL.";
+        }
+        return undefined;
+      },
+    });
+    if (isAborted(site)) return cancelled();
+    const url = String(site).trim();
+    return outcome(
+      await promptGoalWithAdoptedLibrary(hostCtx, folder, agentWiring, "custom", {
+        captureUrl: url,
+        customRequest: `Recreate the pages I capture from ${url}, then explore alternatives.`,
       }),
     );
   }

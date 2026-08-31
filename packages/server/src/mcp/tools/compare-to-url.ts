@@ -1,11 +1,18 @@
+import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  captureDir,
   captureScreenshot,
   captureUrlScreenshot,
   classifyCapture,
   diffPngs,
+  downscalePng,
+  isSafeCaptureId,
+  pngSize,
+  readCaptureManifest,
   sideBySidePng,
+  type UrlCaptureResult,
   type UrlCookie,
 } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
@@ -72,7 +79,18 @@ export function registerCompareToUrlTool(
         "Code-to-design fidelity check: render a screen and screenshot a live URL (typically the app page you're porting, on localhost) at the same viewport, then pixel-diff. Returns similarity (1 = identical), `topMismatches` (the worst diff regions as ranked text lines, each mapped to this screen's node), the full diff regions, and a side-by-side PNG — URL capture left, Velloo render right. A faithful structural port usually lands 0.85+; fix the `topMismatches` entries in order — they name the node ref/id/path responsible for the biggest share of the diff. Don't chase 1.0 — fonts and image assets legitimately differ. scale defaults to 0.5 to keep payloads small. `mode: \"dark\"` renders the Velloo side dark AND best-effort drives the target page dark (an app with a bespoke theme toggle may not flip — eyeball the side-by-side). **When the capture isn't your page**, the result carries `unverified: true` and the similarity is meaningless — do NOT trust it or iterate against it: `redirected`/`authWall` means the URL bounced to a login page (pass `storageStatePath` or `cookies`/`localStorage` to reach the real page); `pageError` means the target app is throwing or rendered blank (fix its dev server first; a data-heavy page that paints a loading spinner first needs a higher `settleTimeoutMs`). If you can't get a real capture, leave the screen unverified rather than tuning it to a page you never actually saw. For a DYNAMIC page whose content changes between loads (feed, dashboard, per-user content), pass `cacheUrl: true` so repeated calls diff against ONE frozen capture instead of drifting live content (`urlCacheTtlMs` bounds staleness; `refreshUrl: true` re-samples after you've changed the target app).",
       inputSchema: {
         screenId: z.string(),
-        url: z.string().describe("Live URL to compare against, e.g. http://localhost:3000/pricing"),
+        url: z
+          .string()
+          .optional()
+          .describe(
+            "Live URL to compare against, e.g. http://localhost:3000/pricing. Mutually exclusive with captureId.",
+          ),
+        captureId: z
+          .string()
+          .optional()
+          .describe(
+            "Diff against a stored browser capture (from `velloo capture` / `start_capture_session`) instead of fetching a live URL. This is the way to verify a page that needs a login — the capture was taken in a real browser the user drove and logged into, so it is authenticated and frozen by construction: no auth wall, no page drift, identical reference on every call. Mutually exclusive with url.",
+          ),
         w: z.number().int().positive().optional(),
         h: z.number().int().positive().optional(),
         viewport: ViewportSchema.optional().describe(
@@ -141,6 +159,7 @@ export function registerCompareToUrlTool(
     async ({
       screenId,
       url,
+      captureId,
       w,
       h,
       viewport: vp,
@@ -169,24 +188,78 @@ export function registerCompareToUrlTool(
         themeName = pinned.name;
       }
 
-      // The server navigates this URL in a real browser — restrict to http(s)
-      // so `file://`, `chrome://`, and other local schemes can't be rasterized
-      // and returned. Private/loopback hosts stay allowed (localhost is the
-      // intended target).
-      let scheme: string;
-      try {
-        scheme = new URL(url).protocol;
-      } catch {
-        return errorResult(`Invalid url: ${url}`);
+      if ((url === undefined) === (captureId === undefined)) {
+        return errorResult(
+          "compare_to_url: pass exactly one of `url` (fetch a live page) or `captureId` (diff against a stored browser capture).",
+        );
       }
-      if (scheme !== "http:" && scheme !== "https:") {
-        return errorResult(`compare_to_url: only http(s) URLs are allowed (got ${scheme})`);
+
+      // A stored capture replaces the live fetch entirely: it was taken in a
+      // real browser the user drove, so it is already past any login, and it
+      // never drifts between calls. That makes it the durable counterpart of
+      // the in-memory URL cache below — same idea, but it survives a restart.
+      let storedPng: Buffer | null = null;
+      let storedFinalUrl = "";
+      let storedViewport: Viewport | null = null;
+      if (captureId !== undefined) {
+        if (!isSafeCaptureId(captureId)) return errorResult(`Invalid captureId: ${captureId}`);
+        const folderId = ctx.folder.config.folderId;
+        const manifest = readCaptureManifest(ctx.folder.root, captureId, folderId);
+        if (!manifest) {
+          return errorResult(
+            `compare_to_url: no capture "${captureId}" for this folder — call list_captures to see what's stored.`,
+          );
+        }
+        if (manifest.themeOnly || !manifest.files.includes("page.png")) {
+          return errorResult(
+            `compare_to_url: capture "${captureId}" is theme-only, so there's no page render to diff against. Capture the page itself in a capture session.`,
+          );
+        }
+        try {
+          storedPng = readFileSync(
+            join(captureDir(ctx.folder.root, captureId, folderId), "page.png"),
+          );
+        } catch {
+          return errorResult(`compare_to_url: capture "${captureId}" is missing its page.png.`);
+        }
+        storedFinalUrl = manifest.finalUrl || manifest.url;
+        if (manifest.viewport.w > 0) storedViewport = manifest.viewport;
+      } else {
+        // The server navigates this URL in a real browser — restrict to http(s)
+        // so `file://`, `chrome://`, and other local schemes can't be rasterized
+        // and returned. Private/loopback hosts stay allowed (localhost is the
+        // intended target). A stored capture is the supported way to diff
+        // against something that isn't a live http(s) page.
+        let scheme: string;
+        try {
+          scheme = new URL(url as string).protocol;
+        } catch {
+          return errorResult(`Invalid url: ${url}`);
+        }
+        if (scheme !== "http:" && scheme !== "https:") {
+          return errorResult(`compare_to_url: only http(s) URLs are allowed (got ${scheme})`);
+        }
       }
 
       const defaults = defaultViewport(ctx.folder);
       const resolved = resolveViewport(w, h, vp);
-      const viewport: Viewport = { w: resolved.w ?? defaults.w, h: resolved.h ?? defaults.h };
-      const scaleFactor = scale ?? 0.5;
+      let viewport: Viewport = { w: resolved.w ?? defaults.w, h: resolved.h ?? defaults.h };
+      let scaleFactor = scale ?? 0.5;
+      // How far the stored PNG has to shrink to land in the same pixel space as
+      // the fresh render. A capture taken in a real window is at the display's
+      // device pixel ratio (2 on a Retina Mac); the render is at whatever scale
+      // was asked for. Snapping the scale to a power of two keeps that ratio a
+      // whole number, which is what makes the box downsample exact.
+      let captureDownscale = 1;
+      if (storedPng && storedViewport) {
+        const requested = scale ?? 0.5;
+        scaleFactor = [1, 0.5, 0.25].reduce((best, s) =>
+          Math.abs(s - requested) < Math.abs(best - requested) ? s : best,
+        );
+        const dpr = Math.max(1, Math.round(pngSize(storedPng).width / storedViewport.w));
+        captureDownscale = Math.max(1, Math.round(dpr / scaleFactor));
+        viewport = { w: storedViewport.w, h: storedViewport.h || defaults.h };
+      }
 
       try {
         const snapshotCss = await jit.build();
@@ -212,7 +285,7 @@ export function registerCompareToUrlTool(
               ? storageStatePath
               : join(ctx.folder.root, storageStatePath);
         const urlKey = urlCacheKey({
-          url,
+          url: url ?? "",
           w: viewport.w,
           h: viewport.h,
           fullPage: fullPage ?? true,
@@ -224,8 +297,10 @@ export function registerCompareToUrlTool(
         });
         const now = Date.now();
         const plan = planUrlCache({
-          cacheUrl: cacheUrl === true,
-          refreshUrl: refreshUrl === true,
+          // A stored capture is already frozen — the live-page cache has no
+          // role to play, and reporting cache state would just be noise.
+          cacheUrl: storedPng === null && cacheUrl === true,
+          refreshUrl: storedPng === null && refreshUrl === true,
           prior: urlCaptures.get(urlKey),
           now,
           ttlMs: urlCacheTtlMs ?? DEFAULT_URL_CACHE_TTL_MS,
@@ -240,19 +315,26 @@ export function registerCompareToUrlTool(
             fullPage: fullPage ?? true,
             deviceScaleFactor: scaleFactor,
           }),
-          plan.reuse
-            ? Promise.resolve(plan.reuse.result)
-            : captureUrlScreenshot({
-                url,
-                viewport,
-                fullPage: fullPage ?? true,
-                deviceScaleFactor: scaleFactor,
-                dark: mode === "dark",
-                ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
-                ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
-                ...(cookies ? { cookies } : {}),
-                ...(localStorage ? { localStorage } : {}),
-              }),
+          storedPng
+            ? Promise.resolve<UrlCaptureResult>({
+                png: downscalePng(storedPng, captureDownscale),
+                finalUrl: storedFinalUrl,
+                authWall: false,
+                pageError: null,
+              })
+            : plan.reuse
+              ? Promise.resolve(plan.reuse.result)
+              : captureUrlScreenshot({
+                  url: url as string,
+                  viewport,
+                  fullPage: fullPage ?? true,
+                  deviceScaleFactor: scaleFactor,
+                  dark: mode === "dark",
+                  ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
+                  ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
+                  ...(cookies ? { cookies } : {}),
+                  ...(localStorage ? { localStorage } : {}),
+                }),
         ]);
 
         const result = diffPngs(urlCapture.png, velloo.png);
@@ -272,7 +354,11 @@ export function registerCompareToUrlTool(
         });
         // An auth wall counts only when the requested page isn't itself a login
         // page (porting a login screen legitimately has a password field).
-        const cls = classifyCapture(url, urlCapture.finalUrl);
+        // A stored capture cannot be an auth wall or a redirect surprise: a
+        // human navigated to it and chose to capture it.
+        const cls = storedPng
+          ? { redirected: false, finalLooksLikeLogin: false, requestedLooksLikeLogin: false }
+          : classifyCapture(url as string, urlCapture.finalUrl);
         const authWall = urlCapture.authWall && !cls.requestedLooksLikeLogin;
         const unverified = cls.redirected || authWall || urlCapture.pageError !== null;
         // Freeze only a trustworthy capture — caching an auth wall / error page
@@ -327,6 +413,15 @@ export function registerCompareToUrlTool(
                   `single column and tanks the whole-page pixel diff; trust contentSimilarity and the per-region node refs here.`,
               }
             : {}),
+          ...(storedPng
+            ? {
+                capture: {
+                  id: captureId,
+                  url: storedFinalUrl,
+                  note: "diffed against a stored browser capture — already past any login and frozen, so similarity reflects your design changes only.",
+                },
+              }
+            : {}),
           ...(plan.active
             ? {
                 urlCache: plan.reuse
@@ -345,7 +440,7 @@ export function registerCompareToUrlTool(
             ? {
                 unverified: true,
                 ...(cls.redirected
-                  ? { redirected: { requested: url, final: urlCapture.finalUrl } }
+                  ? { redirected: { requested: url ?? "", final: urlCapture.finalUrl } }
                   : {}),
                 ...(authWall ? { authWall: true } : {}),
                 ...(urlCapture.pageError !== null ? { pageError: urlCapture.pageError } : {}),
@@ -372,7 +467,7 @@ export function registerCompareToUrlTool(
         const msg = err instanceof Error ? err.message : String(err);
         if (/net::|ERR_CONNECTION|Timeout.*exceeded|goto/.test(msg)) {
           return errorResult(
-            `compare_to_url: could not load ${url} — is the app's dev server running? Underlying error: ${msg}`,
+            `compare_to_url: could not load ${url ?? captureId} — is the app's dev server running? Underlying error: ${msg}`,
           );
         }
         return errorResult(`compare_to_url failed: ${msg}`);

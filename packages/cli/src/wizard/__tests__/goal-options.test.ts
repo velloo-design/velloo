@@ -17,8 +17,19 @@ describe("start-menu goals", () => {
     expect(hostGoalOptions(true).map((o) => o.value)).not.toContain("brand-check");
   });
 
-  test("a repo with no UI code offers only the starts that need no host app", () => {
-    expect(hostGoalOptions(false).map((o) => o.value)).toEqual(["sample", "blank"]);
+  test("a repo with no UI code offers capture plus the starts that need no host app", () => {
+    expect(hostGoalOptions(false).map((o) => o.value)).toEqual(["capture-site", "sample", "blank"]);
+  });
+
+  test("capture is offered ONLY when there's no UI to scan", () => {
+    // With routes to read, a browser session is a heavier path to the same
+    // place — it earns its slot only when a live site is the only input left.
+    expect(hostGoalOptions(true).map((o) => o.value)).not.toContain("capture-site");
+    expect(hostGoalOptions(false).map((o) => o.value)).toContain("capture-site");
+  });
+
+  test("capture leads the no-host menu, since it's the only start that reads something real", () => {
+    expect(hostGoalOptions(false)[0]?.value).toBe("capture-site");
   });
 
   test("quit is gone — Ctrl+C cancels instead", () => {
@@ -28,8 +39,10 @@ describe("start-menu goals", () => {
   });
 
   test("every option carries a hint describing it", () => {
-    for (const option of hostGoalOptions(true)) {
-      expect(option.hint.length).toBeGreaterThan(0);
+    for (const hasHost of [true, false]) {
+      for (const option of hostGoalOptions(hasHost)) {
+        expect(option.hint.length).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -37,6 +50,7 @@ describe("start-menu goals", () => {
     const dir = await mkdtemp(join(tmpdir(), "velloo-empty-"));
     expect(await discoverScanRoots(dir)).toEqual([]);
     expect(hostGoalOptions((await discoverScanRoots(dir)).length > 0).map((o) => o.value)).toEqual([
+      "capture-site",
       "sample",
       "blank",
     ]);

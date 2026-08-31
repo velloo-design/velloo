@@ -82,9 +82,13 @@ never ship a warning blind.
    implemented page. 0.85+ similarity is a faithful structural port; the
    per-region node refs name what's off. Don't chase 1.0 — fonts, imagery,
    and live data legitimately differ.
-3. An `unverified` result means STOP: fix auth (`storageStatePath` /
-   `cookies`) or the dev server first — don't iterate against a page you
-   never actually captured.
+3. An `unverified` result means STOP — don't iterate against a page you
+   never actually captured. If it's a login wall, `start_capture_session
+   { url }` opens a browser the *user* drives (it returns immediately; tell
+   them to log in, hit **Capture page**, then **Done**, and poll
+   `list_captures`), then verify with `compare_to_url { captureId }`. If it's
+   the dev server, fix that first. `storageStatePath` / `cookies` remain the
+   option when you already hold a session.
 4. When implementation drifted from the design, fix the code. When the design
    itself should change, fix it in Velloo (through the MCP tools — never edit
    the design folder's JSON by hand), then re-emit and diff.

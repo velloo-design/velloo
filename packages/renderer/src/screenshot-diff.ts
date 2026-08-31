@@ -222,6 +222,60 @@ export function diffPngs(before: Buffer, after: Buffer, options: DiffOptions = {
 }
 
 /** Crop a PNG buffer to a region (clamped to image bounds). */
+/**
+ * Box-downsample a PNG by an integer factor.
+ *
+ * Exists to reconcile a stored capture with a fresh render: a capture taken in
+ * a real browser window lands at the display's device pixel ratio (2 on a
+ * Retina Mac), while a Velloo render is rasterized at whatever scale the caller
+ * asked for. Both sides have to be in the same pixel space before a diff means
+ * anything. The factor is always integral here — device pixel ratios are whole
+ * numbers and the compare path snaps its scale to 1, 1/2, or 1/4 — so a plain
+ * box average is exact and needs no resampling kernel.
+ */
+export function downscalePng(png: Buffer, factor: number): Buffer {
+  if (!Number.isInteger(factor) || factor <= 1) return png;
+  const src = PNG.sync.read(png);
+  const width = Math.max(1, Math.floor(src.width / factor));
+  const height = Math.max(1, Math.floor(src.height / factor));
+  const out = new PNG({ width, height });
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      let n = 0;
+      for (let dy = 0; dy < factor; dy++) {
+        const sy = y * factor + dy;
+        if (sy >= src.height) break;
+        for (let dx = 0; dx < factor; dx++) {
+          const sx = x * factor + dx;
+          if (sx >= src.width) break;
+          const i = (sy * src.width + sx) << 2;
+          r += src.data[i] ?? 0;
+          g += src.data[i + 1] ?? 0;
+          b += src.data[i + 2] ?? 0;
+          a += src.data[i + 3] ?? 0;
+          n++;
+        }
+      }
+      const o = (y * width + x) << 2;
+      out.data[o] = Math.round(r / n);
+      out.data[o + 1] = Math.round(g / n);
+      out.data[o + 2] = Math.round(b / n);
+      out.data[o + 3] = Math.round(a / n);
+    }
+  }
+  return PNG.sync.write(out);
+}
+
+/** Pixel dimensions of an encoded PNG. */
+export function pngSize(png: Buffer): { width: number; height: number } {
+  const p = PNG.sync.read(png);
+  return { width: p.width, height: p.height };
+}
+
 export function cropPng(png: Buffer, region: DiffRegion, pad = 24): Buffer {
   const src = PNG.sync.read(png);
   const x = Math.max(0, region.x - pad);

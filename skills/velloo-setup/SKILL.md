@@ -54,10 +54,15 @@ Recreate one representative screen — or use whatever init scaffolded — and r
   scripts make it obvious; otherwise ask the user for the command, a running
   URL, or a deployed preview. Ask once, plainly, rather than guessing ports.
 - **Read `unverified` on every result.** `redirected` / `authWall` means you
-  captured a login page, so the similarity number is meaningless — pass
-  `storageStatePath` (a Playwright storage-state JSON is the robust route) or
-  `cookies` / `localStorage`. Ask the user how to reach an authenticated state,
-  or ask for a route that needs no sign-in.
+  captured a login page, so the similarity number is meaningless.
+- **For a login wall, use a capture session.** `start_capture_session { url }`
+  opens a real browser the *user* drives. It returns immediately — it does not
+  wait — so say plainly what you need ("log in, then hit **Capture page** in the
+  velloo toolbar on each page, then **Done**") and poll `list_captures` until
+  their captures land. Then verify with `compare_to_url { captureId }` instead
+  of `url`: the capture is already past the login and frozen, so it can't bounce
+  to a login page or drift between runs. `storageStatePath` / `cookies` /
+  `localStorage` stay available for when you already hold a session.
 - If you cannot get a real capture, **leave it unverified and say so.** Tuning a
   design toward a page you never saw is worse than admitting the gap.
 - For a dashboard or feed whose content shifts between loads, pass

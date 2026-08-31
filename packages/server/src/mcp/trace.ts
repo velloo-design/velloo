@@ -67,6 +67,32 @@ function serializeError(err: unknown): { name?: string; message: string; stack?:
   return { message: String(err) };
 }
 
+/**
+ * Argument names whose values are credentials, not design data. A tape is a
+ * plain JSON file inside the design folder, so anything recorded here can end
+ * up committed — and `compare_to_url` legitimately takes session cookies and
+ * localStorage entries to reach an auth-gated page. Those are bearer
+ * credentials for the user's real app and have no business in a tape.
+ *
+ * Matched on the argument name rather than the value, so a new tool that
+ * accepts `cookies` or a `token` is covered the day it's written.
+ */
+const SECRET_KEY =
+  /^(cookies?|localstorage|storagestate|storagestatepath|authorization|auth|token|accesstoken|refreshtoken|apikey|api_key|password|secret|credentials?|sessionstate)$/i;
+
+/** Replace credential-shaped argument values with a marker, at any depth. */
+export function redactSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSecrets);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = SECRET_KEY.test(k) ? "<redacted>" : redactSecrets(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 /** Clip overlong strings (e.g. an `upload_asset` base64 blob) so tapes stay sane. */
 function clampStrings(value: unknown, max: number): unknown {
   if (typeof value === "string") {
@@ -135,7 +161,7 @@ export class TraceRecorder {
       seq,
       ts: new Date().toISOString(),
       tool: input.tool,
-      params: clampStrings(input.params, MAX_PARAM_STR),
+      params: clampStrings(redactSecrets(input.params), MAX_PARAM_STR),
     };
     if (input.sessionId) call.sessionId = input.sessionId;
     this.pending.set(seq, call);
@@ -165,7 +191,7 @@ export class TraceRecorder {
   /** Append a complete record in one shot (no in-flight phase). */
   record(input: RecordInput): void {
     if (this.broken) return;
-    this.write(this.seq++, input);
+    this.write(this.seq++, { ...input, params: redactSecrets(input.params) });
   }
 
   private write(seq: number, input: RecordInput): void {

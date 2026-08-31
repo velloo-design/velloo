@@ -7,6 +7,7 @@ import type { LiveBundler } from "./live/component-bundler.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { createAuthRouter } from "./routes/auth.ts";
 import { createCanvasRouter, createLiveRouter } from "./routes/bundles.ts";
+import { createCapturesRouter } from "./routes/captures.ts";
 import {
   createBoardRouter,
   createComponentsRouter,
@@ -57,6 +58,7 @@ export function createApp(
   app.route("/api/board", createBoardRouter(folder));
   app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/search", createSearchRouter(folder));
+  app.route("/api/captures", createCapturesRouter(folder));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/live", createLiveRouter(bundler));

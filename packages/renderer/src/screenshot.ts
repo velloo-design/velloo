@@ -94,6 +94,15 @@ export const CHROMIUM_INSTALL_ARGV = [
 export const CHROMIUM_INSTALL_CMD = CHROMIUM_INSTALL_ARGV.join(" ");
 
 /**
+ * The full Chrome-for-Testing install (~300MB) — the fallback for the *headed*
+ * capture session, which the headless-shell build above cannot serve: the
+ * shell has no UI to show a user. Only needed when the machine has no regular
+ * Chrome for `channel: "chrome"` to borrow.
+ */
+export const CHROMIUM_FULL_INSTALL_ARGV = ["bunx", PLAYWRIGHT_PIN, "install", "chromium"] as const;
+export const CHROMIUM_FULL_INSTALL_CMD = CHROMIUM_FULL_INSTALL_ARGV.join(" ");
+
+/**
  * Linux only: the browser download can succeed while the host is missing the
  * shared libraries Chromium links against (playwright prints its "Host system
  * is missing dependencies" box but still exits 0). This installs them via the

@@ -45,7 +45,19 @@ function setupFirstGuidance(): string {
 
 /** Setup already got the app running and past any auth — this is the loop. */
 function compareGuidance(): string {
-  return "Compare against the real app, not memory: iterate with `screenshot` + `compare_to_url` at the same viewport and fix the `topMismatches` in the order they're ranked. If a capture comes back `unverified`, the similarity number means nothing — get a real capture or tell me you couldn't.";
+  return "Compare against the real app, not memory: iterate with `screenshot` + `compare_to_url` at the same viewport and fix the `topMismatches` in the order they're ranked. If a capture comes back `unverified`, the similarity number means nothing — and if the reason is a login wall, call `start_capture_session` so I can sign in and capture the page for you, then verify against it with `compare_to_url { captureId }`.";
+}
+
+/**
+ * The opening move when the design target is a live site rather than local
+ * code — the agent drives the capture session, the user drives the browser.
+ */
+function captureSiteGuidance(url: string): string {
+  return [
+    `**Start by capturing the site.** Call \`start_capture_session { url: "${url}" }\` — it opens a browser window I drive. I'll log in if needed and hit "Capture page" on each page worth designing from; the call returns straight away, so poll \`list_captures\` until my captures appear.`,
+    "Then read each one with `get_capture`: it gives you a structural outline (repeated blocks are marked — those are your component candidates), the site's CSS custom properties as `import_theme`-ready CSS, and its images. Run `import_theme` with that CSS before composing so the real tokens resolve.",
+    "Re-express the pages with real components against the theme — do not transcribe the DOM node-for-node. Verify each screen with `compare_to_url { captureId }`.",
+  ].join("\n");
 }
 
 function exploreAlternativesGuidance(): string {
@@ -137,6 +149,7 @@ function buildCustomHandoff(answers: WizardAnswers): string {
     "**Request:**",
     request,
     "",
+    ...(answers.captureUrl ? [captureSiteGuidance(answers.captureUrl), ""] : []),
     setupFirstGuidance(),
     `Then design it with the project's ${libraryLabel(answers.library)} components. When comparing options, put alternatives side-by-side on the board (explorations) instead of overwriting a single direction.`,
   ];

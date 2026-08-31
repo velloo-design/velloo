@@ -29,6 +29,7 @@ export {
   GLOBAL_AGENT_IDS,
   PROJECT_AGENT_IDS,
 } from "./agents.ts";
+export { type RefreshResult, refreshAgentArtifacts } from "./refresh.ts";
 export type { WriteResult } from "./write-config.ts";
 
 /** Default velloo MCP endpoint for `--http` connections — matches `velloo mcp --http`. */

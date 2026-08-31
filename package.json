@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "Velloo — code-shaped design tool for developers",
+  "description": "Velloo \u2014 code-shaped design tool for developers",
   "workspaces": [
     "packages/*"
   ],
@@ -19,6 +19,7 @@
     "velloo": "bun packages/cli/src/cli.ts",
     "cli:build": "bun packages/cli/build.ts",
     "cli:install": "bun scripts/cli-install.ts",
+    "cli:watch": "bun scripts/cli-watch.ts",
     "cli:dev": "VELLOO_BUILD_CLOUD_URL=https://api.dev.velloo.ai bun scripts/cli-install.ts",
     "cli:prod": "VELLOO_BUILD_CLOUD_URL=https://api.velloo.ai bun scripts/cli-install.ts",
     "cli:release": "bun scripts/publish-cli.ts",
