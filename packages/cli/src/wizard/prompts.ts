@@ -1,29 +1,18 @@
-import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import {
-  cancel,
-  confirm,
-  groupMultiselect,
-  isCancel,
-  note,
-  select,
-  spinner,
-  text,
-} from "@clack/prompts";
+import { cancel, confirm, isCancel, note, select, spinner, text } from "@clack/prompts";
 import { topUpTokens } from "@velloo/server";
 import pc from "picocolors";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential, saveCredential } from "../cloud-credentials.ts";
 import { performDeviceLogin, verifyCredential } from "../cloud-login.ts";
 import { type AgentWiring, askAgentWiring } from "../connect/index.ts";
-import type { ProductSurface } from "../scaffold/sample-page.ts";
-import { THEME_PRESETS } from "../scaffold/theme-presets.ts";
-import { VIBES } from "../scaffold/vibes.ts";
-import { detectHost } from "../scan/detect.ts";
-import { type AppsScanResult, primaryApp, scanApps } from "../scan/index.ts";
+import { DEFAULT_THEME_PRESET } from "../scaffold/theme-presets.ts";
+import { detectHost, findComponentsDir } from "../scan/detect.ts";
+import { type AppsScanResult, discoverScanRoots, primaryApp, scanApps } from "../scan/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 import type {
   DetectedHost,
+  GoalMode,
   InitialContent,
   LibraryId,
   LibrarySource,
@@ -35,23 +24,47 @@ import {
   scanAdoption,
   WIZARD_PROVIDERS,
 } from "./provider-registry.ts";
-import { STACKS } from "./stacks.ts";
+import { DEFAULT_STACK_ID, stackForFramework } from "./stacks.ts";
 
 function isAborted(value: unknown): value is symbol {
   return isCancel(value);
 }
 
-function abort(): null {
-  cancel("Cancelled — no files were written.");
-  return null;
+const DEFAULT_COMPONENTS_DIR = "src/components/ui";
+
+/**
+ * Where the app keeps its UI components. Nothing to ask when there's no app to
+ * put them in, and nothing to ask when the app already has a recognizable
+ * components directory — only a real app with an unconventional layout gets
+ * the question. Returns null when the user cancelled.
+ */
+async function resolveComponentsDir(
+  appRoot: string,
+  hasHostApp: boolean,
+): Promise<{ value: string } | null> {
+  if (!hasHostApp) return { value: DEFAULT_COMPONENTS_DIR };
+  const found = findComponentsDir(appRoot);
+  if (found) return { value: found };
+  const typed = await text({
+    message: subtitledText(
+      "Components subfolder inside your app",
+      "Where your UI components live — emitted code imports from this path.",
+    ),
+    placeholder: DEFAULT_COMPONENTS_DIR,
+    defaultValue: DEFAULT_COMPONENTS_DIR,
+  });
+  if (isAborted(typed)) return null;
+  return { value: typed || DEFAULT_COMPONENTS_DIR };
 }
 
-/** A true-color terminal swatch (two blocks) for a hex color. */
-function swatch(hex: string): string {
-  const m = hex.replace("#", "").match(/.{2}/g);
-  if (!m || m.length < 3) return "  ";
-  const [r, g, b] = m.map((h) => Number.parseInt(h, 16));
-  return `\x1b[48;2;${r};${g};${b}m  \x1b[0m`;
+/** A `select` message with a dim second line — clack bar-prefixes it for us. */
+function subtitled(message: string, subtitle: string): string {
+  return `${message}\n${pc.dim(subtitle)}`;
+}
+
+/** Same, for `text`, which doesn't bar-prefix continuation lines on its own. */
+function subtitledText(message: string, subtitle: string): string {
+  return `${message}\n${pc.gray("│")}  ${pc.dim(subtitle)}`;
 }
 
 const UI_LIBRARY_NAMES: Record<NonNullable<DetectedHost["uiLibrary"]>, string> = {
@@ -65,84 +78,33 @@ const UI_LIBRARY_NAMES: Record<NonNullable<DetectedHost["uiLibrary"]>, string> =
  * The "Detected in your app" box: leads with the UI framework and what velloo
  * will do about it — a supported one becomes the folder's adapter, an
  * unsupported one (Mantine, Untitled UI, …) falls back to the no-framework
- * primitives, and none at all means velloo's shadcn default.
+ * primitives, and none at all means velloo's bundled shadcn snapshot.
  */
 function describeDetected(d: DetectedHost): string {
   let ui: string;
-  if (d.uiLibrary) {
+  let canvas: string;
+  if (d.uiLibrary === "shadcn") {
+    ui = `shadcn${d.shadcnStyle ? ` (${d.shadcnStyle})` : ""}`;
+    canvas =
+      "Velloo's own bundled shadcn components — your app's files are not imported, so designs stay in sync by matching the same upstream shadcn";
+  } else if (d.uiLibrary) {
     const name = UI_LIBRARY_NAMES[d.uiLibrary];
-    const style = d.uiLibrary === "shadcn" && d.shadcnStyle ? ` (${d.shadcnStyle})` : "";
-    ui = `${name}${style} — velloo designs with ${d.uiLibrary === "shadcn" ? "its own shadcn components" : `real ${name} components`}`;
+    ui = name;
+    canvas = `real ${name} components bundled with Velloo`;
   } else if (d.unsupportedUi) {
-    ui = `${d.unsupportedUi} — no velloo adapter yet; the no-framework primitives stand in`;
+    ui = `${d.unsupportedUi} (no Velloo adapter yet)`;
+    canvas = "Velloo's no-library primitives stand in";
   } else {
-    ui = "no compatible UI framework detected — velloo's shadcn components will be used";
+    ui = "none detected";
+    canvas = "Velloo's own bundled shadcn components";
   }
   const lines = [
     `UI library: ${ui}`,
+    `Canvas uses: ${canvas}`,
     `Tailwind:   ${d.tailwindMajor ? `v${d.tailwindMajor}` : "not detected"}`,
     `theme css:  ${d.globalsCssPath ?? "not found — will use a preset"}`,
   ];
   return lines.join("\n");
-}
-
-/**
- * Let the user choose which scanned routes to scaffold into screens + board
- * frames. The top (default) option scaffolds everything and flags the handoff
- * prompt to let the agent pick the first screen to design; "let me pick"
- * drops into a multiselect grouped per app (a monorepo scan has several —
- * each group header is a real select-all/none toggle). Returns the chosen
- * routes ([] when the user unchecks everything → init falls back to a blank
- * board) plus the agent-picks-first flag, or null when the user cancels.
- */
-async function pickScreens(
-  scanned: AppsScanResult,
-): Promise<{ routes: ScannedRoute[]; agentPicksFirst: boolean } | null> {
-  const { apps, routes } = scanned;
-
-  const mode = await select<"all" | "choose">({
-    message: "Which screens should I scaffold as placeholders?",
-    options: [
-      {
-        value: "all",
-        label: `All ${routes.length} — my agent picks where to start`,
-        hint: "recommended",
-      },
-      { value: "choose", label: "Let me pick which screens to include" },
-    ],
-    initialValue: "all",
-  });
-  if (isAborted(mode)) return null;
-  if (mode === "all") return { routes, agentPicksFirst: true };
-
-  // One selectable group per app (a single-app scan gets one "All screens"
-  // group): the header toggles the whole app's screens at once; individual
-  // screens can still be unchecked to prune. Group keys never appear in the
-  // result — only the per-screen ids do. Multi-app labels drop the "Web / "
-  // name prefix the scan added, since the group header already names the app.
-  const options: Record<string, { value: string; label: string; hint?: string }[]> = {};
-  if (apps.length > 1) {
-    for (const app of apps) {
-      options[app.rel || "app root"] = app.routes.map((r) => ({
-        value: r.id,
-        label: r.name.replace(/^[^/]+ \/ /, ""),
-        hint: r.routePath,
-      }));
-    }
-  } else {
-    options["All screens"] = routes.map((r) => ({ value: r.id, label: r.name, hint: r.routePath }));
-  }
-  const picked = await groupMultiselect<string>({
-    message: "Which screens should I build boards for?",
-    options,
-    initialValues: routes.map((r) => r.id),
-    selectableGroups: true,
-    required: false,
-  });
-  if (isAborted(picked)) return null;
-
-  const chosen = new Set(picked);
-  return { routes: routes.filter((r) => chosen.has(r.id)), agentPicksFirst: false };
 }
 
 /**
@@ -321,8 +283,61 @@ async function promptSignIn(cloudUrl: string): Promise<boolean | null> {
 /**
  * Interactive prompts for `velloo init`. `appRoot` is the user's app (where
  * Velloo installs). Config comes first — design folder, then agent wiring —
- * so the scan flow runs straight into handing its screens to a wired agent.
+ * then a goal-first start menu.
  */
+export type InteractiveOutcome = { status: "ok"; answers: WizardAnswers } | { status: "abort" };
+
+/** Ctrl+C or Esc anywhere in the wizard: nothing has been written yet. */
+function cancelled(): InteractiveOutcome {
+  cancel("Cancelled — no files were written.");
+  return { status: "abort" };
+}
+
+function outcome(answers: WizardAnswers | null): InteractiveOutcome {
+  return answers ? { status: "ok", answers } : cancelled();
+}
+
+/**
+ * The host-reading goals need UI code to read; `hasHostApp` false (an empty
+ * repo, or a backend with no frontend) leaves only the two starts that stand
+ * on their own.
+ */
+export function hostGoalOptions(
+  hasHostApp: boolean,
+): { value: GoalMode; label: string; hint: string }[] {
+  const selfContained: { value: GoalMode; label: string; hint: string }[] = [
+    {
+      value: "sample",
+      label: "Welcome sample",
+      hint: "A finished multi-screen app to poke at and reshape",
+    },
+    {
+      value: "blank",
+      label: "Blank",
+      hint: "Empty canvas — you and your agent build it from nothing",
+    },
+  ];
+  if (!hasHostApp) return selfContained;
+  return [
+    {
+      value: "redesign-screen",
+      label: "Redesign a screen",
+      hint: "Recreate one of your pages, then explore alternatives",
+    },
+    {
+      value: "redesign-component",
+      label: "Redesign a component",
+      hint: "One region or widget — recreate it, then try variations",
+    },
+    {
+      value: "custom",
+      label: "Custom request",
+      hint: "Describe any design you need and start there",
+    },
+    ...selfContained,
+  ];
+}
+
 export async function runInteractive(ctx: {
   appRoot: string;
   scanDir?: string;
@@ -330,9 +345,12 @@ export async function runInteractive(ctx: {
   connectEnabled: boolean;
   /** A valid --library flag pins the library — scan adoption won't override it. */
   pinnedLibrary?: LibraryId;
-}): Promise<WizardAnswers | null> {
+}): Promise<InteractiveOutcome> {
   const folderInput = await text({
-    message: "Where should the design folder live?",
+    message: subtitledText(
+      "Where should the design folder live?",
+      "Your designs are plain files that live in this repo — commit them alongside your code.",
+    ),
     placeholder: "velloo",
     defaultValue: "velloo",
     validate(value) {
@@ -340,45 +358,120 @@ export async function runInteractive(ctx: {
       return undefined;
     },
   });
-  if (isAborted(folderInput)) return abort();
+  if (isAborted(folderInput)) return cancelled();
   const folder = resolve(ctx.appRoot, folderInput || "velloo");
 
   // Agent wiring is asked up front (config before content) but only applied
-  // after the scaffold is written — cancelling anywhere below this still
-  // means no files were touched.
+  // after the scaffold is written — cancelling anywhere below touches no files.
   let agentWiring: AgentWiring | undefined;
   if (ctx.connectEnabled) {
     const wiring = await askAgentWiring({ skipWhenCovered: true });
-    if (wiring === null) return abort();
+    if (wiring === null) return cancelled();
     agentWiring = wiring;
   }
 
-  // An empty app root has nothing to scan, so scratch leads; anywhere with
-  // real content defaults to mirroring what's there.
-  const rootEntries = await readdir(ctx.appRoot).catch(() => [] as string[]);
-  const emptyRoot = rootEntries.filter((e) => !e.startsWith(".")).length === 0;
-  const startOptions = {
-    scan: {
-      value: "scan" as const,
-      label: "Scan what I have",
-      hint: "Detect your routes + theme and build a starting board",
-    },
-    scratch: {
-      value: "scratch" as const,
-      label: "Start from scratch",
-      hint: "Pick a component library + a sample or blank board",
-    },
-  };
-  const start = await select<"scratch" | "scan">({
-    message: "How do you want to start?",
-    options: emptyRoot
-      ? [startOptions.scratch, startOptions.scan]
-      : [startOptions.scan, startOptions.scratch],
-    initialValue: emptyRoot ? "scratch" : "scan",
-  });
-  if (isAborted(start)) return abort();
+  // The goal modes that read the host app are dead weight in a repo with no UI
+  // code to read, so an empty app root only gets the two self-contained starts.
+  const hasHostApp = (await discoverScanRoots(ctx.appRoot)).length > 0;
+  const hostCtx = { ...ctx, hasHostApp };
 
-  if (start === "scan") {
+  const goal = await select<GoalMode>({
+    message: subtitled(
+      "How do you want to start your board?",
+      "Pick a real design task — your agent starts on it as soon as init finishes.",
+    ),
+    options: hostGoalOptions(hasHostApp),
+    initialValue: hasHostApp ? "redesign-screen" : "sample",
+  });
+  if (isAborted(goal)) return cancelled();
+
+  if (goal === "redesign-screen") {
+    return outcome(await promptRedesignScreen(hostCtx, folder, agentWiring));
+  }
+  if (goal === "redesign-component") {
+    const desc = await text({
+      message: subtitledText(
+        "Component name or description",
+        "Whatever you'd call it in a code review — the agent finds it from this.",
+      ),
+      placeholder: "e.g. sidebar, pricing card, filter chip row",
+      validate(value) {
+        if (!value?.trim()) return "Describe the component so the agent knows what to redesign.";
+        return undefined;
+      },
+    });
+    if (isAborted(desc)) return cancelled();
+    return outcome(
+      await promptGoalWithAdoptedLibrary(hostCtx, folder, agentWiring, "component", {
+        componentDescription: String(desc).trim(),
+      }),
+    );
+  }
+  if (goal === "custom") {
+    const request = await text({
+      message: subtitledText(
+        "What design do you need?",
+        "A sentence is enough — it becomes the brief your agent works from.",
+      ),
+      placeholder: "e.g. a pricing page with three tiers and a FAQ",
+      validate(value) {
+        if (!value?.trim()) return "Describe what you want designed.";
+        return undefined;
+      },
+    });
+    if (isAborted(request)) return cancelled();
+    return outcome(
+      await promptGoalWithAdoptedLibrary(hostCtx, folder, agentWiring, "custom", {
+        customRequest: String(request).trim(),
+      }),
+    );
+  }
+  if (goal === "blank") {
+    return outcome(await buildBlankAnswers(ctx, folder, agentWiring));
+  }
+
+  return outcome(await promptSample(hostCtx, folder, agentWiring));
+}
+
+async function promptRedesignScreen(
+  ctx: {
+    appRoot: string;
+    scanDir?: string;
+    pinnedLibrary?: LibraryId;
+    hasHostApp: boolean;
+  },
+  folder: string,
+  agentWiring: AgentWiring | undefined,
+): Promise<WizardAnswers | null> {
+  const how = await select<"scan" | "type">({
+    message: subtitled(
+      "Which screen should your agent redesign?",
+      "Scanning finds your real routes; typing a name works for a screen that doesn't exist yet.",
+    ),
+    options: [
+      {
+        value: "scan",
+        label: "Pick from my app's routes",
+        hint: "Scan routes and choose one",
+      },
+      {
+        value: "type",
+        label: "Type a screen name",
+        hint: "e.g. Pricing, Settings, Checkout",
+      },
+    ],
+    initialValue: "scan",
+  });
+  if (isAborted(how)) return null;
+
+  let selectedRoutes: ScannedRoute[] | undefined;
+  let screenName: string | undefined;
+  let scanRoot = ctx.appRoot;
+  let detected: DetectedHost | undefined;
+  let library: LibraryId = ctx.pinnedLibrary ?? DEFAULT_LIBRARY_ID;
+  let stack = DEFAULT_STACK_ID;
+
+  if (how === "scan") {
     const spin = spinner();
     spin.start("Scanning your app's routes");
     const scanned = await scanApps(ctx.appRoot, ctx.scanDir);
@@ -386,179 +479,139 @@ export async function runInteractive(ctx: {
     spin.stop(
       scanned.routes.length > 0
         ? `Found ${scanned.routes.length} screen${scanned.routes.length === 1 ? "" : "s"}${appsSuffix}`
-        : "No routes detected — let's set up from scratch instead.",
+        : "No routes detected — type a screen name instead.",
     );
 
-    if (scanned.routes.length > 0) {
-      // Rank-best app drives detection until the user picks screens; then the
-      // app contributing most of the selection takes over (theme + hostApp).
+    if (scanned.routes.length === 0) {
+      const typed = await text({
+        message: "Screen name",
+        placeholder: "e.g. Pricing",
+        validate(value) {
+          if (!value?.trim()) return "Enter a screen name.";
+          return undefined;
+        },
+      });
+      if (isAborted(typed)) return null;
+      screenName = String(typed).trim();
+    } else {
       const rankPrimary = scanned.apps[0];
       if (scanned.apps.length > 1) {
         const lines = scanned.apps.map(
           (a) =>
             `${pc.cyan(a.rel || ".")} — ${a.routes.length} screen${a.routes.length === 1 ? "" : "s"}`,
         );
-        lines.push("", "Each app gets its own board; screen ids are prefixed per app.");
         note(lines.join("\n"), `Found ${scanned.apps.length} apps`);
-      } else if (rankPrimary?.rel && rankPrimary.rel !== ".") {
-        note(
-          `Your app root has no package.json — scanning ${pc.cyan(rankPrimary.rel)} instead.`,
-          ctx.scanDir ? "Scanning subfolder" : "Found your UI",
-        );
       }
-      let detected = detectHost(rankPrimary?.dir ?? ctx.appRoot);
-      note(describeDetected(detected), "Detected in your app");
+      let host = detectHost(rankPrimary?.dir ?? ctx.appRoot);
+      note(describeDetected(host), "Detected in your app");
 
-      const picked = await pickScreens(scanned);
-      if (picked === null) return abort();
-      // Theme import + hostApp follow the app the user actually kept.
-      const primary = primaryApp(scanned.apps, picked.routes) ?? rankPrimary;
-      const scanRoot = primary?.dir ?? ctx.appRoot;
-      if (primary && primary !== rankPrimary) detected = detectHost(primary.dir);
-
-      const share = await promptShareAndFeedback();
-      if (share === null) return abort();
-      // The "existing project" flow: design in the framework the app actually
-      // uses (a MUI host → the MUI adapter, an unsupported framework → the
-      // no-framework primitives) unless --library pinned one.
-      const adopted = ctx.pinnedLibrary ? undefined : scanAdoption(detected);
-      return {
-        appRoot: ctx.appRoot,
-        scanRoot,
-        folder,
-        // Scan renders against runtimes bundled with the velloo binary and
-        // imports the host theme; it never writes into the app (source: "binary").
-        library: ctx.pinnedLibrary ?? adopted?.library ?? DEFAULT_LIBRARY_ID,
-        source: "binary",
-        componentsRelative: "src/components/ui",
-        initialContent: "scan",
-        detected,
-        selectedRoutes: picked.routes,
-        agentPicksFirst: picked.agentPicksFirst,
-        ...(agentWiring ? { agentWiring } : {}),
-        ...share,
-      };
+      const picked = await pickOneScreen(scanned);
+      if (picked === null) return null;
+      selectedRoutes = [picked];
+      screenName = picked.name;
+      const primary = primaryApp(scanned.apps, [picked]) ?? rankPrimary;
+      scanRoot = primary?.dir ?? ctx.appRoot;
+      if (primary && primary !== rankPrimary) host = detectHost(primary.dir);
+      detected = host;
+      stack = stackForFramework(primary?.framework);
+      if (!ctx.pinnedLibrary) {
+        const adopted = scanAdoption(host);
+        if (adopted) library = adopted.library;
+      }
     }
-    // Nothing scannable — fall through to the scratch questions rather than
-    // silently defaulting to a shadcn/indigo blank folder.
+  } else {
+    const typed = await text({
+      message: "Screen name",
+      placeholder: "e.g. Pricing",
+      validate(value) {
+        if (!value?.trim()) return "Enter a screen name.";
+        return undefined;
+      },
+    });
+    if (isAborted(typed)) return null;
+    screenName = String(typed).trim();
+    // Naming a screen skips the route scan, but the library question is still
+    // answerable from the host — detect it rather than asking.
+    if (!ctx.pinnedLibrary) {
+      const adopted = await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir);
+      if (adopted) {
+        note(describeDetected(adopted.detected), "Detected in your app");
+        detected = adopted.detected;
+        scanRoot = adopted.scanRoot;
+        library = adopted.library;
+        stack = adopted.stack;
+      }
+    }
   }
 
+  const adoptedLibrary = detected ? scanAdoption(detected)?.library : undefined;
+  const rest = await promptLibraryThemePath(
+    { ...ctx, pinnedLibrary: ctx.pinnedLibrary ?? adoptedLibrary ?? library },
+    folder,
+    agentWiring,
+    "redesign-screen",
+    { screenName, selectedRoutes, detected, scanRoot, stack },
+    {
+      skipLibrary: Boolean(ctx.pinnedLibrary || adoptedLibrary),
+      libraryOnly: Boolean(adoptedLibrary),
+    },
+  );
+  if (!rest) return null;
+  const finalLibrary = ctx.pinnedLibrary ?? adoptedLibrary ?? rest.library;
+  return {
+    ...rest,
+    library: finalLibrary,
+    source: WIZARD_PROVIDERS[finalLibrary].defaultSource,
+    scanRoot,
+    ...(detected ? { detected } : {}),
+    ...(selectedRoutes ? { selectedRoutes } : {}),
+    ...(screenName ? { screenName } : {}),
+  };
+}
+
+/** Pick exactly one scanned route (redesign-a-screen). */
+async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | null> {
+  const { routes } = scanned;
+  const choice = await select<string>({
+    message: "Which screen?",
+    options: routes.map((r) => ({
+      value: r.id,
+      label: r.name,
+      hint: r.routePath,
+    })),
+    initialValue: routes[0]?.id,
+  });
+  if (isAborted(choice)) return null;
+  return routes.find((r) => r.id === choice) ?? null;
+}
+
+async function promptSample(
+  ctx: { appRoot: string; pinnedLibrary?: LibraryId; hasHostApp: boolean },
+  folder: string,
+  agentWiring: AgentWiring | undefined,
+): Promise<WizardAnswers | null> {
   const library = await select<LibraryId>({
-    message: "Component library",
+    message: subtitled(
+      "Component library",
+      "What the canvas draws with, and what your emitted code imports.",
+    ),
     options: interactiveLibraryChoices(),
     initialValue: ctx.pinnedLibrary ?? DEFAULT_LIBRARY_ID,
   });
-  if (isAborted(library)) return abort();
+  if (isAborted(library)) return null;
   const provider = WIZARD_PROVIDERS[library];
-
-  // Source is derived from the library: upstream lives in the app (written
-  // post-init), everything else renders from the bundled snapshot.
   const source: LibrarySource = provider.defaultSource;
-  let componentsRelative = "src/components/ui";
+  let componentsRelative = DEFAULT_COMPONENTS_DIR;
   if (provider.asksComponentsSubfolder) {
-    const cr = await text({
-      message: "Components subfolder inside your app",
-      placeholder: "src/components/ui",
-      defaultValue: "src/components/ui",
-    });
-    if (isAborted(cr)) return abort();
-    if (cr) componentsRelative = cr;
-  }
-
-  // The product surface folds the old sample-vs-blank question into "what
-  // are you designing?" — the answer picks which slice of Pulse ships. A
-  // library without surfaces (its welcome sample has none) keeps the plain
-  // pair.
-  let initialContent: Exclude<InitialContent, "scan">;
-  let productSurface: ProductSurface | undefined;
-  if (!provider.hasProductSurfaces) {
-    const content = await select<Exclude<InitialContent, "scan">>({
-      message: "Initial design",
-      options: [
-        { value: "sample", label: "Welcome sample", hint: "A small primitives demo" },
-        { value: "blank", label: "Blank", hint: "Empty board, no screens" },
-      ],
-      initialValue: "sample",
-    });
-    if (isAborted(content)) return abort();
-    initialContent = content;
-  } else {
-    const surface = await select<ProductSurface | "blank">({
-      message: "What are you designing? (tailors the Pulse starter)",
-      options: [
-        { value: "saas", label: "A full product", hint: "all of Pulse — 7 screens, 3 boards" },
-        {
-          value: "analytics",
-          label: "An app / dashboard",
-          hint: "Pulse's App board — dashboard, insights, settings",
-        },
-        {
-          value: "marketing",
-          label: "A marketing site",
-          hint: "Pulse's Marketing board — landing, pricing, sign-up",
-        },
-        { value: "blank", label: "Blank", hint: "Empty board, no screens" },
-      ],
-      initialValue: "saas",
-    });
-    if (isAborted(surface)) return abort();
-    initialContent = surface === "blank" ? "blank" : "sample";
-    if (surface !== "blank") productSurface = surface;
-  }
-
-  let themePreset: string | undefined;
-  let themeVibe: string | undefined;
-  if (provider.asksThemePreset) {
-    const preset = await select<string>({
-      message: "Theme",
-      options: [
-        ...THEME_PRESETS.map((p) => ({
-          value: p.id,
-          label: `${swatch(p.seed)} ${p.label}`,
-        })),
-        { value: "vibe", label: "Pick by vibe…", hint: "playful / calm / premium / …" },
-      ],
-      initialValue: "indigo",
-    });
-    if (isAborted(preset)) return abort();
-    if (preset === "vibe") {
-      const vibe = await select<string>({
-        message: "How should it feel?",
-        options: VIBES.map((v) => ({
-          value: v.id,
-          label: `${swatch(v.seed)} ${v.label}`,
-          hint: v.description,
-        })),
-        initialValue: VIBES[0]?.id,
-      });
-      if (isAborted(vibe)) return abort();
-      themeVibe = typeof vibe === "string" ? vibe : undefined;
-    } else {
-      themePreset = typeof preset === "string" ? preset : undefined;
-    }
-  }
-
-  // Stack → codegen import alias. Only shadcn emits aliased component
-  // imports, so the question is noise for the no-library flow.
-  let stack: string | undefined;
-  if (provider.asksStack) {
-    const picked = await select<string>({
-      message: "Your app's stack (sets the import alias emitted code uses)",
-      options: [
-        ...STACKS.map((s) => ({ value: s.id, label: s.label, hint: s.alias })),
-        { value: "skip", label: "Skip", hint: "decide later — defaults to @/components/ui" },
-      ],
-      initialValue: "nextjs",
-    });
-    if (isAborted(picked)) return abort();
-    if (picked !== "skip") stack = picked;
+    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp);
+    if (!dir) return null;
+    componentsRelative = dir.value;
   }
 
   const share = await promptShareAndFeedback();
-  if (share === null) return abort();
+  if (share === null) return null;
 
   note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");
-
   return {
     appRoot: ctx.appRoot,
     scanRoot: ctx.appRoot,
@@ -566,12 +619,189 @@ export async function runInteractive(ctx: {
     library,
     source,
     componentsRelative,
-    initialContent,
-    productSurface,
-    themePreset,
-    themeVibe,
-    stack,
+    initialContent: "sample",
+    themePreset: DEFAULT_THEME_PRESET,
+    stack: DEFAULT_STACK_ID,
     ...(agentWiring ? { agentWiring } : {}),
     ...share,
+  };
+}
+
+/** The zero-question blank folder: no boards, neutral theme, default stack. */
+function blankAnswers(
+  ctx: { appRoot: string },
+  folder: string,
+  agentWiring: AgentWiring | undefined,
+  library: LibraryId,
+  extra: Partial<WizardAnswers> = {},
+): WizardAnswers {
+  return {
+    appRoot: ctx.appRoot,
+    scanRoot: ctx.appRoot,
+    folder,
+    library,
+    source: WIZARD_PROVIDERS[library].defaultSource,
+    componentsRelative: "src/components/ui",
+    initialContent: "blank",
+    themePreset: "zinc",
+    stack: DEFAULT_STACK_ID,
+    ...(agentWiring ? { agentWiring } : {}),
+    ...extra,
+  };
+}
+
+/** Blank mode: only the library question, defaulting to no-library. */
+async function buildBlankAnswers(
+  ctx: { appRoot: string; scanDir?: string; pinnedLibrary?: LibraryId },
+  folder: string,
+  agentWiring: AgentWiring | undefined,
+  defaultLibrary: LibraryId = "none",
+): Promise<WizardAnswers | null> {
+  let library: LibraryId = ctx.pinnedLibrary ?? defaultLibrary;
+  if (!ctx.pinnedLibrary) {
+    const picked = await select<LibraryId>({
+      message: subtitled(
+        "Component library",
+        "What the canvas draws with, and what your emitted code imports.",
+      ),
+      options: interactiveLibraryChoices(),
+      initialValue: defaultLibrary,
+    });
+    if (isAborted(picked)) return null;
+    library = picked;
+  }
+  const share = await promptShareAndFeedback();
+  if (share === null) return null;
+
+  note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");
+  return blankAnswers(ctx, folder, agentWiring, library, share);
+}
+
+/**
+ * Brand / component / custom: scan the host first and auto-adopt its library
+ * when detectable, so we don't ask unless adoption fails or --library pinned.
+ */
+async function promptGoalWithAdoptedLibrary(
+  ctx: { appRoot: string; scanDir?: string; pinnedLibrary?: LibraryId; hasHostApp: boolean },
+  folder: string,
+  agentWiring: AgentWiring | undefined,
+  initialContent: InitialContent,
+  extra: Partial<WizardAnswers> = {},
+): Promise<WizardAnswers | null> {
+  const adopted = ctx.pinnedLibrary ? null : await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir);
+  if (adopted) {
+    note(describeDetected(adopted.detected), "Detected in your app");
+    note(`Using ${WIZARD_PROVIDERS[adopted.library].label}.`, "Library");
+  }
+  return promptLibraryThemePath(
+    {
+      ...ctx,
+      pinnedLibrary: ctx.pinnedLibrary ?? adopted?.library,
+    },
+    folder,
+    agentWiring,
+    initialContent,
+    {
+      ...extra,
+      ...(adopted
+        ? { detected: adopted.detected, scanRoot: adopted.scanRoot, stack: adopted.stack }
+        : {}),
+    },
+    {
+      skipLibrary: Boolean(ctx.pinnedLibrary || adopted),
+      // Host detection already framed the library; skip theme/stack/subfolder
+      // and import the host theme in resolveTheme when available.
+      libraryOnly: Boolean(adopted),
+    },
+  );
+}
+
+/** Soft host scan — returns null when nothing adoptable is found. */
+async function tryAdoptLibraryFromApp(
+  appRoot: string,
+  scanDir?: string,
+): Promise<{
+  library: LibraryId;
+  detected: DetectedHost;
+  scanRoot: string;
+  stack: string;
+} | null> {
+  const spin = spinner();
+  spin.start("Detecting your app's UI library");
+  try {
+    const scanned = await scanApps(appRoot, scanDir);
+    const primary = scanned.apps[0];
+    const scanRoot = primary?.dir ?? appRoot;
+    const detected = detectHost(scanRoot);
+    const adopted = scanAdoption(detected);
+    spin.stop(
+      adopted
+        ? `Detected ${WIZARD_PROVIDERS[adopted.library].label}`
+        : "No UI library detected — you'll pick one next.",
+    );
+    if (!adopted) return null;
+    return {
+      library: adopted.library,
+      detected,
+      scanRoot,
+      stack: stackForFramework(primary?.framework),
+    };
+  } catch {
+    spin.stop("Couldn't scan the app — you'll pick a library next.");
+    return null;
+  }
+}
+
+async function promptLibraryThemePath(
+  ctx: { appRoot: string; pinnedLibrary?: LibraryId; hasHostApp: boolean },
+  folder: string,
+  agentWiring: AgentWiring | undefined,
+  initialContent: InitialContent,
+  extra: Partial<WizardAnswers> = {},
+  opts: { skipLibrary?: boolean; libraryOnly?: boolean } = {},
+): Promise<WizardAnswers | null> {
+  let library: LibraryId = ctx.pinnedLibrary ?? DEFAULT_LIBRARY_ID;
+  if (!opts.skipLibrary) {
+    const picked = await select<LibraryId>({
+      message: subtitled(
+        "Component library",
+        "What the canvas draws with, and what your emitted code imports.",
+      ),
+      options: interactiveLibraryChoices(),
+      initialValue: library,
+    });
+    if (isAborted(picked)) return null;
+    library = picked;
+  }
+  const provider = WIZARD_PROVIDERS[library];
+  const source: LibrarySource = provider.defaultSource;
+  let componentsRelative = DEFAULT_COMPONENTS_DIR;
+
+  if (!opts.libraryOnly && provider.asksComponentsSubfolder) {
+    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp);
+    if (!dir) return null;
+    componentsRelative = dir.value;
+  }
+  // Blank stays deliberately neutral; every other start gets the house theme.
+  // A detected host theme overrides this in `resolveTheme`.
+  const themePreset = initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET;
+
+  const share = await promptShareAndFeedback();
+  if (share === null) return null;
+
+  note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");
+  return {
+    appRoot: ctx.appRoot,
+    scanRoot: extra.scanRoot ?? ctx.appRoot,
+    folder,
+    library,
+    source,
+    componentsRelative,
+    initialContent,
+    themePreset,
+    stack: extra.stack ?? DEFAULT_STACK_ID,
+    ...(agentWiring ? { agentWiring } : {}),
+    ...share,
+    ...extra,
   };
 }

@@ -67,23 +67,13 @@ export interface WizardProviderEntry {
   defaultSource: LibrarySource;
   /** Ask where inside the app the upstream components should land. */
   asksComponentsSubfolder: boolean;
-  /** Ask the theme preset / vibe question. */
-  asksThemePreset: boolean;
-  /** Ask the app-stack question (sets the codegen import alias). */
-  asksStack: boolean;
-  /**
-   * Ships the Pulse product surfaces: drives the "What are you designing?"
-   * prompt (providers without surfaces get the plain sample/blank pair) and
-   * the `--surface` flag validation.
-   */
-  hasProductSurfaces: boolean;
   /** Placeholder-tree options for screens scaffolded from a scan. */
   scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" | "chakra" };
   /** Resolve the wizard's answers into this provider's library declaration. */
   planInstall(answers: WizardAnswers): InstallPlan;
   /**
    * The provider's own sample scaffold, or undefined to ship the shadcn
-   * Pulse default (see `sampleScaffold`).
+   * welcome-sample default (see `sampleScaffold`).
    */
   buildSampleScaffold(theme: Theme, answers: WizardAnswers): Scaffold | undefined;
   /**
@@ -117,14 +107,11 @@ function bundledComponentsSection(): string[] {
 export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
   "shadcn-upstream": {
     label: "shadcn",
-    hint: "Vanilla shadcn added to your app. Recommended.",
+    hint: "Real shadcn, Tailwind classes. Recommended.",
     interactive: true,
     order: 0,
     defaultSource: "in-repo",
     asksComponentsSubfolder: true,
-    asksThemePreset: true,
-    asksStack: true,
-    hasProductSurfaces: true,
     scanScreenOpts: { hasBadge: true },
     planInstall(answers) {
       const library: Library = {
@@ -143,7 +130,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
         pendingUpstream: { targetDir, relative: answers.componentsRelative },
       };
     },
-    // Pulse is shadcn-native — the shared default in `sampleScaffold` carries it.
+    // The welcome sample is shadcn-native — the shared default in `sampleScaffold` carries it.
     buildSampleScaffold: () => undefined,
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "shadcn",
@@ -166,14 +153,12 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
   },
   none: {
     label: "No library",
-    hint: "Box / Stack / Text primitives.",
+    hint: "Plain Box / Stack / Text primitives.",
     interactive: true,
-    order: 1,
+    // Last in the list: the deliberate trivial-end choice, not a default.
+    order: 9,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
-    asksThemePreset: false,
-    asksStack: false,
-    hasProductSurfaces: false,
     scanScreenOpts: { hasBadge: false },
     planInstall: () => ({
       library: { id: "none", version: noLibVersion, source: "binary", componentsPath: "binary" },
@@ -182,7 +167,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
         location: "bundled with velloo",
       },
     }),
-    // No-library Pulse doesn't exist (Avatar / Tabs / Accordion / Chart have
+    // No-library welcome sample doesn't exist (Avatar / Tabs / Accordion / Chart have
     // no no-lib equivalents) — a smaller two-screen welcome sample instead.
     buildSampleScaffold: (theme) => ({
       theme,
@@ -216,9 +201,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     order: 4,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
-    asksThemePreset: false,
-    asksStack: false,
-    hasProductSurfaces: false,
     scanScreenOpts: { hasBadge: true, tree: "mui" },
     // Framework-native: MUI is a first-class adapter bundled with velloo
     // (@mui/material + emotion are velloo deps; components SSR in-process).
@@ -226,7 +208,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       library: { id: "mui", version: MUI_VERSION, source: "binary", componentsPath: "binary" },
       summary: { name: `Material UI v${MUI_VERSION}`, location: "bundled with velloo" },
     }),
-    // Pulse isn't ported to MUI (its shadcn composition would need a full
+    // The welcome sample isn't ported to MUI (its shadcn composition would need a full
     // redesign) — a two-screen MUI welcome sample (sx styling) instead.
     buildSampleScaffold: (theme) => ({
       theme,
@@ -266,9 +248,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     order: 2,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
-    asksThemePreset: false,
-    asksStack: false,
-    hasProductSurfaces: false,
     scanScreenOpts: { hasBadge: true, tree: "antd" },
     // Framework-native like MUI: antd is a first-class adapter bundled with
     // velloo (antd + @ant-design/cssinjs are velloo deps; components SSR
@@ -277,7 +256,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       library: { id: "antd", version: ANTD_VERSION, source: "binary", componentsPath: "binary" },
       summary: { name: `Ant Design v${ANTD_VERSION}`, location: "bundled with velloo" },
     }),
-    // Pulse isn't ported to antd (its shadcn composition would need a full
+    // The welcome sample isn't ported to antd (its shadcn composition would need a full
     // redesign) — a two-screen antd welcome sample (inline styles) instead.
     buildSampleScaffold: (theme) => ({
       theme,
@@ -317,9 +296,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     order: 3,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
-    asksThemePreset: false,
-    asksStack: false,
-    hasProductSurfaces: false,
     scanScreenOpts: { hasBadge: true, tree: "chakra" },
     // Framework-native like MUI: chakra is a first-class adapter bundled with
     // velloo (@chakra-ui/react + emotion are velloo deps; components SSR
@@ -333,7 +309,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       },
       summary: { name: `Chakra UI v${CHAKRA_VERSION}`, location: "bundled with velloo" },
     }),
-    // Pulse isn't ported to chakra (its shadcn composition would need a full
+    // The welcome sample isn't ported to chakra (its shadcn composition would need a full
     // redesign) — a two-screen chakra welcome sample (sx styling) instead.
     buildSampleScaffold: (theme) => ({
       theme,
@@ -402,15 +378,14 @@ export function planInstall(answers: WizardAnswers): InstallPlan {
 
 /**
  * The provider's sample scaffold; providers without one of their own
- * (shadcn-upstream) fall back to the Pulse sample, optionally sliced by
- * product surface.
+ * (shadcn-upstream) fall back to the full welcome sample.
  */
 export function sampleScaffold(answers: WizardAnswers, theme: Theme): Scaffold {
   return (
     WIZARD_PROVIDERS[answers.library].buildSampleScaffold(theme, answers) ?? {
       theme,
-      screens: buildSampleScreens(answers.productSurface),
-      boards: buildSampleBoards(answers.productSurface),
+      screens: buildSampleScreens(),
+      boards: buildSampleBoards(),
       snippets: buildSampleSnippets(),
       annotations: [],
       notes: [],

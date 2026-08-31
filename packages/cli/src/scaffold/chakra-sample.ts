@@ -4,7 +4,7 @@
  * component set + `sx` styling in a couple of common compositions — a
  * one-glance answer to "what does the chakra adapter give me?"
  *
- * Pulse isn't ported to chakra (its shadcn-specific composition would need a
+ * The welcome sample isn't ported to chakra (its shadcn-specific composition would need a
  * full redesign); the user asks the agent to expand these starter screens once
  * they're on the canvas.
  */

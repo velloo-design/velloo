@@ -1,6 +1,6 @@
 import { Plus, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { annotations as annotationsApi, redo as redoApi, undo as undoApi } from "./api.ts";
+import { annotations as annotationsApi, mutate, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
@@ -218,8 +218,32 @@ export function App() {
             />
           ) : (
             <EmptyState
-              title="No board selected"
-              hint="Pick a board from the sidebar to see its frames."
+              title={design.boards.length === 0 ? "No boards yet" : "No board selected"}
+              hint={
+                design.boards.length === 0
+                  ? "Create a board to start designing — or ask your agent over MCP to set up the folder."
+                  : "Pick a board from the sidebar to see its frames."
+              }
+              action={
+                design.boards.length === 0 ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const r = await mutate.addBoard({ name: "Main" });
+                          await useCanvas.getState().selectBoard(r.boardId);
+                        } catch (err) {
+                          toastError(err, "Could not create board");
+                        }
+                      })();
+                    }}
+                  >
+                    <Plus />
+                    New board
+                  </Button>
+                ) : undefined
+              }
             />
           )}
           <StatusBar />

@@ -33,11 +33,15 @@ import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
 import { registerProject } from "../manifest.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
+import {
+  componentScaffold,
+  customRequestScaffold,
+  redesignScreenScaffold,
+} from "../scaffold/goal-scaffolds.ts";
 import { findMuiTheme, importThemeFromMui } from "../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../scaffold/import-theme.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
-import { buildPresetTheme, presetById } from "../scaffold/theme-presets.ts";
-import { buildVibeTheme, vibeById } from "../scaffold/vibes.ts";
+import { buildPresetTheme, DEFAULT_THEME_PRESET, presetById } from "../scaffold/theme-presets.ts";
 import { detectHost } from "../scan/detect.ts";
 import {
   appPrefixes,
@@ -83,7 +87,7 @@ function blankScaffold(theme: Theme): Scaffold {
   return {
     theme,
     screens: [],
-    boards: [{ id: "main", name: "Main", frames: [], groups: [] }],
+    boards: [],
     snippets: [],
     annotations: [],
     notes: [],
@@ -95,38 +99,56 @@ function blankScaffold(theme: Theme): Scaffold {
  * canvas renders in their brand; everything else uses the chosen preset.
  */
 function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFrom?: string } {
-  if (answers.initialContent === "scan") {
-    // A MUI app's theme lives in a `createTheme({...})` module, not globals.css —
-    // read that first when scanning a MUI host.
-    if (answers.detected?.uiLibrary === "mui") {
+  // Prefer the host app's theme whenever detection found one (scan, redesign,
+  // component after auto-adopt, etc.).
+  if (answers.detected) {
+    if (answers.detected.uiLibrary === "mui") {
       const themeFile = findMuiTheme(answers.scanRoot);
       if (themeFile) {
         const imported = importThemeFromMui(themeFile, answers.themePreset);
         if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
       }
     }
-    if (answers.detected?.globalsCssPath) {
+    if (answers.detected.globalsCssPath) {
       const imported = importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset);
       if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
     }
   }
-  if (answers.themeVibe) return { theme: buildVibeTheme(answers.themeVibe) };
-  return { theme: buildPresetTheme(answers.themePreset) };
+  // Blank defaults to zinc (neutral) so the folder isn't opinionated until the
+  // agent or user styles it. An explicit --theme-preset wins either way.
+  if (answers.initialContent === "blank") {
+    return { theme: buildPresetTheme(answers.themePreset ?? "zinc") };
+  }
+  return { theme: buildPresetTheme(answers.themePreset ?? DEFAULT_THEME_PRESET) };
 }
 
 async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaffold> {
   if (answers.initialContent === "blank") {
     return blankScaffold(theme);
   }
+  if (answers.initialContent === "component") {
+    return componentScaffold(theme, answers.componentDescription ?? "Component");
+  }
+  if (answers.initialContent === "custom") {
+    return customRequestScaffold(theme);
+  }
+  if (answers.initialContent === "redesign-screen") {
+    if (answers.selectedRoutes && answers.selectedRoutes.length > 0) {
+      const routes = answers.selectedRoutes;
+      const screens = buildScreensFromScan({
+        routes,
+        ...WIZARD_PROVIDERS[answers.library].scanScreenOpts,
+      });
+      const boards = buildBoardsFromScan({ routes });
+      return { theme, screens, boards, snippets: [], annotations: [], notes: [] };
+    }
+    return redesignScreenScaffold(theme, answers.screenName ?? "Screen");
+  }
 
   if (answers.initialContent === "scan") {
-    // One screen per chosen route. The interactive wizard pre-filters to the
-    // screens the user picked; non-interactive scan uses every detected route.
-    // The library only affects the placeholder tree — each provider's entry
-    // carries its options (Badge vs Text, MUI components).
+    // Legacy multi-route scan (non-interactive --start=scan).
     const routes = answers.selectedRoutes ?? (await scanAppRoutes(answers.scanRoot)).routes;
     if (routes.length === 0) {
-      // Don't abort init — fall back to a blank board. init prints why.
       return blankScaffold(theme);
     }
     const screens = buildScreensFromScan({
@@ -137,7 +159,7 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
     return { theme, screens, boards, snippets: [], annotations: [], notes: [] };
   }
 
-  // The provider's own welcome sample, or the shadcn Pulse default.
+  // The provider's own welcome sample, or the shadcn welcome sample default.
   return sampleScaffold(answers, theme);
 }
 
@@ -242,15 +264,13 @@ function printSummary(
   importedFrom: string | undefined,
 ): void {
   const boardLabels = scaffold.boards.map((b) => b.name).join(" + ");
-  const vibe = vibeById(answers.themeVibe);
   const themeLabel = importedFrom
     ? `imported from ${relative(answers.appRoot, importedFrom) || importedFrom}`
-    : vibe
-      ? `${vibe.label} vibe (${vibe.description})`
-      : (presetById(answers.themePreset)?.label ?? "Indigo (Pulse default)");
+    : (presetById(answers.themePreset ?? DEFAULT_THEME_PRESET)?.label ?? "Indigo");
 
   console.log("");
-  console.log(pc.green(`✓ Done. Scaffolded ${folder}.`));
+  console.log(pc.green("✓ Velloo is installed and ready to use."));
+  console.log(pc.dim(`  Scaffolded ${folder}`));
   console.log("");
   if (scaffold.screens.length > 0) {
     console.log(
@@ -261,10 +281,10 @@ function printSummary(
     const more = names.length - shown.length;
     console.log(pc.dim(`    ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`));
     if (answers.initialContent === "sample") {
-      console.log(pc.dim("  Pulse — a sample team-analytics product, ready to remix."));
+      console.log(pc.dim("  Welcome sample — ready to remix."));
     }
   } else {
-    console.log(pc.dim("  Blank board — no screens yet."));
+    console.log(pc.dim("  Blank — no boards or screens yet."));
   }
   console.log("");
   console.log(pc.bold("  Your setup"));
@@ -321,25 +341,42 @@ function printWired(outcome: WireOutcome): void {
   if (connected.cursorRules?.installed) console.log(pc.dim("    + Cursor rule"));
 }
 
-function printNextSteps(folder: string, outcome: WireOutcome): void {
+function printExitInstructions(folder: string | undefined, outcome: WireOutcome): void {
   console.log("");
-  console.log(pc.bold("  Next steps"));
+  console.log(pc.bold("  How to use velloo"));
   let n = 1;
-  if (outcome.wiredIds.length === 0) {
+  if (folder) {
+    if (outcome.wiredIds.length === 0) {
+      console.log(
+        `    ${n++}. ${pc.cyan(`velloo connect ${folder}`)} ${pc.dim("(wire your AI agent's MCP config + guidance)")}`,
+      );
+    }
     console.log(
-      `    ${n++}. ${pc.cyan(`velloo connect ${folder}`)} ${pc.dim("(wire your AI agent's MCP config + guidance)")}`,
+      `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
+    );
+    console.log(
+      `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas and prints the URL)")}`,
+    );
+    console.log("");
+    const readme = join(relative(process.cwd(), folder) || ".", "README.md");
+    console.log(`  ${pc.dim("Open")} ${pc.cyan(readme)} ${pc.dim("for the full guide.")}`);
+  } else {
+    console.log(
+      `    ${n++}. ${pc.cyan("velloo init")} ${pc.dim("again when you're ready to scaffold a design folder")}`,
+    );
+    console.log(
+      `    ${n++}. ${pc.cyan("velloo run <folder>")} ${pc.dim("opens the canvas for an existing design")}`,
+    );
+    console.log(
+      `    ${n++}. ${pc.cyan("velloo connect <folder>")} ${pc.dim("wires your AI agent's MCP config")}`,
     );
   }
-  console.log(
-    `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
-  );
-  console.log(
-    `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(optional — run from this folder; opens the canvas and prints the URL)")}`,
-  );
   console.log("");
-  const readme = join(relative(process.cwd(), folder) || ".", "README.md");
-  console.log(`  ${pc.dim("Open")} ${pc.cyan(readme)} ${pc.dim("for the full guide.")}`);
-  console.log("");
+}
+
+/** @deprecated alias — prefer printExitInstructions */
+function printNextSteps(folder: string, outcome: WireOutcome): void {
+  printExitInstructions(folder, outcome);
 }
 
 /**
@@ -478,7 +515,8 @@ export default defineCommand({
     },
     start: {
       type: "string",
-      description: "scratch | scan (scan detects routes + theme from your app)",
+      description:
+        "Goal: redesign-screen | redesign-component | custom | sample | blank | scan (legacy multi-route)",
     },
     scanDir: {
       type: "string",
@@ -495,21 +533,23 @@ export default defineCommand({
     },
     initialContent: {
       type: "string",
-      description: "Initial content: sample | blank (default sample). Use --start=scan to scan.",
+      description: "Initial content: sample | blank | redesign-screen | component | custom | scan",
     },
-    surface: {
+    screenName: {
       type: "string",
-      description:
-        "Pulse slice for the shadcn sample: saas (all of it) | analytics (App board) | marketing (Marketing board)",
+      description: "Screen name for --start=redesign-screen (optional if routes are scanned)",
+    },
+    component: {
+      type: "string",
+      description: "Component name or description for --start=redesign-component",
+    },
+    request: {
+      type: "string",
+      description: "Free-text design request for --start=custom",
     },
     themePreset: {
       type: "string",
       description: "Theme preset: indigo | violet | blue | emerald | rose | orange | amber | zinc",
-    },
-    vibe: {
-      type: "string",
-      description:
-        "Theme by feel: playful | calm | natural | bold | minimal | premium | techy | soft | cozy | sunny | moody | fresh",
     },
     stack: {
       type: "string",
@@ -583,11 +623,11 @@ export default defineCommand({
         pinnedLibrary:
           cliArgs.library && isValidLibraryId(cliArgs.library) ? cliArgs.library : undefined,
       });
-      if (!result) {
-        // The wizard already printed its cancellation notice.
+      if (result.status === "abort") {
+        printExitInstructions(undefined, NOT_WIRED);
         process.exit(1);
       }
-      answers = result;
+      answers = result.answers;
     } else {
       try {
         answers = answersFromArgs(cliArgs);
@@ -597,10 +637,11 @@ export default defineCommand({
       console.log(`velloo: app root ${answers.appRoot}`);
     }
 
-    // Non-interactive scan still wants the host detection (the wizard fills it
-    // for the interactive path) — and the app discovery (--scan-dir, a nested
-    // UI folder, or a monorepo's several apps) the wizard would otherwise do.
-    if (answers.initialContent === "scan" && !answers.detected) {
+    // Non-interactive scan / redesign still wants host detection.
+    if (
+      (answers.initialContent === "scan" || answers.initialContent === "redesign-screen") &&
+      !answers.detected
+    ) {
       const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
       const primary = scanned.apps[0];
       if (primary) answers.scanRoot = primary.dir;
@@ -613,8 +654,12 @@ export default defineCommand({
       } else if (primary?.rel && primary.rel !== ".") {
         console.log(pc.dim(`  Scanning UI in ${primary.rel} (app root has no package.json).`));
       }
-      answers.selectedRoutes = scanned.routes;
-      answers.agentPicksFirst = true;
+      answers.selectedRoutes =
+        answers.initialContent === "redesign-screen" ? scanned.routes.slice(0, 1) : scanned.routes;
+      answers.agentPicksFirst = answers.initialContent === "scan";
+      if (answers.initialContent === "redesign-screen" && scanned.routes[0]) {
+        answers.screenName = answers.screenName ?? scanned.routes[0].name;
+      }
       answers.detected = detectHost(answers.scanRoot);
       // The "existing project" flow: when the user didn't pin a library, adopt
       // the framework the app actually uses so the scan renders + emits in the
@@ -681,7 +726,7 @@ export default defineCommand({
     }
     if (answers.initialContent === "scan" && scaffold.screens.length === 0) {
       console.log(
-        pc.dim("  No routes detected — started you with a blank board instead of a scan."),
+        pc.dim("  No routes detected — started you with a blank folder instead of a scan."),
       );
     }
 
@@ -701,6 +746,6 @@ export default defineCommand({
     await printScreenshotReadiness(interactive);
     await promptShellCompletions(interactive);
     await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
-    printNextSteps(folder, wireOutcome);
+    printExitInstructions(folder, wireOutcome);
   },
 });

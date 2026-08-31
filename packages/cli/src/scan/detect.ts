@@ -67,6 +67,28 @@ export function detectHost(appRoot: string): DetectedHost {
   };
 }
 
+/**
+ * Directories apps conventionally keep UI components in, most common first.
+ * Used to answer the wizard's "components subfolder" question from the app
+ * itself instead of asking.
+ */
+const COMPONENT_DIR_CANDIDATES = [
+  "src/components/ui",
+  "components/ui",
+  "app/components/ui",
+  "src/app/components/ui",
+  "src/components",
+  "components",
+];
+
+/**
+ * The app's existing UI-component directory (relative to `appRoot`), or
+ * undefined when none of the conventional locations exist.
+ */
+export function findComponentsDir(appRoot: string): string | undefined {
+  return COMPONENT_DIR_CANDIDATES.find((rel) => existsSync(join(appRoot, rel)));
+}
+
 /** Known UI frameworks velloo has no adapter for → display name, or undefined. */
 function detectUnsupportedUi(deps: Record<string, unknown>): string | undefined {
   const known: Array<[string, string]> = [

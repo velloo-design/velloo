@@ -34,16 +34,18 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push(`| Library | ${plan.summary.name} |`);
   lines.push(`| Components | ${plan.summary.location} |`);
   lines.push(`| App root | ${answers.appRoot} |`);
-  const surfaceLabel =
-    answers.productSurface && answers.productSurface !== "saas"
-      ? ` (${answers.productSurface} slice)`
-      : "";
   const contentLabel =
     answers.initialContent === "sample"
-      ? `Pulse sample${surfaceLabel}`
+      ? "Welcome sample"
       : answers.initialContent === "scan"
         ? "scanned from your app"
-        : "blank";
+        : answers.initialContent === "redesign-screen"
+          ? `redesign screen${answers.screenName ? ` (${answers.screenName})` : ""}`
+          : answers.initialContent === "component"
+            ? `component redesign${answers.componentDescription ? ` (${answers.componentDescription})` : ""}`
+            : answers.initialContent === "custom"
+              ? "custom request"
+              : "blank";
   lines.push(`| Initial content | ${contentLabel} |`);
   lines.push("");
   lines.push("## Layout");

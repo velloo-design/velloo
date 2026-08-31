@@ -147,8 +147,15 @@ export function buildInstructions(
   intro: readonly string[] = [],
   unresolvedComments = 0,
   hostTailwindMajor: 3 | 4 | null = null,
+  bareFolder = false,
 ): string {
   const parts = [...intro, ...INSTRUCTION_PARTS];
+  if (bareFolder) {
+    parts.unshift(
+      "**Bare folder.** This design has no boards yet. Setup order before composing UI: (1) style the theme with `derive_palette_from_color`, `apply_preset`, `set_token`, or `import_theme`; (2) `add_board`; (3) add screens and frames, then design. Work entirely through MCP tools — do not hand-edit JSON.",
+      "",
+    );
+  }
   if (hostTailwindMajor === 3) {
     parts.push(
       "",
@@ -201,6 +208,7 @@ function buildMcpServer(
   // last pull surfaces on the first connection built AFTER the pull lands,
   // not this one.
   const unresolvedComments = countUnresolvedPulledComments(ctx.folder);
+  const bareFolder = ctx.folder.boards.size === 0;
   const mcp = new McpServer(
     { name: "velloo", version: "0.1.0" },
     {
@@ -211,6 +219,7 @@ function buildMcpServer(
         intro,
         unresolvedComments,
         hostTailwindMajor,
+        bareFolder,
       ),
     },
   );

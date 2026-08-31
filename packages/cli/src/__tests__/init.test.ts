@@ -155,7 +155,7 @@ describe("velloo init", () => {
     expect(config.hostApp?.root).toBe("..");
   }, 30_000);
 
-  test("blank initial content produces an empty board and zero screens", async () => {
+  test("blank initial content produces zero boards, zero screens, and a neutral theme", async () => {
     const { exitCode } = await runInit(tmp, ["--initial-content=blank"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -164,7 +164,12 @@ describe("velloo init", () => {
     );
     expect(config.defaultScreen).toBeUndefined();
     expect((await jsonFiles(join(design, "screens"))).length).toBe(0);
-    expect((await jsonFiles(join(design, "boards"))).length).toBe(1);
+    expect((await jsonFiles(join(design, "boards"))).length).toBe(0);
+    // Neutral zinc default — not the welcome-sample indigo.
+    const theme = ThemeSchema.parse(
+      JSON.parse(await readFile(join(design, "theme/default.json"), "utf8")),
+    );
+    expect(JSON.stringify(theme.colors.primary)).not.toContain("5e6ad2");
   }, 30_000);
 
   test("theme preset is reflected in the generated theme", async () => {
@@ -173,28 +178,17 @@ describe("velloo init", () => {
     const theme = ThemeSchema.parse(
       JSON.parse(await readFile(join(designDir(tmp), "theme/default.json"), "utf8")),
     );
-    // Violet derives a distinctly higher-chroma primary than the Pulse indigo default.
+    // Violet derives a distinctly higher-chroma primary than the sample indigo default.
     expect(JSON.stringify(theme.colors.primary)).not.toContain("5e6ad2");
   }, 30_000);
 
-  test("--surface, --vibe, and --stack tailor the sample, theme, and codegen alias", async () => {
-    const { exitCode, stderr } = await runInit(tmp, [
-      "--surface=marketing",
-      "--vibe=cozy",
-      "--stack=remix",
-    ]);
+  test("--stack sets the codegen alias; the sample always ships whole", async () => {
+    const { exitCode, stderr } = await runInit(tmp, ["--theme-preset=rose", "--stack=remix"]);
     if (exitCode !== 0) throw new Error(stderr);
     const design = designDir(tmp);
 
-    // Marketing slice: the Marketing board's screens + the showcase, no App board.
-    const screenFiles = await jsonFiles(join(design, "screens"));
-    expect(screenFiles.sort()).toEqual([
-      "landing.json",
-      "pricing.json",
-      "showcase.json",
-      "signup.json",
-    ]);
     expect((await jsonFiles(join(design, "boards"))).sort()).toEqual([
+      "app.json",
       "marketing.json",
       "playground.json",
     ]);
@@ -205,7 +199,7 @@ describe("velloo init", () => {
     );
     expect(config.codegen?.componentsAlias).toBe("~/components/ui");
 
-    // The cozy vibe derives its own primary (not the Pulse indigo default).
+    // Rose preset derives its own primary (not the sample indigo default).
     const theme = ThemeSchema.parse(
       JSON.parse(await readFile(join(design, "theme/default.json"), "utf8")),
     );
@@ -342,7 +336,7 @@ describe("velloo init", () => {
     expect(readme.toLowerCase()).toContain("no-library");
   }, 30_000);
 
-  test("--library=shadcn-upstream works offline with a blank board", async () => {
+  test("--library=shadcn-upstream works offline with a blank folder", async () => {
     const { exitCode } = await runInit(tmp, [
       "--library=shadcn-upstream",
       "--initial-content=blank",
@@ -412,7 +406,7 @@ describe("velloo init", () => {
     expect(screenFiles).toContain("settings-profile.json");
   }, 30_000);
 
-  test("--start=scan degrades to a blank board when no routes are detectable", async () => {
+  test("--start=scan degrades to a true blank when no routes are detectable", async () => {
     const app = join(tmp, "empty-app");
     await mkdir(app, { recursive: true });
     await writeFile(
@@ -424,7 +418,7 @@ describe("velloo init", () => {
     expect(exitCode).toBe(0);
     expect(stdout.toLowerCase()).toContain("no routes detected");
     expect((await jsonFiles(join(designDir(app), "screens"))).length).toBe(0);
-    expect((await jsonFiles(join(designDir(app), "boards"))).length).toBe(1);
+    expect((await jsonFiles(join(designDir(app), "boards"))).length).toBe(0);
   }, 30_000);
 
   test("--start=scan imports the host theme from globals.css", async () => {
@@ -449,5 +443,35 @@ describe("velloo init", () => {
     );
     expect(JSON.stringify(theme.colors.primary)).toContain("oklch(0.6 0.2 25)");
     expect(theme.radius.md).toBe("0.75rem");
+  }, 30_000);
+
+  test("--start=redesign-screen scaffolds one named screen with desktop+mobile frames", async () => {
+    const { exitCode, stdout } = await runInit(tmp, [
+      "--start=redesign-screen",
+      "--screen-name=Pricing",
+      "--no-connect",
+    ]);
+    expect(exitCode).toBe(0);
+    const design = designDir(tmp);
+    expect(await jsonFiles(join(design, "screens"))).toEqual(["pricing.json"]);
+    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+    const board = BoardSchema.parse(
+      JSON.parse(await readFile(join(design, "boards/main.json"), "utf8")),
+    );
+    expect(board.frames).toHaveLength(2);
+    expect(board.frames.every((f) => f.screen === "pricing")).toBe(true);
+    expect(stdout.toLowerCase()).toContain("explore alternatives");
+  }, 30_000);
+
+  test("--start=custom scaffolds an empty Main board and embeds the request", async () => {
+    const { exitCode, stdout } = await runInit(tmp, [
+      "--start=custom",
+      "--request=a settings page with dark mode",
+      "--no-connect",
+    ]);
+    expect(exitCode).toBe(0);
+    expect((await jsonFiles(join(designDir(tmp), "boards"))).length).toBe(1);
+    expect((await jsonFiles(join(designDir(tmp), "screens"))).length).toBe(0);
+    expect(stdout).toContain("a settings page with dark mode");
   }, 30_000);
 });

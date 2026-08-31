@@ -171,4 +171,11 @@ describe("buildInstructions tiering hint", () => {
       expect(tiered).toContain(name);
     }
   });
+
+  test("includes bare-folder setup guidance when requested", () => {
+    expect(buildInstructions(false)).not.toContain("Bare folder");
+    const bare = buildInstructions(false, undefined, false, [], 0, null, true);
+    expect(bare).toContain("Bare folder");
+    expect(bare).toContain("add_board");
+  });
 });

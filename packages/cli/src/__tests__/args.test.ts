@@ -63,27 +63,31 @@ describe("answersFromArgs", () => {
     expect(answersFromArgs({ start: "scan", library: "none" }).source).toBe("binary");
   });
 
+  test("--start=redesign-screen and --screen-name", () => {
+    const a = answersFromArgs({ start: "redesign-screen", screenName: "Pricing" });
+    expect(a.initialContent).toBe("redesign-screen");
+    expect(a.screenName).toBe("Pricing");
+  });
+
+  test("--start=redesign-component requires --component", () => {
+    expect(() => answersFromArgs({ start: "redesign-component" })).toThrow(
+      /--component is required/,
+    );
+    const a = answersFromArgs({ start: "redesign-component", component: "sidebar" });
+    expect(a.initialContent).toBe("component");
+    expect(a.componentDescription).toBe("sidebar");
+  });
+
+  test("--start=custom requires --request", () => {
+    expect(() => answersFromArgs({ start: "custom" })).toThrow(/--request is required/);
+    const a = answersFromArgs({ start: "custom", request: "a pricing page" });
+    expect(a.initialContent).toBe("custom");
+    expect(a.customRequest).toBe("a pricing page");
+  });
+
   test("blank theme preset is treated as unset", () => {
     const a = answersFromArgs({ themePreset: "   " });
     expect(a.themePreset).toBeUndefined();
-  });
-
-  test("--surface picks a Pulse slice; only valid for the shadcn sample", () => {
-    expect(answersFromArgs({ surface: "analytics" }).productSurface).toBe("analytics");
-    expect(answersFromArgs({}).productSurface).toBeUndefined();
-    expect(() => answersFromArgs({ surface: "ecommerce" })).toThrow(/unknown --surface/);
-    expect(() => answersFromArgs({ surface: "saas", library: "none" })).toThrow(
-      /--surface only applies/,
-    );
-    expect(() => answersFromArgs({ surface: "saas", initialContent: "blank" })).toThrow(
-      /--surface only applies/,
-    );
-  });
-
-  test("--vibe themes by feel and excludes --theme-preset", () => {
-    expect(answersFromArgs({ vibe: "playful" }).themeVibe).toBe("playful");
-    expect(() => answersFromArgs({ vibe: "corporate-synergy" })).toThrow(/unknown --vibe/);
-    expect(() => answersFromArgs({ vibe: "playful", themePreset: "violet" })).toThrow(/not both/);
   });
 
   test("--stack records the app stack for the codegen alias", () => {

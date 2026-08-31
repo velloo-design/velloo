@@ -5,7 +5,6 @@
  */
 
 import type { AgentWiring } from "../connect/index.ts";
-import type { ProductSurface } from "../scaffold/sample-page.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
 export type LibraryId = "shadcn-upstream" | "none" | "mui" | "antd" | "chakra";
@@ -22,7 +21,23 @@ export type LibraryId = "shadcn-upstream" | "none" | "mui" | "antd" | "chakra";
  */
 export type LibrarySource = "binary" | "in-repo" | "cache";
 
-export type InitialContent = "sample" | "blank" | "scan";
+/**
+ * What init scaffolds into the design folder.
+ *
+ * Goal modes (interactive start menu): `redesign-screen`, `component`,
+ * `custom`, `sample`, `blank`.
+ * `scan` remains for non-interactive `--start=scan` (legacy multi-route).
+ */
+export type InitialContent =
+  | "sample"
+  | "blank"
+  | "scan"
+  | "redesign-screen"
+  | "component"
+  | "custom";
+
+/** Interactive start-menu goals (no full-scan). */
+export type GoalMode = "redesign-screen" | "redesign-component" | "custom" | "sample" | "blank";
 
 /** What `scan` detected about the host app — surfaced to the user and the agent handoff. */
 export interface DetectedHost {
@@ -78,18 +93,16 @@ export interface WizardAnswers {
   componentsRelative: string;
   initialContent: InitialContent;
   /**
-   * What the user is designing — tailors which slice of the Pulse sample
-   * ships (see `ProductSurface`). Only meaningful for a shadcn `sample`
-   * scaffold; undefined ⇒ the full sample (the historical default).
+   * Typed screen name for `redesign-screen` when the user didn't pick a
+   * scanned route (or to override the display name).
    */
-  productSurface?: ProductSurface;
-  /** Built-in theme preset id. Undefined → the default Pulse theme. */
+  screenName?: string;
+  /** Free-text target for `component` redesign. */
+  componentDescription?: string;
+  /** Free-text job for `custom` mode. */
+  customRequest?: string;
+  /** Built-in theme preset id. Undefined → the default sample theme. */
   themePreset?: string;
-  /**
-   * Vibe id (see `scaffold/vibes.ts`) — the "pick by feel" alternative to a
-   * preset. Mutually exclusive with `themePreset`; wins when set.
-   */
-  themeVibe?: string;
   /**
    * The host app's stack (see `wizard/stacks.ts`). Sets
    * `codegen.componentsAlias` in the folder config so `emit_code` mentions
@@ -97,20 +110,16 @@ export interface WizardAnswers {
    * `@/components/ui` default.
    */
   stack?: string;
-  /** Host detection result (populated when `initialContent === "scan"`). */
+  /** Host detection result (populated for scan / redesign-screen from routes). */
   detected?: DetectedHost;
   /**
-   * Scanned routes the user chose to scaffold into screens + board frames
-   * (scan flow). The interactive wizard populates this from the screen
-   * picker. When undefined (non-interactive scan), `buildScaffold` scans
-   * and uses every detected route.
+   * Routes chosen for redesign-screen or legacy scan. Interactive redesign
+   * keeps at most one; non-interactive `--start=scan` may keep every route.
    */
   selectedRoutes?: ScannedRoute[];
   /**
-   * Scan flow: the handoff prompt tells the agent to choose the
-   * highest-impact screen itself and design it first. True on the wizard's
-   * default "all screens" path and on non-interactive scans; false when the
-   * user hand-picked screens.
+   * Legacy scan: handoff tells the agent to choose the highest-impact
+   * screen first. Unused for single-screen redesign.
    */
   agentPicksFirst?: boolean;
   /**

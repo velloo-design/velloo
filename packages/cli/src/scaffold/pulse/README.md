@@ -1,11 +1,12 @@
-# pulse — sample design shipped by `velloo init`
+# Welcome sample — design shipped by `velloo init`
 
 This folder is the canonical source for the sample design `velloo init` writes
-into a fresh folder. It's a fictional team-analytics product called "Pulse",
-chosen because it shows off the canvas at its best:
+into a fresh folder. It demonstrates the canvas with a small product-shaped
+scaffold:
 
-- **Two boards**: `marketing` (landing, pricing, signup) and `app`
-  (dashboard, insights, settings). Six screens total.
+- **Three boards**: `marketing` (landing, pricing, signup), `app`
+  (dashboard, insights, settings), and `playground` (component showcase).
+  Seven screens total.
 - **Multi-frame landing**: the landing screen renders in two frames — desktop
   (1440×) and mobile (390×) — to demonstrate that frames sharing a screen
   always sync.
@@ -43,4 +44,4 @@ own MCP edits flow directly into the scaffold.
 
 The TypeScript files in the parent directory (`sample-page.ts`,
 `sample-snippets.ts`, `default-theme.ts`) just import + return these JSON
-files; they're thin shims over the data.
+files.

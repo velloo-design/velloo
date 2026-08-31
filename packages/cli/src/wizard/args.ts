@@ -1,7 +1,5 @@
 import { resolve } from "node:path";
-import { PRODUCT_SURFACES, type ProductSurface } from "../scaffold/sample-page.ts";
 import { isValidPreset } from "../scaffold/theme-presets.ts";
-import { isValidVibe } from "../scaffold/vibes.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 import { DEFAULT_LIBRARY_ID, LIBRARY_IDS, WIZARD_PROVIDERS } from "./provider-registry.ts";
 import { isValidStack } from "./stacks.ts";
@@ -21,34 +19,56 @@ export interface InitCliArgs {
   nonInteractive?: boolean;
   /** Wire MCP config + guidance for Claude Code + Cursor (default true). */
   connect?: boolean;
-  /** `scratch` | `scan`. */
+  /**
+   * Start goal: redesign-screen | redesign-component | custom |
+   * sample | blank | scratch (→ sample) | scan (legacy multi-route).
+   */
   start?: string;
   /** Subfolder (relative to the app root) to scan when the UI isn't at the root. */
   scanDir?: string;
   library?: string;
   componentsDir?: string;
   initialContent?: string;
-  /** Pulse slice for a shadcn sample: saas | analytics | marketing. */
-  surface?: string;
   themePreset?: string;
-  /** Vibe id (theme by feel) — mutually exclusive with --theme-preset. */
-  vibe?: string;
   /** App stack: nextjs | vite | astro | remix — sets codegen.componentsAlias. */
   stack?: string;
   /** Project name for the repo's velloo.json (default: derived from the folder path). */
   project?: string;
+  /** Screen name for redesign-screen (typed; optional if routes are scanned). */
+  screenName?: string;
+  /** Component name/description for redesign-component. */
+  component?: string;
+  /** Free-text custom design request. */
+  request?: string;
 }
+
+const START_TO_CONTENT: Record<string, InitialContent> = {
+  "redesign-screen": "redesign-screen",
+  "redesign-component": "component",
+  custom: "custom",
+  sample: "sample",
+  blank: "blank",
+  scratch: "sample",
+  scan: "scan",
+};
 
 export function isValidLibraryId(v: string): v is LibraryId {
   return (LIBRARY_IDS as string[]).includes(v);
 }
 
 export function isValidContent(v: string): v is InitialContent {
-  return v === "sample" || v === "blank" || v === "scan";
+  return (
+    v === "sample" ||
+    v === "blank" ||
+    v === "scan" ||
+    v === "redesign-screen" ||
+    v === "component" ||
+    v === "custom"
+  );
 }
 
-export function isValidStart(v: string): v is "scratch" | "scan" {
-  return v === "scratch" || v === "scan";
+export function isValidStart(v: string): boolean {
+  return v in START_TO_CONTENT;
 }
 
 /**
@@ -72,23 +92,18 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     );
   }
   if (args.start && !isValidStart(args.start)) {
-    throw new Error(`unknown --start ${JSON.stringify(args.start)}. Valid: scratch | scan.`);
+    throw new Error(
+      `unknown --start ${JSON.stringify(args.start)}. Valid: redesign-screen | redesign-component | custom | sample | blank | scan.`,
+    );
   }
   if (args.initialContent && !isValidContent(args.initialContent)) {
     throw new Error(
-      `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan.`,
+      `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan | redesign-screen | component | custom.`,
     );
   }
   const themePreset = args.themePreset?.trim() || undefined;
   if (themePreset && !isValidPreset(themePreset)) {
     throw new Error(`unknown --theme-preset ${JSON.stringify(args.themePreset)}.`);
-  }
-  const themeVibe = args.vibe?.trim() || undefined;
-  if (themeVibe && !isValidVibe(themeVibe)) {
-    throw new Error(`unknown --vibe ${JSON.stringify(args.vibe)}.`);
-  }
-  if (themePreset && themeVibe) {
-    throw new Error("pass one of --theme-preset or --vibe, not both.");
   }
   const stack = args.stack?.trim() || undefined;
   if (stack && !isValidStack(stack)) {
@@ -101,27 +116,25 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
   const folder = resolve(appRoot, args.designFolder ?? "velloo");
   const library: LibraryId = (args.library as LibraryId | undefined) ?? DEFAULT_LIBRARY_ID;
 
-  const scan = args.start === "scan" || args.initialContent === "scan";
-  const initialContent: InitialContent = scan
-    ? "scan"
-    : ((args.initialContent as InitialContent | undefined) ?? "sample");
+  let initialContent: InitialContent =
+    (args.initialContent as InitialContent | undefined) ?? "sample";
+  if (args.start) {
+    initialContent = START_TO_CONTENT[args.start] ?? initialContent;
+  }
 
-  const surface = args.surface?.trim() || undefined;
-  if (surface && !PRODUCT_SURFACES.includes(surface as ProductSurface)) {
-    throw new Error(
-      `unknown --surface ${JSON.stringify(args.surface)}. Valid: saas | analytics | marketing.`,
-    );
+  const screenName = args.screenName?.trim() || undefined;
+  const componentDescription = args.component?.trim() || undefined;
+  const customRequest = args.request?.trim() || undefined;
+
+  if (initialContent === "component" && !componentDescription) {
+    throw new Error("--component is required for --start=redesign-component.");
   }
-  // The surface picks a slice of the shadcn Pulse sample — meaningless (so
-  // loudly rejected) for libraries without product surfaces or non-sample
-  // content.
-  if (surface && !WIZARD_PROVIDERS[library].hasProductSurfaces) {
-    throw new Error(`--surface only applies to the shadcn sample, not --library=${library}.`);
+  if (initialContent === "custom" && !customRequest) {
+    throw new Error("--request is required for --start=custom.");
   }
-  if (surface && initialContent !== "sample") {
-    throw new Error(
-      `--surface only applies to the sample (got --initial-content=${initialContent}).`,
-    );
+  if (initialContent === "redesign-screen" && !screenName && args.start === "redesign-screen") {
+    // Allow omitting screen name when a scan will fill selectedRoutes in init.ts;
+    // require it only when we can't scan (caller can still pass --screen-name).
   }
 
   // Upstream components live in the app (written post-init); everything else
@@ -138,9 +151,10 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     source,
     componentsRelative: args.componentsDir ?? "src/components/ui",
     initialContent,
-    ...(surface ? { productSurface: surface as ProductSurface } : {}),
     themePreset,
-    ...(themeVibe ? { themeVibe } : {}),
     ...(stack ? { stack } : {}),
+    ...(screenName ? { screenName } : {}),
+    ...(componentDescription ? { componentDescription } : {}),
+    ...(customRequest ? { customRequest } : {}),
   };
 }

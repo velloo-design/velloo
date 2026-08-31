@@ -4,7 +4,7 @@
  * no-library primitive set in a couple of common compositions. Designed
  * to be a one-glance answer to "what does this provider give me?"
  *
- * Pulse itself isn't ported to no-lib — its rich shadcn primitives
+ * The full welcome sample isn't ported to no-lib — its rich shadcn primitives
  * (Avatar, Tabs, Accordion, Calendar, Chart, …) have no equivalent
  * here. The user can ask the agent to expand on these starter screens
  * once they're on the canvas.

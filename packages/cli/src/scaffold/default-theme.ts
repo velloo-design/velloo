@@ -1,5 +1,5 @@
 /**
- * Default theme for the Pulse sample design. Indigo accent (#5e6ad2) with a
+ * Default theme for the welcome sample. Indigo accent (#5e6ad2) with a
  * cohesive dark mode. Lives as JSON under ./pulse/theme/default.json so it
  * can be iterated in the canvas's theme panel and re-copied here.
  */

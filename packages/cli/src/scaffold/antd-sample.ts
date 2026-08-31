@@ -4,7 +4,7 @@
  * component set + inline `style` objects in a couple of common compositions — a
  * one-glance answer to "what does the antd adapter give me?"
  *
- * Pulse isn't ported to antd (its shadcn-specific composition would need a full
+ * The welcome sample isn't ported to antd (its shadcn-specific composition would need a full
  * redesign); the user asks the agent to expand these starter screens once
  * they're on the canvas.
  */

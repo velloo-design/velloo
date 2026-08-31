@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Board, Screen } from "@velloo/schema";
-import type { WizardAnswers } from "../answers.ts";
-import { buildHandoffPrompt, expandHandoffPrompt, SCREENS_PLACEHOLDER } from "../handoff.ts";
+import type { InitialContent, WizardAnswers } from "../answers.ts";
+import {
+  buildHandoffPrompt,
+  expandHandoffPrompt,
+  SCREENS_PLACEHOLDER,
+  wantsHandoff,
+} from "../handoff.ts";
 
 const BASE: WizardAnswers = {
   appRoot: "/home/me/proj",
@@ -94,6 +99,71 @@ describe("buildHandoffPrompt", () => {
     const flat = buildHandoffPrompt(BASE, [screen("a", "A")], [board([])]);
     expect(grouped).toContain("pre-grouped");
     expect(flat).not.toContain("pre-grouped");
+  });
+  test("redesign-screen handoff asks to recreate then explore alternatives", () => {
+    const prompt = buildHandoffPrompt(
+      { ...BASE, initialContent: "redesign-screen", screenName: "Pricing" },
+      [screen("pricing", "Pricing")],
+      [board([])],
+    );
+    expect(prompt).toContain("Pricing");
+    expect(prompt).toContain("Recreate");
+    expect(prompt.toLowerCase()).toContain("explore alternatives");
+  });
+
+  test("component handoff embeds the description", () => {
+    const prompt = buildHandoffPrompt(
+      {
+        ...BASE,
+        initialContent: "component",
+        componentDescription: "sidebar nav",
+      },
+      [],
+      [board([])],
+    );
+    expect(prompt).toContain("sidebar nav");
+    expect(prompt.toLowerCase()).toContain("explore alternatives");
+  });
+
+  test("custom handoff embeds the request", () => {
+    const prompt = buildHandoffPrompt(
+      {
+        ...BASE,
+        initialContent: "custom",
+        customRequest: "a playful onboarding flow",
+      },
+      [],
+      [board([])],
+    );
+    expect(prompt).toContain("a playful onboarding flow");
+  });
+
+  test("every start that reads the host app opens by calibrating to it", () => {
+    const modes: InitialContent[] = ["scan", "redesign-screen", "component", "custom"];
+    for (const initialContent of modes) {
+      expect(wantsHandoff({ ...BASE, initialContent })).toBe(true);
+      const prompt = buildHandoffPrompt(
+        { ...BASE, initialContent },
+        [screen("a", "A")],
+        [board([])],
+      );
+      expect(prompt).toContain("velloo-setup");
+    }
+  });
+
+  test("calibration comes before the design work, not after", () => {
+    const prompt = buildHandoffPrompt(
+      { ...BASE, initialContent: "redesign-screen", screenName: "Pricing" },
+      [screen("pricing", "Pricing")],
+      [board([])],
+    );
+    expect(prompt.indexOf("velloo-setup")).toBeLessThan(prompt.indexOf("**Recreate**"));
+  });
+
+  test("the self-contained starts get no handoff at all", () => {
+    for (const initialContent of ["sample", "blank"] as InitialContent[]) {
+      expect(wantsHandoff({ ...BASE, initialContent })).toBe(false);
+    }
   });
 });
 

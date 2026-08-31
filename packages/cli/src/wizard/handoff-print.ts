@@ -7,7 +7,12 @@ import pc from "picocolors";
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { openUrl } from "../open-url.ts";
 import type { WizardAnswers } from "./answers.ts";
-import { buildHandoffPrompt, expandHandoffPrompt, SCREENS_PLACEHOLDER } from "./handoff.ts";
+import {
+  buildHandoffPrompt,
+  expandHandoffPrompt,
+  SCREENS_PLACEHOLDER,
+  wantsHandoff,
+} from "./handoff.ts";
 
 /**
  * The user's terminal editor: `$VISUAL` / `$EDITOR` (honoring args like
@@ -138,12 +143,12 @@ export async function printAgentHandoff(
   interactive: boolean,
   wiredIds: string[],
 ): Promise<void> {
-  if (answers.initialContent !== "scan") return;
+  if (!wantsHandoff(answers)) return;
 
   const { screens } = scaffold;
   const prompt = buildHandoffPrompt(answers, screens, scaffold.boards);
   console.log(pc.bold("  Finish setup with your agent"));
-  console.log(pc.dim("    Paste this to your AI agent to recreate your app as a Velloo design:"));
+  console.log(pc.dim("    Paste this to your AI agent:"));
   console.log("");
   for (const line of prompt.split("\n")) console.log(pc.cyan(`    ${line}`));
   if (prompt.includes(SCREENS_PLACEHOLDER)) {

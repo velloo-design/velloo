@@ -1,6 +1,6 @@
 /**
- * Sample snippets shipped by `velloo init`. The Pulse sample design uses
- * three: stat-card (dashboard tiles), feature-row (landing features), and
+ * Sample snippets shipped by `velloo init`. The welcome sample uses three:
+ * stat-card (dashboard tiles), feature-row (landing features), and
  * sidebar-nav-row (every app screen's sidebar). Definitions live as JSON
  * under ./pulse/snippets/ so they can be iterated on in the canvas and
  * re-copied here.
