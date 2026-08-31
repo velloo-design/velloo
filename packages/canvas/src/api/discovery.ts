@@ -79,11 +79,13 @@ export function fetchSnippet(id: string): Promise<Snippet> {
 }
 
 export async function fetchAnnotations(screenId: string): Promise<AnnotationEntry[]> {
-  const body = await getJson<{ annotations: AnnotationEntry[] }>(
+  const body = await getJson<{ annotations: Omit<AnnotationEntry, "screenId">[] }>(
     `/api/annotations/${encodeURIComponent(screenId)}`,
     `fetchAnnotations(${screenId})`,
   );
-  return body.annotations;
+  // Server stores annotations per-screen sidecar; stamp screenId for the
+  // board-scoped canvas layer that may show several screens at once.
+  return body.annotations.map((a) => ({ ...a, screenId }));
 }
 
 export async function fetchNotes(boardId: string): Promise<CanvasNoteEntry[]> {

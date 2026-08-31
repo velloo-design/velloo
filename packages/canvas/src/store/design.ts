@@ -316,6 +316,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     } else if (!current || !screenIdsOnBoard.has(current)) {
       const firstScreen = board.frames[0]?.screen;
       if (firstScreen) await get().selectScreen(firstScreen);
+    } else {
+      // Same screen, new board — reload annotations for this board's frames.
+      await get().refreshAnnotations();
     }
     await get().refreshNotes();
   },
@@ -329,7 +332,6 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     }
     set({
       currentScreenId: screenId,
-      annotations: [],
       editingMarkupId: null,
     });
     await get().refreshAnnotations();
@@ -343,7 +345,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
         screenVersion: s.screenVersion + 1,
         screenVersions: { ...s.screenVersions, [screenId]: (s.screenVersions[screenId] ?? 0) + 1 },
       }));
-      if (screenId === get().currentScreenId) await get().refreshAnnotations();
+      const boardId = get().currentBoardId;
+      const board = boardId ? get().boards[boardId] : null;
+      if (board?.frames.some((f) => f.screen === screenId)) await get().refreshAnnotations();
     } catch {
       await get().loadDesign();
     }

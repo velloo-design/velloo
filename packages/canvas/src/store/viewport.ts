@@ -115,11 +115,9 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
   },
 
   setCursorMode(cursorMode) {
-    if (cursorMode === "annotate") {
-      set({ cursorMode, hover: null, selection: null, nodeState: "default" });
-    } else {
-      set({ cursorMode, hover: null });
-    }
+    // Preserve selection when entering annotate so a selected node can be
+    // annotated immediately (App.tsx subscribe) without re-picking.
+    set({ cursorMode, hover: null });
   },
 
   setPan(pan) {

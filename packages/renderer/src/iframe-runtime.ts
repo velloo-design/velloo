@@ -187,10 +187,9 @@ export const IFRAME_RUNTIME = String.raw`
 
   document.addEventListener('click', (ev) => {
     const path = findPath(ev.target);
-    if (path !== null) {
-      ev.preventDefault();
-      send({ type: 'select', path: path });
-    }
+    ev.preventDefault();
+    // null path = empty space inside the frame → parent clears selection.
+    send({ type: 'select', path: path });
   }, true);
 
   // Hover reports coalesce to one message per animation frame — sweeping the

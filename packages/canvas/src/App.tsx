@@ -1,6 +1,6 @@
 import { Plus, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { annotations as annotationsApi, mutate, redo as redoApi, undo as undoApi } from "./api.ts";
+import { mutate, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
@@ -98,7 +98,7 @@ export function App() {
       } else if (!cmd && !inEditable && (e.key === "t" || e.key === "T")) {
         state.setCursorMode("note");
       } else if (!cmd && !inEditable && (e.key === "y" || e.key === "Y")) {
-        state.setCursorMode("annotate");
+        state.enterAnnotateMode();
       } else if (e.key === " " && !inEditable && !spaceHeldRef.current) {
         e.preventDefault();
         spaceHeldRef.current = state.cursorMode;
@@ -129,26 +129,39 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    return useCanvas.subscribe((state) => {
+    // Pick-a-node annotate mode: the next selection creates an annotation.
+    // Select-then-Y goes through enterAnnotateMode (never arms this mode).
+    return useCanvas.subscribe((state, prev) => {
       if (state.cursorMode !== "annotate") return;
       const sel = state.selection;
       if (!sel) return;
-      state.setCursorMode("select");
-      state.setSelection(sel);
-      const locator = sel.path === "" ? [] : sel.path.split(".").map(Number);
-      void (async () => {
-        try {
-          const r = await annotationsApi.add({
-            screenId: sel.screenId,
-            target: { locator },
-            body: "",
-          });
-          state.setEditingMarkupId(r.annotation.id);
-        } catch (err) {
-          toastError(err, "Could not add annotation");
-        }
-      })();
+      const selChanged =
+        !prev.selection ||
+        prev.selection.screenId !== sel.screenId ||
+        prev.selection.path !== sel.path;
+      if (!selChanged) return;
+      void state.createAnnotationOnSelection(sel);
     });
+  }, []);
+
+  // Body mode classes drive workspace-wide cursors (and hand/note iframe
+  // pointer-events) via styles.css — including over chrome outside frames.
+  useEffect(() => {
+    const modes = ["hand", "note", "annotate"] as const;
+    const sync = (mode: string) => {
+      for (const m of modes) {
+        document.body.classList.toggle(`velloo-${m}`, mode === m);
+      }
+    };
+    sync(useCanvas.getState().cursorMode);
+    const unsub = useCanvas.subscribe((state, prev) => {
+      if (state.cursorMode === prev.cursorMode) return;
+      sync(state.cursorMode);
+    });
+    return () => {
+      unsub();
+      for (const m of modes) document.body.classList.remove(`velloo-${m}`);
+    };
   }, []);
 
   if (!design) {

@@ -31,10 +31,13 @@ function Note({ note }: { note: CanvasNoteEntry }) {
   const boardId = useCanvas((s) => s.currentBoardId);
   const isEditing = editingId === note.id;
   const [draft, setDraft] = useState(note.body);
+  const exitingRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dragRef = useRef<{ ox: number; oy: number; sx: number; sy: number } | null>(null);
 
   useEffect(() => {
     setDraft(note.body);
+    exitingRef.current = false;
   }, [note.body]);
 
   const commit = async (patch: Parameters<typeof notesApi.update>[0]["patch"]) => {
@@ -83,11 +86,6 @@ function Note({ note }: { note: CanvasNoteEntry }) {
     await commit({ x: d.ox + dx, y: d.oy + dy });
   };
 
-  const saveAndExit = async () => {
-    setEditingId(null);
-    if (draft !== note.body) await commit({ body: draft });
-  };
-
   const onRemove = async () => {
     if (!boardId) return;
     try {
@@ -95,6 +93,33 @@ function Note({ note }: { note: CanvasNoteEntry }) {
     } catch (err) {
       toastError(err, "Could not remove note");
     }
+  };
+
+  const saveAndExit = async () => {
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    setEditingId(null);
+    if (!draft.trim()) {
+      await onRemove();
+      return;
+    }
+    if (draft !== note.body) await commit({ body: draft });
+  };
+
+  const cancelAndExit = () => {
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    setDraft(note.body);
+    setEditingId(null);
+    if (!note.body.trim()) void onRemove();
+  };
+
+  /** Defer blur commit so React Strict Mode remount autofocus doesn't delete empties. */
+  const onBlurSave = () => {
+    requestAnimationFrame(() => {
+      if (textareaRef.current && document.activeElement === textareaRef.current) return;
+      void saveAndExit();
+    });
   };
 
   return (
@@ -111,6 +136,7 @@ function Note({ note }: { note: CanvasNoteEntry }) {
       onPointerCancel={onPointerUp}
       onDoubleClick={(e) => {
         e.stopPropagation();
+        exitingRef.current = false;
         setEditingId(note.id);
       }}
       onKeyDown={(e) => {
@@ -119,6 +145,7 @@ function Note({ note }: { note: CanvasNoteEntry }) {
           e.preventDefault();
           void onRemove();
         } else if (e.key === "Enter") {
+          exitingRef.current = false;
           setEditingId(note.id);
         }
       }}
@@ -132,17 +159,19 @@ function Note({ note }: { note: CanvasNoteEntry }) {
           className="w-full min-h-[3rem] bg-transparent text-sm leading-snug outline-none resize-none font-mono"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={saveAndExit}
+          onBlur={onBlurSave}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
-              setDraft(note.body);
-              setEditingId(null);
-            } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              cancelAndExit();
+            } else if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               void saveAndExit();
             }
           }}
           ref={(el) => {
+            textareaRef.current = el;
             if (!el) return;
             el.style.height = "auto";
             el.style.height = `${el.scrollHeight}px`;

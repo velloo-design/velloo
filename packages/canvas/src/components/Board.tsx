@@ -190,6 +190,12 @@ export function Board({ board }: BoardProps) {
       // Return to select mode after dropping the note so the next click
       // doesn't spawn another.
       useCanvas.getState().setCursorMode("select");
+      return;
+    }
+    // Select / annotate: clicking the board chrome (not a frame/note/card)
+    // clears the current node selection.
+    if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.vellooBoardWorld) {
+      useCanvas.getState().setSelection(null);
     }
   };
 
@@ -261,7 +267,9 @@ export function Board({ board }: BoardProps) {
               : "grab"
             : cursorMode === "note"
               ? "crosshair"
-              : "default",
+              : cursorMode === "annotate"
+                ? "cell"
+                : "default",
       }}
     >
       <BoardWorld boardId={board.id} restoredRef={restoredRef} w={bounds.w} h={bounds.h}>
@@ -316,6 +324,7 @@ function BoardWorld({
 
   return (
     <div
+      data-velloo-board-world="true"
       className="relative origin-top-left"
       style={
         {

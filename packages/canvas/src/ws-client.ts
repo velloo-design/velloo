@@ -116,7 +116,11 @@ export function connectWs(): () => void {
           })();
         }
       } else if (payload.type === "annotations-changed") {
-        if (payload.screenId === currentScreenId) void refreshAnnotations();
+        // Board-scoped annotations: refresh when any frame on the current
+        // board hosts the changed screen (not only currentScreenId).
+        const board = currentBoardId ? boards[currentBoardId] : null;
+        if (board?.frames.some((f) => f.screen === payload.screenId)) void refreshAnnotations();
+        else if (!board && payload.screenId === currentScreenId) void refreshAnnotations();
       } else if (payload.type === "notes-changed") {
         if (payload.boardId === currentBoardId) void refreshNotes();
       } else if (payload.type === "config-changed") {

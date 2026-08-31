@@ -231,7 +231,7 @@ export const Frame = memo(function Frame({
           channel.send({ type: "applyVelloState", path: s.selection.path, state: s.nodeState });
         }
         const annotated = s.annotations
-          .filter((a) => a.resolved !== null)
+          .filter((a) => a.screenId === frame.screen && a.resolved !== null)
           .map((a) => (a.resolved ?? []).join("."));
         if (annotated.length > 0) {
           channel.send({ type: "requestRects", paths: annotated });
@@ -308,6 +308,29 @@ export const Frame = memo(function Frame({
     }
   }, [selection, frame.screen]);
 
+  // Annotate mode needs a pick-target cursor *inside* the iframe — parent CSS
+  // can't style cross-document content, so inject a style tag into the doc.
+  useEffect(() => {
+    const apply = (iframe: HTMLIFrameElement | null) => {
+      const doc = iframe?.contentDocument;
+      if (!doc?.head) return;
+      const id = "__velloo-annotate-cursor";
+      let el = doc.getElementById(id);
+      if (cursorMode === "annotate") {
+        if (!el) {
+          el = doc.createElement("style");
+          el.id = id;
+          doc.head.appendChild(el);
+        }
+        el.textContent = "*, *::before, *::after { cursor: cell !important; }";
+      } else if (el) {
+        el.remove();
+      }
+    };
+    apply(slotARef.current);
+    apply(slotBRef.current);
+  }, [cursorMode, front, screenRev, hasScreen]);
+
   // Search jumps: scroll the revealed node into view inside the iframe (the
   // regular highlight effect above never scrolls — click selection is
   // already visible). Keyed on the reveal nonce so re-jumping to the same
@@ -353,13 +376,13 @@ export const Frame = memo(function Frame({
     const channel = channelRef.current;
     if (!channel || !rectProbe || rectProbe.frameId !== frame.id) return;
     const annotatedPaths = annotations
-      .filter((a) => a.resolved !== null)
+      .filter((a) => a.screenId === frame.screen && a.resolved !== null)
       .map((a) => (a.resolved ?? []).join("."));
     channel.send({
       type: "requestRects",
       paths: [...new Set([rectProbe.path, ...annotatedPaths])],
     });
-  }, [rectProbe, frame.id, annotations]);
+  }, [rectProbe, frame.id, frame.screen, annotations]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -392,14 +415,14 @@ export const Frame = memo(function Frame({
     const channel = channelRef.current;
     if (!channel) return;
     const annotatedPaths = annotations
-      .filter((a) => a.resolved !== null)
+      .filter((a) => a.screenId === frame.screen && a.resolved !== null)
       .map((a) => (a.resolved ?? []).join("."));
     if (annotatedPaths.length === 0) {
       clearNodeRects(frame.id);
       return;
     }
     channel.send({ type: "requestRects", paths: annotatedPaths });
-  }, [annotations, frame.id, screenVersion, clearNodeRects]);
+  }, [annotations, frame.id, frame.screen, screenVersion, clearNodeRects]);
 
   const onPickPreset = (preset: ViewportPreset) => {
     if (preset.w === frame.w && preset.h === frame.h) return;

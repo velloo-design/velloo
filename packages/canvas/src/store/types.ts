@@ -15,6 +15,8 @@ export interface LibraryItemRef {
 
 export interface AnnotationEntry {
   id: string;
+  /** Screen the annotation is anchored to — stamped client-side on fetch. */
+  screenId: string;
   target: { locator: number[] | string };
   position: { x: number; y: number } | "auto";
   body: string;

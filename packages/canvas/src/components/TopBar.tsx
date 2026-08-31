@@ -81,6 +81,7 @@ export function TopBar() {
   const setCanvasZoom = useCanvas((s) => s.setCanvasZoom);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const setCursorMode = useCanvas((s) => s.setCursorMode);
+  const enterAnnotateMode = useCanvas((s) => s.enterAnnotateMode);
   const setPan = useCanvas((s) => s.setPan);
   const history = useCanvas((s) => s.history);
   const refreshHistory = useCanvas((s) => s.refreshHistory);
@@ -182,7 +183,11 @@ export function TopBar() {
             variant="outline"
             size="sm"
             value={cursorMode}
-            onValueChange={(v) => v && setCursorMode(v as CursorMode)}
+            onValueChange={(v) => {
+              if (!v) return;
+              if (v === "annotate") enterAnnotateMode();
+              else setCursorMode(v as CursorMode);
+            }}
           >
             {cursorOptions.map((opt) => (
               <HotkeyTip key={opt.value} label={opt.label} hotkey={opt.hotkey}>
