@@ -31,7 +31,7 @@ const cliPath = resolve(import.meta.dir, "../cli.ts");
 
 let tmp: string;
 let server: StubServer;
-let captured: { names: string[]; design?: CapturedDesign };
+let captured: { names: string[]; design?: CapturedDesign; link?: Record<string, unknown> };
 
 beforeEach(() => {
   tmp = join(tmpdir(), `velloo-pub-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -40,7 +40,11 @@ beforeEach(() => {
     port: 0,
     async fetch(req) {
       const { pathname } = new URL(req.url);
+      if (req.method === "GET" && pathname === "/v1/teams/mine") {
+        return Response.json({ teams: [{ id: "team-123", name: "Design" }] });
+      }
       if (req.method === "POST" && pathname === "/v1/links") {
+        captured.link = (await req.json()) as Record<string, unknown>;
         return Response.json({ slug: "test-slug", accessToken: null }, { status: 201 });
       }
       if (req.method === "POST" && pathname.endsWith("/versions")) {
@@ -126,7 +130,7 @@ async function scaffold(design: string, withLive: boolean): Promise<void> {
   );
 }
 
-async function runPublish(design: string) {
+async function runPublish(design: string, extraArgs: string[] = []) {
   const proc = Bun.spawn(
     [
       "bun",
@@ -142,6 +146,7 @@ async function runPublish(design: string) {
       // Screenshot capture has its own suites (publish-screenshots*.test.ts);
       // skipping it here keeps this wiring test fast and browser-free.
       "--no-screenshots",
+      ...extraArgs,
     ],
     { cwd: resolve(import.meta.dir, "../../../.."), stdout: "pipe", stderr: "pipe" },
   );
@@ -180,4 +185,13 @@ test("publish omits the bundle when the folder has no live extensions", async ()
   expect(captured.names).not.toContain("bundle.js");
   expect(captured.design?.live).toBe(false);
   expect(captured.design?.bundlePath).toBeUndefined();
+});
+
+test("publish resolves a team name and sends its explicit team context", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  const { exitCode, stderr } = await runPublish(design, ["--team", "design"]);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  expect(captured.link).toMatchObject({ teamId: "team-123" });
 });

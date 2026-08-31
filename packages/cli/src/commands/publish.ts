@@ -99,6 +99,26 @@ function gitContext(folder: string): { repo: string | null; branch: string | nul
   };
 }
 
+async function resolveTeam(
+  baseUrl: string,
+  token: string,
+  requested?: string,
+): Promise<string | undefined> {
+  if (!requested) return undefined;
+  const res = await fetch(`${baseUrl}/v1/teams/mine`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`could not list teams (${res.status})`);
+  const body = (await res.json()) as { teams: { id: string; name: string }[] };
+  const exact = body.teams.filter(
+    (team) => team.id === requested || team.name.toLowerCase() === requested.toLowerCase(),
+  );
+  if (exact.length === 0) throw new Error(`no team named or identified by '${requested}'`);
+  if (exact.length > 1)
+    throw new Error(`more than one team is named '${requested}'; pass its UUID`);
+  return exact[0]?.id;
+}
+
 export default defineCommand({
   meta: {
     name: "publish",
@@ -134,6 +154,10 @@ export default defineCommand({
       type: "string",
       description: "public | private (default: public)",
     },
+    team: {
+      type: "string",
+      description: "Publish into a team by name or UUID (default: personal workspace)",
+    },
     w: { type: "string", description: "Viewport width in px (default: 1440)" },
     h: { type: "string", description: "Viewport height in px (default: 900)" },
     screenshots: {
@@ -154,13 +178,17 @@ export default defineCommand({
     if (visibility !== "public" && visibility !== "private") {
       fail("publish", `--visibility must be 'public' or 'private', got '${visibility}'`);
     }
+    const teamId = await resolveTeam(baseUrl, token, args.team);
     const viewport: Viewport = {
       w: args.w ? Number(args.w) : 1440,
       h: args.h ? Number(args.h) : 900,
     };
 
-    // Fail fast on a dead or degraded cloud: the upload's fate is
-    // knowable from /health before any of the expensive screenshot/bundle work.
+    // Folder load first: schema-version / parse refusals must surface even when
+    // the cloud is down. The health gate below still runs before any expensive
+    // screenshot or bundle work.
+    const design = await loadDesignFolder(folder);
+
     const health = await checkCloudHealth(baseUrl);
     if (health.status === "unreachable") {
       fail(
@@ -170,7 +198,6 @@ export default defineCommand({
     }
     if (health.status === "unhealthy") fail("publish", health.detail);
 
-    const design = await loadDesignFolder(folder);
     if (design.screens.size === 0) {
       fail("publish", `no screens found in ${folder} — is this a velloo design folder?`);
     }
@@ -390,6 +417,7 @@ export default defineCommand({
           folderId,
           title,
           visibility,
+          ...(teamId ? { teamId } : {}),
         },
         form,
       });
@@ -417,7 +445,7 @@ export default defineCommand({
     if (history && !history.retained && history.pruned > 0) {
       console.log("  replaced the previous version — the free plan keeps only the latest.");
       console.log(
-        "  Upgrade to Pro to keep version history and revisit any past publish: https://velloo.ai/pricing",
+        "  Upgrade to Team to keep version history and revisit past publishes: https://velloo.ai/pricing",
       );
     } else if (history?.retained && history.versions > 1) {
       console.log(

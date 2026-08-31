@@ -20,6 +20,8 @@ export interface CloudLinkRequest {
   folderId?: string;
   title: string;
   visibility: "public" | "private";
+  /** Explicit collaboration context; omitted keeps the board personal. */
+  teamId?: string;
 }
 
 export interface LinkUploadOutcome {

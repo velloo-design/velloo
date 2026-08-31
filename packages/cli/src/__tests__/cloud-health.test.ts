@@ -107,7 +107,10 @@ test("velloo publish fails fast on an unhealthy cloud", async () => {
   const tmp = join(tmpdir(), `velloo-health-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const design = join(tmp, "velloo");
   try {
+    // Minimal loadable folder — publish validates the folder before /health,
+    // so the fixture must clear loadDesignFolder (config + theme).
     await mkdir(join(design, ".design"), { recursive: true });
+    await mkdir(join(design, "theme"), { recursive: true });
     await writeFile(
       join(design, ".design", "config.json"),
       JSON.stringify({
@@ -117,6 +120,21 @@ test("velloo publish fails fast on an unhealthy cloud", async () => {
           default: { id: "none", version: "0.1.0", source: "binary", componentsPath: "binary" },
         },
         defaultLibrary: "default",
+        viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
+      }),
+    );
+    await writeFile(
+      join(design, "theme", "default.json"),
+      JSON.stringify({
+        name: "default",
+        colors: {
+          background: "oklch(1 0 0)",
+          foreground: "oklch(0.145 0 0)",
+          primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
+        },
+        typography: {},
+        spacing: {},
+        radius: {},
       }),
     );
     const proc = Bun.spawn(
