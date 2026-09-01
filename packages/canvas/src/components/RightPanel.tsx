@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useCanvas } from "../store.ts";
 import { Inspector } from "./Inspector.tsx";
+import { Loading } from "./Loading.tsx";
 import { ThemePanel } from "./ThemePanel.tsx";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs.tsx";
 
@@ -54,7 +55,9 @@ export function RightPanel({ screenId }: Props) {
       ) : theme ? (
         <ThemePanel theme={theme} presets={presets} />
       ) : (
-        <EmptyMessage>Loading theme…</EmptyMessage>
+        <EmptyMessage>
+          <Loading size={24} label="Loading theme…" className="flex-col" />
+        </EmptyMessage>
       )}
     </aside>
   );

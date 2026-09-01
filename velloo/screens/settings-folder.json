@@ -1,0 +1,892 @@
+{
+  "id": "settings-folder",
+  "name": "Settings — Folder scope",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative h-[860px] w-full overflow-hidden bg-background"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute inset-x-0 top-0 flex h-12 items-center gap-3 border-b border-border bg-card px-4"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-4 w-20 rounded bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "ml-auto h-6 w-16 rounded-md bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-6 w-16 rounded-md bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-6 w-24 rounded-md bg-primary/40"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute bottom-0 left-0 top-12 w-52 border-r border-border bg-card p-3 flex flex-col gap-2"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-3 w-16 rounded bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-7 w-full rounded-md bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-7 w-full rounded-md bg-muted/60"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-7 w-full rounded-md bg-muted/60"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-64 top-24 h-72 w-96 rounded-lg border border-border bg-card"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-[720px] top-24 h-96 w-[420px] rounded-lg border border-border bg-card"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute inset-0 bg-foreground/45"
+        }
+      },
+      {
+        "$ref": "Box",
+        "$id": "overlay",
+        "props": {
+          "className": "absolute inset-0 flex items-center justify-center p-5"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "dialog",
+            "props": {
+              "className": "flex h-[800px] w-[920px] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "$id": "rail",
+                "props": {
+                  "className": "flex w-[216px] shrink-0 flex-col border-r border-border bg-muted/40 p-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "px-2 pb-2 pt-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                      "children": "Settings"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2.5 rounded-md bg-card px-2.5 py-2 text-[13px] font-medium text-foreground shadow-sm ring-1 ring-border"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "folder-cog",
+                          "className": "size-4 text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "children": "Folder"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mt-0.5 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "layout-grid",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "children": "Board"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "ml-auto max-w-[86px] truncate text-[10.5px] text-muted-foreground/70",
+                          "children": "Node edit pane…"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mt-0.5 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "sliders-horizontal",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "children": "Canvas"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mt-auto rounded-md border border-dashed border-border px-2.5 py-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[10px] uppercase tracking-wider text-muted-foreground",
+                          "children": "Design folder"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-1 break-all font-mono text-[10.5px] leading-tight text-foreground/80",
+                          "children": "~/code/acme/velloo"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "pane",
+                "props": {
+                  "className": "flex min-w-0 flex-1 flex-col"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-start gap-3 border-b border-border px-6 py-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "min-w-0"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "text-[15px] font-semibold leading-tight text-foreground",
+                              "children": "Folder"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-1 text-[11.5px] text-muted-foreground",
+                              "children": "Saved to config.json in the design folder — committed with your repo, visible to your agent."
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "ml-auto flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "x",
+                              "className": "size-4"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "body",
+                    "props": {
+                      "className": "flex-1 overflow-y-auto px-6 py-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                          "children": "Opens on"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-2 divide-y divide-border/70"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center justify-between gap-6 py-2.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "min-w-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "text-[13px] font-medium text-foreground",
+                                      "children": "Board"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "mt-0.5 text-[11.5px] text-muted-foreground",
+                                      "children": "The board the canvas shows on a fresh load."
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "SelectTrigger",
+                                "props": {
+                                  "size": "sm",
+                                  "className": "w-[252px] text-[13px]"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "SelectValue",
+                                    "props": {
+                                      "children": "Node edit pane explorations"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center justify-between gap-6 py-2.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "min-w-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "text-[13px] font-medium text-foreground",
+                                      "children": "Screen"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "mt-0.5 text-[11.5px] text-muted-foreground",
+                                      "children": "Focused after load. Optional."
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "SelectTrigger",
+                                "props": {
+                                  "size": "sm",
+                                  "className": "w-[252px] text-[13px] text-muted-foreground"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "SelectValue",
+                                    "props": {
+                                      "children": "No screen — fit the whole board"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-5 flex items-baseline gap-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                              "children": "Viewport presets"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "text-[11.5px] text-muted-foreground",
+                              "children": "— offered when you add a frame"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-2 overflow-hidden rounded-lg border border-border"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-3 border-b border-border px-3 py-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "smartphone",
+                                  "className": "size-4 text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "text-[13px] text-foreground",
+                                  "children": "Mobile"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "ml-auto font-mono text-[11.5px] text-muted-foreground",
+                                  "children": "390 × 844"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "pencil",
+                                  "className": "size-3.5 text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "trash-2",
+                                  "className": "size-3.5 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-3 border-b border-border px-3 py-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "tablet",
+                                  "className": "size-4 text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "text-[13px] text-foreground",
+                                  "children": "Tablet"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "ml-auto font-mono text-[11.5px] text-muted-foreground",
+                                  "children": "834 × 1112"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "pencil",
+                                  "className": "size-3.5 text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "trash-2",
+                                  "className": "size-3.5 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-3 border-b border-border bg-accent/40 px-3 py-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "monitor",
+                                  "className": "size-4 text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Input",
+                                "props": {
+                                  "className": "h-7 w-40 text-[13px]",
+                                  "value": "Desktop",
+                                  "readOnly": true
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "ml-auto flex items-center gap-1.5"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Input",
+                                    "props": {
+                                      "className": "h-7 w-[68px] text-center font-mono text-[12px]",
+                                      "value": "1440",
+                                      "readOnly": true
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "text-[11px] text-muted-foreground",
+                                      "children": "×"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Input",
+                                    "props": {
+                                      "className": "h-7 w-[68px] text-center font-mono text-[12px]",
+                                      "value": "900",
+                                      "readOnly": true
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "check",
+                                  "className": "size-4 text-primary"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "trash-2",
+                                  "className": "size-3.5 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-3 px-3 py-1.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Button",
+                                "props": {
+                                  "variant": "ghost",
+                                  "size": "sm",
+                                  "className": "h-7 gap-1.5 px-2 text-[12.5px] text-muted-foreground"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "plus",
+                                      "className": "size-3.5"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "children": "Add preset"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "ml-auto text-[11px] text-muted-foreground",
+                                  "children": "At least one preset is required."
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                          "children": "Code generation & feedback"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-2 divide-y divide-border/70"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center justify-between gap-6 py-2.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "min-w-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "text-[13px] font-medium text-foreground",
+                                      "children": "Components import alias"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "mt-0.5 text-[11.5px] text-muted-foreground",
+                                      "children": "Prefix emit_code writes for library imports."
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Input",
+                                "props": {
+                                  "className": "h-8 w-[252px] font-mono text-[12.5px]",
+                                  "value": "@/components/ui",
+                                  "readOnly": true
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "py-2.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex items-center justify-between gap-6"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "min-w-0"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "className": "text-[13px] font-medium text-foreground",
+                                          "children": "Send product feedback"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "className": "mt-0.5 text-[11.5px] text-muted-foreground",
+                                          "children": "Gives your agent the send_feedback tool. Off keeps this folder offline."
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Switch",
+                                    "props": {
+                                      "checked": true
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "mt-2 flex items-start gap-2 border-l-2 border-border pl-3"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Checkbox",
+                                    "props": {
+                                      "checked": true,
+                                      "className": "mt-0.5 size-3.5"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "min-w-0"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "className": "text-[12.5px] text-foreground",
+                                          "children": "Velloo may contact me about what I send"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "className": "text-[11px] text-muted-foreground",
+                                          "children": "Attaches your account email to each report. Unchecked, feedback goes in anonymously."
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                          "children": "What init decided"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-2 grid grid-cols-2 gap-x-8 gap-y-1.5 rounded-lg bg-muted/50 px-4 py-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-2 text-[12px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "w-[68px] shrink-0 text-muted-foreground",
+                                  "children": "Library"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "truncate text-foreground",
+                                  "children": "shadcn-upstream"
+                                }
+                              },
+                              {
+                                "$ref": "Badge",
+                                "props": {
+                                  "variant": "secondary",
+                                  "className": "h-4 px-1.5 text-[10px] font-normal",
+                                  "children": "binary"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-2 text-[12px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "w-[68px] shrink-0 text-muted-foreground",
+                                  "children": "Styling"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "text-foreground",
+                                  "children": "Tailwind"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-2 text-[12px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "w-[68px] shrink-0 text-muted-foreground",
+                                  "children": "Format"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "text-foreground",
+                                  "children": "schema v2 · velloo 0.9.3"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-2 text-[12px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "w-[68px] shrink-0 text-muted-foreground",
+                                  "children": "Cloud id"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "truncate font-mono text-[11px] text-foreground",
+                                  "children": "f3c81a7e-9d2b"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "copy",
+                                  "className": "size-3 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex h-12 shrink-0 items-center gap-2 border-t border-border bg-muted/30 px-6"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "check",
+                          "className": "size-3.5 text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[11.5px] text-muted-foreground",
+                          "children": "Changes save as you make them."
+                        }
+                      },
+                      {
+                        "$ref": "Button",
+                        "props": {
+                          "size": "sm",
+                          "className": "ml-auto h-8 text-[13px]",
+                          "children": "Done"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

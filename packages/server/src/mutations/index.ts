@@ -37,6 +37,20 @@ export {
   updateBoard,
 } from "./api/boards.ts";
 export {
+  type UpdateCodegenArgs,
+  type UpdateCodegenResult,
+  type UpdateDefaultsArgs,
+  type UpdateDefaultsResult,
+  type UpdateFeedbackArgs,
+  type UpdateFeedbackResult,
+  type UpdateViewportPresetsArgs,
+  type UpdateViewportPresetsResult,
+  updateCodegen,
+  updateDefaults,
+  updateFeedback,
+  updateViewportPresets,
+} from "./api/config.ts";
+export {
   type AddFrameArgs,
   type AddFrameResult,
   type AddGroupArgs,

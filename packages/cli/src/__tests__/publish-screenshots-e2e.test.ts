@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -140,8 +141,9 @@ async function runPublish(design: string, extraArgs: string[] = []) {
     { cwd: resolve(import.meta.dir, "../../../.."), stdout: "pipe", stderr: "pipe" },
   );
   const exitCode = await proc.exited;
+  const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stderr };
+  return { exitCode, stdout, stderr };
 }
 
 // PNG magic bytes — the uploads are real rasters, not placeholders.
@@ -156,7 +158,7 @@ test.skipIf(!hasChromium)(
   async () => {
     const design = join(tmp, "velloo");
     await scaffold(design);
-    const { exitCode, stderr } = await runPublish(design);
+    const { exitCode, stdout, stderr } = await runPublish(design);
     if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
 
     expect(captured.design?.screenshots).toEqual({
@@ -167,8 +169,71 @@ test.skipIf(!hasChromium)(
     expect(isPng(captured.files.get("screenshots/home.png"))).toBe(true);
     expect(isPng(captured.files.get("screenshots/main.png"))).toBe(true);
     expect(isPng(captured.files.get("screenshots/cover.png"))).toBe(true);
+    expect(stderr).toContain("compiling styles");
+    expect(stderr).toContain("capturing previews 2/2");
+    expect(stderr).not.toContain("capturing previews 1/2");
+    expect(stderr).toMatch(/uploading \d+ files \([\d.]+ (?:KB|MB)\)/);
+    expect(stdout).not.toContain("capturing previews");
   },
   120_000,
+);
+
+test.skipIf(!hasChromium)(
+  "--changed-since publishes the full design but captures only affected previews",
+  async () => {
+    const design = join(tmp, "velloo");
+    await scaffold(design);
+    await writeFile(
+      join(design, "screens", "pricing.json"),
+      JSON.stringify({
+        id: "pricing",
+        name: "Pricing",
+        library: "default",
+        tree: { $ref: "Box", children: [] },
+      }),
+    );
+    await writeFile(
+      join(design, "boards", "sales.json"),
+      JSON.stringify({
+        id: "sales",
+        name: "Sales",
+        frames: [{ id: "f2", screen: "pricing", x: 0, y: 0, w: 600, h: 400 }],
+        groups: [],
+      }),
+    );
+    execFileSync("git", ["-C", tmp, "init", "-q", "-b", "main"]);
+    execFileSync("git", ["-C", tmp, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", tmp, "config", "user.name", "Test"]);
+    execFileSync("git", ["-C", tmp, "add", "."]);
+    execFileSync("git", ["-C", tmp, "commit", "-qm", "baseline"]);
+    const baseline = execFileSync("git", ["-C", tmp, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    await writeFile(
+      join(design, "screens", "home.json"),
+      JSON.stringify({
+        id: "home",
+        name: "Home changed",
+        library: "default",
+        tree: { $ref: "Box", children: [{ $ref: "Text", props: { children: "Changed" } }] },
+      }),
+    );
+
+    const { exitCode, stderr } = await runPublish(design, ["--changed-since", baseline]);
+    if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+    expect(captured.design?.screenshots).toEqual({
+      cover: "screenshots/cover.png",
+      screens: { home: "screenshots/home.png" },
+      boards: { main: "screenshots/main.png" },
+    });
+    const designJson = JSON.parse(new TextDecoder().decode(captured.files.get("design.json"))) as {
+      screens: Array<{ id: string }>;
+    };
+    expect(designJson.screens.map((screen) => screen.id).sort()).toEqual(["home", "pricing"]);
+    expect(captured.files.has("screenshots/pricing.png")).toBe(false);
+    expect(captured.files.has("screenshots/sales.png")).toBe(false);
+  },
 );
 
 test("--no-screenshots publishes without any screenshot files or manifest", async () => {

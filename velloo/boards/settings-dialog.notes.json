@@ -1,0 +1,9 @@
+[
+  {
+    "id": "note_9112b6f8",
+    "x": 0,
+    "y": -260,
+    "width": 640,
+    "body": "**Canvas settings dialog**\n\nThree scopes in a left rail, one dialog (`h-[min(800px,85vh)] w-[920px]`), reached from the top-bar settings menu (\"Settings…\"). Apply-on-change, no Save button — every folder edit is a mutation that broadcasts `config-changed`, so agents and other tabs see it immediately.\n\n- **Folder** → `config.json`: default board/screen, viewport presets (inline edit, min 1), `codegen.componentsAlias`, `feedback.enabled`, plus a read-only \"what init decided\" block (library, styling, schema/tool version, cloud folder id).\n- **Board** → `boards/<id>.json`: name, theme pin (with a swatch preview + \"use folder default\"), archive. Board id is read-only — it is the filename.\n- **Canvas** → localStorage: app theme, remember design light/dark across reloads, remember collapsed panels, reset.\n\nAccount, credits, and revert-all stay in the top-bar menu — this dialog is about the folder, not the user."
+  }
+]

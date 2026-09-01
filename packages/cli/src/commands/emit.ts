@@ -16,6 +16,7 @@ import { defineCommand } from "citty";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, pickScreen, resolveDesignFolder } from "../folder.ts";
+import { createProgress } from "../progress.ts";
 
 /**
  * Load the emit context a screen needs from its containing design folder:
@@ -95,64 +96,78 @@ export default defineCommand({
     const screenJson = JSON.parse(await readFile(screenPath, "utf8"));
     const screen = ScreenSchema.parse(screenJson);
 
-    const componentsAlias = args["components-alias"] ?? (await readConfigAlias(screenPath));
-    const context = await folderEmitContext(screenPath, screen);
+    const progress = createProgress();
+    progress.start("preparing code");
+    try {
+      const componentsAlias = args["components-alias"] ?? (await readConfigAlias(screenPath));
+      const context = await folderEmitContext(screenPath, screen);
+      progress.step("generating code");
 
-    const result = await emitCode(screen, {
-      ...(componentsAlias ? { componentsAlias } : {}),
-      ...context,
-    });
-    if (!result.ok) {
-      const e = result.error;
-      if (e.kind === "UnknownComponent") {
-        fail("emit", `unknown component: ${JSON.stringify(e.ref)}`);
-      } else if (e.kind === "SnippetNotFound") {
-        fail("emit", `snippet not found: ${JSON.stringify(e.snippetId)}`);
-      } else {
-        fail("emit", `screen not found: ${JSON.stringify(e.screenId)}`);
+      const result = await emitCode(screen, {
+        ...(componentsAlias ? { componentsAlias } : {}),
+        ...context,
+      });
+      if (!result.ok) {
+        progress.fail("code generation failed");
+        const e = result.error;
+        if (e.kind === "UnknownComponent") {
+          fail("emit", `unknown component: ${JSON.stringify(e.ref)}`);
+        } else if (e.kind === "SnippetNotFound") {
+          fail("emit", `snippet not found: ${JSON.stringify(e.snippetId)}`);
+        } else {
+          fail("emit", `screen not found: ${JSON.stringify(e.screenId)}`);
+        }
       }
-    }
 
-    // Tailwind-channel emits against a v3 host app get the v4→v3 class
-    // advisory (the canvas compiles v4, so design classes carry v4 semantics).
-    const found = await findDesignConfig(screenPath);
-    const tailwindV3Compat =
-      found && !context?.target && !context?.inlineStyle
-        ? detectTailwindMajor(hostAppRootFrom(found.folder, found.config.hostApp)) === 3
-          ? v3ClassIssues([
-              ...result.value.classesUsed,
-              ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
-            ])
-          : []
-        : [];
+      // Tailwind-channel emits against a v3 host app get the v4→v3 class
+      // advisory (the canvas compiles v4, so design classes carry v4 semantics).
+      const found = await findDesignConfig(screenPath);
+      const tailwindV3Compat =
+        found && !context?.target && !context?.inlineStyle
+          ? detectTailwindMajor(hostAppRootFrom(found.folder, found.config.hostApp)) === 3
+            ? v3ClassIssues([
+                ...result.value.classesUsed,
+                ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
+              ])
+            : []
+          : [];
 
-    if (args.to) {
-      const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
-      const ir = tailwindV3Compat.length > 0 ? { ...result.value, tailwindV3Compat } : result.value;
-      await writeFile(outPath, JSON.stringify(ir, null, 2), "utf8");
-      console.log(`velloo emit: wrote ${outPath}`);
-      return;
-    }
+      if (args.to) {
+        progress.step("writing code");
+        const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
+        const ir =
+          tailwindV3Compat.length > 0 ? { ...result.value, tailwindV3Compat } : result.value;
+        await writeFile(outPath, JSON.stringify(ir, null, 2), "utf8");
+        progress.succeed("generated code");
+        console.log(`velloo emit: wrote ${outPath}`);
+        return;
+      }
 
-    stdout.write(`// screen: ${result.value.screen.id} (${result.value.screen.name})\n`);
-    stdout.write(`// components: ${result.value.componentsUsed.join(", ") || "(none)"}\n`);
-    if (result.value.iconsUsed.length > 0) {
-      stdout.write(`// icons (lucide): ${result.value.iconsUsed.join(", ")}\n`);
+      // Finish stderr progress before stdout becomes the generated-code payload.
+      progress.succeed("generated code");
+      stdout.write(`// screen: ${result.value.screen.id} (${result.value.screen.name})\n`);
+      stdout.write(`// components: ${result.value.componentsUsed.join(", ") || "(none)"}\n`);
+      if (result.value.iconsUsed.length > 0) {
+        stdout.write(`// icons (lucide): ${result.value.iconsUsed.join(", ")}\n`);
+      }
+      if (result.value.snippetsUsed.length > 0) {
+        stdout.write(
+          `// snippets: ${result.value.snippetsUsed.map((s) => `${s.componentName}(${s.id})`).join(", ")}\n`,
+        );
+      }
+      for (const issue of tailwindV3Compat) {
+        stdout.write(
+          issue.v3
+            ? `// tailwind v3 host: \`${issue.class}\` → \`${issue.v3}\` (${issue.note})\n`
+            : `// tailwind v3 host: \`${issue.class}\` — ${issue.note}\n`,
+        );
+      }
+      stdout.write("\n");
+      stdout.write(`${result.value.jsx}\n`);
+    } catch (error) {
+      progress.fail("code generation failed");
+      throw error;
     }
-    if (result.value.snippetsUsed.length > 0) {
-      stdout.write(
-        `// snippets: ${result.value.snippetsUsed.map((s) => `${s.componentName}(${s.id})`).join(", ")}\n`,
-      );
-    }
-    for (const issue of tailwindV3Compat) {
-      stdout.write(
-        issue.v3
-          ? `// tailwind v3 host: \`${issue.class}\` → \`${issue.v3}\` (${issue.note})\n`
-          : `// tailwind v3 host: \`${issue.class}\` — ${issue.note}\n`,
-      );
-    }
-    stdout.write("\n");
-    stdout.write(`${result.value.jsx}\n`);
   },
 });
 

@@ -2,6 +2,7 @@ import { Plus, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mutate, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
+import { formatBrowserTitle } from "./browser-title.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
 import { Board } from "./components/Board.tsx";
@@ -9,10 +10,12 @@ import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
+import { Loading } from "./components/Loading.tsx";
 import { PreviewDialog } from "./components/PreviewDialog.tsx";
 import { PublishDialog } from "./components/PublishDialog.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { SearchDialog } from "./components/SearchDialog.tsx";
+import { SettingsDialog } from "./components/Settings/SettingsDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { SignInDialog } from "./components/SignInDialog.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
@@ -64,12 +67,7 @@ export function App() {
 
   // Browser tab: `<repo> · <board> - velloo` (middle-dot between repo/board).
   useEffect(() => {
-    const boardName = currentBoard?.name;
-    const folderName = design?.folderName;
-    const parts: string[] = [];
-    if (folderName) parts.push(folderName);
-    if (boardName) parts.push(boardName);
-    document.title = parts.length > 0 ? `${parts.join(" · ")} - velloo` : "velloo";
+    document.title = formatBrowserTitle(design?.folderName, currentBoard?.name);
   }, [design?.folderName, currentBoard?.name]);
 
   useEffect(() => {
@@ -200,7 +198,9 @@ export function App() {
       );
     }
     return (
-      <div className="h-full grid place-items-center text-sm text-muted-foreground">Loading…</div>
+      <div className="h-full grid place-items-center">
+        <Loading size={44} />
+      </div>
     );
   }
 
@@ -282,6 +282,7 @@ export function App() {
       <SearchDialog />
       <ExportDialog />
       <PreviewDialog />
+      <SettingsDialog />
       <AddFrameDialog boardId={emptyBoardAddFrame} onClose={() => setEmptyBoardAddFrame(null)} />
       <SignInDialog />
       <PublishDialog />

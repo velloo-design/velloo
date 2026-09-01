@@ -5,6 +5,7 @@ import { daemonRoot, ensureDaemon, isLive, stopDaemon } from "../daemon/runtime.
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
+import { createProgress } from "../progress.ts";
 import { shouldStayForeground, waitInForeground } from "../run-foreground.ts";
 import { traceEnabled } from "../trace/env.ts";
 
@@ -62,13 +63,23 @@ export default defineCommand({
     // agent). A failure (format gate, daemon dying at boot) escapes to the
     // registry guard, which prints it as one clean `velloo run:` line.
     let spawned = false;
-    const rec = await ensureDaemon(folder, {
-      preferredPort,
-      host: args.host,
-      onSpawn: () => {
-        spawned = true;
-      },
-    });
+    const progress = createProgress();
+    progress.start("starting canvas");
+    let rec: Awaited<ReturnType<typeof ensureDaemon>>;
+    try {
+      rec = await ensureDaemon(folder, {
+        preferredPort,
+        host: args.host,
+        onSpawn: () => {
+          spawned = true;
+          progress.step("waiting for canvas");
+        },
+      });
+      progress.succeed(spawned ? "started canvas" : "connected to running canvas");
+    } catch (error) {
+      progress.fail("could not start canvas");
+      throw error;
+    }
 
     const folderArg = args.folder ? ` ${args.folder}` : "";
     const root = daemonRoot(folder);

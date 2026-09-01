@@ -1,7 +1,17 @@
-import { AlertTriangle, Coins, ExternalLink, History, LogIn, LogOut, Settings } from "lucide-react";
+import {
+  AlertTriangle,
+  Coins,
+  ExternalLink,
+  History,
+  LogIn,
+  LogOut,
+  Settings,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { auth, fetchRevertStatus, type RevertStatus } from "../api.ts";
-import { type AppTheme, useCanvas } from "../store.ts";
+import { auth, type CloudAccount, fetchRevertStatus, type RevertStatus } from "../api.ts";
+import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { RevertDialog } from "./RevertDialog.tsx";
 import { Button } from "./ui/button.tsx";
@@ -10,18 +20,19 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu.tsx";
 
 /**
- * Top-right account + settings. Shows who the folder is signed in to
- * velloo-cloud as — name, email, plan, and which cloud — with a link to the
- * cloud home (the origin the cloud advertises), sign-in, sign-out, the destructive
- * revert-all action, and the app theme (Velloo's own chrome, independent of
- * the design's theme).
+ * Top-right account menu. Signed in, the trigger is the user's avatar and
+ * first name; signed out it stays a plain "Settings" button, because there is
+ * no identity to show and the menu is then mostly the way in to signing up.
+ *
+ * The menu itself opens with Settings… (the folder/board/canvas dialog) and
+ * closes with the destructive revert-all, with the account block — identity,
+ * credits, upgrade, sign-out — between them. App theme moved into the
+ * dialog's Canvas scope, alongside the other per-browser preferences.
  *
  * Account state is served live by the CLI daemon from `~/.velloo`, so signing in
  * from a terminal shows up here on the next menu open without a reload.
@@ -42,6 +53,36 @@ function creditLabel(micros: number): string {
   return `$${(micros / 1_000_000).toFixed(2)}`;
 }
 
+/**
+ * The name to greet someone by. First name only — the whole point of the
+ * signed-in trigger is that it reads like a person, not a database row — with
+ * the email's local part as the fallback when the cloud has no name on file.
+ */
+export function firstName(account: CloudAccount): string {
+  const given = account.name?.trim().split(/\s+/)[0];
+  if (given) return given;
+  return account.email.split("@")[0] ?? account.email;
+}
+
+/** Up to two initials for the avatar: given + family, else the email's first two. */
+export function initials(account: CloudAccount): string {
+  const parts = account.name?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (parts.length >= 2)
+    return `${parts[0]?.[0] ?? ""}${parts[parts.length - 1]?.[0] ?? ""}`.toUpperCase();
+  const source = parts[0] ?? account.email;
+  return source.slice(0, 2).toUpperCase();
+}
+
+/** The cloud's billing page, or null when we can't build a URL we trust. */
+export function billingUrl(appUrl: string | undefined): string | null {
+  if (!appUrl) return null;
+  try {
+    return new URL("/billing", appUrl).href;
+  } catch {
+    return null;
+  }
+}
+
 /** "api.velloo.ai" from a base URL — the whole URL is noise in a menu. */
 function cloudLabel(cloudUrl: string | undefined): string {
   if (!cloudUrl) return "velloo-cloud";
@@ -53,10 +94,9 @@ function cloudLabel(cloudUrl: string | undefined): string {
 }
 
 export function SettingsMenu() {
-  const appTheme = useCanvas((s) => s.appTheme);
-  const setAppTheme = useCanvas((s) => s.setAppTheme);
   const status = useCanvas((s) => s.authStatus);
   const setSignInOpen = useCanvas((s) => s.setSignInOpen);
+  const setSettingsScope = useCanvas((s) => s.setSettingsScope);
 
   // Revert availability, refreshed each time the menu opens. Null while
   // unknown; the item hides entirely when the folder isn't in a git repo.
@@ -78,6 +118,9 @@ export function SettingsMenu() {
   // the account it can no longer use instead of just claiming "signed out".
   const expired = loggedIn && status?.verified === false;
   const plan = account?.tier ? `${PLAN_LABEL[account.tier] ?? account.tier} plan` : null;
+  // Only nudge on a tier the cloud actually reported as free — an absent tier
+  // means it didn't say, and guessing would show an upgrade to paid users.
+  const upgradeUrl = account?.tier === "free" ? billingUrl(status?.appUrl) : null;
   const revertIsRepo =
     revertStatus !== null &&
     (revertStatus.available ||
@@ -97,15 +140,37 @@ export function SettingsMenu() {
     <>
       <DropdownMenu onOpenChange={(open) => open && refresh()}>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="max-w-[12rem] text-xs"
-            title="Settings & account"
-          >
-            <Settings />
-            <span className="truncate">{loggedIn && account ? account.email : "Settings"}</span>
-          </Button>
+          {loggedIn && account ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="max-w-[12rem] gap-2 pl-1 pr-2.5 text-xs"
+              title={`${account.email} — account & settings`}
+            >
+              <span
+                aria-hidden="true"
+                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                  // An expired credential still shows the person, muted — the
+                  // menu explains why, and a red avatar would read as an error
+                  // with their identity rather than with the token.
+                  expired ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground"
+                }`}
+              >
+                {initials(account)}
+              </span>
+              <span className="truncate">{firstName(account)}</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="max-w-[12rem] text-xs"
+              title="Settings & account"
+            >
+              <Settings />
+              <span className="truncate">Settings</span>
+            </Button>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel className="font-normal">
@@ -171,21 +236,44 @@ export function SettingsMenu() {
                   </span>
                 )}
               </div>
-              {status?.appUrl ? (
+              {upgradeUrl ? (
                 <DropdownMenuItem asChild>
                   <a
-                    href={status.appUrl}
+                    href={upgradeUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-inherit no-underline"
-                    data-testid="settings-open-cloud"
+                    data-testid="settings-upgrade"
                   >
-                    <ExternalLink />
-                    Open velloo-cloud
+                    <Sparkles className="text-primary" />
+                    Upgrade plan
+                    <span className="ml-auto text-[10px] text-muted-foreground">Free</span>
                   </a>
                 </DropdownMenuItem>
               ) : null}
             </>
+          ) : null}
+          <DropdownMenuSeparator />
+          {/* The folder/board/canvas settings live in their own dialog; the
+              rest of this menu is the account surface. Settings sits next to
+              the cloud link because both are "go somewhere", not "do something". */}
+          <DropdownMenuItem onSelect={() => setSettingsScope("folder")}>
+            <SlidersHorizontal />
+            Settings…
+          </DropdownMenuItem>
+          {loggedIn && status?.appUrl ? (
+            <DropdownMenuItem asChild>
+              <a
+                href={status.appUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-inherit no-underline"
+                data-testid="settings-open-cloud"
+              >
+                <ExternalLink />
+                Open velloo-cloud
+              </a>
+            </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
           {loggedIn && !expired ? (
@@ -218,18 +306,6 @@ export function SettingsMenu() {
               ) : null}
             </>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
-            App theme
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={appTheme}
-            onValueChange={(v) => setAppTheme(v as AppTheme)}
-          >
-            <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
       <RevertDialog

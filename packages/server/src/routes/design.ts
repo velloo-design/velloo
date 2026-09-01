@@ -93,6 +93,52 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
   return r;
 }
 
+/**
+ * GET /api/config — the folder's settings, as the settings dialog needs
+ * them: the editable fields plus the read-only facts `init` decided.
+ *
+ * Deliberately not the raw `config.json`. Extensions (arbitrary user code
+ * paths) and the host-app roots stay out; libraries are reduced to what the
+ * dialog displays. Growing this means adding a named field, never spreading
+ * the config object.
+ */
+export function createConfigRouter(ctxFor: () => MutationContext): Hono {
+  const r = new Hono();
+
+  r.get("/", (c) => {
+    const f = ctxFor().folder;
+    const cfg = f.config;
+    return c.json({
+      root: f.root,
+      folderName: projectNameFor(f.root),
+      schemaVersion: cfg.schemaVersion,
+      toolVersion: cfg.toolVersion,
+      folderId: cfg.folderId ?? null,
+      defaultLibrary: cfg.defaultLibrary,
+      libraries: Object.entries(cfg.libraries).map(([id, lib]) => ({
+        id,
+        providerId: lib.id,
+        version: lib.version,
+        source: lib.source,
+      })),
+      styling: cfg.styling?.framework ?? null,
+      viewportPresets: cfg.viewportPresets,
+      defaultBoard: cfg.defaultBoard ?? null,
+      defaultScreen: cfg.defaultScreen ?? null,
+      componentsAlias: cfg.codegen?.componentsAlias ?? null,
+      feedback: {
+        enabled: cfg.feedback?.enabled ?? false,
+        contactOk: cfg.feedback?.contactOk ?? false,
+      },
+      /** Named themes a board can pin, "default" first. */
+      themes: ["default", ...[...f.themes.keys()].filter((n) => n !== "default").sort()],
+      extensionsCount: Object.keys(cfg.extensions ?? {}).length,
+    });
+  });
+
+  return r;
+}
+
 export function createScreenRouter(folder: () => DesignFolder): Hono {
   const r = new Hono();
 

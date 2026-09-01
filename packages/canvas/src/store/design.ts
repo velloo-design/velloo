@@ -4,8 +4,10 @@ import type { StateCreator } from "zustand";
 import {
   type BoardMeta,
   type DesignSummary,
+  type FolderConfig,
   fetchBoard,
   fetchComponents,
+  fetchConfig,
   fetchDesign,
   fetchGeneratedAssets,
   fetchHistory,
@@ -25,6 +27,11 @@ import type { CanvasState } from "./index.ts";
  */
 export interface DesignSlice {
   design: DesignSummary | null;
+  /**
+   * The folder's settings, loaded on demand by the settings dialog rather
+   * than at boot — nothing else reads them. Null until first opened.
+   */
+  folderConfig: FolderConfig | null;
   screens: Record<string, Screen>;
   boards: Record<string, Board>;
   currentBoardId: string | null;
@@ -71,6 +78,8 @@ export interface DesignSlice {
   loadDesign(seed?: { boardId?: string | null; screenId?: string | null }): Promise<void>;
   refreshHistory(): Promise<void>;
   refreshDesignSummary(): Promise<void>;
+  /** Load (or reload) `folderConfig`. */
+  loadFolderConfig(): Promise<void>;
   /**
    * Reorder `design.boards` in place to match `order` (board ids). Used
    * by the sidebar drag-and-drop for an optimistic update before the
@@ -119,6 +128,7 @@ export interface DesignSlice {
 
 export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> = (set, get) => ({
   design: null,
+  folderConfig: null,
   screens: {},
   boards: {},
   currentBoardId: null,
@@ -191,6 +201,10 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   async refreshDesignSummary() {
     const design = await fetchDesign();
     set({ design });
+  },
+
+  async loadFolderConfig() {
+    set({ folderConfig: await fetchConfig() });
   },
 
   async setBoardArchived(boardId: string, archived: boolean) {

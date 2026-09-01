@@ -8,6 +8,7 @@ import { toastError } from "../toast.ts";
 import { FrameHeader } from "./Frame/FrameHeader.tsx";
 import { FrameViewportPresets } from "./Frame/FrameViewportPresets.tsx";
 import { useFrameInteractions } from "./Frame/useFrameInteractions.ts";
+import { Loading } from "./Loading.tsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -526,7 +527,7 @@ export const Frame = memo(function Frame({
             style={{ width: w, height: h }}
             className="border border-dashed border-muted-foreground/30 rounded-md grid place-items-center text-xs text-muted-foreground"
           >
-            Loading {frame.screen}…
+            <Loading size={28} label={frame.screen} className="flex-col" />
           </div>
         ) : (
           <div

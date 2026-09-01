@@ -1,0 +1,614 @@
+{
+  "id": "settings-canvas",
+  "name": "Settings — Canvas scope",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative h-[860px] w-full overflow-hidden bg-background"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute inset-x-0 top-0 flex h-12 items-center gap-3 border-b border-border bg-card px-4"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-4 w-20 rounded bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "ml-auto h-6 w-16 rounded-md bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-6 w-16 rounded-md bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-6 w-24 rounded-md bg-primary/40"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute bottom-0 left-0 top-12 w-52 border-r border-border bg-card p-3 flex flex-col gap-2"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-3 w-16 rounded bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-7 w-full rounded-md bg-muted"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-7 w-full rounded-md bg-muted/60"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "h-7 w-full rounded-md bg-muted/60"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-64 top-24 h-72 w-96 rounded-lg border border-border bg-card"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-[720px] top-24 h-96 w-[420px] rounded-lg border border-border bg-card"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute inset-0 bg-foreground/45"
+        }
+      },
+      {
+        "$ref": "Box",
+        "$id": "overlay",
+        "props": {
+          "className": "absolute inset-0 flex items-center justify-center p-5"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "dialog",
+            "props": {
+              "className": "flex h-[800px] w-[920px] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "$id": "rail",
+                "props": {
+                  "className": "flex w-[216px] shrink-0 flex-col border-r border-border bg-muted/40 p-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "px-2 pb-2 pt-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                      "children": "Settings"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "folder-cog",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "children": "Folder"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mt-0.5 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "layout-grid",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "children": "Board"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "ml-auto max-w-[86px] truncate text-[10.5px] text-muted-foreground/70",
+                          "children": "Node edit pane…"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mt-0.5 flex items-center gap-2.5 rounded-md bg-card px-2.5 py-2 text-[13px] font-medium text-foreground shadow-sm ring-1 ring-border"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "sliders-horizontal",
+                          "className": "size-4 text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "children": "Canvas"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mt-auto rounded-md border border-dashed border-border px-2.5 py-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[10px] uppercase tracking-wider text-muted-foreground",
+                          "children": "Design folder"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-1 break-all font-mono text-[10.5px] leading-tight text-foreground/80",
+                          "children": "~/code/acme/velloo"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "pane",
+                "props": {
+                  "className": "flex min-w-0 flex-1 flex-col"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-start gap-3 border-b border-border px-6 py-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "min-w-0"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "text-[15px] font-semibold leading-tight text-foreground",
+                              "children": "Canvas"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-1 text-[11.5px] text-muted-foreground",
+                              "children": "How the editor behaves for you. Kept in this browser — never written to the folder, never shared."
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "ml-auto flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "x",
+                              "className": "size-4"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "body",
+                    "props": {
+                      "className": "flex-1 overflow-y-auto px-6 py-5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                          "children": "Appearance"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-2 divide-y divide-border/70"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center justify-between gap-6 py-2.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "min-w-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "text-[13px] font-medium text-foreground",
+                                      "children": "App theme"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "mt-0.5 text-[11.5px] text-muted-foreground",
+                                      "children": "Velloo's own chrome — the toolbar, sidebar, and panels."
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex w-[252px] shrink-0 gap-0.5 rounded-md border border-border bg-muted p-0.5"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "flex flex-1 items-center justify-center gap-1.5 rounded-[5px] py-1 text-[12px] text-muted-foreground"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "props": {
+                                          "name": "sun",
+                                          "className": "size-3.5"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "children": "Light"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "flex flex-1 items-center justify-center gap-1.5 rounded-[5px] py-1 text-[12px] text-muted-foreground"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "props": {
+                                          "name": "moon",
+                                          "className": "size-3.5"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "children": "Dark"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "flex flex-1 items-center justify-center gap-1.5 rounded-[5px] bg-card py-1 text-[12px] font-medium text-foreground shadow-sm"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "props": {
+                                          "name": "monitor",
+                                          "className": "size-3.5"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "children": "System"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center justify-between gap-6 py-2.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "min-w-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "text-[13px] font-medium text-foreground",
+                                      "children": "Remember the design preset"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "mt-0.5 text-[11.5px] leading-snug text-muted-foreground",
+                                      "children": "Reopen the canvas in whichever preset you last used. Off means every reload starts light."
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex w-[252px] shrink-0 items-center justify-end gap-3"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-1"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "props": {
+                                          "name": "moon",
+                                          "className": "size-3.5 text-muted-foreground"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "className": "text-[11.5px] text-muted-foreground",
+                                          "children": "now: dark"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Switch",
+                                    "props": {
+                                      "checked": true
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-6 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground",
+                          "children": "Layout"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-2 divide-y divide-border/70"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center justify-between gap-6 py-2.5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "min-w-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "text-[13px] font-medium text-foreground",
+                                      "children": "Remember collapsed panels"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "mt-0.5 text-[11.5px] text-muted-foreground",
+                                      "children": "Boards list and screen tree stay as you left them."
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Switch",
+                                "props": {
+                                  "checked": true
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-6 flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "rotate-ccw",
+                              "className": "mt-0.5 size-4 shrink-0 text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "min-w-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "text-[13px] font-medium text-foreground",
+                                  "children": "Reset canvas preferences"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "mt-0.5 text-[11.5px] leading-snug text-muted-foreground",
+                                  "children": "Clears theme, panel, and viewport memory for this browser. Your design is untouched."
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "outline",
+                              "size": "sm",
+                              "className": "ml-auto h-8 shrink-0 text-[12.5px]",
+                              "children": "Reset"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "mt-4 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "info",
+                              "className": "size-3.5 shrink-0 text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "text-[11.5px] text-muted-foreground",
+                              "children": "Signing in, credits, and reverting live in the account menu, top right."
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex h-12 shrink-0 items-center gap-2 border-t border-border bg-muted/30 px-6"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "monitor",
+                          "className": "size-3.5 text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[11.5px] text-muted-foreground",
+                          "children": "This browser only."
+                        }
+                      },
+                      {
+                        "$ref": "Button",
+                        "props": {
+                          "size": "sm",
+                          "className": "ml-auto h-8 text-[13px]",
+                          "children": "Done"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

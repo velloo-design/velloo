@@ -1,0 +1,35 @@
+{
+  "id": "settings-dialog",
+  "name": "Canvas settings dialog",
+  "theme": "velloo-cloud",
+  "frames": [
+    {
+      "id": "settings-folder-1",
+      "screen": "settings-folder",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "label": "Folder scope"
+    },
+    {
+      "id": "settings-board-1",
+      "screen": "settings-board",
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "label": "Board scope"
+    },
+    {
+      "id": "settings-canvas-1",
+      "screen": "settings-canvas",
+      "x": 2720,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "label": "Canvas scope"
+    }
+  ],
+  "groups": []
+}

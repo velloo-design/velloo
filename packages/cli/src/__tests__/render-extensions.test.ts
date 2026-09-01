@@ -91,10 +91,36 @@ test("render resolves a screen's declared extension instead of crashing", async 
     stderr: "pipe",
   });
   const exitCode = await proc.exited;
+  const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
   if (exitCode !== 0) throw new Error(`velloo render failed (${exitCode}): ${stderr}`);
 
   const html = await readFile(out, "utf8");
   expect(html).toContain('data-velloo-extension="Sparkline"');
   expect(html).not.toContain("UnknownComponent");
+  expect(stderr).toContain("preparing render");
+  expect(stderr).toContain("rendering HTML");
+  expect(stderr).toContain("rendered HTML");
+  expect(stdout).toContain("velloo render: wrote");
+});
+
+test("emit keeps generated code on stdout and progress on stderr", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design);
+
+  const proc = Bun.spawn(["bun", cliPath, "emit", "home", "--folder", design], {
+    cwd: resolve(import.meta.dir, "../../../.."),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const exitCode = await proc.exited;
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+  if (exitCode !== 0) throw new Error(`velloo emit failed (${exitCode}): ${stderr}`);
+
+  expect(stdout).toStartWith("// screen: home (Home)");
+  expect(stdout).not.toContain("preparing code");
+  expect(stderr).toContain("preparing code");
+  expect(stderr).toContain("generating code");
+  expect(stderr).toContain("generated code");
 });

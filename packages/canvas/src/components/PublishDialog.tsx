@@ -1,13 +1,4 @@
-import {
-  AlertTriangle,
-  CircleCheck,
-  Copy,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  LoaderCircle,
-  Share2,
-} from "lucide-react";
+import { AlertTriangle, CircleCheck, Copy, ExternalLink, Eye, EyeOff, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type PublishRequest,
@@ -18,6 +9,7 @@ import {
 } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
+import { LoadingMark } from "./Loading.tsx";
 import { Button } from "./ui/button.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";
 import {
@@ -246,7 +238,7 @@ export function PublishDialog() {
         ) : run.state === "running" ? (
           <div className="flex flex-col gap-3 py-4">
             <div className="flex items-center gap-2 text-sm">
-              <LoaderCircle className="animate-spin" size={14} />
+              <LoadingMark size={16} />
               <span>{run.message}</span>
               {run.capture ? (
                 <span className="text-muted-foreground tabular-nums">

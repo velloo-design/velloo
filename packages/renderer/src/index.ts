@@ -95,6 +95,7 @@ export {
   classifyCapture,
   closePooledBrowser,
   isCaptureTimeout,
+  MAX_CONCURRENT_RENDERS,
   type PdfPageOptions,
   pdfDeckBuffer,
   pdfPageBuffer,

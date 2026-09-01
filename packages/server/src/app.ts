@@ -13,6 +13,7 @@ import { createCapturesRouter } from "./routes/captures.ts";
 import {
   createBoardRouter,
   createComponentsRouter,
+  createConfigRouter,
   createDesignRouter,
   createScreenRouter,
   createSnippetsRouter,
@@ -59,6 +60,7 @@ export function createApp(
   // backfills from on open; live entries ride the WS as `activity` events.
   app.get("/api/activity", (c) => c.json({ events: activityLog(ctxFor().folder.root) }));
   app.route("/api/design", createDesignRouter(ctxFor));
+  app.route("/api/config", createConfigRouter(ctxFor));
   app.route("/api/screen", createScreenRouter(folder));
   app.route("/api/board", createBoardRouter(folder));
   app.route("/api/snippets", createSnippetsRouter(folder));

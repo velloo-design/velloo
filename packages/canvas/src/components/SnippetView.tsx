@@ -7,6 +7,7 @@ import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Inspector } from "./Inspector.tsx";
+import { Loading } from "./Loading.tsx";
 import { SnippetParamsPanel } from "./SnippetParamsPanel.tsx";
 import { Tree } from "./Tree.tsx";
 import { Badge } from "./ui/badge.tsx";
@@ -188,7 +189,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   if (loading) {
     return (
       <div className="flex-1 grid place-items-center text-sm text-muted-foreground">
-        Loading snippet…
+        <Loading size={32} label="Loading snippet…" className="flex-col" />
       </div>
     );
   }

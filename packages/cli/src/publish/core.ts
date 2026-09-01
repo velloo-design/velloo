@@ -96,6 +96,11 @@ export interface PublishRequest {
   provenance?: PublishProvenance;
   viewport: Viewport;
   screenshots: boolean;
+  /** Optional git-diff slice: the full design still publishes, only previews are skipped. */
+  screenshotSelection?: {
+    screenIds: ReadonlySet<string>;
+    boardIds: ReadonlySet<string>;
+  };
 }
 
 export interface PublishOutcome {
@@ -388,6 +393,8 @@ export async function publishDesign(
   const viewport = request.viewport ?? PUBLISH_VIEWPORT;
   const title = request.title?.trim() || defaultPublishTitle(root);
   const form = new FormData();
+  let bundleFiles = 0;
+  let bundleBytes = 0;
 
   /**
    * Every bundle file goes through here because a **zero-byte part loses its
@@ -404,6 +411,9 @@ export async function publishDesign(
       return false;
     }
     form.append("file", new File([data], path, type ? { type } : undefined));
+    bundleFiles += 1;
+    bundleBytes +=
+      typeof data === "string" ? new TextEncoder().encode(data).byteLength : data.byteLength;
     return true;
   };
 
@@ -443,7 +453,7 @@ export async function publishDesign(
   if (request.screenshots) {
     report({ kind: "step", step: "capture", message: "capturing previews" });
     shots = await withAssetServer(root, liveCode, (baseHref) => {
-      const htmlCache = new Map<string, string>();
+      const htmlCache = new Map<string, Promise<string>>();
       const renderHtml = async (screen: Screen, themeName?: string): Promise<string> => {
         const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
         // NUL separates the two halves: no id or theme name can contain it, so
@@ -451,7 +461,7 @@ export async function publishDesign(
         const key = `${screen.id}\u0000${theme.name}`;
         const cached = htmlCache.get(key);
         if (cached) return cached;
-        const { html } = await renderScreen(screen, theme, {
+        const rendering = renderScreen(screen, theme, {
           viewport,
           snapshotCss,
           registry: registryForScreen(
@@ -470,13 +480,19 @@ export async function publishDesign(
           customCss: design.customCss,
           baseHref,
           ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
-        });
-        htmlCache.set(key, html);
-        return html;
+        }).then(({ html }) => html);
+        htmlCache.set(key, rendering);
+        return rendering;
       };
       return captureBundleScreenshots({
         screens,
         boards,
+        ...(request.screenshotSelection
+          ? {
+              screenIds: request.screenshotSelection.screenIds,
+              boardIds: request.screenshotSelection.boardIds,
+            }
+          : {}),
         viewport,
         renderHtml,
         capture: async (req) =>
@@ -577,7 +593,11 @@ export async function publishDesign(
   // link (200) or creates one carrying it (201).
   const folderId = await ensureFolderId(root, config.folderId, report);
 
-  report({ kind: "step", step: "upload", message: "uploading" });
+  report({
+    kind: "step",
+    step: "upload",
+    message: `uploading ${bundleFiles} file${bundleFiles === 1 ? "" : "s"} (${formatBytes(bundleBytes)})`,
+  });
   const upload: LinkUploadOutcome = await uploadLinkBundle({
     baseUrl: cloud.baseUrl,
     token: cloud.token,
@@ -611,6 +631,12 @@ export async function publishDesign(
     ...(upload.tier !== undefined ? { tier: upload.tier } : {}),
     ...(upload.history !== undefined ? { history: upload.history } : {}),
   };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
 }
 
 /**

@@ -127,6 +127,9 @@ export function connectWs(): () => void {
         // Extensions / library config changed — the Library tab reads
         // from the design summary.
         void refreshDesignSummary();
+        // An agent (or a second tab) can edit config while the settings
+        // dialog is open; reload it so the dialog isn't showing stale values.
+        if (useCanvas.getState().folderConfig) void useCanvas.getState().loadFolderConfig();
       } else if (payload.type === "folder-reloaded") {
         // Out-of-band rewrite of the whole folder (git revert-all): drop
         // every cache and boot again.

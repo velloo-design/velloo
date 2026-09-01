@@ -47,7 +47,7 @@ export type LockFolder = Pick<DesignFolder, "root">;
 // Keys carry the folder root + a resource kind so two design folders served
 // by one daemon never contend, and a screen/board sharing an id never collide.
 // NUL separators can't appear in a path or resource id.
-const lockKey = (folder: LockFolder, kind: "screen" | "snippet" | "board", id: string) =>
+const lockKey = (folder: LockFolder, kind: "screen" | "snippet" | "board" | "config", id: string) =>
   `${folder.root}\u0000${kind}\u0000${id}`;
 
 export function withScreenLock<T>(
@@ -73,6 +73,15 @@ export function withSnippetLock<T>(
 }
 
 /** Serializes writes for a specific board (frame moves, group ops). */
+/**
+ * Serializes writes to the folder's `config.json`. Config mutations are
+ * read-modify-write on one shared object, so two of them landing at once
+ * would let the later write drop the earlier one's field.
+ */
+export function withConfigLock<T>(folder: LockFolder, fn: () => Promise<T>): Promise<T> {
+  return locks.run(lockKey(folder, "config", "config"), fn);
+}
+
 export function withBoardLock<T>(
   folder: LockFolder,
   boardId: string,

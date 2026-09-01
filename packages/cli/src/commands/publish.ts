@@ -19,6 +19,8 @@ import {
 } from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, pickBoards, resolveDesignFolder } from "../folder.ts";
+import { createProgress, type Progress } from "../progress.ts";
+import { changedPreviewsSince } from "../publish/changed-previews.ts";
 import {
   createPublishBundler,
   exactPublishSlots,
@@ -104,8 +106,16 @@ export default defineCommand({
       default: true,
       description: "Capture PNG previews into the bundle (--no-screenshots to skip)",
     },
+    "changed-since": {
+      type: "string",
+      description:
+        "Capture only screen/board previews affected since this git ref (the full design still publishes)",
+    },
   },
   async run({ args }) {
+    if (args["changed-since"] && args.screenshots === false) {
+      fail("publish", "--changed-since cannot be combined with --no-screenshots");
+    }
     const folder = await resolveDesignFolder(args.folder, "publish");
     const baseUrl = args.url ? args.url.replace(/\/+$/, "") : defaultCloudUrl();
     const token =
@@ -142,6 +152,28 @@ export default defineCommand({
       return;
     }
     const provenance = gitContext(folder);
+    const selectedBoardIds = new Set(selected.map((board) => board.id));
+    const selectedBoards = [...design.boards.values()].filter((board) =>
+      selectedBoardIds.has(board.id),
+    );
+    const screenshotSelection = args["changed-since"]
+      ? (() => {
+          try {
+            return changedPreviewsSince(
+              folder,
+              args["changed-since"],
+              [...design.screens.values()],
+              design.snippets,
+              selectedBoards,
+            );
+          } catch (error) {
+            fail(
+              "publish",
+              `cannot determine previews changed since '${args["changed-since"]}': ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        })()
+      : undefined;
     const listed =
       config.folderId && args.new !== true
         ? await listPublishDestinations({
@@ -196,6 +228,8 @@ export default defineCommand({
       config.styling?.framework,
     );
 
+    const progress = createProgress();
+    const report = createPublishReporter(progress);
     let outcome: PublishOutcome;
     try {
       outcome = await publishDesign(
@@ -218,10 +252,13 @@ export default defineCommand({
           provenance,
           viewport,
           screenshots: args.screenshots !== false,
+          ...(screenshotSelection ? { screenshotSelection } : {}),
         },
         report,
       );
+      progress.succeed("published design");
     } catch (error) {
+      progress.fail("publish failed");
       if (error instanceof CloudUnreachableError) {
         fail(
           "publish",
@@ -350,14 +387,24 @@ export async function choosePublishDestination(opts: {
   return destination;
 }
 
-/**
- * Console flavor of the core's progress events. Steps stay quiet — publish has
- * always printed only its summary — while notes and warnings keep the indented
- * two-space form earlier versions used.
- */
-function report(event: PublishEvent): void {
-  if (event.kind === "note" || event.kind === "warn" || event.kind === "info")
-    console.log(`  ${event.message}`);
+/** Turn the core's events into one live line, with compact stage lines in CI. */
+export function createPublishReporter(progress: Progress): (event: PublishEvent) => void {
+  let latestCapture: string | undefined;
+  return (event) => {
+    if (event.kind === "capture") {
+      latestCapture = `capturing previews ${event.done}/${event.total}`;
+      progress.step(latestCapture, { transient: true });
+      return;
+    }
+    if (event.kind === "step") {
+      // Preserve the final count in line-based logs without printing every tick.
+      if (latestCapture) progress.step(latestCapture);
+      latestCapture = undefined;
+      progress.step(event.message);
+      return;
+    }
+    progress.log(event.message);
+  };
 }
 
 /**

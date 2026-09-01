@@ -11,6 +11,7 @@ import { loadPipeline } from "../ci/render.ts";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, pickScreen, resolveDesignFolder } from "../folder.ts";
+import { createProgress } from "../progress.ts";
 
 export default defineCommand({
   meta: {
@@ -75,28 +76,6 @@ export default defineCommand({
       h: args.h ? Number(args.h) : 900,
     };
 
-    // Reuse the same headless pipeline as `velloo ci`/`publish`: the JIT carries
-    // `extraThemeBlock` (so palette/font utilities compile), and the render gets
-    // the folder's custom.css — both of which the old hand-rolled path dropped,
-    // making `velloo render` diverge from the canvas.
-    const pipeline = await loadPipeline(folder);
-    const { design, config, providers, defaultProvider, snapshotCss } = pipeline;
-    const theme = design.theme;
-    const registry = registryForScreen(screen, providers, defaultProvider, config.extensions ?? {});
-    const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
-    const renderHtml = async (baseHref?: string): Promise<string> => {
-      const { html } = await renderScreen(screen, theme, {
-        viewport,
-        snapshotCss,
-        registry,
-        snippets: design.snippets,
-        renderPass,
-        customCss: design.customCss,
-        ...(baseHref ? { baseHref } : {}),
-      });
-      return html;
-    };
-
     // Output: explicit --to wins; otherwise interactively choose the format and
     // write ./<screen>.<ext> (HTML needs no browser, so it's the non-TTY default).
     let outPath: string;
@@ -118,31 +97,77 @@ export default defineCommand({
       outPath = resolve(`${screen.id}.${ext}`);
     }
     const out = extname(outPath).toLowerCase();
-
-    if (out === ".html") {
-      // Root-relative `/assets/…` links stay as-is (no baseHref) — an .html
-      // written to disk has no live server to resolve an ephemeral origin.
-      await writeText(outPath, await renderHtml());
-      console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
-      return;
+    if (out !== ".html" && out !== ".png") {
+      fail("render", `unsupported output extension ${JSON.stringify(out)}. Use .html or .png.`);
     }
 
-    if (out === ".png") {
+    const progress = createProgress();
+    progress.start("preparing render");
+    try {
+      // Reuse the same headless pipeline as `velloo ci`/`publish`: the JIT carries
+      // `extraThemeBlock` (so palette/font utilities compile), and the render gets
+      // the folder's custom.css — both of which the old hand-rolled path dropped,
+      // making `velloo render` diverge from the canvas.
+      const pipeline = await loadPipeline(folder);
+      const { design, config, providers, defaultProvider, snapshotCss } = pipeline;
+      const theme = design.theme;
+      const registry = registryForScreen(
+        screen,
+        providers,
+        defaultProvider,
+        config.extensions ?? {},
+      );
+      const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
+      const renderHtml = async (baseHref?: string): Promise<string> => {
+        const { html } = await renderScreen(screen, theme, {
+          viewport,
+          snapshotCss,
+          registry,
+          snippets: design.snippets,
+          renderPass,
+          customCss: design.customCss,
+          ...(baseHref ? { baseHref } : {}),
+        });
+        return html;
+      };
+
+      if (out === ".html") {
+        progress.step("rendering HTML");
+        // Root-relative `/assets/…` links stay as-is (no baseHref) — an .html
+        // written to disk has no live server to resolve an ephemeral origin.
+        await writeText(outPath, await renderHtml());
+        progress.succeed("rendered HTML");
+        console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
+        return;
+      }
+
+      progress.step("rendering screen");
       // Serve the folder's assets/ so `/assets/…` resolve during capture.
       await withAssetServer(folder, null, async (baseHref) => {
         const html = await renderHtml(baseHref);
         try {
-          await captureWithBrowserSetup("render", () => screenshot({ html, viewport, outPath }));
+          await captureWithBrowserSetup("render", async () => {
+            progress.step("capturing PNG");
+            try {
+              await screenshot({ html, viewport, outPath });
+            } catch (error) {
+              // Stop the spinner before the browser helper prints or prompts,
+              // then let its optional retry start a fresh live line.
+              progress.fail("PNG capture failed");
+              throw error;
+            }
+          });
         } finally {
           // One-shot process: release the pooled Chromium or the open browser
           // connection keeps the CLI alive after the file is written.
           await closePooledBrowser();
         }
       });
+      progress.succeed("rendered PNG");
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
-      return;
+    } catch (error) {
+      progress.fail("render failed");
+      throw error;
     }
-
-    fail("render", `unsupported output extension ${JSON.stringify(out)}. Use .html or .png.`);
   },
 });

@@ -9,10 +9,14 @@ import {
   reorderBoards,
   setNodeId,
   updateBoard,
+  updateCodegen,
+  updateDefaults,
+  updateFeedback,
   updateFrame,
   updateProps,
   updateSnippet,
   updateSnippetArgs,
+  updateViewportPresets,
 } from "../mutations/index.ts";
 import {
   AddBoardBody,
@@ -23,10 +27,14 @@ import {
   ReorderBoardsBody,
   SetNodeIdBody,
   UpdateBoardBody,
+  UpdateCodegenBody,
+  UpdateDefaultsBody,
+  UpdateFeedbackBody,
   UpdateFrameBody,
   UpdatePropsBody,
   UpdateSnippetArgsBody,
   UpdateSnippetBody,
+  UpdateViewportPresetsBody,
 } from "./mutate-schemas.ts";
 import { makeRoute } from "./route.ts";
 
@@ -70,6 +78,24 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/reorder_boards",
     route(ReorderBoardsBody, (a, ctx) => reorderBoards(ctx, a)),
+  );
+
+  // Folder config
+  r.post(
+    "/update_viewport_presets",
+    route(UpdateViewportPresetsBody, (a, ctx) => updateViewportPresets(ctx, a)),
+  );
+  r.post(
+    "/update_defaults",
+    route(UpdateDefaultsBody, (a, ctx) => updateDefaults(ctx, a)),
+  );
+  r.post(
+    "/update_codegen",
+    route(UpdateCodegenBody, (a, ctx) => updateCodegen(ctx, a)),
+  );
+  r.post(
+    "/update_feedback",
+    route(UpdateFeedbackBody, (a, ctx) => updateFeedback(ctx, a)),
   );
 
   // Frame lifecycle

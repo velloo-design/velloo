@@ -41,6 +41,7 @@ import {
   updateScreen,
   updateSnippet,
   updateSnippetArgs,
+  updateViewportPresets,
 } from "../../mutations/index.ts";
 import {
   dynamicIconWarningsForTree,
@@ -387,6 +388,26 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: { order: z.array(z.string()) },
     },
     async (args) => toMcp(await reorderBoards(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "update_viewport_presets",
+    {
+      description:
+        "Replace the folder's viewport presets (config.viewportPresets) \u2014 the sizes offered when adding a frame. Send the complete list in display order; names must be distinct and at least one preset is required. Frames store their own w/h, so editing presets never resizes an existing frame.",
+      inputSchema: {
+        presets: z
+          .array(
+            z.object({
+              name: z.string(),
+              w: z.number().int().positive(),
+              h: z.number().int().positive(),
+            }),
+          )
+          .min(1),
+      },
+    },
+    async (args) => toMcp(await updateViewportPresets(ctx, args)),
   );
 
   // ── Frame / group lifecycle ────────────────────────────────────────────

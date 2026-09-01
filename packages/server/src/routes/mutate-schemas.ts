@@ -71,6 +71,30 @@ export const ReorderBoardsBody = z.object({
   order: z.array(z.string().min(1)),
 });
 
+// ── Folder config ──────────────────────────────────────────────────────
+export const UpdateViewportPresetsBody = z.object({
+  presets: z.array(
+    z.object({
+      name: z.string().min(1),
+      w: z.number().int().positive(),
+      h: z.number().int().positive(),
+    }),
+  ),
+});
+// `null` clears the default, an absent key leaves it alone — so the dialog
+// can write one picker without echoing the other back.
+export const UpdateDefaultsBody = z.object({
+  defaultBoard: z.string().min(1).nullable().optional(),
+  defaultScreen: z.string().min(1).nullable().optional(),
+});
+export const UpdateCodegenBody = z.object({
+  componentsAlias: z.string().nullable().optional(),
+});
+export const UpdateFeedbackBody = z.object({
+  enabled: z.boolean().optional(),
+  contactOk: z.boolean().optional(),
+});
+
 // ── Frame lifecycle ────────────────────────────────────────────────────
 export const AddFrameBody = z.object({
   boardId: z.string().min(1),

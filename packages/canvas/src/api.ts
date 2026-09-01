@@ -21,6 +21,7 @@ export {
   type LoginState,
   loginAttemptSucceeded,
 } from "./api/auth.ts";
+export { config, type FolderConfig, fetchConfig } from "./api/config.ts";
 export {
   type BoardMeta,
   type DesignSummary,

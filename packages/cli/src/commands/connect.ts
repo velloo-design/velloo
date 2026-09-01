@@ -13,6 +13,7 @@ import {
 import { assertFolderFormatCurrent, DesignFolderFormatError } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
+import { createProgress } from "../progress.ts";
 
 export default defineCommand({
   meta: {
@@ -97,21 +98,31 @@ export default defineCommand({
     }
     if (agents.length === 0) return;
 
-    const result = await connect({
-      designFolder: folder,
-      agents,
-      projectRoot: args.projectRoot ? resolve(args.projectRoot) : undefined,
-      transport: args.http ? "http" : "stdio",
-      mcpUrl: args.mcpUrl,
-      installSkill: args.skill,
-    });
+    const progress = createProgress();
+    progress.start("connecting agent");
+    let result: Awaited<ReturnType<typeof connect>>;
+    try {
+      result = await connect({
+        designFolder: folder,
+        agents,
+        projectRoot: args.projectRoot ? resolve(args.projectRoot) : undefined,
+        transport: args.http ? "http" : "stdio",
+        mcpUrl: args.mcpUrl,
+        installSkill: args.skill,
+      });
+    } catch (error) {
+      progress.fail("agent connection failed");
+      throw error;
+    }
 
     if (result.unknownAgents.length > 0) {
+      progress.fail("agent connection failed");
       fail(
         "connect",
         `unknown agent(s): ${result.unknownAgents.join(", ")}. Valid: ${AGENT_IDS.join(", ")}.`,
       );
     }
+    progress.succeed("connected agent");
 
     console.log("");
     console.log(pc.green("✓ Connected velloo to your agent."));

@@ -94,6 +94,67 @@ test("a 5xx upload failure carries the trouble hint, not a bare internal error",
   ).rejects.toThrow(/storage backend unavailable.*the cloud is having trouble/);
 });
 
+test("version upload retries one transient 5xx and succeeds", async () => {
+  let attempts = 0;
+  const url = serveCloud((req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") {
+      return Response.json(
+        { slug: "retry", visibility: "public", passwordProtected: false },
+        { status: 201 },
+      );
+    }
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      attempts += 1;
+      return attempts === 1
+        ? Response.json({ message: "temporary" }, { status: 503 })
+        : Response.json({ files: 1, bytes: 2, url: "/s/retry/" }, { status: 201 });
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json"));
+  const result = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { title: "x", visibility: "public", publishMode: "new" },
+    form,
+  });
+  expect(attempts).toBe(2);
+  expect(result.shareUrl).toBe(`${url}/s/retry/`);
+});
+
+test("version upload times out, retries once, and reports an actionable failure", async () => {
+  let attempts = 0;
+  const url = serveCloud(async (req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") {
+      return Response.json(
+        { slug: "slow", visibility: "public", passwordProtected: false },
+        { status: 201 },
+      );
+    }
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      attempts += 1;
+      await Bun.sleep(50);
+      return Response.json({ files: 1, bytes: 2, url: "/s/slow/" }, { status: 201 });
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json"));
+  await expect(
+    uploadLinkBundle({
+      baseUrl: url,
+      token: "t",
+      link: { title: "x", visibility: "public", publishMode: "new" },
+      form,
+      uploadTimeoutMs: 5,
+    }),
+  ).rejects.toThrow(/timed out.*2 attempts.*check your connection/i);
+  expect(attempts).toBe(2);
+});
+
 test("reusing a stable link applies the privacy mode before uploading", async () => {
   const requests: { method: string; pathname: string; body?: unknown }[] = [];
   const url = serveCloud(async (req) => {

@@ -213,7 +213,7 @@ async function launchBrowser(): Promise<Browser> {
  * spawn spike that used to stall the daemon is gone. Kept modest so a burst of
  * tall captures still can't peg CPU.
  */
-const MAX_CONCURRENT_RENDERS = 3;
+export const MAX_CONCURRENT_RENDERS = 3;
 
 let renderSlots = MAX_CONCURRENT_RENDERS;
 const renderQueue: Array<() => void> = [];

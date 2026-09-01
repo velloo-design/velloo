@@ -73,6 +73,14 @@ Boards are the canvases of a design folder; one folder has many. Each board owns
 | `remove_board` | `boardId` | Refuses to remove the last board (returns `LastBoard`). Undoable |
 | `reorder_boards` | `order` | Set the sidebar board order (board ids). Unknown ids dropped, omitted boards appended. Persists to `config.boardOrder`; the canvas drag-and-drop calls this |
 
+### Folder config
+
+Fields in `.design/config.json`. Only the viewport presets have an MCP tool — the rest of the config surface (default board/screen, codegen alias, feedback) is edited from the canvas settings dialog over HTTP (`/api/mutate/update_defaults`, `update_codegen`, `update_feedback`), and read whole from `GET /api/config`. All of them persist through `persistConfig` and broadcast `config-changed`.
+
+| Tool | Args | Notes |
+|---|---|---|
+| `update_viewport_presets` | `presets` | Replace the folder's frame-size offers wholesale, in display order. Names must be distinct; at least one is required. Frames store their own `w`/`h`, so this never resizes an existing frame |
+
 ### Canvas notes
 
 Board-level sticky notes in board coordinates (the same space as frame `x`/`y`). The agent uses them for guidance that belongs next to frames — tour steps, review remarks, handoff context. Node-anchored *annotations* remain designer-authored; the agent reads those via `list_annotations`.

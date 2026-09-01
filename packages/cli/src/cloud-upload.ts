@@ -10,6 +10,9 @@
 
 export class CloudUnreachableError extends Error {}
 
+export const VERSION_UPLOAD_TIMEOUT_MS = 60_000;
+export const VERSION_UPLOAD_RETRIES = 1;
+
 // A 5xx is the cloud's trouble, not the user's bundle — say so instead of
 // leaving a bare "internal error".
 const serverTroubleHint = (status: number): string =>
@@ -96,6 +99,10 @@ export async function uploadLinkBundle(opts: {
   token: string;
   link: CloudLinkRequest;
   form: FormData;
+  /** Test seam; production uploads get a one-minute response deadline. */
+  uploadTimeoutMs?: number;
+  /** Test seam; production retries one transient version-upload failure. */
+  uploadRetries?: number;
 }): Promise<LinkUploadOutcome> {
   const { baseUrl, token, form } = opts;
   const authorized = { authorization: `Bearer ${token}` };
@@ -165,13 +172,25 @@ export async function uploadLinkBundle(opts: {
     form.append("expectedVersionId", opts.link.expectedVersionId);
   }
 
-  const uploadRes = await fetch(`${baseUrl}/v1/links/${link.slug}/versions`, {
-    method: "POST",
+  const upload = await uploadVersionWithRetry({
+    url: `${baseUrl}/v1/links/${link.slug}/versions`,
     headers: authorized,
-    body: form,
+    form,
+    timeoutMs: opts.uploadTimeoutMs ?? VERSION_UPLOAD_TIMEOUT_MS,
+    retries: opts.uploadRetries ?? VERSION_UPLOAD_RETRIES,
   });
+  const uploadRes = upload.response;
   if (uploadRes.status !== 201) {
     const body = (await uploadRes.json().catch(() => ({}))) as { message?: string };
+    const slotChangedAfterTransientFailure =
+      upload.transientFailures > 0 &&
+      uploadRes.status === 409 &&
+      /slot changed|already has a version/i.test(body.message ?? "");
+    if (slotChangedAfterTransientFailure) {
+      throw new Error(
+        "upload confirmation was lost and the retry found the publish slot changed — the publish may have succeeded; check your published boards before retrying",
+      );
+    }
     // Clean up a link we just created so a failed upload — e.g. over the size
     // limit — doesn't leave a broken board in the user's home.
     if (created) {
@@ -184,7 +203,7 @@ export async function uploadLinkBundle(opts: {
       `upload failed (${uploadRes.status}): ${body.message ?? "unknown"}${serverTroubleHint(uploadRes.status)}`,
     );
   }
-  const upload = (await uploadRes.json()) as {
+  const uploaded = (await uploadRes.json()) as {
     files: number;
     bytes: number;
     url: string;
@@ -198,10 +217,83 @@ export async function uploadLinkBundle(opts: {
       passwordProtected: link.passwordProtected ?? opts.link.password != null,
     },
     created,
-    files: upload.files,
-    bytes: upload.bytes,
-    shareUrl: upload.url.startsWith("http") ? upload.url : `${baseUrl}${upload.url}`,
-    ...(upload.tier !== undefined ? { tier: upload.tier } : {}),
-    ...(upload.history !== undefined ? { history: upload.history } : {}),
+    files: uploaded.files,
+    bytes: uploaded.bytes,
+    shareUrl: uploaded.url.startsWith("http") ? uploaded.url : `${baseUrl}${uploaded.url}`,
+    ...(uploaded.tier !== undefined ? { tier: uploaded.tier } : {}),
+    ...(uploaded.history !== undefined ? { history: uploaded.history } : {}),
   };
+}
+
+interface VersionUploadAttempt {
+  response: Response;
+  transientFailures: number;
+}
+
+/** Retry only failures that can plausibly recover without changing the request. */
+async function uploadVersionWithRetry(opts: {
+  url: string;
+  headers: Record<string, string>;
+  form: FormData;
+  timeoutMs: number;
+  retries: number;
+}): Promise<VersionUploadAttempt> {
+  const attempts = Math.max(1, Math.floor(opts.retries) + 1);
+  let transientFailures = 0;
+  let lastNetworkError = "unknown network error";
+  let lastTimedOut = false;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(
+      () => {
+        timedOut = true;
+        controller.abort();
+      },
+      Math.max(1, opts.timeoutMs),
+    );
+    try {
+      const response = await fetch(opts.url, {
+        method: "POST",
+        headers: opts.headers,
+        body: opts.form,
+        signal: controller.signal,
+      });
+      if (response.status < 500 || attempt === attempts) {
+        return { response, transientFailures };
+      }
+      transientFailures += 1;
+      await response.body?.cancel().catch(() => {});
+    } catch (error) {
+      transientFailures += 1;
+      lastTimedOut = timedOut;
+      lastNetworkError = error instanceof Error ? error.message : String(error);
+      if (attempt === attempts) {
+        const retried = attempts > 1 ? ` after ${attempts} attempts` : "";
+        if (timedOut) {
+          throw new CloudUnreachableError(
+            `version upload timed out after ${formatDuration(opts.timeoutMs)}${retried} — check your connection and try again`,
+          );
+        }
+        throw new CloudUnreachableError(
+          `version upload could not reach the cloud${retried} (${lastNetworkError}) — check your connection and try again`,
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // The loop always returns or throws. Keep TypeScript honest if its bounds
+  // analysis changes, while retaining the most useful terminal verdict.
+  throw new CloudUnreachableError(
+    lastTimedOut
+      ? `version upload timed out after ${formatDuration(opts.timeoutMs)} — check your connection and try again`
+      : `version upload could not reach the cloud (${lastNetworkError}) — check your connection and try again`,
+  );
+}
+
+function formatDuration(ms: number): string {
+  return ms >= 1000 ? `${Math.round(ms / 1000)}s` : `${Math.max(1, Math.round(ms))}ms`;
 }

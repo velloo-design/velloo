@@ -74,6 +74,42 @@ test("captures one PNG per screen + per board + a cover, and indexes them", asyn
   expect(warnings).toEqual([]);
 });
 
+test("runs captures concurrently without exceeding the renderer cap", async () => {
+  let active = 0;
+  let peak = 0;
+  const capture: CaptureFn = async () => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await Bun.sleep(20);
+    active -= 1;
+    return new Uint8Array(4);
+  };
+  await captureBundleScreenshots({
+    screens: Array.from({ length: 8 }, (_, index) => screen(`s${index}`)),
+    boards: [],
+    viewport,
+    renderHtml,
+    capture,
+    warn: () => {},
+  });
+  expect(peak).toBe(3);
+});
+
+test("changed-only selectors skip unaffected screens and boards", async () => {
+  const shots = await captureBundleScreenshots({
+    screens: [screen("home"), screen("pricing")],
+    boards: [board("main", ["home"]), board("sales", ["pricing"])],
+    screenIds: new Set(["pricing"]),
+    boardIds: new Set(["sales"]),
+    viewport,
+    renderHtml,
+    capture: fixedCapture(4),
+    warn: () => {},
+  });
+  expect(shots?.manifest.screens).toEqual({ pricing: "screenshots/pricing.png" });
+  expect(shots?.manifest.boards).toEqual({ sales: "screenshots/sales.png" });
+});
+
 test("cover falls back to the first screen when there are no boards", async () => {
   const shots = await captureBundleScreenshots({
     screens: [screen("home")],
