@@ -1,15 +1,22 @@
+import { readFile } from "node:fs/promises";
+import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { err, ok, type Result } from "@velloo/result";
 import { svgLooksActive } from "@velloo/schema";
-import { type CloudAuth, isSecureCloudUrl } from "./cloud.ts";
+import { type CloudAuth, currentToken, isSecureCloudUrl } from "./cloud.ts";
 import { storeAsset } from "./fs.ts";
 
 /**
  * Hosted asset generation: POST /v1/assets/generate on velloo-cloud,
- * metered against the account's credit ledger. The cloud returns the artwork
- * as a base64 data URL; this module decodes it and lands the file in the
+ * metered against the account's credit balance. The caller names an INTENT —
+ * what the artwork is for — and the cloud picks the model; that seam is why
+ * this module carries no model names or prices. The cloud returns each result
+ * as a base64 data URL; this module decodes them and lands the files in the
  * folder's `assets/` store exactly like `upload_asset` does (same naming, same
- * layout), so the returned `/assets/<name>` URL drops straight into
- * `<Image src>` — or, for SVG, the decoded markup into `<SVG content>`.
+ * layout), so the returned `/assets/<name>` URL goes into `<Image src>` — or,
+ * for SVG, the decoded markup into `<SVG content>`. Raster results also carry
+ * their pixel `width`/`height`, because `<Image>` fills its parent: without a
+ * matching `aspect` (or a sized box) it lays out at zero height, which is the
+ * one way a paid, fully successful generation can still show nothing.
  *
  * Every failure maps to ONE agent-facing message: the cloud's `message` fields
  * are written for agents, so they pass through verbatim, plus a one-line hint
@@ -17,40 +24,81 @@ import { storeAsset } from "./fs.ts";
  * `upload_asset`). Nothing here throws across the boundary.
  */
 
-export const IMAGE_SIZES = ["1024x1024", "1536x1024", "1024x1536"] as const;
-export type ImageSize = (typeof IMAGE_SIZES)[number];
+/**
+ * What the artwork is for. The cloud owns the intent → model mapping and may
+ * change it at any time; only these NAMES are a contract, so this list is
+ * deliberately short and stable. An unknown intent is a 400 whose message
+ * lists the live catalogue, passed through verbatim.
+ */
+export const INTENTS = [
+  "photo",
+  "illustration",
+  "graphic",
+  "texture",
+  "icon",
+  "vector",
+  "mark",
+  "edit",
+  "cutout",
+  "upscale",
+] as const;
+export type Intent = (typeof INTENTS)[number];
+
+export const ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"] as const;
+export type Aspect = (typeof ASPECTS)[number];
+
 export type GenerateKind = "image" | "svg";
 
 export interface GenerateAssetRequest {
   prompt: string;
-  kind: GenerateKind;
-  /** Image only; the cloud defaults to 1024x1024. */
-  size?: ImageSize;
+  intent: Intent;
+  /** Cloud defaults per intent (16:9 for photo, 1:1 for icon/vector, …). */
+  aspect?: Aspect;
+  /** Variants to generate, 1..4. Each is charged. */
+  count?: number;
   /**
-   * Image only; a cloud-allowlisted model id. Omitted ⇒ the server default.
-   * The allowlist lives server-side: an unknown id is a 400 whose message
-   * names the allowed models, passed through verbatim like every cloud error.
+   * Existing assets to work from, as folder-relative paths ("assets/hero.png")
+   * or canvas URLs ("/assets/hero.png"). `edit`/`cutout`/`upscale` require one;
+   * `photo`/`illustration`/`graphic` accept them as style guidance.
    */
-  model?: string;
+  reference?: string[];
   /** Filename stem for `assets/<stem>.<png|svg>`; defaults to the generation id. */
   filename?: string;
 }
 
-export interface GeneratedAsset {
+export interface GeneratedAssetFile {
   assetPath: string;
   url: string;
   bytes: number;
   kind: GenerateKind;
-  chargedMicros: number;
-  balanceMicros: number;
-  /** e.g. "cost $0.25, balance $11.75" — surfaced verbatim in the tool result. */
-  cost: string;
+  /** Pixel dimensions (raster only) — what `<Image>` must be sized to. */
+  width?: number;
+  height?: number;
   /** Decoded SVG markup, ready for `<SVG content>` (svg only). */
   content?: string;
 }
 
+export interface GeneratedAsset {
+  /** Every stored file, in the order the cloud returned them. */
+  assets: GeneratedAssetFile[];
+  intent: Intent;
+  /** The model the cloud actually used — informational, not a request knob. */
+  model: string;
+  chargedMicros: number;
+  balanceMicros: number;
+  /** e.g. "cost $0.12, balance $11.75" — surfaced verbatim in the tool result. */
+  cost: string;
+  /** Convenience mirror of assets[0], the common single-result case. */
+  assetPath: string;
+  url: string;
+  kind: GenerateKind;
+  width?: number;
+  height?: number;
+  content?: string;
+}
+
 export interface GenerateAssetError {
-  kind: "LoggedOut" | "Unreachable" | "CloudRejected" | "BadResponse";
+  kind: "LoggedOut" | "Unreachable" | "CloudRejected" | "BadResponse" | "BadRequest";
   /** HTTP status for CloudRejected. */
   status?: number;
   /** Complete agent-facing message: cloud text + the actionable hint. */
@@ -60,18 +108,48 @@ export interface GenerateAssetError {
 /** Generation can take a while (raster models run tens of seconds). */
 const FETCH_TIMEOUT_MS = 120_000;
 
+/** Reference images travel inline; the cloud caps each at 4 MB. */
+const MAX_REFERENCE_BYTES = 4 * 1024 * 1024;
+const MAX_REFERENCES = 3;
+
+const REFERENCE_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+};
+
 const AUTHOR_LOCALLY =
   "Hosted generation isn't available on this velloo-cloud server — author the artwork yourself (SVG compositions, rendered gradients/textures) and store it with `upload_asset`.";
 
 /** One-line, actionable follow-up per failure status (appended after the cloud's message). */
 const HINTS: Record<number, string> = {
-  401: "Run `velloo login` to sign in again, then restart the server.",
-  402: "Ask the user to top up credits (or upgrade) before retrying — or author the asset yourself with `upload_asset`.",
+  400: "Fix the arguments and retry — nothing was generated or charged.",
+  401: "Run `velloo login` to sign in again, then retry.",
+  402: "Ask the user to top up credits before retrying — or author the asset yourself with `upload_asset`.",
   404: AUTHOR_LOCALLY,
   429: "The limit is per-account per minute — wait a minute, then retry.",
-  502: "No credits were charged — retry once; if it fails again, author the asset yourself with `upload_asset`.",
+  // The cloud's own 502 text already ends with "no credits were charged" —
+  // restating it here read as a stutter in the agent-facing message.
+  502: "Retry once; if it fails again, author the asset yourself with `upload_asset`.",
   503: AUTHOR_LOCALLY,
 };
+
+/**
+ * A PNG's pixel dimensions, straight out of the IHDR chunk (signature, then a
+ * length + "IHDR" tag, then two big-endian uint32s). The agent needs these:
+ * `<Image>` fills its parent, so a generated asset dropped in without a
+ * matching `aspect` renders at zero height — the one way this whole path can
+ * "succeed" and still show nothing.
+ */
+function pngSize(bytes: Buffer): { width: number; height: number } | null {
+  if (bytes.length < 24 || bytes.toString("latin1", 12, 16) !== "IHDR") return null;
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
 
 export function formatDollars(micros: number): string {
   const value = micros / 1_000_000;
@@ -79,10 +157,16 @@ export function formatDollars(micros: number): string {
   return Number(fixed) === value ? `$${fixed}` : `$${value}`;
 }
 
-interface GenerateResponse {
-  id: string;
+interface GenerateResponseAsset {
   kind: GenerateKind;
   dataUrl: string;
+}
+
+interface GenerateResponse {
+  id: string;
+  intent: string;
+  model: string;
+  assets: GenerateResponseAsset[];
   chargedMicros: number;
   balanceMicros: number;
 }
@@ -92,17 +176,30 @@ function parseSuccess(body: unknown): GenerateResponse | null {
   const r = body as Record<string, unknown>;
   if (
     typeof r.id !== "string" ||
-    (r.kind !== "image" && r.kind !== "svg") ||
-    typeof r.dataUrl !== "string" ||
     typeof r.chargedMicros !== "number" ||
     typeof r.balanceMicros !== "number"
   ) {
     return null;
   }
+  const raw = Array.isArray(r.assets)
+    ? r.assets
+    : // Pre-variant clouds answered with a single top-level kind/dataUrl.
+      typeof r.dataUrl === "string"
+      ? [{ kind: r.kind, dataUrl: r.dataUrl }]
+      : null;
+  if (!raw || raw.length === 0) return null;
+  const assets: GenerateResponseAsset[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") return null;
+    const a = entry as Record<string, unknown>;
+    if ((a.kind !== "image" && a.kind !== "svg") || typeof a.dataUrl !== "string") return null;
+    assets.push({ kind: a.kind, dataUrl: a.dataUrl });
+  }
   return {
     id: r.id,
-    kind: r.kind,
-    dataUrl: r.dataUrl,
+    intent: typeof r.intent === "string" ? r.intent : "",
+    model: typeof r.model === "string" ? r.model : "",
+    assets,
     chargedMicros: r.chargedMicros,
     balanceMicros: r.balanceMicros,
   };
@@ -135,16 +232,70 @@ const DATA_URL = /^data:image\/(png|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/;
 // and existing importers still resolve it from cloud-generate.
 export { svgLooksActive };
 
+/**
+ * Read a reference image out of the design folder and encode it for transport.
+ * Paths are confined to the folder: a reference is agent-supplied and must not
+ * become a way to exfiltrate an arbitrary file to the cloud.
+ */
+async function encodeReference(
+  root: string,
+  ref: string,
+): Promise<Result<string, GenerateAssetError>> {
+  // A leading slash is the canvas URL form ("/assets/hero.png"), not a
+  // filesystem root — strip it BEFORE the absolute-path check, and let the
+  // containment check below be the actual guard.
+  const cleaned = ref.replace(/^\/+/, "");
+  if (isAbsolute(cleaned) || normalize(cleaned).startsWith("..")) {
+    return err({
+      kind: "BadRequest",
+      message: `Reference "${ref}" is outside the design folder — pass a folder-relative path like "assets/hero.png".`,
+    });
+  }
+  const full = resolve(join(root, cleaned));
+  const rel = relative(resolve(root), full);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    return err({
+      kind: "BadRequest",
+      message: `Reference "${ref}" is outside the design folder — pass a folder-relative path like "assets/hero.png".`,
+    });
+  }
+  const ext = (full.split(".").pop() ?? "").toLowerCase();
+  const mime = REFERENCE_MIME[ext];
+  if (!mime) {
+    return err({
+      kind: "BadRequest",
+      message: `Reference "${ref}" isn't a supported image (expected ${Object.keys(REFERENCE_MIME).join(", ")}).`,
+    });
+  }
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(full);
+  } catch {
+    return err({
+      kind: "BadRequest",
+      message: `Reference "${ref}" doesn't exist in this design folder.`,
+    });
+  }
+  if (bytes.length > MAX_REFERENCE_BYTES) {
+    return err({
+      kind: "BadRequest",
+      message: `Reference "${ref}" is ${(bytes.length / (1024 * 1024)).toFixed(1)} MB — the limit is ${MAX_REFERENCE_BYTES / (1024 * 1024)} MB. Use a smaller source image.`,
+    });
+  }
+  return ok(`data:${mime};base64,${bytes.toString("base64")}`);
+}
+
 export async function generateAsset(
   root: string,
   cloud: CloudAuth,
   req: GenerateAssetRequest,
 ): Promise<Result<GeneratedAsset, GenerateAssetError>> {
-  if (!cloud.token) {
+  const token = await currentToken(cloud);
+  if (!token) {
     return err({
       kind: "LoggedOut",
       message:
-        "Not signed in to velloo-cloud — run `velloo login`, then restart the server. Until then, author the artwork yourself and store it with `upload_asset`.",
+        "Not signed in to velloo-cloud — run `velloo login`, then retry. Until then, author the artwork yourself and store it with `upload_asset`.",
     });
   }
 
@@ -156,17 +307,32 @@ export async function generateAsset(
     });
   }
 
+  const refPaths = req.reference ?? [];
+  if (refPaths.length > MAX_REFERENCES) {
+    return err({
+      kind: "BadRequest",
+      message: `At most ${MAX_REFERENCES} reference images per generation (got ${refPaths.length}).`,
+    });
+  }
+  const references: string[] = [];
+  for (const ref of refPaths) {
+    const encoded = await encodeReference(root, ref);
+    if (!encoded.ok) return encoded;
+    references.push(encoded.value);
+  }
+
   let res: Response;
   let body: unknown;
   try {
     res = await fetch(`${cloud.url}/v1/assets/generate`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${cloud.token}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({
         prompt: req.prompt,
-        kind: req.kind,
-        ...(req.kind === "image" && req.size ? { size: req.size } : {}),
-        ...(req.kind === "image" && req.model ? { model: req.model } : {}),
+        intent: req.intent,
+        ...(req.aspect ? { aspect: req.aspect } : {}),
+        ...(req.count && req.count > 1 ? { count: req.count } : {}),
+        ...(references.length > 0 ? { reference: references } : {}),
       }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
@@ -181,10 +347,15 @@ export async function generateAsset(
 
   if (!res.ok) {
     const hint = HINTS[res.status];
+    // The cloud's messages don't reliably end in punctuation, and this one is
+    // read by an agent — run together, "...as a data URI Fix the arguments"
+    // reads as a single mangled sentence.
+    const detail = cloudMessage(body, res.status).trimEnd();
+    const sentence = /[.!?]$/.test(detail) ? detail : `${detail}.`;
     return err({
       kind: "CloudRejected",
       status: res.status,
-      message: `${cloudMessage(body, res.status)}${hint ? ` ${hint}` : ""}`,
+      message: hint ? `${sentence} ${hint}` : sentence,
     });
   }
 
@@ -195,32 +366,51 @@ export async function generateAsset(
       message: "velloo-cloud returned an unexpected response shape for /v1/assets/generate.",
     });
   }
-  const match = DATA_URL.exec(payload.dataUrl);
-  if (!match) {
-    return err({
-      kind: "BadResponse",
-      message:
-        "velloo-cloud returned a data URL this server doesn't understand (expected base64 png or svg).",
-    });
-  }
-  const ext = match[1] === "png" ? "png" : "svg";
-  const bytes = Buffer.from(match[2] as string, "base64");
-  if (ext === "svg" && svgLooksActive(bytes.toString("utf8"))) {
-    return err({
-      kind: "BadResponse",
-      message:
-        "velloo-cloud returned SVG containing active content (script/event handlers) — refusing to store it. Retry the generation, or author the asset yourself with `upload_asset`.",
-    });
-  }
-  const stem = req.filename?.replace(/\.(png|svg)$/i, "") ?? payload.id;
-  const stored = await storeAsset(root, `${stem}.${ext}`, bytes);
 
+  const stem = req.filename?.replace(/\.(png|svg)$/i, "") ?? payload.id;
+  const files: GeneratedAssetFile[] = [];
+  for (const [i, asset] of payload.assets.entries()) {
+    const match = DATA_URL.exec(asset.dataUrl);
+    if (!match) {
+      return err({
+        kind: "BadResponse",
+        message:
+          "velloo-cloud returned a data URL this server doesn't understand (expected base64 png or svg).",
+      });
+    }
+    const ext = match[1] === "png" ? "png" : "svg";
+    const bytes = Buffer.from(match[2] as string, "base64");
+    if (ext === "svg" && svgLooksActive(bytes.toString("utf8"))) {
+      return err({
+        kind: "BadResponse",
+        message:
+          "velloo-cloud returned SVG containing active content (script/event handlers) — refusing to store it. Retry the generation, or author the asset yourself with `upload_asset`.",
+      });
+    }
+    // Single results keep the bare stem; variants get -1, -2, … so a caller's
+    // `filename` still names the file they asked for in the common case.
+    const name = payload.assets.length === 1 ? stem : `${stem}-${i + 1}`;
+    const stored = await storeAsset(root, `${name}.${ext}`, bytes);
+    files.push({
+      ...stored,
+      kind: asset.kind,
+      ...(ext === "png" ? (pngSize(bytes) ?? {}) : {}),
+      ...(ext === "svg" ? { content: bytes.toString("utf8") } : {}),
+    });
+  }
+
+  const first = files[0] as GeneratedAssetFile;
   return ok({
-    ...stored,
-    kind: payload.kind,
+    assets: files,
+    intent: req.intent,
+    model: payload.model,
     chargedMicros: payload.chargedMicros,
     balanceMicros: payload.balanceMicros,
     cost: `cost ${formatDollars(payload.chargedMicros)}, balance ${formatDollars(payload.balanceMicros)}`,
-    ...(ext === "svg" ? { content: bytes.toString("utf8") } : {}),
+    assetPath: first.assetPath,
+    url: first.url,
+    kind: first.kind,
+    ...(first.width && first.height ? { width: first.width, height: first.height } : {}),
+    ...(first.content ? { content: first.content } : {}),
   });
 }

@@ -50,7 +50,15 @@ export default defineCommand({
     const host = args.host ?? "127.0.0.1";
     const cloudUrl = defaultCloudUrl();
     const cred = await loadCredential(cloudUrl);
-    const cloud = { url: cloudUrl, token: cred?.token };
+    // `token` is the boot-time snapshot; `resolveToken` re-reads ~/.velloo on
+    // every cloud call, so signing in mid-session (here or via `velloo login`)
+    // takes effect without restarting the daemon — the same liveness the
+    // canvas account menu already has.
+    const cloud = {
+      url: cloudUrl,
+      token: cred?.token,
+      resolveToken: async () => (await loadCredential(cloudUrl))?.token,
+    };
 
     // Live account state + sign-in/out for the canvas account menu — every call
     // re-reads ~/.velloo, so signing in (here or via `velloo login`/`logout`)

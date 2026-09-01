@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Annotation, Node } from "@velloo/schema";
-import type { CloudAuth } from "./cloud.ts";
+import { type CloudAuth, currentToken } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import { newAnnotationId } from "./mutations/annotations.ts";
@@ -177,7 +177,8 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
       note: "This folder has never been published — `velloo publish` assigns its cloud id and creates a share link.",
     };
   }
-  if (!cloud.token) {
+  const token = await currentToken(cloud);
+  if (!token) {
     return {
       status: "logged-out",
       ...zero(),
@@ -193,7 +194,7 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
     const query = new URLSearchParams({ folderId });
     if (sinceParam) query.set("since", sinceParam);
     const res = await fetch(`${cloud.url}/v1/comments?${query}`, {
-      headers: { authorization: `Bearer ${cloud.token}` },
+      headers: { authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return { fail: `comment fetch failed (${res.status})` };
@@ -300,7 +301,7 @@ async function doPull(ctx: CommentSyncContext, cloud: CloudAuth): Promise<PullCo
     try {
       const res = await fetch(`${cloud.url}/v1/comments/${encodeURIComponent(commentId)}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json", authorization: `Bearer ${cloud.token}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ resolved: true }),
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });

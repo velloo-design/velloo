@@ -12,7 +12,8 @@
       "!**/node_modules",
       "!**/.design",
       "!**/tailwind-entry.css",
-      "!**/canvas/src/styles.css"
+      "!**/canvas/src/styles.css",
+      "!**/*.svg"
     ]
   },
   "formatter": {

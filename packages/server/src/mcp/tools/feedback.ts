@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { CloudAuth } from "../../cloud.ts";
+import { type CloudAuth, currentToken } from "../../cloud.ts";
 import { sendAnonymousFeedback } from "../../feedback-tokens.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { jsonResult } from "./result.ts";
@@ -63,10 +63,11 @@ export function registerFeedbackTool(mcp: McpServer, ctx: MutationContext, cloud
         return jsonResult(result);
       }
 
-      if (!cloud.token) {
+      const token = await currentToken(cloud);
+      if (!token) {
         return jsonResult({
           ok: false,
-          message: "Not signed in to velloo-cloud — run `velloo login`, then restart the server.",
+          message: "Not signed in to velloo-cloud — run `velloo login`, then retry.",
         });
       }
       try {
@@ -74,7 +75,7 @@ export function registerFeedbackTool(mcp: McpServer, ctx: MutationContext, cloud
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: `Bearer ${cloud.token}`,
+            authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             body,

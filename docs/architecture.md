@@ -241,7 +241,11 @@ Every client drives the same tool surface — agent edits and human edits are op
 
 ### The cloud surface: who owns the credential
 
-The canvas shows the signed-in account, signs in, and publishes boards — but **`@velloo/server` never reads `~/.velloo` and never calls velloo-cloud**. It stays credential-blind so an embedder can host the canvas without inheriting the CLI's identity. The two capabilities are *injected* into `createServer` by the daemon (which is the CLI, and does own `~/.velloo`):
+The canvas shows the signed-in account, signs in, and publishes boards — but **`@velloo/server` never reads `~/.velloo`**. It stays credential-blind so an embedder can host the canvas without inheriting the CLI's identity. Everything it needs is *injected* into `createServer` by the daemon (which is the CLI, and does own `~/.velloo`).
+
+The server *does* call velloo-cloud — `generate_asset`, `pull_comments`, `send_feedback` — but only ever with an injected `CloudAuth`, and never with a credential it went looking for. `CloudAuth` carries both a boot-time `token` and an optional `resolveToken()`; every call goes through `currentToken(cloud)`, which prefers the live read. That matters because the daemon snapshots the credential once at startup: without it, a user who signs in *after* hitting the paywall stays logged out to the MCP tools until they restart the server — exactly the flow a metered feature provokes. A `resolveToken` that throws (a credentials file mid-write) falls back to the snapshot rather than failing a call the old token could still serve.
+
+The two canvas-facing capabilities are injected the same way:
 
 - **`CanvasAuth`** (`packages/cli/src/daemon/canvas-auth.ts`) backs `GET /api/auth/status` and `POST /api/auth/login[/cancel]`. Status carries the account's email, display name, and plan (a `GET /v1/me`, cached 60s because the canvas polls) plus a `verified` tri-state: `null` when unknown, `false` when the cloud rejected the stored token — an expired credential still names its account rather than silently reading as signed out. Sign-in is the OAuth device flow, which can't finish inside one request: `beginLogin` returns as soon as there's a user code to display and leaves the polling loop running, writing the credential on success; the canvas watches `login` for the outcome.
 - **`CanvasPublish`** (`packages/cli/src/daemon/canvas-publish.ts`) backs `/api/publish`. Because publishing takes tens of seconds, the server holds a **`PublishRunner`** (`packages/server/src/publish-run.ts`) — one run per folder, rejecting a concurrent `POST` with 409 — and the canvas polls `GET /api/publish/status` for the step, capture counter, and warnings, then the share URL.
@@ -371,7 +375,13 @@ Drift detection is cut for `emit_code` — there's no longer a "last emit" file 
 
 ## Assets
 
-Velloo ships no model-backed asset generation — there are no MCP tools that call an external API. The agent authors SVG/raster art itself and stores it with `upload_asset` (writes to `assets/`, returns a `/assets/<name>` URL for `<Image src>`). Velloo runs fully offline.
+The default path is **offline and free**: the agent authors SVG/raster art itself and stores it with `upload_asset` (writes to `assets/`, returns a `/assets/<name>` URL for `<Image src>`), or bulk-imports existing files by path with `import_assets`. Nothing here calls an external API, and a folder that never generates never leaves the machine.
+
+`generate_asset` is the **one deliberate exception** — hosted, pay-as-you-go generation through velloo-cloud for the art an agent genuinely cannot author: photography, textured illustration, true vector logos, background removal. It is registered unconditionally (like `pull_comments`), and every unavailable path — logged out, feature off, out of credits, cloud unreachable — returns an agent-facing message that names the free local alternative rather than failing.
+
+The client carries **no model names and no prices**. The caller states an *intent* — `photo`, `illustration`, `graphic`, `texture`, `icon`, `vector`, `mark`, `edit`, `cutout`, `upscale` — and velloo-cloud maps it to a model and a price. That seam is deliberate: upstream model quality and pricing churn constantly, so swapping the model behind `photo` must not require a velloo release. Only the intent *names* are a contract; an unknown one comes back as a 400 listing the live catalogue.
+
+One call may return 1–4 variants (each charged), and `reference` feeds existing folder assets back in — as the subject for `edit`/`cutout`/`upscale`, or as style guidance for the text-to-image intents. Results land in `assets/` through the same `storeAsset` path as `upload_asset`, so a generated file is indistinguishable from an authored one afterwards. Generated SVG is sanitized server-side and re-checked locally with `svgLooksActive`, which **refuses** rather than repairs.
 
 ## Distribution
 

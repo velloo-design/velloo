@@ -57,23 +57,43 @@ const theme = {
   radius: {},
 };
 
-function imageSuccess(id = "gen_ab12cd34") {
+const PNG_DATA_URL = `data:image/png;base64,${PNG_1PX.toString("base64")}`;
+const SVG_DATA_URL = `data:image/svg+xml;base64,${Buffer.from(SVG_MARKUP).toString("base64")}`;
+
+function imageSuccess(id = "gen_ab12cd34", count = 1, dataUrl = PNG_DATA_URL) {
   return {
     id,
-    kind: "image",
-    dataUrl: `data:image/png;base64,${PNG_1PX.toString("base64")}`,
-    chargedMicros: 250_000,
+    intent: "photo",
+    model: "provider:model@1",
+    aspect: "16:9",
+    count,
+    assets: Array.from({ length: count }, (_, i) => ({
+      index: i + 1,
+      kind: "image",
+      mime: "image/png",
+      bytes: PNG_1PX.length,
+      dataUrl,
+    })),
+    chargedMicros: 40_000 * count,
     balanceMicros: 11_750_000,
+    // legacy mirror the cloud still sends
+    kind: "image",
+    dataUrl: PNG_DATA_URL,
   };
 }
 
-function svgSuccess(id = "gen_ef56ab78") {
+function svgSuccess(id = "gen_ef56ab78", dataUrl = SVG_DATA_URL) {
   return {
     id,
-    kind: "svg",
-    dataUrl: `data:image/svg+xml;base64,${Buffer.from(SVG_MARKUP).toString("base64")}`,
+    intent: "mark",
+    model: "",
+    aspect: "1:1",
+    count: 1,
+    assets: [{ index: 1, kind: "svg", mime: "image/svg+xml", bytes: 1, dataUrl }],
     chargedMicros: 50_000,
     balanceMicros: 950_000,
+    kind: "svg",
+    dataUrl: SVG_DATA_URL,
   };
 }
 
@@ -122,7 +142,7 @@ test("formatDollars renders micros as dollars", () => {
 });
 
 test("logged out never touches the network and points at `velloo login`", async () => {
-  const r = await generateAsset(tmp, { url: base }, { prompt: "a cloud", kind: "image" });
+  const r = await generateAsset(tmp, { url: base }, { prompt: "a cloud", intent: "photo" });
   expect(r.ok).toBe(false);
   if (!r.ok) {
     expect(r.error.kind).toBe("LoggedOut");
@@ -136,7 +156,7 @@ test("an unreachable cloud reports the failure without charging language ambigui
   const r = await generateAsset(
     tmp,
     { url: "http://127.0.0.1:1", token: "vlk_test" },
-    { prompt: "a cloud", kind: "image" },
+    { prompt: "a cloud", intent: "photo" },
   );
   expect(r.ok).toBe(false);
   if (!r.ok) {
@@ -145,35 +165,123 @@ test("an unreachable cloud reports the failure without charging language ambigui
   }
 });
 
+test("a token that appears mid-session is picked up without a restart", async () => {
+  // The daemon snapshots the credential at boot; `resolveToken` re-reads it, so
+  // signing in after hitting the paywall works on the very next call.
+  let signedIn = false;
+  const live = { url: base, resolveToken: async () => (signedIn ? "vlk_fresh" : undefined) };
+
+  const loggedOut = await generateAsset(tmp, live, { prompt: "x", intent: "photo" });
+  expect(loggedOut.ok).toBe(false);
+  if (!loggedOut.ok) expect(loggedOut.error.kind).toBe("LoggedOut");
+  expect(stub.requests.length).toBe(0);
+
+  signedIn = true;
+  const after = await generateAsset(tmp, live, { prompt: "x", intent: "photo" });
+  expect(after.ok).toBe(true);
+  expect(stub.requests[0]?.auth).toBe("Bearer vlk_fresh");
+});
+
+test("a resolveToken that throws falls back to the boot-time token", async () => {
+  const flaky = {
+    url: base,
+    token: "vlk_boot",
+    resolveToken: async () => {
+      throw new Error("credentials file mid-write");
+    },
+  };
+  const r = await generateAsset(tmp, flaky, { prompt: "x", intent: "photo" });
+  expect(r.ok).toBe(true);
+  expect(stub.requests[0]?.auth).toBe("Bearer vlk_boot");
+});
+
 describe("success", () => {
   test("image: stores the decoded PNG in assets/ (upload_asset naming) and reports cost", async () => {
     const r = await generateAsset(tmp, cloud(), {
       prompt: "hero art",
-      kind: "image",
-      size: "1536x1024",
+      intent: "photo",
+      aspect: "3:2",
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.assetPath).toBe("assets/gen_ab12cd34.png");
     expect(r.value.url).toBe("/assets/gen_ab12cd34.png");
-    expect(r.value.cost).toBe("cost $0.25, balance $11.75");
-    expect(r.value.chargedMicros).toBe(250_000);
+    expect(r.value.assets.length).toBe(1);
+    expect(r.value.assets[0]?.url).toBe("/assets/gen_ab12cd34.png");
+    expect(r.value.intent).toBe("photo");
+    expect(r.value.model).toBe("provider:model@1");
+    expect(r.value.cost).toBe("cost $0.04, balance $11.75");
+    expect(r.value.chargedMicros).toBe(40_000);
     expect(r.value.balanceMicros).toBe(11_750_000);
     expect(r.value.content).toBeUndefined();
     const onDisk = await readFile(join(tmp, "assets", "gen_ab12cd34.png"));
     expect(onDisk.equals(PNG_1PX)).toBe(true);
-    // The request carried auth + the size passthrough.
+    // The request carried auth + the intent/aspect passthrough.
     expect(stub.requests[0]?.auth).toBe("Bearer vlk_test");
     expect(stub.requests[0]?.body).toEqual({
       prompt: "hero art",
-      kind: "image",
-      size: "1536x1024",
+      intent: "photo",
+      aspect: "3:2",
     });
+  });
+
+  test("a raster result carries its pixel size, so <Image> can be sized to it", async () => {
+    // `<Image>` fills its parent: handed a src with no matching aspect it lays
+    // out at zero height, so a paid, fully successful generation shows nothing.
+    const r = await generateAsset(tmp, cloud(), { prompt: "hero art", intent: "photo" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.assets[0]?.width).toBe(1);
+    expect(r.value.assets[0]?.height).toBe(1);
+    expect(r.value.width).toBe(1);
+    expect(r.value.height).toBe(1);
+  });
+
+  test("count > 1 stores every variant under a numbered stem", async () => {
+    stub.body = imageSuccess("gen_multi", 3);
+    const r = await generateAsset(tmp, cloud(), { prompt: "hero art", intent: "photo", count: 3 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.assets.map((a) => a.assetPath)).toEqual([
+      "assets/gen_multi-1.png",
+      "assets/gen_multi-2.png",
+      "assets/gen_multi-3.png",
+    ]);
+    // The flat mirror still points at the first, for the common single case.
+    expect(r.value.assetPath).toBe("assets/gen_multi-1.png");
+    expect(r.value.cost).toBe("cost $0.12, balance $11.75");
+    for (const n of [1, 2, 3]) {
+      expect((await readFile(join(tmp, "assets", `gen_multi-${n}.png`))).equals(PNG_1PX)).toBe(
+        true,
+      );
+    }
+    expect(stub.requests[0]?.body).toEqual({ prompt: "hero art", intent: "photo", count: 3 });
+  });
+
+  test("count: 1 is not sent — the cloud default stands", async () => {
+    await generateAsset(tmp, cloud(), { prompt: "hero art", intent: "photo", count: 1 });
+    expect(stub.requests[0]?.body).toEqual({ prompt: "hero art", intent: "photo" });
+  });
+
+  test("a pre-variant cloud reply (bare kind/dataUrl) is still understood", async () => {
+    stub.body = {
+      id: "gen_legacy",
+      kind: "image",
+      dataUrl: PNG_DATA_URL,
+      chargedMicros: 250_000,
+      balanceMicros: 11_750_000,
+    };
+    const r = await generateAsset(tmp, cloud(), { prompt: "hero art", intent: "photo" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.assets.length).toBe(1);
+    expect(r.value.assetPath).toBe("assets/gen_legacy.png");
+    expect(r.value.cost).toBe("cost $0.25, balance $11.75");
   });
 
   test("svg: stores the markup and returns it inline for <SVG content>", async () => {
     stub.body = svgSuccess();
-    const r = await generateAsset(tmp, cloud(), { prompt: "a mark", kind: "svg" });
+    const r = await generateAsset(tmp, cloud(), { prompt: "a mark", intent: "mark" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.assetPath).toBe("assets/gen_ef56ab78.svg");
@@ -182,35 +290,74 @@ describe("success", () => {
     expect(await readFile(join(tmp, "assets", "gen_ef56ab78.svg"), "utf8")).toBe(SVG_MARKUP);
   });
 
-  test("filename stem overrides the id and is sanitized; size never sent for svg", async () => {
+  test("filename stem overrides the id and is sanitized", async () => {
     stub.body = svgSuccess();
     const r = await generateAsset(tmp, cloud(), {
       prompt: "a mark",
-      kind: "svg",
+      intent: "mark",
       filename: "../evil/brand mark.svg",
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.assetPath).toBe("assets/brand_mark.svg");
-    expect(stub.requests[0]?.body).toEqual({ prompt: "a mark", kind: "svg" });
+    expect(stub.requests[0]?.body).toEqual({ prompt: "a mark", intent: "mark" });
   });
 
-  test("model passes through for images, never for svg", async () => {
+  test("a reference is read from the folder and sent inline as a data URI", async () => {
+    await mkdir(join(tmp, "assets"), { recursive: true });
+    await writeFile(join(tmp, "assets", "source.png"), PNG_1PX);
     const r = await generateAsset(tmp, cloud(), {
-      prompt: "hero art",
-      kind: "image",
-      model: "flux-schnell",
+      prompt: "a stylized version of this",
+      intent: "illustration",
+      reference: ["assets/source.png"],
     });
     expect(r.ok).toBe(true);
-    expect(stub.requests[0]?.body).toEqual({
-      prompt: "hero art",
-      kind: "image",
-      model: "flux-schnell",
-    });
+    expect((stub.requests[0]?.body as { reference?: string[] })?.reference).toEqual([PNG_DATA_URL]);
+  });
 
-    stub.body = svgSuccess();
-    await generateAsset(tmp, cloud(), { prompt: "a mark", kind: "svg", model: "flux-schnell" });
-    expect(stub.requests[1]?.body).toEqual({ prompt: "a mark", kind: "svg" });
+  test("a leading-slash canvas URL resolves to the same folder asset", async () => {
+    await mkdir(join(tmp, "assets"), { recursive: true });
+    await writeFile(join(tmp, "assets", "source.png"), PNG_1PX);
+    await generateAsset(tmp, cloud(), {
+      prompt: "cut it out",
+      intent: "cutout",
+      reference: ["/assets/source.png"],
+    });
+    expect((stub.requests[0]?.body as { reference?: string[] })?.reference).toEqual([PNG_DATA_URL]);
+  });
+
+  test("a reference outside the folder is refused before any network call", async () => {
+    for (const bad of ["../../etc/passwd", "/etc/passwd", "assets/../../secret.png"]) {
+      const r = await generateAsset(tmp, cloud(), {
+        prompt: "x",
+        intent: "cutout",
+        reference: [bad],
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.kind).toBe("BadRequest");
+    }
+    expect(stub.requests.length).toBe(0);
+  });
+
+  test("a missing or non-image reference is a clear local error, not a cloud round-trip", async () => {
+    const missing = await generateAsset(tmp, cloud(), {
+      prompt: "x",
+      intent: "cutout",
+      reference: ["assets/nope.png"],
+    });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error.message).toContain("doesn't exist");
+
+    await mkdir(join(tmp, "assets"), { recursive: true });
+    await writeFile(join(tmp, "assets", "notes.txt"), "hello");
+    const wrongType = await generateAsset(tmp, cloud(), {
+      prompt: "x",
+      intent: "cutout",
+      reference: ["assets/notes.txt"],
+    });
+    expect(wrongType.ok).toBe(false);
+    if (!wrongType.ok) expect(wrongType.error.message).toContain("supported image");
+    expect(stub.requests.length).toBe(0);
   });
 });
 
@@ -221,7 +368,7 @@ describe("failure statuses map to actionable messages", () => {
   };
 
   const generate = async () => {
-    const r = await generateAsset(tmp, cloud(), { prompt: "x", kind: "image" });
+    const r = await generateAsset(tmp, cloud(), { prompt: "x", intent: "photo" });
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("expected failure");
     expect(r.error.kind).toBe("CloudRejected");
@@ -242,21 +389,37 @@ describe("failure statuses map to actionable messages", () => {
     expect(e.message).toContain("prompt must be 1..2000 characters");
   });
 
-  test("400 for an unknown model relays the server's allowlist verbatim", async () => {
+  test("an unpunctuated cloud message and the hint stay two sentences", async () => {
+    // The cloud's messages don't reliably end in a period, and the hint is
+    // appended straight after: "…in 'reference' Fix the arguments and retry"
+    // read as one mangled sentence to the agent that has to act on it.
+    reject(400, "bad_request", "intent 'edit' works on an existing image — name the source asset");
+    const e = await generate();
+    expect(e.message).toBe(
+      "intent 'edit' works on an existing image — name the source asset. " +
+        "Fix the arguments and retry — nothing was generated or charged.",
+    );
+  });
+
+  test("a cloud message that already ends in punctuation gains no second period", async () => {
+    reject(400, "bad_request", "prompt must be 1..2000 characters.");
+    const e = await generate();
+    expect(e.message).toContain("characters. Fix the arguments");
+    expect(e.message).not.toContain("characters.. ");
+  });
+
+  test("400 for an unknown intent relays the server's catalogue verbatim", async () => {
     reject(
       400,
       "bad_request",
-      'Unknown image model "dall-e-9". Allowed models: gpt-image-1, flux-schnell.',
+      "unknown intent 'photograph' — valid intents: photo (Realistic marketing…), vector (True SVG output…)",
     );
-    const r = await generateAsset(tmp, cloud(), {
-      prompt: "x",
-      kind: "image",
-      model: "dall-e-9",
-    });
+    const r = await generateAsset(tmp, cloud(), { prompt: "x", intent: "photo" });
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("expected failure");
     expect(r.error.status).toBe(400);
-    expect(r.error.message).toContain("Allowed models: gpt-image-1, flux-schnell.");
+    expect(r.error.message).toContain("valid intents: photo");
+    expect(r.error.message).toContain("vector (True SVG output…)");
   });
 
   test("402 keeps the cloud's price/balance/top-up text and adds the way out", async () => {
@@ -285,11 +448,13 @@ describe("failure statuses map to actionable messages", () => {
     expect(e.message).toContain("wait a minute");
   });
 
-  test("502 generation_failed relays that no credits were charged", async () => {
+  test("502 generation_failed relays that no credits were charged, and says it once", async () => {
     reject(502, "generation_failed", "The provider failed to generate; no credits were charged.");
     const e = await generate();
     expect(e.message).toContain("no credits were charged");
-    expect(e.message).toContain("retry once");
+    expect(e.message).toContain("Retry once");
+    // The hint used to restate the cloud's own closing clause back at the agent.
+    expect(e.message.toLowerCase().split("no credits were charged").length - 1).toBe(1);
   });
 
   test("503 (provider unconfigured) names the local alternative", async () => {
@@ -308,8 +473,8 @@ describe("failure statuses map to actionable messages", () => {
 });
 
 test("a malformed dataUrl is rejected without writing anything", async () => {
-  stub.body = { ...imageSuccess(), dataUrl: "data:image/webp;base64,AAAA" };
-  const r = await generateAsset(tmp, cloud(), { prompt: "x", kind: "image" });
+  stub.body = imageSuccess("gen_ab12cd34", 1, "data:image/webp;base64,AAAA");
+  const r = await generateAsset(tmp, cloud(), { prompt: "x", intent: "photo" });
   expect(r.ok).toBe(false);
   if (!r.ok) expect(r.error.kind).toBe("BadResponse");
 });
@@ -328,11 +493,11 @@ describe("active-SVG defense in depth", () => {
 
   test("generated SVG that still carries a script is refused, nothing written", async () => {
     const active = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
-    stub.body = {
-      ...svgSuccess(),
-      dataUrl: `data:image/svg+xml;base64,${Buffer.from(active).toString("base64")}`,
-    };
-    const r = await generateAsset(tmp, cloud(), { prompt: "a mark", kind: "svg" });
+    stub.body = svgSuccess(
+      "gen_ef56ab78",
+      `data:image/svg+xml;base64,${Buffer.from(active).toString("base64")}`,
+    );
+    const r = await generateAsset(tmp, cloud(), { prompt: "a mark", intent: "mark" });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.kind).toBe("BadResponse");
@@ -364,12 +529,12 @@ describe("the generate_asset tool", () => {
     const client = await connectTool("vlk_test");
     const res = await client.callTool({
       name: "generate_asset",
-      arguments: { prompt: "hero art", kind: "image" },
+      arguments: { prompt: "hero art", intent: "photo" },
     });
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
     expect(res.isError).toBeFalsy();
     expect(text).toContain("assets/gen_ab12cd34.png");
-    expect(text).toContain("cost $0.25, balance $11.75");
+    expect(text).toContain("cost $0.04, balance $11.75");
     await client.close();
   });
 
@@ -377,7 +542,7 @@ describe("the generate_asset tool", () => {
     const client = await connectTool();
     const res = await client.callTool({
       name: "generate_asset",
-      arguments: { prompt: "hero art", kind: "image" },
+      arguments: { prompt: "hero art", intent: "photo" },
     });
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
     expect(res.isError).toBe(true);
@@ -385,26 +550,33 @@ describe("the generate_asset tool", () => {
     await client.close();
   });
 
-  test("a rejected model surfaces the server's allowlist in the tool text", async () => {
-    stub.status = 400;
+  test("a cloud 402 surfaces the top-up path in the tool text", async () => {
+    stub.status = 402;
     stub.body = {
-      error: "bad_request",
-      message: 'Unknown image model "dall-e-9". Allowed models: gpt-image-1, flux-schnell.',
+      error: "insufficient_credits",
+      message: "Insufficient credits: this costs $0.18, balance $0.13. Top up to continue.",
     };
     const client = await connectTool("vlk_test");
     const res = await client.callTool({
       name: "generate_asset",
-      arguments: { prompt: "hero art", kind: "image", model: "dall-e-9" },
+      arguments: { prompt: "a logo", intent: "vector" },
     });
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
     expect(res.isError).toBe(true);
-    expect(text).toContain("Allowed models: gpt-image-1, flux-schnell.");
-    // The model the agent asked for reached the wire.
-    expect(stub.requests[0]?.body).toEqual({
-      prompt: "hero art",
-      kind: "image",
-      model: "dall-e-9",
+    expect(text).toContain("Top up to continue.");
+    expect(text).toContain("top up credits");
+    expect(stub.requests[0]?.body).toEqual({ prompt: "a logo", intent: "vector" });
+    await client.close();
+  });
+
+  test("an unknown intent never reaches the wire — the enum rejects it locally", async () => {
+    const client = await connectTool("vlk_test");
+    const res = await client.callTool({
+      name: "generate_asset",
+      arguments: { prompt: "hero art", intent: "photograph" },
     });
+    expect(res.isError).toBe(true);
+    expect(stub.requests.length).toBe(0);
     await client.close();
   });
 });

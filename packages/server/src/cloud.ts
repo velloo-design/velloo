@@ -14,6 +14,33 @@ export interface CloudAuth {
   url: string;
   /** `vlk_` CLI token, absent when the user is logged out. */
   token?: string;
+  /**
+   * Re-read the token from wherever the embedder keeps it. The CLI resolves
+   * credentials once at daemon boot, so without this a user who signs in
+   * mid-session stays logged out to every cloud call until they restart the
+   * server — which is exactly the flow a metered feature provokes (hit the
+   * paywall, sign in, retry). `CanvasAuth` already re-reads live; this closes
+   * the same gap for the MCP-side callers. Absent ⇒ fall back to `token`.
+   */
+  resolveToken?: () => Promise<string | undefined>;
+}
+
+/**
+ * The token to send right now: live when the embedder can re-read it, else the
+ * one captured at boot. Every cloud call goes through this rather than reading
+ * `cloud.token` directly.
+ */
+export async function currentToken(cloud: CloudAuth): Promise<string | undefined> {
+  if (cloud.resolveToken) {
+    try {
+      return (await cloud.resolveToken()) ?? cloud.token;
+    } catch {
+      // A credentials file that's mid-write or unreadable must not break a call
+      // that the boot-time token could still serve.
+      return cloud.token;
+    }
+  }
+  return cloud.token;
 }
 
 /** Who the canvas is signed in as, as velloo-cloud describes them (`GET /v1/me`). */
