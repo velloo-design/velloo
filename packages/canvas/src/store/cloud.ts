@@ -16,16 +16,19 @@ export interface CloudSlice {
   publishOpen: boolean;
   /**
    * Set when the publish dialog was opened for one board from its own menu: it
-   * skips the form and starts that board publishing immediately. Null for the
-   * top bar's Publish, which is the full form over every board.
+   * carries the chosen access mode. Public/private start immediately;
+   * password-protected stops briefly to collect the password. Null for the top
+   * bar's Publish, which is the full form over every board.
    */
-  publishScope: { id: string; name: string } | null;
+  publishScope: { id: string; name: string; mode: PublishAccessMode } | null;
 
   refreshAuth(): Promise<void>;
   setSignInOpen(open: boolean): void;
   setPublishOpen(open: boolean): void;
-  publishBoardNow(board: { id: string; name: string }): void;
+  publishBoardNow(board: { id: string; name: string }, mode: PublishAccessMode): void;
 }
+
+export type PublishAccessMode = "public" | "private" | "password";
 
 export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (set) => ({
   authStatus: null,
@@ -50,7 +53,7 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
     set({ publishOpen, publishScope: null });
   },
 
-  publishBoardNow(board) {
-    set({ publishScope: board, publishOpen: true });
+  publishBoardNow(board, mode) {
+    set({ publishScope: { ...board, mode }, publishOpen: true });
   },
 });

@@ -33,7 +33,7 @@ async function writeV1Folder(config = "{}"): Promise<string> {
 }
 
 async function runPublish(folder: string, env: Record<string, string> = {}) {
-  const proc = Bun.spawn(["bun", cliPath, "publish", folder], {
+  const proc = Bun.spawn(["bun", cliPath, "publish", folder, "--public"], {
     cwd: tmp,
     stdout: "pipe",
     stderr: "pipe",

@@ -6,8 +6,8 @@ import type {
   PublishHost,
 } from "@velloo/server";
 import { loadCredential } from "../cloud-credentials.ts";
-import { CloudUnreachableError } from "../cloud-upload.ts";
-import { listTeams, PUBLISH_VIEWPORT, publishDesign } from "../publish/core.ts";
+import { CloudUnreachableError, listPublishDestinations } from "../cloud-upload.ts";
+import { gitContext, listTeams, PUBLISH_VIEWPORT, publishDesign } from "../publish/core.ts";
 
 /**
  * The canvas's Publish action, running the same core `velloo publish` does.
@@ -33,6 +33,27 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
       const token = await tokenFor();
       if (!token) return [];
       return listTeams(cloudUrl, token);
+    },
+
+    async destinations(host) {
+      const token = await tokenFor();
+      if (!token) throw new Error("not signed in to velloo-cloud");
+      const provenance = gitContext(host.folder.root);
+      const folderId = host.folder.config.folderId;
+      if (!folderId) {
+        const teams = await listTeams(cloudUrl, token);
+        return {
+          effectiveTeamId: teams.find((team) => team.isDefault)?.id ?? null,
+          provenance,
+          slots: [],
+        };
+      }
+      const listed = await listPublishDestinations({
+        baseUrl: cloudUrl,
+        token,
+        folderId,
+      });
+      return { ...listed, provenance };
     },
 
     async run(
@@ -64,7 +85,9 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
             ...(request.title ? { title: request.title } : {}),
             visibility: request.visibility,
             ...(request.password ? { password: request.password } : {}),
+            destination: request.destination,
             ...(request.teamId ? { teamId: request.teamId } : {}),
+            provenance: gitContext(host.folder.root),
             viewport: PUBLISH_VIEWPORT,
             screenshots: request.screenshots,
           },

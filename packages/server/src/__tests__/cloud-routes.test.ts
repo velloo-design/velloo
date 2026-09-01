@@ -226,6 +226,13 @@ function fakePublisher(opts: { ready?: boolean; teams?: { id: string; name: stri
     async teams() {
       return opts.teams ?? [];
     },
+    async destinations() {
+      return {
+        effectiveTeamId: null,
+        provenance: { repo: null, branch: null },
+        slots: [],
+      };
+    },
     run(host, request, onProgress, onWarning) {
       requests.push(request);
       hostSeen = host;
@@ -279,6 +286,7 @@ describe("/api/publish without a CLI publisher", () => {
     expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
       ready: false,
       teams: [],
+      slots: [],
     });
     expect((await post(app, "/api/publish", { boardIds: [] })).status).toBe(503);
   });
@@ -291,6 +299,9 @@ describe("/api/publish", () => {
     expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
       ready: true,
       teams: [{ id: "t1", name: "Design" }],
+      effectiveTeamId: null,
+      provenance: { repo: null, branch: null },
+      slots: [],
     });
   });
 
@@ -300,6 +311,7 @@ describe("/api/publish", () => {
     expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
       ready: false,
       teams: [],
+      slots: [],
     });
   });
 
@@ -311,6 +323,7 @@ describe("/api/publish", () => {
       boardIds: ["main"],
       title: "Pulse designs",
       visibility: "private",
+      destination: { mode: "new" },
       teamId: "t1",
       screenshots: true,
     });
@@ -319,6 +332,7 @@ describe("/api/publish", () => {
       boardIds: ["main"],
       title: "Pulse designs",
       visibility: "private",
+      destination: { mode: "new" },
       teamId: "t1",
       screenshots: true,
     });
@@ -349,20 +363,26 @@ describe("/api/publish", () => {
   test("a second publish is refused while one is running", async () => {
     const fake = fakePublisher();
     const app = appWith({ publish: runnerFor(fake.publisher) });
-    expect((await post(app, "/api/publish", { boardIds: [] })).status).toBe(202);
-    expect((await post(app, "/api/publish", { boardIds: [] })).status).toBe(409);
+    expect(
+      (await post(app, "/api/publish", { boardIds: [], destination: { mode: "new" } })).status,
+    ).toBe(202);
+    expect(
+      (await post(app, "/api/publish", { boardIds: [], destination: { mode: "new" } })).status,
+    ).toBe(409);
     expect(fake.requests.length).toBe(1);
 
     // …and allowed again once the first one settles.
     fake.finish();
     await settled();
-    expect((await post(app, "/api/publish", { boardIds: [] })).status).toBe(202);
+    expect(
+      (await post(app, "/api/publish", { boardIds: [], destination: { mode: "new" } })).status,
+    ).toBe(202);
   });
 
   test("a failure surfaces the publisher's own message", async () => {
     const fake = fakePublisher();
     const app = appWith({ publish: runnerFor(fake.publisher) });
-    await post(app, "/api/publish", { boardIds: [] });
+    await post(app, "/api/publish", { boardIds: [], destination: { mode: "new" } });
     fake.explode("Contributor capability is required for this operation");
     await settled();
     expect(await (await get(app, "/api/publish/status")).json()).toMatchObject({
@@ -374,7 +394,7 @@ describe("/api/publish", () => {
   test("reset clears a settled run but never a live one", async () => {
     const fake = fakePublisher();
     const app = appWith({ publish: runnerFor(fake.publisher) });
-    await post(app, "/api/publish", { boardIds: [] });
+    await post(app, "/api/publish", { boardIds: [], destination: { mode: "new" } });
 
     await post(app, "/api/publish/reset");
     expect(await (await get(app, "/api/publish/status")).json()).toMatchObject({
@@ -390,12 +410,50 @@ describe("/api/publish", () => {
   test("a malformed request body still yields a well-formed publish", async () => {
     const fake = fakePublisher();
     const app = appWith({ publish: runnerFor(fake.publisher) });
-    await post(app, "/api/publish", { boardIds: ["ok", 7, null], visibility: "sideways" });
+    await post(app, "/api/publish", {
+      boardIds: ["ok", 7, null],
+      visibility: "sideways",
+      destination: { mode: "new" },
+    });
     // Junk ids are dropped, and an unknown visibility falls back to the safe default.
     expect(fake.requests[0]).toEqual({
       boardIds: ["ok"],
       visibility: "public",
+      destination: { mode: "new" },
       screenshots: true,
     });
+  });
+
+  test("a publish cannot start without an explicit destination", async () => {
+    const fake = fakePublisher();
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect((await post(app, "/api/publish", { boardIds: [] })).status).toBe(400);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  test("share passwords require three characters", async () => {
+    const fake = fakePublisher();
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect(
+      (
+        await post(app, "/api/publish", {
+          boardIds: [],
+          password: "no",
+          destination: { mode: "new" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(fake.requests).toHaveLength(0);
+
+    expect(
+      (
+        await post(app, "/api/publish", {
+          boardIds: [],
+          password: "yes",
+          destination: { mode: "new" },
+        })
+      ).status,
+    ).toBe(202);
+    expect(fake.requests[0]).toMatchObject({ password: "yes" });
   });
 });

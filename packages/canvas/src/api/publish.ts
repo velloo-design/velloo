@@ -46,6 +46,23 @@ export interface PublishTargets {
    * and a single entry needs no choosing — only two or more is a real decision.
    */
   teams: { id: string; name: string; isDefault?: boolean }[];
+  effectiveTeamId?: string | null;
+  provenance?: { repo: string | null; branch: string | null };
+  slots: {
+    slug: string;
+    url: string;
+    title: string;
+    teamId: string | null;
+    latestVersionId: string | null;
+    lastPublishedAt: string | null;
+    context: {
+      boardIds: string[];
+      contextKnown: boolean;
+      repo: string | null;
+      branch: string | null;
+    };
+  }[];
+  destinationError?: string;
 }
 
 export interface PublishRequest {
@@ -55,6 +72,7 @@ export interface PublishRequest {
   visibility: "public" | "private";
   /** Anyone with the password can view, whatever the visibility. */
   password?: string;
+  destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
   teamId?: string;
   screenshots: boolean;
 }

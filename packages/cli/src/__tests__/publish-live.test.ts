@@ -32,6 +32,7 @@ const cliPath = resolve(import.meta.dir, "../cli.ts");
 
 let tmp: string;
 let server: StubServer;
+let destinationBoardIds: string[];
 let captured: {
   names: string[];
   /** Name typed loosely on purpose: a zero-byte part arrives with none. */
@@ -43,6 +44,7 @@ let captured: {
 beforeEach(() => {
   tmp = join(tmpdir(), `velloo-pub-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   captured = { names: [], parts: [] };
+  destinationBoardIds = [];
   server = Bun.serve({
     port: 0,
     async fetch(req) {
@@ -50,12 +52,39 @@ beforeEach(() => {
       if (req.method === "GET" && pathname === "/v1/teams/mine") {
         return Response.json({ teams: [{ id: "team-123", name: "Design" }] });
       }
+      if (req.method === "GET" && pathname === "/v1/publish-destinations") {
+        return Response.json({
+          effectiveTeamId: null,
+          slots: [
+            {
+              slug: "test-slug",
+              url: "/s/test-slug/",
+              title: "Existing review",
+              teamId: null,
+              visibility: "public",
+              passwordProtected: false,
+              latestVersionId: "11111111-1111-4111-8111-111111111111",
+              lastPublishedAt: "2030-01-01T00:00:00.000Z",
+              context: {
+                boardIds: destinationBoardIds,
+                selectionFingerprint: "fingerprint",
+                contextKnown: true,
+                repo: null,
+                branch: null,
+              },
+            },
+          ],
+        });
+      }
       if (req.method === "POST" && pathname === "/v1/links") {
         captured.link = (await req.json()) as Record<string, unknown>;
         return Response.json(
           { slug: "test-slug", visibility: "public", passwordProtected: false },
-          { status: 201 },
+          { status: captured.link.publishMode === "update" ? 200 : 201 },
         );
+      }
+      if (req.method === "PUT" && pathname === "/v1/links/test-slug/access") {
+        return Response.json({ visibility: "public", passwordProtected: false });
       }
       if (req.method === "POST" && pathname.endsWith("/versions")) {
         const form = await req.formData();
@@ -86,7 +115,12 @@ afterEach(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
-async function scaffold(design: string, withLive: boolean, cssFramework?: "none"): Promise<void> {
+async function scaffold(
+  design: string,
+  withLive: boolean,
+  cssFramework?: "none",
+  folderId?: string,
+): Promise<void> {
   await mkdir(join(design, ".design"), { recursive: true });
   await mkdir(join(design, "theme"), { recursive: true });
   await mkdir(join(design, "screens"), { recursive: true });
@@ -111,6 +145,7 @@ async function scaffold(design: string, withLive: boolean, cssFramework?: "none"
         default: { id: "none", version: "0.1.0", source: "binary", componentsPath: "binary" },
       },
       defaultLibrary: "default",
+      ...(folderId ? { folderId } : {}),
       ...(cssFramework ? { styling: { framework: cssFramework } } : {}),
       extensions,
       viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
@@ -143,7 +178,11 @@ async function scaffold(design: string, withLive: boolean, cssFramework?: "none"
   );
 }
 
-async function runPublish(design: string, extraArgs: string[] = []) {
+async function runPublish(
+  design: string,
+  extraArgs: string[] = [],
+  destinationArgs: string[] = ["--new", "--slug", "test-slug"],
+) {
   const proc = Bun.spawn(
     [
       "bun",
@@ -154,8 +193,8 @@ async function runPublish(design: string, extraArgs: string[] = []) {
       `http://localhost:${server.port}`,
       "--token",
       "test-token",
-      "--slug",
-      "test-slug",
+      ...destinationArgs,
+      "--public",
       // Screenshot capture has its own suites (publish-screenshots*.test.ts);
       // skipping it here keeps this wiring test fast and browser-free.
       "--no-screenshots",
@@ -268,4 +307,41 @@ test("publish resolves a team name and sends its explicit team context", async (
   if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
 
   expect(captured.link).toMatchObject({ teamId: "team-123" });
+});
+
+test("noninteractive publish updates the exact matching slot", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false, undefined, "folder-destination-123");
+  const { exitCode, stderr } = await runPublish(design, [], ["--update"]);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  expect(captured.link).toMatchObject({
+    folderId: "folder-destination-123",
+    publishMode: "update",
+    slug: "test-slug",
+    expectedVersionId: "11111111-1111-4111-8111-111111111111",
+  });
+});
+
+test("noninteractive publish refuses to guess when a folder already has a slot", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false, undefined, "folder-destination-123");
+  const { exitCode, stderr } = await runPublish(design, [], []);
+
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("pass --update or --new explicitly");
+  expect(captured.link).toBeUndefined();
+});
+
+test("explicit update fails fast when no exact slot exists", async () => {
+  destinationBoardIds = ["another-board"];
+  const design = join(tmp, "velloo");
+  await scaffold(design, false, undefined, "folder-destination-123");
+  const { exitCode, stderr } = await runPublish(design, [], ["--update"]);
+
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("no exact published-design match");
+  expect(stderr).toContain(`http://localhost:${server.port}/boards`);
+  expect(captured.link).toBeUndefined();
+  expect(captured.design).toBeUndefined();
 });

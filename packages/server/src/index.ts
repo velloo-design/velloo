@@ -443,9 +443,11 @@ export type {
   CanvasAuthStatus,
   CanvasLogin,
   CanvasPublish,
+  CanvasPublishDestinations,
   CanvasPublishProgress,
   CanvasPublishRequest,
   CanvasPublishResult,
+  CanvasPublishSlot,
   CloudAuth,
   PublishHost,
 } from "./cloud.ts";

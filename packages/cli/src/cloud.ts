@@ -17,6 +17,20 @@ export function defaultCloudUrl(): string {
   return (process.env.VELLOO_CLOUD_URL ?? BUILT_DEFAULT).replace(/\/+$/, "");
 }
 
+/** Human-facing published-board management page for this cloud environment. */
+export function publishedBoardsUrl(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  // Hosted CLI traffic goes to api.<app-host>; UI paths redirect today, but
+  // printing the canonical app URL is clearer and survives copied links.
+  if (url.hostname === "api.velloo.ai" || url.hostname === "api.dev.velloo.ai") {
+    url.hostname = url.hostname.slice(4);
+  }
+  url.pathname = "/boards";
+  url.search = "";
+  url.hash = "";
+  return url.toString().replace(/\/$/, "");
+}
+
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 /**

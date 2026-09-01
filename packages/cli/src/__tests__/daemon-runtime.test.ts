@@ -7,6 +7,7 @@ import {
   assertFolderFormatCurrent,
   type DaemonRecord,
   DesignFolderFormatError,
+  daemonMatchesRuntime,
   daemonRoot,
   ensureDaemon,
   readLock,
@@ -15,6 +16,7 @@ import {
   removeLock,
   writeLock,
 } from "../daemon/runtime.ts";
+import { TOOL_VERSION } from "../version.ts";
 
 let tmp: string;
 let root: string;
@@ -39,6 +41,7 @@ function rec(over: Partial<DaemonRecord> = {}): DaemonRecord {
     canvasPort: 7300,
     mcpUrl: "http://127.0.0.1:7301/mcp",
     mcpPort: 7301,
+    cloudUrl: "http://localhost:7400",
     version: "0.0.1",
     startedAt: "2026-06-18T00:00:00.000Z",
     ...over,
@@ -78,6 +81,19 @@ describe("daemon runtime", () => {
   test("daemonRoot resolves an existing path to its realpath", () => {
     // tmp exists, so it resolves (macOS maps /var → /private/var, etc.).
     expect(daemonRoot(root)).toContain("design");
+  });
+
+  test("daemon reuse requires both the current version and cloud target", () => {
+    const current = rec({ version: TOOL_VERSION });
+    expect(daemonMatchesRuntime(current, "http://localhost:7400")).toBe(true);
+    expect(daemonMatchesRuntime(current, "https://api.dev.velloo.ai")).toBe(false);
+    expect(daemonMatchesRuntime(rec({ version: "older" }), "http://localhost:7400")).toBe(false);
+
+    // Records written before cloudUrl was added must restart once so they pick
+    // up the active target instead of silently retaining an unknown one.
+    const legacy = { ...current } as Partial<DaemonRecord>;
+    delete legacy.cloudUrl;
+    expect(daemonMatchesRuntime(legacy as DaemonRecord, "http://localhost:7400")).toBe(false);
   });
 });
 

@@ -88,10 +88,69 @@ test("a 5xx upload failure carries the trouble hint, not a bare internal error",
     uploadLinkBundle({
       baseUrl: url,
       token: "t",
-      link: { title: "x", visibility: "public" },
+      link: { title: "x", visibility: "public", publishMode: "new" },
       form,
     }),
   ).rejects.toThrow(/storage backend unavailable.*the cloud is having trouble/);
+});
+
+test("reusing a stable link applies the privacy mode before uploading", async () => {
+  const requests: { method: string; pathname: string; body?: unknown }[] = [];
+  const url = serveCloud(async (req) => {
+    const { pathname } = new URL(req.url);
+    requests.push({
+      method: req.method,
+      pathname,
+      ...(req.headers.get("content-type")?.includes("application/json")
+        ? { body: await req.json() }
+        : {}),
+    });
+    if (req.method === "POST" && pathname === "/v1/links") {
+      return Response.json(
+        { slug: "stable", visibility: "public", passwordProtected: false },
+        { status: 200 },
+      );
+    }
+    if (req.method === "PUT" && pathname === "/v1/links/stable/access") {
+      return Response.json({ visibility: "private", passwordProtected: false });
+    }
+    if (req.method === "POST" && pathname === "/v1/links/stable/versions") {
+      return Response.json({ files: 1, bytes: 2, url: "/s/stable/" }, { status: 201 });
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json", { type: "application/json" }));
+
+  const result = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: {
+      folderId: "folder-stable",
+      title: "x",
+      visibility: "private",
+      publishMode: "update",
+      expectedVersionId: "11111111-1111-4111-8111-111111111111",
+      slug: "stable",
+    },
+    form,
+  });
+
+  expect(result.link).toEqual({
+    slug: "stable",
+    visibility: "private",
+    passwordProtected: false,
+  });
+  expect(requests[1]).toEqual({
+    method: "PUT",
+    pathname: "/v1/links/stable/access",
+    body: {
+      visibility: "private",
+      password: null,
+      passwordExpiresAt: null,
+      expectedVersionId: "11111111-1111-4111-8111-111111111111",
+    },
+  });
 });
 
 // The command-level contract: publish exits with the health verdict BEFORE any
@@ -150,6 +209,7 @@ test("velloo publish fails fast on an unhealthy cloud", async () => {
         url,
         "--token",
         "t",
+        "--public",
       ],
       { cwd: resolve(import.meta.dir, "../../../.."), stdout: "pipe", stderr: "pipe" },
     );

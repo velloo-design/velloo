@@ -14,6 +14,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { CURRENT_SCHEMA_VERSION, schemaVersionOf } from "@velloo/schema";
 import { writeJsonAtomic } from "@velloo/server";
+import { defaultCloudUrl } from "../cloud.ts";
 import { TOOL_VERSION } from "../version.ts";
 
 /**
@@ -31,8 +32,19 @@ export interface DaemonRecord {
   canvasPort: number;
   mcpUrl: string;
   mcpPort: number;
+  /** Cloud target captured at daemon startup. */
+  cloudUrl: string;
   version: string;
   startedAt: string;
+}
+
+/**
+ * A daemon is reusable only when both its code and cloud target match this
+ * invocation. Local, dev, and production builds can share the same version,
+ * so a version-only check can otherwise keep publishing to a stale target.
+ */
+export function daemonMatchesRuntime(rec: DaemonRecord, cloudUrl = defaultCloudUrl()): boolean {
+  return rec.version === TOOL_VERSION && rec.cloudUrl === cloudUrl;
 }
 
 /** A spawn mutex older than this is presumed abandoned (the spawner crashed). */
@@ -307,8 +319,8 @@ export async function ensureDaemon(
   while (Date.now() < deadline) {
     const existing = await readLock(root);
     if (existing && (await isLive(existing))) {
-      if (existing.version === TOOL_VERSION) return existing;
-      // Version skew: a daemon from an older binary. Replace it.
+      if (daemonMatchesRuntime(existing)) return existing;
+      // Version or cloud-target skew: replace the stale daemon.
       await stopDaemon(root);
     }
 
@@ -316,7 +328,10 @@ export async function ensureDaemon(
       try {
         // Re-check inside the mutex: someone may have just finished spawning.
         const again = await readLock(root);
-        if (again && (await isLive(again)) && again.version === TOOL_VERSION) return again;
+        if (again && (await isLive(again))) {
+          if (daemonMatchesRuntime(again)) return again;
+          await stopDaemon(root);
+        }
         const spawned = spawnDetached(root, opts.preferredPort, host);
         opts.onSpawn?.();
         return await waitForHealthy(root, spawned);

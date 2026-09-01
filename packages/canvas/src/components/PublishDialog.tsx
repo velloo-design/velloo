@@ -1,5 +1,14 @@
-import { AlertTriangle, CircleCheck, Copy, ExternalLink, LoaderCircle, Share2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  CircleCheck,
+  Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  Share2,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type PublishRequest,
   type PublishResult,
@@ -36,9 +45,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
  * organization (the cloud enforces that with a unique index on membership) and
  * publishing outside it is refused, so the only open question is the team.
  *
- * Opened from a single board's menu (`publishScope`) it skips the form
- * entirely and publishes that board on open, so the dialog is only ever showing
- * progress and the resulting link.
+ * A board-menu publish pre-fills board/access choices but still stops here: the
+ * destination must never be inferred merely because the menu was a shortcut.
  */
 
 /** Progress polling: fast enough that per-screenshot counters actually animate. */
@@ -58,9 +66,12 @@ export function PublishDialog() {
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   /** Never persisted anywhere: typed here, sent once, forgotten on close. */
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   /** Null until the teams load, and stays null when there's nothing to choose. */
   const [teamId, setTeamId] = useState<string | null>(null);
   const [screenshots, setScreenshots] = useState(true);
+  const [destinationSlug, setDestinationSlug] = useState("new");
+  const [destinationTouched, setDestinationTouched] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const boards = design?.boards ?? [];
@@ -82,25 +93,30 @@ export function PublishDialog() {
     if (!open) return;
     setTitle(scope ? scope.name : design?.folderName ? `${design.folderName} designs` : "");
     setBoardIds(scope ? [scope.id] : (design?.boards ?? []).map((b) => b.id));
-    setVisibility("public");
+    setVisibility(scope?.mode === "private" ? "private" : "public");
     setPassword("");
+    setShowPassword(false);
     setTeamId(null);
     setScreenshots(true);
+    setDestinationSlug("new");
+    setDestinationTouched(false);
     setBusy(false);
 
     let cancelled = false;
     void (async () => {
       const [found, state] = await Promise.all([
-        publish.targets().catch(() => ({ ready: false, teams: [] }) as PublishTargets),
+        publish.targets().catch(() => ({ ready: false, teams: [], slots: [] }) as PublishTargets),
         publish.status().catch(() => ({ state: "idle" }) as PublishState),
       ]);
       if (cancelled) return;
       setTargets(found);
       // Only offer a choice when there is one; a lone team is where the cloud
       // would put the publish anyway, so it needs no control and no request field.
-      if (found.teams.length > 1) {
-        setTeamId((found.teams.find((team) => team.isDefault) ?? found.teams[0])?.id ?? null);
-      }
+      setTeamId(
+        found.effectiveTeamId ??
+          (found.teams.find((team) => team.isDefault) ?? found.teams[0])?.id ??
+          null,
+      );
       // A settled run from last time would show as a result over a form the
       // user came here to fill in — clear it and start clean.
       let current = state;
@@ -110,21 +126,11 @@ export function PublishDialog() {
         current = { state: "idle" };
       }
       setRun(current);
-      // Straight from a board's menu: there's nothing to fill in, so publish it.
-      // Signed out, or already busy with another run, and we just show that.
-      if (scope && found.ready && current.state === "idle") {
-        await startRun({
-          boardIds: [scope.id],
-          title: scope.name,
-          visibility: "public",
-          screenshots: true,
-        });
-      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, design?.folderName, design?.boards, scope, startRun]);
+  }, [open, design?.folderName, design?.boards, scope]);
 
   // Poll while the daemon is working.
   useEffect(() => {
@@ -138,15 +144,54 @@ export function PublishDialog() {
     return () => clearInterval(timer);
   }, [open, run.state]);
 
-  const start = () =>
-    startRun({
+  const effectiveTeamId = teamId ?? targets?.effectiveTeamId ?? null;
+  const currentSource = useMemo(
+    () => ({
+      boardIds,
+      teamId: effectiveTeamId,
+      repo: targets?.provenance?.repo ?? null,
+      branch: targets?.provenance?.branch ?? null,
+    }),
+    [boardIds, effectiveTeamId, targets?.provenance],
+  );
+  const matchingSlots = useMemo(() => {
+    const latest = canvasLatestMatchingSlot(targets?.slots ?? [], currentSource);
+    return latest ? [latest] : [];
+  }, [targets?.slots, currentSource]);
+  const selectedSlot = matchingSlots.find((slot) => slot.slug === destinationSlug) ?? null;
+  const recommendedSlug = useMemo(() => {
+    return matchingSlots[0]?.slug ?? "new";
+  }, [matchingSlots]);
+
+  useEffect(() => {
+    if (!destinationTouched) setDestinationSlug(recommendedSlug);
+  }, [destinationTouched, recommendedSlug]);
+
+  useEffect(() => {
+    if (destinationSlug !== "new" && !matchingSlots.some((slot) => slot.slug === destinationSlug)) {
+      setDestinationTouched(false);
+      setDestinationSlug(recommendedSlug);
+    }
+  }, [destinationSlug, matchingSlots, recommendedSlug]);
+
+  const start = () => {
+    const destination: PublishRequest["destination"] = selectedSlot
+      ? {
+          mode: "update",
+          slug: selectedSlot.slug,
+          expectedVersionId: selectedSlot.latestVersionId,
+        }
+      : { mode: "new" };
+    return startRun({
       boardIds,
       ...(title.trim() ? { title: title.trim() } : {}),
       visibility,
-      ...(password.length >= 8 ? { password } : {}),
+      ...(password.length >= 3 ? { password } : {}),
       ...(teamId ? { teamId } : {}),
+      destination,
       screenshots,
     });
+  };
 
   const toggleBoard = (id: string, on: boolean) => {
     setBoardIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id)));
@@ -165,6 +210,7 @@ export function PublishDialog() {
   const unavailable = run.state === "unavailable";
   // No boards is legitimate — a board-less folder publishes all its screens.
   const nothingSelected = boards.length > 0 && boardIds.length === 0;
+  const passwordMissing = scope?.mode === "password" && password.length < 3;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
@@ -173,7 +219,7 @@ export function PublishDialog() {
           <DialogTitle>Publish to velloo-cloud</DialogTitle>
           <DialogDescription>
             {scope
-              ? `Sharing “${scope.name}” as a commentable link.`
+              ? `Sharing “${scope.name}” ${scope.mode === "private" ? "privately" : scope.mode === "password" ? "with password protection" : "publicly"}.`
               : "Share a rendered, commentable copy of these boards by link."}
           </DialogDescription>
         </DialogHeader>
@@ -299,6 +345,41 @@ export function PublishDialog() {
             )}
 
             <div className="grid gap-2">
+              <Label htmlFor="publish-destination">Destination</Label>
+              <Select
+                value={destinationSlug}
+                onValueChange={(value) => {
+                  setDestinationTouched(true);
+                  setDestinationSlug(value);
+                }}
+                disabled={Boolean(targets?.destinationError)}
+              >
+                <SelectTrigger id="publish-destination">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {matchingSlots.map((slot) => (
+                    <SelectItem key={slot.slug} value={slot.slug}>
+                      Update {slot.title || "Untitled design"}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="new">Create a new link</SelectItem>
+                </SelectContent>
+              </Select>
+              {targets?.destinationError ? (
+                <p className="text-xs text-destructive">{targets.destinationError}</p>
+              ) : selectedSlot ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Matches this team, board selection, and source.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Creates a separate live URL and keeps existing review links unchanged.
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
               <Label htmlFor="publish-visibility">Visibility</Label>
               <Select
                 value={visibility}
@@ -315,15 +396,32 @@ export function PublishDialog() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="publish-password">Password (optional)</Label>
-              <Input
-                id="publish-password"
-                type="password"
-                autoComplete="new-password"
-                placeholder="8+ characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <Label htmlFor="publish-password">
+                Password{scope?.mode === "password" ? "" : " (optional)"}
+              </Label>
+              <div className="relative">
+                <Input
+                  id="publish-password"
+                  className="pr-10"
+                  type={showPassword ? "text" : "password"}
+                  minLength={3}
+                  autoComplete="new-password"
+                  placeholder="3+ characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="absolute right-0 top-0 h-9 w-9 p-0"
+                  onClick={() => setShowPassword((value) => !value)}
+                  title={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? <EyeOff /> : <Eye />}
+                </Button>
+              </div>
               <p className="text-[11px] text-muted-foreground">
                 Anyone with the password can view, signed in or not. Send it separately from the
                 link.
@@ -366,7 +464,12 @@ export function PublishDialog() {
             {run.state === "done" ? "Done" : "Close"}
           </Button>
           {run.state === "idle" && !signedOut && !unavailable ? (
-            <Button onClick={() => void start()} disabled={busy || nothingSelected}>
+            <Button
+              onClick={() => void start()}
+              disabled={
+                busy || nothingSelected || passwordMissing || Boolean(targets?.destinationError)
+              }
+            >
               <Share2 />
               {busy ? "Starting…" : "Publish"}
             </Button>
@@ -380,7 +483,55 @@ export function PublishDialog() {
   );
 }
 
-/** Non-fatal notes from the run — a dropped screenshot, a missing asset, a new folderId. */
+export function canvasSlotMismatches(
+  slot: PublishTargets["slots"][number],
+  current: {
+    boardIds: string[];
+    teamId: string | null;
+    repo: string | null;
+    branch: string | null;
+  },
+): string[] {
+  const mismatches: string[] = [];
+  if (!slot.context.contextKnown) mismatches.push("board context is unknown");
+  if (slot.teamId !== current.teamId) mismatches.push("team differs");
+  const sorted = (ids: string[]) => [...new Set(ids)].sort();
+  if (JSON.stringify(sorted(slot.context.boardIds)) !== JSON.stringify(sorted(current.boardIds))) {
+    mismatches.push("board selection differs");
+  }
+  if (slot.context.repo !== current.repo) {
+    mismatches.push("repository differs");
+  } else if (current.repo !== null) {
+    if (!slot.context.branch || !current.branch) mismatches.push("branch is unavailable");
+    else if (slot.context.branch !== current.branch) mismatches.push("branch differs");
+  }
+  return mismatches;
+}
+
+export function canvasMatchingSlots(
+  slots: PublishTargets["slots"],
+  current: Parameters<typeof canvasSlotMismatches>[1],
+): PublishTargets["slots"] {
+  return slots.filter((slot) => canvasSlotMismatches(slot, current).length === 0);
+}
+
+export function canvasLatestMatchingSlot(
+  slots: PublishTargets["slots"],
+  current: Parameters<typeof canvasSlotMismatches>[1],
+): PublishTargets["slots"][number] | null {
+  return (
+    canvasMatchingSlots(slots, current).sort(
+      (left, right) =>
+        canvasPublishedAt(right.lastPublishedAt) - canvasPublishedAt(left.lastPublishedAt),
+    )[0] ?? null
+  );
+}
+
+const canvasPublishedAt = (value: string | null): number => {
+  const parsed = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+};
+
 /** What the published link now asks of a visitor, said plainly. */
 function describeAccess(result: PublishResult): string {
   if (result.visibility === "private") {

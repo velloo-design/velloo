@@ -126,6 +126,27 @@ export interface PublishHost {
   snapshotCss(): Promise<string>;
 }
 
+export interface CanvasPublishSlot {
+  slug: string;
+  url: string;
+  title: string;
+  teamId: string | null;
+  latestVersionId: string | null;
+  lastPublishedAt: string | null;
+  context: {
+    boardIds: string[];
+    contextKnown: boolean;
+    repo: string | null;
+    branch: string | null;
+  };
+}
+
+export interface CanvasPublishDestinations {
+  effectiveTeamId: string | null;
+  provenance: { repo: string | null; branch: string | null };
+  slots: CanvasPublishSlot[];
+}
+
 export interface CanvasPublishRequest {
   /** Board ids to publish; empty = every board in the folder. */
   boardIds: string[];
@@ -136,6 +157,7 @@ export interface CanvasPublishRequest {
    * password can view. Sent straight through to the cloud, never persisted.
    */
   password?: string;
+  destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
   /** Publish into a team rather than the personal workspace. */
   teamId?: string;
   screenshots: boolean;
@@ -180,6 +202,8 @@ export interface CanvasPublish {
    * when none is named.
    */
   teams(): Promise<{ id: string; name: string; isDefault?: boolean }[]>;
+  /** Existing link slots plus this folder's best-effort Git provenance. */
+  destinations(host: PublishHost): Promise<CanvasPublishDestinations>;
   /** Whether a credential exists at all — the dialog asks for sign-in if not. */
   ready(): Promise<boolean>;
   run(

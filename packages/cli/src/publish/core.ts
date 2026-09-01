@@ -16,6 +16,7 @@ import {
 import { withAssetServer } from "../asset-server.ts";
 import { checkCloudHealth } from "../cloud.ts";
 import {
+  type CloudPublishSlot,
   CloudUnreachableError,
   type LinkUploadOutcome,
   uploadLinkBundle,
@@ -78,10 +79,14 @@ export interface PublishRequest {
    */
   password?: string;
   passwordExpiresAt?: string;
-  /** Choose/reuse an explicit slug (default: the folder's existing link). */
-  slug?: string;
+  /** The link slot the user deliberately selected before rendering begins. */
+  destination:
+    | { mode: "new"; slug?: string }
+    | { mode: "update"; slug: string; expectedVersionId: string | null };
   /** Publish into a team rather than the personal workspace. */
   teamId?: string;
+  /** Captured before destination selection so matching and upload agree. */
+  provenance?: PublishProvenance;
   viewport: Viewport;
   screenshots: boolean;
 }
@@ -107,6 +112,65 @@ export interface CloudTarget {
   baseUrl: string;
   token: string;
 }
+
+export interface PublishProvenance {
+  repo: string | null;
+  branch: string | null;
+}
+
+export interface PublishSourceContext extends PublishProvenance {
+  boardIds: string[];
+  teamId: string | null;
+}
+
+const normalizedBoardIds = (boardIds: string[]): string[] => [...new Set(boardIds)].sort();
+
+/** Why updating a slot may be surprising. Empty means a safe exact match. */
+export function publishSlotMismatches(
+  slot: CloudPublishSlot,
+  current: PublishSourceContext,
+): string[] {
+  const mismatches: string[] = [];
+  if (!slot.context.contextKnown) mismatches.push("older publish has no board-selection context");
+  if (slot.teamId !== current.teamId) mismatches.push("team differs");
+  if (
+    JSON.stringify(normalizedBoardIds(slot.context.boardIds)) !==
+    JSON.stringify(normalizedBoardIds(current.boardIds))
+  ) {
+    mismatches.push("board selection differs");
+  }
+  if (slot.context.repo !== current.repo) {
+    mismatches.push("repository differs");
+  } else if (current.repo !== null) {
+    // A detached HEAD or otherwise unavailable branch is valid, but not enough
+    // evidence to recommend replacing a branch-specific live link.
+    if (!slot.context.branch || !current.branch) mismatches.push("branch is unavailable");
+    else if (slot.context.branch !== current.branch) mismatches.push("branch differs");
+  }
+  return mismatches;
+}
+
+export function recommendedPublishSlot(
+  slots: CloudPublishSlot[],
+  current: PublishSourceContext,
+): CloudPublishSlot | null {
+  return exactPublishSlots(slots, current)[0] ?? null;
+}
+
+/** Slots safe enough to present as update destinations. */
+export function exactPublishSlots(
+  slots: CloudPublishSlot[],
+  current: PublishSourceContext,
+): CloudPublishSlot[] {
+  return slots
+    .filter((slot) => publishSlotMismatches(slot, current).length === 0)
+    .sort((left, right) => publishedAt(right.lastPublishedAt) - publishedAt(left.lastPublishedAt));
+}
+
+const publishedAt = (value: string | null): number => {
+  const parsed = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+};
 
 /** The size screens render at for the published bundle, unless a caller says otherwise. */
 export const PUBLISH_VIEWPORT: Viewport = { w: 1440, h: 900 };
@@ -176,7 +240,7 @@ export function normalizeRemote(url: string): string | null {
  * (normalized to host/owner/repo) and the current branch. Best-effort — a
  * non-git folder, detached HEAD, or missing remote publishes without them.
  */
-function gitContext(folder: string): { repo: string | null; branch: string | null } {
+export function gitContext(folder: string): PublishProvenance {
   const run = (args: string[]): string | null => {
     try {
       return execFileSync("git", ["-C", folder, ...args], { encoding: "utf8" }).trim() || null;
@@ -454,7 +518,7 @@ export async function publishDesign(
   // Repo + branch provenance for the share card. Unlike commitSha these
   // travel even from a dirty tree — they name where the design lives, not
   // an exact state.
-  const git = gitContext(root);
+  const git = request.provenance ?? gitContext(root);
   if (git.repo) form.append("gitRepo", git.repo);
   if (git.branch) form.append("gitBranch", git.branch);
 
@@ -467,8 +531,12 @@ export async function publishDesign(
     baseUrl: cloud.baseUrl,
     token: cloud.token,
     link: {
-      ...(request.slug ? { slug: request.slug } : {}),
+      ...(request.destination.slug ? { slug: request.destination.slug } : {}),
       folderId,
+      publishMode: request.destination.mode,
+      ...(request.destination.mode === "update"
+        ? { expectedVersionId: request.destination.expectedVersionId }
+        : {}),
       title,
       visibility: request.visibility,
       ...(request.teamId ? { teamId: request.teamId } : {}),

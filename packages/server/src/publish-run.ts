@@ -1,5 +1,6 @@
 import type {
   CanvasPublish,
+  CanvasPublishDestinations,
   CanvasPublishRequest,
   CanvasPublishResult,
   PublishHost,
@@ -48,6 +49,10 @@ export class PublishRunner {
 
   teams(): Promise<{ id: string; name: string }[]> {
     return this.publisher.teams();
+  }
+
+  destinations(): Promise<CanvasPublishDestinations> {
+    return this.publisher.destinations(this.host());
   }
 
   ready(): Promise<boolean> {

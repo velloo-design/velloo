@@ -5,11 +5,14 @@ import {
   Download,
   Frame as FrameIcon,
   LayoutDashboard,
+  Lock,
   MoreHorizontal,
   Pencil,
   Plus,
   Share2,
+  ShieldCheck,
   Trash2,
+  Unlock,
 } from "lucide-react";
 import { type DragEvent, useMemo, useRef, useState } from "react";
 import { type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
@@ -33,6 +36,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu.tsx";
 import { Input } from "./ui/input.tsx";
@@ -387,14 +393,44 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                         <FrameIcon />
                         Add frame…
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          useCanvas.getState().publishBoardNow({ id: b.id, name: b.name })
-                        }
-                      >
-                        <Share2 />
-                        Publish board
-                      </DropdownMenuItem>
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <Share2 />
+                          Publish board
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              useCanvas
+                                .getState()
+                                .publishBoardNow({ id: b.id, name: b.name }, "public")
+                            }
+                          >
+                            <Unlock />
+                            Public
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              useCanvas
+                                .getState()
+                                .publishBoardNow({ id: b.id, name: b.name }, "private")
+                            }
+                          >
+                            <Lock />
+                            Private
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              useCanvas
+                                .getState()
+                                .publishBoardNow({ id: b.id, name: b.name }, "password")
+                            }
+                          >
+                            <ShieldCheck />
+                            Password protected…
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                       <DropdownMenuItem
                         onSelect={() =>
                           useCanvas

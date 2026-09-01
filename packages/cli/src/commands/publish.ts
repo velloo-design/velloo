@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { isCancel, password } from "@clack/prompts";
+import { isCancel, password, select } from "@clack/prompts";
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
@@ -10,18 +10,27 @@ import {
   TailwindJit,
 } from "@velloo/server";
 import { defineCommand } from "citty";
-import { defaultCloudUrl } from "../cloud.ts";
+import { checkCloudHealth, defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
-import { CloudUnreachableError } from "../cloud-upload.ts";
+import {
+  type CloudPublishSlot,
+  CloudUnreachableError,
+  listPublishDestinations,
+} from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, pickBoards, resolveDesignFolder } from "../folder.ts";
 import {
   createPublishBundler,
+  exactPublishSlots,
+  gitContext,
   type PublishEvent,
   type PublishOutcome,
+  type PublishSourceContext,
   publishDesign,
+  recommendedPublishSlot,
   resolveTeam,
 } from "../publish/core.ts";
+import { resolvePublishPrivacy } from "../publish/privacy.ts";
 
 export default defineCommand({
   meta: {
@@ -44,7 +53,15 @@ export default defineCommand({
     },
     slug: {
       type: "string",
-      description: "Reuse/choose the link slug (default: server-generated)",
+      description: "Custom slug for --new (default: server-generated)",
+    },
+    new: {
+      type: "boolean",
+      description: "Create a separate publish link instead of updating an existing slot",
+    },
+    update: {
+      type: "boolean",
+      description: "Update the exact matching published design",
     },
     title: {
       type: "string",
@@ -56,7 +73,15 @@ export default defineCommand({
     },
     visibility: {
       type: "string",
-      description: "public | private — private means your organization (default: public)",
+      description: "public | private — explicit alternative to the interactive privacy prompt",
+    },
+    public: {
+      type: "boolean",
+      description: "Publish for anyone with the link; skips the privacy prompt",
+    },
+    private: {
+      type: "boolean",
+      description: "Publish for your organization only; skips the privacy prompt",
     },
     password: {
       type: "boolean",
@@ -87,12 +112,7 @@ export default defineCommand({
     if (!token) {
       fail("publish", "not logged in. Run `velloo login` (or pass --token / VELLOO_CLOUD_TOKEN).");
     }
-    const visibility = args.visibility ?? "public";
-    if (visibility !== "public" && visibility !== "private") {
-      fail("publish", `--visibility must be 'public' or 'private', got '${visibility}'`);
-    }
-    const password = args.password ? await readSharePassword() : undefined;
-    const passwordExpiresAt = resolvePasswordExpiry(args["password-expires"], password != null);
+    const interactive = Boolean(process.stdin.isTTY);
     const teamId = await resolveTeam(baseUrl, token, args.team);
     const viewport: Viewport = {
       w: args.w ? Number(args.w) : 1440,
@@ -104,12 +124,54 @@ export default defineCommand({
     // screenshot or bundle work.
     const design = await loadDesignFolder(folder);
     const config = design.config;
-    const { providers, defaultProvider } = await resolveProviders(config, folder);
+    const health = await checkCloudHealth(baseUrl);
+    if (health.status === "unreachable") {
+      fail(
+        "publish",
+        `cannot reach ${baseUrl} (${health.reason}). Is velloo-cloud up? (bun cloud:up)`,
+      );
+    }
+    if (health.status === "unhealthy") fail("publish", health.detail);
 
     // Board choice is a CLI concern (an interactive multiselect, or --boards);
     // the core just takes ids. A folder with no boards yields [] — every screen.
-    const interactive = Boolean(process.stdin.isTTY);
     const selected = await pickBoards(folder, args.boards, interactive, "publish");
+    const provenance = gitContext(folder);
+    const listed =
+      config.folderId && args.new !== true
+        ? await listPublishDestinations({
+            baseUrl,
+            token,
+            folderId: config.folderId,
+            ...(teamId ? { teamId } : {}),
+          }).catch((error: unknown) =>
+            fail("publish", error instanceof Error ? error.message : String(error)),
+          )
+        : { effectiveTeamId: teamId ?? null, slots: [] };
+    const source: PublishSourceContext = {
+      boardIds: selected.map((board) => board.id),
+      teamId: listed.effectiveTeamId,
+      ...provenance,
+    };
+    const destination = await choosePublishDestination({
+      slots: listed.slots,
+      source,
+      interactive,
+      createNew: args.new === true,
+      updateExisting: args.update === true,
+      customSlug: args.slug,
+      manageUrl: publishedBoardsUrl(baseUrl),
+    });
+
+    // Destination failures happen before privacy/password questions or any
+    // render work, so --update with no exact slot stops immediately.
+    const privacy = await resolvePublishPrivacy(args, interactive).catch((error: unknown) =>
+      fail("publish", error instanceof Error ? error.message : String(error)),
+    );
+    const visibility = privacy.visibility;
+    const password = privacy.password ? await readSharePassword() : undefined;
+    const passwordExpiresAt = resolvePasswordExpiry(args["password-expires"], password != null);
+    const { providers, defaultProvider } = await resolveProviders(config, folder);
 
     // The publish-flavored live bundler is shared with the JIT below so the host
     // app's classes compile from the same source dirs we bundle from.
@@ -146,8 +208,9 @@ export default defineCommand({
           visibility,
           ...(password ? { password } : {}),
           ...(passwordExpiresAt ? { passwordExpiresAt } : {}),
-          ...(args.slug ? { slug: args.slug } : {}),
+          destination,
           ...(teamId ? { teamId } : {}),
+          provenance,
           viewport,
           screenshots: args.screenshots !== false,
         },
@@ -189,6 +252,92 @@ export default defineCommand({
   },
 });
 
+export type DestinationChoice =
+  | { mode: "new"; slug?: string }
+  | { mode: "update"; slug: string; expectedVersionId: string | null };
+
+/** Turn the prompt's wire value into a guarded destination; null is cancellation. */
+export function resolvePublishDestinationChoice(
+  value: string | null,
+  slots: CloudPublishSlot[],
+): DestinationChoice | null {
+  if (value === null) return null;
+  if (value === "new") return { mode: "new" };
+  const slug = value.replace(/^update:/, "");
+  const slot = slots.find((candidate) => candidate.slug === slug);
+  if (!slot) return null;
+  return { mode: "update", slug: slot.slug, expectedVersionId: slot.latestVersionId };
+}
+
+async function choosePublishDestination(opts: {
+  slots: CloudPublishSlot[];
+  source: PublishSourceContext;
+  interactive: boolean;
+  createNew: boolean;
+  updateExisting: boolean;
+  customSlug?: string;
+  manageUrl: string;
+}): Promise<DestinationChoice> {
+  if (opts.createNew && opts.updateExisting) {
+    fail("publish", "choose either --new or --update, not both");
+  }
+  if (opts.customSlug && !opts.createNew) {
+    fail("publish", "--slug names a new link; use it together with --new");
+  }
+  const matching = exactPublishSlots(opts.slots, opts.source);
+  if (opts.updateExisting) {
+    const slot = matching[0];
+    if (!slot) {
+      fail(
+        "publish",
+        `there is no exact published-design match to update. Manage existing boards at ${opts.manageUrl}`,
+      );
+    }
+    return {
+      mode: "update",
+      slug: slot.slug,
+      expectedVersionId: slot.latestVersionId,
+    };
+  }
+  if (opts.createNew || opts.slots.length === 0) {
+    return { mode: "new", ...(opts.customSlug ? { slug: opts.customSlug } : {}) };
+  }
+  if (!opts.interactive) {
+    fail("publish", "this folder already has published designs; pass --update or --new explicitly");
+  }
+
+  const recommended = recommendedPublishSlot(opts.slots, opts.source);
+  const latestMatch = matching[0];
+  const value = await select({
+    message: "Publish destination",
+    initialValue: recommended ? `update:${recommended.slug}` : "new",
+    options: [
+      ...(latestMatch
+        ? [
+            {
+              value: `update:${latestMatch.slug}`,
+              label: `Update ${latestMatch.title || "Untitled design"}`,
+              hint: "latest exact match for this team, board selection, and source",
+            },
+          ]
+        : []),
+      {
+        value: "new",
+        label: "Create a new link",
+        hint: recommended ? "keep the matching design separate" : "recommended for this source",
+      },
+    ],
+  });
+  const destination = resolvePublishDestinationChoice(
+    isCancel(value) ? null : String(value),
+    matching,
+  );
+  if (!destination) {
+    fail("publish", isCancel(value) ? "cancelled" : "selected publish slot is no longer available");
+  }
+  return destination;
+}
+
 /**
  * Console flavor of the core's progress events. Steps stay quiet — publish has
  * always printed only its summary — while notes and warnings keep the indented
@@ -207,7 +356,7 @@ function report(event: PublishEvent): void {
 async function readSharePassword(): Promise<string> {
   const fromEnv = process.env.VELLOO_SHARE_PASSWORD?.trim();
   if (fromEnv) {
-    if (fromEnv.length < 8) fail("publish", "VELLOO_SHARE_PASSWORD must be at least 8 characters");
+    if (fromEnv.length < 3) fail("publish", "VELLOO_SHARE_PASSWORD must be at least 3 characters");
     return fromEnv;
   }
   if (!process.stdin.isTTY) {
@@ -215,7 +364,7 @@ async function readSharePassword(): Promise<string> {
   }
   const entered = await password({
     message: "Password for this share link",
-    validate: (value) => ((value ?? "").length < 8 ? "At least 8 characters." : undefined),
+    validate: (value) => ((value ?? "").length < 3 ? "At least 3 characters." : undefined),
   });
   if (isCancel(entered)) fail("publish", "cancelled");
   return entered as string;

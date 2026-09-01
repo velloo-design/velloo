@@ -103,6 +103,7 @@ export default defineCommand({
       canvasPort: handle.port,
       mcpUrl: handle.mcpUrl ?? "",
       mcpPort: handle.mcpPort ?? 0,
+      cloudUrl,
       version: TOOL_VERSION,
       startedAt: new Date().toISOString(),
     };

@@ -18,6 +18,9 @@ const serverTroubleHint = (status: number): string =>
 export interface CloudLinkRequest {
   slug?: string;
   folderId?: string;
+  publishMode: "new" | "update";
+  /** Latest version observed when the user selected an update destination. */
+  expectedVersionId?: string | null;
   title: string;
   visibility: "public" | "private";
   /** Explicit collaboration context; omitted keeps the board personal. */
@@ -28,6 +31,51 @@ export interface CloudLinkRequest {
    */
   password?: string;
   passwordExpiresAt?: string;
+}
+
+export interface CloudPublishSlot {
+  slug: string;
+  url: string;
+  title: string;
+  teamId: string | null;
+  visibility: "public" | "private";
+  passwordProtected: boolean;
+  latestVersionId: string | null;
+  lastPublishedAt: string | null;
+  context: {
+    boardIds: string[];
+    selectionFingerprint: string | null;
+    contextKnown: boolean;
+    repo: string | null;
+    branch: string | null;
+  };
+}
+
+export interface CloudPublishDestinations {
+  effectiveTeamId: string | null;
+  slots: CloudPublishSlot[];
+}
+
+export async function listPublishDestinations(opts: {
+  baseUrl: string;
+  token: string;
+  folderId: string;
+  teamId?: string;
+}): Promise<CloudPublishDestinations> {
+  const query = new URLSearchParams({ folderId: opts.folderId });
+  if (opts.teamId) query.set("teamId", opts.teamId);
+  const res = await fetch(`${opts.baseUrl}/v1/publish-destinations?${query}`, {
+    headers: { authorization: `Bearer ${opts.token}` },
+  }).catch((error: unknown) => {
+    throw new CloudUnreachableError(error instanceof Error ? error.message : String(error));
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(
+      `could not list publish destinations (${res.status}): ${body.message ?? "unknown"}${serverTroubleHint(res.status)}`,
+    );
+  }
+  return (await res.json()) as CloudPublishDestinations;
 }
 
 export interface LinkUploadOutcome {
@@ -68,11 +116,54 @@ export async function uploadLinkBundle(opts: {
     );
   }
   const created = createRes.status === 201;
-  const link = (await createRes.json()) as {
+  let link = (await createRes.json()) as {
     slug: string;
     visibility?: "public" | "private";
     passwordProtected?: boolean;
   };
+
+  if (opts.link.publishMode === "new" && !created) {
+    throw new Error("the cloud reused a link even though a new publish destination was requested");
+  }
+  if (opts.link.publishMode === "update" && created) {
+    await fetch(`${baseUrl}/v1/links/${link.slug}`, {
+      method: "DELETE",
+      headers: authorized,
+    }).catch(() => {});
+    throw new Error("the cloud created a link even though an existing destination was selected");
+  }
+
+  // A folder reuses its stable link. The privacy choice made for this publish
+  // still has to win over the link's previous access mode, otherwise choosing
+  // Private in the CLI/canvas could silently leave an old public link open.
+  if (!created) {
+    const accessRes = await fetch(`${baseUrl}/v1/links/${link.slug}/access`, {
+      method: "PUT",
+      headers: { ...authorized, "content-type": "application/json" },
+      body: JSON.stringify({
+        visibility: opts.link.visibility,
+        password: opts.link.password ?? null,
+        passwordExpiresAt: opts.link.password ? (opts.link.passwordExpiresAt ?? null) : null,
+        expectedVersionId: opts.link.expectedVersionId ?? null,
+      }),
+    });
+    if (!accessRes.ok) {
+      const body = (await accessRes.json().catch(() => ({}))) as { message?: string };
+      throw new Error(
+        `privacy update failed (${accessRes.status}): ${body.message ?? "unknown"}${serverTroubleHint(accessRes.status)}`,
+      );
+    }
+    const access = (await accessRes.json()) as {
+      visibility: "public" | "private";
+      passwordProtected: boolean;
+    };
+    link = { ...link, ...access };
+  }
+
+  form.append("publishMode", opts.link.publishMode);
+  if (opts.link.expectedVersionId) {
+    form.append("expectedVersionId", opts.link.expectedVersionId);
+  }
 
   const uploadRes = await fetch(`${baseUrl}/v1/links/${link.slug}/versions`, {
     method: "POST",

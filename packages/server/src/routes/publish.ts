@@ -24,12 +24,24 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
 
   /** What the publish dialog needs to fill itself in: sign-in state + teams. */
   app.get("/targets", async (c) => {
-    if (!runner) return c.json({ ready: false, teams: [] });
+    if (!runner) return c.json({ ready: false, teams: [], slots: [] });
     const ready = await runner.ready();
     // Teams need a live cloud call, so a logged-out or offline account offers
     // none rather than failing the whole dialog.
-    const teams = ready ? await runner.teams().catch(() => []) : [];
-    return c.json({ ready, teams });
+    if (!ready) return c.json({ ready: false, teams: [], slots: [] });
+    const [teams, destinationResult] = await Promise.all([
+      runner.teams().catch(() => []),
+      runner
+        .destinations()
+        .then((value) => ({ value }))
+        .catch((error: unknown) => ({
+          error: error instanceof Error ? error.message : String(error),
+        })),
+    ]);
+    if ("error" in destinationResult) {
+      return c.json({ ready: true, teams, slots: [], destinationError: destinationResult.error });
+    }
+    return c.json({ ready: true, teams, ...destinationResult.value });
   });
 
   app.post("/", async (c) => {
@@ -41,6 +53,7 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       password?: unknown;
       teamId?: unknown;
       screenshots?: unknown;
+      destination?: unknown;
     };
     const boardIds = Array.isArray(body.boardIds)
       ? body.boardIds.filter((id): id is string => typeof id === "string")
@@ -50,11 +63,29 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
     const teamId = typeof body.teamId === "string" && body.teamId ? body.teamId : undefined;
     // Passed straight through to the cloud, which hashes it. It is never
     // written to the folder, the run state, or a log line on the way.
-    const password =
-      typeof body.password === "string" && body.password.length >= 8 ? body.password : undefined;
+    if (typeof body.password === "string" && body.password.length < 3) {
+      return c.json({ error: "password must be at least 3 characters" }, 400);
+    }
+    const password = typeof body.password === "string" ? body.password : undefined;
+    const rawDestination = body.destination as Record<string, unknown> | null | undefined;
+    const destination =
+      rawDestination?.mode === "new"
+        ? ({ mode: "new" } as const)
+        : rawDestination?.mode === "update" &&
+            typeof rawDestination.slug === "string" &&
+            (typeof rawDestination.expectedVersionId === "string" ||
+              rawDestination.expectedVersionId === null)
+          ? ({
+              mode: "update" as const,
+              slug: rawDestination.slug,
+              expectedVersionId: rawDestination.expectedVersionId,
+            } as const)
+          : null;
+    if (!destination) return c.json({ error: "choose a publish destination" }, 400);
     const started = runner.start({
       boardIds,
       visibility,
+      destination,
       screenshots: body.screenshots !== false,
       ...(title ? { title } : {}),
       ...(password ? { password } : {}),
