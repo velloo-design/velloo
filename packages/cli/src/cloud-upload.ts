@@ -22,10 +22,16 @@ export interface CloudLinkRequest {
   visibility: "public" | "private";
   /** Explicit collaboration context; omitted keeps the board personal. */
   teamId?: string;
+  /**
+   * Password protection, independent of visibility — anyone who has it can
+   * view. Only ever sent, never echoed back or stored locally.
+   */
+  password?: string;
+  passwordExpiresAt?: string;
 }
 
 export interface LinkUploadOutcome {
-  link: { slug: string; accessToken: string | null };
+  link: { slug: string; visibility: "public" | "private"; passwordProtected: boolean };
   /** True when this call created the link (vs. reusing the folder's existing one). */
   created: boolean;
   files: number;
@@ -62,7 +68,11 @@ export async function uploadLinkBundle(opts: {
     );
   }
   const created = createRes.status === 201;
-  const link = (await createRes.json()) as { slug: string; accessToken: string | null };
+  const link = (await createRes.json()) as {
+    slug: string;
+    visibility?: "public" | "private";
+    passwordProtected?: boolean;
+  };
 
   const uploadRes = await fetch(`${baseUrl}/v1/links/${link.slug}/versions`, {
     method: "POST",
@@ -91,7 +101,11 @@ export async function uploadLinkBundle(opts: {
     history?: { retained: boolean; versions: number; pruned: number };
   };
   return {
-    link,
+    link: {
+      slug: link.slug,
+      visibility: link.visibility ?? opts.link.visibility,
+      passwordProtected: link.passwordProtected ?? opts.link.password != null,
+    },
     created,
     files: upload.files,
     bytes: upload.bytes,

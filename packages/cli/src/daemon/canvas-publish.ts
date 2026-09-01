@@ -63,6 +63,7 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
             boardIds: request.boardIds,
             ...(request.title ? { title: request.title } : {}),
             visibility: request.visibility,
+            ...(request.password ? { password: request.password } : {}),
             ...(request.teamId ? { teamId: request.teamId } : {}),
             viewport: PUBLISH_VIEWPORT,
             screenshots: request.screenshots,
@@ -89,11 +90,11 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
         );
 
         return {
-          // The canvas shows one clickable link, so a private link's key
-          // travels in it rather than as a field the UI has to remember to add.
-          shareUrl: outcome.accessToken
-            ? `${outcome.shareUrl}?k=${outcome.accessToken}`
-            : outcome.shareUrl,
+          // One clickable link, and nothing secret in it: what the link asks of
+          // a visitor is a property of the link now, not of the URL.
+          shareUrl: outcome.shareUrl,
+          visibility: outcome.visibility,
+          passwordProtected: outcome.passwordProtected,
           files: outcome.files,
           bytes: outcome.bytes,
           screenshots: outcome.screenshots,

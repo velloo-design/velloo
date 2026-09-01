@@ -52,7 +52,10 @@ beforeEach(() => {
       }
       if (req.method === "POST" && pathname === "/v1/links") {
         captured.link = (await req.json()) as Record<string, unknown>;
-        return Response.json({ slug: "test-slug", accessToken: null }, { status: 201 });
+        return Response.json(
+          { slug: "test-slug", visibility: "public", passwordProtected: false },
+          { status: 201 },
+        );
       }
       if (req.method === "POST" && pathname.endsWith("/versions")) {
         const form = await req.formData();

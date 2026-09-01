@@ -69,7 +69,10 @@ test("a 5xx upload failure carries the trouble hint, not a bare internal error",
   const url = serveCloud((req) => {
     const { pathname } = new URL(req.url);
     if (req.method === "POST" && pathname === "/v1/links") {
-      return Response.json({ slug: "s", accessToken: null }, { status: 201 });
+      return Response.json(
+        { slug: "s", visibility: "public", passwordProtected: false },
+        { status: 201 },
+      );
     }
     if (req.method === "POST" && pathname.endsWith("/versions")) {
       return Response.json(

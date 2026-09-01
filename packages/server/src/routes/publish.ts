@@ -38,6 +38,7 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       boardIds?: unknown;
       title?: unknown;
       visibility?: unknown;
+      password?: unknown;
       teamId?: unknown;
       screenshots?: unknown;
     };
@@ -47,11 +48,16 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
     const visibility = body.visibility === "private" ? "private" : "public";
     const title = typeof body.title === "string" ? body.title : undefined;
     const teamId = typeof body.teamId === "string" && body.teamId ? body.teamId : undefined;
+    // Passed straight through to the cloud, which hashes it. It is never
+    // written to the folder, the run state, or a log line on the way.
+    const password =
+      typeof body.password === "string" && body.password.length >= 8 ? body.password : undefined;
     const started = runner.start({
       boardIds,
       visibility,
       screenshots: body.screenshots !== false,
       ...(title ? { title } : {}),
+      ...(password ? { password } : {}),
       ...(teamId ? { teamId } : {}),
     });
     if (!started) {

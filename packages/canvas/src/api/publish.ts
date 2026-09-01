@@ -2,8 +2,11 @@ import { getJson } from "./discovery.ts";
 import { postJson } from "./http.ts";
 
 export interface PublishResult {
-  /** Share URL, already carrying the `?k=` key when the link is private. */
+  /** The share URL — stable across publishes, and never carrying a secret. */
   shareUrl: string;
+  /** What the link asks of a visitor, so the dialog can say it back. */
+  visibility: "public" | "private";
+  passwordProtected: boolean;
   files: number;
   bytes: number;
   screenshots: number;
@@ -50,6 +53,8 @@ export interface PublishRequest {
   boardIds: string[];
   title?: string;
   visibility: "public" | "private";
+  /** Anyone with the password can view, whatever the visibility. */
+  password?: string;
   teamId?: string;
   screenshots: boolean;
 }

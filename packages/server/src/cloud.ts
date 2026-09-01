@@ -98,6 +98,11 @@ export interface CanvasPublishRequest {
   boardIds: string[];
   title?: string;
   visibility: "public" | "private";
+  /**
+   * Password-protect the link. Independent of visibility — anyone who has the
+   * password can view. Sent straight through to the cloud, never persisted.
+   */
+  password?: string;
   /** Publish into a team rather than the personal workspace. */
   teamId?: string;
   screenshots: boolean;
@@ -112,8 +117,11 @@ export interface CanvasPublishProgress {
 }
 
 export interface CanvasPublishResult {
-  /** Share URL, already carrying the `?k=` key when the link is private. */
+  /** The share URL — the same one every time, and never carrying a secret. */
   shareUrl: string;
+  /** What the link asks of a visitor, so the dialog can say it back. */
+  visibility: "public" | "private";
+  passwordProtected: boolean;
   files: number;
   bytes: number;
   screenshots: number;

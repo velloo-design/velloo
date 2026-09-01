@@ -7,9 +7,9 @@
  *   bun run cli:release:dev    # dev  → get.dev.velloo.dev (bakes api.dev.velloo.ai)
  *
  * The download host is velloo-cloud itself serving the env's R2 bucket under
- * the `downloads/` prefix (src/routes/downloads.ts) — the old Vultr box's
- * Caddy file_server is gone. Uploads go through the R2 S3 API using the
- * BLOB_* values from the sibling velloo-cloud checkout's `.env.<env>`.
+ * the `downloads/` prefix (src/routes/downloads.ts). Uploads go through the R2
+ * S3 API using the BLOB_* values from the sibling velloo-cloud checkout's
+ * `.env.<env>`.
  *
  * Env overrides: VELLOO_CLOUD_DIR (sibling checkout, default ../velloo-cloud),
  * BLOB_ENDPOINT / BLOB_BUCKET / BLOB_ACCESS_KEY / BLOB_SECRET_KEY (skip the

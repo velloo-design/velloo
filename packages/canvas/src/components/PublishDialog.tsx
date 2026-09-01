@@ -1,6 +1,12 @@
 import { AlertTriangle, CircleCheck, Copy, ExternalLink, LoaderCircle, Share2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { type PublishRequest, type PublishState, type PublishTargets, publish } from "../api.ts";
+import {
+  type PublishRequest,
+  type PublishResult,
+  type PublishState,
+  type PublishTargets,
+  publish,
+} from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { Button } from "./ui/button.tsx";
@@ -50,6 +56,8 @@ export function PublishDialog() {
   const [title, setTitle] = useState("");
   const [boardIds, setBoardIds] = useState<string[]>([]);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
+  /** Never persisted anywhere: typed here, sent once, forgotten on close. */
+  const [password, setPassword] = useState("");
   /** Null until the teams load, and stays null when there's nothing to choose. */
   const [teamId, setTeamId] = useState<string | null>(null);
   const [screenshots, setScreenshots] = useState(true);
@@ -75,6 +83,7 @@ export function PublishDialog() {
     setTitle(scope ? scope.name : design?.folderName ? `${design.folderName} designs` : "");
     setBoardIds(scope ? [scope.id] : (design?.boards ?? []).map((b) => b.id));
     setVisibility("public");
+    setPassword("");
     setTeamId(null);
     setScreenshots(true);
     setBusy(false);
@@ -134,6 +143,7 @@ export function PublishDialog() {
       boardIds,
       ...(title.trim() ? { title: title.trim() } : {}),
       visibility,
+      ...(password.length >= 8 ? { password } : {}),
       ...(teamId ? { teamId } : {}),
       screenshots,
     });
@@ -225,6 +235,7 @@ export function PublishDialog() {
                 </a>
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">{describeAccess(run.result)}</p>
             <p className="text-xs text-muted-foreground">
               {run.result.boards} board{run.result.boards === 1 ? "" : "s"} · {run.result.screens}{" "}
               screen{run.result.screens === 1 ? "" : "s"} · {run.result.files} files ·{" "}
@@ -298,9 +309,25 @@ export function PublishDialog() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="public">Anyone with the link</SelectItem>
-                  <SelectItem value="private">Private (link carries a key)</SelectItem>
+                  <SelectItem value="private">Only your organization</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="publish-password">Password (optional)</Label>
+              <Input
+                id="publish-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="8+ characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Anyone with the password can view, signed in or not. Send it separately from the
+                link.
+              </p>
             </div>
 
             {targets && targets.teams.length > 1 && teamId ? (
@@ -354,6 +381,18 @@ export function PublishDialog() {
 }
 
 /** Non-fatal notes from the run — a dropped screenshot, a missing asset, a new folderId. */
+/** What the published link now asks of a visitor, said plainly. */
+function describeAccess(result: PublishResult): string {
+  if (result.visibility === "private") {
+    return result.passwordProtected
+      ? "Your organization, or anyone with the password."
+      : "Anyone signed in at your organization.";
+  }
+  return result.passwordProtected
+    ? "Anyone with the link and the password."
+    : "Anyone with the link.";
+}
+
 function Warnings({ messages }: { messages: string[] }) {
   if (messages.length === 0) return null;
   return (

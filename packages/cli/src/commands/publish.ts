@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { isCancel, password } from "@clack/prompts";
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
@@ -55,7 +56,16 @@ export default defineCommand({
     },
     visibility: {
       type: "string",
-      description: "public | private (default: public)",
+      description: "public | private — private means your organization (default: public)",
+    },
+    password: {
+      type: "boolean",
+      description:
+        "Password-protect the link; anyone with the password can view. Prompts for it, or reads $VELLOO_SHARE_PASSWORD",
+    },
+    "password-expires": {
+      type: "string",
+      description: "Stop accepting the password after this date (YYYY-MM-DD or ISO timestamp)",
     },
     team: {
       type: "string",
@@ -81,6 +91,8 @@ export default defineCommand({
     if (visibility !== "public" && visibility !== "private") {
       fail("publish", `--visibility must be 'public' or 'private', got '${visibility}'`);
     }
+    const password = args.password ? await readSharePassword() : undefined;
+    const passwordExpiresAt = resolvePasswordExpiry(args["password-expires"], password != null);
     const teamId = await resolveTeam(baseUrl, token, args.team);
     const viewport: Viewport = {
       w: args.w ? Number(args.w) : 1440,
@@ -132,6 +144,8 @@ export default defineCommand({
           boardIds: selected.map((b) => b.id),
           ...(args.title ? { title: args.title } : {}),
           visibility,
+          ...(password ? { password } : {}),
+          ...(passwordExpiresAt ? { passwordExpiresAt } : {}),
           ...(args.slug ? { slug: args.slug } : {}),
           ...(teamId ? { teamId } : {}),
           viewport,
@@ -153,11 +167,11 @@ export default defineCommand({
       await closePooledBrowser();
     }
 
-    const key = outcome.accessToken ? `?k=${outcome.accessToken}` : "";
     console.log(
       `velloo publish: ${outcome.files} files, ${Math.round(outcome.bytes / 1024)} KB${outcome.screenshots > 0 ? `, ${outcome.screenshots} screenshots` : ""}${outcome.commitSha ? `, commit ${outcome.commitSha.slice(0, 7)}` : ""}`,
     );
-    console.log(`  ${outcome.shareUrl}${key}`);
+    console.log(`  ${outcome.shareUrl}`);
+    console.log(`  ${describeAccess(outcome)}`);
     // Version-history messaging (folderId-aware clouds only). The share URL is
     // stable now, so a re-publish REPLACES what viewers see: free keeps only
     // the latest version, paid tiers retain every publish for pinning.
@@ -182,4 +196,54 @@ export default defineCommand({
  */
 function report(event: PublishEvent): void {
   if (event.kind === "note" || event.kind === "warn") console.log(`  ${event.message}`);
+}
+
+/**
+ * A share password never arrives as a flag value — a secret typed on a command
+ * line lands in shell history and in `ps` output for anyone on the machine.
+ * `--password` says "protect this"; the value comes from a masked prompt, or
+ * from the environment when there's no terminal to prompt at (CI).
+ */
+async function readSharePassword(): Promise<string> {
+  const fromEnv = process.env.VELLOO_SHARE_PASSWORD?.trim();
+  if (fromEnv) {
+    if (fromEnv.length < 8) fail("publish", "VELLOO_SHARE_PASSWORD must be at least 8 characters");
+    return fromEnv;
+  }
+  if (!process.stdin.isTTY) {
+    fail("publish", "--password needs a terminal to prompt — set $VELLOO_SHARE_PASSWORD instead");
+  }
+  const entered = await password({
+    message: "Password for this share link",
+    validate: (value) => ((value ?? "").length < 8 ? "At least 8 characters." : undefined),
+  });
+  if (isCancel(entered)) fail("publish", "cancelled");
+  return entered as string;
+}
+
+/** `YYYY-MM-DD` (end of that day) or a full ISO instant. */
+function resolvePasswordExpiry(raw: string | undefined, hasPassword: boolean): string | undefined {
+  if (!raw) return undefined;
+  if (!hasPassword) fail("publish", "--password-expires needs --password");
+  const value = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T23:59:59` : raw;
+  const when = new Date(value);
+  if (Number.isNaN(when.getTime())) {
+    fail(
+      "publish",
+      `--password-expires must be a date (YYYY-MM-DD) or ISO timestamp, got '${raw}'`,
+    );
+  }
+  return when.toISOString();
+}
+
+/** What the link now asks of a visitor, said plainly. */
+function describeAccess(outcome: PublishOutcome): string {
+  if (outcome.visibility === "private") {
+    return outcome.passwordProtected
+      ? "private — your organization, or anyone with the password"
+      : "private — anyone signed in at your organization";
+  }
+  return outcome.passwordProtected
+    ? "public — anyone with the link and the password"
+    : "public — anyone with the link";
 }

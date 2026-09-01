@@ -37,7 +37,10 @@ beforeEach(() => {
     async fetch(req) {
       const { pathname } = new URL(req.url);
       if (req.method === "POST" && pathname === "/v1/links") {
-        return Response.json({ slug: "test-slug", accessToken: null }, { status: 201 });
+        return Response.json(
+          { slug: "test-slug", visibility: "public", passwordProtected: false },
+          { status: 201 },
+        );
       }
       if (req.method === "POST" && pathname.endsWith("/versions")) {
         const form = await req.formData();

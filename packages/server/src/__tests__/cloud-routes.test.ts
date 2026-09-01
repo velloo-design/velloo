@@ -247,6 +247,8 @@ function fakePublisher(opts: { ready?: boolean; teams?: { id: string; name: stri
     finish: (result: Partial<CanvasPublishResult> = {}) =>
       settle?.({
         shareUrl: "https://share.velloo.dev/s/abc/",
+        visibility: "public",
+        passwordProtected: false,
         files: 4,
         bytes: 2048,
         screenshots: 2,
@@ -336,11 +338,11 @@ describe("/api/publish", () => {
       warnings: ['screenshot of board "wide" exceeds 4MB even downscaled — skipped'],
     });
 
-    fake.finish({ shareUrl: "https://share.velloo.dev/s/abc/?k=key" });
+    fake.finish({ shareUrl: "https://share.velloo.dev/s/abc/" });
     await settled();
     expect(await (await get(app, "/api/publish/status")).json()).toMatchObject({
       state: "done",
-      result: { shareUrl: "https://share.velloo.dev/s/abc/?k=key", boards: 1, created: true },
+      result: { shareUrl: "https://share.velloo.dev/s/abc/", boards: 1, created: true },
     });
   });
 

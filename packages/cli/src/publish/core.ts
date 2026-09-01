@@ -72,6 +72,12 @@ export interface PublishRequest {
   /** Link title (default: "<folder name> designs"). */
   title?: string;
   visibility: "public" | "private";
+  /**
+   * A password anyone can use to view, whatever the visibility. Sent once at
+   * publish and never written anywhere local.
+   */
+  password?: string;
+  passwordExpiresAt?: string;
   /** Choose/reuse an explicit slug (default: the folder's existing link). */
   slug?: string;
   /** Publish into a team rather than the personal workspace. */
@@ -82,8 +88,9 @@ export interface PublishRequest {
 
 export interface PublishOutcome {
   shareUrl: string;
-  /** Private-link key, appended to the share URL as `?k=` when present. */
-  accessToken: string | null;
+  /** What the link now asks of a visitor — for the summary the CLI prints. */
+  visibility: "public" | "private";
+  passwordProtected: boolean;
   files: number;
   bytes: number;
   screenshots: number;
@@ -458,13 +465,16 @@ export async function publishDesign(
       title,
       visibility: request.visibility,
       ...(request.teamId ? { teamId: request.teamId } : {}),
+      ...(request.password ? { password: request.password } : {}),
+      ...(request.passwordExpiresAt ? { passwordExpiresAt: request.passwordExpiresAt } : {}),
     },
     form,
   });
 
   return {
     shareUrl: upload.shareUrl,
-    accessToken: upload.link.accessToken,
+    visibility: upload.link.visibility,
+    passwordProtected: upload.link.passwordProtected,
     files: upload.files,
     bytes: upload.bytes,
     screenshots: shots?.files.length ?? 0,
