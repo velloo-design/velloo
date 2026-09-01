@@ -6,7 +6,14 @@ import {
   isCaptureTimeout,
   renderScreen,
 } from "@velloo/renderer";
-import { isComponentNode, nodeId, type Screen, type Theme, type Viewport } from "@velloo/schema";
+import {
+  isArchived,
+  isComponentNode,
+  nodeId,
+  type Screen,
+  type Theme,
+  type Viewport,
+} from "@velloo/schema";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import { updateFrame } from "../../mutations/api/frames.ts";
@@ -216,6 +223,9 @@ export function framesShorterThan(
 ): FrameOverflow[] {
   const out: FrameOverflow[] = [];
   for (const board of ctx.folder.boards.values()) {
+    // Overflow is an advisory to act on; an archived board's frames are
+    // noise the agent shouldn't be resizing.
+    if (isArchived(board)) continue;
     for (const frame of board.frames) {
       if (frame.screen === screenId && frame.w === viewportW && frame.h < contentHeight) {
         out.push({

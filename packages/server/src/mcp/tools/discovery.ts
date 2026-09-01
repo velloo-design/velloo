@@ -11,7 +11,12 @@ import {
   type Screen,
 } from "@velloo/schema";
 import { z } from "zod";
-import { orderedBoards, resolveNamedTheme } from "../../design-folder.ts";
+import {
+  activeBoards,
+  type DesignFolder,
+  orderedBoards,
+  resolveNamedTheme,
+} from "../../design-folder.ts";
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
@@ -121,6 +126,26 @@ function toSummary(c: ComponentDescriptor): ComponentSummary {
   return out;
 }
 
+/**
+ * `list_boards`' payload, extracted so the selection rule is testable without
+ * standing up an MCP session. Honors config.boardOrder so the agent sees the
+ * same order as the canvas + /api/design (reorder_boards' effect would
+ * otherwise be invisible here), and hides archived boards unless asked.
+ */
+export function listBoardsPayload(
+  folder: DesignFolder,
+  opts: { include_frames?: boolean | undefined; include_archived?: boolean | undefined } = {},
+): Record<string, unknown>[] {
+  const entries = opts.include_archived ? orderedBoards(folder) : activeBoards(folder);
+  return entries.map(([id, board]) => ({
+    id,
+    name: board.name,
+    frameCount: board.frames.length,
+    ...(board.archivedAt ? { archivedAt: board.archivedAt } : {}),
+    ...(opts.include_frames ? { frames: board.frames, groups: board.groups } : {}),
+  }));
+}
+
 export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
     "list_screens",
@@ -161,20 +186,14 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_boards",
     {
       description:
-        "List every board in the design folder. Each board has its own collection of frames + groups. Pass `include_frames: true` to embed the full frame list for each board.",
-      inputSchema: { include_frames: z.boolean().optional() },
+        "List the design folder's live boards. Each board has its own collection of frames + groups. Pass `include_frames: true` to embed the full frame list for each board, or `include_archived: true` to also list boards the user has archived (those carry `archivedAt`).",
+      inputSchema: {
+        include_frames: z.boolean().optional(),
+        include_archived: z.boolean().optional(),
+      },
     },
-    async ({ include_frames }) => {
-      // Honor config.boardOrder so the agent sees the same order as the canvas
-      // + /api/design (reorder_boards' effect would otherwise be invisible here).
-      const boards = orderedBoards(ctx.folder).map(([id, board]) => ({
-        id,
-        name: board.name,
-        frameCount: board.frames.length,
-        ...(include_frames ? { frames: board.frames, groups: board.groups } : {}),
-      }));
-      return jsonResult({ boards });
-    },
+    async ({ include_frames, include_archived }) =>
+      jsonResult({ boards: listBoardsPayload(ctx.folder, { include_frames, include_archived }) }),
   );
 
   mcp.registerTool(

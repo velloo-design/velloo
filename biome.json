@@ -11,6 +11,7 @@
       "!**/dist",
       "!**/node_modules",
       "!**/.design",
+      "!velloo",
       "!**/tailwind-entry.css",
       "!**/canvas/src/styles.css",
       "!**/*.svg"

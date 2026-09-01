@@ -1,4 +1,4 @@
-import { isComponentNode, isSnippetInstance, type Node, nodeId } from "@velloo/schema";
+import { isArchived, isComponentNode, isSnippetInstance, type Node, nodeId } from "@velloo/schema";
 import { type DesignFolder, orderedBoards } from "./design-folder.ts";
 
 /**
@@ -22,20 +22,22 @@ export interface BoardHit {
   id: string;
   name: string;
   frameCount: number;
+  /** Archived boards still match — search is how you find something you parked. */
+  archived: boolean;
 }
 
 export interface ScreenHit {
   id: string;
   name: string;
-  /** Boards with a frame showing this screen, in sidebar order. */
-  boards: { id: string; name: string }[];
+  /** Boards with a frame showing this screen, in sidebar order (archived last). */
+  boards: { id: string; name: string; archived: boolean }[];
 }
 
 export interface TextHit {
   screenId: string;
   screenName: string;
-  /** First board (sidebar order) with a frame showing the screen. */
-  board: { id: string; name: string } | null;
+  /** First board (sidebar order, live before archived) showing the screen. */
+  board: { id: string; name: string; archived: boolean } | null;
   path: number[];
   kind: "component" | "snippet";
   /** Component `$ref`, or the snippet id for snippet-instance arg matches. */
@@ -63,9 +65,13 @@ export function emptySearchResult(query: string): SearchResult {
   return { query, boards: [], screens: [], text: [], textTotal: 0 };
 }
 
-/** Prefix matches sort ahead of mid-string matches; ties keep folder order. */
-function nameRank(name: string, id: string, q: string): number {
-  return name.toLowerCase().startsWith(q) || id.toLowerCase().startsWith(q) ? 0 : 1;
+/**
+ * Prefix matches sort ahead of mid-string matches; ties keep folder order.
+ * Archived boards sink below every live hit — present, but never in the way.
+ */
+function nameRank(name: string, id: string, q: string, archived = false): number {
+  const prefix = name.toLowerCase().startsWith(q) || id.toLowerCase().startsWith(q) ? 0 : 1;
+  return (archived ? 2 : 0) + prefix;
 }
 
 function nameMatches(name: string, id: string, q: string): boolean {
@@ -99,18 +105,30 @@ export function searchFolder(folder: DesignFolder, rawQuery: string, textLimit =
 
   const boards: BoardHit[] = boardsInOrder
     .filter(([id, b]) => nameMatches(b.name, id, q))
-    .map(([id, b]) => ({ id, name: b.name, frameCount: b.frames.length }))
-    .sort((a, b) => nameRank(a.name, a.id, q) - nameRank(b.name, b.id, q));
+    .map(([id, b]) => ({
+      id,
+      name: b.name,
+      frameCount: b.frames.length,
+      archived: isArchived(b),
+    }))
+    .sort((a, b) => nameRank(a.name, a.id, q, a.archived) - nameRank(b.name, b.id, q, b.archived));
 
   // screen id → hosting boards, in sidebar order (drives both the screen
   // hits' board chips and the text hits' navigation target).
-  const hostBoards = new Map<string, { id: string; name: string }[]>();
+  const hostBoards = new Map<string, { id: string; name: string; archived: boolean }[]>();
   for (const [boardId, board] of boardsInOrder) {
     for (const frame of board.frames) {
       const hosts = hostBoards.get(frame.screen) ?? [];
-      if (!hosts.some((h) => h.id === boardId)) hosts.push({ id: boardId, name: board.name });
+      if (!hosts.some((h) => h.id === boardId)) {
+        hosts.push({ id: boardId, name: board.name, archived: isArchived(board) });
+      }
       hostBoards.set(frame.screen, hosts);
     }
+  }
+  // Live hosts first, so a text hit's navigation target (hosts[0]) never
+  // lands on an archived board while a live one shows the same screen.
+  for (const hosts of hostBoards.values()) {
+    hosts.sort((a, b) => Number(a.archived) - Number(b.archived));
   }
 
   const screens: ScreenHit[] = [...folder.screens.entries()]

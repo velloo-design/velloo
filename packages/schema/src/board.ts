@@ -42,8 +42,21 @@ export const BoardSchema = z.object({
    * mirroring the per-screen `library` twin pattern.
    */
   theme: z.string().min(1).optional(),
+  /**
+   * ISO timestamp of when the board was archived. **Presence is the state** —
+   * there is no `archived: false` twin to contradict it. Archived boards drop
+   * out of the sidebar, `/api/design`, `list_boards`, and a default publish,
+   * but stay on disk untouched and fully editable; archive is not lock.
+   * Absent ⇒ active, so existing folders are unaffected.
+   */
+  archivedAt: z.string().datetime().optional(),
   frames: z.array(FrameSchema).default([]),
   groups: z.array(BoardGroupSchema).default([]),
 });
 
 export type Board = z.infer<typeof BoardSchema>;
+
+/** Archived state is the presence of `archivedAt` — never a separate boolean. */
+export function isArchived(board: Pick<Board, "archivedAt">): boolean {
+  return board.archivedAt !== undefined;
+}

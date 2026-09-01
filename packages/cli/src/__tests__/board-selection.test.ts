@@ -4,8 +4,8 @@ import { multiselect } from "@clack/prompts";
 import { type BoardEntry, boardSelectionPrompt, resolveBoardSelection } from "../folder.ts";
 
 const boards: BoardEntry[] = [
-  { id: "home", name: "Home", screens: ["landing"] },
-  { id: "checkout", name: "Checkout", screens: ["cart", "payment"] },
+  { id: "home", name: "Home", screens: ["landing"], archived: false },
+  { id: "checkout", name: "Checkout", screens: ["cart", "payment"], archived: false },
 ];
 
 async function runBoardPrompt(keys: string): Promise<string[]> {

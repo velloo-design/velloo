@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Result } from "@velloo/result";
+import { isArchived } from "@velloo/schema";
 
 /**
  * Agent-activity events. Every mutation api wrapper emits one
@@ -75,7 +76,7 @@ export const GROUP_DETAIL_CAP = 20;
 export interface ActivityContext {
   folder: {
     root: string;
-    boards?: Map<string, { id: string; frames: Array<{ screen: string }> }>;
+    boards?: Map<string, { id: string; archivedAt?: string; frames: Array<{ screen: string }> }>;
   };
   broadcast: (e: ActivityEvent) => void;
 }
@@ -173,9 +174,13 @@ export function clearActivityLogForTest(folderRoot: string): void {
 /** See ActivityTarget.boards — resolved here because only the server knows every board. */
 function enrichBoards(ctx: ActivityContext, target: ActivityTarget): ActivityTarget {
   if (!target.screenId || target.boardId || !ctx.folder.boards) return target;
-  const boards = [...ctx.folder.boards.values()]
-    .filter((b) => b.frames.some((f) => f.screen === target.screenId))
-    .map((b) => b.id);
+  const hosting = [...ctx.folder.boards.values()].filter((b) =>
+    b.frames.some((f) => f.screen === target.screenId),
+  );
+  // Point the feed at a board the user can actually see; an archived host
+  // is better than nothing when it's the only one left.
+  const live = hosting.filter((b) => !isArchived(b));
+  const boards = (live.length > 0 ? live : hosting).map((b) => b.id);
   return boards.length > 0 ? { ...target, boards } : target;
 }
 

@@ -1,5 +1,7 @@
 import { MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import {
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   ChevronRight,
   Download,
@@ -14,7 +16,7 @@ import {
   Trash2,
   Unlock,
 } from "lucide-react";
-import { type DragEvent, useMemo, useRef, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
@@ -44,6 +46,16 @@ import {
 import { Input } from "./ui/input.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
+/** Stable empty array so the `archivedBoards` selector doesn't re-render on every store tick. */
+const EMPTY_BOARDS: BoardMeta[] = [];
+
+/** "Aug 25" — enough to date an archived board without widening the row. */
+function archivedOn(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "archived";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 interface Props {
   boards: BoardMeta[];
   screens: ScreenMeta[];
@@ -68,6 +80,8 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const toggleTreeCollapsed = useCanvas((s) => s.toggleTreeCollapsed);
   const reorderBoardsLocal = useCanvas((s) => s.reorderBoardsLocal);
   const boardPulse = useCanvas((s) => s.boardPulse);
+  const setBoardArchived = useCanvas((s) => s.setBoardArchived);
+  const archivedBoards = useCanvas((s) => s.design?.archivedBoards ?? EMPTY_BOARDS);
   const currentScreen = useCanvas((s) =>
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
   );
@@ -157,6 +171,31 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
         await useCanvas.getState().pruneBoard(id);
       } catch (e) {
         toastError(e, "Could not delete board");
+      }
+    })();
+  };
+
+  // Collapsed by default: the archive is a filing cabinet, not a second list.
+  const [archivedOpen, setArchivedOpen] = useState(false);
+
+  // Landing on an archived board (search, a shared ?board= link) with the
+  // section shut would leave the sidebar showing no selection at all.
+  const currentIsArchived = archivedBoards.some((b) => b.id === currentBoardId);
+  useEffect(() => {
+    if (currentIsArchived) setArchivedOpen(true);
+  }, [currentIsArchived]);
+
+  const archiveBoard = (b: BoardMeta, archived: boolean) => {
+    void (async () => {
+      try {
+        await setBoardArchived(b.id, archived);
+        pushToast({
+          kind: "info",
+          message: archived ? `Archived "${b.name}"` : `Restored "${b.name}"`,
+        });
+        if (archived) setArchivedOpen(true);
+      } catch (e) {
+        toastError(e, archived ? "Could not archive board" : "Could not restore board");
       }
     })();
   };
@@ -296,7 +335,9 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
           </Button>
         </div>
         {boardsCollapsed ? null : boards.length === 0 ? (
-          <div className="px-4 pb-2 text-sm text-muted-foreground">No boards yet.</div>
+          <div className="px-4 pb-2 text-sm text-muted-foreground">
+            {archivedBoards.length > 0 ? "No boards — everything's archived." : "No boards yet."}
+          </div>
         ) : (
           <ul
             className="flex flex-1 flex-col gap-0.5 overflow-auto scroll-stable px-2 pb-2 min-h-0"
@@ -442,8 +483,15 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                         Export board…
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        disabled={!wsConnected}
+                        onSelect={() => archiveBoard(b, true)}
+                      >
+                        <Archive />
+                        Archive board
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         variant="destructive"
-                        disabled={boards.length <= 1 || !wsConnected}
+                        disabled={!wsConnected}
                         onSelect={() => setPendingBoardDelete({ id: b.id, name: b.name })}
                       >
                         <Trash2 />
@@ -455,6 +503,97 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
               );
             })}
           </ul>
+        )}
+        {boardsCollapsed || archivedBoards.length === 0 ? null : (
+          <div className="shrink-0 border-t px-2 py-1.5">
+            <button
+              type="button"
+              onClick={() => setArchivedOpen((v) => !v)}
+              aria-expanded={archivedOpen}
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {archivedOpen ? (
+                <ChevronDown size={12} strokeWidth={2.5} className="shrink-0" />
+              ) : (
+                <ChevronRight size={12} strokeWidth={2.5} className="shrink-0" />
+              )}
+              <Archive size={11} strokeWidth={2} className="shrink-0" /> Archived
+              <span className="normal-case opacity-60">({archivedBoards.length})</span>
+            </button>
+            {archivedOpen ? (
+              <ul className="mt-0.5 flex flex-col gap-0.5">
+                {archivedBoards.map((b) => {
+                  const active = b.id === currentBoardId;
+                  return (
+                    <li key={b.id} className="relative group/board rounded-md">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!wsConnected && !active) {
+                            pushToast({
+                              kind: "error",
+                              message:
+                                "Disconnected — board switching resumes when the daemon is back.",
+                            });
+                            return;
+                          }
+                          void selectBoard(b.id);
+                        }}
+                        // An archived board is still fully editable — opening
+                        // one is normal, it just isn't in the way by default.
+                        className={
+                          "w-full text-left px-2 py-1.5 pr-8 rounded-md text-sm transition-colors " +
+                          (active
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-muted text-muted-foreground")
+                        }
+                      >
+                        <div className="truncate">{b.name}</div>
+                        <div
+                          className={
+                            "text-xs " +
+                            (active ? "text-primary-foreground/80" : "text-muted-foreground/70")
+                          }
+                        >
+                          {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
+                          {b.archivedAt ? ` · ${archivedOn(b.archivedAt)}` : ""}
+                        </div>
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            title="Board menu"
+                            className="absolute right-2 top-2 opacity-0 group-hover/board:opacity-100 data-[state=open]:opacity-100"
+                          >
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            disabled={!wsConnected}
+                            onSelect={() => archiveBoard(b, false)}
+                          >
+                            <ArchiveRestore />
+                            Restore board
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={!wsConnected}
+                            onSelect={() => setPendingBoardDelete({ id: b.id, name: b.name })}
+                          >
+                            <Trash2 />
+                            Delete board
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
         )}
       </section>
 

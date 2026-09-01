@@ -1,10 +1,11 @@
-import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
+import { type ExecFileSyncOptionsWithStringEncoding, execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ComponentProvider } from "@velloo/provider";
 import { captureScreenshot, renderScreen } from "@velloo/renderer";
 import type { Board, Config, Screen, Theme, Viewport } from "@velloo/schema";
 import {
+  activeBoards,
   type DesignFolder,
   LiveBundler,
   liveExtensions,
@@ -331,12 +332,20 @@ export async function listTeams(baseUrl: string, token: string): Promise<CloudTe
   return body.teams;
 }
 
-/** The boards a publish would ship, in the canvas sidebar's display order. */
+/**
+ * The boards a publish would ship, in the canvas sidebar's display order.
+ *
+ * A default publish ships the live boards only. Named ids win over that —
+ * asking for an archived board by id is an explicit request, not an oversight.
+ */
 export function selectBoards(design: DesignFolder, boardIds?: string[]): Board[] {
-  const all = orderedBoards(design).map(([, board]) => board);
-  if (!boardIds || boardIds.length === 0) return all;
+  if (!boardIds || boardIds.length === 0) {
+    return activeBoards(design).map(([, board]) => board);
+  }
   const wanted = new Set(boardIds);
-  return all.filter((board) => wanted.has(board.id));
+  return orderedBoards(design)
+    .map(([, board]) => board)
+    .filter((board) => wanted.has(board.id));
 }
 
 /**

@@ -19,6 +19,7 @@ export {
   type BoardGroup,
   BoardGroupSchema,
   BoardSchema,
+  isArchived,
   MAX_BOARD_NAME_LENGTH,
 } from "./board.ts";
 export {

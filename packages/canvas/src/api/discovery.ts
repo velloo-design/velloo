@@ -23,7 +23,14 @@ export interface DesignSummary {
   defaultBoard: string | null;
   viewportPresets: ViewportPreset[];
   screens: ScreenMeta[];
+  /** Live boards, in sidebar order. Archived ones are served separately. */
   boards: BoardMeta[];
+  /**
+   * Boards the user has filed away, in the same sidebar order. Kept out of
+   * `boards` so every existing consumer keeps seeing live boards only.
+   * Absent on older daemons.
+   */
+  archivedBoards?: BoardMeta[];
   snippets: SnippetMeta[];
 }
 
@@ -38,6 +45,8 @@ export interface BoardMeta {
   id: string;
   name: string;
   frameCount: number;
+  /** ISO stamp when archived; null/absent = live. */
+  archivedAt?: string | null;
 }
 
 export interface SnippetMeta {

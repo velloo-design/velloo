@@ -3,12 +3,18 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unwrap } from "@velloo/result";
-import type { Theme } from "@velloo/schema";
+import type { Board, Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { ActivityEvent } from "../../activity.ts";
-import { type DesignFolder, loadDesignFolder, orderedBoards } from "../../design-folder.ts";
+import {
+  activeBoards,
+  type DesignFolder,
+  loadDesignFolder,
+  orderedBoards,
+} from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { type MutationContext, removeBoard, reorderBoards } from "../index.ts";
+import { persistBoard } from "../persist.ts";
 
 const sampleConfig = {
   schemaVersion: 2,
@@ -82,18 +88,34 @@ describe("reorder_boards", () => {
     expect(orderedBoards(folder).map(([id]) => id)).toEqual(["alpha", "beta", "gamma"]);
   });
 
-  test("persists a new order; omitted boards are appended", async () => {
+  test("persists a new order; omitted boards keep their slots", async () => {
     const result = unwrap(await reorderBoards(ctx, { order: ["gamma", "alpha"] }));
-    // beta wasn't named, so it's appended after the explicit ids.
-    expect(result.order).toEqual(["gamma", "alpha", "beta"]);
-    expect(folder.config.boardOrder).toEqual(["gamma", "alpha", "beta"]);
-    expect(orderedBoards(folder).map(([id]) => id)).toEqual(["gamma", "alpha", "beta"]);
+    // beta wasn't named, so it holds its middle slot while alpha and gamma
+    // swap around it.
+    expect(result.order).toEqual(["gamma", "beta", "alpha"]);
+    expect(folder.config.boardOrder).toEqual(["gamma", "beta", "alpha"]);
+    expect(orderedBoards(folder).map(([id]) => id)).toEqual(["gamma", "beta", "alpha"]);
     expect(events.filter((e) => e.type !== "activity")).toEqual([{ type: "config-changed" }]);
   });
 
   test("drops unknown ids and de-duplicates", async () => {
     const result = unwrap(await reorderBoards(ctx, { order: ["beta", "ghost", "beta", "gamma"] }));
-    expect(result.order).toEqual(["beta", "gamma", "alpha"]);
+    // beta-then-gamma is already their relative order, and alpha holds its
+    // slot — so the sanitized permutation is unchanged.
+    expect(result.order).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  test("an archived board keeps its slot when the sidebar reorders the live ones", async () => {
+    // The sidebar only ever sends the boards it renders. beta is archived and
+    // invisible to it, so beta must not be shuffled to the end.
+    await persistBoard(folder, "beta", {
+      ...(folder.boards.get("beta") as Board),
+      archivedAt: "2026-08-25T00:00:00.000Z",
+    });
+    const result = unwrap(await reorderBoards(ctx, { order: ["gamma", "alpha"] }));
+    expect(result.order).toEqual(["gamma", "beta", "alpha"]);
+    // Unarchiving restores it between the two live boards, not below them.
+    expect(activeBoards(folder).map(([id]) => id)).toEqual(["gamma", "alpha"]);
   });
 
   test("survives a reload from disk", async () => {

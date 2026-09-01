@@ -1,4 +1,4 @@
-import { Frame as FrameIcon, LayoutGrid, Search } from "lucide-react";
+import { Archive, Frame as FrameIcon, LayoutGrid, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -238,11 +238,24 @@ export function SearchDialog() {
                     onPick={() => void go({ kind: "board", hit })}
                     onHover={() => setActiveIndex(index)}
                   >
-                    <LayoutGrid size={16} className="shrink-0 text-muted-foreground" />
-                    <span className="truncate text-[13.5px]">
+                    {hit.archived ? (
+                      <Archive
+                        size={16}
+                        className="shrink-0 text-muted-foreground"
+                        aria-label="Archived board"
+                      />
+                    ) : (
+                      <LayoutGrid size={16} className="shrink-0 text-muted-foreground" />
+                    )}
+                    <span
+                      className={`truncate text-[13.5px] ${
+                        hit.archived ? "text-muted-foreground" : ""
+                      }`}
+                    >
                       <Highlighted text={hit.name} query={q} />
                     </span>
                     <span className="ml-auto shrink-0 text-[11.5px] text-muted-foreground">
+                      {hit.archived ? "Archived · " : ""}
                       {hit.frameCount} frame{hit.frameCount === 1 ? "" : "s"}
                     </span>
                   </ResultRow>

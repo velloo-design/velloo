@@ -458,7 +458,7 @@ export {
   pullComments,
 } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
-export { loadDesignFolder, orderedBoards } from "./design-folder.ts";
+export { activeBoards, loadDesignFolder, orderedBoards } from "./design-folder.ts";
 export {
   type ExportFormat,
   type ExportMode,

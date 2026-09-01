@@ -2,8 +2,9 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { type Manifest, type StyleChannel, styleChannelOf } from "@velloo/provider";
+import { isArchived } from "@velloo/schema";
 import { Hono } from "hono";
-import { type DesignFolder, orderedBoards } from "../design-folder.ts";
+import { activeBoards, type DesignFolder, orderedBoards } from "../design-folder.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { findSnippetInstances } from "../mutations/snippet-instances.ts";
 
@@ -60,11 +61,25 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
         name: screen.name,
         library: screen.library ?? f.config.defaultLibrary ?? null,
       })),
-      boards: orderedBoards(f).map(([id, board]) => ({
+      boards: activeBoards(f).map(([id, board]) => ({
         id,
         name: board.name,
         frameCount: board.frames.length,
       })),
+      /**
+       * Archived boards, in the same sidebar order — served alongside rather
+       * than inside `boards` so every existing consumer keeps seeing only
+       * live boards, and the sidebar's Archived section has what it needs
+       * without a second round trip.
+       */
+      archivedBoards: orderedBoards(f)
+        .filter(([, board]) => isArchived(board))
+        .map(([id, board]) => ({
+          id,
+          name: board.name,
+          frameCount: board.frames.length,
+          archivedAt: board.archivedAt ?? null,
+        })),
       snippets: [...f.snippets.entries()].map(([id, snippet]) => ({
         id,
         name: snippet.name,

@@ -10,6 +10,7 @@ import {
   type Config,
   ConfigSchema,
   CURRENT_SCHEMA_VERSION,
+  isArchived,
   type Screen,
   ScreenSchema,
   type Snippet,
@@ -257,6 +258,18 @@ export function orderedBoards(folder: DesignFolder): [string, Board][] {
   return out;
 }
 
+/**
+ * The boards a user should *see*: {@link orderedBoards} minus archived ones.
+ *
+ * Deliberately a separate function rather than a filtering default inside
+ * `orderedBoards` — presentation call sites opt in by name, so a future scan
+ * that must see every board (frame pruning, theme usage) can't inherit the
+ * filter by accident and silently skip one.
+ */
+export function activeBoards(folder: DesignFolder): [string, Board][] {
+  return orderedBoards(folder).filter(([, board]) => !isArchived(board));
+}
+
 /** Reload one screen from disk and update the cache in place. */
 export async function reloadScreen(folder: DesignFolder, screenId: string): Promise<Screen | null> {
   const path = join(folder.root, "screens", `${screenId}.json`);
@@ -344,6 +357,10 @@ export function pinnedThemeForScreen(
 ): { ok: true; name: string | undefined } | { ok: false; message: string } {
   const boardsByTheme = new Map<string, string[]>();
   for (const board of folder.boards.values()) {
+    // An archived board's theme pin must not enter the disagreement check —
+    // a parked candidate board would otherwise wedge every screenshot of a
+    // screen it happens to share with a live board.
+    if (isArchived(board)) continue;
     if (!board.frames.some((f) => f.screen === screenId)) continue;
     const name = board.theme ?? "default";
     const hosts = boardsByTheme.get(name) ?? [];

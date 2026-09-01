@@ -356,12 +356,13 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_board",
     {
       description:
-        "Update a board's metadata. patch.theme names a theme (stem of theme/<name>.json) the board's frames render with — the per-board look; null clears back to the folder default.",
+        "Update a board's metadata. patch.theme names a theme (stem of theme/<name>.json) the board's frames render with — the per-board look; null clears back to the folder default. patch.archived: true files the board away (hidden from the sidebar, list_boards, and a default publish, but kept on disk and still editable); false restores it.",
       inputSchema: {
         boardId: z.string(),
         patch: z.object({
           name: z.string().max(MAX_BOARD_NAME_LENGTH).optional(),
           theme: z.string().nullable().optional(),
+          archived: z.boolean().optional(),
         }),
       },
     },
@@ -371,7 +372,8 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   mcp.registerTool(
     "remove_board",
     {
-      description: "Delete a board. Refuses when it's the last board in the folder.",
+      description:
+        "Delete a board and its notes. Permanent — to file a board away reversibly, prefer update_board { patch: { archived: true } }.",
       inputSchema: { boardId: z.string() },
     },
     async (args) => toMcp(await removeBoard(ctx, args)),
@@ -381,7 +383,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "reorder_boards",
     {
       description:
-        "Set the left-sidebar display order of boards. `order` is the list of board ids in the desired order; unknown ids are ignored and any omitted boards are appended in their current order. Persisted to config.json (config.boardOrder).",
+        "Set the left-sidebar display order of boards. `order` is the list of board ids in the desired order; unknown ids are ignored and any omitted boards keep their current slots. Persisted to config.json (config.boardOrder).",
       inputSchema: { order: z.array(z.string()) },
     },
     async (args) => toMcp(await reorderBoards(ctx, args)),

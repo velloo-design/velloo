@@ -12,6 +12,13 @@ const introOf = (
 ): readonly string[] => p.mcpIntro?.(channel) ?? [];
 
 describe("buildInstructions", () => {
+  test("tells the agent archived boards exist and how to see them", () => {
+    const text = buildInstructions(false);
+    expect(text).toContain("include_archived");
+    // The agent must know archiving is the reversible alternative to deletion.
+    expect(text).toContain("archived: true");
+  });
+
   test("omits the feedback paragraph when feedback is disabled", () => {
     const text = buildInstructions(false);
     expect(text).not.toContain("send_feedback");

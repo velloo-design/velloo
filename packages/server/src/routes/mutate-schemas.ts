@@ -61,6 +61,7 @@ export const UpdateBoardBody = z.object({
   patch: z.object({
     name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH).optional(),
     theme: z.string().min(1).nullable().optional(),
+    archived: z.boolean().optional(),
   }),
 });
 export const RemoveBoardBody = z.object({

@@ -9,13 +9,15 @@ export interface SearchBoardHit {
   id: string;
   name: string;
   frameCount: number;
+  /** Archived boards still match — search is how you find one you parked. */
+  archived: boolean;
 }
 
 export interface SearchScreenHit {
   id: string;
   name: string;
-  /** Boards with a frame showing this screen, in sidebar order. */
-  boards: { id: string; name: string }[];
+  /** Boards with a frame showing this screen, in sidebar order (archived last). */
+  boards: { id: string; name: string; archived: boolean }[];
 }
 
 export interface SearchTextHit {

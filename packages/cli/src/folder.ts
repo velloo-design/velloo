@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { isCancel, multiselect, select } from "@clack/prompts";
-import { BoardSchema, ScreenSchema } from "@velloo/schema";
+import { BoardSchema, isArchived, ScreenSchema } from "@velloo/schema";
 import { findDesignConfig } from "./design-config.ts";
 import { fail } from "./fail.ts";
 import { type FoundManifest, findManifest, pickProject } from "./manifest.ts";
@@ -169,6 +169,8 @@ export interface BoardEntry {
   name: string;
   /** Screen ids placed on this board (from its frames). */
   screens: string[];
+  /** Archived boards stay out of the default publish set — see {@link pickBoards}. */
+  archived: boolean;
 }
 
 /** Every board under `<folder>/boards`, sorted; skips unparseable files. */
@@ -183,7 +185,12 @@ export async function listBoards(folder: string): Promise<BoardEntry[]> {
   for (const f of files.sort()) {
     try {
       const b = BoardSchema.parse(JSON.parse(await readFile(join(folder, "boards", f), "utf8")));
-      out.push({ id: b.id, name: b.name || b.id, screens: b.frames.map((fr) => fr.screen) });
+      out.push({
+        id: b.id,
+        name: b.name || b.id,
+        screens: b.frames.map((fr) => fr.screen),
+        archived: isArchived(b),
+      });
     } catch {
       // skip a malformed board rather than abort
     }
@@ -206,9 +213,12 @@ export function boardsByScreen(boards: BoardEntry[]): Map<string, string[]> {
 
 /**
  * Resolve the boards a command should act on: an explicit `--boards a,b` arg,
- * else (interactive) an empty multiselect, else all boards. An explicitly
+ * else (interactive) an empty multiselect, else all live boards. An explicitly
  * empty interactive choice returns null so callers can stop without confusing
  * it with a folder that has no boards, which returns [] (all screens).
+ *
+ * Archived boards are out of the default and the picker, but a `--boards` arg
+ * naming one still resolves — asking for it by id is deliberate.
  */
 export async function pickBoards(
   folder: string,
@@ -216,8 +226,8 @@ export async function pickBoards(
   interactive: boolean,
   cmd: string,
 ): Promise<BoardEntry[] | null> {
-  const boards = await listBoards(folder);
-  if (boards.length === 0) return [];
+  const all = await listBoards(folder);
+  if (all.length === 0) return [];
   if (arg) {
     const ids = new Set(
       arg
@@ -225,12 +235,14 @@ export async function pickBoards(
         .map((s) => s.trim())
         .filter(Boolean),
     );
-    const chosen = boards.filter((b) => ids.has(b.id));
+    const chosen = all.filter((b) => ids.has(b.id));
     if (chosen.length === 0) {
-      fail(cmd, `no boards matched "${arg}". Available: ${boards.map((b) => b.id).join(", ")}`);
+      fail(cmd, `no boards matched "${arg}". Available: ${all.map((b) => b.id).join(", ")}`);
     }
     return chosen;
   }
+  const boards = all.filter((b) => !b.archived);
+  if (boards.length === 0) return [];
   if (!interactive) return boards;
   const chosen = await multiselect<string>(boardSelectionPrompt(boards));
   if (isCancel(chosen)) fail(cmd, "cancelled.");

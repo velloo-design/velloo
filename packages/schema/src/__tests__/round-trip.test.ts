@@ -5,6 +5,7 @@ import {
   type Frame,
   FrameSchema,
   findDuplicateIds,
+  isArchived,
   type Node,
   NodeSchema,
   type Screen,
@@ -77,6 +78,30 @@ describe("schema round-trips", () => {
       groups: [{ id: "core", name: "Core", color: "#5e6ad2" }],
     };
     expect(roundTrip((v) => BoardSchema.parse(v), board)).toEqual(board);
+  });
+
+  test("archived board survives JSON round-trip; absent archivedAt stays absent", () => {
+    const live: Board = { id: "b1", name: "Main", frames: [], groups: [] };
+    const parsedLive = roundTrip((v) => BoardSchema.parse(v), live);
+    expect(parsedLive).toEqual(live);
+    // Absent means active — Zod must not materialize the key.
+    expect("archivedAt" in parsedLive).toBe(false);
+    expect(isArchived(parsedLive)).toBe(false);
+
+    const archived: Board = { ...live, archivedAt: "2026-08-25T10:30:00.000Z" };
+    const parsedArchived = roundTrip((v) => BoardSchema.parse(v), archived);
+    expect(parsedArchived).toEqual(archived);
+    expect(isArchived(parsedArchived)).toBe(true);
+  });
+
+  test("a board file predating archiving still loads", () => {
+    // The on-disk contract: adding archivedAt must not break existing folders.
+    const legacy = { id: "b1", name: "Main", frames: [], groups: [] };
+    expect(() => BoardSchema.parse(legacy)).not.toThrow();
+  });
+
+  test("archivedAt must be a real ISO timestamp", () => {
+    expect(() => BoardSchema.parse({ id: "b1", name: "M", archivedAt: "yesterday" })).toThrow();
   });
 
   test("snippet with typed params survives JSON round-trip", () => {

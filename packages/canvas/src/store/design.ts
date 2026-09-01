@@ -14,6 +14,7 @@ import {
   fetchTheme,
   type GeneratedAsset,
   type HistoryDepths,
+  mutate,
 } from "../api.ts";
 import type { CanvasState } from "./index.ts";
 
@@ -91,6 +92,12 @@ export interface DesignSlice {
    * the first remaining board.
    */
   pruneBoard(boardId: string): Promise<void>;
+  /**
+   * File a board away (or bring it back). Archived boards leave the sidebar's
+   * main list but stay on disk and fully editable; archiving the board you're
+   * looking at moves the selection to the first remaining live board.
+   */
+  setBoardArchived(boardId: string, archived: boolean): Promise<void>;
   selectScreen(screenId: string): Promise<void>;
   loadScreen(screenId: string): Promise<Screen | null>;
   refreshScreen(screenId: string): Promise<void>;
@@ -186,6 +193,24 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     set({ design });
   },
 
+  async setBoardArchived(boardId: string, archived: boolean) {
+    await mutate.updateBoard({ boardId, patch: { archived } });
+    // Archiving moves the board between two summary lists, which no
+    // `board-changed` reconciliation covers — refetch the summary rather
+    // than reimplementing the server's ordering here.
+    await get().refreshDesignSummary();
+    if (!archived || get().currentBoardId !== boardId) return;
+    const next = get().design?.boards[0]?.id ?? null;
+    if (next) {
+      await get().selectBoard(next);
+    } else {
+      // Everything's archived — clear the canvas rather than opening onto a
+      // board the user just put away.
+      set({ currentBoardId: null, currentScreenId: null, annotations: [], notes: [] });
+      get().setEditingMarkupId(null);
+    }
+  },
+
   reorderBoardsLocal(order) {
     set((s) => {
       if (!s.design) return s;
@@ -277,6 +302,15 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
             }
           : s.design,
       }));
+      // An archive/unarchive elsewhere (another tab, an agent) also arrives as
+      // `board-changed`, but it moves the board between the summary's two
+      // lists — which the in-place patch above can't express. Only refetch
+      // when the flag actually disagrees with what we're showing.
+      const design = get().design;
+      if (design) {
+        const shown = design.boards.some((b) => b.id === boardId);
+        if (shown === Boolean(board.archivedAt)) await get().refreshDesignSummary();
+      }
       for (const f of board.frames) {
         if (!get().screens[f.screen]) await get().loadScreen(f.screen);
       }
