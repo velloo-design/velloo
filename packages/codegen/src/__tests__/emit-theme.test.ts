@@ -35,10 +35,11 @@ describe("emitTheme", () => {
     const outDir = join(tmpdir(), `velloo-theme-${Date.now()}`);
     const result = await emitTheme(buildDefaultTheme(), { outputDir: outDir, apply: false });
 
-    expect(result.files.length).toBe(2);
-    const [css, tsConfig] = result.files;
+    expect(result.files.length).toBe(3);
+    const [css, tsConfig, tokens] = result.files;
     expect(css?.path.endsWith("app/globals.css")).toBe(true);
     expect(tsConfig?.path.endsWith("tailwind.config.ts")).toBe(true);
+    expect(tokens?.path.endsWith("tokens.json")).toBe(true);
 
     if (!css || !tsConfig) throw new Error("expected both files");
     const cssOut = css.contents;
@@ -135,8 +136,9 @@ describe("emitTheme", () => {
       cssOnly: true,
       apply: false,
     });
-    expect(result.files.length).toBe(1);
+    expect(result.files.length).toBe(2);
     expect(result.files[0]?.path.endsWith("app/globals.css")).toBe(true);
+    expect(result.files[1]?.path.endsWith("tokens.json")).toBe(true);
   });
 
   test("writes files when apply is true", async () => {
@@ -174,6 +176,49 @@ describe("emitTheme", () => {
     expect(css).not.toContain(".dark {");
     expect(result.warnings).toEqual([]);
   }, 30_000);
+
+  test("emits DTCG light/dark modes with structured colors and resolved dark fallbacks", async () => {
+    const theme: Theme = {
+      ...buildDefaultTheme(),
+      colorsDark: { background: "#111827" },
+      palette: { brand: "rgb(79 70 229)" },
+      paletteDark: { brand: "oklch(0.7 0.18 275)" },
+    };
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-dtcg-${Date.now()}`),
+      apply: false,
+    });
+    const tokens = result.files.find((file) => file.path.endsWith("tokens.json"));
+    if (!tokens) throw new Error("expected tokens.json");
+    const parsed = JSON.parse(tokens.contents);
+    expect(parsed.light.color.background.$type).toBe("color");
+    expect(parsed.light.color.background.$value.colorSpace).toBe("oklch");
+    expect(parsed.dark.color.background.$value.colorSpace).toBe("srgb");
+    expect(parsed.dark.color.foreground).toEqual(parsed.light.color.foreground);
+    expect(parsed.dark.color.palette.brand.$value.colorSpace).toBe("oklch");
+    expect(parsed.light.spacing[1]).toEqual({
+      $type: "dimension",
+      $value: { value: 4, unit: "px" },
+    });
+  });
+
+  test("DTCG export warns and preserves unsupported CSS color expressions", async () => {
+    const theme = buildDefaultTheme();
+    theme.colors.background = "var(--app-background)";
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-dtcg-warning-${Date.now()}`),
+      apply: false,
+    });
+    const tokens = result.files.find((file) => file.path.endsWith("tokens.json"));
+    const parsed = JSON.parse(tokens?.contents ?? "{}");
+    expect(parsed.light.color.background).toEqual({
+      $type: "string",
+      $value: "var(--app-background)",
+    });
+    expect(result.warnings.some((warning) => warning.includes("light.color.background"))).toBe(
+      true,
+    );
+  });
 
   test("a palette token shadowing a semantic slot is skipped and warned about", async () => {
     // The velloo.design papercut: a brand `palette.muted` text color emitted a

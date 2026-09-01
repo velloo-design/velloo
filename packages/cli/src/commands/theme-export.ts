@@ -46,6 +46,7 @@ async function themeEmitter(
           outputDir: outDir,
           apply,
           ...(theme.colorsDark ? { darkThemeOptions: toNative(theme, true) } : {}),
+          sourceTheme: theme,
         }),
     };
   }
@@ -67,7 +68,7 @@ export default defineCommand({
   meta: {
     name: "theme:export",
     description:
-      "Export theme as Tailwind globals.css (+ config) in diff mode — v4 @theme by default, or a velloo-theme.css + preset for a detected v3 target",
+      "Export DTCG tokens.json plus the framework theme in diff mode — Tailwind v4 globals.css by default, or v3 CSS + preset when detected",
   },
   args: {
     to: {

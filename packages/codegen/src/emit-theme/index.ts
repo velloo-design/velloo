@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { Theme } from "@velloo/schema";
 import { diffFile, type FileDiff } from "../diff.ts";
 import { type FormatError, formatCss } from "../format.ts";
+import { emitDtcgFile } from "./dtcg.ts";
 import { emitGlobalsCss, paletteShadowedSlots } from "./globals-css.ts";
 import { emitTailwindConfig } from "./tailwind-config.ts";
 import { emitThemeV3 } from "./v3.ts";
@@ -105,6 +106,10 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
       errors: [],
     });
   }
+
+  const dtcg = await emitDtcgFile(theme, options);
+  files.push(dtcg.file);
+  warnings.push(...dtcg.warnings);
 
   return { files, warnings, notes: [] };
 }

@@ -1,9 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ThemeModuleSpec } from "@velloo/provider";
+import type { Theme } from "@velloo/schema";
 import { diffFile } from "../diff.ts";
 import { jsLiteral } from "../emit-code/js-literal.ts";
-import type { EmitThemeResult } from "./index.ts";
+import { emitDtcgFile } from "./dtcg.ts";
+import type { EmitThemeFile, EmitThemeResult } from "./index.ts";
 
 export interface EmitNativeThemeOptions {
   /** The adapter's module shape (imports, factory, default path). */
@@ -19,6 +21,8 @@ export interface EmitNativeThemeOptions {
    * flag over the light color values.
    */
   darkThemeOptions?: unknown;
+  /** Source Velloo theme; when present, also emits framework-neutral tokens.json. */
+  sourceTheme?: Theme;
   /** Whether to actually write the file. Default false → returns the diff only. */
   apply?: boolean;
 }
@@ -55,9 +59,16 @@ ${darkBlock}`;
     await writeFile(themePath, contents, "utf8");
     applied = true;
   }
+  const files: EmitThemeFile[] = [{ path: themePath, contents, diff, applied, errors: [] }];
+  const warnings: string[] = [];
+  if (options.sourceTheme) {
+    const dtcg = await emitDtcgFile(options.sourceTheme, options);
+    files.push(dtcg.file);
+    warnings.push(...dtcg.warnings);
+  }
   return {
-    files: [{ path: themePath, contents, diff, applied, errors: [] }],
-    warnings: [],
+    files,
+    warnings,
     notes: [],
   };
 }

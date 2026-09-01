@@ -9,6 +9,7 @@ export {
   emitSnippet,
 } from "./emit-code/index.ts";
 export { type CodegenTarget, moduleTarget } from "./emit-code/target.ts";
+export { emitDtcgFile, emitDtcgTokens } from "./emit-theme/dtcg.ts";
 export { keyframesToCss } from "./emit-theme/globals-css.ts";
 export {
   type EmitThemeFile,

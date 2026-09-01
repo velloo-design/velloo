@@ -147,7 +147,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     "emit_theme",
     {
       description:
-        "Generate the active framework's theme artifact from the active theme. shadcn ⇒ Tailwind v4 globals.css (+ optional tailwind.config.ts) at `<outputDir>/<cssPath>` (cssPath default `app/globals.css`; pass `globals.css`/`src/index.css` for Vite/Astro). A target app detected as **Tailwind v3** instead gets `velloo-theme.css` (HSL variables, written next to the globals path — never into it) + a `velloo.preset.{ts,cjs}`; the result's `notes` carry the one-time wiring steps (an `@import` line + `presets: [...]`). MUI ⇒ a `createTheme(...)` module at `<outputDir>/<themePath>` (default `theme.ts`). Defaults to dry-run; this *is* a direct artifact (no agent translation needed).",
+        "Generate the active framework's theme artifact plus framework-neutral DTCG `tokens.json` from the active theme. shadcn ⇒ Tailwind v4 globals.css (+ optional tailwind.config.ts) at `<outputDir>/<cssPath>` (cssPath default `app/globals.css`; pass `globals.css`/`src/index.css` for Vite/Astro). A target app detected as **Tailwind v3** instead gets `velloo-theme.css` (HSL variables, written next to the globals path — never into it) + a `velloo.preset.{ts,cjs}`; the result's `notes` carry the one-time wiring steps (an `@import` line + `presets: [...]`). Native frameworks emit their adapter theme module. Defaults to dry-run; these are direct artifacts (no agent translation needed).",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z
@@ -192,6 +192,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
           outputDir: out,
           ...(args.themePath ? { themePath: args.themePath } : {}),
           ...(theme.colorsDark ? { darkThemeOptions: adapter.themeToNative(theme, true) } : {}),
+          sourceTheme: theme,
           apply: args.apply ?? false,
         });
         return jsonResult({ files: result.files });

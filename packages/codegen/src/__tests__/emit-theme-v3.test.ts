@@ -56,7 +56,7 @@ describe("emitTheme tailwindMajor 3", () => {
     const outDir = freshDir("basic");
     const result = await emitTheme(buildTheme(), { outputDir: outDir, tailwindMajor: 3 });
 
-    expect(result.files.length).toBe(2);
+    expect(result.files.length).toBe(3);
     const [css, preset] = result.files;
     if (!css || !preset) throw new Error("expected both files");
     // Next to the default globals path, not the globals file itself.
@@ -102,7 +102,7 @@ describe("emitTheme tailwindMajor 3", () => {
       cssPath: "src/index.css",
       cssOnly: true,
     });
-    expect(result.files.length).toBe(1);
+    expect(result.files.length).toBe(2);
     expect(result.files[0]?.path.endsWith("src/velloo-theme.css")).toBe(true);
   });
 

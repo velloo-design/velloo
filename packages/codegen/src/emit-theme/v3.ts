@@ -11,6 +11,7 @@ import {
 } from "@velloo/schema";
 import { diffFile } from "../diff.ts";
 import { formatCss } from "../format.ts";
+import { emitDtcgFile } from "./dtcg.ts";
 import { COLOR_SLOTS, paletteShadowedSlots, SEMANTIC_SLOTS } from "./globals-css.ts";
 import { hslTriplet } from "./hsl.ts";
 import type { EmitThemeFile, EmitThemeOptions, EmitThemeResult } from "./index.ts";
@@ -350,6 +351,10 @@ export async function emitThemeV3(
       errors: [],
     });
   }
+
+  const dtcg = await emitDtcgFile(theme, options);
+  files.push(dtcg.file);
+  warnings.push(...dtcg.warnings);
 
   const notes = [
     `Tailwind v3 target: emitted ${cssRel}${options.cssOnly ? "" : ` + ${presetName}`} instead of a v4 globals.css.`,
