@@ -9,6 +9,42 @@
       "height": 1024,
       "generatedAt": "2026-08-22T14:21:13.676Z",
       "replaces": "assets/funny-cat.png"
+    },
+    "assets/01M0N6EF88D6S3SKMAXNZ1EF3X.png": {
+      "prompt": "A comically fat orange tabby cat wedged inside a glass fishbowl far too small for it, cheeks squished against the glass, wide indignant eyes staring straight at the viewer. Playful editorial illustration, bold clean linework, flat shapes with soft shading, warm cream background.",
+      "intent": "illustration",
+      "aspect": "1:1",
+      "width": 1024,
+      "height": 1024,
+      "generatedAt": "2026-08-22T16:56:48.857Z",
+      "replaces": "assets/01M0MXHJC5Z86ZD6BJ4AMEQBK3.png"
+    },
+    "assets/01M0N6F0SD4MX7TJT2JBB8A3W1.png": {
+      "prompt": "A comically fat orange tabby cat wedged inside a glass fishbowl far too small for it, cheeks squished against the glass, wide indignant eyes staring straight at the viewer. Playful editorial illustration, bold clean linework, flat shapes with soft shading, warm cream background.",
+      "intent": "photo",
+      "aspect": "1:1",
+      "width": 1024,
+      "height": 1024,
+      "generatedAt": "2026-08-22T16:57:05.592Z",
+      "replaces": "assets/01M0N6EF88D6S3SKMAXNZ1EF3X.png"
+    },
+    "assets/01M0N9MBMAKV27QNQTDG6VYBNH.png": {
+      "prompt": "A comically fat orange tabby cat wedged inside a glass fishbowl far too small for it, cheeks squished against the glass, wide indignant eyes staring straight at the viewer.",
+      "intent": "photo",
+      "aspect": "1:1",
+      "width": 1024,
+      "height": 1024,
+      "generatedAt": "2026-08-22T17:52:25.885Z",
+      "replaces": "assets/01M0N6F0SD4MX7TJT2JBB8A3W1.png"
+    },
+    "assets/01M0N9MSSC07TZ818N2PRY9KCQ.png": {
+      "prompt": "A comically fat orange tabby cat wedged inside a glass fishbowl far too small for it, cheeks squished against the glass, wide indignant eyes staring straight at the viewer.",
+      "intent": "graphic",
+      "aspect": "1:1",
+      "width": 1024,
+      "height": 1024,
+      "generatedAt": "2026-08-22T17:52:44.092Z",
+      "replaces": "assets/01M0N9MBMAKV27QNQTDG6VYBNH.png"
     }
   }
 }

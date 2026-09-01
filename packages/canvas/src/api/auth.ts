@@ -5,6 +5,8 @@ export interface CloudAccount {
   name?: string;
   /** Plan tier — "free" | "team" | "business" | "enterprise". */
   tier?: string;
+  /** PAYG credit balance in micros; null when the cloud couldn't price it. */
+  creditMicros?: number | null;
 }
 
 /** A sign-in in flight: `pending` has a code to show, `error` has why it ended. */

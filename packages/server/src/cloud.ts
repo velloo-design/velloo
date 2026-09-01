@@ -50,6 +50,12 @@ export interface CanvasAccount {
   name?: string;
   /** Plan tier — "free" | "team" | "business" | "enterprise". */
   tier?: string;
+  /**
+   * Pay-as-you-go credit balance in micros ($1 = 1_000_000). Null when the
+   * cloud couldn't price it (its account service briefly down) — distinct from
+   * absent, which means an older cloud that doesn't report a balance at all.
+   */
+  creditMicros?: number | null;
 }
 
 /**

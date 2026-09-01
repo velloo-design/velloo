@@ -21,6 +21,13 @@ export interface CloudAccount {
   name?: string;
   /** Plan tier — "free" | "team" | "business" | "enterprise". */
   tier?: string;
+  /**
+   * Pay-as-you-go credit balance in micros ($1 = 1_000_000), for the canvas's
+   * settings menu. Null when the cloud couldn't price it (its account service
+   * briefly down) — distinct from absent, which is a cloud that doesn't report
+   * a balance at all. The menu shows "—" for both, but only one is a fault.
+   */
+  creditMicros?: number | null;
 }
 
 /**
@@ -58,6 +65,7 @@ export async function fetchAccount(
     email?: string;
     name?: string;
     tier?: string;
+    creditMicros?: number | null;
   } | null;
   if (!body?.email) return { status: "unreachable" };
   return {
@@ -66,6 +74,9 @@ export async function fetchAccount(
       email: body.email,
       ...(body.name ? { name: body.name } : {}),
       ...(body.tier ? { tier: body.tier } : {}),
+      // null is meaningful (the cloud couldn't price it); undefined means an
+      // older cloud that doesn't report a balance, so only the latter is dropped.
+      ...(body.creditMicros !== undefined ? { creditMicros: body.creditMicros } : {}),
     },
   };
 }

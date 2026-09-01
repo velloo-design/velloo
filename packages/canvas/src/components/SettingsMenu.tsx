@@ -1,4 +1,4 @@
-import { AlertTriangle, History, LogIn, LogOut, Settings } from "lucide-react";
+import { AlertTriangle, Coins, History, LogIn, LogOut, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { auth, fetchRevertStatus, type RevertStatus } from "../api.ts";
 import { type AppTheme, useCanvas } from "../store.ts";
@@ -32,6 +32,14 @@ const PLAN_LABEL: Record<string, string> = {
   business: "Business",
   enterprise: "Enterprise",
 };
+
+/**
+ * Credit balance for the menu. Micros are the wire unit ($1 = 1_000_000); the
+ * cents are what the user is actually watching drain, so they always show.
+ */
+function creditLabel(micros: number): string {
+  return `$${(micros / 1_000_000).toFixed(2)}`;
+}
 
 /** "api.velloo.ai" from a base URL — the whole URL is noise in a menu. */
 function cloudLabel(cloudUrl: string | undefined): string {
@@ -129,6 +137,40 @@ export function SettingsMenu() {
               <AlertTriangle size={12} className="mt-px shrink-0" />
               <span>This credential expired — sign in again.</span>
             </div>
+          ) : null}
+          {loggedIn ? (
+            <>
+              <DropdownMenuSeparator />
+              {/* Image generation spends real money per click, and the panel
+                  that spends it only reports the balance in a toast that has
+                  already gone. This is the standing answer to "how much is
+                  left" — it re-reads on every menu open. */}
+              <div
+                className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs"
+                data-testid="settings-credits"
+              >
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Coins size={14} className="shrink-0" />
+                  Credits
+                </span>
+                {typeof account?.creditMicros === "number" ? (
+                  <span className="font-medium tabular-nums">
+                    {creditLabel(account.creditMicros)}
+                  </span>
+                ) : (
+                  <span
+                    className="text-muted-foreground"
+                    title={
+                      account?.creditMicros === null
+                        ? "velloo-cloud couldn't read the balance just now."
+                        : "This velloo-cloud doesn't report a credit balance."
+                    }
+                  >
+                    —
+                  </span>
+                )}
+              </div>
+            </>
           ) : null}
           <DropdownMenuSeparator />
           {loggedIn && !expired ? (
