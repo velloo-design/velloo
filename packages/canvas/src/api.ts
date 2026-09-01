@@ -4,6 +4,13 @@
  * importing from `../api.ts`.
  */
 export { annotations } from "./api/annotations.ts";
+export {
+  fetchGeneratedAssets,
+  type GeneratedAsset,
+  type GenerateRequest,
+  type GenerateResult,
+  generateAsset,
+} from "./api/assets.ts";
 export { type AuthStatus, auth, type CloudAccount, type LoginState } from "./api/auth.ts";
 export {
   type BoardMeta,

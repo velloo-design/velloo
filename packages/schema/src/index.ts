@@ -7,6 +7,14 @@ export {
   CanvasNoteSchema,
 } from "./annotation.ts";
 export {
+  type AssetsFile,
+  AssetsFileSchema,
+  assetPathFromSrc,
+  EMPTY_ASSETS_FILE,
+  type GeneratedAsset,
+  GeneratedAssetSchema,
+} from "./asset.ts";
+export {
   type Board,
   type BoardGroup,
   BoardGroupSchema,

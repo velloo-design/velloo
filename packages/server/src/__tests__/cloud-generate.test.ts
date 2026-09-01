@@ -147,7 +147,9 @@ test("logged out never touches the network and points at `velloo login`", async 
   if (!r.ok) {
     expect(r.error.kind).toBe("LoggedOut");
     expect(r.error.message).toContain("velloo login");
-    expect(r.error.message).toContain("upload_asset");
+    // Error messages name the way forward on THIS path; they don't advertise
+    // authoring the art by hand as a consolation.
+    expect(r.error.message).not.toContain("upload_asset");
   }
   expect(stub.requests.length).toBe(0);
 });
@@ -209,7 +211,10 @@ describe("success", () => {
     expect(r.value.assets.length).toBe(1);
     expect(r.value.assets[0]?.url).toBe("/assets/gen_ab12cd34.png");
     expect(r.value.intent).toBe("photo");
-    expect(r.value.model).toBe("provider:model@1");
+    // The stub cloud still sends `model` (an older cloud would). It must not
+    // reach the agent: which checkpoint serves an intent is the cloud's to
+    // change, so the intent is the only name that crosses this boundary.
+    expect((r.value as { model?: string }).model).toBeUndefined();
     expect(r.value.cost).toBe("cost $0.04, balance $11.75");
     expect(r.value.chargedMicros).toBe(40_000);
     expect(r.value.balanceMicros).toBe(11_750_000);
@@ -235,6 +240,40 @@ describe("success", () => {
     expect(r.value.assets[0]?.height).toBe(1);
     expect(r.value.width).toBe(1);
     expect(r.value.height).toBe(1);
+  });
+
+  test("provenance lands in assets.json, so the prompt outlives the transcript", async () => {
+    const r = await generateAsset(tmp, cloud(), {
+      prompt: "hero art",
+      intent: "photo",
+      aspect: "3:2",
+      replaces: "assets/placeholder.png",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const store = JSON.parse(await readFile(join(tmp, "assets.json"), "utf8"));
+    const entry = store.generated["assets/gen_ab12cd34.png"];
+    expect(entry.prompt).toBe("hero art");
+    expect(entry.intent).toBe("photo");
+    expect(entry.aspect).toBe("3:2");
+    // ...and it must not be written into the design folder either.
+    expect(entry.model).toBeUndefined();
+    expect(entry.width).toBe(1);
+    expect(entry.height).toBe(1);
+    expect(entry.replaces).toBe("assets/placeholder.png");
+    expect(Number.isFinite(Date.parse(entry.generatedAt))).toBe(true);
+  });
+
+  test("every variant of a multi-result generation is recorded", async () => {
+    stub.body = imageSuccess("gen_multi", 3);
+    const r = await generateAsset(tmp, cloud(), { prompt: "hero art", intent: "photo", count: 3 });
+    expect(r.ok).toBe(true);
+    const store = JSON.parse(await readFile(join(tmp, "assets.json"), "utf8"));
+    expect(Object.keys(store.generated).sort()).toEqual([
+      "assets/gen_multi-1.png",
+      "assets/gen_multi-2.png",
+      "assets/gen_multi-3.png",
+    ]);
   });
 
   test("count > 1 stores every variant under a numbered stem", async () => {
@@ -434,11 +473,12 @@ describe("failure statuses map to actionable messages", () => {
     expect(e.message).toContain("top up credits");
   });
 
-  test("404 (feature off) names the local alternative", async () => {
+  test("404 (feature off) says hosted generation isn't available here", async () => {
     reject(404, "not_found", "Asset generation is not enabled on this server.");
     const e = await generate();
     expect(e.message).toContain("not enabled");
-    expect(e.message).toContain("upload_asset");
+    expect(e.message).toContain("isn't available");
+    expect(e.message).not.toContain("upload_asset");
   });
 
   test("429 says to wait and retry", async () => {
@@ -457,11 +497,12 @@ describe("failure statuses map to actionable messages", () => {
     expect(e.message.toLowerCase().split("no credits were charged").length - 1).toBe(1);
   });
 
-  test("503 (provider unconfigured) names the local alternative", async () => {
+  test("503 (provider unconfigured) says hosted generation isn't available here", async () => {
     reject(503, "unavailable", "No generation provider is configured.");
     const e = await generate();
     expect(e.message).toContain("No generation provider is configured.");
-    expect(e.message).toContain("upload_asset");
+    expect(e.message).toContain("isn't available");
+    expect(e.message).not.toContain("upload_asset");
   });
 
   test("a body without a message still yields a readable error", async () => {

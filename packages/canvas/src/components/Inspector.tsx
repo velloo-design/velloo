@@ -7,6 +7,7 @@ import { selectedNode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { CopyField } from "./CopyField.tsx";
 import { IdField } from "./IdField.tsx";
+import { ImagePanel } from "./ImagePanel.tsx";
 import { PropField } from "./PropField.tsx";
 import { SnippetInspector } from "./SnippetInspector.tsx";
 import { SnippetSubstitutions } from "./SnippetSubstitutions.tsx";
@@ -26,10 +27,15 @@ export function Inspector() {
   const styleChannel = useCanvas((s) => s.styleChannel);
   const channelsByLibrary = useCanvas((s) => s.channelsByLibrary);
   const loadComponents = useCanvas((s) => s.loadComponents);
+  const loadGeneratedAssets = useCanvas((s) => s.loadGeneratedAssets);
 
   useEffect(() => {
     void loadComponents();
   }, [loadComponents]);
+
+  useEffect(() => {
+    void loadGeneratedAssets();
+  }, [loadGeneratedAssets]);
 
   const node = useMemo(() => selectedNode(screens, selection), [screens, selection]);
   const descriptor = useMemo(() => {
@@ -102,6 +108,15 @@ export function Inspector() {
   const childrenValue =
     typeof node.props?.children === "string" ? (node.props.children as string) : "";
   const showCopy = typeof node.props?.children === "string" || descriptor === null;
+  // The image panel keys on the node carrying a src, not on `$ref === "Image"`:
+  // every provider names its image component differently, and a node with a
+  // src is exactly the node a generated asset can be swapped into.
+  const imageSrc = typeof node.props?.src === "string" ? (node.props.src as string) : null;
+  // ValueField deliberately keeps its draft across store updates so an
+  // in-progress edit never snaps back — but the image panel repoints `src`
+  // while the selection stays put, so without the src in the key the Src field
+  // would keep showing the asset that was just replaced.
+  const propsKey = `${selectionKey}:${imageSrc ?? ""}`;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -132,6 +147,16 @@ export function Inspector() {
           />
         ) : null}
 
+        {imageSrc !== null ? (
+          <ImagePanel
+            key={`${selectionKey}:image`}
+            screenId={selection.screenId}
+            path={selection.path}
+            src={imageSrc}
+            nodeAspect={typeof node.props?.aspect === "string" ? node.props.aspect : undefined}
+          />
+        ) : null}
+
         {descriptor && descriptor.props.filter((p) => !hiddenProps.has(p.name)).length > 0 ? (
           <section className="flex flex-col gap-3">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Props</div>
@@ -139,7 +164,7 @@ export function Inspector() {
               .filter((p) => !hiddenProps.has(p.name))
               .map((p) => (
                 <PropField
-                  key={`${selectionKey}:${p.name}`}
+                  key={`${propsKey}:${p.name}`}
                   descriptor={p}
                   initialValue={node.props?.[p.name]}
                   onChange={(v) => commitProp(p.name, v)}

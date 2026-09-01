@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { activityLog } from "./activity.ts";
-import type { CanvasAuth } from "./cloud.ts";
+import type { CanvasAuth, CloudAuth } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
 import type { LiveBundler } from "./live/component-bundler.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import type { PublishRunner } from "./publish-run.ts";
+import { createAssetsRouter } from "./routes/assets.ts";
 import { createAuthRouter } from "./routes/auth.ts";
 import { createCanvasRouter, createLiveRouter } from "./routes/bundles.ts";
 import { createCapturesRouter } from "./routes/captures.ts";
@@ -39,6 +40,7 @@ export function createApp(
   canvasBundler: CanvasBundler,
   auth?: CanvasAuth,
   publish?: PublishRunner,
+  cloud?: CloudAuth,
 ): Hono {
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
@@ -62,6 +64,7 @@ export function createApp(
   app.route("/api/snippets", createSnippetsRouter(folder));
   app.route("/api/search", createSearchRouter(folder));
   app.route("/api/captures", createCapturesRouter(folder));
+  app.route("/api/assets", createAssetsRouter(folder, cloud));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/live", createLiveRouter(bundler));

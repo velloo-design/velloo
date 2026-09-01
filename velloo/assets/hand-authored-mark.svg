@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img"><title>Hand-authored placeholder — concentric arcs</title>
+  <rect width="800" height="800" fill="#eceae4"/>
+  <g fill="none" stroke="#3f3a33" stroke-width="10" stroke-linecap="round">
+    <circle cx="400" cy="400" r="90"/>
+    <path d="M400 250a150 150 0 0 1 150 150"/>
+    <path d="M400 190a210 210 0 0 1 210 210"/>
+    <path d="M400 130a270 270 0 0 1 270 270"/>
+    <path d="M400 550a150 150 0 0 1-150-150"/>
+    <path d="M400 610a210 210 0 0 1-210-210"/>
+    <path d="M400 670a270 270 0 0 1-270-270"/>
+  </g>
+  <circle cx="400" cy="400" r="26" fill="#c2632c"/>
+</svg>

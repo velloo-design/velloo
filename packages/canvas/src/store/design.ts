@@ -7,10 +7,12 @@ import {
   fetchBoard,
   fetchComponents,
   fetchDesign,
+  fetchGeneratedAssets,
   fetchHistory,
   fetchPresets,
   fetchScreen,
   fetchTheme,
+  type GeneratedAsset,
   type HistoryDepths,
 } from "../api.ts";
 import type { CanvasState } from "./index.ts";
@@ -35,6 +37,12 @@ export interface DesignSlice {
    */
   screenVersions: Record<string, number>;
   components: Manifest | null;
+  /**
+   * Provenance for velloo-generated assets, keyed by folder-relative path
+   * ("assets/hero.png"). An image whose src isn't a key here is one velloo
+   * didn't generate — which is exactly the distinction the image panel draws.
+   */
+  generatedAssets: Record<string, GeneratedAsset>;
   /** Default library's native style channel — drives the inspector's style editor. */
   styleChannel: StyleChannel | null;
   /** Per-library channels, so a multi-library folder edits each screen in its own channel. */
@@ -70,6 +78,8 @@ export interface DesignSlice {
    */
   reorderBoardsLocal(order: string[]): void;
   loadComponents(): Promise<void>;
+  /** Refetch assets.json — after a generation, and on boot. */
+  loadGeneratedAssets(): Promise<void>;
   loadTheme(): Promise<void>;
   refreshTheme(): Promise<void>;
   selectBoard(boardId: string): Promise<void>;
@@ -109,6 +119,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   screenVersion: 0,
   screenVersions: {},
   components: null,
+  generatedAssets: {},
   styleChannel: null,
   channelsByLibrary: {},
   theme: null,
@@ -197,6 +208,16 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     if (get().components) return;
     const { manifest, styleChannel, channelsByLibrary } = await fetchComponents();
     set({ components: manifest, styleChannel, channelsByLibrary });
+  },
+
+  async loadGeneratedAssets() {
+    // Provenance is an enhancement: a folder with no assets.json, or a daemon
+    // too old to serve the route, must leave the inspector working.
+    try {
+      set({ generatedAssets: await fetchGeneratedAssets() });
+    } catch {
+      set({ generatedAssets: {} });
+    }
   },
 
   async loadTheme() {

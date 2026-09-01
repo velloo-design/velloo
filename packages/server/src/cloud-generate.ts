@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { err, ok, type Result } from "@velloo/result";
 import { svgLooksActive } from "@velloo/schema";
+import { recordGeneratedAssets } from "./assets-store.ts";
 import { type CloudAuth, currentToken, isSecureCloudUrl } from "./cloud.ts";
 import { storeAsset } from "./fs.ts";
 
@@ -9,7 +10,9 @@ import { storeAsset } from "./fs.ts";
  * Hosted asset generation: POST /v1/assets/generate on velloo-cloud,
  * metered against the account's credit balance. The caller names an INTENT —
  * what the artwork is for — and the cloud picks the model; that seam is why
- * this module carries no model names or prices. The cloud returns each result
+ * this module carries no model names or prices, and why nothing here reports
+ * which model ran: the intent is the contract, and the cloud must stay free to
+ * re-point one at a different checkpoint without a velloo release. The cloud returns each result
  * as a base64 data URL; this module decodes them and lands the files in the
  * folder's `assets/` store exactly like `upload_asset` does (same naming, same
  * layout), so the returned `/assets/<name>` URL goes into `<Image src>` — or,
@@ -20,8 +23,8 @@ import { storeAsset } from "./fs.ts";
  *
  * Every failure maps to ONE agent-facing message: the cloud's `message` fields
  * are written for agents, so they pass through verbatim, plus a one-line hint
- * naming the way out (log in, top up, wait, or author the art locally with
- * `upload_asset`). Nothing here throws across the boundary.
+ * naming the way out (log in, top up, wait, retry). Nothing here throws across
+ * the boundary.
  */
 
 /**
@@ -64,6 +67,11 @@ export interface GenerateAssetRequest {
   reference?: string[];
   /** Filename stem for `assets/<stem>.<png|svg>`; defaults to the generation id. */
   filename?: string;
+  /**
+   * The asset this generation replaces, recorded in the provenance store.
+   * Set by the canvas's regenerate action; agents don't pass it.
+   */
+  replaces?: string;
 }
 
 export interface GeneratedAssetFile {
@@ -82,8 +90,6 @@ export interface GeneratedAsset {
   /** Every stored file, in the order the cloud returned them. */
   assets: GeneratedAssetFile[];
   intent: Intent;
-  /** The model the cloud actually used — informational, not a request knob. */
-  model: string;
   chargedMicros: number;
   balanceMicros: number;
   /** e.g. "cost $0.12, balance $11.75" — surfaced verbatim in the tool result. */
@@ -121,20 +127,19 @@ const REFERENCE_MIME: Record<string, string> = {
   avif: "image/avif",
 };
 
-const AUTHOR_LOCALLY =
-  "Hosted generation isn't available on this velloo-cloud server — author the artwork yourself (SVG compositions, rendered gradients/textures) and store it with `upload_asset`.";
+const NOT_AVAILABLE = "Hosted generation isn't available on this velloo-cloud server.";
 
 /** One-line, actionable follow-up per failure status (appended after the cloud's message). */
 const HINTS: Record<number, string> = {
   400: "Fix the arguments and retry — nothing was generated or charged.",
   401: "Run `velloo login` to sign in again, then retry.",
-  402: "Ask the user to top up credits before retrying — or author the asset yourself with `upload_asset`.",
-  404: AUTHOR_LOCALLY,
+  402: "Ask the user to top up credits before retrying.",
+  404: NOT_AVAILABLE,
   429: "The limit is per-account per minute — wait a minute, then retry.",
   // The cloud's own 502 text already ends with "no credits were charged" —
   // restating it here read as a stutter in the agent-facing message.
-  502: "Retry once; if it fails again, author the asset yourself with `upload_asset`.",
-  503: AUTHOR_LOCALLY,
+  502: "Retry once.",
+  503: NOT_AVAILABLE,
 };
 
 /**
@@ -165,7 +170,6 @@ interface GenerateResponseAsset {
 interface GenerateResponse {
   id: string;
   intent: string;
-  model: string;
   assets: GenerateResponseAsset[];
   chargedMicros: number;
   balanceMicros: number;
@@ -198,7 +202,6 @@ function parseSuccess(body: unknown): GenerateResponse | null {
   return {
     id: r.id,
     intent: typeof r.intent === "string" ? r.intent : "",
-    model: typeof r.model === "string" ? r.model : "",
     assets,
     chargedMicros: r.chargedMicros,
     balanceMicros: r.balanceMicros,
@@ -294,8 +297,7 @@ export async function generateAsset(
   if (!token) {
     return err({
       kind: "LoggedOut",
-      message:
-        "Not signed in to velloo-cloud — run `velloo login`, then retry. Until then, author the artwork yourself and store it with `upload_asset`.",
+      message: "Not signed in to velloo-cloud — run `velloo login`, then retry.",
     });
   }
 
@@ -341,7 +343,7 @@ export async function generateAsset(
     const msg = e instanceof Error ? e.message : String(e);
     return err({
       kind: "Unreachable",
-      message: `Couldn't reach velloo-cloud (${msg}) — nothing was generated or charged. Check the connection and retry, or author the asset yourself with \`upload_asset\`.`,
+      message: `Couldn't reach velloo-cloud (${msg}) — nothing was generated or charged. Check the connection and retry.`,
     });
   }
 
@@ -384,7 +386,7 @@ export async function generateAsset(
       return err({
         kind: "BadResponse",
         message:
-          "velloo-cloud returned SVG containing active content (script/event handlers) — refusing to store it. Retry the generation, or author the asset yourself with `upload_asset`.",
+          "velloo-cloud returned SVG containing active content (script/event handlers) — refusing to store it. Retry the generation.",
       });
     }
     // Single results keep the bare stem; variants get -1, -2, … so a caller's
@@ -399,11 +401,31 @@ export async function generateAsset(
     });
   }
 
+  // Provenance is what makes a generated image editable later: without the
+  // prompt stored beside the design, re-rolling it means reconstructing the
+  // prompt from memory. Never fail a paid, already-stored generation over it.
+  await recordGeneratedAssets(
+    root,
+    Object.fromEntries(
+      files.map((f) => [
+        f.assetPath,
+        {
+          prompt: req.prompt,
+          intent: req.intent,
+          ...(req.aspect ? { aspect: req.aspect } : {}),
+          ...(f.width && f.height ? { width: f.width, height: f.height } : {}),
+          generatedAt: new Date().toISOString(),
+          ...(refPaths.length > 0 ? { reference: refPaths } : {}),
+          ...(req.replaces ? { replaces: req.replaces } : {}),
+        },
+      ]),
+    ),
+  ).catch(() => {});
+
   const first = files[0] as GeneratedAssetFile;
   return ok({
     assets: files,
     intent: req.intent,
-    model: payload.model,
     chargedMicros: payload.chargedMicros,
     balanceMicros: payload.balanceMicros,
     cost: `cost ${formatDollars(payload.chargedMicros)}, balance ${formatDollars(payload.balanceMicros)}`,

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "generated": {
+    "assets/01M0MXHJC5Z86ZD6BJ4AMEQBK3.png": {
+      "prompt": "A comically fat orange tabby cat wedged inside a glass fishbowl far too small for it, cheeks squished against the glass, wide indignant eyes staring straight at the viewer. Playful editorial illustration, bold clean linework, flat shapes with soft shading, warm cream background.",
+      "intent": "illustration",
+      "aspect": "1:1",
+      "width": 1024,
+      "height": 1024,
+      "generatedAt": "2026-08-22T14:21:13.676Z",
+      "replaces": "assets/funny-cat.png"
+    }
+  }
+}

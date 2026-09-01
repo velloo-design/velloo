@@ -259,7 +259,15 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         snapshotCss: () => jit.build(),
       }))
     : undefined;
-  const app = createApp(() => ctx, jit, bundler, canvasBundler, opts.auth, publishRunner);
+  const app = createApp(
+    () => ctx,
+    jit,
+    bundler,
+    canvasBundler,
+    opts.auth,
+    publishRunner,
+    opts.cloud,
+  );
 
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {
