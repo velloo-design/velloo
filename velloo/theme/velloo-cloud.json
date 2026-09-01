@@ -1,0 +1,139 @@
+{
+  "name": "velloo-cloud",
+  "colors": {
+    "background": "oklch(0.962 0.017 88.0)",
+    "foreground": "oklch(0.184 0.005 67.5)",
+    "primary": {
+      "DEFAULT": "oklch(0.804 0.165 72.4)",
+      "foreground": "oklch(0.155 0.004 84.6)"
+    },
+    "secondary": {
+      "DEFAULT": "oklch(0.918 0.025 83.4)",
+      "foreground": "oklch(0.184 0.005 67.5)"
+    },
+    "muted": {
+      "DEFAULT": "oklch(0.918 0.025 83.4)",
+      "foreground": "oklch(0.515 0.022 75.1)"
+    },
+    "accent": {
+      "DEFAULT": "oklch(0.918 0.025 83.4)",
+      "foreground": "oklch(0.184 0.005 67.5)"
+    },
+    "destructive": {
+      "DEFAULT": "oklch(0.603 0.173 35.1)",
+      "foreground": "oklch(0.994 0.008 91.5)"
+    },
+    "card": {
+      "DEFAULT": "oklch(0.994 0.008 91.5)",
+      "foreground": "oklch(0.184 0.005 67.5)"
+    },
+    "popover": {
+      "DEFAULT": "oklch(0.994 0.008 91.5)",
+      "foreground": "oklch(0.184 0.005 67.5)"
+    },
+    "border": "oklch(0.885 0.029 84.6)",
+    "input": "oklch(0.885 0.029 84.6)",
+    "ring": "oklch(0.629 0.129 72.2)"
+  },
+  "colorsDark": {
+    "background": "oklch(0.155 0.004 84.6)",
+    "foreground": "oklch(0.950 0.016 86.4)",
+    "primary": {
+      "DEFAULT": "oklch(0.804 0.165 72.4)",
+      "foreground": "oklch(0.155 0.004 84.6)"
+    },
+    "secondary": {
+      "DEFAULT": "oklch(0.219 0.012 84.5)",
+      "foreground": "oklch(0.950 0.016 86.4)"
+    },
+    "muted": {
+      "DEFAULT": "oklch(0.219 0.012 84.5)",
+      "foreground": "oklch(0.696 0.024 80.6)"
+    },
+    "accent": {
+      "DEFAULT": "oklch(0.219 0.012 84.5)",
+      "foreground": "oklch(0.950 0.016 86.4)"
+    },
+    "destructive": {
+      "DEFAULT": "oklch(0.603 0.173 35.1)",
+      "foreground": "oklch(0.950 0.016 86.4)"
+    },
+    "card": {
+      "DEFAULT": "oklch(0.187 0.010 88.8)",
+      "foreground": "oklch(0.950 0.016 86.4)"
+    },
+    "popover": {
+      "DEFAULT": "oklch(0.187 0.010 88.8)",
+      "foreground": "oklch(0.950 0.016 86.4)"
+    },
+    "border": "oklch(0.254 0.012 78.0)",
+    "input": "oklch(0.254 0.012 78.0)",
+    "ring": "oklch(0.804 0.165 72.4)"
+  },
+  "palette": {
+    "amber": "#ffab1f",
+    "amber-press": "#b87a14",
+    "amber-soft": "#ffce7a",
+    "coral": "#ff6f4d",
+    "coral-press": "#d4502f",
+    "coral-soft": "#ff9b82",
+    "ink": "#0d0c0a",
+    "surface": "#15130e",
+    "surface-2": "#1d1a14",
+    "line": "#26221c",
+    "bone-on-dark": "#f3eee3",
+    "bone": "#f7f2e6",
+    "paper": "#fffdf7",
+    "sand": "#ece3d2",
+    "rule": "#e2d8c4",
+    "coal": "#141210",
+    "muted": "#a59c8d",
+    "dim": "#6b6357",
+    "stone": "#6f665a"
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": "\"Space Grotesk\", ui-sans-serif, system-ui, sans-serif",
+      "mono": "\"JetBrains Mono\", ui-monospace, SFMono-Regular, monospace",
+      "display": "\"Space Grotesk\", ui-sans-serif, system-ui, sans-serif",
+      "wordmark": "\"Poppins\", ui-sans-serif, sans-serif"
+    },
+    "googleFonts": [
+      "Space Grotesk:wght@400;500;600;700",
+      "JetBrains Mono:wght@400;500"
+    ],
+    "fontSize": {
+      "xs": 12,
+      "sm": 14,
+      "base": 16,
+      "lg": 18,
+      "xl": 20,
+      "2xl": 24,
+      "3xl": 30,
+      "4xl": 36
+    },
+    "lineHeight": {
+      "tight": 1.2,
+      "normal": 1.5,
+      "relaxed": 1.75
+    }
+  },
+  "spacing": {
+    "0": 0,
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "6": 24,
+    "8": 32,
+    "12": 48,
+    "16": 64
+  },
+  "radius": {
+    "sm": 4,
+    "md": 6,
+    "lg": 8,
+    "xl": 12,
+    "full": 9999
+  }
+}
