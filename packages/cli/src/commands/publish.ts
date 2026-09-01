@@ -69,7 +69,8 @@ export default defineCommand({
     },
     boards: {
       type: "string",
-      description: "Comma-separated board ids to publish (default: pick interactively / all)",
+      description:
+        "Comma-separated board ids to publish (default: pick interactively; all when non-interactive)",
     },
     visibility: {
       type: "string",
@@ -136,6 +137,10 @@ export default defineCommand({
     // Board choice is a CLI concern (an interactive multiselect, or --boards);
     // the core just takes ids. A folder with no boards yields [] — every screen.
     const selected = await pickBoards(folder, args.boards, interactive, "publish");
+    if (selected === null) {
+      console.log("velloo publish: no boards selected — nothing was published.");
+      return;
+    }
     const provenance = gitContext(folder);
     const listed =
       config.folderId && args.new !== true
@@ -242,7 +247,7 @@ export default defineCommand({
     if (history && !history.retained && history.pruned > 0) {
       console.log("  replaced the previous version — the free plan keeps only the latest.");
       console.log(
-        "  Upgrade to Team to keep version history and revisit past publishes: https://velloo.ai/pricing",
+        "  Upgrade to Team to keep version history and revisit past publishes: https://velloo.design/pricing",
       );
     } else if (history?.retained && history.versions > 1) {
       console.log(
@@ -269,7 +274,7 @@ export function resolvePublishDestinationChoice(
   return { mode: "update", slug: slot.slug, expectedVersionId: slot.latestVersionId };
 }
 
-async function choosePublishDestination(opts: {
+export async function choosePublishDestination(opts: {
   slots: CloudPublishSlot[];
   source: PublishSourceContext;
   interactive: boolean;
@@ -277,6 +282,7 @@ async function choosePublishDestination(opts: {
   updateExisting: boolean;
   customSlug?: string;
   manageUrl: string;
+  log?: (message: string) => void;
 }): Promise<DestinationChoice> {
   if (opts.createNew && opts.updateExisting) {
     fail("publish", "choose either --new or --update, not both");
@@ -299,8 +305,14 @@ async function choosePublishDestination(opts: {
       expectedVersionId: slot.latestVersionId,
     };
   }
-  if (opts.createNew || opts.slots.length === 0) {
+  if (opts.createNew) {
     return { mode: "new", ...(opts.customSlug ? { slug: opts.customSlug } : {}) };
+  }
+  if (matching.length === 0) {
+    (opts.log ?? console.log)(
+      "velloo publish: no matching published design — a new link will be created.",
+    );
+    return { mode: "new" };
   }
   if (!opts.interactive) {
     fail("publish", "this folder already has published designs; pass --update or --new explicitly");

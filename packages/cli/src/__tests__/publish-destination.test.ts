@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CloudPublishSlot } from "../cloud-upload.ts";
-import { resolvePublishDestinationChoice } from "../commands/publish.ts";
+import { choosePublishDestination, resolvePublishDestinationChoice } from "../commands/publish.ts";
 import {
   exactPublishSlots,
   type PublishSourceContext,
@@ -97,5 +97,23 @@ describe("publish destination recommendations", () => {
     const newest = slot({ slug: "newest", lastPublishedAt: "2030-02-01T00:00:00.000Z" });
     expect(exactPublishSlots([older, newest], source())).toEqual([newest, older]);
     expect(recommendedPublishSlot([older, newest], source())).toEqual(newest);
+  });
+
+  test("a missing exact match automatically creates a new link and announces it", async () => {
+    const messages: string[] = [];
+    const destination = await choosePublishDestination({
+      slots: [slot()],
+      source: source({ branch: "feature/cart" }),
+      interactive: true,
+      createNew: false,
+      updateExisting: false,
+      manageUrl: "https://cloud.velloo.dev/boards",
+      log: (message) => messages.push(message),
+    });
+
+    expect(destination).toEqual({ mode: "new" });
+    expect(messages).toEqual([
+      "velloo publish: no matching published design — a new link will be created.",
+    ]);
   });
 });

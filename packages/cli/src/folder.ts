@@ -201,15 +201,16 @@ export function boardsByScreen(boards: BoardEntry[]): Map<string, string[]> {
 
 /**
  * Resolve the boards a command should act on: an explicit `--boards a,b` arg,
- * else (interactive) a multiselect with all preselected, else all boards. A
- * folder with no boards returns [] (callers fall back to all screens).
+ * else (interactive) an empty multiselect, else all boards. An explicitly
+ * empty interactive choice returns null so callers can stop without confusing
+ * it with a folder that has no boards, which returns [] (all screens).
  */
 export async function pickBoards(
   folder: string,
   arg: string | undefined,
   interactive: boolean,
   cmd: string,
-): Promise<BoardEntry[]> {
+): Promise<BoardEntry[] | null> {
   const boards = await listBoards(folder);
   if (boards.length === 0) return [];
   if (arg) {
@@ -225,20 +226,34 @@ export async function pickBoards(
     }
     return chosen;
   }
-  if (!interactive || boards.length === 1) return boards;
-  const chosen = await multiselect<string>({
-    message: "Which boards to publish?",
-    options: boards.map((b) => ({
-      value: b.id,
-      label: b.name,
-      hint: `${b.screens.length} screen${b.screens.length === 1 ? "" : "s"}`,
-    })),
-    initialValues: boards.map((b) => b.id),
-    required: false,
-  });
+  if (!interactive) return boards;
+  const chosen = await multiselect<string>(boardSelectionPrompt(boards));
   if (isCancel(chosen)) fail(cmd, "cancelled.");
-  const set = new Set(chosen as string[]);
-  return boards.filter((b) => set.has(b.id));
+  return resolveBoardSelection(boards, chosen as string[]);
+}
+
+/** Prompt configuration kept separate so its empty default and bulk key are testable. */
+export function boardSelectionPrompt(boards: BoardEntry[]) {
+  return {
+    message: "Which boards to publish? (a: select all / clear all)",
+    options: boards.map((board) => ({
+      value: board.id,
+      label: board.name,
+      hint: `${board.screens.length} screen${board.screens.length === 1 ? "" : "s"}`,
+    })),
+    initialValues: [] as string[],
+    required: false,
+  };
+}
+
+/** Empty means the user confirmed that nothing should be published. */
+export function resolveBoardSelection(
+  boards: BoardEntry[],
+  selectedIds: string[],
+): BoardEntry[] | null {
+  const selected = new Set(selectedIds);
+  const chosen = boards.filter((board) => selected.has(board.id));
+  return chosen.length > 0 ? chosen : null;
 }
 
 /**

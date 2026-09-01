@@ -570,7 +570,7 @@ function HistoryNote({
       <p className="text-xs text-muted-foreground">
         Replaced the previous version — the free plan keeps only the latest.{" "}
         <a
-          href="https://velloo.ai/pricing"
+          href="https://velloo.design/pricing"
           target="_blank"
           rel="noreferrer"
           className="underline underline-offset-4"
