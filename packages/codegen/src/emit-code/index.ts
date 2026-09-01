@@ -29,11 +29,14 @@ import {
   isComponentNode,
   isSnippetInstance,
   type Node,
+  pascalizeIconName,
   type Screen,
   type Snippet,
 } from "@velloo/schema";
 import {
   helpersToMaterialize,
+  isKnownLucideIcon,
+  REMOVED_BRAND_ICONS,
   resolveLucideJsxName,
   shadcnInstallTargets,
 } from "../component-registry.ts";
@@ -184,9 +187,15 @@ function extractClasses(jsx: string): string[] {
 function collectMetadata(
   root: Node,
   snippets: Map<string, Snippet> | undefined,
-): { components: Set<string>; icons: Set<string>; snippetIds: Set<string> } {
+): {
+  components: Set<string>;
+  icons: Set<string>;
+  unresolvedIcons: Set<string>;
+  snippetIds: Set<string>;
+} {
   const components = new Set<string>();
   const icons = new Set<string>();
+  const unresolvedIcons = new Set<string>();
   const snippetIds = new Set<string>();
   // Nodes can also live inside *props* (a `children` prop carrying inline rich
   // text / an Icon, a slot prop) — emitTree renders those, so metadata must
@@ -208,6 +217,12 @@ function collectMetadata(
       // invalid/missing names render <HelpCircle />, which needs an import too.
       if (node.$ref === "Icon") {
         icons.add(resolveLucideJsxName(node.props?.name));
+        // A $param/$if name is a caller-filled slot, warned about separately
+        // by dynamicIconWarningsForTree — only literal names resolve here.
+        const literal = node.props?.name;
+        if (typeof literal === "string" && !isKnownLucideIcon(literal)) {
+          unresolvedIcons.add(literal);
+        }
       }
       for (const val of Object.values(node.props ?? {})) walkPropValue(val);
       for (const child of node.children ?? []) walk(child);
@@ -222,7 +237,19 @@ function collectMetadata(
     }
   }
   walk(root);
-  return { components, icons, snippetIds };
+  return { components, icons, unresolvedIcons, snippetIds };
+}
+
+/**
+ * The emit-time backstop for an icon name that never passed through a
+ * mutation (hand-edited JSON, an import, a merge) and so never saw the
+ * server's advisory.
+ */
+function unresolvedIconWarning(name: string): string {
+  const fix = REMOVED_BRAND_ICONS.has(pascalizeIconName(name))
+    ? "lucide dropped brand glyphs — use the `SVG` helper (it inherits currentColor, so it theme-flips with the design) or `Image`"
+    : "check the name against lucide's icon list";
+  return `Icon name ${JSON.stringify(name)} is not a lucide export — emitted as <HelpCircle /> to keep the code compiling. ${fix}.`;
 }
 
 /** Emit one screen as agent-consumed IR. Pure: no I/O, no diff, no write. */
@@ -249,6 +276,7 @@ export async function emitCode(
     const body = yield* $(emitTree(screen.tree, ctx));
 
     const meta = collectMetadata(screen.tree, options.snippets);
+    for (const name of [...meta.unresolvedIcons].sort()) warnings.push(unresolvedIconWarning(name));
 
     // Emit each referenced snippet's IR. Recurse via emitSnippet so the
     // snippet's own componentName / params / jsx are carried.
@@ -332,6 +360,7 @@ export async function emitSnippet(
     };
     const body = yield* $(emitTree(snippet.tree, ctx));
     const meta = collectMetadata(snippet.tree, options.snippets);
+    for (const name of [...meta.unresolvedIcons].sort()) warnings.push(unresolvedIconWarning(name));
     const native = options.target !== undefined || Boolean(options.inlineStyle);
     return {
       id: snippet.id,

@@ -356,7 +356,8 @@ export async function choosePublishDestination(opts: {
  * two-space form earlier versions used.
  */
 function report(event: PublishEvent): void {
-  if (event.kind === "note" || event.kind === "warn") console.log(`  ${event.message}`);
+  if (event.kind === "note" || event.kind === "warn" || event.kind === "info")
+    console.log(`  ${event.message}`);
 }
 
 /**

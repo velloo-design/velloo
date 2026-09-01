@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ComponentProvider } from "@velloo/provider";
@@ -44,6 +44,12 @@ export type PublishEvent =
   | { kind: "capture"; done: number; total: number }
   /** Advisory: something the user should know but that didn't stop the publish. */
   | { kind: "note"; message: string }
+  /**
+   * What this publish carries, for the record — not a problem and not
+   * actionable. Separate from `note` because the canvas surfaces notes as
+   * notices, and it already shows provenance in its publish dialog.
+   */
+  | { kind: "info"; message: string }
   | { kind: "warn"; message: string };
 
 export type PublishReporter = (event: PublishEvent) => void;
@@ -203,13 +209,44 @@ async function ensureFolderId(
   return folderId;
 }
 
+/**
+ * Say what source the publish records. Provenance is best-effort and used to be
+ * silent, so a folder with no remote — or no repository at all — published with
+ * an empty Source on the share card and no way to tell why.
+ */
+export function reportProvenance(git: PublishProvenance, report: PublishReporter): void {
+  if (git.repo) {
+    report({
+      kind: "info",
+      message: git.branch
+        ? `source: ${git.repo} on ${git.branch}`
+        : `source: ${git.repo} (detached HEAD — no branch recorded)`,
+    });
+    return;
+  }
+  report({
+    kind: "info",
+    message: git.branch
+      ? `source: branch ${git.branch} — no git remote, publishing without a repository`
+      : "source: not a git repository — publishing without repository or branch",
+  });
+}
+
+/**
+ * Probing git must stay silent: `execFileSync` forwards the child's stderr to
+ * ours by default, so a non-git folder would spray `fatal: not a git
+ * repository` through the publish output instead of the note we report.
+ */
+const GIT_PROBE: ExecFileSyncOptionsWithStringEncoding = {
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "ignore"],
+};
+
 function gitCommitSha(folder: string): string | null {
   try {
-    const dirty = execFileSync("git", ["-C", folder, "status", "--porcelain"], {
-      encoding: "utf8",
-    });
+    const dirty = execFileSync("git", ["-C", folder, "status", "--porcelain"], GIT_PROBE);
     if (dirty.trim().length > 0) return null;
-    return execFileSync("git", ["-C", folder, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    return execFileSync("git", ["-C", folder, "rev-parse", "HEAD"], GIT_PROBE).trim();
   } catch {
     return null;
   }
@@ -223,6 +260,10 @@ function gitCommitSha(folder: string): string | null {
  */
 export function normalizeRemote(url: string): string | null {
   const rest = url.trim().replace(/\.git\/?$/, "");
+  // A filesystem path is a legal remote but names no host. Reject it up front:
+  // `new URL("https:///Users/me/repo")` drops the extra slash for special
+  // schemes and reads "Users" as the hostname, inventing `users/me/repo`.
+  if (/^[./~]/.test(rest) || /^[a-z]:[\\/]/i.test(rest) || rest.startsWith("file://")) return null;
   // scp-like syntax: [user@]host:path (no scheme).
   const scp = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)(.+)$/.exec(rest);
   if (scp?.[1] && scp[2]) return `${scp[1]}/${scp[2].replace(/^\/+/, "")}`;
@@ -243,7 +284,7 @@ export function normalizeRemote(url: string): string | null {
 export function gitContext(folder: string): PublishProvenance {
   const run = (args: string[]): string | null => {
     try {
-      return execFileSync("git", ["-C", folder, ...args], { encoding: "utf8" }).trim() || null;
+      return execFileSync("git", ["-C", folder, ...args], GIT_PROBE).trim() || null;
     } catch {
       return null;
     }
@@ -519,6 +560,7 @@ export async function publishDesign(
   // travel even from a dirty tree — they name where the design lives, not
   // an exact state.
   const git = request.provenance ?? gitContext(root);
+  reportProvenance(git, report);
   if (git.repo) form.append("gitRepo", git.repo);
   if (git.branch) form.append("gitBranch", git.branch);
 

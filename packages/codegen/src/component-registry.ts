@@ -12,6 +12,7 @@
 import {
   CONTAINER_WIDTH_CLASS,
   HEADING_BY_LEVEL,
+  ICON_ALIASES,
   PLACEHOLDER_ASPECT_CLASS,
   PLACEHOLDER_AVATAR_SIZE_CLASS,
   STACK_ALIGN_CLASS,
@@ -69,16 +70,65 @@ const shadcn = (jsxName: string, importFile: string): ShadcnEntry => ({
 });
 
 /**
+ * Brand glyphs lucide removed (they live in `lucide-static`/`simple-icons`
+ * now). These are exactly the names people reach for, so a generic "closest
+ * match" suggestion (GitGraph for Github) misleads — point at the real fix.
+ * Shared with the server's mutation-time advisory so the two messages can't
+ * drift; PascalCase, matching `pascalizeIconName` output.
+ */
+export const REMOVED_BRAND_ICONS: ReadonlySet<string> = new Set([
+  "Apple",
+  "Chrome",
+  "Codepen",
+  "Discord",
+  "Dribbble",
+  "Facebook",
+  "Figma",
+  "Framer",
+  "Github",
+  "Gitlab",
+  "Google",
+  "Instagram",
+  "Linkedin",
+  "Slack",
+  "Trello",
+  "Twitch",
+  "Twitter",
+  "Youtube",
+]);
+
+/**
+ * Does `name` resolve to a real lucide export? Checked against the same
+ * icon data the runtime Icon renders from, so codegen and canvas agree on
+ * what exists. `ICON_ALIASES` is keyed by every accepted spelling
+ * (PascalCase, the `*Icon` suffix form, and lucide's own renames), and its
+ * keys cover all `ICON_NODES` — so pascalizing first also admits the
+ * kebab/snake/space-separated forms.
+ */
+export function isKnownLucideIcon(name: unknown): boolean {
+  const raw = typeof name === "string" ? name : "";
+  return ICON_ALIASES[pascalizeIconName(raw)] !== undefined;
+}
+
+/**
  * Icon's `name` prop → lucide JSX identifier. PascalCase passes through,
  * kebab/snake/space-separated names normalize ("arrow-right" →
- * "ArrowRight"), anything that still isn't a valid identifier falls back
- * to HelpCircle. Single source for the registry resolve AND emit-code's
+ * "ArrowRight"), and anything that doesn't name a real lucide export falls
+ * back to HelpCircle. Single source for the registry resolve AND emit-code's
  * iconsUsed metadata so the two can't drift.
+ *
+ * The identifier-shape test alone used to pass a well-formed name that
+ * lucide doesn't export — brand glyphs above all, dropped in lucide 1.0 —
+ * emitting `import { Github } from "lucide-react"`, which only fails once
+ * it reaches the user's build. The canvas already renders those as
+ * HelpCircle; matching that here keeps emitted code compiling, and callers
+ * surface `unresolvedIconNames` as an emit warning so the substitution is
+ * never silent.
  */
 export function resolveLucideJsxName(name: unknown): string {
   const raw = typeof name === "string" ? name : "";
   const pascal = pascalizeIconName(raw);
-  return /^[A-Z][A-Za-z0-9]*$/.test(pascal) ? pascal : "HelpCircle";
+  return isKnownLucideIcon(pascal) ? pascal : "HelpCircle";
 }
 
 /**

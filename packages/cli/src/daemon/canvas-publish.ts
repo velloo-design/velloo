@@ -102,6 +102,9 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
               onWarning(event.message);
               return;
             }
+            // The canvas already shows provenance in its publish dialog, so
+            // repeating it as a notice would just be noise.
+            if (event.kind === "info") return;
             if (event.kind === "capture") {
               onProgress({ step, message, capture: { done: event.done, total: event.total } });
               return;

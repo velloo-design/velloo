@@ -168,6 +168,46 @@ describe("emitCode", () => {
     expect(result.iconsUsed).toEqual(["ArrowRight", "HelpCircle", "Sparkles"]);
   });
 
+  test("a well-formed name lucide doesn't export emits HelpCircle, not a broken import", async () => {
+    // "Github" is a valid JSX identifier, so a shape-only check passed it
+    // through and emitted `import { Github } from "lucide-react"` — a name
+    // lucide dropped, so it only failed in the consumer's build.
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Box",
+          children: [
+            { $ref: "Icon", props: { name: "github" } },
+            { $ref: "Icon", props: { name: "Sparkles" } },
+          ],
+        }),
+      ),
+    );
+    expect(result.jsx).not.toContain("Github");
+    expect(result.jsx).toContain(`<HelpCircle />`);
+    expect(result.iconsUsed).toEqual(["HelpCircle", "Sparkles"]);
+    const warning = result.warnings.find((w) => w.includes('"github"'));
+    expect(warning).toContain("not a lucide export");
+    // Brand glyphs get the real fix, not a "did you mean" that can't help.
+    expect(warning).toContain("SVG");
+  });
+
+  test("an unresolved icon inside a snippet body warns on that snippet's IR", async () => {
+    const brandRow: Snippet = {
+      id: "brand-row",
+      name: "Brand Row",
+      params: [],
+      tree: { $ref: "Box", children: [{ $ref: "Icon", props: { name: "Twitter" } }] },
+    };
+    const result = unwrap(
+      await emitCode(screenOf({ $snippet: "brand-row" }), {
+        snippets: new Map([["brand-row", brandRow]]),
+      }),
+    );
+    const ir = result.snippetsUsed.find((s) => s.id === "brand-row");
+    expect(ir?.warnings.some((w) => w.includes('"Twitter"'))).toBe(true);
+  });
+
   test("emits snippet instances with args and carries each snippet's own IR", async () => {
     const featureCard: Snippet = {
       id: "feature-card",

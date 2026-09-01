@@ -1,4 +1,4 @@
-import { dynamicIconName } from "@velloo/codegen";
+import { dynamicIconName, REMOVED_BRAND_ICONS } from "@velloo/codegen";
 import type { ComponentProvider, Manifest } from "@velloo/provider";
 import { isComponentNode, type Node, pascalizeIconName, type Screen } from "@velloo/schema";
 import { providerForScreen } from "../extensions/registry.ts";
@@ -22,30 +22,6 @@ import { nearestRefs } from "./errors.ts";
  * `type` instead of `kind` still warns.
  */
 const UNIVERSAL_PROPS = new Set(["className", "children", "id", "style", "title", "role"]);
-
-/**
- * Brand glyphs lucide removed (they live in `lucide-static`/`simple-icons`
- * now). These are exactly the names people reach for, so a generic "closest
- * match" suggestion (GitGraph for Github) misleads — point at the real fix.
- */
-const REMOVED_BRAND_ICONS = new Set([
-  "Github",
-  "Gitlab",
-  "Twitter",
-  "Facebook",
-  "Linkedin",
-  "Instagram",
-  "Youtube",
-  "Twitch",
-  "Slack",
-  "Figma",
-  "Chrome",
-  "Codepen",
-  "Dribbble",
-  "Trello",
-  "Framer",
-  "Discord",
-]);
 
 const manifestCache = new WeakMap<ComponentProvider, Promise<Manifest>>();
 
