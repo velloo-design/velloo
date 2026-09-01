@@ -205,6 +205,8 @@ export async function resolveTeam(
 export interface CloudTeam {
   id: string;
   name: string;
+  /** The team a publish lands in when none is named. Absent on older clouds. */
+  isDefault?: boolean;
 }
 
 /** The caller's teams, for a publish-target picker. */
@@ -266,6 +268,24 @@ export async function publishDesign(
   const title = request.title?.trim() || defaultPublishTitle(root);
   const form = new FormData();
 
+  /**
+   * Every bundle file goes through here because a **zero-byte part loses its
+   * filename in transit**: the multipart body is well formed, but the receiving
+   * parser reports `File.name` as undefined, so the cloud can't tell what the
+   * file was. Callers make sure nothing empty gets this far (see snapshot.css
+   * below); an empty asset on disk is dropped with a warning, since a zero-byte
+   * image can't render anyway.
+   */
+  const addFile = (path: string, data: string | Uint8Array, type?: string): boolean => {
+    const empty = typeof data === "string" ? data.length === 0 : data.byteLength === 0;
+    if (empty) {
+      report({ kind: "warn", message: `skipped empty file: ${path}` });
+      return false;
+    }
+    form.append("file", new File([data], path, type ? { type } : undefined));
+    return true;
+  };
+
   // Live-island bundle: when the folder declares render:"live" extensions
   // (charts &c.), compile the host app's real components into one ESM module.
   // The cloud's screen viewer imports it and client-mounts the real component
@@ -285,9 +305,13 @@ export async function publishDesign(
     report({ kind: "step", step: "bundle", message: "bundling live components" });
     const bundle = await bundler.build();
     for (const e of bundle.errors) report({ kind: "warn", message: `live-island: ${e.message}` });
-    form.append("file", new File([bundle.code], "bundle.js", { type: "text/javascript" }));
-    liveCode = bundle.code;
-    live = true;
+    // A bundle that came back empty (every live extension failed to compile) is
+    // not a live design — say so in the doc rather than pointing at a file the
+    // upload doesn't carry.
+    if (addFile("bundle.js", bundle.code, "text/javascript")) {
+      liveCode = bundle.code;
+      live = true;
+    }
   }
 
   // PNG previews (one per screen, one composite per board, plus a cover) —
@@ -347,9 +371,7 @@ export async function publishDesign(
         progress: (done, total) => report({ kind: "capture", done, total }),
       });
     });
-    for (const f of shots?.files ?? []) {
-      form.append("file", new File([f.bytes], f.path, { type: "image/png" }));
-    }
+    for (const f of shots?.files ?? []) addFile(f.path, f.bytes, "image/png");
   }
 
   // Designer markup travels with the design so the cloud's board canvas can
@@ -390,11 +412,11 @@ export async function publishDesign(
     ...(live ? { bundlePath: "bundle.js" } : {}),
     ...(shots ? { screenshots: shots.manifest } : {}),
   };
-  form.append(
-    "file",
-    new File([JSON.stringify(designDoc)], "design.json", { type: "application/json" }),
-  );
-  form.append("file", new File([snapshotCss], "snapshot.css", { type: "text/css" }));
+  addFile("design.json", JSON.stringify(designDoc), "application/json");
+  // A folder with no CSS framework (styling.framework "none") compiles to no
+  // stylesheet at all. The doc still names snapshot.css, so send a real —
+  // non-empty — file rather than dropping the part the viewer will ask for.
+  addFile("snapshot.css", snapshotCss || "/* this folder uses no CSS framework */\n", "text/css");
 
   // Upload the image assets the published screens reference (absolute
   // `/assets/…` paths). Only referenced files travel — keeps the publish lean
@@ -407,8 +429,7 @@ export async function publishDesign(
   for (const ref of assetRefs) {
     const rel = ref.replace(/^\//, ""); // assets/foo.png
     try {
-      const bytes = await readFile(join(root, rel));
-      form.append("file", new File([bytes], rel));
+      addFile(rel, await readFile(join(root, rel)));
     } catch {
       report({ kind: "warn", message: `asset not found: ${rel}` });
     }

@@ -24,7 +24,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
  * starts a run and then polls it — the dialog can be closed and reopened
  * mid-publish without losing it. Everything a board carries into the cloud is
  * decided here: which boards, the link title, whether it's world-readable, and
- * which workspace owns it.
+ * — when the account's organization has more than one team — which team owns it.
+ *
+ * There is no workspace choice to make: an account belongs to at most one
+ * organization (the cloud enforces that with a unique index on membership) and
+ * publishing outside it is refused, so the only open question is the team.
  *
  * Opened from a single board's menu (`publishScope`) it skips the form
  * entirely and publishes that board on open, so the dialog is only ever showing
@@ -33,8 +37,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 /** Progress polling: fast enough that per-screenshot counters actually animate. */
 const POLL_MS = 700;
-/** The team select's "no team" option — Radix Select has no empty-string value. */
-const PERSONAL = "personal";
 
 export function PublishDialog() {
   const open = useCanvas((s) => s.publishOpen);
@@ -48,7 +50,8 @@ export function PublishDialog() {
   const [title, setTitle] = useState("");
   const [boardIds, setBoardIds] = useState<string[]>([]);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
-  const [teamId, setTeamId] = useState<string>(PERSONAL);
+  /** Null until the teams load, and stays null when there's nothing to choose. */
+  const [teamId, setTeamId] = useState<string | null>(null);
   const [screenshots, setScreenshots] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -72,7 +75,7 @@ export function PublishDialog() {
     setTitle(scope ? scope.name : design?.folderName ? `${design.folderName} designs` : "");
     setBoardIds(scope ? [scope.id] : (design?.boards ?? []).map((b) => b.id));
     setVisibility("public");
-    setTeamId(PERSONAL);
+    setTeamId(null);
     setScreenshots(true);
     setBusy(false);
 
@@ -84,6 +87,11 @@ export function PublishDialog() {
       ]);
       if (cancelled) return;
       setTargets(found);
+      // Only offer a choice when there is one; a lone team is where the cloud
+      // would put the publish anyway, so it needs no control and no request field.
+      if (found.teams.length > 1) {
+        setTeamId((found.teams.find((team) => team.isDefault) ?? found.teams[0])?.id ?? null);
+      }
       // A settled run from last time would show as a result over a form the
       // user came here to fill in — clear it and start clean.
       let current = state;
@@ -126,7 +134,7 @@ export function PublishDialog() {
       boardIds,
       ...(title.trim() ? { title: title.trim() } : {}),
       visibility,
-      ...(teamId !== PERSONAL ? { teamId } : {}),
+      ...(teamId ? { teamId } : {}),
       screenshots,
     });
 
@@ -153,7 +161,7 @@ export function PublishDialog() {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Publish to velloo-cloud</DialogTitle>
-          <DialogDescription className="truncate">
+          <DialogDescription>
             {scope
               ? `Sharing “${scope.name}” as a commentable link.`
               : "Share a rendered, commentable copy of these boards by link."}
@@ -295,15 +303,14 @@ export function PublishDialog() {
               </Select>
             </div>
 
-            {targets && targets.teams.length > 0 ? (
+            {targets && targets.teams.length > 1 && teamId ? (
               <div className="grid gap-2">
-                <Label htmlFor="publish-team">Workspace</Label>
+                <Label htmlFor="publish-team">Team</Label>
                 <Select value={teamId} onValueChange={setTeamId}>
                   <SelectTrigger id="publish-team">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={PERSONAL}>Personal</SelectItem>
                     {targets.teams.map((team) => (
                       <SelectItem key={team.id} value={team.id}>
                         {team.name}

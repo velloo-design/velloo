@@ -132,8 +132,13 @@ export interface CanvasPublishResult {
  * one-at-a-time run state, and never learns a token.
  */
 export interface CanvasPublish {
-  /** The account's teams, so the dialog can offer them as publish targets. */
-  teams(): Promise<{ id: string; name: string }[]>;
+  /**
+   * The teams of the account's one organization, so a picker can offer them.
+   * Empty for an account with no organization: that publish is personal, and
+   * the cloud allows no other target. `isDefault` marks where a publish lands
+   * when none is named.
+   */
+  teams(): Promise<{ id: string; name: string; isDefault?: boolean }[]>;
   /** Whether a credential exists at all — the dialog asks for sign-in if not. */
   ready(): Promise<boolean>;
   run(

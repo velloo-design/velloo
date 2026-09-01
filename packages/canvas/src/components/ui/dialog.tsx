@@ -36,6 +36,12 @@ export function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "fixed left-1/2 top-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 sm:max-w-lg",
+          // A centred fixed panel has no scroll of its own, so anything taller
+          // than the viewport is clipped at BOTH ends and unreachable: cap the
+          // height and scroll inside instead. `min-w-0` on the children stops a
+          // non-wrapping child (a truncated title, a long URL) from widening
+          // the grid track past the panel and spilling out of its right edge.
+          "max-h-[calc(100dvh-2rem)] overflow-auto [&>*]:min-w-0",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className,
         )}

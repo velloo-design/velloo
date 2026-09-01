@@ -38,7 +38,11 @@ export type PublishState =
 export interface PublishTargets {
   /** False when nothing is signed in — the dialog asks for sign-in instead. */
   ready: boolean;
-  teams: { id: string; name: string }[];
+  /**
+   * The teams of this account's one organization. Empty for a personal account,
+   * and a single entry needs no choosing — only two or more is a real decision.
+   */
+  teams: { id: string; name: string; isDefault?: boolean }[];
 }
 
 export interface PublishRequest {

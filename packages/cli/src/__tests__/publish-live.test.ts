@@ -23,6 +23,7 @@ type StubServer = Server<undefined>;
 interface CapturedDesign {
   live?: boolean;
   bundlePath?: string;
+  snapshotCssPath?: string;
   extensions?: Record<string, unknown>;
   screens?: { id: string }[];
 }
@@ -31,11 +32,17 @@ const cliPath = resolve(import.meta.dir, "../cli.ts");
 
 let tmp: string;
 let server: StubServer;
-let captured: { names: string[]; design?: CapturedDesign; link?: Record<string, unknown> };
+let captured: {
+  names: string[];
+  /** Name typed loosely on purpose: a zero-byte part arrives with none. */
+  parts: { name: string | undefined; size: number }[];
+  design?: CapturedDesign;
+  link?: Record<string, unknown>;
+};
 
 beforeEach(() => {
   tmp = join(tmpdir(), `velloo-pub-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  captured = { names: [] };
+  captured = { names: [], parts: [] };
   server = Bun.serve({
     port: 0,
     async fetch(req) {
@@ -51,7 +58,9 @@ beforeEach(() => {
         const form = await req.formData();
         for (const value of form.getAll("file")) {
           if (value instanceof File) {
-            captured.names.push(value.name);
+            const name = value.name as string | undefined;
+            captured.parts.push({ name, size: value.size });
+            if (name !== undefined) captured.names.push(name);
             if (value.name === "design.json") {
               captured.design = JSON.parse(await value.text()) as CapturedDesign;
             }
@@ -74,7 +83,7 @@ afterEach(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
-async function scaffold(design: string, withLive: boolean): Promise<void> {
+async function scaffold(design: string, withLive: boolean, cssFramework?: "none"): Promise<void> {
   await mkdir(join(design, ".design"), { recursive: true });
   await mkdir(join(design, "theme"), { recursive: true });
   await mkdir(join(design, "screens"), { recursive: true });
@@ -99,6 +108,7 @@ async function scaffold(design: string, withLive: boolean): Promise<void> {
         default: { id: "none", version: "0.1.0", source: "binary", componentsPath: "binary" },
       },
       defaultLibrary: "default",
+      ...(cssFramework ? { styling: { framework: cssFramework } } : {}),
       extensions,
       viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
     }),
@@ -185,6 +195,24 @@ test("publish omits the bundle when the folder has no live extensions", async ()
   expect(captured.names).not.toContain("bundle.js");
   expect(captured.design?.live).toBe(false);
   expect(captured.design?.bundlePath).toBeUndefined();
+});
+
+/**
+ * A folder with no CSS framework compiles to no stylesheet, and a zero-byte
+ * multipart part reaches the receiver with NO filename at all — so the cloud
+ * couldn't tell what the file was and 500'd on the whole publish. Every part
+ * must therefore carry bytes, while the design still names its stylesheet.
+ */
+test("publish sends no empty parts for a folder with no CSS framework", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false, "none");
+  const { exitCode, stderr } = await runPublish(design);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  expect(captured.parts.filter((p) => p.size === 0)).toEqual([]);
+  expect(captured.parts.every((p) => typeof p.name === "string")).toBe(true);
+  expect(captured.names).toContain("snapshot.css");
+  expect(captured.design?.snapshotCssPath).toBe("snapshot.css");
 });
 
 test("publish resolves a team name and sends its explicit team context", async () => {
