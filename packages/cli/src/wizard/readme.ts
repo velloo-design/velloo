@@ -22,8 +22,9 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("velloo run .");
   lines.push("```");
   lines.push("");
-  lines.push("`velloo run .` prints and opens the canvas URL — it defaults to");
-  lines.push("http://localhost:7300, but uses a free port if that's taken. Your AI");
+  lines.push("`velloo run .` starts the canvas and stays in the foreground — `b` keeps it");
+  lines.push("running in the background, `s` stops it, `o` opens the browser. It defaults");
+  lines.push("to http://localhost:7300, but uses a free port if that's taken. Your AI");
   lines.push("agent drives the design over MCP — wire it once with `velloo connect`,");
   lines.push("and it starts the velloo MCP server itself (no separate server to run).");
   lines.push("");

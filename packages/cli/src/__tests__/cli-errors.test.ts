@@ -46,7 +46,7 @@ async function runPublish(folder: string, env: Record<string, string> = {}) {
 }
 
 async function runRun(folder: string) {
-  const proc = Bun.spawn(["bun", cliPath, "run", folder, "--no-open"], {
+  const proc = Bun.spawn(["bun", cliPath, "run", folder, "--background"], {
     cwd: tmp,
     stdout: "pipe",
     stderr: "pipe",

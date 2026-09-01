@@ -1,5 +1,6 @@
 import type { CanvasAccount, CanvasAuth, CanvasAuthStatus, CanvasLogin } from "@velloo/server";
 import { topUpTokens } from "@velloo/server";
+import { fetchCloudAppUrl } from "../cloud.ts";
 import { deleteCredential, loadCredential, saveCredential } from "../cloud-credentials.ts";
 import { fetchAccount, performDeviceLogin } from "../cloud-login.ts";
 
@@ -28,10 +29,20 @@ interface CachedAccount {
   verified: boolean | null;
 }
 
-export function createCanvasAuth(cloudUrl: string): CanvasAuth {
+interface CanvasAuthDependencies {
+  /** Test seam for driving the asynchronous device-flow transitions. */
+  performDeviceLogin?: typeof performDeviceLogin;
+}
+
+export function createCanvasAuth(
+  cloudUrl: string,
+  dependencies: CanvasAuthDependencies = {},
+): CanvasAuth {
+  const runDeviceLogin = dependencies.performDeviceLogin ?? performDeviceLogin;
   let login: CanvasLogin = { state: "idle" };
   let pending: AbortController | null = null;
   let cached: CachedAccount | null = null;
+  let cachedApp: { at: number; url: string } | null = null;
 
   /**
    * Who this token belongs to, plus whether the cloud still accepts it. A
@@ -57,13 +68,27 @@ export function createCanvasAuth(cloudUrl: string): CanvasAuth {
     return resolved;
   };
 
+  const resolveAppUrl = async (): Promise<string> => {
+    if (cachedApp && Date.now() - cachedApp.at < ACCOUNT_TTL_MS) return cachedApp.url;
+    const url = await fetchCloudAppUrl(cloudUrl, ACCOUNT_TIMEOUT_MS);
+    cachedApp = { at: Date.now(), url };
+    return url;
+  };
+
   const status = async (): Promise<CanvasAuthStatus> => {
     const cred = await loadCredential(cloudUrl);
-    if (!cred?.token) return { loggedIn: false, cloudUrl, verified: null, login };
-    const { account, verified } = await describe(cred.token, cred.email);
+    const appUrlP = resolveAppUrl();
+    if (!cred?.token) {
+      return { loggedIn: false, cloudUrl, appUrl: await appUrlP, verified: null, login };
+    }
+    const [{ account, verified }, appUrl] = await Promise.all([
+      describe(cred.token, cred.email),
+      appUrlP,
+    ]);
     return {
       loggedIn: true,
       cloudUrl,
+      appUrl,
       verified,
       login,
       ...(account ? { account } : {}),
@@ -89,7 +114,7 @@ export function createCanvasAuth(cloudUrl: string): CanvasAuth {
         settle = resolve;
       });
 
-      const flow = performDeviceLogin(
+      const flow = runDeviceLogin(
         cloudUrl,
         ({ verificationUrl, userCode, expiresIn }) => {
           login = {

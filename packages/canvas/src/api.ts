@@ -14,7 +14,13 @@ export {
   generateAsset,
   type IntentPrice,
 } from "./api/assets.ts";
-export { type AuthStatus, auth, type CloudAccount, type LoginState } from "./api/auth.ts";
+export {
+  type AuthStatus,
+  auth,
+  type CloudAccount,
+  type LoginState,
+  loginAttemptSucceeded,
+} from "./api/auth.ts";
 export {
   type BoardMeta,
   type DesignSummary,

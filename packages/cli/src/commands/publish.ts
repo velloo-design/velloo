@@ -165,7 +165,7 @@ export default defineCommand({
       createNew: args.new === true,
       updateExisting: args.update === true,
       customSlug: args.slug,
-      manageUrl: publishedBoardsUrl(baseUrl),
+      manageUrl: await publishedBoardsUrl(baseUrl),
     });
 
     // Destination failures happen before privacy/password questions or any

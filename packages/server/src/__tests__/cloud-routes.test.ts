@@ -147,6 +147,7 @@ describe("/api/auth with a CLI controller", () => {
     status = {
       loggedIn: true,
       cloudUrl: "https://api.velloo.ai",
+      appUrl: "https://velloo.ai",
       verified: true,
       login: { state: "idle" },
       account: { email: "designer@example.com", name: "Dana Designer", tier: "team" },
@@ -182,6 +183,7 @@ describe("/api/auth with a CLI controller", () => {
     expect(await res.json()).toMatchObject({
       loggedIn: true,
       cloudUrl: "https://api.velloo.ai",
+      appUrl: "https://velloo.ai",
       verified: true,
       account: { email: "designer@example.com", name: "Dana Designer", tier: "team" },
     });

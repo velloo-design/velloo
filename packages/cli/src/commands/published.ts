@@ -34,7 +34,7 @@ export default defineCommand({
     });
     if (designs.length === 0) {
       console.log("velloo published: no published designs.");
-      console.log(`  ${publishedBoardsUrl(baseUrl)}`);
+      console.log(`  ${await publishedBoardsUrl(baseUrl)}`);
       return;
     }
 
@@ -50,6 +50,6 @@ export default defineCommand({
       console.log(`  ${publishedDesignSubtitle(design)}`);
       console.log(`  ${design.url}`);
     }
-    console.log(`\nManage in velloo-cloud: ${publishedBoardsUrl(baseUrl)}`);
+    console.log(`\nManage in velloo-cloud: ${await publishedBoardsUrl(baseUrl)}`);
   },
 });

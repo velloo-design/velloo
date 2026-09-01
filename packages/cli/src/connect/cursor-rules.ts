@@ -31,7 +31,9 @@ for this project is \`${designRel}\`.
 - Cursor starts the velloo MCP server itself (wired as \`velloo mcp\`), so the
   tools are available once the MCP config is loaded — nothing to start first. If
   they're missing, ask the user to run \`velloo connect ${designRel}\` and
-  restart Cursor. To watch the canvas, run \`velloo run ${designRel}\` — it
+  restart Cursor. To watch the canvas, the user runs \`velloo run ${designRel}\`
+  (stays in the foreground; \`b\` background, \`s\` stop, \`o\` open). If you start
+  it yourself, pass \`--background\` so you aren't stuck in that session. It
   prints the canvas URL (defaults to \`:7300\`, or a free port if that's taken,
   so don't assume 7300). When a canvas is already up, the server's
   \`initialize\` instructions hand you its live URL.

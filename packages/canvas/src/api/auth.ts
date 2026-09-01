@@ -19,10 +19,24 @@ export interface AuthStatus {
   loggedIn: boolean;
   /** The velloo-cloud this folder signs into. */
   cloudUrl?: string;
+  /** User-facing home advertised by that cloud; falls back to the API origin. */
+  appUrl?: string;
   account?: CloudAccount;
   /** false = the cloud rejected the stored token; null = it couldn't be asked. */
   verified: boolean | null;
   login: LoginState;
+}
+
+/**
+ * Whether a device-login attempt has actually completed successfully.
+ *
+ * `loggedIn` alone is not enough: while re-authenticating an expired token,
+ * the daemon keeps the old local identity available and reports the new
+ * device flow as `pending`. Treating that stale identity as success closes the
+ * dialog before the user has approved the new device code.
+ */
+export function loginAttemptSucceeded(status: AuthStatus): boolean {
+  return status.loggedIn && status.login.state === "idle";
 }
 
 const LOGGED_OUT: AuthStatus = { loggedIn: false, verified: null, login: { state: "idle" } };

@@ -25,7 +25,7 @@
 #              emulation
 #   --publish  expose a container port on your host (repeatable). To reach the
 #              canvas from your host browser, bind it to all interfaces inside:
-#                velloo run --host 0.0.0.0 --port 7300 --no-open
+#                velloo run --host 0.0.0.0 --port 7300 --background
 #              then open http://localhost:7300 on the host. (The default
 #              127.0.0.1 bind is unreachable through Docker's port proxy.)
 #   --keep     don't wipe the box on exit (default is docker --rm: everything
@@ -125,7 +125,7 @@ docker_args+=(-v "$repo_root/scripts/install.sh:/tmp/install.sh:ro")
 canvas_hint=":"
 for p in "${publish[@]+"${publish[@]}"}"; do
   docker_args+=(-p "$p:$p")
-  canvas_hint="echo '   canvas from your host browser: velloo run --host 0.0.0.0 --port $p --no-open  →  http://localhost:$p'"
+  canvas_hint="echo '   canvas from your host browser: velloo run --host 0.0.0.0 --port $p --background  →  http://localhost:$p'"
 done
 
 # `cat | bash` (not `bash /tmp/install.sh`) keeps the real pipe-from-curl

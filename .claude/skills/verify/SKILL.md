@@ -17,7 +17,7 @@ cd packages/canvas && bun run build        # only needed for canvas changes
 # Never restart the user's daemon (an MCP proxy session wedges on respawn).
 # Copy the design folder and run a second daemon on a fixed port:
 cp -R velloo /tmp/velloo-verify
-bun packages/cli/src/cli.ts run /tmp/velloo-verify --port 7399 --no-open
+bun packages/cli/src/cli.ts run /tmp/velloo-verify --port 7399 --background
 # → canvas at http://127.0.0.1:7399, HTTP API under /api/*
 ```
 

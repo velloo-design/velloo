@@ -194,6 +194,11 @@ describe("resolveDesignFolder without a manifest (legacy chain)", () => {
       join(tmp, "velloo"),
     );
 
+    // `velloo run /path/to/app` — the arg is the app root, not the design folder.
+    expect(await resolveDesignFolder(tmp, "run", { cwd: tmp, onFail, requireConfig: true })).toBe(
+      join(tmp, "velloo"),
+    );
+
     const asFolder = join(tmp, "self");
     await makeDesignFolder(asFolder);
     expect(await resolveDesignFolder(undefined, "run", { cwd: asFolder, onFail })).toBe(asFolder);
@@ -207,6 +212,12 @@ describe("resolveDesignFolder without a manifest (legacy chain)", () => {
     expect(resolveDesignFolder(undefined, "run", { cwd: tmp, onFail })).rejects.toThrow(
       "no design folder found",
     );
+  });
+
+  test("an explicit path with no design folder fails when required", async () => {
+    expect(
+      resolveDesignFolder(tmp, "run", { cwd: tmp, onFail, requireConfig: true }),
+    ).rejects.toThrow("is not a velloo design folder");
   });
 });
 

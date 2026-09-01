@@ -1,16 +1,24 @@
 import { join } from "node:path";
 import { defineCommand } from "citty";
-import { ensureDaemon } from "../daemon/runtime.ts";
+import pc from "picocolors";
+import { daemonRoot, ensureDaemon, isLive, stopDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
+import { shouldStayForeground, waitInForeground } from "../run-foreground.ts";
 import { traceEnabled } from "../trace/env.ts";
+
+function printBackgroundStay(folderArg: string): void {
+  console.log(
+    `velloo: it keeps running in the background — awake while the canvas is open or an agent is connected. Stop it anytime with \`velloo stop${folderArg}\`.`,
+  );
+}
 
 export default defineCommand({
   meta: {
     name: "run",
     description:
-      "Open the canvas for a design folder (starts a persistent canvas if none is running)",
+      "Open the canvas for a design folder and stay in the foreground (starts a persistent canvas if none is running)",
   },
   args: {
     folder: {
@@ -28,12 +36,21 @@ export default defineCommand({
     },
     open: {
       type: "boolean",
-      default: true,
-      description: "Open the canvas in your browser (use --no-open to skip)",
+      default: false,
+      description: "Open the canvas in your browser",
+    },
+    background: {
+      type: "boolean",
+      default: false,
+      description:
+        "Leave the canvas running and return to the shell (the default when stdin is not a TTY)",
     },
   },
   async run({ args }) {
-    const folder = await resolveDesignFolder(args.folder, "run", { interactive: true });
+    const folder = await resolveDesignFolder(args.folder, "run", {
+      interactive: true,
+      requireConfig: true,
+    });
     const preferredPort = args.port ? Number(args.port) : undefined;
     if (preferredPort !== undefined && (!Number.isFinite(preferredPort) || preferredPort < 0)) {
       fail("run", `invalid --port ${JSON.stringify(args.port)}`);
@@ -54,10 +71,8 @@ export default defineCommand({
     });
 
     const folderArg = args.folder ? ` ${args.folder}` : "";
+    const root = daemonRoot(folder);
     console.log(`velloo: canvas at ${rec.canvasUrl}`);
-    console.log(
-      `velloo: it keeps running in the background — awake while the canvas is open or an agent is connected. Stop it anytime with \`velloo stop${folderArg}\`.`,
-    );
 
     // The recorder lives in the daemon and reads VELLOO_TRACE at spawn time, so
     // it only takes effect on a daemon *this* command spawned — be explicit
@@ -74,7 +89,43 @@ export default defineCommand({
       }
     }
 
-    if (args.open !== false) await openUrl(rec.canvasUrl);
-    // Return to the shell; the daemon stays up.
+    const foreground = shouldStayForeground({
+      background: Boolean(args.background),
+      stdinIsTTY: Boolean(process.stdin.isTTY),
+    });
+
+    if (foreground) {
+      console.log("");
+      console.log(`  ${pc.cyan("b")}  run in the background`);
+      console.log(`  ${pc.cyan("s")}  stop`);
+      console.log(`  ${pc.cyan("o")}  open the browser`);
+      console.log("");
+    } else {
+      printBackgroundStay(folderArg);
+    }
+
+    if (args.open) await openUrl(rec.canvasUrl);
+    if (!foreground) return;
+
+    const outcome = await waitInForeground({
+      isLive: () => isLive(rec),
+      onOpen: () => {
+        void openUrl(rec.canvasUrl);
+      },
+    });
+
+    if (outcome === "background") {
+      printBackgroundStay(folderArg);
+      return;
+    }
+    if (outcome === "died") {
+      console.log("velloo: canvas exited.");
+      return;
+    }
+
+    const stopped = await stopDaemon(root);
+    console.log(
+      stopped ? `velloo: stopped canvas for ${root}` : `velloo: no canvas running for ${root}`,
+    );
   },
 });

@@ -73,6 +73,11 @@ export interface CanvasAuthStatus {
   loggedIn: boolean;
   /** The velloo-cloud this daemon signs into — an account is scoped to one. */
   cloudUrl?: string;
+  /**
+   * User-facing home advertised by that cloud (`GET /v1/auth/config`), falling
+   * back to the API origin when the cloud doesn't name one.
+   */
+  appUrl?: string;
   account?: CanvasAccount;
   /**
    * The cloud's verdict on the stored token: true = accepted, false = rejected

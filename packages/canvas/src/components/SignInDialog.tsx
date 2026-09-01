@@ -1,6 +1,6 @@
 import { AlertTriangle, ExternalLink, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AuthStatus, auth, type LoginState } from "../api.ts";
+import { type AuthStatus, auth, type LoginState, loginAttemptSucceeded } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast } from "../toast.ts";
 import { Button } from "./ui/button.tsx";
@@ -78,8 +78,9 @@ export function SignInDialog() {
       if (!live) return;
       setStarting(false);
       setLogin(status.login);
-      // A credential that was already good (or landed instantly) needs no poll.
-      if (status.loggedIn) {
+      // An old expired credential can coexist with the replacement flow. Only
+      // the attempt leaving `pending` proves the browser approval has landed.
+      if (loginAttemptSucceeded(status)) {
         succeed(status);
         return;
       }
@@ -88,7 +89,7 @@ export function SignInDialog() {
       timer = setInterval(() => {
         void auth.status().then((next) => {
           if (!live) return;
-          if (next.loggedIn) {
+          if (loginAttemptSucceeded(next)) {
             succeed(next);
             return;
           }

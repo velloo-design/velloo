@@ -58,7 +58,9 @@ async function manifestProject(
 
 /**
  * Resolve the design folder for a command. An explicit arg wins — a repo
- * manifest (`velloo.json`) project name, else a path. Without an arg, a
+ * manifest (`velloo.json`) project name, else a path. A path that is the
+ * app/repo root (not the design folder itself) still resolves via the same
+ * `./velloo` convention as standing there with no arg. Without an arg, a
  * manifest drives resolution (cwd containment → the only project →
  * defaultProject → picker/fail); repos without one keep the convention chain:
  * `./velloo`, then the cwd, then walk up for a `.design/config.json` (so the
@@ -86,6 +88,9 @@ export async function resolveDesignFolder(
     }
     const explicit = resolve(cwd, arg);
     if (await hasDesignConfig(explicit)) return explicit;
+    // App root passed as a path — same as `cd` there with no arg.
+    const nested = join(explicit, DEFAULT_FOLDER);
+    if (await hasDesignConfig(nested)) return nested;
     // A bare name that matches nothing is a typo'd project, not a folder path —
     // suggest the real names even for commands that require a config.
     if (repo && !arg.includes(sep)) {

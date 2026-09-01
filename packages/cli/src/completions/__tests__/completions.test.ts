@@ -27,6 +27,11 @@ describe("commandSpecs", () => {
     expect(flags).not.toContain("--connect");
     expect(init?.flags.find((f) => f.flag === "--design-folder")?.takesValue).toBe(true);
     expect(init?.flags.find((f) => f.flag === "--force")?.takesValue).toBe(false);
+    const run = specs.find((s) => s.name === "run");
+    const runFlags = run?.flags.map((f) => f.flag) ?? [];
+    expect(runFlags).toContain("--background");
+    expect(runFlags).toContain("--open");
+    expect(runFlags).not.toContain("--no-open");
   });
 
   test("descriptions are single-line and free of spec-breaking characters", () => {

@@ -3,7 +3,6 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Server } from "bun";
-import { publishedBoardsUrl } from "../cloud.ts";
 import { type CloudPublishedDesign, publishedDesignSubtitle } from "../cloud-published.ts";
 import { designFromReference, resolveUnpublishSelection } from "../commands/unpublish.ts";
 
@@ -188,14 +187,6 @@ test("published and unpublish report an unreachable cloud cleanly", async () => 
   );
   expect(removed.exitCode).toBe(1);
   expect(removed.stderr).toContain(`cannot reach ${unreachable}`);
-});
-
-test("published-board links use the canonical hosted app and preserve custom clouds", () => {
-  expect(publishedBoardsUrl("https://api.velloo.ai")).toBe("https://velloo.ai/boards");
-  expect(publishedBoardsUrl("https://api.dev.velloo.ai/")).toBe("https://dev.velloo.ai/boards");
-  expect(publishedBoardsUrl("https://api.example.test/base")).toBe(
-    "https://api.example.test/boards",
-  );
 });
 
 test("published metadata uses clear fallbacks", () => {

@@ -355,7 +355,7 @@ function printExitInstructions(folder: string | undefined, outcome: WireOutcome)
       `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
     );
     console.log(
-      `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas and prints the URL)")}`,
+      `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas; b background, s stop, o open)")}`,
     );
     console.log("");
     const readme = join(relative(process.cwd(), folder) || ".", "README.md");
@@ -573,6 +573,8 @@ export default defineCommand({
       fail("init", `--scan-dir "${cliArgs.scanDir}" doesn't exist under ${appRoot}.`);
     }
 
+    if (interactive) printLogo();
+
     // Already a Velloo design here? Don't re-run the whole scaffold wizard —
     // offer the actions that make sense on an existing folder.
     if (interactive && !cliArgs.force) {
@@ -613,7 +615,6 @@ export default defineCommand({
     let answers: WizardAnswers;
 
     if (interactive) {
-      printLogo();
       console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
       console.log("");
       const result = await runInteractive({

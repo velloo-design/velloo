@@ -17,18 +17,46 @@ export function defaultCloudUrl(): string {
   return (process.env.VELLOO_CLOUD_URL ?? BUILT_DEFAULT).replace(/\/+$/, "");
 }
 
-/** Human-facing published-board management page for this cloud environment. */
-export function publishedBoardsUrl(baseUrl: string): string {
-  const url = new URL(baseUrl);
-  // Hosted CLI traffic goes to api.<app-host>; UI paths redirect today, but
-  // printing the canonical app URL is clearer and survives copied links.
-  if (url.hostname === "api.velloo.ai" || url.hostname === "api.dev.velloo.ai") {
-    url.hostname = url.hostname.slice(4);
+const CONFIG_TIMEOUT_MS = 5000;
+
+/** Origin of a cloud API URL — the home when the cloud doesn't advertise one. */
+export function cloudOrigin(baseUrl: string): string {
+  return new URL(baseUrl).origin;
+}
+
+/**
+ * User-facing velloo-cloud home. The cloud advertises it on `GET /v1/auth/config`
+ * (`APP_BASE_URL` there). When that's missing — local, a custom single-host
+ * cloud, or an older server — the API origin is the home: those setups serve
+ * UI and API together, and a hosted API-only host 301s UI paths to the app.
+ */
+export async function fetchCloudAppUrl(
+  baseUrl: string,
+  timeoutMs = CONFIG_TIMEOUT_MS,
+): Promise<string> {
+  const fallback = cloudOrigin(baseUrl);
+  let res: Response;
+  try {
+    res = await fetch(`${fallback}/v1/auth/config`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch {
+    return fallback;
   }
-  url.pathname = "/boards";
-  url.search = "";
-  url.hash = "";
-  return url.toString().replace(/\/$/, "");
+  if (!res.ok) return fallback;
+  const body = (await res.json().catch(() => null)) as { appUrl?: unknown } | null;
+  if (typeof body?.appUrl !== "string") return fallback;
+  try {
+    const advertised = new URL(body.appUrl).origin;
+    return isSecureCloudUrl(advertised) ? advertised : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Human-facing published-board management page for this cloud. */
+export async function publishedBoardsUrl(baseUrl: string): Promise<string> {
+  return `${await fetchCloudAppUrl(baseUrl)}/boards`;
 }
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);

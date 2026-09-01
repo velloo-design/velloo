@@ -1,4 +1,4 @@
-import { AlertTriangle, Coins, History, LogIn, LogOut, Settings } from "lucide-react";
+import { AlertTriangle, Coins, ExternalLink, History, LogIn, LogOut, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { auth, fetchRevertStatus, type RevertStatus } from "../api.ts";
 import { type AppTheme, useCanvas } from "../store.ts";
@@ -18,9 +18,10 @@ import {
 
 /**
  * Top-right account + settings. Shows who the folder is signed in to
- * velloo-cloud as — name, email, plan, and which cloud — with sign-in, sign-out,
- * the destructive revert-all action, and the app theme (Velloo's own chrome,
- * independent of the design's theme).
+ * velloo-cloud as — name, email, plan, and which cloud — with a link to the
+ * cloud home (the origin the cloud advertises), sign-in, sign-out, the destructive
+ * revert-all action, and the app theme (Velloo's own chrome, independent of
+ * the design's theme).
  *
  * Account state is served live by the CLI daemon from `~/.velloo`, so signing in
  * from a terminal shows up here on the next menu open without a reload.
@@ -170,6 +171,20 @@ export function SettingsMenu() {
                   </span>
                 )}
               </div>
+              {status?.appUrl ? (
+                <DropdownMenuItem asChild>
+                  <a
+                    href={status.appUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-inherit no-underline"
+                    data-testid="settings-open-cloud"
+                  >
+                    <ExternalLink />
+                    Open velloo-cloud
+                  </a>
+                </DropdownMenuItem>
+              ) : null}
             </>
           ) : null}
           <DropdownMenuSeparator />

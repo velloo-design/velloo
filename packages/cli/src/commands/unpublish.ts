@@ -55,7 +55,7 @@ export default defineCommand({
     if (manageable.length === 0) {
       fail(
         "unpublish",
-        `there are no published designs you can remove. Manage boards at ${publishedBoardsUrl(baseUrl)}`,
+        `there are no published designs you can remove. Manage boards at ${await publishedBoardsUrl(baseUrl)}`,
       );
     }
 
@@ -65,7 +65,7 @@ export default defineCommand({
       if (!target) {
         fail(
           "unpublish",
-          `that share URL is not in your published designs. Manage boards at ${publishedBoardsUrl(baseUrl)}`,
+          `that share URL is not in your published designs. Manage boards at ${await publishedBoardsUrl(baseUrl)}`,
         );
       }
       if (!target.canManage) fail("unpublish", "you do not have permission to remove that design");
