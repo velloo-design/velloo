@@ -1,8 +1,15 @@
 import { existsSync } from "node:fs";
-import { type CanvasAuth, createServer, type ServerHandle } from "@velloo/server";
+import {
+  type CanvasAuth,
+  type CanvasPublish,
+  createServer,
+  type ServerHandle,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import { defaultCloudUrl } from "../cloud.ts";
-import { deleteCredential, loadCredential } from "../cloud-credentials.ts";
+import { loadCredential } from "../cloud-credentials.ts";
+import { createCanvasAuth } from "../daemon/canvas-auth.ts";
+import { createCanvasPublish } from "../daemon/canvas-publish.ts";
 import {
   type DaemonRecord,
   daemonRoot,
@@ -45,18 +52,13 @@ export default defineCommand({
     const cred = await loadCredential(cloudUrl);
     const cloud = { url: cloudUrl, token: cred?.token };
 
-    // Live login state for the canvas account menu — re-read from ~/.velloo each
-    // call so signing in/out (here or via `velloo login`/`logout`) shows without
-    // restarting the daemon.
-    const auth: CanvasAuth = {
-      async status() {
-        const c = await loadCredential(cloudUrl);
-        return { loggedIn: Boolean(c?.token), email: c?.email };
-      },
-      async logout() {
-        await deleteCredential(cloudUrl);
-      },
-    };
+    // Live account state + sign-in/out for the canvas account menu — every call
+    // re-reads ~/.velloo, so signing in (here or via `velloo login`/`logout`)
+    // shows without restarting the daemon.
+    const auth: CanvasAuth = createCanvasAuth(cloudUrl);
+    // Publishing from the canvas runs the same core as `velloo publish`, over
+    // the pipeline this daemon already has warm.
+    const publish: CanvasPublish = createCanvasPublish(cloudUrl);
 
     // Prefer the requested port (7300 by default), fall back to a free one.
     const preferred = args.port ? Number(args.port) : 7300;
@@ -70,6 +72,7 @@ export default defineCommand({
         mcp: { transport: "http", port: 0 },
         cloud,
         auth,
+        publish,
       });
     } catch (err) {
       // Lost the preferred port between probe and bind — take any free port.
@@ -81,6 +84,7 @@ export default defineCommand({
         mcp: { transport: "http", port: 0 },
         cloud,
         auth,
+        publish,
       });
     }
 

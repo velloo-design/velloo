@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Share2,
   Trash2,
 } from "lucide-react";
 import { type DragEvent, useMemo, useRef, useState } from "react";
@@ -385,6 +386,14 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                       >
                         <FrameIcon />
                         Add frame…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          useCanvas.getState().publishBoardNow({ id: b.id, name: b.name })
+                        }
+                      >
+                        <Share2 />
+                        Publish board
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() =>

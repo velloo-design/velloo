@@ -239,6 +239,17 @@ One **persistent canvas daemon per folder**, with two thin clients attaching to 
 
 Every client drives the same tool surface — agent edits and human edits are operationally identical. No "agent mode" vs "user mode" code paths.
 
+### The cloud surface: who owns the credential
+
+The canvas shows the signed-in account, signs in, and publishes boards — but **`@velloo/server` never reads `~/.velloo` and never calls velloo-cloud**. It stays credential-blind so an embedder can host the canvas without inheriting the CLI's identity. The two capabilities are *injected* into `createServer` by the daemon (which is the CLI, and does own `~/.velloo`):
+
+- **`CanvasAuth`** (`packages/cli/src/daemon/canvas-auth.ts`) backs `GET /api/auth/status` and `POST /api/auth/login[/cancel]`. Status carries the account's email, display name, and plan (a `GET /v1/me`, cached 60s because the canvas polls) plus a `verified` tri-state: `null` when unknown, `false` when the cloud rejected the stored token — an expired credential still names its account rather than silently reading as signed out. Sign-in is the OAuth device flow, which can't finish inside one request: `beginLogin` returns as soon as there's a user code to display and leaves the polling loop running, writing the credential on success; the canvas watches `login` for the outcome.
+- **`CanvasPublish`** (`packages/cli/src/daemon/canvas-publish.ts`) backs `/api/publish`. Because publishing takes tens of seconds, the server holds a **`PublishRunner`** (`packages/server/src/publish-run.ts`) — one run per folder, rejecting a concurrent `POST` with 409 — and the canvas polls `GET /api/publish/status` for the step, capture counter, and warnings, then the share URL.
+
+Both routes degrade rather than break when nothing was injected: status reads as signed out, and a publish attempt answers 503 instead of pretending.
+
+The publish pipeline itself lives in `packages/cli/src/publish/core.ts` and is shared verbatim by `velloo publish` and the canvas — one `publishDesign(cloud, pipeline, request, report)` emitting progress events that the command prints and the runner stores. The daemon lends it a **`PublishHost`** (its own loaded folder, resolved providers, and warm Tailwind JIT), so an in-canvas publish reuses the daemon's render pipeline instead of standing up a second one. Browser lifecycle stays with the caller: the one-shot command closes the pooled browser, the long-lived daemon keeps it.
+
 ## Component sourcing
 
 Components come from the **active component provider** (`@velloo/provider`). The design folder doesn't ship a `components/` directory.

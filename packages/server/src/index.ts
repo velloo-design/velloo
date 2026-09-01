@@ -7,7 +7,7 @@ import type { ServerWebSocket } from "bun";
 import type { ActivityEvent } from "./activity.ts";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
-import type { CanvasAuth, CloudAuth } from "./cloud.ts";
+import type { CanvasAuth, CanvasPublish, CloudAuth } from "./cloud.ts";
 import { pullComments } from "./cloud-comments.ts";
 import {
   type DesignFolder,
@@ -30,6 +30,7 @@ import {
 } from "./mcp/server.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { resolveProviders } from "./providers.ts";
+import { PublishRunner } from "./publish-run.ts";
 import { requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -59,6 +60,11 @@ export interface ServerOptions {
    * Omit ⇒ the canvas reports logged out.
    */
   auth?: CanvasAuth;
+  /**
+   * Publish-to-cloud for the canvas, provided by the CLI (it owns the
+   * credential and the cloud transport). Omit ⇒ the canvas can't publish.
+   */
+  publish?: CanvasPublish;
 }
 
 export interface ServerHandle {
@@ -243,7 +249,17 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     defaultProvider,
     broadcast,
   };
-  const app = createApp(() => ctx, jit, bundler, canvasBundler, opts.auth);
+  // Publishing borrows the daemon's warm pipeline — same folder, same resolved
+  // providers, same compiled Tailwind the canvas is already rendering with.
+  const publishRunner = opts.publish
+    ? new PublishRunner(opts.publish, () => ({
+        folder,
+        providers,
+        defaultProvider,
+        snapshotCss: () => jit.build(),
+      }))
+    : undefined;
+  const app = createApp(() => ctx, jit, bundler, canvasBundler, opts.auth, publishRunner);
 
   let watcher: Watcher | null = null;
   watcher = watchDesignFolder(folder.root, async (event) => {
@@ -386,7 +402,18 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   };
 }
 
-export type { CanvasAuth, CloudAuth } from "./cloud.ts";
+export type {
+  CanvasAccount,
+  CanvasAuth,
+  CanvasAuthStatus,
+  CanvasLogin,
+  CanvasPublish,
+  CanvasPublishProgress,
+  CanvasPublishRequest,
+  CanvasPublishResult,
+  CloudAuth,
+  PublishHost,
+} from "./cloud.ts";
 export {
   type CommentSyncContext,
   countUnresolvedPulledComments,

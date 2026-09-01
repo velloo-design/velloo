@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { type ActivitySlice, createActivitySlice } from "./activity.ts";
 import { type AnnotationsSlice, createAnnotationsSlice } from "./annotations.ts";
+import { type CloudSlice, createCloudSlice } from "./cloud.ts";
 import { createDesignSlice, type DesignSlice } from "./design.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
@@ -23,6 +24,7 @@ import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
  *   - library     — boards ↔ library ↔ snippet-editor view switching
  *   - annotations — node annotations + board sticky notes
  *   - activity    — agent-activity events: indicator, highlights, feed
+ *   - cloud       — velloo-cloud account state + the sign-in/publish dialogs
  */
 export type CanvasState = DesignSlice &
   SelectionSlice &
@@ -31,7 +33,8 @@ export type CanvasState = DesignSlice &
   InspectorSlice &
   LibrarySlice &
   AnnotationsSlice &
-  ActivitySlice;
+  ActivitySlice &
+  CloudSlice;
 
 export const useCanvas = create<CanvasState>()((...a) => ({
   ...createDesignSlice(...a),
@@ -42,4 +45,5 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createLibrarySlice(...a),
   ...createAnnotationsSlice(...a),
   ...createActivitySlice(...a),
+  ...createCloudSlice(...a),
 }));

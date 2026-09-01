@@ -58,6 +58,12 @@ export interface CaptureBundleScreenshotsOptions {
   renderHtml: (screen: Screen, themeName?: string) => Promise<string>;
   capture: CaptureFn;
   warn: (message: string) => void;
+  /**
+   * Capture progress, so a long pass isn't silent. `total` counts the screens
+   * plus the boards with frames; skipped and failed shots still advance `done`,
+   * since it tracks work completed rather than files produced.
+   */
+  progress?: (done: number, total: number) => void;
 }
 
 function isBrowserMissing(err: unknown): boolean {
@@ -72,11 +78,17 @@ function isBrowserMissing(err: unknown): boolean {
 export async function captureBundleScreenshots(
   opts: CaptureBundleScreenshotsOptions,
 ): Promise<BundleScreenshots | null> {
-  const { screens, boards, viewport, renderHtml, capture, warn } = opts;
+  const { screens, boards, viewport, renderHtml, capture, warn, progress } = opts;
   const files: Array<{ path: string; bytes: Uint8Array }> = [];
   const manifest: ScreenshotManifest = { cover: "", screens: {}, boards: {} };
   // One slot stays reserved for the cover (a byte-copy of an existing shot).
   let budget = MAX_SCREENSHOT_COUNT - 1;
+  const total = screens.length + boards.filter((b) => b.frames.length > 0).length;
+  let done = 0;
+  const advance = () => {
+    done += 1;
+    progress?.(done, total);
+  };
 
   /** Capture; retry downscaled if over the byte limit; null if it stays over. */
   const shoot = async (
@@ -115,6 +127,8 @@ export async function captureBundleScreenshots(
       } catch (err) {
         if (isBrowserMissing(err)) throw err;
         warn(`screenshot of screen "${screen.id}" failed — skipped (${message(err)})`);
+      } finally {
+        advance();
       }
     }
 
@@ -146,6 +160,8 @@ export async function captureBundleScreenshots(
       } catch (err) {
         if (isBrowserMissing(err)) throw err;
         warn(`screenshot of board "${board.id}" failed — skipped (${message(err)})`);
+      } finally {
+        advance();
       }
     }
   } catch (err) {

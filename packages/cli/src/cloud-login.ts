@@ -15,27 +15,74 @@ export interface DeviceLoginResult {
   email: string;
 }
 
+/** The account behind a CLI token, as `GET /v1/me` describes it. */
+export interface CloudAccount {
+  email: string;
+  name?: string;
+  /** Plan tier — "free" | "team" | "business" | "enterprise". */
+  tier?: string;
+}
+
+/**
+ * The cloud's verdict on a stored token. `rejected` means revoked or expired —
+ * a re-sign-in fixes it; `unreachable` means we couldn't ask, so callers keep
+ * trusting the local credential rather than pretending it's dead.
+ */
+export type AccountLookup =
+  | { status: "ok"; account: CloudAccount }
+  | { status: "rejected" }
+  | { status: "unreachable" };
+
+/**
+ * Ask `cloudUrl` who a token belongs to (`GET /v1/me`) — email plus the
+ * display name and plan tier the canvas account panel shows. `timeoutMs` caps
+ * the wait; status-style callers want a snappier check than the default.
+ */
+export async function fetchAccount(
+  cloudUrl: string,
+  token: string,
+  timeoutMs = 8000,
+): Promise<AccountLookup> {
+  // Never transmit the token over an insecure URL; treat as unverifiable.
+  if (!isSecureCloudUrl(cloudUrl)) return { status: "unreachable" };
+  const res = await fetch(`${cloudUrl}/v1/me`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(timeoutMs),
+  }).catch(() => null);
+  if (!res) return { status: "unreachable" };
+  // Only the cloud saying "not you" is a rejection; a 5xx or a garbled body is
+  // the cloud's problem and must not log the user out of the canvas.
+  if (res.status === 401 || res.status === 403) return { status: "rejected" };
+  if (!res.ok) return { status: "unreachable" };
+  const body = (await res.json().catch(() => null)) as {
+    email?: string;
+    name?: string;
+    tier?: string;
+  } | null;
+  if (!body?.email) return { status: "unreachable" };
+  return {
+    status: "ok",
+    account: {
+      email: body.email,
+      ...(body.name ? { name: body.name } : {}),
+      ...(body.tier ? { tier: body.tier } : {}),
+    },
+  };
+}
+
 /**
  * Whether a stored CLI token is still accepted by `cloudUrl`. Returns the
- * account email when the cloud validates it (`GET /v1/me`), else null — token
- * revoked/expired, or the cloud unreachable. Lets `login` / `init` say "already
- * logged in" instead of re-running the device flow. `timeoutMs` caps the wait
- * (status-style callers want a snappier check than the default).
+ * account email when the cloud validates it, else null — token revoked/expired,
+ * or the cloud unreachable. Lets `login` / `init` say "already logged in"
+ * instead of re-running the device flow.
  */
 export async function verifyCredential(
   cloudUrl: string,
   token: string,
   timeoutMs = 8000,
 ): Promise<string | null> {
-  // Never transmit the token over an insecure URL; treat as unverifiable.
-  if (!isSecureCloudUrl(cloudUrl)) return null;
-  const res = await fetch(`${cloudUrl}/v1/me`, {
-    headers: { authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(timeoutMs),
-  }).catch(() => null);
-  if (!res?.ok) return null;
-  const body = (await res.json().catch(() => null)) as { email?: string } | null;
-  return body?.email ?? null;
+  const found = await fetchAccount(cloudUrl, token, timeoutMs);
+  return found.status === "ok" ? found.account.email : null;
 }
 
 const sleepCancelable = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -64,12 +111,18 @@ const sleepCancelable = (ms: number, signal: AbortSignal): Promise<void> =>
  * Throws on any failure (cloud unreachable, code expired, exchange error) so
  * callers choose how to surface it — the `login` command exits via `fail`; the
  * init wizard catches and shows a soft note, then continues. `onPrompt` is
- * called once with the verification URL + user code, so each caller can render
- * them in its own style (plain console vs clack note).
+ * called once with the verification URL + user code (and how long they stay
+ * valid), so each caller can render them in its own style — plain console,
+ * clack note, or the canvas sign-in dialog.
  */
 export async function performDeviceLogin(
   cloudUrl: string,
-  onPrompt: (info: { verificationUrl: string; userCode: string }) => void | Promise<void>,
+  onPrompt: (info: {
+    verificationUrl: string;
+    userCode: string;
+    /** Seconds until the code expires. */
+    expiresIn: number;
+  }) => void | Promise<void>,
   signal?: AbortSignal,
 ): Promise<DeviceLoginResult> {
   // The flow receives + returns the vlk_ token; refuse a cleartext channel.
@@ -88,7 +141,11 @@ export async function performDeviceLogin(
 
   // Await the prompt so a caller can confirm (e.g. "press Enter") before we open
   // the browser; the browser opens only once it resolves.
-  await onPrompt({ verificationUrl: device.verification_uri_complete, userCode: device.user_code });
+  await onPrompt({
+    verificationUrl: device.verification_uri_complete,
+    userCode: device.user_code,
+    expiresIn: device.expires_in,
+  });
   // Fire-and-forget: polling must start now, and the printed URL is the
   // fallback — never wait on the opener (some block until the browser closes).
   void openUrl(device.verification_uri_complete);

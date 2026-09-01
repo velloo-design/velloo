@@ -5,6 +5,7 @@ import type { DesignFolder } from "./design-folder.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
 import type { LiveBundler } from "./live/component-bundler.ts";
 import type { MutationContext } from "./mutations/index.ts";
+import type { PublishRunner } from "./publish-run.ts";
 import { createAuthRouter } from "./routes/auth.ts";
 import { createCanvasRouter, createLiveRouter } from "./routes/bundles.ts";
 import { createCapturesRouter } from "./routes/captures.ts";
@@ -18,6 +19,7 @@ import {
 import { createExportRouter } from "./routes/export.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
+import { createPublishRouter } from "./routes/publish.ts";
 import { createRenderRouter } from "./routes/render.ts";
 import { createRevertRouter } from "./routes/revert.ts";
 import { createSearchRouter } from "./routes/search.ts";
@@ -36,6 +38,7 @@ export function createApp(
   bundler: LiveBundler,
   canvasBundler: CanvasBundler,
   auth?: CanvasAuth,
+  publish?: PublishRunner,
 ): Hono {
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
@@ -72,6 +75,7 @@ export function createApp(
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));
   app.route("/api/notes", createNotesRouter(ctxFor));
   app.route("/api/auth", createAuthRouter(auth));
+  app.route("/api/publish", createPublishRouter(publish));
   app.route(
     "/api/undo",
     createUndoRouter(folder, (e) => ctxFor().broadcast(e)),

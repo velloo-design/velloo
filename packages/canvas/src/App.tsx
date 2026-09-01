@@ -10,9 +10,11 @@ import { ExportDialog } from "./components/ExportDialog.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
 import { PreviewDialog } from "./components/PreviewDialog.tsx";
+import { PublishDialog } from "./components/PublishDialog.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { SearchDialog } from "./components/SearchDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
+import { SignInDialog } from "./components/SignInDialog.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { TopBar } from "./components/TopBar.tsx";
@@ -281,6 +283,8 @@ export function App() {
       <ExportDialog />
       <PreviewDialog />
       <AddFrameDialog boardId={emptyBoardAddFrame} onClose={() => setEmptyBoardAddFrame(null)} />
+      <SignInDialog />
+      <PublishDialog />
       <ActivityFeed />
       <Toaster />
     </div>

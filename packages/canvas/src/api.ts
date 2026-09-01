@@ -4,7 +4,7 @@
  * importing from `../api.ts`.
  */
 export { annotations } from "./api/annotations.ts";
-export { type AuthStatus, auth } from "./api/auth.ts";
+export { type AuthStatus, auth, type CloudAccount, type LoginState } from "./api/auth.ts";
 export {
   type BoardMeta,
   type DesignSummary,
@@ -38,6 +38,13 @@ export {
 export type { MutateError } from "./api/http.ts";
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
+export {
+  type PublishRequest,
+  type PublishResult,
+  type PublishState,
+  type PublishTargets,
+  publish,
+} from "./api/publish.ts";
 export {
   fetchRevertStatus,
   type RevertFile,
