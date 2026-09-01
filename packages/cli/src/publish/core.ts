@@ -425,13 +425,20 @@ export async function publishDesign(
   // non-empty — file rather than dropping the part the viewer will ask for.
   addFile("snapshot.css", snapshotCss || "/* this folder uses no CSS framework */\n", "text/css");
 
-  // Upload the image assets the published screens reference (absolute
+  // Upload the image assets the bundle actually references (absolute
   // `/assets/…` paths). Only referenced files travel — keeps the publish lean
   // and within the size limit; the cloud serves them under /s/<slug>/assets/.
+  // That also means a superseded generation, which no node points at any more,
+  // simply doesn't travel.
+  //
+  // Snippets are scanned alongside screens because they ship in the bundle and
+  // render into every screen that instantiates them: an image used only inside
+  // a snippet body would otherwise be a broken image on the published page,
+  // and silently so — the reference never reaches the "asset not found" warning.
   const assetRefs = new Set<string>();
   const assetRe = /\/assets\/[A-Za-z0-9._@\-/]+/g;
-  for (const s of screens) {
-    for (const m of JSON.stringify(s).matchAll(assetRe)) assetRefs.add(m[0]);
+  for (const source of [...screens, ...design.snippets.values()]) {
+    for (const m of JSON.stringify(source).matchAll(assetRe)) assetRefs.add(m[0]);
   }
   for (const ref of assetRefs) {
     const rel = ref.replace(/^\//, ""); // assets/foo.png

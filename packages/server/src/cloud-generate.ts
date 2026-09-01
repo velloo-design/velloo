@@ -288,6 +288,68 @@ async function encodeReference(
   return ok(`data:${mime};base64,${bytes.toString("base64")}`);
 }
 
+export interface IntentPrice {
+  intent: string;
+  summary: string;
+  /** List price per asset in micros; what a run actually costs is in its reply. */
+  priceMicros: number;
+  output: "image" | "svg";
+  aspects: string[];
+  defaultAspect: string;
+  reference: "forbidden" | "optional" | "required";
+}
+
+/**
+ * The cloud's live intent catalogue. Read per request rather than cached: the
+ * whole reason prices come from the server is that a repricing there — an env
+ * override, no deploy — should reach the picker on the next open.
+ */
+export async function fetchIntentCatalog(
+  cloud: CloudAuth,
+): Promise<Result<{ intents: IntentPrice[]; maxCount?: number }, GenerateAssetError>> {
+  const token = await currentToken(cloud);
+  if (!token) return err({ kind: "LoggedOut", message: "Not signed in to velloo-cloud." });
+  if (!isSecureCloudUrl(cloud.url)) {
+    return err({
+      kind: "Unreachable",
+      message: `Refusing to use a non-HTTPS cloud URL (${cloud.url}).`,
+    });
+  }
+  try {
+    const res = await fetch(`${cloud.url}/v1/assets/intents`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      return err({
+        kind: "CloudRejected",
+        status: res.status,
+        message: `velloo-cloud returned ${res.status} for the intent catalogue.`,
+      });
+    }
+    const body = (await res.json()) as { intents?: unknown; maxCount?: unknown };
+    if (!Array.isArray(body.intents)) {
+      return err({ kind: "BadResponse", message: "Unexpected intent catalogue shape." });
+    }
+    const intents = body.intents.filter(
+      (i): i is IntentPrice =>
+        !!i &&
+        typeof i === "object" &&
+        typeof (i as IntentPrice).intent === "string" &&
+        typeof (i as IntentPrice).priceMicros === "number",
+    );
+    return ok({
+      intents,
+      ...(typeof body.maxCount === "number" ? { maxCount: body.maxCount } : {}),
+    });
+  } catch (e) {
+    return err({
+      kind: "Unreachable",
+      message: `Couldn't reach velloo-cloud (${e instanceof Error ? e.message : String(e)}).`,
+    });
+  }
+}
+
 export async function generateAsset(
   root: string,
   cloud: CloudAuth,

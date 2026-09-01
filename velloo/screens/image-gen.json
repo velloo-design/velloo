@@ -46,7 +46,7 @@
                 "$ref": "Image",
                 "$id": "generated-image",
                 "props": {
-                  "src": "/assets/01M0N9MSSC07TZ818N2PRY9KCQ.png",
+                  "src": "/assets/01M0NDX2SFMM657GSEWGJ23312.png",
                   "aspect": "1/1",
                   "className": "w-full rounded-xl border"
                 }

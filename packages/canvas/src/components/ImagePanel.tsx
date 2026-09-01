@@ -1,6 +1,14 @@
 import { assetPathFromSrc } from "@velloo/schema";
+import { RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { generateAsset, mutate } from "../api.ts";
+import {
+  deleteAsset,
+  fetchIntents,
+  type GeneratedAsset,
+  generateAsset,
+  type IntentPrice,
+  mutate,
+} from "../api.ts";
 import { pathFromString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
@@ -88,6 +96,52 @@ function seedAspect(
   );
 }
 
+/** "$0.04" — the unit the picker is choosing between, so cents always show. */
+function priceLabel(micros: number): string {
+  return `$${(micros / 1_000_000).toFixed(2)}`;
+}
+
+/**
+ * Every other version of this image, newest first.
+ *
+ * Provenance links each generation to the one it replaced, so the versions of
+ * an image form a chain — but restoring an older one and re-rolling from there
+ * branches it. Walking the `replaces` edges as an UNDIRECTED graph keeps the
+ * whole family reachable from whichever member is currently on the node;
+ * following the chain backwards only would make everything newer than the
+ * current pick vanish the moment you restored an older one.
+ *
+ * The far end of the chain is usually an asset with no record of its own — the
+ * uploaded image the first generation replaced. It belongs in the list: going
+ * back to the original is the most likely reason to open this at all.
+ */
+function lineageOf(records: Record<string, GeneratedAsset>, current: string): string[] {
+  const edges = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    if (!edges.has(a)) edges.set(a, new Set());
+    if (!edges.has(b)) edges.set(b, new Set());
+    edges.get(a)?.add(b);
+    edges.get(b)?.add(a);
+  };
+  for (const [path, rec] of Object.entries(records)) if (rec.replaces) link(path, rec.replaces);
+
+  const seen = new Set([current]);
+  const queue = [current];
+  while (queue.length > 0) {
+    const next = queue.shift() as string;
+    for (const neighbour of edges.get(next) ?? []) {
+      if (!seen.has(neighbour)) {
+        seen.add(neighbour);
+        queue.push(neighbour);
+      }
+    }
+  }
+  seen.delete(current);
+  return [...seen].sort((a, b) =>
+    (records[b]?.generatedAt ?? "").localeCompare(records[a]?.generatedAt ?? ""),
+  );
+}
+
 function relativeAge(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(ms) || ms < 0) return "just now";
@@ -124,6 +178,10 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
   const [intent, setIntent] = useState<string>(record?.intent ?? "illustration");
   const [aspect, setAspect] = useState<string>(() => seedAspect(record, nodeAspect));
   const [busy, setBusy] = useState(false);
+  // Priced live from the cloud on every mount, so a repricing on the server
+  // reaches the picker on the next image you select rather than the next
+  // velloo release. An empty list simply means no prices to show.
+  const [prices, setPrices] = useState<IntentPrice[]>([]);
   // A non-generated image starts collapsed: most selections are just "what is
   // this node", and an unbidden prompt box would imply the image is editable
   // when it isn't yet.
@@ -158,6 +216,23 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
       setAspect(seedAspect(rec, nodeAspect));
     }
   }, [assetPath, generatedAssets, prompt, nodeAspect]);
+
+  useEffect(() => {
+    let live = true;
+    fetchIntents()
+      .then((list) => live && setPrices(list))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const priceOf = (id: string) => prices.find((p) => p.intent === id)?.priceMicros;
+  // The curated order and labels stay local — the catalogue includes intents
+  // that need a source image (edit/cutout/upscale), which this panel doesn't
+  // offer. But an intent the server has withdrawn drops out on its own.
+  const offered = INTENTS.filter((i) => prices.length === 0 || priceOf(i.id) !== undefined);
+  const intentLabel = INTENTS.find((i) => i.id === intent)?.label ?? intent;
 
   const svgIntent = intent === "vector" || intent === "mark";
 
@@ -199,6 +274,48 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
     }
   };
 
+  /** Point the node back at an earlier version. Undoable like any prop edit. */
+  const restore = async (version: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const rec = generatedAssets[version];
+      const propPatch: Record<string, unknown> = { src: `/${version}` };
+      const restoredAspect = IMAGE_ASPECT_PROP[aspectForSize(rec?.width, rec?.height) ?? ""];
+      // Sizing follows the image being restored — an older version at a
+      // different shape would otherwise be cropped to the current one's.
+      if (restoredAspect && (!nodeAspect || nodeAspect in ASPECT_FROM_PROP)) {
+        propPatch.aspect = restoredAspect;
+      }
+      // Claim it before the src reaches the store, exactly as generating does,
+      // so the re-seed effect adopts this draft rather than resetting it.
+      seededFrom.current = version;
+      setPrompt(rec?.prompt ?? "");
+      setIntent(rec?.intent ?? "illustration");
+      setComposing(false);
+      await mutate.updateProps({ screenId, path: pathFromString(path), propPatch });
+    } catch (err) {
+      toastError(err, "Could not restore that version");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Delete a version for good. The server refuses while anything still uses it. */
+  const forget = async (version: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await deleteAsset(version);
+      await loadGeneratedAssets();
+      pushToast({ kind: "success", message: `Deleted ${version.replace("assets/", "")}.` });
+    } catch (err) {
+      toastError(err, "Could not delete that image");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // An image pointing outside assets/ (a remote URL, a host-app path) can't be
   // regenerated in place — say so rather than offering a button that would
   // silently repoint it.
@@ -215,6 +332,7 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
   }
 
   const collapsed = !record && !composing;
+  const versions = lineageOf(generatedAssets, assetPath);
 
   return (
     <section className="flex flex-col gap-2" data-testid="image-panel">
@@ -274,14 +392,32 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
               </Label>
               <Select value={intent} onValueChange={setIntent}>
                 <SelectTrigger id="image-intent" size="sm" className="text-xs">
-                  <SelectValue />
+                  {/* Children override the selected item's text: the price
+                      belongs in the list, where you're comparing options, not
+                      in the trigger, where it's just noise on every render. */}
+                  <SelectValue>{intentLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {INTENTS.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.label}
-                    </SelectItem>
-                  ))}
+                  {offered.map((i) => {
+                    const micros = priceOf(i.id);
+                    return (
+                      // Radix wraps an item's children in an ItemText span,
+                      // which is a shrink-to-fit flex item — so `w-full`
+                      // inside it measures the text, not the row. Letting
+                      // that span grow is what puts the prices in a column
+                      // down the right edge instead of trailing each label.
+                      <SelectItem key={i.id} value={i.id} className="[&>span:last-child]:flex-1">
+                        <span className="flex items-center justify-between gap-4">
+                          <span>{i.label}</span>
+                          {micros === undefined ? null : (
+                            <span className="text-muted-foreground tabular-nums">
+                              {priceLabel(micros)}
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -333,6 +469,56 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
           </p>
         </>
       )}
+
+      {versions.length > 0 ? (
+        <div className="flex flex-col gap-1.5 pt-1" data-testid="image-panel-history">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Previous versions
+          </div>
+          {versions.map((version) => {
+            const rec = generatedAssets[version];
+            return (
+              <div
+                key={version}
+                className="flex items-center gap-2"
+                data-testid="image-panel-version"
+                data-version={version}
+              >
+                <img
+                  src={`/${version}`}
+                  alt=""
+                  className="size-8 shrink-0 rounded border object-cover"
+                />
+                <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+                  {rec ? `${rec.intent} · ${relativeAge(rec.generatedAt)}` : "original"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  title="Put this version back on the node"
+                  data-testid="image-panel-restore"
+                  disabled={busy}
+                  onClick={() => void restore(version)}
+                >
+                  <RotateCcw className="size-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 text-muted-foreground hover:text-destructive"
+                  title="Delete this version for good"
+                  data-testid="image-panel-delete"
+                  disabled={busy}
+                  onClick={() => void forget(version)}
+                >
+                  <Trash2 className="size-3" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </section>
   );
 }

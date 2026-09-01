@@ -158,8 +158,15 @@ export function extraThemeBlock(folder: DesignFolder): string {
   return `@theme {\n${[...lines, keyframesCss].filter(Boolean).join("\n")}\n}`;
 }
 
-/** Serve the design folder's assets/ directory at /assets/*. */
-async function serveFolderAsset(req: Request, folderRoot: string): Promise<Response | null> {
+/**
+ * Serve the design folder's assets/ directory at /assets/*.
+ *
+ * Null on a miss, because /assets/ is a SHARED namespace: the canvas's own
+ * Vite bundles ship at /assets/index-*.js, so anything not found here has to
+ * fall through to the dist handler. `serveNonApi` turns the eventual miss into
+ * a 404.
+ */
+export async function serveFolderAsset(req: Request, folderRoot: string): Promise<Response | null> {
   const url = new URL(req.url);
   if (!url.pathname.startsWith("/assets/")) return null;
   const fsPath = join(folderRoot, decodeURIComponent(url.pathname));
@@ -187,6 +194,34 @@ async function serveFolderAsset(req: Request, folderRoot: string): Promise<Respo
     headers["Content-Security-Policy"] = "script-src 'none'";
   }
   return new Response(file, { headers });
+}
+
+/**
+ * Everything that isn't /api/*: the folder's assets, then the canvas bundle,
+ * then the SPA.
+ *
+ * The last step is why this is one function. /assets/* is a file namespace,
+ * not an app route, so a miss there must be a 404 — falling through to the SPA
+ * answered 200 with index.html, which an `<img>` renders as a broken image
+ * indistinguishable from a corrupt file, and which makes any existence check
+ * (a deleted asset, a typo'd src) silently succeed.
+ */
+export async function serveNonApi(req: Request, folderRoot: string): Promise<Response> {
+  const assetResponse = await serveFolderAsset(req, folderRoot);
+  if (assetResponse) return assetResponse;
+
+  const staticResponse = await serveStatic(req);
+  if (staticResponse) return staticResponse;
+
+  if (new URL(req.url).pathname.startsWith("/assets/")) {
+    return new Response("asset not found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  if (req.method === "GET") return serveSpaFallback();
+  return new Response("Not found", { status: 404 });
 }
 
 async function serveSpaFallback(): Promise<Response> {
@@ -318,15 +353,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         return app.fetch(req);
       }
 
-      const assetResponse = await serveFolderAsset(req, folder.root);
-      if (assetResponse) return assetResponse;
-
-      const staticResponse = await serveStatic(req);
-      if (staticResponse) return staticResponse;
-
-      if (req.method === "GET") return serveSpaFallback();
-
-      return new Response("Not found", { status: 404 });
+      return serveNonApi(req, folder.root);
     },
     websocket: {
       open(ws: ServerWebSocket<unknown>) {

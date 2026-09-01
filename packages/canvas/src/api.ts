@@ -5,11 +5,14 @@
  */
 export { annotations } from "./api/annotations.ts";
 export {
+  deleteAsset,
   fetchGeneratedAssets,
+  fetchIntents,
   type GeneratedAsset,
   type GenerateRequest,
   type GenerateResult,
   generateAsset,
+  type IntentPrice,
 } from "./api/assets.ts";
 export { type AuthStatus, auth, type CloudAccount, type LoginState } from "./api/auth.ts";
 export {

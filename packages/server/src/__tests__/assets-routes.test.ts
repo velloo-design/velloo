@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { canvasDistPath } from "@velloo/canvas";
 import { assetPathFromSrc } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { createApp } from "../app.ts";
-import { readAssetsFile, recordGeneratedAssets } from "../assets-store.ts";
+import {
+  assetReferences,
+  deleteGeneratedAsset,
+  readAssetsFile,
+  recordGeneratedAssets,
+} from "../assets-store.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
+import { serveNonApi } from "../index.ts";
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -146,6 +153,126 @@ describe("assets store", () => {
   });
 });
 
+describe("deleting a generated asset", () => {
+  const screenUsing = (src: string) => ({
+    id: "s1",
+    name: "S1",
+    tree: { $ref: "Image", props: { src } },
+  });
+
+  const withAsset = async (name: string) => {
+    await mkdir(join(tmp, "assets"), { recursive: true });
+    await writeFile(join(tmp, "assets", name), "x", "utf8");
+    await recordGeneratedAssets(tmp, { [`assets/${name}`]: record });
+  };
+
+  test("a superseded version is removed from disk and from provenance", async () => {
+    await withAsset("old.png");
+    const r = await deleteGeneratedAsset(folder, "assets/old.png");
+    expect(r.ok).toBe(true);
+    expect(
+      await access(join(tmp, "assets/old.png")).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+    expect((await readAssetsFile(tmp)).generated["assets/old.png"]).toBeUndefined();
+  });
+
+  test("an image a screen still points at is refused, and stays on disk", async () => {
+    await withAsset("live.png");
+    folder.screens.set("s1", screenUsing("/assets/live.png") as never);
+    const r = await deleteGeneratedAsset(folder, "assets/live.png");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toContain('screen "s1"');
+    expect(
+      await access(join(tmp, "assets/live.png")).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(true);
+  });
+
+  test("a snippet counts as a user — its body renders into every screen using it", async () => {
+    await withAsset("insnippet.png");
+    folder.snippets.set("card", {
+      id: "card",
+      name: "Card",
+      params: [],
+      tree: { $ref: "Image", props: { src: "/assets/insnippet.png" } },
+    } as never);
+    const r = await deleteGeneratedAsset(folder, "assets/insnippet.png");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain('snippet "card"');
+  });
+
+  test("a path outside the asset store is refused before touching the disk", async () => {
+    for (const bad of ["../../etc/hosts", "assets/../../secrets", "theme/default.json"]) {
+      const r = await deleteGeneratedAsset(folder, bad);
+      expect(r.ok).toBe(false);
+    }
+  });
+
+  test("deleting an asset already gone still clears its provenance", async () => {
+    await recordGeneratedAssets(tmp, { "assets/ghost.png": record });
+    const r = await deleteGeneratedAsset(folder, "assets/ghost.png");
+    expect(r.ok).toBe(true);
+    expect((await readAssetsFile(tmp)).generated["assets/ghost.png"]).toBeUndefined();
+  });
+
+  test("assetReferences finds both the /assets and assets forms", () => {
+    folder.screens.set("a", screenUsing("/assets/x.png") as never);
+    folder.screens.set("b", screenUsing("assets/x.png") as never);
+    expect(assetReferences(folder, "assets/x.png").length).toBe(2);
+    expect(assetReferences(folder, "assets/other.png")).toEqual([]);
+  });
+});
+
+describe("POST /api/assets/delete", () => {
+  test("refusing to delete a used asset is a 409 that names the user", async () => {
+    await mkdir(join(tmp, "assets"), { recursive: true });
+    await writeFile(join(tmp, "assets/used.png"), "x", "utf8");
+    folder.screens.set("s1", {
+      id: "s1",
+      name: "S1",
+      tree: { $ref: "Image", props: { src: "/assets/used.png" } },
+    } as never);
+    const res = await app.fetch(
+      new Request("http://localhost/api/assets/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assetPath: "assets/used.png" }),
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("AssetInUse");
+    expect(body.error?.message).toContain('screen "s1"');
+  });
+
+  test("a missing assetPath is a 400 in the canvas's envelope", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/api/assets/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error?: { code?: string } }).error?.code).toBe("BadRequest");
+  });
+});
+
+describe("GET /api/assets/intents", () => {
+  test("a daemon with no cloud answers with an empty catalogue, not an error", async () => {
+    // Prices are a nicety: the picker still generates without them.
+    const res = await get("/api/assets/intents");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ intents: [] });
+  });
+});
+
 describe("GET /api/assets", () => {
   test("serves the provenance the canvas looks images up in", async () => {
     await recordGeneratedAssets(tmp, { "assets/a.png": record });
@@ -209,6 +336,51 @@ describe("POST /api/assets/generate", () => {
     expect(body.error?.code).toBe("Unreachable");
     expect(body.error?.message).toContain("velloo-cloud");
     expect(body.error?.message).toContain("nothing was generated or charged");
+  });
+});
+
+describe("serving /assets/*", () => {
+  const serve = (path: string) => serveNonApi(new Request(`http://localhost${path}`), tmp);
+
+  test("an existing asset is served with its own content type", async () => {
+    await mkdir(join(tmp, "assets"), { recursive: true });
+    await writeFile(join(tmp, "assets/a.png"), "x", "utf8");
+    const res = await serve("/assets/a.png");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/png");
+  });
+
+  test("a deleted asset is a 404, not the canvas's index.html", async () => {
+    // Falling through to the SPA answered 200 with an HTML document, so an
+    // <img> pointed at a deleted asset was indistinguishable from a decode
+    // failure — and anything checking existence got a false positive.
+    const res = await serve("/assets/gone.png");
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Content-Type")).toContain("text/plain");
+  });
+
+  test("the canvas's OWN bundles still resolve under /assets/", async () => {
+    // /assets/ is a shared namespace — Vite emits the SPA's JS/CSS there. A
+    // 404 raised before the dist handler took the whole canvas down.
+    const dist = join(canvasDistPath, "assets");
+    const bundle = (await readdir(dist).catch(() => []))[0];
+    if (!bundle) return; // canvas not built in this environment
+    const res = await serve(`/assets/${bundle}`);
+    expect(res.status).toBe(200);
+  });
+
+  test("an encoded path escaping the asset store is a 404, not a file read", async () => {
+    // ".." — and even "%2e%2e" — is normalized away by the URL parser before
+    // the handler sees it. Encoding the SLASH too survives normalization, so
+    // this is the shape the containment check is actually for.
+    const res = await serve("/assets/%2e%2e%2ftheme/default.json");
+    expect(res.status).toBe(404);
+  });
+
+  test("a non-asset route still reaches the SPA", async () => {
+    const res = await serve("/some/board");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/html");
   });
 });
 

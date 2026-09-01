@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type AssetsFile,
@@ -6,6 +6,7 @@ import {
   EMPTY_ASSETS_FILE,
   type GeneratedAsset,
 } from "@velloo/schema";
+import type { DesignFolder } from "./design-folder.ts";
 import { writeJsonAtomic } from "./fs.ts";
 
 /**
@@ -58,6 +59,64 @@ function serialize<T>(root: string, op: () => Promise<T>): Promise<T> {
     next.catch(() => {}),
   );
   return next;
+}
+
+/**
+ * Whether any screen or snippet still points at `assetPath`. The design folder
+ * is the only thing that can hold an asset alive, and a `src` is the only way
+ * it does — so a JSON scan for the path is exact, and cheap enough at folder
+ * size to beat maintaining a reverse index that could drift.
+ *
+ * Snippets count: a snippet body's `src` renders into every screen that
+ * instantiates it, so an asset used only there is very much in use.
+ */
+export function assetReferences(folder: DesignFolder, assetPath: string): string[] {
+  const url = `/${assetPath}`;
+  const hits: string[] = [];
+  const uses = (value: unknown): boolean => {
+    const json = JSON.stringify(value) ?? "";
+    return json.includes(`"${url}"`) || json.includes(`"${assetPath}"`);
+  };
+  for (const [id, screen] of folder.screens) if (uses(screen)) hits.push(`screen "${id}"`);
+  for (const [id, snippet] of folder.snippets) if (uses(snippet)) hits.push(`snippet "${id}"`);
+  return hits;
+}
+
+/**
+ * Delete a generated asset: the file, then its provenance. Refuses while the
+ * design still points at it — a design folder has no other record of which
+ * bytes a screen needs, so an unlink there is unrecoverable in a way an undo
+ * can't reach.
+ */
+export async function deleteGeneratedAsset(
+  folder: DesignFolder,
+  assetPath: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const root = folder.root;
+  if (!assetPath.startsWith("assets/") || assetPath.includes("..")) {
+    return { ok: false, reason: `"${assetPath}" is not a path inside this folder's asset store.` };
+  }
+  const used = assetReferences(folder, assetPath);
+  if (used.length > 0) {
+    return {
+      ok: false,
+      reason: `${assetPath} is still used by ${used.join(", ")} — point those at another image first.`,
+    };
+  }
+  await unlink(join(root, assetPath)).catch(() => {
+    // Already gone on disk is the desired end state, not a failure; the
+    // provenance entry below still needs clearing.
+  });
+  await serialize(root, async () => {
+    const file = await readAssetsFile(root);
+    if (!(assetPath in file.generated)) return;
+    const { [assetPath]: _dropped, ...rest } = file.generated;
+    await writeJsonAtomic(assetsFilePath(root), {
+      ...file,
+      generated: rest,
+    } satisfies AssetsFile);
+  });
+  return { ok: true };
 }
 
 /** Record provenance for freshly generated assets, merging into the store. */

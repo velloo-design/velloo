@@ -45,6 +45,15 @@
       "height": 1024,
       "generatedAt": "2026-08-22T17:52:44.092Z",
       "replaces": "assets/01M0N9MBMAKV27QNQTDG6VYBNH.png"
+    },
+    "assets/01M0NDX2SFMM657GSEWGJ23312.png": {
+      "prompt": "A comically fat orange tabby fox wedged inside a glass fishbowl far too small for it, cheeks squished against the glass, wide indignant eyes staring straight at the viewer.",
+      "intent": "icon",
+      "aspect": "1:1",
+      "width": 1024,
+      "height": 1024,
+      "generatedAt": "2026-08-22T19:07:12.589Z",
+      "replaces": "assets/01M0N9MSSC07TZ818N2PRY9KCQ.png"
     }
   }
 }

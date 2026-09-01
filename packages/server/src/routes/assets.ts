@@ -1,9 +1,9 @@
 import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
-import { readAssetsFile } from "../assets-store.ts";
+import { deleteGeneratedAsset, readAssetsFile } from "../assets-store.ts";
 import type { CloudAuth } from "../cloud.ts";
-import { ASPECTS, generateAsset, INTENTS } from "../cloud-generate.ts";
+import { ASPECTS, fetchIntentCatalog, generateAsset, INTENTS } from "../cloud-generate.ts";
 import type { DesignFolder } from "../design-folder.ts";
 
 /**
@@ -42,6 +42,29 @@ export function createAssetsRouter(folder: () => DesignFolder, cloud?: CloudAuth
   // it yourself — so getting the envelope right is the whole point.
   const fail = (c: Context, status: ContentfulStatusCode, code: string, message: string) =>
     c.json({ error: { code, message } }, status);
+
+  /**
+   * The cloud's intent catalogue, proxied so the canvas can price the picker.
+   * Not cached: the point of reading it live is that a repricing on the server
+   * lands on the next open, and the payload is ten short rows.
+   */
+  app.get("/intents", async (c) => {
+    if (!cloud) return c.json({ intents: [] });
+    const r = await fetchIntentCatalog(cloud);
+    // Prices are a nicety — a picker with no prices still generates, so an
+    // unreachable or logged-out cloud degrades instead of failing the panel.
+    return c.json(r.ok ? r.value : { intents: [] });
+  });
+
+  app.post("/delete", async (c) => {
+    const body = (await c.req.json().catch(() => undefined)) as { assetPath?: unknown };
+    if (typeof body?.assetPath !== "string") {
+      return fail(c, 400, "BadRequest", "assetPath is required.");
+    }
+    const r = await deleteGeneratedAsset(folder(), body.assetPath);
+    if (!r.ok) return fail(c, 409, "AssetInUse", r.reason);
+    return c.json({ deleted: body.assetPath });
+  });
 
   app.post("/generate", async (c) => {
     if (!cloud) {

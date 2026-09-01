@@ -188,6 +188,49 @@ test("publish ships the live bundle and flags it in the design", async () => {
   expect(captured.design?.screens?.some((s) => s.id === "home")).toBe(true);
 });
 
+test("only referenced assets travel — snippets included, superseded ones not", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  await mkdir(join(design, "assets"), { recursive: true });
+  await mkdir(join(design, "snippets"), { recursive: true });
+  for (const name of ["current.png", "in-snippet.png", "superseded.png"]) {
+    await writeFile(join(design, "assets", name), "not-really-a-png");
+  }
+  await writeFile(
+    join(design, "screens", "home.json"),
+    JSON.stringify({
+      id: "home",
+      name: "Home",
+      library: "default",
+      tree: {
+        $ref: "Box",
+        children: [{ $ref: "Image", props: { src: "/assets/current.png" } }, { $snippet: "card" }],
+      },
+    }),
+  );
+  // An image used only inside a snippet body still renders on every screen
+  // that instantiates it, so it has to travel; scanning screens alone missed
+  // it, and silently — the reference never reached the "not found" warning.
+  await writeFile(
+    join(design, "snippets", "card.json"),
+    JSON.stringify({
+      id: "card",
+      name: "Card",
+      params: [],
+      tree: { $ref: "Image", props: { src: "/assets/in-snippet.png" } },
+    }),
+  );
+
+  const { exitCode, stderr } = await runPublish(design);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  expect(captured.names).toContain("assets/current.png");
+  expect(captured.names).toContain("assets/in-snippet.png");
+  // A generation nothing points at any more stays home: publish carries what
+  // the design references, so an image that was replaced simply isn't in it.
+  expect(captured.names).not.toContain("assets/superseded.png");
+});
+
 test("publish omits the bundle when the folder has no live extensions", async () => {
   const design = join(tmp, "velloo");
   await scaffold(design, false);
