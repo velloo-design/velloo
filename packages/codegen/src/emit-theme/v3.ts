@@ -8,11 +8,18 @@ import {
   neutralizeCssText,
   sanitizeGoogleFontSpec,
   type Theme,
+  typesetUtilityClasses,
+  typesetV3FontSize,
 } from "@velloo/schema";
 import { diffFile } from "../diff.ts";
 import { formatCss } from "../format.ts";
 import { emitDtcgFile } from "./dtcg.ts";
-import { COLOR_SLOTS, paletteShadowedSlots, SEMANTIC_SLOTS } from "./globals-css.ts";
+import {
+  COLOR_SLOTS,
+  emitTypesetCss,
+  paletteShadowedSlots,
+  SEMANTIC_SLOTS,
+} from "./globals-css.ts";
 import { hslTriplet } from "./hsl.ts";
 import type { EmitThemeFile, EmitThemeOptions, EmitThemeResult } from "./index.ts";
 
@@ -106,6 +113,9 @@ function paint(v: ThemeVar): string {
 function configColor(v: ThemeVar): string {
   return v.triplet ? `hsl(var(--${v.name}) / <alpha-value>)` : `var(--${v.name})`;
 }
+
+/** The typeset sheet's filename on the v3 path — velloo-prefixed like its sibling. */
+const TYPESET_CSS_V3_FILENAME = "velloo-typeset.css";
 
 /** The `--radius` base, mirroring the v4 emitter's precedence. */
 function radiusBase(theme: Theme): string | undefined {
@@ -210,6 +220,11 @@ function presetObject(theme: Theme, vars: ThemeVar[]): Record<string, unknown> {
     if (Object.keys(fontFamily).length > 0) extend.fontFamily = fontFamily;
   }
 
+  // The typeset ladder. Values are `var()` references into velloo-typeset.css,
+  // so `text-h1` re-derives inside a `.typeset-<preset>` region just as it does
+  // under v4's @theme.
+  extend.fontSize = typesetV3FontSize();
+
   const spacing: Record<string, string> = {};
   for (const [name, value] of Object.entries(theme.spacing)) {
     if (!Number.isNaN(Number(name))) continue;
@@ -236,7 +251,13 @@ function presetObject(theme: Theme, vars: ThemeVar[]): Record<string, unknown> {
     extend.animation = theme.animation;
   }
 
-  const preset: Record<string, unknown> = { darkMode: ["class"] };
+  // v3 has no `@source inline(...)`: the typeset ladder's class literals live in
+  // @velloo/schema and appear in no scanned file, so safelist them or the
+  // Heading/Text defaults never compile.
+  const preset: Record<string, unknown> = {
+    darkMode: ["class"],
+    safelist: typesetUtilityClasses(),
+  };
   const themeSection: Record<string, unknown> = {};
   const container = theme.container;
   if (container && (container.center || container.padding || container.maxWidth)) {
@@ -331,6 +352,27 @@ export async function emitThemeV3(
     errors: cssFormatted.errors,
   });
 
+  // The typeset sheet, alongside velloo-theme.css. Same generator as v4 and as
+  // the canvas — only the wiring differs (a preset instead of `@theme`).
+  const typesetRel = join(dirname(cssRel), TYPESET_CSS_V3_FILENAME);
+  const typesetPath = join(options.outputDir, typesetRel);
+  const typesetRaw = emitTypesetCss(theme);
+  const typesetFormatted = await formatCss(typesetPath, typesetRaw);
+  const typesetDiff = await diffFile(typesetPath, typesetFormatted.output);
+  let typesetApplied = false;
+  if (options.apply && !typesetDiff.identical) {
+    await mkdir(dirname(typesetPath), { recursive: true });
+    await writeFile(typesetPath, typesetFormatted.output, "utf8");
+    typesetApplied = true;
+  }
+  files.push({
+    path: typesetPath,
+    contents: typesetFormatted.output,
+    diff: typesetDiff,
+    applied: typesetApplied,
+    errors: typesetFormatted.errors,
+  });
+
   const moduleKind = presetModuleKind(options.outputDir);
   const presetName = moduleKind === "ts" ? "velloo.preset.ts" : "velloo.preset.cjs";
   if (!options.cssOnly) {
@@ -357,8 +399,8 @@ export async function emitThemeV3(
   warnings.push(...dtcg.warnings);
 
   const notes = [
-    `Tailwind v3 target: emitted ${cssRel}${options.cssOnly ? "" : ` + ${presetName}`} instead of a v4 globals.css.`,
-    `Add \`@import "./velloo-theme.css";\` at the very top of your globals stylesheet (before the @tailwind directives — postcss-import requires @import rules first).`,
+    `Tailwind v3 target: emitted ${cssRel} + ${typesetRel}${options.cssOnly ? "" : ` + ${presetName}`} instead of a v4 globals.css.`,
+    `Add \`@import "./velloo-theme.css";\` and \`@import "./${TYPESET_CSS_V3_FILENAME}";\` at the very top of your globals stylesheet (before the @tailwind directives — postcss-import requires @import rules first).`,
     ...(options.cssOnly
       ? []
       : [

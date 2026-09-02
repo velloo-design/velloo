@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { unwrap } from "@velloo/result";
-import type { Screen, Snippet } from "@velloo/schema";
+import {
+  headingClasses,
+  headingInlineStyle,
+  type Screen,
+  type Snippet,
+  textClasses,
+  textInlineStyle,
+} from "@velloo/schema";
 import { emitCode } from "../emit-code/index.ts";
 
 function screenOf(tree: Screen["tree"]): Screen {
@@ -43,6 +50,76 @@ describe("emitCode — inline-style channel (none/none)", () => {
     // No shadcn install plan on a Tailwind-free folder.
     expect(result.componentsToInstall).toEqual([]);
     expect(result.helpersToMaterialize).toEqual([]);
+  });
+
+  // The one class a Tailwind-free folder legitimately emits: `typeset` is
+  // velloo's own CSS (shipped by the emitted typeset.css), not a utility.
+  test("Prose still emits its typeset class on the inline channel", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Prose",
+          props: { as: "article", preset: "reading" },
+          children: [{ $ref: "Text", props: { children: "Copy" } }],
+        }),
+        { inlineStyle: true },
+      ),
+    );
+    expect(result.jsx).toContain("<article");
+    expect(result.jsx).toContain("typeset");
+    expect(result.jsx).toContain("typeset-reading");
+    expect(result.jsx).not.toContain("preset=");
+    expect(result.helpersToMaterialize).toEqual([]);
+  });
+
+  test("the inline typography ladder is var() references, so none/none folders are themed", async () => {
+    const heading = unwrap(
+      await emitCode(screenOf({ $ref: "Heading", props: { level: 2, children: "Hello" } }), {
+        inlineStyle: true,
+      }),
+    );
+    // Tokens, not baked rem values — the same ones the Tailwind channel's
+    // `text-h2` utility reads, so both channels move with the typeset.
+    expect(heading.jsx).toContain('fontSize: "var(--text-h2)"');
+    expect(heading.jsx).toContain('lineHeight: "var(--leading-h2)"');
+    expect(heading.jsx).toContain('letterSpacing: "var(--tracking-h2)"');
+    expect(heading.jsx).toContain("fontWeight: 700");
+    expect(heading.jsx).not.toMatch(/fontSize: "[\d.]+rem"/);
+
+    const text = unwrap(
+      await emitCode(screenOf({ $ref: "Text", props: { variant: "lead", children: "Copy" } }), {
+        inlineStyle: true,
+      }),
+    );
+    expect(text.jsx).toContain('fontSize: "var(--text-lead)"');
+    expect(text.jsx).toContain('color: "var(--color-muted-foreground)"');
+  });
+
+  test("the emitted inline styles are the ones the runtime component renders", async () => {
+    for (const level of [1, 3, 6]) {
+      const emitted = unwrap(
+        await emitCode(screenOf({ $ref: "Heading", props: { level, children: "T" } }), {
+          inlineStyle: true,
+        }),
+      );
+      for (const [prop, value] of Object.entries(headingInlineStyle(level))) {
+        expect(emitted.jsx).toContain(
+          typeof value === "number" ? `${prop}: ${value}` : `${prop}: "${value}"`,
+        );
+      }
+    }
+    for (const variant of ["default", "muted", "small", "lead"]) {
+      const emitted = unwrap(
+        await emitCode(screenOf({ $ref: "Text", props: { variant, children: "T" } }), {
+          inlineStyle: true,
+        }),
+      );
+      for (const [prop, value] of Object.entries(textInlineStyle(variant))) {
+        expect(emitted.jsx).toContain(
+          typeof value === "number" ? `${prop}: ${value}` : `${prop}: "${value}"`,
+        );
+      }
+    }
   });
 
   test("Icon still lowers to a lucide import on the inline channel", async () => {
@@ -90,7 +167,11 @@ describe("emitCode", () => {
     const heading = unwrap(
       await emitCode(screenOf({ $ref: "Heading", props: { level: 3, children: "Pricing" } })),
     );
-    expect(heading.jsx).toBe(`<h3 className="text-3xl font-semibold tracking-tight">Pricing</h3>`);
+    // The ladder is the theme's typeset, not a fixed Tailwind size — `text-h3`
+    // resolves through the generated `--text-h3` token.
+    expect(heading.jsx).toBe(
+      `<h3 className="text-h3 leading-h3 tracking-h3 font-semibold">Pricing</h3>`,
+    );
     expect(heading.jsx).not.toContain("level=");
 
     const text = unwrap(
@@ -98,8 +179,56 @@ describe("emitCode", () => {
         screenOf({ $ref: "Text", props: { variant: "muted", children: "Pick a plan" } }),
       ),
     );
-    expect(text.jsx).toBe(`<p className="text-sm text-muted-foreground">Pick a plan</p>`);
+    expect(text.jsx).toBe(
+      `<p className="text-caption leading-caption tracking-caption font-normal text-muted-foreground">Pick a plan</p>`,
+    );
     expect(text.jsx).not.toContain("variant=");
+  });
+
+  test("the emitted classes are the ones the runtime component renders", async () => {
+    for (const level of [1, 2, 3, 4, 5, 6]) {
+      const emitted = unwrap(
+        await emitCode(screenOf({ $ref: "Heading", props: { level, children: "T" } })),
+      );
+      expect(emitted.jsx).toBe(`<h${level} className="${headingClasses(level)}">T</h${level}>`);
+    }
+    for (const variant of ["default", "muted", "small", "lead"]) {
+      const emitted = unwrap(
+        await emitCode(screenOf({ $ref: "Text", props: { variant, children: "T" } })),
+      );
+      expect(emitted.jsx).toBe(`<p className="${textClasses(variant)}">T</p>`);
+    }
+  });
+
+  test("Prose emits the typeset region classes and needs nothing materialized", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Prose",
+          props: { as: "article", preset: "docs", className: "max-w-prose" },
+          children: [{ $ref: "Heading", props: { level: 2, children: "Install" } }],
+        }),
+      ),
+    );
+    expect(result.jsx).toContain("<article");
+    expect(result.jsx).toContain("typeset");
+    expect(result.jsx).toContain("typeset-docs");
+    expect(result.jsx).toContain("max-w-prose");
+    // Both props are consumed by the lowering, not leaked as DOM attributes.
+    expect(result.jsx).not.toContain("preset=");
+    expect(result.jsx).not.toContain('as="article"');
+    // The `typeset` classes come from the emitted typeset.css, so unlike
+    // Gradient/Divider there is no component for the agent to author.
+    expect(result.helpersToMaterialize).not.toContain("Prose");
+    expect(result.componentsToInstall).toEqual([]);
+  });
+
+  test("a Prose preset that is not ident-shaped is dropped, not emitted as a class", async () => {
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Prose", props: { preset: "a b { color: red }" } })),
+    );
+    expect(result.jsx).toContain("typeset");
+    expect(result.jsx).not.toContain("color: red");
   });
 
   test("preserves an object `style` prop as a JSX expression", async () => {
@@ -132,7 +261,10 @@ describe("emitCode", () => {
     );
     expect(button.jsx).toBe(`<Button className="p-4" />`);
 
-    // A node's own className overrides the lowered primitive's defaults.
+    // A node's own className overrides the lowered primitive's defaults. The
+    // typeset scale is theme-generated, so tailwind-merge has to be taught it
+    // (`cn` extends the font-size group) or `text-h1` would read as a color and
+    // survive alongside the author's size.
     const heading = unwrap(
       await emitCode(
         screenOf({
@@ -142,7 +274,25 @@ describe("emitCode", () => {
       ),
     );
     expect(heading.jsx).toContain("text-sm");
-    expect(heading.jsx).not.toContain("text-5xl");
+    expect(heading.jsx).not.toContain("text-h1");
+    // `text-sm` carries its own line-height, so it correctly displaces
+    // `leading-h1` — but not the tracking, which is a separate group.
+    expect(heading.jsx).not.toContain("leading-h1");
+    expect(heading.jsx).toContain("tracking-h1");
+
+    // A color override replaces the tone without touching the size, because
+    // they are separate groups.
+    const text = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Text",
+          props: { variant: "muted", className: "text-primary", children: "Note" },
+        }),
+      ),
+    );
+    expect(text.jsx).toContain("text-caption");
+    expect(text.jsx).toContain("text-primary");
+    expect(text.jsx).not.toContain("text-muted-foreground");
   });
 
   test("emits lucide JSX names for Icon and reports them in iconsUsed", async () => {

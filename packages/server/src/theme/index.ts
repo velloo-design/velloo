@@ -25,6 +25,7 @@ import {
   setTokens as setTokensImpl,
   type TokenEntry,
 } from "./set-token.ts";
+import { setTypeset as setTypesetImpl, type TypesetSpec } from "./set-typeset.ts";
 
 export interface ThemeContext {
   folder: DesignFolder;
@@ -105,6 +106,25 @@ export async function setFonts(
   });
 }
 
+/**
+ * Declare or retune typesets. A `theme-changed` broadcast invalidates the JIT
+ * and re-renders every frame, so a rhythm change lands live.
+ */
+export async function setTypeset(
+  ctx: ThemeContext,
+  typesets: TypesetSpec[],
+  themeName?: string,
+): Promise<Result<Theme, ThemeError>> {
+  return withThemeLock(ctx.folder, async () => {
+    const r = await setTypesetImpl(ctx.folder, typesets, themeName);
+    if (r.ok) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "set_typeset", themeName ? { themeName } : {});
+    }
+    return r;
+  });
+}
+
 /** Create theme/<name>.json by cloning another theme (default if omitted). */
 export async function addTheme(
   ctx: ThemeContext,
@@ -170,7 +190,7 @@ export function getCustomCss(ctx: ThemeContext): CustomCssResult {
   return getCustomCssImpl(ctx.folder);
 }
 
-export type { CustomCssResult, FontSpec };
+export type { CustomCssResult, FontSpec, TypesetSpec };
 
 export async function applyPreset(
   ctx: ThemeContext,

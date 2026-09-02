@@ -4,7 +4,7 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-chakra";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
-import type { Screen, Theme } from "@velloo/schema";
+import { type Screen, type Theme, TYPESET_SCALE_NAMES, typesetScale } from "@velloo/schema";
 
 /**
  * The chakra twin of mui-render.test.ts / antd-render.test.ts: a
@@ -456,6 +456,11 @@ const SWEEP_TREES: Screen["tree"][] = [
       { $ref: "Gradient", props: { from: "#4f46e5" } },
     ],
   },
+  {
+    $ref: "Prose",
+    props: { preset: "docs" },
+    children: [{ $ref: "Text", props: { children: "long-form copy" } }],
+  },
 ];
 
 function collectRefs(node: Screen["tree"], into: Set<string>): void {
@@ -486,6 +491,50 @@ describe("chakra full-registry SSR sweep", () => {
       );
       expect(bodyHtml.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("chakra typography projection", () => {
+  const typeset: Theme = {
+    ...theme,
+    typography: {
+      fontFamily: { sans: "Inter, sans-serif", display: "Fraunces, serif", mono: "Menlo" },
+      typesets: { default: { size: 18, leading: 1.6, fontBody: "sans", fontHeading: "display" } },
+    },
+  };
+
+  test("the default typeset drives fontSizes/lineHeights, keyed by role", () => {
+    const native = chakra.themeToNative?.(typeset, false) as {
+      fontSizes: Record<string, string>;
+      lineHeights: Record<string, number>;
+      fontWeights: Record<string, number>;
+    };
+    const scale = typesetScale(typeset.typography.typesets?.default);
+    expect(native.fontSizes.body).toBe(`${scale.body.fontSize}px`);
+    expect(native.fontSizes.h1).toBe(`${scale.h1.fontSize}px`);
+    expect(native.lineHeights.h1).toBe(scale.h1.lineHeight);
+    expect(native.fontWeights.h1).toBe(700);
+    // Every role in the ladder is projected, not a hand-picked subset.
+    for (const role of TYPESET_SCALE_NAMES) expect(native.fontSizes[role]).toBeDefined();
+  });
+
+  test("the heading face is the typeset's heading role, not the body font", () => {
+    const native = chakra.themeToNative?.(typeset, false) as {
+      fonts: { heading: string; body: string; mono?: string };
+    };
+    expect(native.fonts.heading).toBe("Fraunces, serif");
+    expect(native.fonts.body).toBe("Inter, sans-serif");
+    expect(native.fonts.mono).toBe("Menlo");
+  });
+
+  test("a folder with no typesets still gets the baseline ladder and the sans face", () => {
+    const native = chakra.themeToNative?.(theme, false) as {
+      fonts: { heading: string; body: string };
+      fontSizes: Record<string, string>;
+    };
+    expect(native.fonts.heading).toBe("Inter, sans-serif");
+    expect(native.fontSizes.body).toBe("16px");
+    expect(native.fontSizes.h1).toBe("40px");
   });
 });
 

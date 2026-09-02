@@ -75,20 +75,18 @@
       "sans": "Inter, ui-sans-serif, system-ui, sans-serif",
       "mono": "ui-monospace, SFMono-Regular, monospace"
     },
-    "fontSize": {
-      "xs": 12,
-      "sm": 14,
-      "base": 16,
-      "lg": 18,
-      "xl": 20,
-      "2xl": 24,
-      "3xl": 30,
-      "4xl": 36
-    },
-    "lineHeight": {
-      "tight": 1.2,
-      "normal": 1.5,
-      "relaxed": 1.75
+    "typesets": {
+      "default": {
+        "size": "1em",
+        "leading": 1.75,
+        "flow": "1.25em",
+        "fontBody": "sans",
+        "fontMono": "mono"
+      },
+      "docs": { "size": 15, "leading": 1.75, "flow": "1.5em" },
+      "chat": { "leading": 1.6, "flow": "1em" },
+      "compact": { "size": 14, "leading": 1.6, "flow": "1em" },
+      "reading": { "size": 18, "leading": 1.9, "flow": "2em" }
     }
   },
   "spacing": {

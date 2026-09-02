@@ -4,7 +4,12 @@ import type { Theme } from "@velloo/schema";
 import { diffFile, type FileDiff } from "../diff.ts";
 import { type FormatError, formatCss } from "../format.ts";
 import { emitDtcgFile } from "./dtcg.ts";
-import { emitGlobalsCss, paletteShadowedSlots } from "./globals-css.ts";
+import {
+  emitGlobalsCss,
+  emitTypesetCss,
+  paletteShadowedSlots,
+  TYPESET_CSS_FILENAME,
+} from "./globals-css.ts";
 import { emitTailwindConfig } from "./tailwind-config.ts";
 import { emitThemeV3 } from "./v3.ts";
 
@@ -86,6 +91,25 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
     diff: cssDiff,
     applied: cssApplied,
     errors: cssFormatted.errors,
+  });
+
+  // The typeset sheet, a sibling of globals.css (which @imports it).
+  const typesetPath = join(dirname(cssPath), TYPESET_CSS_FILENAME);
+  const typesetRaw = emitTypesetCss(theme);
+  const typesetFormatted = await formatCss(typesetPath, typesetRaw);
+  const typesetDiff = await diffFile(typesetPath, typesetFormatted.output);
+  let typesetApplied = false;
+  if (options.apply && !typesetDiff.identical) {
+    await mkdir(dirname(typesetPath), { recursive: true });
+    await writeFile(typesetPath, typesetFormatted.output, "utf8");
+    typesetApplied = true;
+  }
+  files.push({
+    path: typesetPath,
+    contents: typesetFormatted.output,
+    diff: typesetDiff,
+    applied: typesetApplied,
+    errors: typesetFormatted.errors,
   });
 
   if (!options.cssOnly) {

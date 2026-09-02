@@ -1,5 +1,10 @@
 import { createTheme, type Theme as MuiTheme, type ThemeOptions } from "@mui/material/styles";
-import type { ColorPair, Theme as VellooTheme } from "@velloo/schema";
+import {
+  type ColorPair,
+  DEFAULT_TYPESET_NAME,
+  typesetScale,
+  type Theme as VellooTheme,
+} from "@velloo/schema";
 import { formatRgb, parse } from "culori";
 
 /**
@@ -64,9 +69,56 @@ export function muiThemeOptions(theme: VellooTheme, dark = false): ThemeOptions 
       divider: c.border ? muiColor(c.border) : "rgba(0,0,0,0.12)",
     },
     shape: { borderRadius: radiusPx(theme) },
-    typography: {
-      fontFamily: theme.typography.fontFamily?.sans ?? "system-ui, -apple-system, sans-serif",
-    },
+    typography: muiTypography(theme),
+  };
+}
+
+/**
+ * Project the default typeset onto MUI's typography variants.
+ *
+ * MUI's theme is a serialized POJO — it ends up inside a `createTheme(...)`
+ * artifact where no CSS variables exist — so this reads `typesetScale`, the
+ * concrete-value form of the same ratio table `typesetCss` uses symbolically.
+ * The canvas render pass and the emitted artifact both come through here, so a
+ * preview cannot disagree with generated code.
+ */
+function muiTypography(theme: VellooTheme): NonNullable<ThemeOptions["typography"]> {
+  const typography = theme.typography;
+  const typeset = typography.typesets?.[DEFAULT_TYPESET_NAME];
+  const scale = typesetScale(typeset, {
+    ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
+  });
+  // The body face, falling back to the `sans` role then the system stack.
+  const bodyFamily =
+    scale.body.fontFamily ?? typography.fontFamily?.sans ?? "system-ui, -apple-system, sans-serif";
+
+  const variant = (role: keyof typeof scale) => {
+    const r = scale[role];
+    return {
+      // Only override the family when the typeset names a *different* face for
+      // this role; otherwise inherit the theme's own fontFamily.
+      ...(r.fontFamily && r.fontFamily !== bodyFamily ? { fontFamily: r.fontFamily } : {}),
+      fontSize: `${r.fontSize}px`,
+      lineHeight: r.lineHeight,
+      letterSpacing: r.letterSpacing,
+      fontWeight: r.fontWeight,
+    };
+  };
+
+  return {
+    fontFamily: bodyFamily,
+    fontSize: scale.body.fontSize,
+    h1: variant("h1"),
+    h2: variant("h2"),
+    h3: variant("h3"),
+    h4: variant("h4"),
+    h5: variant("h5"),
+    h6: variant("h6"),
+    subtitle1: variant("lead"),
+    subtitle2: variant("small"),
+    body1: variant("body"),
+    body2: variant("caption"),
+    caption: variant("caption"),
   };
 }
 

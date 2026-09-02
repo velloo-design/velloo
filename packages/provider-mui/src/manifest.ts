@@ -250,4 +250,14 @@ export const MUI_MANIFEST: Manifest = [
     [{ name: "from", type: "string", optional: true, control: "color" }],
     "A gradient fill block.",
   ),
+  helper(
+    "Prose",
+    [
+      children,
+      { name: "preset", type: "string", optional: true, control: "string" },
+      { name: "as", type: "string", optional: true, control: "string" },
+    ],
+    "A long-form content region. Everything inside — Typography, headings, lists, quotes, code, tables — picks up the theme typeset's proportions and vertical rhythm automatically. `preset` selects a named typeset (see set_typeset). Reach for this for articles, docs, and marketing copy instead of setting sizes block by block.",
+    { as: "article" },
+  ),
 ];

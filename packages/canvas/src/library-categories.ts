@@ -62,7 +62,7 @@ export const LIBRARY_CATEGORIES: LibraryCategory[] = [
     label: "Layout",
     components: ["ScrollArea", "Separator", "Divider", "Carousel", "Layer"],
   },
-  { id: "typography", label: "Typography", components: ["Heading", "Text"] },
+  { id: "typography", label: "Typography", components: ["Heading", "Text", "Prose"] },
   { id: "visuals", label: "Visuals", components: ["Icon", "Gradient", "SVG", "Chart", "Image"] },
 ];
 

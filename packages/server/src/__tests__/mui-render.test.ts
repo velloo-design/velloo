@@ -4,7 +4,7 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-mui";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
-import type { Screen, Theme } from "@velloo/schema";
+import { type Screen, type Theme, typesetScale } from "@velloo/schema";
 
 /**
  * The framework-native milestone: a MUI-native screen SSRs to REAL MUI markup
@@ -187,6 +187,53 @@ describe("MUI adapter SSR", () => {
     expect(out).toContain("borderRadius: 12"); // radius.md → shape.borderRadius
     // Idiomatic JS literal (bare identifier keys), not JSON.
     expect(out).not.toContain('"main":');
+  });
+});
+
+describe("MUI typography projection", () => {
+  const typeset: Theme = {
+    ...theme,
+    typography: {
+      fontFamily: { sans: "Inter, sans-serif", display: "Fraunces, serif" },
+      typesets: { default: { size: 18, leading: 1.6, fontBody: "sans", fontHeading: "display" } },
+    },
+  };
+
+  test("the default typeset drives every heading and body variant", () => {
+    const native = mui.themeToNative?.(typeset, false) as {
+      typography: Record<string, { fontSize: string; lineHeight: number; fontWeight: number }>;
+    };
+    const scale = typesetScale(typeset.typography.typesets?.default);
+    expect(native.typography.h1?.fontSize).toBe(`${scale.h1.fontSize}px`);
+    expect(native.typography.h1?.lineHeight).toBe(scale.h1.lineHeight);
+    expect(native.typography.h1?.fontWeight).toBe(700);
+    expect(native.typography.h6?.fontSize).toBe(`${scale.h6.fontSize}px`);
+    expect(native.typography.body1?.fontSize).toBe(`${scale.body.fontSize}px`);
+    expect(native.typography.caption?.fontSize).toBe(`${scale.caption.fontSize}px`);
+  });
+
+  test("only a distinct heading face overrides the variant's family", () => {
+    const native = mui.themeToNative?.(typeset, false) as {
+      typography: Record<string, { fontFamily?: string }> & { fontFamily: string };
+    };
+    expect(native.typography.fontFamily).toBe("Inter, sans-serif");
+    expect(native.typography.h1?.fontFamily).toBe("Fraunces, serif");
+    // Body copy inherits the theme family rather than restating it.
+    expect(native.typography.body1?.fontFamily).toBeUndefined();
+  });
+
+  test("the emitted createTheme artifact carries the same ladder as the canvas", async () => {
+    const spec = (mui as FrameworkAdapter).themeModule;
+    if (!spec) throw new Error("mui adapter must declare themeModule");
+    const result = await emitNativeTheme(mui.themeToNative?.(typeset, false), {
+      spec,
+      outputDir: "/tmp/velloo-mui-typeset-test",
+      apply: false,
+    });
+    const out = result.files[0]?.contents ?? "";
+    const scale = typesetScale(typeset.typography.typesets?.default);
+    expect(out).toContain(`"${scale.h1.fontSize}px"`);
+    expect(out).toContain("Fraunces, serif");
   });
 });
 

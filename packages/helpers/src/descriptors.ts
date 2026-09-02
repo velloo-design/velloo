@@ -185,6 +185,21 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
     example: { kind: "image", aspect: "16/9", label: "product screenshot" },
   },
   {
+    id: "Prose",
+    category: "typography",
+    source: "velloo",
+    props: [
+      {
+        name: "preset",
+        type: "string | undefined",
+        optional: true,
+        control: "string",
+      },
+      { name: "as", type: "string | undefined", optional: true, control: "string" },
+    ],
+    example: { as: "article", className: "max-w-prose" },
+  },
+  {
     id: "SVG",
     category: "ui",
     source: "velloo",

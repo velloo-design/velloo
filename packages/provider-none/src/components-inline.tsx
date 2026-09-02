@@ -1,3 +1,4 @@
+import { headingInlineStyle, textInlineStyle } from "@velloo/schema/typeset";
 import * as React from "react";
 import type { ButtonProps, ContainerProps, InputProps, StackProps } from "./components.tsx";
 
@@ -9,6 +10,11 @@ import type { ButtonProps, ContainerProps, InputProps, StackProps } from "./comp
  * tokens reach them as the CSS variables `themeToCss` injects
  * (`var(--color-foreground)`, `var(--radius)`, …), so a `none/none` folder still
  * themes. The node's authored `style` (set via `set_style`) merges last and wins.
+ *
+ * Typography is the same story one level deeper: Heading/Text reference the
+ * typeset's `var(--text-*)` / `var(--leading-*)` tokens rather than hardcoded
+ * rem values, so a `none/none` folder's type follows its typeset — and moves
+ * live when one changes — exactly like every other channel.
  */
 
 /** Merge structural defaults with the node's authored inline style (author wins). */
@@ -178,19 +184,10 @@ interface HeadingProps extends React.HTMLAttributes<HTMLHeadingElement> {
   level?: 1 | 2 | 3 | 4 | 5 | 6;
 }
 
-const headingStyle: Record<NonNullable<HeadingProps["level"]>, React.CSSProperties> = {
-  1: { fontSize: "3rem", fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.1 },
-  2: { fontSize: "2.25rem", fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.1 },
-  3: { fontSize: "1.875rem", fontWeight: 600, letterSpacing: "-0.025em" },
-  4: { fontSize: "1.5rem", fontWeight: 600, letterSpacing: "-0.025em" },
-  5: { fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.025em" },
-  6: { fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.025em" },
-};
-
 export const Heading = React.forwardRef<HTMLHeadingElement, HeadingProps>(
   ({ level = 1, style, ...rest }, ref) => {
     const Tag = `h${level}` as const;
-    return <Tag ref={ref} style={merge(headingStyle[level], style)} {...rest} />;
+    return <Tag ref={ref} style={merge(headingInlineStyle(level), style)} {...rest} />;
   },
 );
 Heading.displayName = "Heading";
@@ -199,16 +196,9 @@ interface TextProps extends React.HTMLAttributes<HTMLParagraphElement> {
   variant?: "default" | "muted" | "small" | "lead";
 }
 
-const textStyle: Record<NonNullable<TextProps["variant"]>, React.CSSProperties> = {
-  default: { fontSize: "1rem", color: "var(--color-foreground)", lineHeight: 1.75 },
-  muted: { fontSize: "0.875rem", color: "var(--color-muted-foreground)" },
-  small: { fontSize: "0.875rem", fontWeight: 500, lineHeight: 1 },
-  lead: { fontSize: "1.25rem", color: "var(--color-muted-foreground)" },
-};
-
 export const Text = React.forwardRef<HTMLParagraphElement, TextProps>(
   ({ variant = "default", style, ...rest }, ref) => (
-    <p ref={ref} style={merge(textStyle[variant], style)} {...rest} />
+    <p ref={ref} style={merge(textInlineStyle(variant), style)} {...rest} />
   ),
 );
 Text.displayName = "Text";

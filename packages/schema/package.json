@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Zod schemas and TS types for the Velloo design folder format",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./typeset": "./src/typeset.ts"
   },
   "dependencies": {
     "zod": "4.4.3"

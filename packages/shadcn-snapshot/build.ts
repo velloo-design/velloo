@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Builds packages/shadcn-snapshot/dist/{styles.css, manifest.json}.
+ * Builds packages/shadcn-snapshot/dist/manifest.json.
  *
  * Run via `bun run build` from this package.
  *

@@ -1,5 +1,10 @@
 import { identifierRef } from "@velloo/provider";
-import type { ColorPair, Theme as VellooTheme } from "@velloo/schema";
+import {
+  type ColorPair,
+  DEFAULT_TYPESET_NAME,
+  typesetScale,
+  type Theme as VellooTheme,
+} from "@velloo/schema";
 import type { ThemeConfig } from "antd";
 import { theme as antdTheme } from "antd";
 import { formatRgb, parse } from "culori";
@@ -51,8 +56,48 @@ function antdTokens(theme: VellooTheme, dark: boolean): NonNullable<ThemeConfig[
     colorTextBase: antdColor(c.foreground),
     colorError: base(c.destructive, "#dc2626"),
     borderRadius: radiusPx(theme),
-    fontFamily: theme.typography.fontFamily?.sans ?? "system-ui, -apple-system, sans-serif",
+    ...antdTypography(theme),
     ...(c.card ? { colorBgContainer: base(c.card, c.background) } : {}),
+  };
+}
+
+/**
+ * Project the default typeset onto antd's typography seed tokens.
+ *
+ * antd derives its whole type scale from `fontSize` plus the five
+ * `fontSizeHeading*` tokens, which is close enough to velloo's ladder to map
+ * directly. Values come from `typesetScale` — the concrete-value form of the
+ * same ratio table `typesetCss` uses symbolically — because a seed token ends
+ * up in a serialized `ThemeConfig` where no CSS variables exist.
+ *
+ * antd has only five heading tokens (h1–h5), so the velloo `h6` rung has no
+ * antd equivalent and is intentionally dropped here; `Prose` regions still get
+ * it from the typeset CSS.
+ */
+function antdTypography(theme: VellooTheme): NonNullable<ThemeConfig["token"]> {
+  const typography = theme.typography;
+  const scale = typesetScale(typography.typesets?.[DEFAULT_TYPESET_NAME], {
+    ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
+  });
+  return {
+    fontFamily:
+      scale.body.fontFamily ??
+      typography.fontFamily?.sans ??
+      "system-ui, -apple-system, sans-serif",
+    fontSize: scale.body.fontSize,
+    fontSizeSM: scale.caption.fontSize,
+    fontSizeLG: scale.lead.fontSize,
+    fontSizeHeading1: scale.h1.fontSize,
+    fontSizeHeading2: scale.h2.fontSize,
+    fontSizeHeading3: scale.h3.fontSize,
+    fontSizeHeading4: scale.h4.fontSize,
+    fontSizeHeading5: scale.h5.fontSize,
+    lineHeight: scale.body.lineHeight,
+    lineHeightHeading1: scale.h1.lineHeight,
+    lineHeightHeading2: scale.h2.lineHeight,
+    lineHeightHeading3: scale.h3.lineHeight,
+    lineHeightHeading4: scale.h4.lineHeight,
+    lineHeightHeading5: scale.h5.lineHeight,
   };
 }
 

@@ -3,12 +3,14 @@ import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ComponentDescriptor, Manifest } from "@velloo/provider";
 import {
+  DEFAULT_TYPESET_NAME,
   isComponentNode,
   isParamRef,
   isSnippetInstance,
   type Node,
   nodeId,
   type Screen,
+  typesetScale,
 } from "@velloo/schema";
 import { z } from "zod";
 import {
@@ -265,7 +267,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_theme",
     {
       description:
-        "Return a theme token tree — the default, or a named theme via theme (see list_themes).",
+        "Return a theme token tree — the default, or a named theme via theme (see list_themes). `typography.typesets` holds the rhythm controls; the extra `typeScale` field shows what the default typeset's three controls actually compute to per role (h1–h6, body, lead, small, caption), so you can check proportions without deriving them yourself. Adjust via set_typeset, not by setting sizes per node.",
       inputSchema: {
         theme: z.string().optional().describe('Named theme to read; default "default"'),
       },
@@ -275,7 +277,13 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       if (!resolved.ok) {
         return errorResult({ kind: "BadRequest", message: resolved.message });
       }
-      return jsonResult(resolved.theme);
+      const typography = resolved.theme.typography;
+      return jsonResult({
+        ...resolved.theme,
+        typeScale: typesetScale(typography.typesets?.[DEFAULT_TYPESET_NAME], {
+          ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
+        }),
+      });
     },
   );
 

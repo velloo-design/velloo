@@ -78,6 +78,45 @@ export {
   substituteSnippetParams,
 } from "./snippet-resolve.ts";
 export { sanitizeSvgMarkup, svgLooksActive } from "./svg-sanitize.ts";
-export { type ColorPair, type Colors, ColorsSchema, type Theme, ThemeSchema } from "./theme.ts";
+export {
+  type ColorPair,
+  type Colors,
+  ColorsSchema,
+  type Theme,
+  ThemeSchema,
+  TypographySchema,
+} from "./theme.ts";
+export {
+  DEFAULT_TYPESET_NAME,
+  HEADING_ROLE_BY_LEVEL,
+  headingClasses,
+  headingInlineStyle,
+  isTypesetName,
+  type ResolvedTypesetRole,
+  resolveHeadingLevel,
+  resolveTypeset,
+  TEXT_ROLE_BY_VARIANT,
+  TEXT_TONE_BY_VARIANT,
+  type TextVariant,
+  TYPESET_CLASSES,
+  TYPESET_DEFAULT,
+  TYPESET_INLINE_STYLE,
+  TYPESET_RATIOS,
+  TYPESET_SCALE_NAMES,
+  type Typeset,
+  type TypesetRatio,
+  type TypesetRole,
+  type TypesetScale,
+  textClasses,
+  textInlineStyle,
+  typesetBaseVars,
+  typesetCss,
+  typesetSafelist,
+  typesetScale,
+  typesetThemeTokens,
+  typesetUtilityClasses,
+  typesetV3FontSize,
+  typesetVars,
+} from "./typeset.ts";
 export { type DuplicateId, findDuplicateIds } from "./validate-ids.ts";
 export { type Viewport, ViewportSchema } from "./viewport.ts";

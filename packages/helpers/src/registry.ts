@@ -7,6 +7,7 @@ import { Icon } from "./icon.tsx";
 import { Image } from "./image.tsx";
 import { Layer } from "./layer.tsx";
 import { Placeholder } from "./placeholder.tsx";
+import { Prose } from "./prose.tsx";
 import { SVG } from "./svg.tsx";
 import { Text } from "./text.tsx";
 
@@ -19,6 +20,7 @@ const ALL: ComponentRegistry = {
   Image,
   Layer,
   Placeholder,
+  Prose,
   SVG,
   Text,
 };

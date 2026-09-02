@@ -3,6 +3,12 @@ import { extname, join, sep } from "node:path";
 import { canvasDistPath } from "@velloo/canvas";
 import { keyframesToCss } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
+import {
+  isCssIdent,
+  sanitizeCssTokenValue,
+  typesetSafelist,
+  typesetThemeTokens,
+} from "@velloo/schema";
 import type { ServerWebSocket } from "bun";
 import type { ActivityEvent } from "./activity.ts";
 import { createApp } from "./app.ts";
@@ -144,18 +150,34 @@ export function extraThemeBlock(folder: DesignFolder): string {
     for (const [name, steps] of Object.entries(theme.keyframes ?? {})) keyframes[name] = steps;
   }
   const lines = [
-    ...Object.entries(fonts).map(([role, stack]) => `  --font-${role}: ${stack};`),
+    ...Object.entries(fonts)
+      .filter(([role]) => isCssIdent(role))
+      .map(([role, stack]) => `  --font-${role}: ${sanitizeCssTokenValue(stack)};`),
     ...Object.entries(palette).map(([name, value]) => `  --color-${name}: ${value};`),
     ...Object.entries(spacing).map(([name, value]) => `  --spacing-${name}: ${value};`),
     ...Object.entries(shadows).map(([name, value]) => `  --shadow-${name}: ${value};`),
     ...Object.entries(animation).map(([name, value]) => `  --animate-${name}: ${value};`),
+    // The typeset scale. Placeholder values — every one is overridden per render
+    // by themeToCss; the JIT only needs the token to exist so `text-h1` and
+    // friends are generated.
+    ...typesetThemeTokens(),
   ];
   const keyframesCss = keyframesToCss(
     Object.keys(keyframes).length > 0 ? keyframes : undefined,
     "  ",
   );
-  if (lines.length === 0 && keyframesCss === "") return "";
-  return `@theme {\n${[...lines, keyframesCss].filter(Boolean).join("\n")}\n}`;
+  // The typeset ladder's class literals live in @velloo/schema (a `.ts` module
+  // the oxide scanner never reads) and no screen JSON references them, so
+  // safelist them explicitly. This is what let the ladder stop being duplicated
+  // into `heading.tsx` purely to be scanned.
+  const safelist = typesetSafelist()
+    .map((pattern) => `@source inline("${pattern}");`)
+    .join("\n");
+  const themeBlock =
+    lines.length === 0 && keyframesCss === ""
+      ? ""
+      : `@theme {\n${[...lines, keyframesCss].filter(Boolean).join("\n")}\n}`;
+  return [safelist, themeBlock].filter(Boolean).join("\n\n");
 }
 
 /**

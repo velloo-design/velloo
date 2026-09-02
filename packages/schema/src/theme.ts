@@ -62,32 +62,62 @@ const PaletteSchema = z.record(
 );
 
 /**
- * Structured typography slots — what Velloo's codegen + renderer actually
- * read. Each sub-shape is .passthrough()-equivalent (extra keys allowed)
- * via z.record at the leaf, so callers can add custom sizes without
- * breaking validation.
+ * A typeset: three rhythm controls plus font roles. Everything visible —
+ * the h1..h6 ladder, body/lead/small copy, the space under a heading — derives
+ * from these through `TYPESET_RATIOS` (see `./typeset.ts`), which is why there
+ * is no size/weight/leading/tracking scale here to keep in sync.
  */
-export const TypographySchema = z.object({
-  /**
-   * Font stacks keyed by role. `sans` / `mono` / `serif` are the
-   * conventional roles, but any key works — `display: '"Unbounded",
-   * sans-serif'` becomes `--font-display`, which Tailwind v4 turns into
-   * a `font-display` utility. Roles are the lever for typographic
-   * personality: declare one per voice, not one per screen.
-   */
-  fontFamily: z.record(z.string(), z.string().min(1)).optional(),
-  /**
-   * Google Fonts css2 family specs to load in design mode and emit as
-   * an @import in generated globals.css. Full spec syntax, e.g.
-   * "Unbounded:wght@400..900" or "Fraunces:ital,wght@0,300..900".
-   * Set via the `set_fonts` MCP tool rather than by hand.
-   */
-  googleFonts: z.array(z.string().min(1)).optional(),
-  fontSize: z.record(z.string(), NumOrCssLen).optional(),
-  fontWeight: z.record(z.string(), NumOrCssLen).optional(),
-  lineHeight: z.record(z.string(), NumOrCssLen).optional(),
-  letterSpacing: z.record(z.string(), NumOrCssLen).optional(),
+const TypesetSchema = z.object({
+  /** Base text size. `1em` (the default) follows the surrounding container. */
+  size: NumOrCssLen.optional(),
+  /** Body line-height, unitless. Heading leading derives from it. */
+  leading: z.number().positive().optional(),
+  /** Vertical space between blocks. Heading margins and rule spacing derive from it. */
+  flow: NumOrCssLen.optional(),
+  /** A `fontFamily` role name for body copy, e.g. "sans". */
+  fontBody: z.string().min(1).optional(),
+  /** A `fontFamily` role name for headings, e.g. "display". */
+  fontHeading: z.string().min(1).optional(),
+  /** A `fontFamily` role name for code. */
+  fontMono: z.string().min(1).optional(),
 });
+
+/**
+ * Typography: font roles, webfont loading, and the folder's typesets.
+ *
+ * `.strict()` on purpose. This shape once carried `fontSize` / `fontWeight` /
+ * `lineHeight` / `letterSpacing` records that no renderer, importer, or codegen
+ * path ever read — tokens you could set and that silently did nothing. Typesets
+ * replaced them, and strict validation means an attempt to write the old scale
+ * fails loudly instead of being quietly dropped.
+ */
+export const TypographySchema = z
+  .object({
+    /**
+     * Font stacks keyed by role. `sans` / `mono` / `serif` are the
+     * conventional roles, but any key works — `display: '"Unbounded",
+     * sans-serif'` becomes `--font-display`, which Tailwind v4 turns into
+     * a `font-display` utility. Roles are the lever for typographic
+     * personality: declare one per voice, not one per screen.
+     */
+    fontFamily: z.record(z.string(), z.string().min(1)).optional(),
+    /**
+     * Google Fonts css2 family specs to load in design mode and emit as
+     * an @import in generated globals.css. Full spec syntax, e.g.
+     * "Unbounded:wght@400..900" or "Fraunces:ital,wght@0,300..900".
+     * Set via the `set_fonts` MCP tool rather than by hand.
+     */
+    googleFonts: z.array(z.string().min(1)).optional(),
+    /**
+     * Named typesets. `default` is the folder baseline and projects onto
+     * `:root`, so it styles every screen; every other name becomes a
+     * `.typeset-<name>` preset class a Prose region can opt into. Keys are
+     * constrained to a CSS-safe ident because they are emitted as selectors.
+     * Set via the `set_typeset` MCP tool.
+     */
+    typesets: z.record(z.string().regex(/^[A-Za-z0-9_-]+$/), TypesetSchema).optional(),
+  })
+  .strict();
 
 /**
  * Structured radius slots. `md` is what emit_theme picks up as `--radius`.

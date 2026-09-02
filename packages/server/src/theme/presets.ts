@@ -5,8 +5,16 @@ const baseTypography = {
     sans: "Inter, ui-sans-serif, system-ui, sans-serif",
     mono: "ui-monospace, SFMono-Regular, monospace",
   },
-  fontSize: { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, "2xl": 24, "3xl": 30, "4xl": 36 },
-  lineHeight: { tight: 1.2, normal: 1.5, relaxed: 1.75 },
+  // Rhythm, not a scale: the ladder derives from these three controls. `default`
+  // projects onto `:root` so it styles every screen; the rest are preset classes
+  // a Prose region opts into.
+  typesets: {
+    default: { size: "1em", leading: 1.75, flow: "1.25em", fontBody: "sans", fontMono: "mono" },
+    docs: { size: 15, leading: 1.75, flow: "1.5em" },
+    chat: { leading: 1.6, flow: "1em" },
+    compact: { size: 14, leading: 1.6, flow: "1em" },
+    reading: { size: 18, leading: 1.9, flow: "2em" },
+  },
 };
 const baseSpacing = { 0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 };
 const baseRadius = { sm: 4, md: 6, lg: 8, xl: 12, full: 9999 };

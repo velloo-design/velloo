@@ -40,7 +40,9 @@ framework-native provider typically implements all of these:
 - **`registry`** — canvas-safe React components for design mode. The canvas-safe contract:
   no portals that escape the iframe, overlays render pinned-open and inline, no
   router/form requirements. Reuse the framework-neutral helpers via
-  `helpersRegistry(ids)` from `@velloo/helpers` (Heading, Text, Icon, …).
+  `helpersRegistry(ids)` from `@velloo/helpers` (Heading, Text, Prose, Icon, …). Always
+  include `Prose`: `.typeset` is velloo-owned CSS shipped by `themeToCss` on every channel,
+  so it works without any framework support.
 - **`renderPass(theme, dark)`** — SSR wrapping + critical-CSS extraction when styles
   aren't Tailwind classes (MUI: emotion cache + ThemeProvider; cssinjs frameworks
   extract their own style sheet). Dark must project real dark values, not just a mode flag.
@@ -49,6 +51,11 @@ framework-native provider typically implements all of these:
   `defaultPath`) codegen's generic `emitNativeTheme` serializes. Values that must emit as
   bare identifiers (e.g. an algorithm reference) use `identifierRef("theme.darkAlgorithm")`;
   your `importLines` bring them into scope. No framework import ever appears in codegen.
+  For typography, project `typesetScale(theme.typography.typesets?.[DEFAULT_TYPESET_NAME])`
+  onto the framework's own type scale — not `fontFamily.sans` alone, and never a second
+  copy of the ratios. `typesetScale` resolves to concrete numbers precisely because this
+  object gets serialized into an artifact where no CSS variables exist; the canvas mount and
+  the emitted theme both come through `themeToNative`, so they cannot disagree.
 - **`codegenModule`** — the bare module emitted component imports come from. Codegen's
   `CodegenTarget` remaps imports only: styling is authored in-channel at design time and
   serialized verbatim — there is deliberately no class→native translation at emit time.

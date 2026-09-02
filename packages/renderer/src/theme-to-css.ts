@@ -1,4 +1,10 @@
-import { type Colors, isCssIdent, sanitizeCssTokenValue, type Theme } from "@velloo/schema";
+import {
+  type Colors,
+  isCssIdent,
+  sanitizeCssTokenValue,
+  type Theme,
+  typesetCss,
+} from "@velloo/schema";
 
 /**
  * Map theme tokens onto the shadcn CSS-variable convention so the
@@ -152,5 +158,8 @@ export function themeToCss(theme: Theme): string {
 
   emitContainer(theme.container, lines);
 
-  return lines.join("\n");
+  // Typesets last: the generated sheet re-declares the derived `--text-*` /
+  // `--leading-*` / `--tracking-*` tokens the compiled Tailwind @theme block
+  // seeded with placeholders, so it must come after them to win.
+  return [lines.join("\n"), typesetCss(theme.typography.typesets)].join("\n\n");
 }

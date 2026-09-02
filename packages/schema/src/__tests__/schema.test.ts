@@ -500,11 +500,41 @@ describe("ThemeSchema", () => {
         muted: "oklch(0.97 0 0)",
         border: "oklch(0.922 0 0)",
       },
-      typography: { fontFamily: { sans: "Inter, sans-serif" }, fontSize: { base: 16 } },
+      typography: {
+        fontFamily: { sans: "Inter, sans-serif" },
+        typesets: { default: { size: "1em", leading: 1.75, flow: "1.25em", fontBody: "sans" } },
+      },
       spacing: { 1: 4, 2: 8 },
       radius: { md: 8 },
     };
     expect(ThemeSchema.safeParse(theme).success).toBe(true);
+  });
+
+  test("rejects the retired size/weight/leading/tracking scales", () => {
+    // These records were settable and read by nothing. Typesets replaced them,
+    // and strict typography means writing the old scale fails loudly rather
+    // than being silently dropped on the next persist.
+    const base = {
+      name: "default",
+      colors: { background: "oklch(1 0 0)", foreground: "oklch(0 0 0)", primary: "oklch(0.5 0 0)" },
+      spacing: {},
+      radius: {},
+    };
+    for (const retired of ["fontSize", "fontWeight", "lineHeight", "letterSpacing"]) {
+      const theme = { ...base, typography: { [retired]: { base: 16 } } };
+      expect(ThemeSchema.safeParse(theme).success).toBe(false);
+    }
+  });
+
+  test("rejects a typeset name that is not selector-safe", () => {
+    const theme = {
+      name: "default",
+      colors: { background: "oklch(1 0 0)", foreground: "oklch(0 0 0)", primary: "oklch(0.5 0 0)" },
+      typography: { typesets: { "bad name": { size: 14 } } },
+      spacing: {},
+      radius: {},
+    };
+    expect(ThemeSchema.safeParse(theme).success).toBe(false);
   });
 
   test("rejects a theme without primary", () => {

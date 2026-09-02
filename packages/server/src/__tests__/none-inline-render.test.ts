@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createProvider } from "@velloo/provider-none";
-import { renderScreen } from "@velloo/renderer";
+import { renderScreen, themeToCss } from "@velloo/renderer";
 import type { Screen, Theme } from "@velloo/schema";
 import { registryForScreen } from "../extensions/registry.ts";
 
@@ -68,6 +68,45 @@ describe("no-framework × CSS framework", () => {
     // Tailwind path: structural defaults are utility classes, not inline flex.
     expect(bodyHtml).toContain('class="flex');
     expect(bodyHtml).not.toMatch(/style="[^"]*display:\s*flex/);
+  });
+
+  // Before typesets, the inline ladder was hardcoded rem values, so a
+  // `none/none` folder's type never followed its theme. Both channels now read
+  // the same derived tokens, which is the whole point of the de-triplication.
+  test("both channels resolve type through the typeset tokens", async () => {
+    const typography: Screen = {
+      ...screen,
+      tree: {
+        $ref: "Stack",
+        children: [
+          { $ref: "Heading", props: { level: 2, children: "Title" } },
+          { $ref: "Text", props: { variant: "muted", children: "Sub" } },
+        ],
+      },
+    };
+    const inline = await renderScreen(typography, theme, {
+      viewport: { w: 800, h: 600 },
+      snapshotCss: "",
+      registry: registryForScreen(typography, providers, none, {}, "none"),
+    });
+    expect(inline.bodyHtml).toContain("font-size:var(--text-h2)");
+    expect(inline.bodyHtml).toContain("line-height:var(--leading-h2)");
+    expect(inline.bodyHtml).toContain("color:var(--color-muted-foreground)");
+    // No baked sizes left behind.
+    expect(inline.bodyHtml).not.toMatch(/font-size:\s*[\d.]+rem/);
+
+    const tailwind = await renderScreen(typography, theme, {
+      viewport: { w: 800, h: 600 },
+      snapshotCss: "",
+      registry: registryForScreen(typography, providers, none, {}, "tailwind"),
+    });
+    expect(tailwind.bodyHtml).toContain("text-h2");
+    expect(tailwind.bodyHtml).toContain("text-caption");
+
+    // Both channels get their values from the same generated declarations.
+    const css = themeToCss(theme);
+    expect(css).toContain("--text-h2:");
+    expect(css).toContain("--leading-h2:");
   });
 
   test("the provider exposes both channels; none resolves to inline `style`", () => {

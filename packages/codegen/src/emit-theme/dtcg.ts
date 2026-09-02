@@ -1,6 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ColorPair, Theme } from "@velloo/schema";
+import {
+  type ColorPair,
+  DEFAULT_TYPESET_NAME,
+  resolveTypeset,
+  type Theme,
+  typesetScale,
+} from "@velloo/schema";
 import { parse } from "culori";
 import { diffFile } from "../diff.ts";
 import type { EmitThemeFile } from "./index.ts";
@@ -83,6 +89,44 @@ function looseGroup(
   );
 }
 
+/** The authored rhythm controls, per typeset. */
+function typesetGroup(typesets: NonNullable<Theme["typography"]["typesets"]>): DtcgGroup {
+  return Object.fromEntries(
+    Object.entries(typesets).map(([name, typeset]) => {
+      const resolved = resolveTypeset(typeset);
+      return [
+        name,
+        {
+          size: dimensionToken(resolved.size),
+          leading: scalarToken(resolved.leading),
+          flow: dimensionToken(resolved.flow),
+        },
+      ];
+    }),
+  );
+}
+
+/** The default typeset's ladder, resolved to concrete values. */
+function scaleGroup(theme: Theme): DtcgGroup {
+  const scale = typesetScale(theme.typography.typesets?.[DEFAULT_TYPESET_NAME], {
+    ...(theme.typography.fontFamily ? { fontFamily: theme.typography.fontFamily } : {}),
+  });
+  return Object.fromEntries(
+    Object.entries(scale).map(([role, resolved]) => [
+      role,
+      {
+        fontSize: dimensionToken(resolved.fontSize),
+        lineHeight: scalarToken(resolved.lineHeight),
+        letterSpacing: { $type: "string", $value: resolved.letterSpacing },
+        fontWeight: scalarToken(resolved.fontWeight),
+        ...(resolved.fontFamily
+          ? { fontFamily: { $type: "fontFamily", $value: resolved.fontFamily } }
+          : {}),
+      },
+    ]),
+  );
+}
+
 function colorGroup(
   colors: Theme["colors"] | NonNullable<Theme["colorsDark"]>,
   warnings: string[],
@@ -127,18 +171,11 @@ function modeGroup(theme: Theme, dark: boolean, warnings: string[]): DtcgGroup {
             })),
           }
         : {}),
-      ...(theme.typography.fontSize
-        ? { fontSize: looseGroup(theme.typography.fontSize, dimensionToken) }
-        : {}),
-      ...(theme.typography.fontWeight
-        ? { fontWeight: looseGroup(theme.typography.fontWeight) }
-        : {}),
-      ...(theme.typography.lineHeight
-        ? { lineHeight: looseGroup(theme.typography.lineHeight) }
-        : {}),
-      ...(theme.typography.letterSpacing
-        ? { letterSpacing: looseGroup(theme.typography.letterSpacing, dimensionToken) }
-        : {}),
+      ...(theme.typography.typesets ? { typeset: typesetGroup(theme.typography.typesets) } : {}),
+      // The resolved ladder. A consuming design tool wants concrete values, not
+      // the three controls it would have to re-derive — so export both: the
+      // authored rhythm above, and what it computes to here.
+      scale: scaleGroup(theme),
     },
     spacing: looseGroup(theme.spacing, dimensionToken),
     radius: looseGroup(theme.radius, dimensionToken),

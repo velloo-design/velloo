@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
+import { TYPESET_SCALE_NAMES, typesetSafelist, typesetThemeTokens } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { TailwindJit } from "../tailwind-jit.ts";
 
@@ -61,11 +62,39 @@ describe("TailwindJit.build", () => {
   });
 
   // The velloo helpers live in @velloo/helpers, outside every provider's
-  // componentsDir — their structural default classes (Heading's `text-5xl`,
-  // no screen needs to reference it) must still land in the compiled CSS.
+  // componentsDir — the structural default classes still written as literals in
+  // those `.tsx` files (Placeholder's aspect/size ladders, which no screen needs
+  // to reference) must land in the compiled CSS. The typography ladder no longer
+  // relies on this scan; see the safelist test below.
   test("helper default classes compile from the @velloo/helpers scan", async () => {
     const css = await jit.build();
-    expect(css).toContain(".text-5xl");
+    expect(css).toContain(".aspect-square");
+    expect(css).toContain(".size-8");
+  });
+
+  // The typeset ladder's class literals live in @velloo/schema — a `.ts` module
+  // the oxide scanner never reads — and no screen JSON references them. The
+  // generated `@source inline(...)` is what makes them compile anyway, and it is
+  // the mechanism that let the ladder stop being duplicated into `heading.tsx`
+  // purely so it would be scanned.
+  test("the typeset ladder compiles from the safelist, not from a scan", async () => {
+    const safelisted = new TailwindJit(provider, join(tmp, "screens"), join(tmp, "snippets"), () =>
+      [
+        ...typesetSafelist().map((p) => `@source inline("${p}");`),
+        `@theme {\n${typesetThemeTokens().join("\n")}\n}`,
+      ].join("\n\n"),
+    );
+    const css = await safelisted.build();
+    for (const role of TYPESET_SCALE_NAMES) {
+      expect(css).toContain(`.text-${role}`);
+      expect(css).toContain(`.leading-${role}`);
+      expect(css).toContain(`.tracking-${role}`);
+    }
+    // …and it resolves to the derived token, not a literal size.
+    expect(css).toMatch(/\.text-h1\s*\{[^}]*var\(--text-h1\)/);
+    // The tone classes `textClasses` composes come from the same unscanned
+    // module, so they ride the safelist too.
+    expect(css).toContain(".text-muted-foreground");
   });
 });
 

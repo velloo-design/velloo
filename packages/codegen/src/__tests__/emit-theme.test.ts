@@ -35,15 +35,21 @@ describe("emitTheme", () => {
     const outDir = join(tmpdir(), `velloo-theme-${Date.now()}`);
     const result = await emitTheme(buildDefaultTheme(), { outputDir: outDir, apply: false });
 
-    expect(result.files.length).toBe(3);
-    const [css, tsConfig, tokens] = result.files;
+    expect(result.files.length).toBe(4);
+    const [css, typeset, tsConfig, tokens] = result.files;
     expect(css?.path.endsWith("app/globals.css")).toBe(true);
+    expect(typeset?.path.endsWith("app/typeset.css")).toBe(true);
     expect(tsConfig?.path.endsWith("tailwind.config.ts")).toBe(true);
     expect(tokens?.path.endsWith("tokens.json")).toBe(true);
 
     if (!css || !tsConfig) throw new Error("expected both files");
     const cssOut = css.contents;
     expect(cssOut).toContain(`@import "tailwindcss"`);
+    expect(cssOut).toContain(`@import "./typeset.css"`);
+    // The scale's class literals live in @velloo/schema, so they must be
+    // safelisted or `text-h1` never compiles in the user's app.
+    expect(cssOut).toContain(`@source inline(`);
+    expect(cssOut).toContain("--text-h1:");
     expect(cssOut).toContain("@theme {");
     expect(cssOut).toContain("--color-background:");
     expect(cssOut).toContain("--color-primary:");
@@ -136,10 +142,38 @@ describe("emitTheme", () => {
       cssOnly: true,
       apply: false,
     });
-    expect(result.files.length).toBe(2);
+    expect(result.files.length).toBe(3);
     expect(result.files[0]?.path.endsWith("app/globals.css")).toBe(true);
-    expect(result.files[1]?.path.endsWith("tokens.json")).toBe(true);
+    expect(result.files[1]?.path.endsWith("app/typeset.css")).toBe(true);
+    expect(result.files[2]?.path.endsWith("tokens.json")).toBe(true);
   });
+
+  test("the typeset sheet carries the rhythm controls and the derived ladder", async () => {
+    const theme: Theme = {
+      ...buildDefaultTheme(),
+      typography: {
+        fontFamily: { sans: "Inter, sans-serif", display: '"Unbounded", sans-serif' },
+        typesets: {
+          default: { size: "1em", leading: 1.75, flow: "1.25em", fontHeading: "display" },
+          compact: { size: 14, leading: 1.6, flow: "1em" },
+        },
+      },
+    };
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-typeset-${Date.now()}`),
+      apply: false,
+    });
+    const sheet = result.files.find((f) => f.path.endsWith("typeset.css"));
+    if (!sheet) throw new Error("expected a typeset.css artifact");
+
+    expect(sheet.contents).toContain("--typeset-leading: 1.75");
+    expect(sheet.contents).toContain("--typeset-font-heading: var(--font-display)");
+    expect(sheet.contents).toContain(".typeset-compact");
+    // Derived from the controls, not hardcoded.
+    expect(sheet.contents).toContain("--text-h1: calc(var(--typeset-rhythm) * 2.5)");
+    // Zero specificity so the app's own utilities still win.
+    expect(sheet.contents).toContain(":where(.typeset h1)");
+  }, 30_000);
 
   test("writes files when apply is true", async () => {
     const outDir = join(tmpdir(), `velloo-theme-apply-${Date.now()}`);

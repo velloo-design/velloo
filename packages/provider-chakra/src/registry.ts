@@ -89,7 +89,15 @@ import {
   Tooltip,
 } from "./overlays.ts";
 
-const REUSED_HELPER_IDS = ["Icon", "Image", "Placeholder", "SVG", "Layer", "Gradient"] as const;
+const REUSED_HELPER_IDS = [
+  "Icon",
+  "Image",
+  "Placeholder",
+  "SVG",
+  "Layer",
+  "Gradient",
+  "Prose",
+] as const;
 
 /**
  * The runtime registry for chakra-native folders: design `$ref` ids → real

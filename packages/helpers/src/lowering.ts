@@ -4,25 +4,12 @@
  * the literals stay duplicated in the co-located `.tsx` components because
  * the server's Tailwind JIT scans only `.tsx` files for class candidates and
  * would not see strings that live only in this `.ts` module.
+ *
+ * The typography ladder is the exception, and the model for retiring the rest:
+ * `headingClasses` / `textClasses` in `@velloo/schema/typeset` are called by the
+ * component AND by codegen, because the generated `@source inline(...)` safelist
+ * makes the JIT see those utilities without scanning a literal.
  */
-
-// Keep in sync with ./heading.tsx (`sizeByLevel`).
-export const HEADING_BY_LEVEL: Record<number, string> = {
-  1: "text-5xl font-bold tracking-tight leading-tight",
-  2: "text-4xl font-bold tracking-tight leading-tight",
-  3: "text-3xl font-semibold tracking-tight",
-  4: "text-2xl font-semibold tracking-tight",
-  5: "text-xl font-semibold tracking-tight",
-  6: "text-lg font-semibold tracking-tight",
-};
-
-// Keep in sync with ./text.tsx (`variantClasses`).
-export const TEXT_VARIANT_CLASSES: Record<string, string> = {
-  default: "text-base text-foreground leading-7",
-  muted: "text-sm text-muted-foreground",
-  small: "text-sm font-medium leading-none",
-  lead: "text-xl text-muted-foreground",
-};
 
 // Keep in sync with ./placeholder.tsx (`ASPECT_CLASS`).
 export const PLACEHOLDER_ASPECT_CLASS: Record<string, string> = {

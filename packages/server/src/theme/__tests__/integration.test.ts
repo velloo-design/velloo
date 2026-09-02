@@ -2,16 +2,20 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createProvider as createMuiProvider } from "@velloo/provider-mui";
+import { themeToCss } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
-import type { Theme } from "@velloo/schema";
+import { type Theme, typesetScale } from "@velloo/schema";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import {
   applyPreset,
   derivePaletteFromColor,
+  setFonts,
   setToken,
   setTokens,
+  setTypeset,
   type ThemeContext,
   withThemeLock,
 } from "../index.ts";
@@ -108,6 +112,107 @@ describe("setToken", () => {
     const r = await setToken(ctx, "colors.primary.DEFAULT", "");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.kind).toBe("InvalidThemePath");
+  });
+});
+
+describe("setTypeset", () => {
+  test("merges fields, so tuning one control keeps the others", async () => {
+    unwrap(await setTypeset(ctx, [{ leading: 1.9, flow: "2em" }]));
+    unwrap(await setTypeset(ctx, [{ leading: 1.5 }]));
+    const typesets = (await diskTheme()).typography.typesets;
+    expect(typesets?.default).toEqual({ leading: 1.5, flow: "2em" });
+    expect(events.filter((e) => e.type !== "activity").at(-1)).toEqual({ type: "theme-changed" });
+  });
+
+  test("null clears a field back to the baseline", async () => {
+    unwrap(await setTypeset(ctx, [{ size: 15, leading: 1.6 }]));
+    unwrap(await setTypeset(ctx, [{ size: null }]));
+    expect((await diskTheme()).typography.typesets?.default).toEqual({ leading: 1.6 });
+  });
+
+  test("a named typeset becomes a preset alongside the default", async () => {
+    unwrap(await setTypeset(ctx, [{ leading: 1.75 }, { name: "compact", size: 14, leading: 1.5 }]));
+    const typesets = (await diskTheme()).typography.typesets;
+    expect(Object.keys(typesets ?? {}).sort()).toEqual(["compact", "default"]);
+  });
+
+  test("rejects a name that is not selector-safe", async () => {
+    const r = await setTypeset(ctx, [{ name: "bad name", size: 14 }]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("InvalidThemePath");
+  });
+
+  test("rejects a font role that set_fonts never declared", async () => {
+    const r = await setTypeset(ctx, [{ fontHeading: "display" }]);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.error.kind === "InvalidThemePath") {
+      expect(r.error.reason).toContain("not a declared font role");
+    } else {
+      throw new Error("expected an InvalidThemePath error");
+    }
+  });
+
+  test("accepts a font role once it exists", async () => {
+    unwrap(await setFonts(ctx, [{ role: "display", family: "Unbounded" }]));
+    unwrap(await setTypeset(ctx, [{ fontHeading: "display" }]));
+    expect((await diskTheme()).typography.typesets?.default?.fontHeading).toBe("display");
+  });
+
+  test("rejects a font role that collides with the type scale", async () => {
+    unwrap(await setFonts(ctx, [{ role: "body", family: "Inter" }]));
+    const r = await setTypeset(ctx, [{ fontBody: "body" }]);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.error.kind === "InvalidThemePath") {
+      expect(r.error.reason).toContain("collides with the type scale");
+    } else {
+      throw new Error("expected an InvalidThemePath error");
+    }
+  });
+
+  test("rejects a non-positive leading", async () => {
+    const r = await setTypeset(ctx, [{ leading: 0 }]);
+    expect(r.ok).toBe(false);
+  });
+
+  // The point of the whole design: one rhythm change moves what renders.
+  test("a rhythm change moves the rendered CSS and the native theme together", async () => {
+    const before = themeToCss(await diskTheme());
+    expect(before).toContain("--typeset-leading: 1.75");
+
+    unwrap(await setTypeset(ctx, [{ size: 20, leading: 1.4 }]));
+    const theme = await diskTheme();
+
+    const after = themeToCss(theme);
+    expect(after).toContain("--typeset-size: 20px");
+    expect(after).toContain("--typeset-leading: 1.4");
+    // Derived, not restated — the ladder still references the controls.
+    expect(after).toContain("--text-h1: calc(var(--typeset-rhythm) * 2.5)");
+
+    // The same controls resolved for a native framework theme.
+    const scale = typesetScale(theme.typography.typesets?.default);
+    expect(scale.body.fontSize).toBe(20);
+    expect(scale.h1.fontSize).toBe(50);
+    expect(scale.body.lineHeight).toBeCloseTo(1.4, 3);
+
+    // …and a real adapter picks it up, so a folder on MUI re-rhythms too.
+    const mui = createMuiProvider().themeToNative?.(theme, false) as {
+      typography: Record<string, { fontSize?: string }>;
+    };
+    expect(mui.typography.h1?.fontSize).toBe("50px");
+    expect(mui.typography.body1?.fontSize).toBe("20px");
+  });
+
+  test("a preset overrides only the controls, so the ladder re-derives per region", async () => {
+    unwrap(await setTypeset(ctx, [{ name: "compact", size: 14, leading: 1.4 }]));
+    const css = themeToCss(await diskTheme());
+    expect(css).toContain(".typeset-compact {");
+    // A preset block carries the authored controls…
+    const preset = css.slice(css.indexOf(".typeset-compact {"));
+    const block = preset.slice(0, preset.indexOf("}"));
+    expect(block).toContain("--typeset-size: 14px");
+    // …and NOT the derived scale: re-declaring it there would freeze the ladder
+    // at the base rhythm instead of re-substituting against the override.
+    expect(block).not.toContain("--text-h1");
   });
 });
 

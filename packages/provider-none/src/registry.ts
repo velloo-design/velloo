@@ -10,6 +10,7 @@ import { Box, Button, Card, Container, Input, Stack } from "./components.tsx";
 export const REUSED_HELPER_IDS = [
   "Heading",
   "Text",
+  "Prose",
   "Icon",
   "SVG",
   "Image",

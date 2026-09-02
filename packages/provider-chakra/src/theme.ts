@@ -1,4 +1,9 @@
-import type { ColorPair, Theme as VellooTheme } from "@velloo/schema";
+import {
+  type ColorPair,
+  DEFAULT_TYPESET_NAME,
+  typesetScale,
+  type Theme as VellooTheme,
+} from "@velloo/schema";
 import { converter, formatHex, formatRgb, parse } from "culori";
 
 /**
@@ -80,8 +85,58 @@ export interface ChakraThemeOptions {
   config: { initialColorMode: "light" | "dark"; useSystemColorMode: boolean };
   colors: { brand: Record<string, string> };
   semanticTokens: { colors: Record<string, string> };
-  fonts: { heading: string; body: string };
+  fonts: { heading: string; body: string; mono?: string };
+  fontSizes: Record<string, string>;
+  lineHeights: Record<string, number>;
+  letterSpacings: Record<string, string>;
+  fontWeights: Record<string, number>;
   radii: { md: string };
+}
+
+/**
+ * Project the default typeset onto chakra's typography scales.
+ *
+ * chakra's theme is a serialized POJO — it ends up in an `extendTheme(...)`
+ * artifact where no CSS variables exist — so this reads `typesetScale`, the
+ * concrete-value form of the same ratio table `typesetCss` uses symbolically.
+ * Keys are the velloo role names, so `fontSize="h1"` in a chakra folder resolves
+ * to the same size the canvas paints.
+ */
+function chakraTypography(
+  theme: VellooTheme,
+  fallbackSans: string,
+): Pick<
+  ChakraThemeOptions,
+  "fonts" | "fontSizes" | "lineHeights" | "letterSpacings" | "fontWeights"
+> {
+  const typography = theme.typography;
+  const scale = typesetScale(typography.typesets?.[DEFAULT_TYPESET_NAME], {
+    ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
+  });
+  const fontSizes: Record<string, string> = {};
+  const lineHeights: Record<string, number> = {};
+  const letterSpacings: Record<string, string> = {};
+  const fontWeights: Record<string, number> = {};
+  for (const [role, resolved] of Object.entries(scale)) {
+    fontSizes[role] = `${resolved.fontSize}px`;
+    lineHeights[role] = resolved.lineHeight;
+    letterSpacings[role] = resolved.letterSpacing;
+    fontWeights[role] = resolved.fontWeight;
+  }
+  const mono = typography.fontFamily?.mono;
+  return {
+    fonts: {
+      // The heading face, which the typeset names explicitly. Before typesets
+      // this was the body font, so a folder with a display face never used it.
+      heading: scale.h1.fontFamily ?? fallbackSans,
+      body: scale.body.fontFamily ?? fallbackSans,
+      ...(mono ? { mono } : {}),
+    },
+    fontSizes,
+    lineHeights,
+    letterSpacings,
+    fontWeights,
+  };
 }
 
 /**
@@ -116,7 +171,7 @@ export function chakraThemeOptions(theme: VellooTheme, dark = false): ChakraThem
           : {}),
       },
     },
-    fonts: { heading: sans, body: sans },
+    ...chakraTypography(theme, sans),
     radii: { md: radiusCss(theme) },
   };
 }

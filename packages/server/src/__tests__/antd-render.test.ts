@@ -4,7 +4,7 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-antd";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
-import type { Screen, Theme } from "@velloo/schema";
+import { type Screen, type Theme, typesetScale } from "@velloo/schema";
 
 /**
  * The antd twin of mui-render.test.ts: an antd-native screen SSRs to REAL antd
@@ -215,6 +215,43 @@ describe("antd adapter SSR", () => {
     expect(out).toContain("cssVar: true");
     // Idiomatic JS literal (bare identifier keys), not JSON.
     expect(out).not.toContain('"colorPrimary":');
+  });
+});
+
+describe("antd typography projection", () => {
+  const typeset: Theme = {
+    ...theme,
+    typography: {
+      fontFamily: { sans: "Inter, sans-serif", display: "Fraunces, serif" },
+      typesets: { default: { size: 18, leading: 1.6, fontBody: "sans", fontHeading: "display" } },
+    },
+  };
+
+  test("the default typeset drives the seed font sizes and line heights", () => {
+    const native = antd.themeToNative?.(typeset, false) as {
+      token: Record<string, number | string>;
+    };
+    const scale = typesetScale(typeset.typography.typesets?.default);
+    expect(native.token.fontSize).toBe(scale.body.fontSize);
+    expect(native.token.fontSizeLG).toBe(scale.lead.fontSize);
+    expect(native.token.fontSizeSM).toBe(scale.caption.fontSize);
+    expect(native.token.fontSizeHeading1).toBe(scale.h1.fontSize);
+    expect(native.token.fontSizeHeading5).toBe(scale.h5.fontSize);
+    expect(native.token.lineHeight).toBe(scale.body.lineHeight);
+    expect(native.token.lineHeightHeading1).toBe(scale.h1.lineHeight);
+    // antd's family is a single seed token, so the body face is what it gets.
+    expect(native.token.fontFamily).toBe("Inter, sans-serif");
+  });
+
+  test("the render pass publishes the projected sizes as --ant-* variables", async () => {
+    const { html } = await renderScreen(screen, typeset, {
+      viewport: { w: 800, h: 600 },
+      snapshotCss: "",
+      registry: antd.registry,
+      renderPass: antd.renderPass?.(typeset, false),
+    });
+    const scale = typesetScale(typeset.typography.typesets?.default);
+    expect(html).toMatch(new RegExp(`--ant-font-size:\\s*${scale.body.fontSize}px`, "i"));
   });
 });
 

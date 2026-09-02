@@ -18,6 +18,7 @@ import {
   setCustomCss,
   setFonts,
   setTokens,
+  setTypeset,
   type ThemeContext,
   type TokenEntry,
 } from "../../theme/index.ts";
@@ -220,6 +221,57 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     },
     async (args) => {
       const r = await setFonts(ctx, args.fonts, args.theme);
+      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
+    },
+  );
+
+  mcp.registerTool(
+    "set_typeset",
+    {
+      description:
+        'Set a typeset — the typographic rhythm. Three controls: `size` (base text size; "1em" follows the container, 15 pins it), `leading` (body line-height; the whole heading ladder derives from it), `flow` (space between blocks). Everything visible follows: h1–h6 sizes, copy sizes, heading margins. Name "default" is the folder baseline and styles every screen; any other name becomes a preset a Prose region opts into (`preset: "docs"`). Reach for this instead of setting per-node text-* classes — one call re-rhythms the whole design coherently. `fontHeading` / `fontBody` / `fontMono` take a role declared by set_fonts.',
+      inputSchema: {
+        typesets: z
+          .array(
+            z.object({
+              name: z
+                .string()
+                .optional()
+                .describe('Typeset name; default "default" (the folder baseline)'),
+              size: z
+                .union([z.string(), z.number(), z.null()])
+                .optional()
+                .describe('Base text size — "1em" (container-relative), 15, or "15px"'),
+              leading: z
+                .union([z.number(), z.null()])
+                .optional()
+                .describe(
+                  "Body line-height, unitless — e.g. 1.75. Heading leading derives from it",
+                ),
+              flow: z
+                .union([z.string(), z.number(), z.null()])
+                .optional()
+                .describe('Space between blocks — e.g. "1.25em"'),
+              fontBody: z
+                .union([z.string(), z.null()])
+                .optional()
+                .describe("A font role from set_fonts, for body copy"),
+              fontHeading: z
+                .union([z.string(), z.null()])
+                .optional()
+                .describe("A font role from set_fonts, for headings"),
+              fontMono: z
+                .union([z.string(), z.null()])
+                .optional()
+                .describe("A font role from set_fonts, for code"),
+            }),
+          )
+          .min(1),
+        theme: z.string().optional().describe('Named theme to edit; default "default"'),
+      },
+    },
+    async (args) => {
+      const r = await setTypeset(ctx, args.typesets, args.theme);
       return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
     },
   );

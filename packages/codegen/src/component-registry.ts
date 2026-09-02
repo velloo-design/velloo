@@ -11,15 +11,21 @@
 
 import {
   CONTAINER_WIDTH_CLASS,
-  HEADING_BY_LEVEL,
   ICON_ALIASES,
   PLACEHOLDER_ASPECT_CLASS,
   PLACEHOLDER_AVATAR_SIZE_CLASS,
   STACK_ALIGN_CLASS,
   STACK_JUSTIFY_CLASS,
-  TEXT_VARIANT_CLASSES,
 } from "@velloo/helpers";
-import { pascalizeIconName, sanitizeSvgMarkup } from "@velloo/schema";
+import {
+  headingClasses,
+  headingInlineStyle,
+  pascalizeIconName,
+  resolveHeadingLevel,
+  sanitizeSvgMarkup,
+  textClasses,
+  textInlineStyle,
+} from "@velloo/schema";
 
 export type LoweredEntry = {
   kind: "lowered";
@@ -58,10 +64,11 @@ export type DynamicEntry = {
 
 export type RegistryEntry = LoweredEntry | ShadcnEntry | DynamicEntry;
 
-// The lowering class tables (HEADING_BY_LEVEL, TEXT_VARIANT_CLASSES,
-// PLACEHOLDER_*, STACK_*, CONTAINER_WIDTH_CLASS) live in
-// packages/helpers/src/lowering.ts, co-located with the components they
-// mirror — imported above so codegen can't drift from the runtime classes.
+// The lowering class tables (PLACEHOLDER_*, STACK_*, CONTAINER_WIDTH_CLASS)
+// live in packages/helpers/src/lowering.ts, co-located with the components they
+// mirror — imported above so codegen can't drift from the runtime classes. The
+// typography ladder needs no mirror at all: `headingClasses` / `textClasses`
+// are the same functions the runtime components call.
 
 const shadcn = (jsxName: string, importFile: string): ShadcnEntry => ({
   kind: "shadcn",
@@ -340,18 +347,30 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   Heading: {
     kind: "lowered",
     lower(props) {
-      const level = Number(props.level ?? 1);
-      const safe = Number.isFinite(level) && level >= 1 && level <= 6 ? Math.trunc(level) : 1;
-      const classes = HEADING_BY_LEVEL[safe] ?? HEADING_BY_LEVEL[1] ?? "";
-      return { tag: `h${safe}`, extraClasses: classes };
+      return {
+        tag: `h${resolveHeadingLevel(props.level)}`,
+        extraClasses: headingClasses(props.level),
+      };
     },
   },
   Text: {
     kind: "lowered",
     lower(props) {
-      const variant = String(props.variant ?? "default");
-      const classes = TEXT_VARIANT_CLASSES[variant] ?? TEXT_VARIANT_CLASSES.default ?? "";
-      return { tag: "p", extraClasses: classes };
+      return { tag: "p", extraClasses: textClasses(props.variant) };
+    },
+  },
+  // The `typeset` classes are velloo-owned CSS from the emitted typeset.css, not
+  // Tailwind utilities, so Prose lowers to a plain element and needs nothing
+  // materialized in the host app.
+  Prose: {
+    kind: "lowered",
+    lower(props) {
+      const as = props.as;
+      const tag = typeof as === "string" && /^[a-z][a-z0-9]*$/.test(as) ? as : "div";
+      const preset = props.preset;
+      const presetClass =
+        typeof preset === "string" && /^[A-Za-z0-9_-]+$/.test(preset) ? ` typeset-${preset}` : "";
+      return { tag, extraClasses: `typeset${presetClass}` };
     },
   },
   Icon: {
@@ -436,6 +455,7 @@ export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
   Box: new Set(["as"]),
   Heading: new Set(["level"]),
   Text: new Set(["variant"]),
+  Prose: new Set(["as", "preset"]),
   Icon: new Set(["name"]),
   Placeholder: new Set(["kind", "label", "aspect", "size"]),
   Stack: new Set(["direction", "gap", "align", "justify"]),
@@ -480,20 +500,8 @@ const BUTTON_VARIANT_STYLE: Record<string, CssObject> = {
     border: "1px solid var(--color-border)",
   },
 };
-const HEADING_STYLE_BY_LEVEL: Record<number, CssObject> = {
-  1: { fontSize: "3rem", fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.1 },
-  2: { fontSize: "2.25rem", fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.1 },
-  3: { fontSize: "1.875rem", fontWeight: 600, letterSpacing: "-0.025em" },
-  4: { fontSize: "1.5rem", fontWeight: 600, letterSpacing: "-0.025em" },
-  5: { fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.025em" },
-  6: { fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.025em" },
-};
-const TEXT_STYLE_BY_VARIANT: Record<string, CssObject> = {
-  default: { fontSize: "1rem", color: "var(--color-foreground)", lineHeight: 1.75 },
-  muted: { fontSize: "0.875rem", color: "var(--color-muted-foreground)" },
-  small: { fontSize: "0.875rem", fontWeight: 500, lineHeight: 1 },
-  lead: { fontSize: "1.25rem", color: "var(--color-muted-foreground)" },
-};
+// Heading/Text have no table here: `headingInlineStyle` / `textInlineStyle` are
+// the same functions components-inline.tsx renders with.
 
 /**
  * Inline-style lowering for the no-library primitives. Returns the HTML tag +
@@ -583,22 +591,16 @@ export function inlineNoneLower(
         consumed: [],
         extraProps: { type: "text" },
       };
-    case "Heading": {
-      const level = Number(props.level ?? 1);
-      const safe = Number.isFinite(level) && level >= 1 && level <= 6 ? Math.trunc(level) : 1;
+    case "Heading":
       return {
-        tag: `h${safe}`,
-        style: HEADING_STYLE_BY_LEVEL[safe] ?? HEADING_STYLE_BY_LEVEL[1] ?? {},
+        tag: `h${resolveHeadingLevel(props.level)}`,
+        style: headingInlineStyle(props.level),
         consumed: ["level"],
       };
-    }
     case "Text":
       return {
         tag: "p",
-        style:
-          TEXT_STYLE_BY_VARIANT[String(props.variant ?? "default")] ??
-          TEXT_STYLE_BY_VARIANT.default ??
-          {},
+        style: textInlineStyle(props.variant),
         consumed: ["variant"],
       };
     default:

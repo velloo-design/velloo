@@ -55,9 +55,10 @@ One generator, consumed twice: injected into rendered documents by the renderer 
 and written to `velloo.css` by `emit_theme`. Derived strictly from tokens that exist in the
 theme — no invented scale:
 
-- **Typography** — `.h1`–`.h6` (from `typography.fontSize`/`fontWeight`/`lineHeight` keys),
-  `.text-<size>` per `fontSize` key, `.font-<role>` per `fontFamily` role, weight/tracking
-  classes per declared key.
+- **Typography** — nothing new to generate: `typesetCss` (from `typography.typesets`) already
+  ships `.typeset` regions and the `--text-*` / `--leading-*` / `--tracking-*` ladder on every
+  channel, so this generator only adds `.text-<role>` / `.leading-<role>` shorthands over those
+  tokens, plus `.font-<role>` per `fontFamily` role.
 - **Color** — `.bg-<slot>`, `.text-<slot>`, `.border-<slot>` for each semantic slot (and
   `-foreground` pairs); `palette` entries pass through the same way (their keys are already
   constrained to CSS-safe idents).

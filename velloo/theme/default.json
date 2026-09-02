@@ -75,20 +75,20 @@
       "sans": "-apple-system, BlinkMacSystemFont, \"Inter\", \"Segoe UI\", system-ui, sans-serif",
       "mono": "ui-monospace, \"JetBrains Mono\", SFMono-Regular, Menlo, monospace"
     },
-    "fontSize": {
-      "xs": 12,
-      "sm": 14,
-      "base": 16,
-      "lg": 18,
-      "xl": 20,
-      "2xl": 24,
-      "3xl": 30,
-      "4xl": 36
-    },
-    "lineHeight": {
-      "tight": 1.2,
-      "normal": 1.5,
-      "relaxed": 1.75
+    "typesets": {
+      "default": {
+        "leading": 1.5,
+        "fontBody": "sans",
+        "fontMono": "mono"
+      },
+      "docs": {
+        "leading": 1.75,
+        "flow": "1.25em"
+      },
+      "compact": {
+        "size": 14,
+        "leading": 1.45
+      }
     }
   },
   "spacing": {

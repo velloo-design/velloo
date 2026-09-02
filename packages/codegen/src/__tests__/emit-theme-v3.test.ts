@@ -51,14 +51,21 @@ describe("hslTriplet", () => {
   });
 });
 
+/** Look artifacts up by name — the file list's order is not part of the contract. */
+function fileEndingWith(result: { files: { path: string; contents: string }[] }, suffix: string) {
+  const file = result.files.find((f) => f.path.endsWith(suffix));
+  if (!file) throw new Error(`expected an artifact ending in ${suffix}`);
+  return file;
+}
+
 describe("emitTheme tailwindMajor 3", () => {
   test("emits velloo-theme.css + velloo.preset.cjs, never a v4 vocabulary", async () => {
     const outDir = freshDir("basic");
     const result = await emitTheme(buildTheme(), { outputDir: outDir, tailwindMajor: 3 });
 
-    expect(result.files.length).toBe(3);
-    const [css, preset] = result.files;
-    if (!css || !preset) throw new Error("expected both files");
+    expect(result.files.length).toBe(4);
+    const css = fileEndingWith(result, "velloo-theme.css");
+    const preset = fileEndingWith(result, "velloo.preset.cjs");
     // Next to the default globals path, not the globals file itself.
     expect(css.path.endsWith("app/velloo-theme.css")).toBe(true);
     expect(preset.path.endsWith("velloo.preset.cjs")).toBe(true);
@@ -88,9 +95,20 @@ describe("emitTheme tailwindMajor 3", () => {
     expect(cjs).toContain('"2xl": "1400px"');
     // Numeric spacing stays Tailwind's own scale.
     expect(cjs).not.toContain('"2": "8"');
+    // v3 has no `@source inline`, so the ladder's classes must be safelisted in
+    // the preset or the Heading/Text defaults never compile.
+    expect(cjs).toContain('"safelist"');
+    expect(cjs).toContain('"text-h1"');
+    expect(cjs).toContain('"var(--text-h1)"');
+
+    const typeset = fileEndingWith(result, "velloo-typeset.css");
+    expect(typeset.path.endsWith("app/velloo-typeset.css")).toBe(true);
+    expect(typeset.contents).toContain("--text-h1: calc(var(--typeset-rhythm) * 2.5)");
+    expect(typeset.contents).toContain(":where(.typeset h1)");
 
     expect(result.notes.length).toBeGreaterThan(0);
     expect(result.notes.join("\n")).toContain("velloo-theme.css");
+    expect(result.notes.join("\n")).toContain("velloo-typeset.css");
     expect(result.notes.join("\n")).toContain("presets");
   });
 
@@ -102,17 +120,19 @@ describe("emitTheme tailwindMajor 3", () => {
       cssPath: "src/index.css",
       cssOnly: true,
     });
-    expect(result.files.length).toBe(2);
-    expect(result.files[0]?.path.endsWith("src/velloo-theme.css")).toBe(true);
+    expect(result.files.length).toBe(3);
+    expect(fileEndingWith(result, "src/velloo-theme.css")).toBeDefined();
+    // The typeset sheet follows the css path, not the output root.
+    expect(fileEndingWith(result, "src/velloo-typeset.css")).toBeDefined();
+    expect(result.files.some((f) => f.path.includes("velloo.preset"))).toBe(false);
   });
 
   test("a TS host config selects the .ts preset flavor", async () => {
     const outDir = freshDir("tsconfig");
     writeFileSync(join(outDir, "tailwind.config.ts"), "export default { content: [] };\n");
     const result = await emitTheme(buildTheme(), { outputDir: outDir, tailwindMajor: 3 });
-    const preset = result.files[1];
-    expect(preset?.path.endsWith("velloo.preset.ts")).toBe(true);
-    expect(preset?.contents).toContain("export default {");
+    const preset = fileEndingWith(result, "velloo.preset.ts");
+    expect(preset.contents).toContain("export default {");
   });
 
   test("alpha-carrying colors fall back to raw var() with a warning", async () => {
@@ -120,10 +140,11 @@ describe("emitTheme tailwindMajor 3", () => {
     theme.colors.border = "rgb(0 0 0 / 0.1)";
     const outDir = freshDir("alpha");
     const result = await emitTheme(theme, { outputDir: outDir, tailwindMajor: 3 });
-    const [css, preset] = result.files;
-    expect(css?.contents).toContain("--border: rgb(0 0 0 / 0.1);");
-    expect(css?.contents).toContain("border-color: var(--border);");
-    expect(preset?.contents).toContain('"border": "var(--border)"');
+    const css = fileEndingWith(result, "velloo-theme.css");
+    const preset = fileEndingWith(result, "velloo.preset.cjs");
+    expect(css.contents).toContain("--border: rgb(0 0 0 / 0.1);");
+    expect(css.contents).toContain("border-color: var(--border);");
+    expect(preset.contents).toContain('"border": "var(--border)"');
     expect(result.warnings.join("\n")).toContain("--border");
   });
 
