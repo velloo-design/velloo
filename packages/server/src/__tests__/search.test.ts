@@ -6,7 +6,7 @@ import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
 import { searchFolder } from "../search.ts";
 
 const config = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "test",
   libraries: {
     default: {

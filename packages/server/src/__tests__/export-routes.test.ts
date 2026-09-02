@@ -22,7 +22,7 @@ const hasChromium = (await chromiumExecutable()) !== null;
  */
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {

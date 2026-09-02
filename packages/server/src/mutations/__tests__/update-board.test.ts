@@ -11,7 +11,7 @@ import type { WatchEvent } from "../../watcher.ts";
 import { addBoard, type MutationContext, updateBoard } from "../index.ts";
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {

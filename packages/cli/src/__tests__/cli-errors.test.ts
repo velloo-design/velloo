@@ -101,7 +101,7 @@ describe("cli error presentation", () => {
     // folder — theme/default.json is missing.
     const folder = join(tmp, "velloo-broken");
     await mkdir(join(folder, ".design"), { recursive: true });
-    await writeFile(join(folder, ".design", "config.json"), JSON.stringify({ schemaVersion: 2 }));
+    await writeFile(join(folder, ".design", "config.json"), JSON.stringify({ schemaVersion: 3 }));
     const { exitCode, stderr } = await runRun(folder);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("exited during startup");

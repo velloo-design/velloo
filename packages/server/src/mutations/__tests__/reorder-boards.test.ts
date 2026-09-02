@@ -17,7 +17,7 @@ import { type MutationContext, removeBoard, reorderBoards } from "../index.ts";
 import { persistBoard } from "../persist.ts";
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {

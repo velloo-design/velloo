@@ -46,7 +46,7 @@ async function scaffoldFolder(): Promise<string> {
   const writeJson = (p: string, v: unknown) =>
     writeFile(p, `${JSON.stringify(v, null, 2)}\n`, "utf8");
   await writeJson(join(tmp, ".design/config.json"), {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: "0.1.0",
     libraries: {
       default: {

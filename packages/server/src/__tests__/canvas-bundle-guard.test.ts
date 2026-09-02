@@ -48,7 +48,7 @@ const theme: Theme = {
 };
 
 const config = {
-  schemaVersion: 2 as const,
+  schemaVersion: 3 as const,
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {

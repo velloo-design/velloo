@@ -29,7 +29,6 @@ describe("schemaVersionOf", () => {
 describe("planMigration 1 → 2", () => {
   test("promotes the legacy single-library shape", () => {
     const run = planMigration(legacyConfig);
-    expect(run.applied).toHaveLength(1);
     expect(run.config.library).toBeUndefined();
     expect(run.config.defaultLibrary).toBe("default");
     const libs = run.config.libraries as Record<string, Record<string, unknown>>;
@@ -86,6 +85,98 @@ describe("planMigration 1 → 2", () => {
 
   test("stamps the current schema version", () => {
     expect(planMigration(legacyConfig).config.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+  });
+});
+
+describe("planMigration 2 → 3", () => {
+  const v2Theme = {
+    name: "Wren & Field",
+    colors: { background: "#fff" },
+    typography: {
+      fontFamily: {
+        sans: '"Karla", sans-serif',
+        mono: "ui-monospace, monospace",
+        display: '"Fraunces", serif',
+      },
+      googleFonts: ["Fraunces:wght@300..600"],
+      fontSize: { xs: 12, sm: 14, base: 16, lg: 18, "4xl": 36 },
+      fontWeight: { normal: 400, bold: 700 },
+      lineHeight: { tight: 1.2, normal: 1.5, relaxed: 1.75 },
+      letterSpacing: { tight: "-0.02em" },
+    },
+  };
+
+  /** Migrate one theme document through the whole chain from v2. */
+  function migrateTheme(theme: Record<string, unknown>) {
+    const run = planMigration({ schemaVersion: 2 });
+    const out = run.theme(theme) as { typography: Record<string, unknown> };
+    return out.typography;
+  }
+
+  test("drops every record the typeset replaced", () => {
+    const typography = migrateTheme(v2Theme);
+    expect(typography.fontSize).toBeUndefined();
+    expect(typography.fontWeight).toBeUndefined();
+    expect(typography.lineHeight).toBeUndefined();
+    expect(typography.letterSpacing).toBeUndefined();
+    // Everything the typeset did NOT replace survives untouched.
+    expect(typography.fontFamily).toEqual(v2Theme.typography.fontFamily);
+    expect(typography.googleFonts).toEqual(v2Theme.typography.googleFonts);
+  });
+
+  test("binds the font roles so a migrated folder keeps its own faces", () => {
+    const typesets = migrateTheme(v2Theme).typesets as { default: Record<string, unknown> };
+    expect(typesets.default.fontBody).toBe("sans");
+    expect(typesets.default.fontHeading).toBe("display");
+    expect(typesets.default.fontMono).toBe("mono");
+  });
+
+  test("carries body leading over and leaves the base size container-relative", () => {
+    const typesets = migrateTheme(v2Theme).typesets as { default: Record<string, unknown> };
+    expect(typesets.default.leading).toBe(1.5);
+    // base was the implied 16, so `size` stays unset rather than pinning to px.
+    expect(typesets.default.size).toBeUndefined();
+  });
+
+  test("preserves a base size that was actually tuned", () => {
+    const theme = {
+      typography: { ...v2Theme.typography, fontSize: { base: 15 } },
+    };
+    const typesets = migrateTheme(theme).typesets as { default: Record<string, unknown> };
+    expect(typesets.default.size).toBe(15);
+  });
+
+  test("leaves a hand-authored default typeset alone", () => {
+    const authored = { leading: 1.9, fontBody: "body" };
+    const theme = {
+      typography: { ...v2Theme.typography, typesets: { default: authored, docs: { flow: 20 } } },
+    };
+    const typesets = migrateTheme(theme).typesets as Record<string, unknown>;
+    expect(typesets.default).toEqual(authored);
+    expect(typesets.docs).toEqual({ flow: 20 });
+  });
+
+  test("emits no typesets when there was nothing to read", () => {
+    expect(migrateTheme({ typography: {} }).typesets).toBeUndefined();
+  });
+
+  test("a theme with no typography block passes through", () => {
+    const theme = { name: "Bare", colors: {} };
+    expect(planMigration({ schemaVersion: 2 }).theme(theme)).toEqual(theme);
+  });
+
+  test("a v1 folder gets the typeset step too, not just the library one", () => {
+    const run = planMigration(legacyConfig);
+    expect(run.applied).toHaveLength(2);
+    const typography = (run.theme(v2Theme) as { typography: Record<string, unknown> }).typography;
+    expect(typography.fontSize).toBeUndefined();
+    expect(typography.typesets).toBeDefined();
+  });
+
+  test("migrating a theme twice equals migrating it once", () => {
+    const once = planMigration({ schemaVersion: 2 }).theme(v2Theme);
+    const twice = planMigration({ schemaVersion: 2 }).theme(once as Record<string, unknown>);
+    expect(twice).toEqual(once);
   });
 });
 

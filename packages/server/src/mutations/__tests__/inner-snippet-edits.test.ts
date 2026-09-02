@@ -33,7 +33,7 @@ function ctxOf(root: string): { ctx: MutationContext; screen: Screen } {
   const folder = {
     root,
     config: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       toolVersion: "test",
       libraries: {
         default: {

@@ -11,7 +11,7 @@ import { TailwindJit } from "../../../styles/tailwind-jit.ts";
 import { registerValidateTools } from "../validate.ts";
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {

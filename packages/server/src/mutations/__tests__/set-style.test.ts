@@ -29,7 +29,7 @@ const sampleTheme: Theme = {
 };
 
 const config = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {

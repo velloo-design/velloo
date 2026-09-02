@@ -16,7 +16,7 @@ import { connect } from "../connect/index.ts";
  */
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {

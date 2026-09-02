@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   BoardSchema,
   ConfigSchema,
+  CURRENT_SCHEMA_VERSION,
   ExtensionPropDescriptorSchema,
   FrameSchema,
   isComponentNode,
@@ -281,7 +282,7 @@ describe("BoardSchema", () => {
 
 describe("ConfigSchema", () => {
   const base = {
-    schemaVersion: 2,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     toolVersion: "0.1.0",
     libraries: {
       default: {
@@ -353,8 +354,13 @@ describe("ConfigSchema", () => {
   });
 
   test("rejects any schemaVersion but the current one", () => {
-    expect(ConfigSchema.safeParse({ ...base, schemaVersion: 1 }).success).toBe(false);
-    expect(ConfigSchema.safeParse({ ...base, schemaVersion: 3 }).success).toBe(false);
+    const { schemaVersion } = base;
+    expect(ConfigSchema.safeParse({ ...base, schemaVersion: schemaVersion - 1 }).success).toBe(
+      false,
+    );
+    expect(ConfigSchema.safeParse({ ...base, schemaVersion: schemaVersion + 1 }).success).toBe(
+      false,
+    );
   });
 
   test("rejects the legacy single-library shape", () => {

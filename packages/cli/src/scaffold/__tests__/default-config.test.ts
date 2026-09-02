@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigSchema } from "@velloo/schema";
+import { ConfigSchema, CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import { buildDefaultConfig } from "../default-config.ts";
 
-describe("buildDefaultConfig — schema v2 shape", () => {
-  test("emits a v2 multi-library config with the shadcn-upstream default", () => {
+describe("buildDefaultConfig — current schema shape", () => {
+  test("emits a current multi-library config with the shadcn-upstream default", () => {
     const config = buildDefaultConfig();
-    expect(config.schemaVersion).toBe(2);
+    expect(config.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(config.defaultLibrary).toBe("default");
     expect(config.libraries.default?.id).toBe("shadcn-upstream");
     expect(config.libraries.default?.source).toBe("binary");

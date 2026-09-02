@@ -34,7 +34,7 @@ interface StubComment {
 // only thing the pull needs (the cloud resolves the folder's links from it).
 const FOLDER_ID = "folder-uuid-1234";
 const config = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "test",
   folderId: FOLDER_ID,
   libraries: {

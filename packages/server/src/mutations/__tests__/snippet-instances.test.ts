@@ -40,7 +40,7 @@ function makeFolder(screens: Screen[], snippets: Snippet[]): DesignFolder {
   return {
     root: "/tmp",
     config: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       toolVersion: "test",
       libraries: {
         default: {

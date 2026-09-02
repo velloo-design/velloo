@@ -1,6 +1,16 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "toolVersion": "0.1.0",
+  "folderId": "ad1bf0c9-b546-498d-8a42-66b8d57d997d",
+  "libraries": {
+    "default": {
+      "id": "shadcn-upstream",
+      "version": "2026.05.22",
+      "source": "binary",
+      "componentsPath": "binary"
+    }
+  },
+  "defaultLibrary": "default",
   "viewportPresets": [
     {
       "name": "Mobile",
@@ -18,18 +28,29 @@
       "h": 900
     }
   ],
-  "projectId": "2c3ac846-202e-4be0-8629-a5a2865b13df",
+  "boardOrder": [
+    "board-org",
+    "cloud-published-boards",
+    "gallery-ember-oak",
+    "gallery-quarry",
+    "gallery-wren-field",
+    "images",
+    "main",
+    "search-explorations",
+    "settings-dialog"
+  ],
+  "boardGroups": [
+    {
+      "id": "canvas",
+      "name": "Canvas",
+      "color": "#8b5cf6"
+    }
+  ],
   "hostApp": {
     "root": "../packages/canvas"
   },
-  "folderId": "ad1bf0c9-b546-498d-8a42-66b8d57d997d",
-  "libraries": {
-    "default": {
-      "id": "shadcn-upstream",
-      "version": "2026.05.22",
-      "source": "binary",
-      "componentsPath": "binary"
-    }
-  },
-  "defaultLibrary": "default"
+  "feedback": {
+    "enabled": true,
+    "contactOk": true
+  }
 }

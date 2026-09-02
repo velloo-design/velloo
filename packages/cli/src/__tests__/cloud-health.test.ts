@@ -237,7 +237,7 @@ test("velloo publish fails fast on an unhealthy cloud", async () => {
     await writeFile(
       join(design, ".design", "config.json"),
       JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         toolVersion: "0.0.1",
         libraries: {
           default: { id: "none", version: "0.1.0", source: "binary", componentsPath: "binary" },

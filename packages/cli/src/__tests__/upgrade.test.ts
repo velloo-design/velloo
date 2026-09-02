@@ -35,7 +35,13 @@ async function legacyFolder(): Promise<string> {
     JSON.stringify({
       name: "Test",
       colors: { background: "#fff", foreground: "#111", primary: "#06f" },
-      typography: {},
+      typography: {
+        fontFamily: { sans: '"Karla", sans-serif', display: '"Fraunces", serif' },
+        fontSize: { sm: 14, base: 16, "4xl": 36 },
+        fontWeight: { bold: 700 },
+        lineHeight: { normal: 1.5 },
+        letterSpacing: { tight: "-0.02em" },
+      },
       spacing: {},
       radius: {},
     }),
@@ -72,6 +78,24 @@ describe("upgradeFolder", () => {
       await readFile(join(root, "screens", "home.annotations.json"), "utf8"),
     );
     expect(annotations[0].author).toBe("user");
+  });
+
+  test("rewrites theme documents onto typesets", async () => {
+    const root = await legacyFolder();
+    const result = await upgradeFolder(root);
+    expect(result.changedFiles).toContain(join("theme", "default.json"));
+
+    const { typography } = JSON.parse(await readFile(join(root, "theme", "default.json"), "utf8"));
+    expect(typography.typesets.default).toEqual({
+      leading: 1.5,
+      fontBody: "sans",
+      fontHeading: "display",
+    });
+    for (const dead of ["fontSize", "fontWeight", "lineHeight", "letterSpacing"]) {
+      expect(typography[dead]).toBeUndefined();
+    }
+    // The whole folder is re-validated after the write, so reaching here means
+    // the migrated theme parses against the strict current schema.
   });
 
   test("is idempotent", async () => {

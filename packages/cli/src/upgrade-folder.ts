@@ -4,6 +4,51 @@ import { CURRENT_SCHEMA_VERSION, planMigration, schemaVersionOf } from "@velloo/
 import { loadDesignFolder } from "@velloo/server";
 import { TOOL_VERSION } from "./version.ts";
 
+type RawObject = Record<string, unknown>;
+
+interface Rewrite {
+  /** Path relative to the folder root. */
+  rel: string;
+  next: string;
+}
+
+function isObject(value: unknown): value is RawObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const isAnnotationSidecar = (file: string) => file.endsWith(".annotations.json");
+
+// Theme sidecars don't exist, so every .json under theme/ is a theme document.
+const isThemeDocument = (file: string) => file.endsWith(".json");
+
+/**
+ * Plan the rewrites for one directory of JSON documents. Reads and transforms
+ * everything up front so a parse failure aborts the whole upgrade with the
+ * folder still untouched.
+ */
+async function planRewrites(
+  folder: string,
+  dir: string,
+  matches: (file: string) => boolean,
+  transform: (parsed: unknown) => unknown,
+): Promise<Rewrite[]> {
+  let files: string[] = [];
+  try {
+    files = await readdir(join(folder, dir));
+  } catch {
+    return [];
+  }
+  const out: Rewrite[] = [];
+  for (const file of files.sort()) {
+    if (!matches(file)) continue;
+    const rel = join(dir, file);
+    const prev = await readFile(join(folder, rel), "utf8");
+    const next = `${JSON.stringify(transform(JSON.parse(prev)), null, 2)}\n`;
+    if (next !== prev) out.push({ rel, next });
+  }
+  return out;
+}
+
 export interface UpgradeResult {
   /** Version the folder was at before the run. */
   from: number;
@@ -34,40 +79,30 @@ export async function upgradeFolder(
     return { from, to: CURRENT_SCHEMA_VERSION, applied: [], changedFiles: [] };
   }
 
-  // Collect annotation sidecar rewrites before writing anything, so a parse
-  // failure aborts with the folder untouched.
-  const sidecars: Array<{ rel: string; next: string }> = [];
-  const screensDir = join(folder, "screens");
-  let screenFiles: string[] = [];
-  try {
-    screenFiles = await readdir(screensDir);
-  } catch {
-    // No screens/ dir — nothing to migrate there.
-  }
-  for (const file of screenFiles.sort()) {
-    if (!file.endsWith(".annotations.json")) continue;
-    const path = join(screensDir, file);
-    const entries: unknown = JSON.parse(await readFile(path, "utf8"));
-    if (!Array.isArray(entries)) continue;
-    const next = entries.map((e) =>
-      typeof e === "object" && e !== null ? run.annotation(e as Record<string, unknown>) : e,
-    );
-    const nextText = `${JSON.stringify(next, null, 2)}\n`;
-    const prevText = await readFile(path, "utf8");
-    if (nextText !== prevText) sidecars.push({ rel: join("screens", file), next: nextText });
-  }
+  const rewrites = [
+    ...(await planRewrites(folder, "screens", isAnnotationSidecar, (parsed) =>
+      Array.isArray(parsed)
+        ? parsed.map((e) =>
+            typeof e === "object" && e !== null ? run.annotation(e as RawObject) : e,
+          )
+        : parsed,
+    )),
+    ...(await planRewrites(folder, "theme", isThemeDocument, (parsed) =>
+      isObject(parsed) ? run.theme(parsed) : parsed,
+    )),
+  ];
 
   // The upgrade run is the natural moment to refresh the recorded tool version.
   const nextConfig = { ...run.config, toolVersion: TOOL_VERSION };
 
-  const changedFiles = [join(".design", "config.json"), ...sidecars.map((s) => s.rel)];
+  const changedFiles = [join(".design", "config.json"), ...rewrites.map((r) => r.rel)];
   if (opts.dryRun) {
     return { from, to: CURRENT_SCHEMA_VERSION, applied: run.applied, changedFiles };
   }
 
   await writeFile(configPath, `${JSON.stringify(nextConfig, null, 2)}\n`, "utf8");
-  for (const s of sidecars) {
-    await writeFile(join(folder, s.rel), s.next, "utf8");
+  for (const r of rewrites) {
+    await writeFile(join(folder, r.rel), r.next, "utf8");
   }
 
   // Full-folder validation: parse everything with the current schemas so the

@@ -33,7 +33,7 @@ const sampleTheme: Theme = {
 };
 
 const multiLibraryConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {

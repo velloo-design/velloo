@@ -20,9 +20,13 @@
  *       enum "binary" | "cache" | "in-repo", `shadcn-react` retired in favor
  *       of `shadcn-upstream` (same canvas runtime, real install deferred to
  *       the host app), `author` required.
+ *   3 — typography is typesets. The `fontSize` / `fontWeight` / `lineHeight` /
+ *       `letterSpacing` records are gone and `typography` parses strictly, so
+ *       a v2 theme file is now a hard validation failure rather than dead
+ *       weight — hence the version gate.
  */
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * Read the format version off a raw (unvalidated) config object. Historical
@@ -46,6 +50,8 @@ export interface FolderMigration {
   config?(raw: RawObject): RawObject;
   /** Transform one annotation entry from a `screens/<id>.annotations.json` sidecar. */
   annotation?(raw: RawObject): RawObject;
+  /** Transform one `theme/<name>.json` document. */
+  theme?(raw: RawObject): RawObject;
 }
 
 /** Library id assigned to a legacy single-library config when it is promoted. */
@@ -67,6 +73,70 @@ function migrateLibraryEntry(raw: unknown): unknown {
     lib.id = "shadcn-upstream";
   }
   return lib;
+}
+
+/**
+ * The typography records the typeset replaced. All four were declared, written
+ * by every preset, and read by nothing that painted — the sizes that actually
+ * rendered were literal utility classes. `TypographySchema` is strict now, so
+ * they have to go rather than linger as ignored keys.
+ *
+ * `fontWeight` and `letterSpacing` have no destination: both are per-role
+ * constants in the ratio table, deliberately not among the three controls.
+ */
+const RETIRED_TYPOGRAPHY_KEYS = ["fontSize", "fontWeight", "lineHeight", "letterSpacing"] as const;
+
+/**
+ * Font *role* names to bind each typeset face to, in preference order. A theme
+ * names its families freely, so rather than guess we look for the keys velloo's
+ * own scaffolds, wizard, and CSS import have always written.
+ */
+const FACE_ROLE_CANDIDATES: Record<"fontBody" | "fontHeading" | "fontMono", string[]> = {
+  fontBody: ["sans", "body", "base"],
+  fontHeading: ["display", "heading", "serif"],
+  fontMono: ["mono", "code"],
+};
+
+/** The base size the ratio table already assumes, in px. */
+const IMPLIED_BASE_PX = 16;
+
+function asObject(value: unknown): RawObject | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as RawObject)
+    : undefined;
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+/**
+ * Read a v2 theme's typography intent into a typeset. Only `fontSize.base` and
+ * `lineHeight.normal` carry over — the rest of both records described a ladder
+ * the typeset now derives, so restating any of it would freeze proportions that
+ * are supposed to move with the three controls.
+ */
+function deriveTypeset(typography: RawObject): RawObject {
+  const derived: RawObject = {};
+
+  // 16px is what the ladder scales from anyway, so a folder that never tuned
+  // the base keeps the container-relative `1em` default instead of being pinned
+  // to an absolute size it never asked for.
+  const base = positiveNumber(asObject(typography.fontSize)?.base);
+  if (base !== undefined && base !== IMPLIED_BASE_PX) derived.size = base;
+
+  const leading = positiveNumber(asObject(typography.lineHeight)?.normal);
+  if (leading !== undefined) derived.leading = leading;
+
+  const families = asObject(typography.fontFamily);
+  if (families) {
+    for (const [face, candidates] of Object.entries(FACE_ROLE_CANDIDATES)) {
+      const role = candidates.find((name) => typeof families[name] === "string");
+      if (role) derived[face] = role;
+    }
+  }
+
+  return derived;
 }
 
 export const FOLDER_MIGRATIONS: FolderMigration[] = [
@@ -97,6 +167,33 @@ export const FOLDER_MIGRATIONS: FolderMigration[] = [
       return raw;
     },
   },
+  {
+    from: 2,
+    summary:
+      "typography scales → typesets (font roles bound, dead size/weight/tracking records dropped)",
+    config(raw) {
+      return { ...raw, schemaVersion: 3 };
+    },
+    theme(raw) {
+      const typography = asObject(raw.typography);
+      if (!typography) return raw;
+      const next = { ...typography };
+
+      // Binding the font roles is the load-bearing half of this: without
+      // `fontBody` a migrated folder's typeset regions resolve to `inherit` and
+      // quietly stop using the theme's own faces.
+      const typesets = asObject(next.typesets);
+      if (typesets?.default === undefined) {
+        const derived = deriveTypeset(next);
+        if (Object.keys(derived).length > 0) {
+          next.typesets = { ...typesets, default: derived };
+        }
+      }
+
+      for (const key of RETIRED_TYPOGRAPHY_KEYS) delete next[key];
+      return { ...raw, typography: next };
+    },
+  },
 ];
 
 export interface MigrationRun {
@@ -109,6 +206,8 @@ export interface MigrationRun {
    * over every entry of every `*.annotations.json` sidecar it finds.
    */
   annotation: (raw: RawObject) => RawObject;
+  /** Per-theme transform, applied to every `theme/<name>.json` in the folder. */
+  theme: (raw: RawObject) => RawObject;
 }
 
 /**
@@ -140,5 +239,6 @@ export function planMigration(rawConfig: unknown): MigrationRun {
     config,
     applied: steps.map((s) => s.summary),
     annotation: (raw) => steps.reduce((acc, step) => step.annotation?.(acc) ?? acc, raw),
+    theme: (raw) => steps.reduce((acc, step) => step.theme?.(acc) ?? acc, raw),
   };
 }

@@ -34,7 +34,7 @@ function ctxOf(): { ctx: MutationContext; screen: Screen } {
   const folder = {
     root: "/tmp/velloo-override-test-nonexistent",
     config: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       toolVersion: "test",
       libraries: {
         default: {

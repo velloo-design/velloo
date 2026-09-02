@@ -19,7 +19,7 @@ import {
 } from "../index.ts";
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: { id: "shadcn-upstream", version: "test", source: "binary", componentsPath: "binary" },
@@ -194,7 +194,7 @@ describe("HTTP surface", () => {
     const body = (await (await app.request("/")).json()) as Record<string, unknown>;
     expect(body).toMatchObject({
       root: tmp,
-      schemaVersion: 2,
+      schemaVersion: 3,
       toolVersion: "0.1.0",
       defaultLibrary: "default",
       styling: null,

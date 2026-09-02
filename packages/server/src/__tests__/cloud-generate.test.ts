@@ -36,7 +36,7 @@ let stub: {
 };
 
 const config = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "test",
   libraries: {
     default: { id: "shadcn-upstream", version: "test", source: "binary", componentsPath: "binary" },

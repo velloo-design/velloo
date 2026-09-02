@@ -29,7 +29,7 @@ import { TailwindJit } from "../styles/tailwind-jit.ts";
 const provider = createShadcnProvider();
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {
