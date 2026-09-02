@@ -1,0 +1,52 @@
+{
+  "id": "bo-row",
+  "name": "Sidebar board row",
+  "params": [
+    {
+      "name": "rowClass",
+      "type": "string"
+    },
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "metaClass",
+      "type": "string"
+    },
+    {
+      "name": "meta",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": {
+        "$param": "rowClass"
+      }
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "truncate text-[13px] font-medium leading-tight",
+          "children": {
+            "$param": "name"
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": {
+            "$param": "metaClass"
+          },
+          "children": {
+            "$param": "meta"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "id": "typography-panel",
+  "name": "Theme typography panel",
+  "group": "canvas",
+  "frames": [
+    {
+      "id": "ty-a-1",
+      "screen": "ty-a-panel",
+      "x": 0,
+      "y": 0,
+      "w": 360,
+      "h": 800,
+      "label": "A · Theme tab section"
+    },
+    {
+      "id": "ty-d-1",
+      "screen": "ty-d-typesets",
+      "x": 440,
+      "y": 0,
+      "w": 360,
+      "h": 660,
+      "label": "D · Typeset manager"
+    },
+    {
+      "id": "ty-c-1",
+      "screen": "ty-c-workbench",
+      "x": 880,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "label": "C · Typography workbench"
+    },
+    {
+      "id": "ty-b-1",
+      "screen": "ty-b-hud",
+      "x": 2240,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "B · Floating rhythm HUD"
+    }
+  ],
+  "groups": []
+}

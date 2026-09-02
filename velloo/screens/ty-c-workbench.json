@@ -1,0 +1,422 @@
+{
+  "id": "ty-c-workbench",
+  "name": "C · Typography workbench (dialog scope)",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "h-[860px] flex flex-col bg-card text-card-foreground font-sans overflow-hidden"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-3 px-6 py-4 border-b border-border shrink-0"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "size-8 grid place-items-center rounded-lg bg-primary/10 text-primary shrink-0"
+            },
+            "children": [{ "$ref": "Icon", "props": { "name": "type", "size": 16 } }]
+          },
+          {
+            "$ref": "Box",
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "block text-sm font-medium text-foreground",
+                  "children": "Typography"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "block text-[11px] text-muted-foreground",
+                  "children": "Theme velloo-cloud · applies to every board using it"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "ml-auto size-7 grid place-items-center rounded-md text-muted-foreground"
+            },
+            "children": [{ "$ref": "Icon", "props": { "name": "x", "size": 15 } }]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": { "className": "flex-1 flex min-h-0" },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "w-[212px] shrink-0 border-r border-border p-3 flex flex-col gap-1"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+                  "children": "Typesets"
+                }
+              },
+              {
+                "$snippet": "ty-listrow",
+                "args": {
+                  "name": "default",
+                  "meta": ":root",
+                  "rowClass": "flex items-center gap-2 px-2 h-9 rounded-md bg-accent text-accent-foreground"
+                }
+              },
+              {
+                "$snippet": "ty-listrow",
+                "args": {
+                  "name": "docs",
+                  "meta": "2 overrides",
+                  "rowClass": "flex items-center gap-2 px-2 h-9 rounded-md text-foreground"
+                }
+              },
+              {
+                "$snippet": "ty-listrow",
+                "args": {
+                  "name": "compact",
+                  "meta": "2 overrides",
+                  "rowClass": "flex items-center gap-2 px-2 h-9 rounded-md text-foreground"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "mt-1 flex items-center gap-2 px-2 h-9 rounded-md border border-dashed border-border text-muted-foreground"
+                },
+                "children": [
+                  { "$ref": "Icon", "props": { "name": "plus", "size": 13 } },
+                  {
+                    "$ref": "Box",
+                    "props": { "as": "span", "className": "text-xs", "children": "New preset" }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "p",
+                  "className": "mt-auto px-2 text-[10px] leading-relaxed text-muted-foreground/80",
+                  "children": "Each preset becomes a .typeset-<name> class you can drop on any region."
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "w-[380px] shrink-0 border-r border-border p-5 space-y-5" },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": { "className": "space-y-4" },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+                      "children": "Rhythm"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-slider",
+                    "args": {
+                      "label": "Size",
+                      "value": "1em",
+                      "fillClass": "absolute inset-y-0 left-0 w-[33%] rounded-full bg-primary",
+                      "thumbClass": "absolute top-1/2 left-[33%] -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full border-2 border-background bg-primary shadow-sm",
+                      "hint": "container-relative — resolves to 16px at the document root"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-slider",
+                    "args": {
+                      "label": "Leading",
+                      "value": "1.50",
+                      "fillClass": "absolute inset-y-0 left-0 w-[42%] rounded-full bg-primary",
+                      "thumbClass": "absolute top-1/2 left-[42%] -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full border-2 border-background bg-primary shadow-sm",
+                      "hint": "heading leading is a ratio of this, so the ladder moves together"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-slider",
+                    "args": {
+                      "label": "Flow",
+                      "value": "1.25em",
+                      "fillClass": "absolute inset-y-0 left-0 w-[38%] rounded-full bg-primary",
+                      "thumbClass": "absolute top-1/2 left-[38%] -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full border-2 border-background bg-primary shadow-sm",
+                      "hint": "block spacing, list indent, and the air above a heading"
+                    }
+                  }
+                ]
+              },
+              { "$ref": "Separator" },
+              {
+                "$ref": "Box",
+                "props": { "className": "space-y-2.5" },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+                      "children": "Faces"
+                    }
+                  },
+                  {
+                    "$snippet": "field",
+                    "args": {
+                      "label": "Body",
+                      "control": { "$snippet": "selecttrig", "args": { "value": "sans" } }
+                    }
+                  },
+                  {
+                    "$snippet": "field",
+                    "args": {
+                      "label": "Heading",
+                      "control": { "$snippet": "selecttrig", "args": { "value": "display" } }
+                    }
+                  },
+                  {
+                    "$snippet": "field",
+                    "args": {
+                      "label": "Mono",
+                      "control": { "$snippet": "selecttrig", "args": { "value": "mono" } }
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "p",
+                      "className": "text-[10px] leading-relaxed text-muted-foreground/80",
+                      "children": "Roles, not stacks — they point at typography.fontFamily, so swapping a face updates every typeset that names it."
+                    }
+                  }
+                ]
+              },
+              { "$ref": "Separator" },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2.5"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "smartphone",
+                      "size": 13,
+                      "className": "mt-0.5 text-muted-foreground shrink-0"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "p",
+                      "className": "text-[10px] leading-relaxed text-muted-foreground",
+                      "children": "Under 48rem the base gets a 1.125× bump so phone frames stay readable. Every preset inherits it."
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "flex-1 min-w-0 flex flex-col" },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": { "className": "px-5 py-4 border-b border-border" },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "block mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+                      "children": "Resolved ladder"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "h1",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[30px] leading-none font-bold tracking-[-0.025em] text-foreground truncate",
+                      "meta": "40px / 0.945 / -0.025em"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "h2",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[25px] leading-none font-bold tracking-[-0.025em] text-foreground truncate",
+                      "meta": "32px / 0.990 / -0.025em"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "h3",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[20px] leading-none font-semibold tracking-[-0.02em] text-foreground truncate",
+                      "meta": "24px / 1.065 / -0.02em"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "h4",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[17px] leading-none font-semibold tracking-[-0.02em] text-foreground truncate",
+                      "meta": "20px / 1.110 / -0.02em"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "h5",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[16px] leading-none font-semibold tracking-[-0.015em] text-foreground truncate",
+                      "meta": "18px / 1.200 / -0.015em"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "h6",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[15px] leading-none font-semibold tracking-[-0.01em] text-foreground truncate",
+                      "meta": "16px / 1.200 / -0.01em"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "lead",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[16px] leading-none text-muted-foreground truncate",
+                      "meta": "20px / 1.365"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "body",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[14px] leading-none text-foreground truncate",
+                      "meta": "16px / 1.500"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "small",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[13px] leading-none font-medium text-foreground truncate",
+                      "meta": "14px / 0.855"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-rung",
+                    "args": {
+                      "role": "caption",
+                      "sample": "Grotesque",
+                      "sampleClass": "text-[13px] leading-none text-muted-foreground truncate",
+                      "meta": "14px / 1.290"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": { "className": "flex-1 min-h-0 px-5 py-4 overflow-hidden" },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "block mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+                      "children": "Specimen"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "rounded-lg border border-border bg-background px-6 py-5 h-full overflow-hidden"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Prose",
+                        "children": [
+                          { "$ref": "Box", "props": { "as": "h2", "children": "Setting the type" } },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "p",
+                              "children": "This block is a real .typeset region, so it is not a picture of the settings — it is the settings. Drag a control on the left and this reflows with the rest of the canvas."
+                            }
+                          },
+                          { "$ref": "Box", "props": { "as": "h3", "children": "Inline detail" } },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "p",
+                              "children": "Code like set_typeset keeps the mono face, and a long paragraph shows whether the leading you picked survives contact with a real measure."
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-3 px-6 py-3 border-t border-border shrink-0 bg-muted/30"
+        },
+        "children": [
+          {
+            "$ref": "Icon",
+            "props": { "name": "zap", "size": 13, "className": "text-muted-foreground" }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[11px] text-muted-foreground",
+              "children": "Applies on change — every edit goes through set_typeset, so a second tab and your agent see it immediately."
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "ml-auto text-[11px] text-muted-foreground",
+              "children": "Reset typeset"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

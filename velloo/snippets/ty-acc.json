@@ -1,0 +1,23 @@
+{
+  "id": "ty-acc",
+  "name": "Collapsed accordion header",
+  "params": [{ "name": "title", "type": "string" }],
+  "tree": {
+    "$ref": "Box",
+    "props": { "className": "flex items-center gap-2 py-2.5" },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-xs uppercase tracking-wider text-muted-foreground",
+          "children": { "$param": "title" }
+        }
+      },
+      {
+        "$ref": "Icon",
+        "props": { "name": "chevron-right", "size": 14, "className": "ml-auto text-muted-foreground/70" }
+      }
+    ]
+  }
+}

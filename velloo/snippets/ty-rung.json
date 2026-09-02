@@ -1,0 +1,42 @@
+{
+  "id": "ty-rung",
+  "name": "Type ladder rung (specimen row)",
+  "params": [
+    { "name": "role", "type": "string" },
+    { "name": "sample", "type": "string" },
+    { "name": "sampleClass", "type": "string" },
+    { "name": "meta", "type": "string" }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex items-baseline gap-3 py-1.5 border-b border-border/60 last:border-0"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "w-12 shrink-0 font-mono text-[10px] text-muted-foreground",
+          "children": { "$param": "role" }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": { "$param": "sampleClass" },
+          "children": { "$param": "sample" }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "ml-auto shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/80",
+          "children": { "$param": "meta" }
+        }
+      }
+    ]
+  }
+}

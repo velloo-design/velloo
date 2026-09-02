@@ -1,0 +1,55 @@
+{
+  "id": "ty-slider",
+  "name": "Rhythm control (slider + readout)",
+  "params": [
+    { "name": "label", "type": "string" },
+    { "name": "value", "type": "string" },
+    { "name": "fillClass", "type": "string" },
+    { "name": "thumbClass", "type": "string" },
+    { "name": "hint", "type": "string" }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": { "className": "space-y-1.5" },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": { "className": "flex items-baseline justify-between gap-3" },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-xs text-muted-foreground",
+              "children": { "$param": "label" }
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-xs font-mono tabular-nums text-foreground",
+              "children": { "$param": "value" }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": { "className": "relative h-1.5 rounded-full bg-muted" },
+        "children": [
+          { "$ref": "Box", "props": { "className": { "$param": "fillClass" } } },
+          { "$ref": "Box", "props": { "className": { "$param": "thumbClass" } } }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "block text-[10px] text-muted-foreground/80",
+          "children": { "$param": "hint" }
+        }
+      }
+    ]
+  }
+}

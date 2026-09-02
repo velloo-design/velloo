@@ -1,0 +1,44 @@
+{
+  "id": "ty-frame",
+  "name": "Board frame showing one typeset",
+  "params": [
+    { "name": "label", "type": "string" },
+    { "name": "wrapClass", "type": "string" },
+    { "name": "cardClass", "type": "string" },
+    { "name": "preset", "type": "string" }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": { "className": { "$param": "wrapClass" } },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "block mb-1.5 text-[11px] text-muted-foreground truncate",
+          "children": { "$param": "label" }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": { "className": { "$param": "cardClass" } },
+        "children": [
+          {
+            "$ref": "Prose",
+            "props": { "preset": { "$param": "preset" } },
+            "children": [
+              { "$ref": "Box", "props": { "as": "h3", "children": "Rhythm" } },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "p",
+                  "children": "Three controls decide the whole ladder. Nothing here is a separate size token."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,253 @@
+{
+  "id": "ty-d-typesets",
+  "name": "D · Typeset manager (inheritance made visible)",
+  "tree": {
+    "$ref": "Box",
+    "props": { "className": "min-h-full bg-card text-card-foreground font-sans flex flex-col" },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-2 px-3 py-2.5 border-b border-border shrink-0"
+        },
+        "children": [
+          {
+            "$ref": "Icon",
+            "props": { "name": "type", "size": 15, "className": "text-muted-foreground" }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-sm font-medium text-foreground",
+              "children": "Typesets"
+            }
+          },
+          {
+            "$ref": "Badge",
+            "props": { "variant": "secondary", "className": "font-mono text-[10px]", "children": "3" }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "ml-auto size-7 grid place-items-center rounded-md border border-input bg-background"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": { "name": "plus", "size": 13, "className": "text-muted-foreground" }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": { "className": "flex-1 p-3 space-y-2.5" },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "rounded-lg border border-primary/40 bg-primary/[0.03] overflow-hidden"
+            },
+            "children": [
+              {
+                "$snippet": "ty-cardhead",
+                "args": { "name": "default", "selector": ":root", "headClass": "flex items-center gap-2 px-3 h-9 border-b border-primary/25 bg-primary/[0.05]" }
+              },
+              {
+                "$ref": "Box",
+                "props": { "className": "px-3 py-2" },
+                "children": [
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full bg-primary shrink-0",
+                      "label": "Size",
+                      "tag": "",
+                      "value": "1em",
+                      "valueClass": "font-mono text-xs tabular-nums text-foreground"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full bg-primary shrink-0",
+                      "label": "Leading",
+                      "tag": "",
+                      "value": "1.50",
+                      "valueClass": "font-mono text-xs tabular-nums text-foreground"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full bg-primary shrink-0",
+                      "label": "Flow",
+                      "tag": "",
+                      "value": "1.25em",
+                      "valueClass": "font-mono text-xs tabular-nums text-foreground"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mt-1.5 pt-1.5 border-t border-primary/20 flex items-center gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-[10px] text-muted-foreground",
+                          "children": "faces"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "font-mono text-[10px] text-foreground",
+                          "children": "sans · display · mono"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "rounded-lg border border-border overflow-hidden" },
+            "children": [
+              {
+                "$snippet": "ty-cardhead",
+                "args": { "name": "docs", "selector": ".typeset-docs", "headClass": "flex items-center gap-2 px-3 h-9 border-b border-border bg-muted/40" }
+              },
+              {
+                "$ref": "Box",
+                "props": { "className": "px-3 py-2" },
+                "children": [
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full border border-muted-foreground/40 shrink-0",
+                      "label": "Size",
+                      "tag": "inherited",
+                      "value": "1em",
+                      "valueClass": "font-mono text-xs tabular-nums text-muted-foreground/60"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full bg-primary shrink-0",
+                      "label": "Leading",
+                      "tag": "",
+                      "value": "1.75",
+                      "valueClass": "font-mono text-xs tabular-nums text-foreground"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full bg-primary shrink-0",
+                      "label": "Flow",
+                      "tag": "",
+                      "value": "1.25em",
+                      "valueClass": "font-mono text-xs tabular-nums text-foreground"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "rounded-lg border border-border overflow-hidden" },
+            "children": [
+              {
+                "$snippet": "ty-cardhead",
+                "args": { "name": "compact", "selector": ".typeset-compact", "headClass": "flex items-center gap-2 px-3 h-9 border-b border-border bg-muted/40" }
+              },
+              {
+                "$ref": "Box",
+                "props": { "className": "px-3 py-2" },
+                "children": [
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full bg-primary shrink-0",
+                      "label": "Size",
+                      "tag": "",
+                      "value": "14px",
+                      "valueClass": "font-mono text-xs tabular-nums text-foreground"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full bg-primary shrink-0",
+                      "label": "Leading",
+                      "tag": "",
+                      "value": "1.45",
+                      "valueClass": "font-mono text-xs tabular-nums text-foreground"
+                    }
+                  },
+                  {
+                    "$snippet": "ty-ctl",
+                    "args": {
+                      "dotClass": "size-1.5 rounded-full border border-muted-foreground/40 shrink-0",
+                      "label": "Flow",
+                      "tag": "inherited",
+                      "value": "1.25em",
+                      "valueClass": "font-mono text-xs tabular-nums text-muted-foreground/60"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center justify-center gap-1.5 h-9 rounded-lg border border-dashed border-border text-muted-foreground"
+            },
+            "children": [
+              { "$ref": "Icon", "props": { "name": "plus", "size": 13 } },
+              {
+                "$ref": "Box",
+                "props": { "as": "span", "className": "text-xs", "children": "Add preset" }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-start gap-2 rounded-md bg-muted/50 px-2.5 py-2"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "info",
+                  "size": 12,
+                  "className": "mt-0.5 text-muted-foreground shrink-0"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "p",
+                  "className": "text-[10px] leading-relaxed text-muted-foreground",
+                  "children": "A filled dot is authored on this preset; a hollow one inherits from default and re-derives when default changes. Clearing a control returns it to inherited."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

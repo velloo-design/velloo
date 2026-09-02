@@ -1,0 +1,291 @@
+{
+  "id": "ty-b-hud",
+  "name": "B · Floating rhythm HUD over the board",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative h-[900px] overflow-hidden bg-muted/40 font-sans [background-image:radial-gradient(theme(colors.border)_1px,transparent_1px)] [background-size:22px_22px]"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-start gap-10 px-12 pt-16"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": { "className": "w-[620px] shrink-0" },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "block mb-1.5 text-[11px] text-muted-foreground",
+                  "children": "Changelog — 1440 · typeset default"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "rounded-lg border border-border bg-background shadow-sm ring-2 ring-primary/40 px-8 py-7 h-[320px] overflow-hidden"
+                },
+                "children": [
+                  {
+                    "$ref": "Prose",
+                    "children": [
+                      { "$ref": "Box", "props": { "as": "h1", "children": "Typography" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "p",
+                          "children": "A typeset is three controls. Everything else — the h1 to h6 ladder, the space under a heading, the indent of a list — derives from them."
+                        }
+                      },
+                      { "$ref": "Box", "props": { "as": "h3", "children": "Rhythm" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "p",
+                          "children": "Drag a control and every frame on the board re-flows at once, because the projection is CSS custom properties rather than a re-render."
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "w-[400px] shrink-0" },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "block mb-1.5 text-[11px] text-muted-foreground",
+                  "children": "Docs sidebar — 640 · .typeset-compact"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "rounded-lg border border-border bg-background shadow-sm px-6 py-5 h-[320px] overflow-hidden"
+                },
+                "children": [
+                  {
+                    "$ref": "Prose",
+                    "props": { "preset": "compact" },
+                    "children": [
+                      { "$ref": "Box", "props": { "as": "h1", "children": "Typography" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "p",
+                          "children": "A typeset is three controls. Everything else — the h1 to h6 ladder, the space under a heading, the indent of a list — derives from them."
+                        }
+                      },
+                      { "$ref": "Box", "props": { "as": "h3", "children": "Rhythm" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "p",
+                          "children": "Drag a control and every frame on the board re-flows at once, because the projection is CSS custom properties rather than a re-render."
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": { "className": "flex items-start gap-10 px-12 pt-9" },
+        "children": [
+          {
+            "$snippet": "ty-frame",
+            "args": {
+              "label": "Mobile — 390 · narrow bump",
+              "wrapClass": "w-[300px] shrink-0",
+              "cardClass": "rounded-lg border border-border bg-background shadow-sm px-5 py-4 h-[168px] overflow-hidden",
+              "preset": ""
+            }
+          },
+          {
+            "$snippet": "ty-frame",
+            "args": {
+              "label": "Guide — .typeset-docs",
+              "wrapClass": "w-[340px] shrink-0",
+              "cardClass": "rounded-lg border border-border bg-background shadow-sm px-5 py-4 h-[168px] overflow-hidden",
+              "preset": "docs"
+            }
+          },
+          {
+            "$snippet": "ty-frame",
+            "args": {
+              "label": "Panel — .typeset-compact",
+              "wrapClass": "w-[300px] shrink-0",
+              "cardClass": "rounded-lg border border-border bg-background shadow-sm px-5 py-4 h-[168px] overflow-hidden",
+              "preset": "compact"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-5 rounded-xl border border-border bg-card/95 px-4 py-3 shadow-xl backdrop-blur"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": { "className": "flex items-center gap-2 pr-1" },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": { "name": "type", "size": 15, "className": "text-primary" }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-0.5 p-0.5 rounded-md bg-muted"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "px-2 h-6 flex items-center rounded-[5px] bg-background text-[11px] font-medium text-foreground shadow-sm",
+                      "children": "default"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "px-2 h-6 flex items-center rounded-[5px] text-[11px] text-muted-foreground",
+                      "children": "docs"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "px-2 h-6 flex items-center rounded-[5px] text-[11px] text-muted-foreground",
+                      "children": "compact"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          { "$ref": "Separator", "props": { "className": "h-9 w-px" } },
+          {
+            "$ref": "Box",
+            "props": { "className": "w-[150px]" },
+            "children": [
+              {
+                "$snippet": "ty-slider",
+                "args": {
+                  "label": "Size",
+                  "value": "1em",
+                  "fillClass": "absolute inset-y-0 left-0 w-[33%] rounded-full bg-primary",
+                  "thumbClass": "absolute top-1/2 left-[33%] -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full border-2 border-background bg-primary shadow-sm",
+                  "hint": "16px"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "w-[150px]" },
+            "children": [
+              {
+                "$snippet": "ty-slider",
+                "args": {
+                  "label": "Leading",
+                  "value": "1.50",
+                  "fillClass": "absolute inset-y-0 left-0 w-[42%] rounded-full bg-primary",
+                  "thumbClass": "absolute top-1/2 left-[42%] -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full border-2 border-background bg-primary shadow-sm",
+                  "hint": "body line-height"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "w-[150px]" },
+            "children": [
+              {
+                "$snippet": "ty-slider",
+                "args": {
+                  "label": "Flow",
+                  "value": "1.25em",
+                  "fillClass": "absolute inset-y-0 left-0 w-[38%] rounded-full bg-primary",
+                  "thumbClass": "absolute top-1/2 left-[38%] -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full border-2 border-background bg-primary shadow-sm",
+                  "hint": "block spacing"
+                }
+              }
+            ]
+          },
+          { "$ref": "Separator", "props": { "className": "h-9 w-px" } },
+          {
+            "$ref": "Box",
+            "props": { "className": "flex flex-col gap-0.5 pr-1 w-[136px] shrink-0" },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "whitespace-nowrap font-mono text-[10px] tabular-nums text-muted-foreground",
+                  "children": "h1 40 · h3 24 · body 16"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "whitespace-nowrap font-mono text-[10px] tabular-nums text-muted-foreground/70",
+                  "children": "6 frames re-flow live"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": { "className": "flex items-center gap-1" },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "size-7 grid place-items-center rounded-md border border-input bg-background"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "rotate-ccw",
+                      "size": 13,
+                      "className": "text-muted-foreground"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "size-7 grid place-items-center rounded-md text-muted-foreground"
+                },
+                "children": [{ "$ref": "Icon", "props": { "name": "x", "size": 14 } }]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

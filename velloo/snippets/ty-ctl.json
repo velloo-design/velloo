@@ -1,0 +1,42 @@
+{
+  "id": "ty-ctl",
+  "name": "Typeset control row (authored / inherited)",
+  "params": [
+    { "name": "dotClass", "type": "string" },
+    { "name": "label", "type": "string" },
+    { "name": "value", "type": "string" },
+    { "name": "valueClass", "type": "string" },
+    { "name": "tag", "type": "string" }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": { "className": "flex items-center gap-2 h-7" },
+    "children": [
+      { "$ref": "Box", "props": { "className": { "$param": "dotClass" } } },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-xs text-muted-foreground",
+          "children": { "$param": "label" }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "ml-auto text-[10px] uppercase tracking-wide text-muted-foreground/60",
+          "children": { "$param": "tag" }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": { "$param": "valueClass" },
+          "children": { "$param": "value" }
+        }
+      }
+    ]
+  }
+}

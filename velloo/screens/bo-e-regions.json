@@ -1,0 +1,1039 @@
+{
+  "id": "bo-e-regions",
+  "name": "Board org E — Groups as canvas regions",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex h-[900px] w-full overflow-hidden bg-zinc-100 font-sans text-zinc-900"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex h-full w-80 shrink-0 flex-col border-r border-zinc-200 bg-white"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "border-b border-zinc-200 p-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex h-8 items-center gap-1 rounded-lg bg-zinc-100 p-1"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-1 items-center justify-center gap-1.5 rounded-md bg-white py-1 text-[12px] font-medium text-zinc-900 shadow-sm"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "layout-dashboard",
+                          "className": "size-3"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Boards"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-[12px] font-medium text-zinc-500"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "library-big",
+                          "className": "size-3"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Library"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex min-h-0 flex-1 flex-col border-b border-zinc-200"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center justify-between px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "chevron-down",
+                          "className": "size-3"
+                        }
+                      },
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "layout-dashboard",
+                          "className": "size-3"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Boards"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "normal-case text-zinc-400",
+                          "children": "7"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "plus",
+                      "className": "size-3.5 text-zinc-400"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-col gap-0.5 px-2 pb-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "rounded-md bg-zinc-900 px-2 py-1.5 text-white"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center gap-1.5"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "chevron-down",
+                              "className": "size-3 shrink-0 text-white/70"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "truncate text-[13px] font-medium leading-tight",
+                              "children": "Node edit pane explorations"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "ml-[18px] mt-0.5 text-[11px] leading-tight text-zinc-400",
+                          "children": "6 frames · 3 groups"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "ml-[19px] flex flex-col gap-0.5 border-l border-zinc-200 pl-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center gap-2 rounded-md bg-zinc-100 px-2 py-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "size-2 shrink-0 rounded-[3px] bg-violet-500"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "truncate text-[12px] text-zinc-800",
+                              "children": "Tailwind classes"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "ml-auto text-[10px] text-zinc-400",
+                              "children": "2"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center gap-2 rounded-md px-2 py-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "size-2 shrink-0 rounded-[3px] bg-amber-500"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "truncate text-[12px] text-zinc-800",
+                              "children": "MUI sx"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "ml-auto text-[10px] text-zinc-400",
+                              "children": "2"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center gap-2 rounded-md px-2 py-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "size-2 shrink-0 rounded-[3px] bg-emerald-500"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "truncate text-[12px] text-zinc-800",
+                              "children": "Inline box model"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "ml-auto text-[10px] text-zinc-400",
+                              "children": "1"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center gap-2 rounded-md px-2 py-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "size-2 shrink-0 rounded-[3px] border border-dashed border-zinc-300"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "truncate text-[12px] text-zinc-400",
+                              "children": "Ungrouped"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "ml-auto text-[10px] text-zinc-400",
+                              "children": "1"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$snippet": "bo-row",
+                    "args": {
+                      "rowClass": "mt-1 rounded-md px-2 py-1.5 text-zinc-800",
+                      "name": "Canvas search explorations",
+                      "meta": "3 frames",
+                      "metaClass": "mt-0.5 text-[11px] leading-tight text-zinc-500"
+                    }
+                  },
+                  {
+                    "$snippet": "bo-row",
+                    "args": {
+                      "rowClass": "rounded-md px-2 py-1.5 text-zinc-800",
+                      "name": "Canvas settings dialog",
+                      "meta": "3 frames",
+                      "metaClass": "mt-0.5 text-[11px] leading-tight text-zinc-500"
+                    }
+                  },
+                  {
+                    "$snippet": "bo-row",
+                    "args": {
+                      "rowClass": "rounded-md px-2 py-1.5 text-zinc-800",
+                      "name": "Cloud — Published boards table",
+                      "meta": "3 frames",
+                      "metaClass": "mt-0.5 text-[11px] leading-tight text-zinc-500"
+                    }
+                  },
+                  {
+                    "$snippet": "bo-row",
+                    "args": {
+                      "rowClass": "rounded-md px-2 py-1.5 text-zinc-800",
+                      "name": "Gallery — Ember & Oak",
+                      "meta": "3 frames",
+                      "metaClass": "mt-0.5 text-[11px] leading-tight text-zinc-500"
+                    }
+                  },
+                  {
+                    "$snippet": "bo-row",
+                    "args": {
+                      "rowClass": "rounded-md px-2 py-1.5 text-zinc-800",
+                      "name": "Images",
+                      "meta": "1 frame",
+                      "metaClass": "mt-0.5 text-[11px] leading-tight text-zinc-500"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "mt-auto shrink-0 border-t border-zinc-200"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center justify-between px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "chevron-down",
+                          "className": "size-3"
+                        }
+                      },
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "frame",
+                          "className": "size-3"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Screen tree"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "chevrons-up-down",
+                      "className": "size-3 text-zinc-400"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-col gap-1 px-4 pb-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "h-3.5 w-40 rounded bg-zinc-200"
+                    }
+                  },
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "ml-3 h-3.5 w-32 rounded bg-zinc-200"
+                    }
+                  },
+                  {
+                    "$ref": "Skeleton",
+                    "props": {
+                      "className": "ml-3 h-3.5 w-36 rounded bg-zinc-200"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "shrink-0 border-t border-zinc-200 px-4 py-2 text-[11px] text-zinc-400",
+              "children": "shadcn snapshot 2026.05.22"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "relative flex min-w-0 flex-1 flex-col"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex h-11 shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex min-w-0 items-center gap-2 text-[13px]"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "layout-dashboard",
+                      "className": "size-3.5 text-zinc-400"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "font-medium text-zinc-900",
+                      "children": "Node edit pane explorations"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-300",
+                      "children": "/"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "size-2 rounded-[3px] bg-violet-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Tailwind classes"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-1.5 rounded-md border border-zinc-200 px-2 py-1 text-[11px] text-zinc-500"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "search",
+                          "className": "size-3"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "⌘K"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "rounded-md border border-zinc-200 px-2 py-1 text-[11px] text-zinc-500",
+                      "children": "62%"
+                    }
+                  },
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "sun-moon",
+                      "className": "size-4 text-zinc-400"
+                    }
+                  },
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "settings",
+                      "className": "size-4 text-zinc-400"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "relative flex-1 overflow-hidden bg-zinc-100 [background-image:radial-gradient(circle,rgba(0,0,0,0.09)_1px,transparent_1px)] [background-size:22px_22px] p-6"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-5"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative rounded-xl border-2 border-violet-300 bg-violet-500/[0.07] p-3 pt-9"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "absolute left-3 top-2.5 flex items-center gap-1.5"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "size-2 rounded-[3px] bg-violet-500"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-[11px] font-semibold text-violet-800",
+                              "children": "Tailwind classes"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded bg-violet-500/15 px-1 text-[10px] text-violet-700",
+                              "children": "2"
+                            }
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "more-horizontal",
+                              "className": "size-3.5 text-violet-400"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex gap-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[168px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "mb-1 text-[10px] font-medium text-zinc-500",
+                                  "children": "A1 — classes"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex h-[300px] flex-col gap-2.5 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-4 w-20 rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-16 w-full rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-3 w-3/4 rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-3 w-2/3 rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-10 w-full rounded bg-zinc-200"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[168px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "mb-1 text-[10px] font-medium text-zinc-500",
+                                  "children": "A2 — typography"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex h-[300px] flex-col gap-2.5 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-4 w-24 rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-3 w-full rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-24 w-full rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-3 w-1/2 rounded bg-zinc-200"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative rounded-xl border-2 border-amber-300 bg-amber-500/[0.07] p-3 pt-9"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "absolute left-3 top-2.5 flex items-center gap-1.5"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "size-2 rounded-[3px] bg-amber-500"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-[11px] font-semibold text-amber-800",
+                              "children": "MUI sx"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded bg-amber-500/15 px-1 text-[10px] text-amber-700",
+                              "children": "2"
+                            }
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "more-horizontal",
+                              "className": "size-3.5 text-amber-400"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex gap-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[168px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "mb-1 text-[10px] font-medium text-zinc-500",
+                                  "children": "B1 — sx pane"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex h-[300px] flex-col gap-2.5 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-4 w-24 rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-20 w-full rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-3 w-2/3 rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-8 w-24 rounded bg-zinc-200"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[168px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "mb-1 text-[10px] font-medium text-zinc-500",
+                                  "children": "B2 — raw escape"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex h-[300px] flex-col gap-2.5 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-4 w-16 rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-32 w-full rounded bg-zinc-200"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Skeleton",
+                                    "props": {
+                                      "className": "h-3 w-3/4 rounded bg-zinc-200"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "mt-5 flex items-start gap-5"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative rounded-xl border-2 border-emerald-300 bg-emerald-500/[0.07] p-3 pt-9"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "absolute left-3 top-2.5 flex items-center gap-1.5"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "size-2 rounded-[3px] bg-emerald-500"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-[11px] font-semibold text-emerald-800",
+                              "children": "Inline box model"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "rounded bg-emerald-500/15 px-1 text-[10px] text-emerald-700",
+                              "children": "1"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "w-[168px]"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mb-1 text-[10px] font-medium text-zinc-500",
+                              "children": "C — box model"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex h-[210px] flex-col gap-2.5 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Skeleton",
+                                "props": {
+                                  "className": "h-4 w-20 rounded bg-zinc-200"
+                                }
+                              },
+                              {
+                                "$ref": "Skeleton",
+                                "props": {
+                                  "className": "h-24 w-full rounded bg-zinc-200"
+                                }
+                              },
+                              {
+                                "$ref": "Skeleton",
+                                "props": {
+                                  "className": "h-3 w-1/2 rounded bg-zinc-200"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "rounded-xl border-2 border-dashed border-zinc-900/25 bg-white/40 p-3 pt-9 relative"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "absolute left-3 top-2.5 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "plus",
+                              "className": "size-3"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "Drop to group · ⌘G"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "w-[168px]"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mb-1 text-[10px] font-medium text-zinc-500",
+                              "children": "Scratch — ungrouped"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex h-[210px] flex-col gap-2.5 rounded-lg border border-zinc-200 bg-white p-3 opacity-80 shadow-sm"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Skeleton",
+                                "props": {
+                                  "className": "h-4 w-16 rounded bg-zinc-200"
+                                }
+                              },
+                              {
+                                "$ref": "Skeleton",
+                                "props": {
+                                  "className": "h-14 w-full rounded bg-zinc-200"
+                                }
+                              },
+                              {
+                                "$ref": "Skeleton",
+                                "props": {
+                                  "className": "h-3 w-2/3 rounded bg-zinc-200"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

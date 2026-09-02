@@ -1,0 +1,79 @@
+{
+  "id": "board-org",
+  "name": "Board organization explorations",
+  "frames": [
+    {
+      "id": "bo-a-groups-1",
+      "screen": "bo-a-groups",
+      "x": 0,
+      "y": 0,
+      "w": 1180,
+      "h": 900,
+      "label": "A — Groups over the flat list"
+    },
+    {
+      "id": "bo-b-projects-1",
+      "screen": "bo-b-projects",
+      "x": 1280,
+      "y": 0,
+      "w": 1180,
+      "h": 900,
+      "label": "B — Projects (retired — answered by F)"
+    },
+    {
+      "id": "bo-c-facets-1",
+      "screen": "bo-c-facets",
+      "x": 2560,
+      "y": 0,
+      "w": 1180,
+      "h": 900,
+      "label": "C — Flat + filter, pins, tags"
+    },
+    {
+      "id": "bo-d-derived-1",
+      "screen": "bo-d-derived",
+      "x": 3840,
+      "y": 0,
+      "w": 1180,
+      "h": 900,
+      "label": "D — Derived groups (REJECTED — too magical)"
+    },
+    {
+      "id": "bo-e-regions-1",
+      "screen": "bo-e-regions",
+      "x": 5120,
+      "y": 0,
+      "w": 1180,
+      "h": 900,
+      "label": "E — Groups as canvas regions"
+    },
+    {
+      "id": "bo-f-init-1",
+      "screen": "bo-f-init",
+      "x": 0,
+      "y": 2200,
+      "w": 880,
+      "h": 900,
+      "label": "F1 — velloo init offers another folder"
+    },
+    {
+      "id": "bo-f2-switcher-1",
+      "screen": "bo-f2-switcher",
+      "x": 980,
+      "y": 2200,
+      "w": 1180,
+      "h": 900,
+      "label": "F2 — Folder switcher in the canvas"
+    },
+    {
+      "id": "bo-g-groups-1",
+      "screen": "bo-g-groups",
+      "x": 6400,
+      "y": 0,
+      "w": 1180,
+      "h": 900,
+      "label": "G — Groups of boards (revised pick)"
+    }
+  ],
+  "groups": []
+}

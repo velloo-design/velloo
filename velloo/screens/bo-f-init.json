@@ -1,0 +1,947 @@
+{
+  "id": "bo-f-init",
+  "name": "Board org F1 — velloo init: another folder",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex h-[900px] w-full flex-col justify-center gap-5 bg-zinc-100 p-7 font-sans"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "relative flex items-center gap-1.5 border-b border-zinc-800 bg-zinc-900 px-3 py-2.5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "size-2.5 rounded-full bg-zinc-700"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "size-2.5 rounded-full bg-zinc-700"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "size-2.5 rounded-full bg-zinc-700"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "absolute inset-x-0 text-center font-mono text-[11px] text-zinc-500",
+                  "children": "~/code/acme"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-[3px] p-5 font-mono text-[12.5px] leading-[1.55]"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-emerald-400",
+                      "children": "❯"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-100",
+                      "children": "velloo init"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "h-2"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "┌"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-300",
+                      "children": "velloo init"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-500",
+                      "children": "velloo/ · shadcn · format v2 (current) · agents wired · project \"app\""
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-cyan-400",
+                      "children": "◇"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-100",
+                      "children": "Velloo is already set up here. What would you like to do?"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-cyan-400",
+                          "children": "●"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-100",
+                          "children": "Create another design folder"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-500",
+                          "children": "a second canvas in this repo"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "rounded bg-emerald-400/15 px-1.5 text-[10px] text-emerald-300",
+                          "children": "new"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "○"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-400",
+                          "children": "Connect agents"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "re-wire the MCP into Claude Code / Cursor"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "○"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-400",
+                          "children": "Scan for new routes"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "3 routes have no screen yet"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "rounded bg-emerald-400/15 px-1.5 text-[10px] text-emerald-300",
+                          "children": "new"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "○"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-400",
+                          "children": "Re-import theme from the app"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "globals.css changed 2d ago · shows a diff first"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "rounded bg-emerald-400/15 px-1.5 text-[10px] text-emerald-300",
+                          "children": "new"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "○"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-400",
+                          "children": "Check setup"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "browser, agent wiring, velloo.json, host app path"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "rounded bg-emerald-400/15 px-1.5 text-[10px] text-emerald-300",
+                          "children": "new"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "○"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-400",
+                          "children": "Open the canvas"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "velloo run"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "○"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-400",
+                          "children": "Cancel"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2 opacity-60"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-700",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-700",
+                          "children": "○"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-amber-300/70",
+                          "children": "Upgrade folder format · v2 → v3"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-zinc-600",
+                          "children": "← only listed when planMigration() has steps"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-zinc-600",
+                  "children": "│"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-cyan-400",
+                      "children": "◇"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-100",
+                      "children": "Folder path"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-emerald-300",
+                      "children": "velloo-brand"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "← rejected if it's already a design folder"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-cyan-400",
+                      "children": "◇"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-100",
+                      "children": "Name it in velloo.json"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-emerald-300",
+                      "children": "brand"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "← velloo run brand"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-600",
+                      "children": "│"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-500",
+                      "children": "… library, theme, goal — the normal wizard from here"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-emerald-400",
+                      "children": "└"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-zinc-300",
+                      "children": "Created velloo-brand/ · registered as \"brand\" · velloo run brand"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "grid grid-cols-[1fr_1.15fr] gap-5"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "mb-2 flex items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "file-json",
+                      "className": "size-3.5 text-zinc-400"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "font-mono text-[11px] text-zinc-500",
+                      "children": "acme/velloo.json"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600",
+                      "children": "already shipped"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-col gap-0.5 rounded-lg bg-zinc-50 p-3 font-mono text-[11.5px] leading-[1.5] text-zinc-700"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "children": "{"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "pl-3",
+                      "children": "\"projects\": {"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "pl-6",
+                      "children": "\"app\": \"velloo\","
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex gap-2 rounded bg-emerald-50 pl-6 text-emerald-800"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "\"brand\": \"velloo-brand\""
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-emerald-600",
+                          "children": "← added"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "pl-3",
+                      "children": "},"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "pl-3",
+                      "children": "\"defaultProject\": \"app\""
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "children": "}"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "mt-2.5 border-t border-zinc-100 pt-2 text-[11px] leading-snug text-zinc-500",
+                  "children": "Two folders, two daemons, two MCP endpoints, one repo. `velloo status` already labels them by project name."
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "rounded-xl border border-rose-200 bg-rose-50/40 p-4 shadow-sm"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "mb-2 flex items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "trash-2",
+                      "className": "size-3.5 text-rose-400"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-[12px] font-semibold text-rose-900",
+                      "children": "Re-scaffold (overwrite) — dropped"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-col gap-2 text-[11.5px] leading-snug text-zinc-600"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "children": "It never replaced the design. It sets allowNonEmpty and falls through to the normal wizard, then writeScaffold() writes config.json, theme/default.json, README, .gitignore and the sample screens/boards/snippets over whatever is there."
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-col gap-1 rounded-lg border border-rose-100 bg-white p-2.5 font-mono text-[11px] text-zinc-600"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-rose-700",
+                          "children": "✗ keeps every board/screen whose id isn't in the sample"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-rose-700",
+                          "children": "✗ replaces config.json — viewports, hostApp, feedback, defaultScreen"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-rose-700",
+                          "children": "✗ result is a hybrid folder, not a fresh one"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "children": "So it's worse than the thing it's meant to save you from. Deleting the folder and running velloo init is cleaner and already obvious. `--force` stays for automation."
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

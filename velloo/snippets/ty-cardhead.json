@@ -1,0 +1,39 @@
+{
+  "id": "ty-cardhead",
+  "name": "Typeset card header",
+  "params": [
+    { "name": "name", "type": "string" },
+    { "name": "selector", "type": "string" },
+    { "name": "headClass", "type": "string" }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": { "className": { "$param": "headClass" } },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "text-xs font-medium text-foreground",
+          "children": { "$param": "name" }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "as": "span",
+          "className": "font-mono text-[10px] text-muted-foreground/80 truncate",
+          "children": { "$param": "selector" }
+        }
+      },
+      {
+        "$ref": "Icon",
+        "props": {
+          "name": "ellipsis",
+          "size": 13,
+          "className": "ml-auto shrink-0 text-muted-foreground"
+        }
+      }
+    ]
+  }
+}
