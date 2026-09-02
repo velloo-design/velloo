@@ -20,6 +20,7 @@ import {
   ThemeSchema,
 } from "@velloo/schema";
 import { HistoryManager } from "./history.ts";
+import { readRepoFeedback } from "./repo-config.ts";
 
 export interface DesignFolder {
   root: string;
@@ -168,7 +169,13 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
         `(current: ${CURRENT_SCHEMA_VERSION}). Run \`velloo upgrade\` to migrate it.`,
     );
   }
-  const config = ConfigSchema.parse(configRaw);
+  const parsedConfig = ConfigSchema.parse(configRaw);
+  // Feedback consent lives at the repo root; overlaying it here means every
+  // reader keeps asking `config.feedback` and none of them cares where it was
+  // stored. A folder outside a registered repo (or written before the move)
+  // falls back to its own recorded answer.
+  const repoFeedback = await readRepoFeedback(root);
+  const config = repoFeedback ? { ...parsedConfig, feedback: repoFeedback } : parsedConfig;
   const theme = ThemeSchema.parse(themeRaw);
 
   const screens = await loadDir(

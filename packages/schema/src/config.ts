@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BoardGroupSchema } from "./board.ts";
 import { ExtensionSchema } from "./extension.ts";
 import { CURRENT_SCHEMA_VERSION } from "./migrate.ts";
+import { FeedbackPrefsSchema } from "./repo.ts";
 
 export const ViewportPresetSchema = z.object({
   name: z.string().min(1),
@@ -160,7 +161,14 @@ export const ConfigSchema = z
      * `contactOk` records consent to be contacted about that feedback. Absent
      * ⇒ disabled (the default; the local tool stays account-free + offline).
      */
-    feedback: z.object({ enabled: z.boolean(), contactOk: z.boolean().optional() }).optional(),
+    /**
+     * @deprecated Feedback consent is a repo-level preference now, stored in
+     * `velloo.json` — it's about the person, not the design folder, and a
+     * repo with several folders shouldn't ask (or answer) it twice. Still
+     * read as the fallback for folders written before the move; never
+     * written.
+     */
+    feedback: FeedbackPrefsSchema.optional(),
   })
   .refine((c) => c.defaultLibrary in c.libraries, {
     message: "`defaultLibrary` must name an entry in `libraries`.",

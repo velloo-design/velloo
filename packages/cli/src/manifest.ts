@@ -1,7 +1,7 @@
 import type { Dirent } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { z } from "zod";
+import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
 
 /**
  * The repo-root manifest (`velloo.json`) names a repo's design folders so a
@@ -16,20 +16,15 @@ const DEFAULT_FOLDER_NAME = "velloo";
 
 const PROJECT_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
 
-export const ManifestSchema = z
-  .object({
-    $schema: z.string().optional(),
-    projects: z.record(
-      z.string().regex(PROJECT_NAME, "project names are letters/digits plus . _ -"),
-      z.string().min(1),
-    ),
-    defaultProject: z.string().optional(),
-  })
-  .refine((m) => !m.defaultProject || m.defaultProject in m.projects, {
-    message: "defaultProject must name an entry in projects",
-  });
+/**
+ * The manifest shape lives in `@velloo/schema` because the daemon reads it
+ * too — feedback consent is a repo preference, so both halves of velloo have
+ * to agree on the file. Re-exported here so the CLI's callers don't need to
+ * know that.
+ */
+export const ManifestSchema = RepoManifestSchema;
 
-export type Manifest = z.infer<typeof ManifestSchema>;
+export type Manifest = RepoManifest;
 
 export interface FoundManifest {
   /** Absolute path of the velloo.json file. */

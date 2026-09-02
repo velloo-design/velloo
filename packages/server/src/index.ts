@@ -519,6 +519,11 @@ export {
   darkModeAuditTree,
 } from "./mutations/dark-mode-audit.ts";
 export { createServerProviderLoader, resolveProviders } from "./providers.ts";
+export {
+  findRepoManifest,
+  readRepoFeedback,
+  writeRepoFeedback,
+} from "./repo-config.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";

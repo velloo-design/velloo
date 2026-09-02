@@ -68,6 +68,13 @@ export {
   type ParamRef,
   type SnippetInstance,
 } from "./node.ts";
+export {
+  type FeedbackPrefs,
+  FeedbackPrefsSchema,
+  REPO_MANIFEST_FILE,
+  type RepoManifest,
+  RepoManifestSchema,
+} from "./repo.ts";
 export { type Screen, ScreenSchema } from "./screen.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";
 export {

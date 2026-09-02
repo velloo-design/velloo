@@ -131,7 +131,8 @@ export function FolderPane({ cfg }: { cfg: FolderConfig }) {
             <div className="min-w-0">
               <div className="text-[13px] font-medium text-foreground">Send product feedback</div>
               <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                Gives your agent the send_feedback tool. Off keeps this folder offline.
+                Gives your agent the send_feedback tool. Off keeps velloo offline. Set once per repo
+                — every design folder here shares this answer.
               </p>
             </div>
             <Switch

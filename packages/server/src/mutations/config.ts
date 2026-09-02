@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "@velloo/result";
 import { type Config, type ViewportPreset, ViewportPresetSchema } from "@velloo/schema";
+import { writeRepoFeedback } from "../repo-config.ts";
 import type { MutationContext } from "./context.ts";
 import { badRequest, boardNotFound, type MutationError, screenNotFound } from "./errors.ts";
 import { persistConfig } from "./persist.ts";
@@ -169,6 +170,12 @@ export interface UpdateFeedbackResult {
  * Toggle product feedback and its contact consent. `contactOk` survives
  * switching `enabled` off and on — it records what the user agreed to, not
  * whether the tool is live right now.
+ *
+ * The answer is a *repo* preference (`velloo.json`), so every design folder
+ * in the repo moves together and a second folder never re-asks. A folder
+ * outside any registered repo has nowhere higher to write, so it keeps the
+ * answer in its own config — the historical location, still read as the
+ * fallback.
  */
 export async function updateFeedback(
   ctx: MutationContext,
@@ -179,6 +186,14 @@ export async function updateFeedback(
     enabled: args.enabled ?? current?.enabled ?? false,
     contactOk: args.contactOk ?? current?.contactOk ?? false,
   };
+  const wroteRepo = await writeRepoFeedback(ctx.folder.root, feedback);
+  if (wroteRepo) {
+    // The folder config didn't change, but every reader reads through it —
+    // keep the in-memory copy honest and tell the canvas to re-read.
+    ctx.folder.config = { ...ctx.folder.config, feedback };
+    ctx.broadcast({ type: "config-changed" });
+    return ok({ enabled: feedback.enabled, contactOk: feedback.contactOk });
+  }
   const saved = await commit(ctx, { ...ctx.folder.config, feedback });
   return ok({
     enabled: saved.feedback?.enabled ?? false,

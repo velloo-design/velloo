@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { cancel, confirm, isCancel, log, note, select, spinner, text } from "@clack/prompts";
-import { topUpTokens } from "@velloo/server";
+import { readRepoFeedback, topUpTokens } from "@velloo/server";
 import pc from "picocolors";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential, saveCredential } from "../cloud-credentials.ts";
@@ -119,11 +119,23 @@ function describeDetected(d: DetectedHost): string {
  * answers (feedback omitted unless enabled), or `null` if the user cancels.
  * A sign-in failure is soft: we note it and continue without feedback.
  */
-async function promptShareAndFeedback(): Promise<{
+async function promptShareAndFeedback(appRoot: string): Promise<{
   feedback?: { enabled: boolean; contactOk: boolean };
 } | null> {
   const cloudUrl = defaultCloudUrl();
   let signedIn = false;
+
+  // Feedback consent is a repo preference, answered once. A second design
+  // folder in a repo that already answered inherits it silently — re-asking
+  // the same person the same consent question is how a wizard wears out its
+  // welcome.
+  const answered = await readRepoFeedback(appRoot);
+  if (answered) {
+    log.info(
+      `Feedback tool: ${answered.enabled ? (answered.contactOk ? "on, contact OK" : "on, anonymous") : "off"} ${pc.dim("(already set for this repo)")}`,
+    );
+    return {};
+  }
 
   // Sticky login: if ~/.velloo already holds a valid credential, don't ask to
   // sign in again — note who we are and go straight to the feedback opt-in.
@@ -710,7 +722,7 @@ async function promptSample(
     componentsRelative = dir.value;
   }
 
-  const share = await promptShareAndFeedback();
+  const share = await promptShareAndFeedback(ctx.appRoot);
   if (share === null) return null;
 
   note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");
@@ -778,7 +790,7 @@ async function buildBlankAnswers(
     if (isAborted(picked)) return null;
     library = picked;
   }
-  const share = await promptShareAndFeedback();
+  const share = await promptShareAndFeedback(ctx.appRoot);
   if (share === null) return null;
 
   note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");
@@ -900,7 +912,7 @@ async function promptLibraryThemePath(
   // A detected host theme overrides this in `resolveTheme`.
   const themePreset = initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET;
 
-  const share = await promptShareAndFeedback();
+  const share = await promptShareAndFeedback(ctx.appRoot);
   if (share === null) return null;
 
   note(pc.dim(`App root: ${ctx.appRoot}\nDesign:   ${folder}`), "Setup");

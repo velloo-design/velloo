@@ -11,7 +11,7 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
-import { writeJsonAtomic, writeText } from "@velloo/server";
+import { writeJsonAtomic, writeRepoFeedback, writeText } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { defineCommand } from "citty";
 import pc from "picocolors";
@@ -219,7 +219,7 @@ async function writeScaffold(
     defaultScreen: defaultScreenForScaffold(scaffold),
     ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
     ...(hostApps ? { hostApps } : {}),
-    ...(answers.feedback ? { feedback: answers.feedback } : {}),
+
     ...(styling ? { styling } : {}),
     codegen: {
       ...(stack ? { componentsAlias: stack.alias } : {}),
@@ -750,6 +750,10 @@ export default defineCommand({
           ),
         );
       }
+      // Feedback consent belongs to the repo, not this folder — write it
+      // now that a manifest is guaranteed to exist. A folder outside any
+      // repo has nowhere higher to put it and keeps the default (off).
+      if (answers.feedback) await writeRepoFeedback(folder, answers.feedback);
     } catch (err) {
       console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
     }
