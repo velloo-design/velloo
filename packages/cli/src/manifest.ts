@@ -1,4 +1,5 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 
@@ -9,6 +10,9 @@ import { z } from "zod";
  * `.design/config.json`; nothing here duplicates that contract.
  */
 export const MANIFEST_FILE = "velloo.json";
+
+/** The conventional design-folder name, when a repo has no manifest yet. */
+const DEFAULT_FOLDER_NAME = "velloo";
 
 const PROJECT_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
 
@@ -130,6 +134,51 @@ async function findGitRoot(start: string): Promise<string | null> {
   }
 }
 
+/** Directories a repo scan should never descend into. */
+const SCAN_SKIP = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  ".turbo",
+  "coverage",
+  ".velloo",
+]);
+
+/**
+ * Design folders already sitting in the repo, found by a shallow walk. Used
+ * only when {@link registerProject} *creates* the manifest: a repo that grew a
+ * second design folder must not end up with a manifest naming only the new
+ * one, because a manifest shadows the `./velloo` convention entirely — the
+ * older folder would vanish from every command that resolves through it.
+ */
+async function discoverDesignFolders(root: string, maxDepth = 3): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".") || SCAN_SKIP.has(entry.name)) continue;
+      const child = join(dir, entry.name);
+      try {
+        await stat(join(child, ".design", "config.json"));
+        out.push(child);
+        continue; // a design folder never nests another
+      } catch {
+        // not a design folder — keep descending
+      }
+      if (depth < maxDepth) await walk(child, depth + 1);
+    }
+  };
+  await walk(resolve(root), 1);
+  return out.sort();
+}
+
 function deriveName(folder: string): string {
   // `apps/web/velloo` should read as project "web", not "velloo" — the
   // default folder name says nothing about which app it designs.
@@ -176,11 +225,34 @@ export async function registerProject(
     if (target === abs) return { name: existing, path, created: false };
   }
 
-  let name = requestedName ?? deriveName(abs);
-  for (let n = 2; name in projects; n++) name = `${requestedName ?? deriveName(abs)}-${n}`;
-  projects[name] = relative(dir, abs) || ".";
+  const add = (folder: string, wanted?: string): string => {
+    let name = wanted ?? deriveName(folder);
+    for (let n = 2; name in projects; n++) name = `${wanted ?? deriveName(folder)}-${n}`;
+    projects[name] = relative(dir, folder) || ".";
+    return name;
+  };
 
-  const manifest: Manifest = { ...(found?.manifest ?? {}), projects };
+  // Creating the manifest for the first time: adopt the design folders that
+  // are already here, or they'd be shadowed the moment this file exists.
+  let defaultProject = found?.manifest.defaultProject;
+  if (!found) {
+    for (const sibling of await discoverDesignFolders(dir)) {
+      if (sibling === abs) continue;
+      const name = add(sibling);
+      // The conventional `<root>/velloo` was what every command resolved to
+      // before the manifest existed — keep it the default so nothing else
+      // changes behaviour on the day a second folder appears.
+      if (sibling === join(dir, DEFAULT_FOLDER_NAME)) defaultProject = name;
+    }
+  }
+
+  const name = add(abs, requestedName);
+
+  const manifest: Manifest = {
+    ...(found?.manifest ?? {}),
+    projects,
+    ...(defaultProject ? { defaultProject } : {}),
+  };
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   return { name, path, created: true };
 }

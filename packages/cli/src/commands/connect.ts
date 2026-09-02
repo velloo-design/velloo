@@ -10,6 +10,7 @@ import {
   manualSetupText,
   PROJECT_AGENT_IDS,
 } from "../connect/index.ts";
+import { resolveProjectRoot } from "../connect/project-root.ts";
 import { assertFolderFormatCurrent, DesignFolderFormatError } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
@@ -73,7 +74,7 @@ export default defineCommand({
         .map((s) => s.trim())
         .filter(Boolean);
     } else if (interactive) {
-      const wiring = await askAgentWiring();
+      const wiring = await askAgentWiring({ projectRoot: await resolveProjectRoot(folder) });
       if (wiring === null) fail("connect", "cancelled.");
       if (wiring.agents.length === 0 && !wiring.manual) {
         console.log(pc.dim("No agents selected — nothing wired."));

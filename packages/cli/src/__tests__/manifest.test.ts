@@ -260,6 +260,49 @@ describe("registerProject", () => {
     expect(manifest.projects).toEqual({ brand: "velloo" });
   });
 
+  test("creating the manifest adopts design folders already in the repo", async () => {
+    // The bug this guards: a repo with `velloo/` gains a second folder, and
+    // the new manifest names only the second — shadowing the original, which
+    // then disappears from every command that resolves through the manifest.
+    await mkdir(join(tmp, ".git"), { recursive: true });
+    await makeDesignFolder(join(tmp, "velloo"));
+    await makeDesignFolder(join(tmp, "apps/site/velloo"));
+    const second = join(tmp, "initial-board");
+    await makeDesignFolder(second);
+
+    const reg = await registerProject(second, tmp);
+    expect(reg.created).toBe(true);
+    const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
+    // `<root>/velloo` derives its name from the repo directory, so match on
+    // the target rather than the generated tmp name.
+    const targets = Object.values(manifest.projects) as string[];
+    expect(targets.sort()).toEqual(["apps/site/velloo", "initial-board", "velloo"]);
+    // The conventional folder keeps being what a bare command resolves to.
+    expect(manifest.projects[manifest.defaultProject]).toBe("velloo");
+    expect(await resolveDesignFolder(undefined, "run", { cwd: tmp, onFail })).toBe(
+      join(tmp, "velloo"),
+    );
+  });
+
+  test("adoption only happens on creation — a later register just merges", async () => {
+    await mkdir(join(tmp, ".git"), { recursive: true });
+    await writeManifest(tmp, { projects: { web: "apps/web/velloo" } });
+    await makeDesignFolder(join(tmp, "velloo"));
+    await registerProject(join(tmp, "apps/site/velloo"), join(tmp, "apps/site"));
+    const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
+    expect(manifest.projects).toEqual({ web: "apps/web/velloo", site: "apps/site/velloo" });
+    expect(manifest.defaultProject).toBeUndefined();
+  });
+
+  test("node_modules and dist are never scanned for adoption", async () => {
+    await mkdir(join(tmp, ".git"), { recursive: true });
+    await makeDesignFolder(join(tmp, "node_modules/pkg/velloo"));
+    await makeDesignFolder(join(tmp, "dist/velloo"));
+    await registerProject(join(tmp, "design"), tmp);
+    const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
+    expect(Object.keys(manifest.projects)).toEqual(["design"]);
+  });
+
   test("an invalid requested name throws", async () => {
     expect(registerProject(join(tmp, "velloo"), tmp, "bad name!")).rejects.toThrow(
       "invalid --project",

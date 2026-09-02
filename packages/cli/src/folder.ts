@@ -1,3 +1,4 @@
+import { existsSync, readdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { isCancel, multiselect, select } from "@clack/prompts";
@@ -15,6 +16,24 @@ const DEFAULT_FOLDER = "velloo";
  */
 export const FOLDER_ARG_DESCRIPTION =
   "A velloo.json project name or a design-folder path (default: resolve via velloo.json, else ./velloo or the nearest design folder above the cwd)";
+
+/**
+ * Sync twins of {@link hasDesignConfig} and the empty-folder check, for
+ * clack `validate` callbacks — those run synchronously, and the folder prompt
+ * needs the answer before it accepts a path.
+ */
+export function isDesignFolderSync(dir: string): boolean {
+  return existsSync(join(dir, ".design", "config.json"));
+}
+
+export function isEmptyOrMissingSync(dir: string): boolean {
+  try {
+    return readdirSync(dir).length === 0;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return true;
+    throw err;
+  }
+}
 
 /** True when `dir` already holds a Velloo design (has `.design/config.json`). */
 export async function hasDesignConfig(dir: string): Promise<boolean> {

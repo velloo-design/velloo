@@ -104,13 +104,25 @@ export async function askAgentWiring(opts?: {
    * asking so an explicit invocation can always add more.
    */
   skipWhenCovered?: boolean;
+  /**
+   * Repo root to check for *project*-scoped wiring. Passing it makes the
+   * checklist arrive ticked for what this project already has, which is the
+   * common case when adding a second design folder to a wired repo.
+   */
+  projectRoot?: string;
 }): Promise<AgentWiring | null> {
   const preWired = await globallyWiredAgents();
+  const projectWired = opts?.projectRoot ? await projectWiredAgents(opts.projectRoot) : [];
   const detected = detectInstalledAgents();
   const fallback = detected.length === 0;
   const wanted = fallback ? GLOBAL_AGENT_IDS : detected;
   const missing = wanted.filter((id) => !preWired.includes(id));
 
+  if (projectWired.length > 0) {
+    log.info(
+      `Already wired for this project: ${projectWired.map(baseLabel).join(", ")} ${pc.dim("(re-wiring is a no-op merge)")}`,
+    );
+  }
   if (preWired.length > 0) {
     const labels = preWired.map(baseLabel).join(", ");
     if (opts?.skipWhenCovered && missing.length === 0) {
@@ -170,7 +182,11 @@ export async function askAgentWiring(opts?: {
 
   const picked = await pickAgents({
     exclude: opts?.skipWhenCovered ? preWired : [],
-    initial: targets,
+    // Tick what this machine and this repo already carry, on top of what's
+    // installed — re-selecting a wired agent is an idempotent merge, so the
+    // safe default is "everything that's already true stays true".
+    initial: [...new Set([...targets, ...preWired, ...projectWired])],
+    wired: [...new Set([...preWired, ...projectWired])],
   });
   if (picked === null) return null;
   return {
@@ -191,8 +207,11 @@ export async function askAgentWiring(opts?: {
 export async function pickAgents(opts?: {
   exclude?: string[];
   initial?: string[];
+  /** Agents already carrying a velloo entry — shown as such in the list. */
+  wired?: string[];
 }): Promise<string[] | null> {
   const exclude = new Set(opts?.exclude ?? []);
+  const wired = new Set(opts?.wired ?? []);
   const agents = Object.values(AGENTS)
     .filter((a) => !exclude.has(a.id))
     .sort((a, b) => (a.scope === b.scope ? 0 : a.scope === "global" ? -1 : 1));
@@ -206,7 +225,7 @@ export async function pickAgents(opts?: {
       ...agents.map((a) => ({
         value: a.id,
         label: a.label,
-        hint: a.path(".", "~"),
+        hint: wired.has(a.id) ? `already wired — ${a.path(".", "~")}` : a.path(".", "~"),
       })),
       {
         value: MANUAL_AGENT_ID,
@@ -262,6 +281,27 @@ function hasVellooEntry(content: string, format: AgentConfigFormat): boolean {
  * entry means this project is already covered and init can skip the wiring
  * question.
  */
+/**
+ * Agents whose *project*-scoped config in `projectRoot` already carries a
+ * velloo entry. The global twin below answers the same question one level up;
+ * the wiring prompt needs both, because "already installed" is what the
+ * checklist should arrive pre-ticked with.
+ */
+async function projectWiredAgents(projectRoot: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const agent of Object.values(AGENTS)) {
+    if (agent.scope !== "project") continue;
+    let content: string;
+    try {
+      content = await readFile(agent.path(projectRoot, homedir()), "utf8");
+    } catch {
+      continue;
+    }
+    if (hasVellooEntry(content, agent.format)) out.push(agent.id);
+  }
+  return out;
+}
+
 export async function globallyWiredAgents(homeDir = homedir()): Promise<string[]> {
   const out: string[] = [];
   for (const agent of Object.values(AGENTS)) {

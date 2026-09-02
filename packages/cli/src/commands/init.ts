@@ -1,6 +1,6 @@
 import { mkdir, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { confirm, isCancel, select } from "@clack/prompts";
+import { confirm, isCancel } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   BoardSchema,
@@ -29,6 +29,17 @@ import {
   manualSetupText,
   PROJECT_AGENT_IDS,
 } from "../connect/index.ts";
+import { resolveProjectRoot } from "../connect/project-root.ts";
+import {
+  inheritedFromFolder,
+  promptExistingFolderAction,
+  readFolderFacts,
+  runCheckSetup,
+  runOpenCanvas,
+  runScan,
+  runThemeReimport,
+  runUpgrade,
+} from "../existing-folder.ts";
 import { fail } from "../fail.ts";
 import { hasDesignConfig } from "../folder.ts";
 import { registerProject } from "../manifest.ts";
@@ -210,7 +221,10 @@ async function writeScaffold(
     ...(hostApps ? { hostApps } : {}),
     ...(answers.feedback ? { feedback: answers.feedback } : {}),
     ...(styling ? { styling } : {}),
-    ...(stack ? { codegen: { componentsAlias: stack.alias } } : {}),
+    codegen: {
+      ...(stack ? { componentsAlias: stack.alias } : {}),
+      componentsDir: answers.componentsRelative,
+    },
   });
   ConfigSchema.parse(config);
   ThemeSchema.parse(scaffold.theme);
@@ -355,7 +369,7 @@ function printExitInstructions(folder: string | undefined, outcome: WireOutcome)
       `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
     );
     console.log(
-      `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas; b background, s stop, o open)")}`,
+      `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas; o open, b background, q stop)")}`,
     );
     console.log("");
     const readme = join(relative(process.cwd(), folder) || ".", "README.md");
@@ -566,7 +580,14 @@ export default defineCommand({
     const cliArgs = args as InitCliArgs;
     const appRoot = resolve(cliArgs.folder ?? ".");
     const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
-    let allowNonEmpty = cliArgs.force;
+    const allowNonEmpty = cliArgs.force;
+    // True when the user chose "Create another design folder" — the wizard's
+    // folder prompt then defaults to a fresh name instead of the taken one.
+    let secondFolder = false;
+    let inherited: { library: string | undefined; componentsDir: string | undefined } = {
+      library: undefined,
+      componentsDir: undefined,
+    };
 
     // An explicit --scan-dir that doesn't exist is a typo, not a degrade-to-blank.
     if (cliArgs.scanDir && !(await dirExists(resolve(appRoot, cliArgs.scanDir)))) {
@@ -580,35 +601,37 @@ export default defineCommand({
     if (interactive && !cliArgs.force) {
       const existing = resolve(appRoot, cliArgs.designFolder ?? "velloo");
       if (await hasDesignConfig(existing)) {
-        const action = await select<"connect" | "overwrite" | "cancel">({
-          message: `A Velloo design already exists at ${relative(process.cwd(), existing) || existing}. What would you like to do?`,
-          options: [
-            {
-              value: "connect",
-              label: "Connect agents",
-              hint: "wire the MCP into Claude Code / Cursor",
-            },
-            {
-              value: "overwrite",
-              label: "Re-scaffold (overwrite)",
-              hint: "replaces the existing design",
-            },
-            { value: "cancel", label: "Cancel" },
-          ],
-          initialValue: "connect",
-        });
-        if (isCancel(action) || action === "cancel") {
+        const facts = await readFolderFacts(existing, appRoot);
+        const action = await promptExistingFolderAction(facts, existing);
+        if (action === null || action === "cancel") {
           console.log(pc.dim("  Nothing changed."));
           return;
         }
         if (action === "connect") {
-          const wiring = await askAgentWiring({ skipWhenCovered: true });
+          const wiring = await askAgentWiring({
+            skipWhenCovered: true,
+            projectRoot: await resolveProjectRoot(existing),
+          });
           const wireOutcome = wiring ? await applyAgentWiring(existing, wiring) : NOT_WIRED;
           printWired(wireOutcome);
           printNextSteps(existing, wireOutcome);
           return;
         }
-        allowNonEmpty = true; // overwrite → fall through to the normal wizard
+        if (action !== "another") {
+          if (action === "upgrade") await runUpgrade(existing);
+          if (action === "scan") await runScan(existing, appRoot, cliArgs.scanDir);
+          if (action === "theme") await runThemeReimport(existing, appRoot);
+          if (action === "check") await runCheckSetup(existing, appRoot);
+          if (action === "open") await runOpenCanvas(existing);
+          return;
+        }
+        // "another" falls through to the normal wizard, which asks where the
+        // new folder goes — and rejects a path that's already a design folder
+        // at the prompt, not after the whole wizard has run. The app is the
+        // same one, so the sibling's library + components dir carry over
+        // instead of being asked again.
+        secondFolder = true;
+        inherited = await inheritedFromFolder(existing);
       }
     }
 
@@ -617,12 +640,20 @@ export default defineCommand({
     if (interactive) {
       console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
       console.log("");
+      const inheritedLibrary =
+        inherited.library && isValidLibraryId(inherited.library) ? inherited.library : undefined;
       const result = await runInteractive({
         appRoot,
+        secondFolder,
         scanDir: cliArgs.scanDir,
         connectEnabled: cliArgs.connect !== false,
+        // An explicit --library still wins over what the sibling folder uses.
         pinnedLibrary:
-          cliArgs.library && isValidLibraryId(cliArgs.library) ? cliArgs.library : undefined,
+          cliArgs.library && isValidLibraryId(cliArgs.library) ? cliArgs.library : inheritedLibrary,
+        ...(inheritedLibrary && !cliArgs.library
+          ? { pinnedLibraryReason: "same as the design folder already in this repo" }
+          : {}),
+        ...(inherited.componentsDir ? { inheritComponentsDir: inherited.componentsDir } : {}),
       });
       if (result.status === "abort") {
         printExitInstructions(undefined, NOT_WIRED);

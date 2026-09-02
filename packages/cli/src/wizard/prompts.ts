@@ -1,11 +1,12 @@
 import { resolve } from "node:path";
-import { cancel, confirm, isCancel, note, select, spinner, text } from "@clack/prompts";
+import { cancel, confirm, isCancel, log, note, select, spinner, text } from "@clack/prompts";
 import { topUpTokens } from "@velloo/server";
 import pc from "picocolors";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential, saveCredential } from "../cloud-credentials.ts";
 import { performDeviceLogin, verifyCredential } from "../cloud-login.ts";
 import { type AgentWiring, askAgentWiring } from "../connect/index.ts";
+import { isDesignFolderSync, isEmptyOrMissingSync } from "../folder.ts";
 import { DEFAULT_THEME_PRESET } from "../scaffold/theme-presets.ts";
 import { detectHost, findComponentsDir } from "../scan/detect.ts";
 import { type AppsScanResult, discoverScanRoots, primaryApp, scanApps } from "../scan/index.ts";
@@ -41,7 +42,11 @@ const DEFAULT_COMPONENTS_DIR = "src/components/ui";
 async function resolveComponentsDir(
   appRoot: string,
   hasHostApp: boolean,
+  inherited?: string,
 ): Promise<{ value: string } | null> {
+  // A sibling design folder already answered this for the same app — don't
+  // ask twice, and don't let a second folder drift from the first.
+  if (inherited) return { value: inherited };
   if (!hasHostApp) return { value: DEFAULT_COMPONENTS_DIR };
   const found = findComponentsDir(appRoot);
   if (found) return { value: found };
@@ -355,29 +360,55 @@ export async function runInteractive(ctx: {
   scanDir?: string;
   /** Ask the agent-wiring question (false under --no-connect). */
   connectEnabled: boolean;
+  /** The repo already has a design folder — this run is adding a second one. */
+  secondFolder?: boolean;
+  /**
+   * The sibling folder's components directory, when adding a second folder to
+   * a repo that already answered that question.
+   */
+  inheritComponentsDir?: string;
   /** A valid --library flag pins the library — scan adoption won't override it. */
   pinnedLibrary?: LibraryId;
+  /** Why the library is pinned, when it's worth saying (a sibling folder's choice). */
+  pinnedLibraryReason?: string;
 }): Promise<InteractiveOutcome> {
+  // A second design folder in the same repo can't reuse the default name, and
+  // "velloo-2" reads worse than a purpose name — suggest one they'll rename.
+  const folderDefault = ctx.secondFolder ? "velloo-brand" : "velloo";
   const folderInput = await text({
     message: subtitledText(
       "Where should the design folder live?",
-      "Your designs are plain files that live in this repo — commit them alongside your code.",
+      ctx.secondFolder
+        ? "A second canvas in this repo — its own boards, theme, daemon and MCP endpoint."
+        : "Your designs are plain files that live in this repo — commit them alongside your code.",
     ),
-    placeholder: "velloo",
-    defaultValue: "velloo",
+    placeholder: folderDefault,
+    defaultValue: folderDefault,
+    // Validating here is the point: an occupied path is caught the moment
+    // it's typed, not after the whole wizard has run and it's time to write.
     validate(value) {
-      if (value && value.trim() === "") return "Path can't be empty.";
+      const raw = (value || folderDefault).trim();
+      if (raw === "") return "Path can't be empty.";
+      const abs = resolve(ctx.appRoot, raw);
+      if (isDesignFolderSync(abs)) {
+        return `${raw} is already a Velloo design folder — pick another path.`;
+      }
+      if (!isEmptyOrMissingSync(abs)) {
+        return `${raw} isn't empty — pick an empty path (or delete it first).`;
+      }
       return undefined;
     },
   });
   if (isAborted(folderInput)) return cancelled();
-  const folder = resolve(ctx.appRoot, folderInput || "velloo");
+  const folder = resolve(ctx.appRoot, folderInput || folderDefault);
 
   // Agent wiring is asked up front (config before content) but only applied
   // after the scaffold is written — cancelling anywhere below touches no files.
   let agentWiring: AgentWiring | undefined;
   if (ctx.connectEnabled) {
-    const wiring = await askAgentWiring({ skipWhenCovered: true });
+    // Nothing is written yet, so the app root stands in for the project root
+    // a later `connect` would resolve.
+    const wiring = await askAgentWiring({ skipWhenCovered: true, projectRoot: ctx.appRoot });
     if (wiring === null) return cancelled();
     agentWiring = wiring;
   }
@@ -478,7 +509,9 @@ async function promptRedesignScreen(
     appRoot: string;
     scanDir?: string;
     pinnedLibrary?: LibraryId;
+    pinnedLibraryReason?: string;
     hasHostApp: boolean;
+    inheritComponentsDir?: string;
   },
   folder: string,
   agentWiring: AgentWiring | undefined,
@@ -625,25 +658,54 @@ async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | nu
   return routes.find((r) => r.id === choice) ?? null;
 }
 
-async function promptSample(
-  ctx: { appRoot: string; pinnedLibrary?: LibraryId; hasHostApp: boolean },
-  folder: string,
-  agentWiring: AgentWiring | undefined,
-): Promise<WizardAnswers | null> {
-  const library = await select<LibraryId>({
+/**
+ * The library question — unless it's already decided. A pinned library (the
+ * `--library` flag, a scan adoption, or the sibling design folder's choice)
+ * is not a default to preselect: MUI and shadcn-upstream aren't both in the
+ * wizard's list (`interactive: false` hides MUI), so offering the list would
+ * silently drop the pinned answer on the floor. Returns null on cancel.
+ */
+async function resolveLibrary(ctx: {
+  pinnedLibrary?: LibraryId;
+  pinnedLibraryReason?: string;
+}): Promise<LibraryId | null> {
+  if (ctx.pinnedLibrary) {
+    if (ctx.pinnedLibraryReason) {
+      log.info(
+        `Component library: ${WIZARD_PROVIDERS[ctx.pinnedLibrary].label} ${pc.dim(`(${ctx.pinnedLibraryReason})`)}`,
+      );
+    }
+    return ctx.pinnedLibrary;
+  }
+  const picked = await select<LibraryId>({
     message: subtitled(
       "Component library",
       "What the canvas draws with, and what your emitted code imports.",
     ),
     options: interactiveLibraryChoices(),
-    initialValue: ctx.pinnedLibrary ?? DEFAULT_LIBRARY_ID,
+    initialValue: DEFAULT_LIBRARY_ID,
   });
-  if (isAborted(library)) return null;
+  return isAborted(picked) ? null : picked;
+}
+
+async function promptSample(
+  ctx: {
+    appRoot: string;
+    pinnedLibrary?: LibraryId;
+    pinnedLibraryReason?: string;
+    hasHostApp: boolean;
+    inheritComponentsDir?: string;
+  },
+  folder: string,
+  agentWiring: AgentWiring | undefined,
+): Promise<WizardAnswers | null> {
+  const library = await resolveLibrary(ctx);
+  if (library === null) return null;
   const provider = WIZARD_PROVIDERS[library];
   const source: LibrarySource = provider.defaultSource;
   let componentsRelative = DEFAULT_COMPONENTS_DIR;
   if (provider.asksComponentsSubfolder) {
-    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp);
+    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp, ctx.inheritComponentsDir);
     if (!dir) return null;
     componentsRelative = dir.value;
   }
@@ -669,7 +731,7 @@ async function promptSample(
 
 /** The zero-question blank folder: no boards, neutral theme, default stack. */
 function blankAnswers(
-  ctx: { appRoot: string },
+  ctx: { appRoot: string; inheritComponentsDir?: string },
   folder: string,
   agentWiring: AgentWiring | undefined,
   library: LibraryId,
@@ -681,7 +743,7 @@ function blankAnswers(
     folder,
     library,
     source: WIZARD_PROVIDERS[library].defaultSource,
-    componentsRelative: "src/components/ui",
+    componentsRelative: ctx.inheritComponentsDir ?? DEFAULT_COMPONENTS_DIR,
     initialContent: "blank",
     themePreset: "zinc",
     stack: DEFAULT_STACK_ID,
@@ -692,7 +754,13 @@ function blankAnswers(
 
 /** Blank mode: only the library question, defaulting to no-library. */
 async function buildBlankAnswers(
-  ctx: { appRoot: string; scanDir?: string; pinnedLibrary?: LibraryId },
+  ctx: {
+    appRoot: string;
+    scanDir?: string;
+    pinnedLibrary?: LibraryId;
+    pinnedLibraryReason?: string;
+    inheritComponentsDir?: string;
+  },
   folder: string,
   agentWiring: AgentWiring | undefined,
   defaultLibrary: LibraryId = "none",
@@ -722,7 +790,14 @@ async function buildBlankAnswers(
  * when detectable, so we don't ask unless adoption fails or --library pinned.
  */
 async function promptGoalWithAdoptedLibrary(
-  ctx: { appRoot: string; scanDir?: string; pinnedLibrary?: LibraryId; hasHostApp: boolean },
+  ctx: {
+    appRoot: string;
+    scanDir?: string;
+    pinnedLibrary?: LibraryId;
+    pinnedLibraryReason?: string;
+    hasHostApp: boolean;
+    inheritComponentsDir?: string;
+  },
   folder: string,
   agentWiring: AgentWiring | undefined,
   initialContent: InitialContent,
@@ -793,7 +868,13 @@ async function tryAdoptLibraryFromApp(
 }
 
 async function promptLibraryThemePath(
-  ctx: { appRoot: string; pinnedLibrary?: LibraryId; hasHostApp: boolean },
+  ctx: {
+    appRoot: string;
+    pinnedLibrary?: LibraryId;
+    pinnedLibraryReason?: string;
+    hasHostApp: boolean;
+    inheritComponentsDir?: string;
+  },
   folder: string,
   agentWiring: AgentWiring | undefined,
   initialContent: InitialContent,
@@ -802,15 +883,8 @@ async function promptLibraryThemePath(
 ): Promise<WizardAnswers | null> {
   let library: LibraryId = ctx.pinnedLibrary ?? DEFAULT_LIBRARY_ID;
   if (!opts.skipLibrary) {
-    const picked = await select<LibraryId>({
-      message: subtitled(
-        "Component library",
-        "What the canvas draws with, and what your emitted code imports.",
-      ),
-      options: interactiveLibraryChoices(),
-      initialValue: library,
-    });
-    if (isAborted(picked)) return null;
+    const picked = await resolveLibrary(ctx);
+    if (picked === null) return null;
     library = picked;
   }
   const provider = WIZARD_PROVIDERS[library];
@@ -818,7 +892,7 @@ async function promptLibraryThemePath(
   let componentsRelative = DEFAULT_COMPONENTS_DIR;
 
   if (!opts.libraryOnly && provider.asksComponentsSubfolder) {
-    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp);
+    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp, ctx.inheritComponentsDir);
     if (!dir) return null;
     componentsRelative = dir.value;
   }
