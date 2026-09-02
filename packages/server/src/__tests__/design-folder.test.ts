@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import {
   loadDesignFolder,
   pinnedThemeForScreen,
@@ -11,7 +12,7 @@ import {
 } from "../design-folder.ts";
 
 const config = {
-  schemaVersion: 2,
+  schemaVersion: CURRENT_SCHEMA_VERSION,
   toolVersion: "test",
   libraries: {
     default: {
@@ -90,7 +91,10 @@ describe("loadDesignFolder", () => {
   });
 
   test("a newer schema version is refused with an upgrade-velloo hint", async () => {
-    await writeJson(join(tmp, ".design", "config.json"), { ...config, schemaVersion: 3 });
+    await writeJson(join(tmp, ".design", "config.json"), {
+      ...config,
+      schemaVersion: CURRENT_SCHEMA_VERSION + 1,
+    });
     await expect(loadDesignFolder(tmp)).rejects.toThrow(/Upgrade velloo/);
   });
 });

@@ -21,7 +21,7 @@ import {
 } from "../index.ts";
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {
@@ -213,6 +213,97 @@ describe("setTypeset", () => {
     // …and NOT the derived scale: re-declaring it there would freeze the ladder
     // at the base rhythm instead of re-substituting against the override.
     expect(block).not.toContain("--text-h1");
+  });
+
+  test("renaming a preset carries its authored controls to the new class", async () => {
+    unwrap(await setTypeset(ctx, [{ name: "compact", size: 14, leading: 1.4 }]));
+    unwrap(await setTypeset(ctx, [{ name: "compact", renameTo: "dense" }]));
+    const typesets = (await diskTheme()).typography.typesets;
+    expect(Object.keys(typesets ?? {})).toEqual(["dense"]);
+    expect(typesets?.dense).toEqual({ size: 14, leading: 1.4 });
+    const css = themeToCss(await diskTheme());
+    expect(css).toContain(".typeset-dense {");
+    expect(css).not.toContain(".typeset-compact {");
+  });
+
+  test("a rename can retune in the same call", async () => {
+    unwrap(await setTypeset(ctx, [{ name: "compact", size: 14, leading: 1.4 }]));
+    unwrap(await setTypeset(ctx, [{ name: "compact", renameTo: "dense", leading: 1.2 }]));
+    expect((await diskTheme()).typography.typesets?.dense).toEqual({ size: 14, leading: 1.2 });
+  });
+
+  test("removing a preset drops its rule, leaving regions on the baseline", async () => {
+    unwrap(await setTypeset(ctx, [{ name: "compact", size: 14 }]));
+    unwrap(await setTypeset(ctx, [{ name: "compact", remove: true }]));
+    expect(Object.keys((await diskTheme()).typography.typesets ?? {})).toEqual([]);
+    // The baseline still renders — a removed preset falls back to it, it does
+    // not leave the folder without a rhythm.
+    const css = themeToCss(await diskTheme());
+    expect(css).not.toContain(".typeset-compact");
+    expect(css).toContain("--typeset-leading: 1.75");
+  });
+
+  test("the default typeset is the baseline, so it cannot be renamed or removed", async () => {
+    for (const spec of [{ renameTo: "base" }, { remove: true }]) {
+      const r = await setTypeset(ctx, [spec]);
+      expect(r.ok).toBe(false);
+      if (!r.ok && r.error.kind === "InvalidThemePath") {
+        expect(r.error.reason).toContain("baseline");
+      } else {
+        throw new Error("expected an InvalidThemePath error");
+      }
+    }
+  });
+
+  test("rejects renaming onto a name already in use", async () => {
+    unwrap(
+      await setTypeset(ctx, [
+        { name: "compact", size: 14 },
+        { name: "docs", leading: 1.9 },
+      ]),
+    );
+    const r = await setTypeset(ctx, [{ name: "compact", renameTo: "docs" }]);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.error.kind === "InvalidThemePath") {
+      expect(r.error.reason).toContain("already exists");
+    } else {
+      throw new Error("expected an InvalidThemePath error");
+    }
+    // The rejected call left both presets exactly as they were.
+    const typesets = (await diskTheme()).typography.typesets;
+    expect(typesets?.compact).toEqual({ size: 14 });
+    expect(typesets?.docs).toEqual({ leading: 1.9 });
+  });
+
+  test("rejects renaming or removing a typeset that does not exist", async () => {
+    for (const spec of [
+      { name: "ghost", renameTo: "spook" },
+      { name: "ghost", remove: true },
+    ]) {
+      const r = await setTypeset(ctx, [spec]);
+      expect(r.ok).toBe(false);
+      if (!r.ok && r.error.kind === "InvalidThemePath") {
+        expect(r.error.reason).toContain("does not exist");
+      } else {
+        throw new Error("expected an InvalidThemePath error");
+      }
+    }
+  });
+
+  // What the canvas panel's authored/inherited distinction rests on: clearing a
+  // control on a preset must remove it from the record, not pin it to whatever
+  // the baseline happened to be at the time.
+  test("clearing a preset control returns it to following the baseline", async () => {
+    unwrap(await setTypeset(ctx, [{ leading: 1.75 }]));
+    unwrap(await setTypeset(ctx, [{ name: "docs", size: 18, leading: 2 }]));
+    unwrap(await setTypeset(ctx, [{ name: "docs", size: null }]));
+    expect((await diskTheme()).typography.typesets?.docs).toEqual({ leading: 2 });
+
+    unwrap(await setTypeset(ctx, [{ size: 20 }]));
+    const css = themeToCss(await diskTheme());
+    const block = css.slice(css.indexOf(".typeset-docs {"));
+    expect(block.slice(0, block.indexOf("}"))).not.toContain("--typeset-size");
+    expect(css).toContain("--typeset-size: 20px");
   });
 });
 

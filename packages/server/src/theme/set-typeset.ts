@@ -17,11 +17,20 @@ import { invalidThemePath, type ThemeError } from "./errors.ts";
  *
  * Fields are merged into the existing typeset, so tuning one control does not
  * require restating the others. Pass `null` for a field to clear it back to the
- * baseline.
+ * baseline — which is how a preset returns a control to inheriting from
+ * `default`, since a preset only emits what it authored.
+ *
+ * `renameTo` and `remove` handle the rest of a preset's life here rather than in
+ * their own operations, so the whole typeset record is rewritten under one lock
+ * acquisition and one broadcast.
  */
 export interface TypesetSpec {
   /** Typeset name. `default` is the folder baseline that styles every screen. */
   name?: string;
+  /** Rename this typeset, carrying its authored controls over to the new name. */
+  renameTo?: string;
+  /** Delete this typeset. Regions still carrying its class fall back to the baseline. */
+  remove?: boolean;
   /** Base text size — `"1em"` follows the container, `16` / `"16px"` pins it. */
   size?: string | number | null;
   /** Body line-height, unitless. Heading leading derives from it. */
@@ -81,6 +90,42 @@ export async function setTypeset(
         ),
       );
     }
+    if (spec.remove && spec.renameTo !== undefined) {
+      return err(invalidThemePath(`typeset "${name}": pass either remove or renameTo, not both`));
+    }
+    if (spec.remove || spec.renameTo !== undefined) {
+      const verb = spec.remove ? "removed" : "renamed";
+      if (name === DEFAULT_TYPESET_NAME) {
+        return err(
+          invalidThemePath(
+            `the "${DEFAULT_TYPESET_NAME}" typeset is the baseline every preset inherits from — it cannot be ${verb}`,
+          ),
+        );
+      }
+      if (!(name in next)) {
+        return err(invalidThemePath(`typeset "${name}" does not exist, so it cannot be ${verb}`));
+      }
+    }
+    if (spec.remove) {
+      delete next[name];
+      continue;
+    }
+    let target = name;
+    if (spec.renameTo !== undefined && spec.renameTo !== name) {
+      if (!isTypesetName(spec.renameTo)) {
+        return err(
+          invalidThemePath(
+            `typeset name "${spec.renameTo}" must be selector-safe (letters, digits, dash, underscore) — it is emitted as a \`.typeset-${spec.renameTo}\` class`,
+          ),
+        );
+      }
+      if (spec.renameTo in next) {
+        return err(invalidThemePath(`typeset "${spec.renameTo}" already exists`));
+      }
+      next[spec.renameTo] = next[name] ?? {};
+      delete next[name];
+      target = spec.renameTo;
+    }
     if (spec.leading !== undefined && spec.leading !== null && spec.leading <= 0) {
       return err(invalidThemePath(`typeset "${name}": leading must be a positive number`));
     }
@@ -105,7 +150,7 @@ export async function setTypeset(
         );
       }
     }
-    next[name] = merge(next[name] ?? {}, spec);
+    next[target] = merge(next[target] ?? {}, spec);
   }
 
   const candidate: Theme = {

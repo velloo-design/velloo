@@ -5,6 +5,7 @@ import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { typesetDraftCss } from "../typeset-draft.ts";
 import { FrameHeader } from "./Frame/FrameHeader.tsx";
 import { FrameViewportPresets } from "./Frame/FrameViewportPresets.tsx";
 import { useFrameInteractions } from "./Frame/useFrameInteractions.ts";
@@ -337,6 +338,46 @@ export const Frame = memo(function Frame({
     apply(slotARef.current);
     apply(slotBRef.current);
   }, [cursorMode, front, screenRev, hasScreen]);
+
+  // Live typeset preview: while a rhythm control is being dragged in the theme
+  // panel, paint the uncommitted typeset straight into this frame's document as
+  // a CSS-variable override. Same-origin, so it's a direct style write rather
+  // than a channel message, and the ladder re-derives from the three authored
+  // controls — the board re-rhythms continuously with no reload and no render.
+  //
+  // The override outlives the store draft by one document. A commit clears the
+  // draft and bumps `themeVersion` in the same tick, and the reloaded document
+  // takes a moment to arrive; dropping the override immediately would snap this
+  // frame back to the pre-drag rhythm for exactly that long. So it is held
+  // while a reload is in flight and released once the current document — which
+  // the server rendered with the committed typeset — is the one on screen.
+  const typesetDraft = useCanvas((s) => s.typesetDraft);
+  const frontIsCurrent = buffers.srcs[front] === src;
+  const heldDraftCssRef = useRef<string | null>(null);
+  if (typesetDraft) heldDraftCssRef.current = typesetDraftCss(typesetDraft);
+  else if (frontIsCurrent) heldDraftCssRef.current = null;
+  const draftCss = heldDraftCssRef.current;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: front/screenRev/hasScreen re-apply the override after iframe swaps and reloads
+  useEffect(() => {
+    const apply = (iframe: HTMLIFrameElement | null) => {
+      const doc = iframe?.contentDocument;
+      if (!doc?.head) return;
+      const id = "__velloo-typeset-draft";
+      const existing = doc.getElementById(id);
+      if (!draftCss) {
+        existing?.remove();
+        return;
+      }
+      const el = existing ?? doc.createElement("style");
+      if (!existing) {
+        el.id = id;
+        doc.head.appendChild(el);
+      }
+      el.textContent = draftCss;
+    };
+    apply(slotARef.current);
+    apply(slotBRef.current);
+  }, [draftCss, front, screenRev, hasScreen]);
 
   // Search jumps: scroll the revealed node into view inside the iframe (the
   // regular highlight effect above never scrolls — click selection is

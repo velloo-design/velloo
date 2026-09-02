@@ -238,6 +238,14 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
                 .string()
                 .optional()
                 .describe('Typeset name; default "default" (the folder baseline)'),
+              renameTo: z
+                .string()
+                .optional()
+                .describe("Rename this preset, carrying its authored controls over"),
+              remove: z
+                .boolean()
+                .optional()
+                .describe("Delete this preset; regions still carrying its class fall back"),
               size: z
                 .union([z.string(), z.number(), z.null()])
                 .optional()

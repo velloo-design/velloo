@@ -5,6 +5,7 @@ import { useCanvas } from "../store.ts";
 import { ColorSwatch } from "./ColorSwatch.tsx";
 import { ContrastReport } from "./ContrastReport.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
+import { TypographySection } from "./typography/TypographySection.tsx";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
@@ -149,6 +150,15 @@ export function ThemePanel({ theme, presets }: Props) {
           </AccordionTrigger>
           <AccordionContent>
             <ContrastReport bumpKey={themeVersion} />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="typography">
+          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
+            Typography
+          </AccordionTrigger>
+          <AccordionContent>
+            <TypographySection theme={theme} />
           </AccordionContent>
         </AccordionItem>
 

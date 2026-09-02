@@ -8,6 +8,7 @@ import {
   PRESETS,
   scoreThemeContrast,
   setToken,
+  setTypeset,
   type ThemeContext,
 } from "../theme/index.ts";
 import { makeThemeRoute } from "./route.ts";
@@ -24,6 +25,28 @@ const ApplyPresetBody = z.object({
 const DeriveFromColorBody = z.object({
   seedColor: z.string().min(1),
   name: z.string().min(1).optional(),
+});
+
+/**
+ * Mirrors the `set_typeset` MCP tool's spec shape. `null` clears a control back
+ * to inherited — which is the canvas's "return to default" affordance, so the
+ * nullable unions are load-bearing rather than decorative.
+ */
+const TypesetSpecBody = z.object({
+  name: z.string().min(1).optional(),
+  renameTo: z.string().min(1).optional(),
+  remove: z.boolean().optional(),
+  size: z.union([z.string(), z.number(), z.null()]).optional(),
+  leading: z.union([z.number(), z.null()]).optional(),
+  flow: z.union([z.string(), z.number(), z.null()]).optional(),
+  fontBody: z.union([z.string(), z.null()]).optional(),
+  fontHeading: z.union([z.string(), z.null()]).optional(),
+  fontMono: z.union([z.string(), z.null()]).optional(),
+});
+
+const SetTypesetBody = z.object({
+  typesets: z.array(TypesetSpecBody).min(1),
+  theme: z.string().min(1).optional(),
 });
 
 export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
@@ -67,6 +90,13 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
     "/apply_preset",
     route(ApplyPresetBody, async (args, ctx) =>
       map(await applyPreset(ctx, args.presetName), (theme) => ({ theme })),
+    ),
+  );
+
+  r.post(
+    "/set_typeset",
+    route(SetTypesetBody, async (args, ctx) =>
+      map(await setTypeset(ctx, args.typesets, args.theme), (theme) => ({ theme })),
     ),
   );
 

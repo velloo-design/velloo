@@ -9,6 +9,8 @@ import { ensureConnected } from "./connection.ts";
 export interface MutateError {
   code: string;
   message: string;
+  /** Theme errors say `reason` where mutation errors say `message`. */
+  reason?: string;
   path?: number[];
   ref?: string;
   suggestions?: string[];
@@ -25,7 +27,9 @@ async function post<T>(url: string, body: unknown, label: string): Promise<T> {
   });
   if (!res.ok) {
     const respBody = (await res.json().catch(() => ({}))) as { error?: MutateError };
-    const err = new Error(respBody.error?.message ?? `${label}: ${res.status}`);
+    const err = new Error(
+      respBody.error?.message ?? respBody.error?.reason ?? `${label}: ${res.status}`,
+    );
     (err as Error & { payload?: MutateError }).payload = respBody.error;
     throw err;
   }

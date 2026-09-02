@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import {
   BoardSchema,
   ConfigSchema,
+  CURRENT_SCHEMA_VERSION,
   ScreenSchema,
   SnippetSchema,
   ThemeSchema,
@@ -64,7 +65,7 @@ describe("velloo init", () => {
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
-    expect(config.schemaVersion).toBe(2);
+    expect(config.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(config.defaultLibrary).toBe("default");
     expect(config.libraries.default?.id).toBe("shadcn-upstream");
     expect(config.defaultBoard).toBeUndefined();

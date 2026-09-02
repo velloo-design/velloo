@@ -620,8 +620,13 @@ export interface TypesetScaleOptions {
 
 const DEFAULT_ROOT_PX = 16;
 
-/** Resolve an authored size to px. Relative units scale `rootPx` by their factor. */
-function sizePx(size: string | number, rootPx: number): number {
+/**
+ * Resolve an authored length to px. Relative units scale `rootPx` by their
+ * factor. Exported because every surface that turns an authored control back
+ * into a number — the native scale below, the canvas's rhythm sliders — has to
+ * agree on what `"1em"` and a bare `15` mean.
+ */
+export function typesetSizePx(size: string | number, rootPx = DEFAULT_ROOT_PX): number {
   if (typeof size === "number") return size;
   const match = /^(-?[\d.]+)\s*(px|rem|em|%)?$/.exec(size.trim());
   if (!match) return rootPx;
@@ -650,7 +655,7 @@ export function typesetScale(
 ): TypesetScale {
   const t = resolveTypeset(typeset);
   const rootPx = options.rootPx ?? DEFAULT_ROOT_PX;
-  const basePx = sizePx(t.size, rootPx);
+  const basePx = typesetSizePx(t.size, rootPx);
   const families = options.fontFamily ?? {};
   const headingStack = t.fontHeading ? families[t.fontHeading] : undefined;
   const bodyStack = t.fontBody ? families[t.fontBody] : undefined;

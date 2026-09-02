@@ -1,5 +1,6 @@
 import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Screen, Theme } from "@velloo/schema";
+import type { Typeset } from "@velloo/schema/typeset";
 import type { StateCreator } from "zustand";
 import {
   type BoardMeta,
@@ -57,6 +58,16 @@ export interface DesignSlice {
   channelsByLibrary: Record<string, StyleChannel>;
   theme: Theme | null;
   themeVersion: number;
+  /**
+   * A typeset being dragged in the theme panel, before it is committed.
+   *
+   * Every frame paints it as a CSS-variable override in its own iframe
+   * document, which re-rhythms the whole board without reloading anything —
+   * the derived ladder is declared in the same rule as the three authored
+   * controls, so overriding those re-substitutes the rest. Cleared on
+   * pointer-up, when the committed theme arrives the normal way.
+   */
+  typesetDraft: { name: string; typeset: Typeset } | null;
   presets: string[];
   history: HistoryDepths;
   wsConnected: boolean;
@@ -92,6 +103,8 @@ export interface DesignSlice {
   loadGeneratedAssets(): Promise<void>;
   loadTheme(): Promise<void>;
   refreshTheme(): Promise<void>;
+  /** Paint (or clear, with null) an uncommitted typeset across every frame. */
+  setTypesetDraft(draft: { name: string; typeset: Typeset } | null): void;
   selectBoard(boardId: string): Promise<void>;
   loadBoard(boardId: string): Promise<Board | null>;
   refreshBoard(boardId: string): Promise<void>;
@@ -141,6 +154,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   channelsByLibrary: {},
   theme: null,
   themeVersion: 0,
+  typesetDraft: null,
   presets: [],
   history: { undo: 0, redo: 0 },
   wsConnected: false,
@@ -266,7 +280,13 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
 
   async refreshTheme() {
     const theme = await fetchTheme();
-    set({ theme, themeVersion: get().themeVersion + 1 });
+    // The committed stylesheet now carries whatever the draft was previewing,
+    // so drop it rather than leaving a duplicate override on top.
+    set({ theme, typesetDraft: null, themeVersion: get().themeVersion + 1 });
+  },
+
+  setTypesetDraft(typesetDraft) {
+    set({ typesetDraft });
   },
 
   async loadScreen(screenId: string): Promise<Screen | null> {

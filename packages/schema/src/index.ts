@@ -120,6 +120,7 @@ export {
   typesetCss,
   typesetSafelist,
   typesetScale,
+  typesetSizePx,
   typesetThemeTokens,
   typesetUtilityClasses,
   typesetV3FontSize,
