@@ -3,9 +3,11 @@ import { FrameSchema } from "./frame.ts";
 import { ResourceIdSchema } from "./ids.ts";
 
 /**
- * A visual group on a Board — a colored region label that ties related
- * frames together ("marketing flow", "settings flow"). Frames carry the
- * group id; the group itself just defines name + color.
+ * A colored, named container. Used at two levels, same shape both times:
+ * `config.boardGroups` holds the sidebar's groups of *boards* (an area of
+ * work — "Side pane", "Account page") and `Board.groups` holds a board's
+ * regions of *frames*. The member carries the group id (`Board.group`,
+ * `Frame.group`); the group itself only defines name + color.
  */
 export const BoardGroupSchema = z.object({
   id: ResourceIdSchema,
@@ -50,7 +52,14 @@ export const BoardSchema = z.object({
    * Absent ⇒ active, so existing folders are unaffected.
    */
   archivedAt: z.string().datetime().optional(),
+  /**
+   * Id of the `config.boardGroups` entry this board is filed under — the
+   * sidebar section it appears in. Absent ⇒ Ungrouped, which is also every
+   * existing folder, so grouping is additive.
+   */
+  group: z.string().min(1).optional(),
   frames: z.array(FrameSchema).default([]),
+  /** Frame regions within this board (see {@link BoardGroupSchema}). */
   groups: z.array(BoardGroupSchema).default([]),
 });
 

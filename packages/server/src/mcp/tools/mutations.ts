@@ -13,7 +13,6 @@ import { badRequest } from "../../mutations/errors.ts";
 import {
   addBoard,
   addFrame,
-  addGroup,
   addNode,
   addScreen,
   addSnippet,
@@ -24,7 +23,6 @@ import {
   overrideSnippetProps,
   removeBoard,
   removeFrame,
-  removeGroup,
   removeNode,
   removeScreen,
   removeSnippet,
@@ -35,7 +33,6 @@ import {
   updateBoard,
   updateFrame,
   updateFrames,
-  updateGroup,
   updateProps,
   updatePropsBulk,
   updateScreen,
@@ -347,8 +344,12 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_board",
     {
       description:
-        "Create a new empty board. A board is one infinite canvas with its own frames + groups; a design folder can have many.",
-      inputSchema: { name: z.string().max(MAX_BOARD_NAME_LENGTH), id: z.string().optional() },
+        'Create a new empty board. A board is one infinite canvas of frames; a design folder can have many. `group` files it under a sidebar group — pass an existing group\'s name (or id), or a new name to create that group. Groups are areas of work ("Side pane", "Account page"); everything ungrouped shows under Ungrouped.',
+      inputSchema: {
+        name: z.string().max(MAX_BOARD_NAME_LENGTH),
+        id: z.string().optional(),
+        group: z.string().optional(),
+      },
     },
     async (args) => toMcp(await addBoard(ctx, args)),
   );
@@ -357,13 +358,14 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_board",
     {
       description:
-        "Update a board's metadata. patch.theme names a theme (stem of theme/<name>.json) the board's frames render with — the per-board look; null clears back to the folder default. patch.archived: true files the board away (hidden from the sidebar, list_boards, and a default publish, but kept on disk and still editable); false restores it.",
+        "Update a board's metadata. patch.theme names a theme (stem of theme/<name>.json) the board's frames render with — the per-board look; null clears back to the folder default. patch.archived: true files the board away (hidden from the sidebar, list_boards, and a default publish, but kept on disk and still editable); false restores it. patch.group moves the board to a sidebar group — an existing group's name or id, a new name (which creates the group), or null for Ungrouped.",
       inputSchema: {
         boardId: z.string(),
         patch: z.object({
           name: z.string().max(MAX_BOARD_NAME_LENGTH).optional(),
           theme: z.string().nullable().optional(),
           archived: z.boolean().optional(),
+          group: z.string().nullable().optional(),
         }),
       },
     },
@@ -487,47 +489,6 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: { boardId: z.string(), frameId: z.string() },
     },
     async (args) => toMcp(await removeFrame(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "add_group",
-    {
-      description:
-        "Create a group on a board — a visual tag for related frames (e.g. 'marketing flow').",
-      inputSchema: {
-        boardId: z.string(),
-        name: z.string(),
-        color: z.string().optional(),
-        id: z.string().optional(),
-      },
-    },
-    async (args) => toMcp(await addGroup(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "update_group",
-    {
-      description: "Update a group's name or color on a board. Pass `color: null` to clear.",
-      inputSchema: {
-        boardId: z.string(),
-        groupId: z.string(),
-        patch: z.object({
-          name: z.string().optional(),
-          color: z.string().nullable().optional(),
-        }),
-      },
-    },
-    async (args) => toMcp(await updateGroup(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "remove_group",
-    {
-      description:
-        "Remove a group from a board. Frames in the group are not deleted — they're un-grouped.",
-      inputSchema: { boardId: z.string(), groupId: z.string() },
-    },
-    async (args) => toMcp(await removeGroup(ctx, args)),
   );
 
   // ── Snippets ────────────────────────────────────────────────────────────

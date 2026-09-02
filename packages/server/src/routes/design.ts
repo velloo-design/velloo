@@ -65,7 +65,10 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
         id,
         name: board.name,
         frameCount: board.frames.length,
+        group: board.group ?? null,
       })),
+      /** Sidebar groups of boards, in display order. Empty ⇒ a flat list. */
+      boardGroups: f.config.boardGroups ?? [],
       /**
        * Archived boards, in the same sidebar order — served alongside rather
        * than inside `boards` so every existing consumer keeps seeing only
@@ -78,6 +81,7 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
           id,
           name: board.name,
           frameCount: board.frames.length,
+          group: board.group ?? null,
           archivedAt: board.archivedAt ?? null,
         })),
       snippets: [...f.snippets.entries()].map(([id, snippet]) => ({

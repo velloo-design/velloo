@@ -5,17 +5,6 @@ import type { MutationContext } from "../context.ts";
 import { withBoardLock } from "../context.ts";
 import type { MutationError } from "../errors.ts";
 import {
-  type AddGroupArgs,
-  type AddGroupResult,
-  addGroup as addGroupImpl,
-  type RemoveGroupArgs,
-  type RemoveGroupResult,
-  removeGroup as removeGroupImpl,
-  type UpdateGroupArgs,
-  type UpdateGroupResult,
-  updateGroup as updateGroupImpl,
-} from "../groups.ts";
-import {
   type RemoveFrameArgs,
   type RemoveFrameResult,
   removeFrame as removeFrameImpl,
@@ -64,44 +53,14 @@ export function removeFrame(
     withBoardLock(ctx.folder, args.boardId, () => removeFrameImpl(ctx, args)),
   );
 }
-export function addGroup(
-  ctx: MutationContext,
-  args: AddGroupArgs,
-): Promise<Result<AddGroupResult, MutationError>> {
-  return tracked(ctx, "add_group", { boardId: args.boardId }, () =>
-    withBoardLock(ctx.folder, args.boardId, () => addGroupImpl(ctx, args)),
-  );
-}
-export function updateGroup(
-  ctx: MutationContext,
-  args: UpdateGroupArgs,
-): Promise<Result<UpdateGroupResult, MutationError>> {
-  return tracked(ctx, "update_group", { boardId: args.boardId }, () =>
-    withBoardLock(ctx.folder, args.boardId, () => updateGroupImpl(ctx, args)),
-  );
-}
-export function removeGroup(
-  ctx: MutationContext,
-  args: RemoveGroupArgs,
-): Promise<Result<RemoveGroupResult, MutationError>> {
-  return tracked(ctx, "remove_group", { boardId: args.boardId }, () =>
-    withBoardLock(ctx.folder, args.boardId, () => removeGroupImpl(ctx, args)),
-  );
-}
 
 export type {
   AddFrameArgs,
   AddFrameResult,
-  AddGroupArgs,
-  AddGroupResult,
   RemoveFrameArgs,
   RemoveFrameResult,
-  RemoveGroupArgs,
-  RemoveGroupResult,
   UpdateFrameArgs,
   UpdateFrameResult,
   UpdateFramesArgs,
   UpdateFramesResult,
-  UpdateGroupArgs,
-  UpdateGroupResult,
 };

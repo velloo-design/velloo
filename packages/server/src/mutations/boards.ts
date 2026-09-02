@@ -1,6 +1,7 @@
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import { type Board, MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import { orderedBoards } from "../design-folder.ts";
+import { resolveGroup } from "./board-groups.ts";
 import type { MutationContext } from "./context.ts";
 import { badRequest, boardIdConflict, boardIdExhausted, type MutationError } from "./errors.ts";
 import { getBoard } from "./lookup.ts";
@@ -17,6 +18,11 @@ function boardNameTooLong(name: string): MutationError | null {
 export interface AddBoardArgs {
   name: string;
   id?: string;
+  /**
+   * Sidebar group to file the board under — an existing group's id or name,
+   * or a new name, which creates the group (see {@link resolveGroup}).
+   */
+  group?: string;
 }
 
 export interface AddBoardResult {
@@ -42,7 +48,23 @@ export async function addBoard(
       if (attempt > 100) return yield* $(err(boardIdExhausted(baseId)));
     }
 
-    const board: Board = { id: boardId, name: args.name, frames: [], groups: [] };
+    let groupId: string | undefined;
+    if (args.group !== undefined) {
+      const resolved = yield* $(resolveGroup(ctx.folder.config, args.group));
+      groupId = resolved.groupId;
+      if (resolved.config !== ctx.folder.config) {
+        await persistConfig(ctx.folder, resolved.config);
+        ctx.broadcast({ type: "config-changed" });
+      }
+    }
+
+    const board: Board = {
+      id: boardId,
+      name: args.name,
+      ...(groupId ? { group: groupId } : {}),
+      frames: [],
+      groups: [],
+    };
     await persistBoard(ctx.folder, boardId, board);
     ctx.broadcast({ type: "board-changed", boardId });
     return { boardId, board };
@@ -57,6 +79,11 @@ export interface UpdateBoardArgs {
     theme?: string | null;
     /** true stamps `archivedAt` with now; false clears it. */
     archived?: boolean;
+    /**
+     * Sidebar group — an existing group's id or name, or a new name (which
+     * creates the group). null files the board back under Ungrouped.
+     */
+    group?: string | null;
   };
 }
 
@@ -79,6 +106,17 @@ export async function updateBoard(
     if (args.patch.theme !== undefined) {
       if (args.patch.theme === null) delete next.theme;
       else next.theme = args.patch.theme;
+    }
+    if (args.patch.group !== undefined) {
+      if (args.patch.group === null) delete next.group;
+      else {
+        const resolved = yield* $(resolveGroup(ctx.folder.config, args.patch.group));
+        next.group = resolved.groupId;
+        if (resolved.config !== ctx.folder.config) {
+          await persistConfig(ctx.folder, resolved.config);
+          ctx.broadcast({ type: "config-changed" });
+        }
+      }
     }
     if (args.patch.archived !== undefined) {
       // Re-archiving an already-archived board refreshes the stamp rather

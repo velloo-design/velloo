@@ -2,13 +2,17 @@ import { MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import {
   Archive,
   ArchiveRestore,
+  Check,
   ChevronDown,
   ChevronRight,
   Download,
+  FolderInput,
+  FolderPlus,
   Frame as FrameIcon,
   LayoutDashboard,
   Lock,
   MoreHorizontal,
+  Palette,
   Pencil,
   Plus,
   Share2,
@@ -16,8 +20,8 @@ import {
   Trash2,
   Unlock,
 } from "lucide-react";
-import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
+import { type DragEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { type BoardGroupMeta, type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { AddFrameDialog } from "./AddFrameDialog.tsx";
@@ -48,6 +52,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 /** Stable empty array so the `archivedBoards` selector doesn't re-render on every store tick. */
 const EMPTY_BOARDS: BoardMeta[] = [];
+/** Same, for the groups selector. */
+const EMPTY_GROUPS: BoardGroupMeta[] = [];
+
+/** Colors offered in a group's recolor menu — the server's palette, named. */
+const GROUP_COLORS = [
+  { value: "#8b5cf6", label: "Violet" },
+  { value: "#0ea5e9", label: "Sky" },
+  { value: "#f59e0b", label: "Amber" },
+  { value: "#f43f5e", label: "Rose" },
+  { value: "#10b981", label: "Emerald" },
+  { value: "#6366f1", label: "Indigo" },
+  { value: "#ec4899", label: "Pink" },
+  { value: "#84cc16", label: "Lime" },
+];
+
+const COLLAPSED_GROUPS_KEY = "velloo:collapsedBoardGroups";
+
+/** Collapsed groups are a per-browser convenience, not folder state. */
+function readCollapsedGroups(): string[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 /** "Aug 25" — enough to date an archived board without widening the row. */
 function archivedOn(iso: string): string {
@@ -82,6 +114,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const boardPulse = useCanvas((s) => s.boardPulse);
   const setBoardArchived = useCanvas((s) => s.setBoardArchived);
   const archivedBoards = useCanvas((s) => s.design?.archivedBoards ?? EMPTY_BOARDS);
+  const groups = useCanvas((s) => s.design?.boardGroups ?? EMPTY_GROUPS);
   const currentScreen = useCanvas((s) =>
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
   );
@@ -127,6 +160,95 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     { mode: "create" } | { mode: "rename"; boardId: string } | null
   >(null);
   const [boardName, setBoardName] = useState("");
+
+  // Group create/rename share one dialog, same as boards. `boardId` carries
+  // the board waiting to be filed when the group is created from its menu.
+  const [groupDialog, setGroupDialog] = useState<
+    { mode: "create"; boardId?: string } | { mode: "rename"; groupId: string } | null
+  >(null);
+  const [groupName, setGroupName] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>(readCollapsedGroups);
+  const [pendingGroupDelete, setPendingGroupDelete] = useState<BoardGroupMeta | null>(null);
+
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroups((prev) => {
+      const next = prev.includes(groupId)
+        ? prev.filter((id) => id !== groupId)
+        : [...prev, groupId];
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const openGroupDialog = (
+    dialog: { mode: "create"; boardId?: string } | { mode: "rename"; group: BoardGroupMeta },
+  ) => {
+    if (dialog.mode === "create") {
+      setGroupName("New group");
+      setGroupDialog({ mode: "create", ...(dialog.boardId ? { boardId: dialog.boardId } : {}) });
+    } else {
+      setGroupName(dialog.group.name);
+      setGroupDialog({ mode: "rename", groupId: dialog.group.id });
+    }
+  };
+
+  const submitGroupDialog = async () => {
+    const name = groupName.trim();
+    if (!name || !groupDialog) return;
+    const dialog = groupDialog;
+    setGroupDialog(null);
+    try {
+      if (dialog.mode === "rename") {
+        await mutate.updateBoardGroup({ groupId: dialog.groupId, patch: { name } });
+      } else if (dialog.boardId) {
+        // Creating from a board's "New group…" both creates and files it —
+        // `group` takes a name and creates on miss, so one call does both.
+        await mutate.updateBoard({ boardId: dialog.boardId, patch: { group: name } });
+      } else {
+        await mutate.addBoardGroup({ name });
+      }
+      await useCanvas.getState().refreshDesignSummary();
+    } catch (err) {
+      toastError(err, dialog.mode === "rename" ? "Could not rename group" : "Could not add group");
+    }
+  };
+
+  const recolorGroup = (groupId: string, color: string) => {
+    void mutate
+      .updateBoardGroup({ groupId, patch: { color } })
+      .then(() => useCanvas.getState().refreshDesignSummary())
+      .catch((err: unknown) => toastError(err, "Could not recolor group"));
+  };
+
+  const confirmDeleteGroup = () => {
+    if (!pendingGroupDelete) return;
+    const { id, name } = pendingGroupDelete;
+    setPendingGroupDelete(null);
+    void (async () => {
+      try {
+        const r = await mutate.removeBoardGroup({ groupId: id });
+        await useCanvas.getState().refreshDesignSummary();
+        pushToast({
+          kind: "info",
+          message:
+            r.ungroupedBoardIds.length > 0
+              ? `Deleted "${name}" — ${r.ungroupedBoardIds.length} board${r.ungroupedBoardIds.length === 1 ? "" : "s"} moved to Ungrouped`
+              : `Deleted "${name}"`,
+        });
+      } catch (err) {
+        toastError(err, "Could not delete group");
+      }
+    })();
+  };
+
+  const moveBoardToGroup = (boardId: string, group: string | null) => {
+    void mutate
+      .updateBoard({ boardId, patch: { group } })
+      .then(() => useCanvas.getState().refreshDesignSummary())
+      .catch((err: unknown) => toastError(err, "Could not move board"));
+  };
 
   const openCreateDialog = () => {
     setBoardName("New board");
@@ -208,6 +330,9 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   // While a drag is in flight, `dragOrder` holds the live previewed order
   // so the list reflows under the pointer. Null when not dragging.
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
+  // Group the dragged board would land in, previewed live. `undefined` = the
+  // drag hasn't crossed a group boundary, so the drop only reorders.
+  const [dragGroup, setDragGroup] = useState<string | null | undefined>(undefined);
   // Distinguishes a real drop (persist) from a cancelled drag / drop
   // outside the list (revert). `onDragEnd` fires for both.
   const dropHandled = useRef(false);
@@ -228,6 +353,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     dropHandled.current = false;
     setDraggingId(id);
     setDragOrder(boards.map((b) => b.id));
+    setDragGroup(undefined);
     e.dataTransfer.effectAllowed = "move";
     // Firefox won't start a drag unless some data is attached.
     e.dataTransfer.setData("text/plain", id);
@@ -244,6 +370,10 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     if (overId === draggingId) return;
+    // Hovering a row in another group means "put it there" — the drop both
+    // reorders and refiles, which is what dragging across a rail looks like.
+    const over = boards.find((b) => b.id === overId);
+    if (over) setDragGroup(over.group ?? null);
     setDragOrder((prev) => {
       const cur = prev ?? boards.map((b) => b.id);
       const from = cur.indexOf(draggingId);
@@ -254,6 +384,14 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
       next.splice(to, 0, draggingId);
       return next;
     });
+  };
+
+  /** Hovering a group header (or the Ungrouped header) files into that group. */
+  const onGroupDragOver = (e: DragEvent<HTMLLIElement>, groupId: string | null) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragGroup(groupId);
   };
 
   // Drops bubble to the list so a release in a gap or the empty space
@@ -270,8 +408,14 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     e.preventDefault();
     dropHandled.current = true;
     const order = dragOrder;
+    const nextGroup = dragGroup;
+    const dragged = boards.find((b) => b.id === draggingId);
     setDraggingId(null);
     setDragOrder(null);
+    setDragGroup(undefined);
+    if (dragged && nextGroup !== undefined && (dragged.group ?? null) !== nextGroup) {
+      moveBoardToGroup(dragged.id, nextGroup);
+    }
     if (!order) return;
     const original = boards.map((b) => b.id);
     if (order.length === original.length && order.every((id, i) => id === original[i])) return;
@@ -290,7 +434,36 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     // Cancelled (Esc) or dropped outside the list — discard the preview.
     setDraggingId(null);
     setDragOrder(null);
+    setDragGroup(undefined);
   };
+
+  /**
+   * The sidebar's shape: one section per group in `boardGroups` order, then
+   * the ungrouped remainder. Board order within a section stays the folder's
+   * global order (`renderedBoards`), so drag-reorder keeps working unchanged.
+   * A folder with no groups yields a single ungrouped section — today's flat
+   * list, headerless.
+   */
+  const sections = useMemo<{ group: BoardGroupMeta | null; boards: BoardMeta[] }[]>(() => {
+    const groupOf = (b: BoardMeta) =>
+      // While dragging across a rail the preview shows the board already in
+      // the target group, so the row moves under the pointer rather than
+      // snapping there only on release.
+      b.id === draggingId && dragGroup !== undefined ? dragGroup : (b.group ?? null);
+    const live = new Set(groups.map((g) => g.id));
+    const out = groups.map((group) => ({
+      group: group as BoardGroupMeta | null,
+      boards: renderedBoards.filter((b) => groupOf(b) === group.id),
+    }));
+    // A board pointing at a group that no longer exists reads as ungrouped
+    // rather than disappearing.
+    const loose = renderedBoards.filter((b) => {
+      const g = groupOf(b);
+      return g === null || !live.has(g);
+    });
+    out.push({ group: null, boards: loose });
+    return out;
+  }, [groups, renderedBoards, draggingId, dragGroup]);
 
   // The boards list never eats the whole pane: when both panels are
   // open it's capped at half so the tree stays visible; when the tree
@@ -302,6 +475,174 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
       ? "flex-1 flex flex-col min-h-0 border-b"
       : "flex flex-col min-h-0 max-h-[50%] border-b";
   const treeSectionClass = treeCollapsed ? "shrink-0" : "flex-1 flex flex-col min-h-0";
+
+  /** One board row — rendered flat, or nested under its group's rail. */
+  const renderBoardRow = (b: BoardMeta) => {
+    const active = b.id === currentBoardId;
+    const dragging = draggingId === b.id;
+    return (
+      <li
+        key={b.id}
+        draggable={canReorder}
+        onDragStart={(e) => onBoardDragStart(e, b.id)}
+        onDragOver={(e) => onBoardDragOver(e, b.id)}
+        onDragEnd={onBoardDragEnd}
+        className={
+          "relative group/board rounded-md " +
+          (canReorder ? "cursor-grab active:cursor-grabbing " : "") +
+          (dragging ? "opacity-50" : "")
+        }
+      >
+        <button
+          type="button"
+          onClick={() => {
+            // Board data comes from the daemon — switching while
+            // disconnected would silently no-op.
+            if (!wsConnected && !active) {
+              pushToast({
+                kind: "error",
+                message: "Disconnected — board switching resumes when the daemon is back.",
+              });
+              return;
+            }
+            void selectBoard(b.id);
+          }}
+          title={
+            !wsConnected && !active
+              ? "Disconnected — board switching resumes when the daemon is back."
+              : undefined
+          }
+          className={
+            "w-full text-left px-2 py-1.5 pr-8 rounded-md text-sm transition-colors " +
+            (active
+              ? "bg-primary text-primary-foreground"
+              : !wsConnected
+                ? "text-muted-foreground cursor-not-allowed opacity-60"
+                : "hover:bg-muted text-foreground")
+          }
+        >
+          <div className="font-medium truncate">
+            {b.name}
+            {!active && boardPulse[b.id] ? (
+              <span
+                data-board-pulse={b.id}
+                title="An agent edited this board recently"
+                className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle"
+              />
+            ) : null}
+          </div>
+          <div
+            className={`text-xs ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}
+          >
+            {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
+          </div>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              title="Board menu"
+              className="absolute right-2 top-2 opacity-0 group-hover/board:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={!wsConnected} onSelect={() => openRenameDialog(b)}>
+              <Pencil />
+              Rename board
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!wsConnected} onSelect={() => setAddFrameBoardId(b.id)}>
+              <FrameIcon />
+              Add frame…
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Share2 />
+                Publish board
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    useCanvas.getState().publishBoardNow({ id: b.id, name: b.name }, "public")
+                  }
+                >
+                  <Unlock />
+                  Public
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    useCanvas.getState().publishBoardNow({ id: b.id, name: b.name }, "private")
+                  }
+                >
+                  <Lock />
+                  Private
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    useCanvas.getState().publishBoardNow({ id: b.id, name: b.name }, "password")
+                  }
+                >
+                  <ShieldCheck />
+                  Password protected…
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger disabled={!wsConnected}>
+                <FolderInput />
+                Move to group
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {groups.map((g) => (
+                  <DropdownMenuItem key={g.id} onSelect={() => moveBoardToGroup(b.id, g.id)}>
+                    <span
+                      className="size-2.5 rounded-[3px]"
+                      style={{ backgroundColor: g.color ?? "var(--muted-foreground)" }}
+                    />
+                    {g.name}
+                    {b.group === g.id ? <Check className="ml-auto" /> : null}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem onSelect={() => moveBoardToGroup(b.id, null)}>
+                  <span className="size-2.5 rounded-[3px] border border-dashed" />
+                  No group
+                  {b.group ? null : <Check className="ml-auto" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => openGroupDialog({ mode: "create", boardId: b.id })}
+                >
+                  <FolderPlus />
+                  New group…
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuItem
+              onSelect={() =>
+                useCanvas.getState().setExportTarget({ kind: "board", id: b.id, name: b.name })
+              }
+            >
+              <Download />
+              Export board…
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!wsConnected} onSelect={() => archiveBoard(b, true)}>
+              <Archive />
+              Archive board
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={!wsConnected}
+              onSelect={() => setPendingBoardDelete({ id: b.id, name: b.name })}
+            >
+              <Trash2 />
+              Delete board
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </li>
+    );
+  };
 
   return (
     <>
@@ -324,15 +665,26 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
               <span className="normal-case opacity-60">({boards.length})</span>
             ) : null}
           </button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={openCreateDialog}
-            disabled={!wsConnected}
-            title={wsConnected ? "New board" : "Disconnected — edits are paused."}
-          >
-            <Plus />
-          </Button>
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => openGroupDialog({ mode: "create" })}
+              disabled={!wsConnected}
+              title={wsConnected ? "New group" : "Disconnected — edits are paused."}
+            >
+              <FolderPlus />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={openCreateDialog}
+              disabled={!wsConnected}
+              title={wsConnected ? "New board" : "Disconnected — edits are paused."}
+            >
+              <Plus />
+            </Button>
+          </div>
         </div>
         {boardsCollapsed ? null : boards.length === 0 ? (
           <div className="px-4 pb-2 text-sm text-muted-foreground">
@@ -344,162 +696,50 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             onDragOver={onListDragOver}
             onDrop={onListDrop}
           >
-            {renderedBoards.map((b) => {
-              const active = b.id === currentBoardId;
-              const dragging = draggingId === b.id;
-              return (
-                <li
-                  key={b.id}
-                  draggable={canReorder}
-                  onDragStart={(e) => onBoardDragStart(e, b.id)}
-                  onDragOver={(e) => onBoardDragOver(e, b.id)}
-                  onDragEnd={onBoardDragEnd}
-                  className={
-                    "relative group/board rounded-md " +
-                    (canReorder ? "cursor-grab active:cursor-grabbing " : "") +
-                    (dragging ? "opacity-50" : "")
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Board data comes from the daemon — switching while
-                      // disconnected would silently no-op.
-                      if (!wsConnected && !active) {
-                        pushToast({
-                          kind: "error",
-                          message:
-                            "Disconnected — board switching resumes when the daemon is back.",
-                        });
-                        return;
-                      }
-                      void selectBoard(b.id);
-                    }}
-                    title={
-                      !wsConnected && !active
-                        ? "Disconnected — board switching resumes when the daemon is back."
-                        : undefined
-                    }
-                    className={
-                      "w-full text-left px-2 py-1.5 pr-8 rounded-md text-sm transition-colors " +
-                      (active
-                        ? "bg-primary text-primary-foreground"
-                        : !wsConnected
-                          ? "text-muted-foreground cursor-not-allowed opacity-60"
-                          : "hover:bg-muted text-foreground")
-                    }
-                  >
-                    <div className="font-medium truncate">
-                      {b.name}
-                      {!active && boardPulse[b.id] ? (
-                        <span
-                          data-board-pulse={b.id}
-                          title="An agent edited this board recently"
-                          className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle"
-                        />
-                      ) : null}
-                    </div>
-                    <div
+            {sections.map((section) => {
+              const group = section.group;
+              return group ? (
+                <li key={group.id}>
+                  <GroupHeader
+                    group={group}
+                    count={section.boards.length}
+                    collapsed={collapsedGroups.includes(group.id)}
+                    dropTarget={dragGroup === group.id}
+                    disabled={!wsConnected}
+                    onToggle={() => toggleGroup(group.id)}
+                    onDragOver={(e) => onGroupDragOver(e, group.id)}
+                    onRename={() => openGroupDialog({ mode: "rename", group })}
+                    onRecolor={(color) => recolorGroup(group.id, color)}
+                    onDelete={() => setPendingGroupDelete(group)}
+                  />
+                  {collapsedGroups.includes(group.id) ? null : (
+                    <ul
+                      className="ml-[15px] flex flex-col gap-0.5 border-l-2 pl-2"
+                      style={{ borderColor: group.color ?? "var(--border)" }}
+                    >
+                      {section.boards.map(renderBoardRow)}
+                    </ul>
+                  )}
+                </li>
+              ) : (
+                <Fragment key="__ungrouped">
+                  {groups.length > 0 && section.boards.length > 0 ? (
+                    <li
+                      onDragOver={(e) => onGroupDragOver(e, null)}
                       className={
-                        "text-xs " +
-                        (active ? "text-primary-foreground/80" : "text-muted-foreground")
+                        "mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground " +
+                        (dragGroup === null && draggingId ? "bg-accent" : "")
                       }
                     >
-                      {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
-                    </div>
-                  </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        title="Board menu"
-                        className="absolute right-2 top-2 opacity-0 group-hover/board:opacity-100 data-[state=open]:opacity-100"
-                      >
-                        <MoreHorizontal />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={!wsConnected}
-                        onSelect={() => openRenameDialog(b)}
-                      >
-                        <Pencil />
-                        Rename board
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!wsConnected}
-                        onSelect={() => setAddFrameBoardId(b.id)}
-                      >
-                        <FrameIcon />
-                        Add frame…
-                      </DropdownMenuItem>
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>
-                          <Share2 />
-                          Publish board
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent>
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              useCanvas
-                                .getState()
-                                .publishBoardNow({ id: b.id, name: b.name }, "public")
-                            }
-                          >
-                            <Unlock />
-                            Public
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              useCanvas
-                                .getState()
-                                .publishBoardNow({ id: b.id, name: b.name }, "private")
-                            }
-                          >
-                            <Lock />
-                            Private
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              useCanvas
-                                .getState()
-                                .publishBoardNow({ id: b.id, name: b.name }, "password")
-                            }
-                          >
-                            <ShieldCheck />
-                            Password protected…
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          useCanvas
-                            .getState()
-                            .setExportTarget({ kind: "board", id: b.id, name: b.name })
-                        }
-                      >
-                        <Download />
-                        Export board…
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!wsConnected}
-                        onSelect={() => archiveBoard(b, true)}
-                      >
-                        <Archive />
-                        Archive board
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        disabled={!wsConnected}
-                        onSelect={() => setPendingBoardDelete({ id: b.id, name: b.name })}
-                      >
-                        <Trash2 />
-                        Delete board
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </li>
+                      <span className="size-2.5 shrink-0 rounded-[3px] border border-dashed" />
+                      Ungrouped
+                      <span className="ml-auto normal-case opacity-70">
+                        {section.boards.length}
+                      </span>
+                    </li>
+                  ) : null}
+                  {section.boards.map(renderBoardRow)}
+                </Fragment>
               );
             })}
           </ul>
@@ -696,6 +936,68 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={groupDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setGroupDialog(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {groupDialog?.mode === "rename" ? "Rename group" : "New group"}
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitGroupDialog();
+            }}
+          >
+            <Input
+              autoFocus
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              maxLength={40}
+              placeholder="Group name"
+              aria-label="Group name"
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setGroupDialog(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={groupName.trim().length === 0}>
+                {groupDialog?.mode === "rename" ? "Rename" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={pendingGroupDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingGroupDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete group</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingGroupDelete
+                ? `Delete the group "${pendingGroupDelete.name}"? Its boards aren't deleted — they move to Ungrouped.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteGroup}>Delete group</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AddFrameDialog boardId={addFrameBoardId} onClose={() => setAddFrameBoardId(null)} />
 
       <AlertDialog
@@ -725,5 +1027,99 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+interface GroupHeaderProps {
+  group: BoardGroupMeta;
+  count: number;
+  collapsed: boolean;
+  /** True while a dragged board would land in this group. */
+  dropTarget: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+  onDragOver: (e: DragEvent<HTMLLIElement>) => void;
+  onRename: () => void;
+  onRecolor: (color: string) => void;
+  onDelete: () => void;
+}
+
+/**
+ * A sidebar group header: color chip, name, board count, and the group's own
+ * menu. Doubles as a drop target — dragging a board onto it files the board.
+ */
+function GroupHeader({
+  group,
+  count,
+  collapsed,
+  dropTarget,
+  disabled,
+  onToggle,
+  onDragOver,
+  onRename,
+  onRecolor,
+  onDelete,
+}: GroupHeaderProps) {
+  return (
+    <li
+      onDragOver={onDragOver}
+      className={`group/gr relative flex items-center rounded-md pr-7 ${dropTarget ? "bg-accent" : ""}`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
+      >
+        {collapsed ? (
+          <ChevronRight size={12} strokeWidth={2.5} className="shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronDown size={12} strokeWidth={2.5} className="shrink-0 text-muted-foreground" />
+        )}
+        <span
+          className="size-2.5 shrink-0 rounded-[3px]"
+          style={{ backgroundColor: group.color ?? "var(--muted-foreground)" }}
+        />
+        <span className="truncate text-xs font-semibold">{group.name}</span>
+        <span className="ml-auto text-[10px] text-muted-foreground">{count}</span>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Group menu"
+            className="absolute right-1 top-1.5 opacity-0 group-hover/gr:opacity-100 data-[state=open]:opacity-100"
+          >
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem disabled={disabled} onSelect={onRename}>
+            <Pencil />
+            Rename group
+          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={disabled}>
+              <Palette />
+              Color
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {GROUP_COLORS.map(({ value, label }) => (
+                <DropdownMenuItem key={value} onSelect={() => onRecolor(value)}>
+                  <span className="size-3 rounded-[3px]" style={{ backgroundColor: value }} />
+                  {label}
+                  {group.color === value ? <Check className="ml-auto" /> : null}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuItem variant="destructive" disabled={disabled} onSelect={onDelete}>
+            <Trash2 />
+            Delete group
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </li>
   );
 }

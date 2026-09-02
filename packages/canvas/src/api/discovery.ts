@@ -31,7 +31,19 @@ export interface DesignSummary {
    * Absent on older daemons.
    */
   archivedBoards?: BoardMeta[];
+  /**
+   * Sidebar groups of boards, in display order. Absent/empty ⇒ a flat list,
+   * which is also every folder that has never used grouping.
+   */
+  boardGroups?: BoardGroupMeta[];
   snippets: SnippetMeta[];
+}
+
+export interface BoardGroupMeta {
+  id: string;
+  name: string;
+  /** CSS color for the group's chip and rail. */
+  color?: string;
 }
 
 export interface ScreenMeta {
@@ -45,6 +57,8 @@ export interface BoardMeta {
   id: string;
   name: string;
   frameCount: number;
+  /** Id of the `boardGroups` entry this board sits under; null = ungrouped. */
+  group?: string | null;
   /** ISO stamp when archived; null/absent = live. */
   archivedAt?: string | null;
 }

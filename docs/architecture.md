@@ -104,7 +104,7 @@ Snippet instances reference their library entry by id:
 
 ### Board
 
-A board is one infinite canvas. It holds **frames** — placements of screens at chosen sizes and positions — and **groups** that visually tag related frames. Each board persists as `boards/<id>.json`; a folder typically has several.
+A board is one infinite canvas. It holds **frames** — placements of screens at chosen sizes and positions — and **groups** that visually tag related frames. Each board persists as `boards/<id>.json`; a folder typically has several. In the sidebar, boards are filed into **board groups** — areas of work, defined once in `config.boardGroups` and referenced by `Board.group` — which is a separate level from a board's own frame groups.
 
 ```json
 // boards/marketing.json
@@ -153,7 +153,7 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 ```json
 // .design/config.json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "toolVersion": "0.1.0",
   "folderId": "9f2c1a7e-4b3d-4f7e-a1c2-0d9e8b7a6f5e",
   "libraries": {
@@ -414,7 +414,7 @@ Total size: ~25–40MB. Same shape as `gh`, `bun`, `tailwindcss`.
 
 The design folder's `.design/config.json` records three version facts:
 
-- `schemaVersion` — the on-disk format version, and the only one that gates loading. The loader refuses a folder on any other version: older folders are migrated **on disk** by `velloo upgrade` (ordered pure migrations in `@velloo/schema`'s `migrate.ts`; the command stops the folder's daemon, rewrites config + sidecars, then re-validates the whole folder); newer folders need a newer binary.
+- `schemaVersion` — the on-disk format version, and the only one that gates loading. The loader refuses a folder on any other version: older folders are migrated **on disk** by `velloo upgrade` (ordered pure migrations in `@velloo/schema`'s `migrate.ts`; the command stops the folder's daemon, rewrites config + annotation sidecars + theme documents, then re-validates the whole folder); newer folders need a newer binary.
 - `toolVersion` — the binary version that created (or last upgraded) the folder. Informational.
 - `library.version` — the library version recorded at init. Informational.
 

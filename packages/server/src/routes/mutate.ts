@@ -1,14 +1,18 @@
 import { Hono } from "hono";
 import {
   addBoard,
+  addBoardGroup,
   addFrame,
   applyClasses,
   type MutationContext,
   removeBoard,
+  removeBoardGroup,
   removeFrame,
+  reorderBoardGroups,
   reorderBoards,
   setNodeId,
   updateBoard,
+  updateBoardGroup,
   updateCodegen,
   updateDefaults,
   updateFeedback,
@@ -20,13 +24,17 @@ import {
 } from "../mutations/index.ts";
 import {
   AddBoardBody,
+  AddBoardGroupBody,
   AddFrameBody,
   ApplyClassesBody,
   RemoveBoardBody,
+  RemoveBoardGroupBody,
   RemoveFrameBody,
+  ReorderBoardGroupsBody,
   ReorderBoardsBody,
   SetNodeIdBody,
   UpdateBoardBody,
+  UpdateBoardGroupBody,
   UpdateCodegenBody,
   UpdateDefaultsBody,
   UpdateFeedbackBody,
@@ -78,6 +86,25 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/reorder_boards",
     route(ReorderBoardsBody, (a, ctx) => reorderBoards(ctx, a)),
+  );
+
+  // Board groups — canvas-only: agents file a board with update_board's
+  // `group`, they never manage the groups themselves.
+  r.post(
+    "/add_board_group",
+    route(AddBoardGroupBody, (a, ctx) => addBoardGroup(ctx, a)),
+  );
+  r.post(
+    "/update_board_group",
+    route(UpdateBoardGroupBody, (a, ctx) => updateBoardGroup(ctx, a)),
+  );
+  r.post(
+    "/remove_board_group",
+    route(RemoveBoardGroupBody, (a, ctx) => removeBoardGroup(ctx, a)),
+  );
+  r.post(
+    "/reorder_board_groups",
+    route(ReorderBoardGroupsBody, (a, ctx) => reorderBoardGroups(ctx, a)),
   );
 
   // Folder config

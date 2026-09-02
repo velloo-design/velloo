@@ -7,7 +7,7 @@ export type MutationError =
   | { kind: "ScreenNotFound"; screenId: string }
   | { kind: "BoardNotFound"; boardId: string }
   | { kind: "FrameNotFound"; boardId: string; frameId: string }
-  | { kind: "GroupNotFound"; boardId: string; groupId: string }
+  | { kind: "BoardGroupNotFound"; groupId: string }
   | { kind: "UnknownComponent"; ref: string; suggestions: string[]; hint?: string }
   | { kind: "InvalidPath"; reason: string; path?: number[]; hint?: string }
   | { kind: "InvalidMove"; reason: string }
@@ -17,7 +17,6 @@ export type MutationError =
   | { kind: "BoardIdConflict"; boardId: string }
   | { kind: "BoardIdExhausted"; base: string }
   | { kind: "FrameIdConflict"; boardId: string; frameId: string }
-  | { kind: "GroupIdConflict"; boardId: string; groupId: string }
   /** Request body failed zod validation. */
   | { kind: "BadRequest"; message: string; issues?: unknown; hint?: string }
   | { kind: "SnippetNotFound"; snippetId: string }
@@ -64,9 +63,8 @@ export const frameNotFound = (boardId: string, frameId: string): MutationError =
   boardId,
   frameId,
 });
-export const groupNotFound = (boardId: string, groupId: string): MutationError => ({
-  kind: "GroupNotFound",
-  boardId,
+export const boardGroupNotFound = (groupId: string): MutationError => ({
+  kind: "BoardGroupNotFound",
   groupId,
 });
 export const unknownComponent = (
@@ -118,11 +116,6 @@ export const frameIdConflict = (boardId: string, frameId: string): MutationError
   kind: "FrameIdConflict",
   boardId,
   frameId,
-});
-export const groupIdConflict = (boardId: string, groupId: string): MutationError => ({
-  kind: "GroupIdConflict",
-  boardId,
-  groupId,
 });
 export const badRequest = (message: string, issues?: unknown): MutationError => {
   const hint = scalarChildrenHint(issues);

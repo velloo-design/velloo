@@ -18,7 +18,7 @@ Flat is the default because it requires a client that re-fetches the tool list o
 |---|---|---|
 | `reveal_tools` | `area: "theme-authoring" \| "lifecycle" \| "annotations-write" \| "all"` | Progressive mode only. Unlock a hidden family. Fires `tools/list_changed` (compliant clients re-fetch the larger list automatically) and returns the now-callable tool names + that family's guidance. Idempotent |
 
-Hidden families (progressive mode): **theme-authoring** (`add_theme`, `apply_preset`, `score_theme_contrast`, `list_themes`), **lifecycle** (the `remove_*` for boards/frames/groups/screens/snippets/extensions + `update_board`/`update_group`/`update_screen`/`update_extension`), **annotations-write** (`add_annotation`, `remove_annotation`). Everything else — including reads (`list_annotations`), node deletes (`remove_node`), frame edits (`update_frame`), `import_theme`, and `derive_palette_from_color` — stays core.
+Hidden families (progressive mode): **theme-authoring** (`add_theme`, `apply_preset`, `score_theme_contrast`, `list_themes`), **lifecycle** (the `remove_*` for boards/frames/screens/snippets/extensions + `update_board`/`update_screen`/`update_extension`), **annotations-write** (`add_annotation`, `remove_annotation`). Everything else — including reads (`list_annotations`), node deletes (`remove_node`), frame edits (`update_frame`), `import_theme`, and `derive_palette_from_color` — stays core.
 
 ### Discovery
 
@@ -26,7 +26,7 @@ Hidden families (progressive mode): **theme-authoring** (`add_theme`, `apply_pre
 |---|---|---|
 | `list_screens` | `include_tree?: boolean` | `[{ id, name, tree? }]`. Pass `include_tree: true` for a single-round-trip overview of every screen |
 | `get_screen` | `screenId, mode?: "full" \| "outline"` | full screen JSON, or a stripped `{ref/snippet, $id, classSnippet (≤40 chars), children}` tree when `mode: "outline"` for scanning long screens |
-| `list_boards` | `include_frames?: boolean` | `[{ id, name, frameCount, frames?, groups? }]` — pass `include_frames: true` to embed each board's full frame list in one round-trip |
+| `list_boards` | `include_frames?: boolean` | `[{ id, name, frameCount, group?, frames?, groups? }]` — `group` names the sidebar group the board is filed under (absent ⇒ ungrouped); pass `include_frames: true` to embed each board's full frame list in one round-trip |
 | `get_board` | `boardId` | `{ id, name, frames: [...], groups: [...] }` — frame placement on the named board |
 | `list_components` | `filter?, mode?: "summary" \| "full"` | `[{ id, props, category, summary }]` — summary mode returns just `{ id, props (names only), category, source }` to avoid blowing the token cap on first call |
 | `install_component` | `componentId, screenId?` | The existing-project flow's "is this component available + install it if not." Resolves the active library's catalog: an already-present component (every shipped library bundles its whole set, so the common case) returns `{ installed: true, importPath }` — just `$ref` it; an uninstalled one routes to the adapter's installer (shadcn-upstream's per-component fetch); an unknown id errors with the catalog. `screenId` picks the library; omitted ⇒ folder default |
@@ -66,10 +66,12 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 
 Boards are the canvases of a design folder; one folder has many. Each board owns its own frames + groups and persists as `boards/<id>.json`.
 
+Boards are filed into **sidebar groups** — areas of work ("Side pane", "Account page"). The agent surface is one optional `group` argument: pass an existing group's name or id, or a new name and the group is created (color auto-assigned). There are no group-management tools by design — creating, renaming, recoloring, reordering and deleting groups is canvas work over HTTP (`/api/mutate/add_board_group`, `update_board_group`, `remove_board_group`, `reorder_board_groups`). Groups live in `config.boardGroups`; a board points at one via `Board.group`.
+
 | Tool | Args | Notes |
 |---|---|---|
-| `add_board` | `name, id?` | Create a new empty board. Id is derived from `name` if omitted |
-| `update_board` | `boardId, patch` | Sparse patch on `name` (only field today) |
+| `add_board` | `name, id?, group?` | Create a new empty board. Id is derived from `name` if omitted; `group` files it (creating the group when the name is new) |
+| `update_board` | `boardId, patch` | Sparse patch on `name`, `theme`, `archived`, `group` (`null` ⇒ Ungrouped) |
 | `remove_board` | `boardId` | Refuses to remove the last board (returns `LastBoard`). Undoable |
 | `reorder_boards` | `order` | Set the sidebar board order (board ids). Unknown ids dropped, omitted boards appended. Persists to `config.boardOrder`; the canvas drag-and-drop calls this |
 
@@ -112,7 +114,7 @@ Extensions register wholly new components the active library doesn't have — th
 | `update_extension` | `id, patch: { importPath?, props?, category?, description?, render?, fit? }` | Sparse patch — add/remove props, retarget importPath, flip render mode. Renaming is deliberate remove+add (a rename would break tree references) |
 | `remove_extension` | `id` | Refuses while any screen/snippet tree still references it (`ExtensionInUse`, carrying the offending nodes) — remove or re-`$ref` those first, then retry |
 
-### Frame / group lifecycle
+### Frame lifecycle
 
 Frames are placements of screens on a chosen board. Multiple frames of the same screen always render the same tree at different sizes — that's the sync model.
 
@@ -121,9 +123,6 @@ Frames are placements of screens on a chosen board. Multiple frames of the same 
 | `add_frame` | `boardId, screenId, x?, y?, w, h, label?, group?, id?` | Drop a frame for a screen at a given size + position on a specific board. Position defaults to a free spot on the board if `x`/`y` omitted |
 | `update_frame` | `boardId, frameId, patch` **or** `boardId, patches: [{ frameId, patch }]` | Sparse patch: `x`, `y`, `w`, `h`, `label`, `group` (pass `null` to clear label/group). Single-or-bulk like `update_props`: pass `patches` to lay out many frames in one atomic write (single persist, broadcast, undo entry) |
 | `remove_frame` | `boardId, frameId` | Removes the frame placement; the underlying screen is untouched |
-| `add_group` | `boardId, name, color?, id?` | Create a board group (visual tag for related frames — "marketing flow", "settings flow") |
-| `update_group` | `boardId, groupId, patch` | Sparse: `name`, `color` (pass `color: null` to clear) |
-| `remove_group` | `boardId, groupId` | Frames in the group are not deleted — they're un-grouped |
 
 ### Snippets
 
@@ -236,7 +235,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `ScreenNotFound` | The named screen doesn't exist |
 | `BoardNotFound` | The named board doesn't exist in the folder |
 | `FrameNotFound` | The named frame doesn't exist on the given board; carries `boardId` + `frameId` |
-| `GroupNotFound` | The named group doesn't exist on the given board; carries `boardId` + `groupId` |
+| `BoardGroupNotFound` | The named sidebar group doesn't exist in `config.boardGroups`; carries `groupId` |
 | `UnknownComponent` | `componentRef` not in the active palette; carries `suggestions[]` by Levenshtein distance |
 | `InvalidPath` | Path doesn't resolve in the screen tree |
 | `InvalidMove` | `move_node` would create a cycle or move into self |
@@ -248,7 +247,6 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `BoardIdConflict` | `add_board` id collides with an existing board |
 | `BoardIdExhausted` | Couldn't derive a unique board id from the supplied name |
 | `FrameIdConflict` | `add_frame` id collides with an existing frame on that board |
-| `GroupIdConflict` | `add_group` id collides with an existing group on that board |
 | `BadRequest` | Zod validation failed at the route boundary; carries the issue list |
 | `SnippetNotFound` | The named snippet doesn't exist |
 | `SnippetParamMismatch` | `args` to `instantiate_snippet` don't match the declared `params` (missing required, unknown extras, type mismatch) |

@@ -22,7 +22,7 @@ import type { WatchEvent } from "../../watcher.ts";
 import { type MutationContext, removeBoard, removeScreen, updateBoard } from "../index.ts";
 
 const sampleConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   toolVersion: "0.1.0",
   libraries: {
     default: {
@@ -253,7 +253,13 @@ describe("GET /api/design", () => {
     const after = await summary();
     expect(after.boards.map((b) => b.id)).toEqual(["live", "second"]);
     expect(after.archivedBoards).toEqual([
-      { id: "parked", name: "Parked exploration", frameCount: 2, archivedAt: board.archivedAt },
+      {
+        id: "parked",
+        name: "Parked exploration",
+        frameCount: 2,
+        group: null,
+        archivedAt: board.archivedAt,
+      },
     ] as never);
   });
 

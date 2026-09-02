@@ -139,10 +139,12 @@ export function listBoardsPayload(
   opts: { include_frames?: boolean | undefined; include_archived?: boolean | undefined } = {},
 ): Record<string, unknown>[] {
   const entries = opts.include_archived ? orderedBoards(folder) : activeBoards(folder);
+  const groups = new Map((folder.config.boardGroups ?? []).map((g) => [g.id, g.name]));
   return entries.map(([id, board]) => ({
     id,
     name: board.name,
     frameCount: board.frames.length,
+    ...(board.group ? { group: groups.get(board.group) ?? board.group } : {}),
     ...(board.archivedAt ? { archivedAt: board.archivedAt } : {}),
     ...(opts.include_frames ? { frames: board.frames, groups: board.groups } : {}),
   }));
@@ -188,7 +190,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_boards",
     {
       description:
-        "List the design folder's live boards. Each board has its own collection of frames + groups. Pass `include_frames: true` to embed the full frame list for each board, or `include_archived: true` to also list boards the user has archived (those carry `archivedAt`).",
+        "List the design folder's live boards, in sidebar order. Each board has its own collection of frames; `group` names the sidebar group it's filed under (absent ⇒ ungrouped) — pass that name to add_board/update_board to file another board alongside it. Pass `include_frames: true` to embed the full frame list for each board, or `include_archived: true` to also list boards the user has archived (those carry `archivedAt`).",
       inputSchema: {
         include_frames: z.boolean().optional(),
         include_archived: z.boolean().optional(),

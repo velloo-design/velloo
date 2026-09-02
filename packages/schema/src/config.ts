@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { BoardGroupSchema } from "./board.ts";
 import { ExtensionSchema } from "./extension.ts";
+import { CURRENT_SCHEMA_VERSION } from "./migrate.ts";
 
 export const ViewportPresetSchema = z.object({
   name: z.string().min(1),
@@ -37,6 +39,12 @@ export type Library = z.infer<typeof LibrarySchema>;
 export const CodegenConfigSchema = z.object({
   /** Import prefix for emitted shadcn imports. Defaults to "@/components/ui". */
   componentsAlias: z.string().min(1).optional(),
+  /**
+   * Where the app's UI components live, relative to the app root — what
+   * `init` asked (or detected). Recorded so a *second* design folder in the
+   * same repo inherits the answer instead of asking again.
+   */
+  componentsDir: z.string().min(1).optional(),
 });
 
 export type CodegenConfig = z.infer<typeof CodegenConfigSchema>;
@@ -70,7 +78,7 @@ export type HostApp = z.infer<typeof HostAppSchema>;
  */
 export const ConfigSchema = z
   .object({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
     toolVersion: z.string().min(1),
     /**
      * Stable folder identity for velloo-cloud (a UUID). Published share links
@@ -112,6 +120,14 @@ export const ConfigSchema = z
      * historical default, so existing folders are unaffected.
      */
     boardOrder: z.array(z.string().min(1)).optional(),
+    /**
+     * Sidebar groups of boards, in display order — an area of work ("Side
+     * pane", "Account page") holding a set of boards. A board points at one
+     * via `Board.group`; boards pointing at nothing render under Ungrouped.
+     * `boardOrder` still orders boards *within* a group. Absent ⇒ today's
+     * flat list, so existing folders are unaffected.
+     */
+    boardGroups: z.array(BoardGroupSchema).optional(),
     codegen: CodegenConfigSchema.optional(),
     /**
      * The folder's CSS framework — the styling axis, independent of the

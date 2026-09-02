@@ -55,6 +55,7 @@ export const SetNodeIdBody = z.object({
 export const AddBoardBody = z.object({
   name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH),
   id: z.string().min(1).optional(),
+  group: z.string().min(1).optional(),
 });
 export const UpdateBoardBody = z.object({
   boardId: z.string().min(1),
@@ -62,12 +63,32 @@ export const UpdateBoardBody = z.object({
     name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH).optional(),
     theme: z.string().min(1).nullable().optional(),
     archived: z.boolean().optional(),
+    group: z.string().min(1).nullable().optional(),
   }),
 });
 export const RemoveBoardBody = z.object({
   boardId: z.string().min(1),
 });
 export const ReorderBoardsBody = z.object({
+  order: z.array(z.string().min(1)),
+});
+
+// ── Board groups (sidebar groups of boards) ────────────────────────────
+export const AddBoardGroupBody = z.object({
+  name: z.string().min(1),
+  color: z.string().min(1).optional(),
+});
+export const UpdateBoardGroupBody = z.object({
+  groupId: z.string().min(1),
+  patch: z.object({
+    name: z.string().min(1).optional(),
+    color: z.string().min(1).nullable().optional(),
+  }),
+});
+export const RemoveBoardGroupBody = z.object({
+  groupId: z.string().min(1),
+});
+export const ReorderBoardGroupsBody = z.object({
   order: z.array(z.string().min(1)),
 });
 

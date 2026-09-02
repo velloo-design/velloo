@@ -8,7 +8,7 @@ import { writeJsonAtomic } from "../fs.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { addNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
-import { addFrame, addGroup, removeFrame, updateFrame } from "./api/frames.ts";
+import { addFrame, removeFrame, updateFrame } from "./api/frames.ts";
 import { addScreen, removeScreen, setScreenTree } from "./api/screens.ts";
 import {
   addSnippet,
@@ -129,7 +129,6 @@ export const BATCH_TOOLS: Record<string, BatchFn> = {
   add_board: addBoard as BatchFn,
   add_frame: addFrame as BatchFn,
   remove_frame: removeFrame as BatchFn,
-  add_group: addGroup as BatchFn,
   add_node: addNodeBatch,
   update_props: updatePropsBatch,
   override_snippet_props: overrideSnippetProps as BatchFn,
@@ -273,7 +272,6 @@ function touchedResources(
     case "remove_snippet":
       return [{ kind: "snippet", id: a.snippetId as string }];
     case "add_frame":
-    case "add_group":
     case "update_frame":
     case "remove_frame":
       return [{ kind: "board", id: a.boardId as string }];

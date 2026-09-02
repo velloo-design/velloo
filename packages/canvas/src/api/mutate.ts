@@ -42,12 +42,12 @@ export const mutate = {
   removeFrame(args: { boardId: string; frameId: string }) {
     return postMutate<{ removedFrameId: string }>("remove_frame", args);
   },
-  addBoard(args: { name: string; id?: string }) {
+  addBoard(args: { name: string; id?: string; group?: string }) {
     return postMutate<{ boardId: string; board: unknown }>("add_board", args);
   },
   updateBoard(args: {
     boardId: string;
-    patch: { name?: string; theme?: string | null; archived?: boolean };
+    patch: { name?: string; theme?: string | null; archived?: boolean; group?: string | null };
   }) {
     return postMutate<{ board: unknown }>("update_board", args);
   },
@@ -56,6 +56,27 @@ export const mutate = {
   },
   reorderBoards(args: { order: string[] }) {
     return postMutate<{ order: string[] }>("reorder_boards", args);
+  },
+  addBoardGroup(args: { name: string; color?: string }) {
+    return postMutate<{ group: { id: string; name: string; color?: string } }>(
+      "add_board_group",
+      args,
+    );
+  },
+  updateBoardGroup(args: { groupId: string; patch: { name?: string; color?: string | null } }) {
+    return postMutate<{ group: { id: string; name: string; color?: string } }>(
+      "update_board_group",
+      args,
+    );
+  },
+  removeBoardGroup(args: { groupId: string }) {
+    return postMutate<{ removedGroupId: string; ungroupedBoardIds: string[] }>(
+      "remove_board_group",
+      args,
+    );
+  },
+  reorderBoardGroups(args: { order: string[] }) {
+    return postMutate<{ order: string[] }>("reorder_board_groups", args);
   },
   updateProps(args: { screenId: string; path: number[]; propPatch: Record<string, unknown> }) {
     return postMutate<{ path: number[] }>("update_props", args);

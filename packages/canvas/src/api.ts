@@ -23,6 +23,7 @@ export {
 } from "./api/auth.ts";
 export { config, type FolderConfig, fetchConfig } from "./api/config.ts";
 export {
+  type BoardGroupMeta,
   type BoardMeta,
   type DesignSummary,
   fetchAnnotations,

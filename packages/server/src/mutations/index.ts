@@ -23,6 +23,20 @@ export {
   updateNote,
 } from "./api/annotations.ts";
 export {
+  type AddBoardGroupArgs,
+  type AddBoardGroupResult,
+  addBoardGroup,
+  type RemoveBoardGroupArgs,
+  type RemoveBoardGroupResult,
+  type ReorderBoardGroupsArgs,
+  type ReorderBoardGroupsResult,
+  removeBoardGroup,
+  reorderBoardGroups,
+  type UpdateBoardGroupArgs,
+  type UpdateBoardGroupResult,
+  updateBoardGroup,
+} from "./api/board-groups.ts";
+export {
   type AddBoardArgs,
   type AddBoardResult,
   addBoard,
@@ -53,25 +67,16 @@ export {
 export {
   type AddFrameArgs,
   type AddFrameResult,
-  type AddGroupArgs,
-  type AddGroupResult,
   addFrame,
-  addGroup,
   type RemoveFrameArgs,
   type RemoveFrameResult,
-  type RemoveGroupArgs,
-  type RemoveGroupResult,
   removeFrame,
-  removeGroup,
   type UpdateFrameArgs,
   type UpdateFrameResult,
   type UpdateFramesArgs,
   type UpdateFramesResult,
-  type UpdateGroupArgs,
-  type UpdateGroupResult,
   updateFrame,
   updateFrames,
-  updateGroup,
 } from "./api/frames.ts";
 export {
   type AuditSnippetArgs,

@@ -311,7 +311,14 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
           ? {
               ...s.design,
               boards: s.design.boards.map((b) =>
-                b.id === boardId ? { ...b, name: board.name, frameCount: board.frames.length } : b,
+                b.id === boardId
+                  ? {
+                      ...b,
+                      name: board.name,
+                      frameCount: board.frames.length,
+                      group: board.group ?? null,
+                    }
+                  : b,
               ),
             }
           : s.design,
