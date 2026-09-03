@@ -454,11 +454,15 @@ export async function publishDesign(
     report({ kind: "step", step: "capture", message: "capturing previews" });
     shots = await withAssetServer(root, liveCode, (baseHref) => {
       const htmlCache = new Map<string, Promise<string>>();
-      const renderHtml = async (screen: Screen, themeName?: string): Promise<string> => {
+      const renderHtml = async (
+        screen: Screen,
+        themeName?: string,
+        scheme: "light" | "dark" = "light",
+      ): Promise<string> => {
         const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
         // NUL separates the two halves: no id or theme name can contain it, so
         // the composite key can't collide the way a printable separator can.
-        const key = `${screen.id}\u0000${theme.name}`;
+        const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
         const cached = htmlCache.get(key);
         if (cached) return cached;
         const rendering = renderScreen(screen, theme, {
@@ -478,6 +482,7 @@ export async function publishDesign(
           ),
           snippets: design.snippets,
           customCss: design.customCss,
+          dark: scheme === "dark",
           baseHref,
           ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
         }).then(({ html }) => html);

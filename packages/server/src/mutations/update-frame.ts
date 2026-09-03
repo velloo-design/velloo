@@ -12,6 +12,7 @@ export interface FramePatch {
   h?: number;
   label?: string | null;
   group?: string | null;
+  scheme?: "light" | "dark" | null;
 }
 
 export interface UpdateFrameArgs {
@@ -32,17 +33,24 @@ function applyPatch(frame: Frame, patch: FramePatch): Frame {
   if (patch.h !== undefined) next.h = patch.h;
   if (patch.label !== undefined) {
     if (patch.label === null) {
-      const { label: _l, ...rest } = next;
-      return rest as Frame;
+      delete next.label;
+    } else {
+      next.label = patch.label;
     }
-    next.label = patch.label;
   }
   if (patch.group !== undefined) {
     if (patch.group === null) {
-      const { group: _g, ...rest } = next;
-      return rest as Frame;
+      delete next.group;
+    } else {
+      next.group = patch.group;
     }
-    next.group = patch.group;
+  }
+  if (patch.scheme !== undefined) {
+    if (patch.scheme === null) {
+      delete next.scheme;
+    } else {
+      next.scheme = patch.scheme;
+    }
   }
   return next;
 }

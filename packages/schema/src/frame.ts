@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { ResourceIdSchema } from "./ids.ts";
 
+export const FrameSchemeSchema = z.enum(["light", "dark"]);
+export type FrameScheme = z.infer<typeof FrameSchemeSchema>;
+
 /**
  * A Frame is a placement of a Screen on the Board: position, size, optional
  * label, optional group. Multiple frames can reference the same screen at
@@ -22,6 +25,16 @@ export const FrameSchema = z.object({
   label: z.string().optional(),
   /** Optional BoardGroup id. */
   group: z.string().optional(),
+  /** Pinned render scheme; absent means follow the canvas default. */
+  scheme: FrameSchemeSchema.optional(),
 });
 
 export type Frame = z.infer<typeof FrameSchema>;
+
+/** Resolve a frame pin against the current canvas-level default. */
+export function resolveFrameScheme(
+  frame: Pick<Frame, "scheme">,
+  canvasDefault: FrameScheme,
+): FrameScheme {
+  return frame.scheme ?? canvasDefault;
+}

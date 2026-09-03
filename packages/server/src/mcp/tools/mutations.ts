@@ -440,13 +440,14 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     h: z.number().int().positive().optional(),
     label: z.string().nullable().optional(),
     group: z.string().nullable().optional(),
+    scheme: z.enum(["light", "dark"]).nullable().optional(),
   });
 
   mcp.registerTool(
     "update_frame",
     {
       description:
-        "Move/resize/relabel/regroup a frame on a board (`label: null` or `group: null` clears). One frame: pass `frameId` + `patch`. For many frames in one atomic write — single persist + broadcast + undo entry — pass `patches: [{ frameId, patch }]` instead (the same single-or-bulk shape as update_props).",
+        'Move/resize/relabel/regroup a frame on a board. `label: null`, `group: null`, or `scheme: null` clears that field; omitting a field leaves it unchanged. `scheme: "light" | "dark"` pins this frame\'s render scheme; it is a review affordance over the screen\'s one shared tree, not a separate design variant. One frame: pass `frameId` + `patch`. For many frames in one atomic write — single persist + broadcast + undo entry — pass `patches: [{ frameId, patch }]` instead (the same single-or-bulk shape as update_props).',
       inputSchema: {
         boardId: z.string(),
         frameId: z.string().optional(),
@@ -496,7 +497,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_snippet",
     {
       description:
-        'Create a reusable subtree. `params` declares typed inputs; placeholders inside the body are `{ "$param": "name" }` refs substituted at render time. Placement depends on the param type: a `node` param fills a child slot (put `{"$param":"slot"}` directly in a `children` array); a scalar param (string/number/boolean/icon/color/enum) fills a prop value (put `{"$param":"title"}` as a prop, e.g. `{"$ref":"Heading","props":{"children":{"$param":"title"}}}`). A scalar `$param` placed directly in a `children` array is an error — it renders as nothing.',
+        'Create a reusable subtree. `params` declares typed inputs; placeholders inside the body are `{ "$param": "name" }` refs substituted at render time. Placement depends on the param type: a `node` param fills a child slot (put `{"$param":"slot"}` directly in a `children` array); a scalar param (string/number/boolean/icon/color/enum) fills a prop value (put `{"$param":"title"}` as a prop, e.g. `{"$ref":"Heading","props":{"children":{"$param":"title"}}}`). A scalar `$param` placed directly in a `children` array is an error — it renders as nothing.\n\n**If the STRUCTURE varies between instances, that is still one snippet — declare a `node` param.** Rows whose leading mark is an icon, or a logo, or nothing at all are three fillings of one `node` slot, not three snippets and not a reason to inline the repetition. Add `optional: true` and an omitted slot renders and emits nothing, so the "or nothing at all" case needs no placeholder. A `node` param accepts one node or an array that renders as siblings. Only scalar values belong in scalar params: notably an `icon` param bakes ONE lucide glyph into the emitted JSX for every instance, so a per-instance icon must be a `node` param. Inlining repeated structure instead of parameterizing it is the most common and most expensive mistake here — it bloats the screen JSON and turns every later edit into N edits.',
       inputSchema: {
         name: z.string(),
         id: z.string().optional(),

@@ -74,6 +74,31 @@ test("captures one PNG per screen + per board + a cover, and indexes them", asyn
   expect(warnings).toEqual([]);
 });
 
+test("board composites render each frame in its pinned scheme", async () => {
+  const main = board("main", ["home", "pricing"]);
+  if (main.frames[0]) main.frames[0].scheme = "dark";
+  if (main.frames[1]) main.frames[1].scheme = "light";
+  const rendered: Array<{ screen: string; scheme?: "light" | "dark" }> = [];
+
+  await captureBundleScreenshots({
+    screens: [screen("home"), screen("pricing")],
+    boards: [main],
+    screenIds: new Set(),
+    viewport,
+    renderHtml: async (item, _theme, scheme) => {
+      rendered.push({ screen: item.id, ...(scheme ? { scheme } : {}) });
+      return `<html><body>${item.id}-${scheme}</body></html>`;
+    },
+    capture: fixedCapture(4),
+    warn: () => {},
+  });
+
+  expect(rendered).toEqual([
+    { screen: "home", scheme: "dark" },
+    { screen: "pricing", scheme: "light" },
+  ]);
+});
+
 test("runs captures concurrently without exceeding the renderer cap", async () => {
   let active = 0;
   let peak = 0;

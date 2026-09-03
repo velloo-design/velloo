@@ -1,3 +1,4 @@
+import type { FrameScheme } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import type { CanvasState } from "./index.ts";
 import type { AppTheme, DesignMode } from "./types.ts";
@@ -31,25 +32,66 @@ function readDesignMode(): DesignMode {
 }
 
 const LEFT_PANELS_KEY = "velloo:leftPanels";
+const PANES_KEY = "velloo:panes";
+const PANE_WIDTHS_KEY = "velloo:paneWidths";
 const REMEMBER_PANELS_KEY = "velloo:rememberPanels";
 
-/** Collapsed state of the boards-mode left panels, persisted like the app theme. */
-function readLeftPanels(): { boards: boolean; tree: boolean } {
-  if (typeof localStorage === "undefined") return { boards: false, tree: false };
-  if (!readFlag(REMEMBER_PANELS_KEY, true)) return { boards: false, tree: false };
+/**
+ * Side-pane width bounds, in px. The floor is where the inspector's label +
+ * control rows stop fitting side by side; the ceiling keeps a pane from
+ * crowding out the canvas on a laptop screen.
+ */
+export const PANE_WIDTH = { min: 240, max: 560, default: 320 } as const;
+
+export function clampPaneWidth(px: number): number {
+  return Math.min(PANE_WIDTH.max, Math.max(PANE_WIDTH.min, Math.round(px)));
+}
+
+/**
+ * Read a stored `{ name: collapsed }` record — the sections inside the left
+ * sidebar and the two side panes both persist this shape, under the same
+ * remember-panels gate. Anything missing or malformed reads as expanded.
+ */
+function readCollapsed<K extends string>(key: string, names: readonly K[]): Record<K, boolean> {
+  const out = Object.fromEntries(names.map((n) => [n, false])) as Record<K, boolean>;
+  if (typeof localStorage === "undefined" || !readFlag(REMEMBER_PANELS_KEY, true)) return out;
   try {
-    const raw = localStorage.getItem(LEFT_PANELS_KEY);
-    if (!raw) return { boards: false, tree: false };
-    const parsed = JSON.parse(raw) as { boards?: unknown; tree?: unknown };
-    return { boards: parsed.boards === true, tree: parsed.tree === true };
+    const raw = localStorage.getItem(key);
+    if (!raw) return out;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const n of names) out[n] = parsed[n] === true;
+    return out;
   } catch {
-    return { boards: false, tree: false };
+    return out;
   }
 }
 
-function persistLeftPanels(boards: boolean, tree: boolean) {
+function persistCollapsed(key: string, value: Record<string, boolean>) {
   if (typeof localStorage !== "undefined" && readFlag(REMEMBER_PANELS_KEY, true)) {
-    localStorage.setItem(LEFT_PANELS_KEY, JSON.stringify({ boards, tree }));
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+}
+
+/** Dragged pane widths. Clamped on read too — the bounds can move between releases. */
+function readPaneWidths(): { left: number; right: number } {
+  const fallback = { left: PANE_WIDTH.default, right: PANE_WIDTH.default };
+  if (typeof localStorage === "undefined" || !readFlag(REMEMBER_PANELS_KEY, true)) return fallback;
+  try {
+    const raw = localStorage.getItem(PANE_WIDTHS_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as { left?: unknown; right?: unknown };
+    return {
+      left: typeof parsed.left === "number" ? clampPaneWidth(parsed.left) : fallback.left,
+      right: typeof parsed.right === "number" ? clampPaneWidth(parsed.right) : fallback.right,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function persistPaneWidths(left: number, right: number) {
+  if (typeof localStorage !== "undefined" && readFlag(REMEMBER_PANELS_KEY, true)) {
+    localStorage.setItem(PANE_WIDTHS_KEY, JSON.stringify({ left, right }));
   }
 }
 
@@ -60,7 +102,9 @@ function persistLeftPanels(boards: boolean, tree: boolean) {
  * without depending on when the store module happened to evaluate.
  */
 export function readCanvasPrefs() {
-  const panels = readLeftPanels();
+  const panels = readCollapsed(LEFT_PANELS_KEY, ["boards", "tree"]);
+  const panes = readCollapsed(PANES_KEY, ["left", "right"]);
+  const widths = readPaneWidths();
   return {
     appTheme: readAppTheme(),
     designMode: readDesignMode(),
@@ -68,6 +112,10 @@ export function readCanvasPrefs() {
     rememberPanels: readFlag(REMEMBER_PANELS_KEY, true),
     boardsCollapsed: panels.boards,
     treeCollapsed: panels.tree,
+    leftPaneCollapsed: panes.left,
+    rightPaneCollapsed: panes.right,
+    leftPaneWidth: widths.left,
+    rightPaneWidth: widths.right,
   };
 }
 
@@ -77,6 +125,8 @@ const CANVAS_PREF_KEYS = [
   DESIGN_MODE_KEY,
   REMEMBER_DESIGN_MODE_KEY,
   LEFT_PANELS_KEY,
+  PANES_KEY,
+  PANE_WIDTHS_KEY,
   REMEMBER_PANELS_KEY,
 ];
 
@@ -97,6 +147,14 @@ export interface ModesSlice {
   boardsCollapsed: boolean;
   /** Collapsed state of the screen tree in the boards-mode left sidebar. */
   treeCollapsed: boolean;
+  /** Left sidebar collapsed to its rail, handing the width to the canvas. */
+  leftPaneCollapsed: boolean;
+  /** Right inspector/theme pane collapsed to its rail. */
+  rightPaneCollapsed: boolean;
+  /** Dragged width of the left sidebar, in px. */
+  leftPaneWidth: number;
+  /** Dragged width of the right pane, in px. */
+  rightPaneWidth: number;
   /** Ctrl/Cmd+K search dialog visibility (session-only, not persisted). */
   searchOpen: boolean;
   /** Export dialog target (session-only); null = closed. */
@@ -113,6 +171,11 @@ export interface ModesSlice {
   resetCanvasPrefs(): void;
   toggleBoardsCollapsed(): void;
   toggleTreeCollapsed(): void;
+  setLeftPaneCollapsed(collapsed: boolean): void;
+  setRightPaneCollapsed(collapsed: boolean): void;
+  /** Commit a dragged width; clamped to `PANE_WIDTH`. */
+  setLeftPaneWidth(px: number): void;
+  setRightPaneWidth(px: number): void;
   setSearchOpen(open: boolean): void;
   setExportTarget(target: ExportTarget | null): void;
   setPreviewTarget(target: PreviewTarget | null): void;
@@ -133,6 +196,8 @@ export interface PreviewTarget {
   name: string;
   /** Board theme pin, so the preview matches the frame's board. */
   boardTheme?: string;
+  /** Originating frame pin; absent means keep following the canvas default. */
+  scheme?: FrameScheme;
   /** Starting preview width — the originating frame's width. */
   w: number;
 }
@@ -172,12 +237,13 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
     localStorage.setItem(REMEMBER_PANELS_KEY, String(rememberPanels));
     if (rememberPanels) {
       const s = get();
-      localStorage.setItem(
-        LEFT_PANELS_KEY,
-        JSON.stringify({ boards: s.boardsCollapsed, tree: s.treeCollapsed }),
-      );
+      persistCollapsed(LEFT_PANELS_KEY, { boards: s.boardsCollapsed, tree: s.treeCollapsed });
+      persistCollapsed(PANES_KEY, { left: s.leftPaneCollapsed, right: s.rightPaneCollapsed });
+      persistPaneWidths(s.leftPaneWidth, s.rightPaneWidth);
     } else {
       localStorage.removeItem(LEFT_PANELS_KEY);
+      localStorage.removeItem(PANES_KEY);
+      localStorage.removeItem(PANE_WIDTHS_KEY);
     }
   },
 
@@ -196,13 +262,17 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
       rememberPanels: true,
       boardsCollapsed: false,
       treeCollapsed: false,
+      leftPaneCollapsed: false,
+      rightPaneCollapsed: false,
+      leftPaneWidth: PANE_WIDTH.default,
+      rightPaneWidth: PANE_WIDTH.default,
     });
   },
 
   toggleBoardsCollapsed() {
     set((s) => {
       const boardsCollapsed = !s.boardsCollapsed;
-      persistLeftPanels(boardsCollapsed, s.treeCollapsed);
+      persistCollapsed(LEFT_PANELS_KEY, { boards: boardsCollapsed, tree: s.treeCollapsed });
       return { boardsCollapsed };
     });
   },
@@ -222,8 +292,38 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
   toggleTreeCollapsed() {
     set((s) => {
       const treeCollapsed = !s.treeCollapsed;
-      persistLeftPanels(s.boardsCollapsed, treeCollapsed);
+      persistCollapsed(LEFT_PANELS_KEY, { boards: s.boardsCollapsed, tree: treeCollapsed });
       return { treeCollapsed };
+    });
+  },
+
+  setLeftPaneCollapsed(leftPaneCollapsed) {
+    set((s) => {
+      persistCollapsed(PANES_KEY, { left: leftPaneCollapsed, right: s.rightPaneCollapsed });
+      return { leftPaneCollapsed };
+    });
+  },
+
+  setRightPaneCollapsed(rightPaneCollapsed) {
+    set((s) => {
+      persistCollapsed(PANES_KEY, { left: s.leftPaneCollapsed, right: rightPaneCollapsed });
+      return { rightPaneCollapsed };
+    });
+  },
+
+  setLeftPaneWidth(px) {
+    set((s) => {
+      const leftPaneWidth = clampPaneWidth(px);
+      persistPaneWidths(leftPaneWidth, s.rightPaneWidth);
+      return { leftPaneWidth };
+    });
+  },
+
+  setRightPaneWidth(px) {
+    set((s) => {
+      const rightPaneWidth = clampPaneWidth(px);
+      persistPaneWidths(s.leftPaneWidth, rightPaneWidth);
+      return { rightPaneWidth };
     });
   },
 });

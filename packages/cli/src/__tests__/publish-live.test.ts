@@ -26,6 +26,12 @@ interface CapturedDesign {
   snapshotCssPath?: string;
   extensions?: Record<string, unknown>;
   screens?: { id: string }[];
+  themes?: Record<string, { name: string }>;
+  boards?: Array<{
+    id: string;
+    theme?: string;
+    frames: Array<{ id: string; scheme?: "light" | "dark" }>;
+  }>;
 }
 
 const cliPath = resolve(import.meta.dir, "../cli.ts");
@@ -225,6 +231,62 @@ test("publish ships the live bundle and flags it in the design", async () => {
   expect(captured.design?.bundlePath).toBe("bundle.js");
   expect(captured.design?.extensions).toHaveProperty("Sparkline");
   expect(captured.design?.screens?.some((s) => s.id === "home")).toBe(true);
+});
+
+test("publish preserves per-frame schemes in design.json", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  await mkdir(join(design, "boards"), { recursive: true });
+  await writeFile(
+    join(design, "boards", "main.json"),
+    JSON.stringify({
+      id: "main",
+      name: "Main",
+      frames: [{ id: "home-dark", screen: "home", x: 0, y: 0, w: 1440, h: 900, scheme: "dark" }],
+      groups: [],
+    }),
+  );
+
+  const { exitCode, stderr } = await runPublish(design);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+  expect(captured.design?.boards?.[0]?.frames[0]?.scheme).toBe("dark");
+});
+
+test("publish preserves a board's pinned named theme in design.json", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  await mkdir(join(design, "boards"), { recursive: true });
+  await writeFile(
+    join(design, "theme", "velloo-cloud.json"),
+    JSON.stringify({
+      name: "velloo-cloud",
+      colors: {
+        background: "oklch(0.2 0.02 260)",
+        foreground: "oklch(0.98 0 0)",
+        primary: { DEFAULT: "oklch(0.7 0.15 40)", foreground: "oklch(0.15 0 0)" },
+      },
+      typography: {},
+      spacing: {},
+      radius: {},
+    }),
+  );
+  await writeFile(
+    join(design, "boards", "main.json"),
+    JSON.stringify({
+      id: "main",
+      name: "Main",
+      theme: "velloo-cloud",
+      frames: [{ id: "home-dark", screen: "home", x: 0, y: 0, w: 1440, h: 900, scheme: "dark" }],
+      groups: [],
+    }),
+  );
+
+  const { exitCode, stderr } = await runPublish(design);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  expect(captured.design?.boards?.[0]?.theme).toBe("velloo-cloud");
+  expect(captured.design?.boards?.[0]?.frames[0]?.scheme).toBe("dark");
+  expect(captured.design?.themes?.["velloo-cloud"]?.name).toBe("velloo-cloud");
 });
 
 test("only referenced assets travel — snippets included, superseded ones not", async () => {

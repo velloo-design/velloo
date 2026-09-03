@@ -45,7 +45,13 @@ export {
   ExtensionPropDescriptorSchema,
   ExtensionSchema,
 } from "./extension.ts";
-export { type Frame, FrameSchema } from "./frame.ts";
+export {
+  type Frame,
+  FrameSchema,
+  type FrameScheme,
+  FrameSchemeSchema,
+  resolveFrameScheme,
+} from "./frame.ts";
 export { pascalizeIconName } from "./icon-name.ts";
 export { type ResourceId, ResourceIdSchema } from "./ids.ts";
 export {

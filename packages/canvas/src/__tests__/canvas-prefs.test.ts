@@ -32,6 +32,9 @@ const storage = new MemoryStorage();
 storage.setItem("velloo:designMode", "dark");
 storage.setItem("velloo:appTheme", "dark");
 storage.setItem("velloo:leftPanels", JSON.stringify({ boards: true, tree: false }));
+storage.setItem("velloo:panes", JSON.stringify({ left: true, right: false }));
+// The right width is out of range on purpose — bounds can move between releases.
+storage.setItem("velloo:paneWidths", JSON.stringify({ left: 420, right: 9999 }));
 (globalThis as { localStorage?: unknown }).localStorage = storage;
 
 const { useCanvas } = await import("../store.ts");
@@ -50,6 +53,18 @@ describe("canvas preferences at boot", () => {
     expect(s.treeCollapsed).toBe(false);
     expect(s.rememberDesignMode).toBe(true);
     expect(s.rememberPanels).toBe(true);
+  });
+
+  test("restores the side panes independently of each other", () => {
+    const s = readCanvasPrefs();
+    expect(s.leftPaneCollapsed).toBe(true);
+    expect(s.rightPaneCollapsed).toBe(false);
+  });
+
+  test("restores dragged widths, clamping a stored value out of range", () => {
+    const s = readCanvasPrefs();
+    expect(s.leftPaneWidth).toBe(420);
+    expect(s.rightPaneWidth).toBe(560);
   });
 });
 
@@ -89,6 +104,37 @@ describe("panel persistence", () => {
       tree: useCanvas.getState().treeCollapsed,
     });
   });
+
+  test("pane widths are clamped on the way in and on the way out", () => {
+    useCanvas.getState().setRememberPanels(true);
+    useCanvas.getState().setLeftPaneWidth(10_000);
+    expect(useCanvas.getState().leftPaneWidth).toBe(560);
+    useCanvas.getState().setRightPaneWidth(12);
+    expect(useCanvas.getState().rightPaneWidth).toBe(240);
+    expect(JSON.parse(storage.getItem("velloo:paneWidths") as string)).toEqual({
+      left: 560,
+      right: 240,
+    });
+  });
+
+  test("the side panes follow the same gate", () => {
+    useCanvas.getState().setRememberPanels(false);
+    expect(storage.has("velloo:panes")).toBe(false);
+    expect(storage.has("velloo:paneWidths")).toBe(false);
+    useCanvas.getState().setRightPaneCollapsed(true);
+    useCanvas.getState().setLeftPaneWidth(400);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+    expect(useCanvas.getState().leftPaneWidth).toBe(400);
+    expect(storage.has("velloo:panes")).toBe(false);
+    expect(storage.has("velloo:paneWidths")).toBe(false);
+
+    useCanvas.getState().setRememberPanels(true);
+    useCanvas.getState().setLeftPaneCollapsed(true);
+    expect(JSON.parse(storage.getItem("velloo:panes") as string)).toEqual({
+      left: true,
+      right: true,
+    });
+  });
 });
 
 describe("resetCanvasPrefs", () => {
@@ -102,6 +148,8 @@ describe("resetCanvasPrefs", () => {
       "velloo:designMode",
       "velloo:rememberDesignMode",
       "velloo:leftPanels",
+      "velloo:panes",
+      "velloo:paneWidths",
       "velloo:rememberPanels",
     ]) {
       expect(storage.has(key)).toBe(false);
@@ -112,6 +160,10 @@ describe("resetCanvasPrefs", () => {
     expect(s.rememberDesignMode).toBe(true);
     expect(s.rememberPanels).toBe(true);
     expect(s.boardsCollapsed).toBe(false);
+    expect(s.leftPaneCollapsed).toBe(false);
+    expect(s.rightPaneCollapsed).toBe(false);
+    expect(s.leftPaneWidth).toBe(320);
+    expect(s.rightPaneWidth).toBe(320);
   });
 });
 

@@ -224,6 +224,18 @@ body {
   -webkit-user-select: none;
 }
 
+/* Resizing a side pane: hold the col-resize cursor wherever the pointer
+ * wanders, and keep frames from eating the release. */
+.velloo-resizing .velloo-frame-iframe {
+  pointer-events: none;
+}
+.velloo-resizing,
+.velloo-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* Mid-drag: kill iframe pointer events so a cursor crossing a frame
  * doesn't swallow our window-level mouseup. */
 .velloo-dragging .velloo-frame-iframe {

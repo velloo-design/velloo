@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import {
   loadDesignFolder,
+  pinnedSchemeForScreen,
   pinnedThemeForScreen,
   reloadScreen,
   reloadTheme,
@@ -210,5 +211,58 @@ describe("pinnedThemeForScreen", () => {
       expect(res.message).toContain('"midnight" (a)');
       expect(res.message).toContain('"default" (b)');
     }
+  });
+});
+
+describe("pinnedSchemeForScreen", () => {
+  function board(id: string, schemes: Array<"light" | "dark" | undefined>) {
+    return {
+      id,
+      name: id,
+      frames: schemes.map((scheme, index) => ({
+        id: `f-${id}-${index}`,
+        screen: "landing",
+        x: index * 100,
+        y: 0,
+        w: 100,
+        h: 100,
+        ...(scheme ? { scheme } : {}),
+      })),
+      groups: [],
+    };
+  }
+
+  test("resolves an agreed frame pin and leaves all-default hosts unpinned", async () => {
+    await mkdir(join(tmp, "boards"), { recursive: true });
+    await writeJson(join(tmp, "boards", "a.json"), board("a", ["dark", "dark"]));
+    let folder = await loadDesignFolder(tmp);
+    expect(pinnedSchemeForScreen(folder, "landing")).toEqual({ ok: true, scheme: "dark" });
+
+    await writeJson(join(tmp, "boards", "a.json"), board("a", [undefined, undefined]));
+    folder = await loadDesignFolder(tmp);
+    expect(pinnedSchemeForScreen(folder, "landing")).toEqual({ ok: true, scheme: undefined });
+    expect(pinnedSchemeForScreen(folder, "elsewhere")).toEqual({ ok: true, scheme: undefined });
+  });
+
+  test("disagreeing pins require an explicit mode", async () => {
+    await mkdir(join(tmp, "boards"), { recursive: true });
+    await writeJson(join(tmp, "boards", "a.json"), board("a", ["light", "dark"]));
+    const folder = await loadDesignFolder(tmp);
+    const result = pinnedSchemeForScreen(folder, "landing");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('"light" (a/f-a-0)');
+      expect(result.message).toContain('"dark" (a/f-a-1)');
+      expect(result.message).toContain("Pass mode");
+    }
+  });
+
+  test("a canvas-default host and a pinned host are ambiguous", async () => {
+    await mkdir(join(tmp, "boards"), { recursive: true });
+    await writeJson(join(tmp, "boards", "a.json"), board("a", [undefined, "dark"]));
+    const folder = await loadDesignFolder(tmp);
+    const result = pinnedSchemeForScreen(folder, "landing");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain('"canvas default"');
   });
 });

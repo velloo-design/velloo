@@ -35,6 +35,7 @@ export const mutate = {
       h?: number;
       label?: string | null;
       group?: string | null;
+      scheme?: "light" | "dark" | null;
     };
   }) {
     return postMutate<{ frame: unknown }>("update_frame", args);

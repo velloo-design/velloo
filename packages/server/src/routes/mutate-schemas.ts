@@ -1,4 +1,5 @@
 import {
+  FrameSchemeSchema,
   MAX_BOARD_NAME_LENGTH,
   NodeIdSchema,
   NodeSchema,
@@ -20,6 +21,7 @@ const FramePatch = z.object({
   h: z.number().int().positive().optional(),
   label: z.string().nullable().optional(),
   group: z.string().nullable().optional(),
+  scheme: FrameSchemeSchema.nullable().optional(),
 });
 
 // ── Tree mutations ─────────────────────────────────────────────────────

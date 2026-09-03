@@ -1,5 +1,5 @@
 import { buildBoardComposite, MAX_CONCURRENT_RENDERS } from "@velloo/renderer";
-import type { Board, Frame, Screen, Viewport } from "@velloo/schema";
+import type { Board, Frame, FrameScheme, Screen, Viewport } from "@velloo/schema";
 
 /**
  * Screenshot capture for `velloo publish`: one PNG per
@@ -59,7 +59,7 @@ export interface CaptureBundleScreenshotsOptions {
    * Render a screen to a full HTML document (same render the cloud shows).
    * `themeName` carries a board's pinned theme for its composite.
    */
-  renderHtml: (screen: Screen, themeName?: string) => Promise<string>;
+  renderHtml: (screen: Screen, themeName?: string, scheme?: FrameScheme) => Promise<string>;
   capture: CaptureFn;
   warn: (message: string) => void;
   /**
@@ -157,7 +157,9 @@ export async function captureBundleScreenshots(
             await Promise.all(
               board.frames.map(async (frame): Promise<{ frame: Frame; html: string } | null> => {
                 const screen = screenById.get(frame.screen);
-                return screen ? { frame, html: await renderHtml(screen, board.theme) } : null;
+                return screen
+                  ? { frame, html: await renderHtml(screen, board.theme, frame.scheme ?? "light") }
+                  : null;
               }),
             )
           ).filter((entry): entry is { frame: Frame; html: string } => entry !== null);

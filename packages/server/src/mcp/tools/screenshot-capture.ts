@@ -8,9 +8,14 @@ import {
   screenshotCompareBuffer,
   unionRegion,
 } from "@velloo/renderer";
-import type { Viewport } from "@velloo/schema";
+import type { FrameScheme, Viewport } from "@velloo/schema";
 import { z } from "zod";
-import { pinnedThemeForScreen, resolveNamedTheme } from "../../design-folder.ts";
+import {
+  type DesignFolder,
+  pinnedSchemeForScreen,
+  pinnedThemeForScreen,
+  resolveNamedTheme,
+} from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -47,6 +52,19 @@ const BASELINE_CAP = 20;
 /** Cap the baseline cache's total PNG bytes (~64MB) so many large shots can't grow unbounded. */
 const BASELINE_MAX_BYTES = 64 * 1024 * 1024;
 
+type ScreenshotMode = FrameScheme | "compare";
+
+export function resolveScreenshotMode(
+  folder: Pick<DesignFolder, "boards">,
+  screenId: string,
+  explicit: ScreenshotMode | undefined,
+): { ok: true; mode: ScreenshotMode } | { ok: false; message: string } {
+  if (explicit !== undefined) return { ok: true, mode: explicit };
+  const pinned = pinnedSchemeForScreen(folder, screenId);
+  if (!pinned.ok) return pinned;
+  return { ok: true, mode: pinned.scheme ?? "light" };
+}
+
 export function registerScreenshotCaptureTool(
   mcp: McpServer,
   ctx: MutationContext,
@@ -70,7 +88,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        'Render a screen to PNG. mode: "light" (default) | "dark" | "compare" (side-by-side). Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme — omitted, it defaults to what the canvas shows (the hosting board\'s pinned theme; boards disagreeing is an error asking for an explicit theme). diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame at this capture width whose fixed height clips this screen below the fold, so you know which placements to resize (content height is width-dependent, so frames at other widths are never flagged or fitted). fitFrames: true auto-resizes those clipping frames to the content height in the same call (returns `fittedFrames`) instead of just reporting them.',
+        'Render a screen to PNG. mode: "light" | "dark" | "compare" (side-by-side); omitted, it resolves the hosting frame\'s pin, with disagreeing frames requiring an explicit mode. Size via w/h (or a viewport: {w,h} object); both default to the desktop preset. fullPage defaults true. scale (0.25–1) shrinks the payload for layout checks; path ("@id" or array) captures one element; theme renders with a named theme — omitted, it defaults to what the canvas shows (the hosting board\'s pinned theme; boards disagreeing is an error asking for an explicit theme). diff: true compares against your previous capture with the same params — zero change returns text only, small changes return a highlight crop with the changed nodes named, big changes return the new full image. resetBaseline: true re-establishes the baseline without comparing. The plain (non-diff, whole-screen) result also returns text with `contentHeight` (the screen\'s full rendered height in CSS px) and `framesShorterThanContent` — any board frame at this capture width whose fixed height clips this screen below the fold, so you know which placements to resize (content height is width-dependent, so frames at other widths are never flagged or fitted). fitFrames: true auto-resizes those clipping frames to the content height in the same call (returns `fittedFrames`) instead of just reporting them.',
       inputSchema: {
         screenId: z.string(),
         w: z.number().int().positive().optional(),
@@ -114,6 +132,10 @@ export function registerScreenshotCaptureTool(
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
       ({ w, h } = resolveViewport(w, h, vp));
+
+      const resolvedMode = resolveScreenshotMode(ctx.folder, screenId, mode);
+      if (!resolvedMode.ok) return errorResult(resolvedMode.message);
+      mode = resolvedMode.mode;
 
       // Match what the canvas shows: no explicit theme → the hosting board's pin.
       let themeName = theme;

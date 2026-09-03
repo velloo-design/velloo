@@ -11,6 +11,7 @@ import {
   NodeIdSchema,
   NodeSchema,
   nodeId,
+  resolveFrameScheme,
   ScreenSchema,
   SnippetParamSchema,
   SnippetSchema,
@@ -244,6 +245,20 @@ describe("FrameSchema", () => {
       group: "marketing",
     };
     expect(FrameSchema.safeParse(frame).success).toBe(true);
+  });
+
+  test("accepts an optional light or dark scheme without changing existing frames", () => {
+    const existing = { id: "f1", screen: "landing", x: 0, y: 0, w: 1440, h: 900 };
+    expect(FrameSchema.parse(existing)).toEqual(existing);
+    expect(FrameSchema.safeParse({ ...existing, scheme: "light" }).success).toBe(true);
+    expect(FrameSchema.safeParse({ ...existing, scheme: "dark" }).success).toBe(true);
+    expect(FrameSchema.safeParse({ ...existing, scheme: "system" }).success).toBe(false);
+  });
+
+  test("resolves a pinned scheme before the canvas default", () => {
+    expect(resolveFrameScheme({ scheme: "dark" }, "light")).toBe("dark");
+    expect(resolveFrameScheme({ scheme: "light" }, "dark")).toBe("light");
+    expect(resolveFrameScheme({}, "dark")).toBe("dark");
   });
 
   test("rejects a frame with non-positive size", () => {

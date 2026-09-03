@@ -1,4 +1,4 @@
-import type { ViewportPreset } from "@velloo/schema";
+import type { FrameScheme, ViewportPreset } from "@velloo/schema";
 import {
   Copy,
   Download,
@@ -21,6 +21,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
+import { FrameSchemeControl } from "./FrameSchemeControl.tsx";
 
 interface FrameHeaderProps {
   label: string;
@@ -35,6 +36,9 @@ interface FrameHeaderProps {
   library?: string | null;
   /** Viewport presets offered by the "new frame of this screen" menu. */
   presets: ViewportPreset[];
+  /** Persisted frame pin; absent means follow canvasDefault. */
+  scheme?: FrameScheme;
+  canvasDefault: FrameScheme;
   onPointerDownGrip: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
   /** Open the export dialog for this frame (PNG / PDF / standalone HTML). */
@@ -45,6 +49,7 @@ interface FrameHeaderProps {
   onPreview: () => void;
   /** Place a sibling frame of the same screen at the given size. */
   onAddSibling: (size: { w: number; h: number }) => void;
+  onSchemeChange: (scheme: FrameScheme | null) => void;
 }
 
 const MIN_SIZE = 120;
@@ -70,12 +75,15 @@ export function FrameHeader({
   sharedCount,
   library,
   presets,
+  scheme,
+  canvasDefault,
   onPointerDownGrip,
   onRemove,
   onExport,
   onResize,
   onPreview,
   onAddSibling,
+  onSchemeChange,
 }: FrameHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -122,6 +130,12 @@ export function FrameHeader({
         ) : null}
       </div>
       <div className="flex items-center gap-0.5">
+        <FrameSchemeControl
+          frameLabel={label}
+          scheme={scheme}
+          canvasDefault={canvasDefault}
+          onChange={onSchemeChange}
+        />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

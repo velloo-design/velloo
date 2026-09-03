@@ -1,8 +1,9 @@
 import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { mutate, renderUrl } from "../api.ts";
+import { mutate } from "../api.ts";
 import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { fontDraftCss, fontDraftUrl } from "../font-draft.ts";
+import { frameRenderSrc } from "../frame-render-src.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -102,7 +103,13 @@ export const Frame = memo(function Frame({
   // src is frozen entirely: recomputing it (theme toggle, version bumps,
   // attempted resizes) would point the iframe at an unreachable /api/render
   // URL and blank the frame to gray.
-  const computedSrc = `${renderUrl(frame.screen, frame.w, frame.h, boardTheme)}&mode=${designMode}&v=${screenRev}.${themeVersion}`;
+  const computedSrc = frameRenderSrc({
+    frame,
+    canvasDefault: designMode,
+    ...(boardTheme ? { boardTheme } : {}),
+    screenRevision: screenRev,
+    themeVersion,
+  });
   const frozenSrcRef = useRef(computedSrc);
   if (wsConnected) frozenSrcRef.current = computedSrc;
   const src = frozenSrcRef.current;
@@ -508,6 +515,12 @@ export const Frame = memo(function Frame({
       .catch((err) => toastError(err, "Could not resize frame"));
   };
 
+  const onSchemeChange = (scheme: "light" | "dark" | null) => {
+    void mutate
+      .updateFrame({ boardId, frameId: frame.id, patch: { scheme } })
+      .catch((err) => toastError(err, "Could not update frame color scheme"));
+  };
+
   const onExport = () => {
     useCanvas.getState().setExportTarget({
       kind: "frame",
@@ -521,6 +534,7 @@ export const Frame = memo(function Frame({
       screenId: frame.screen,
       name: frame.label ?? screen?.name ?? frame.screen,
       ...(boardTheme ? { boardTheme } : {}),
+      ...(frame.scheme ? { scheme: frame.scheme } : {}),
       w: frame.w,
     });
   };
@@ -566,12 +580,15 @@ export const Frame = memo(function Frame({
             sharedCount={sharedCount}
             library={screen?.library ?? null}
             presets={presets}
+            scheme={frame.scheme}
+            canvasDefault={designMode}
             onPointerDownGrip={startDrag}
             onRemove={onRemove}
             onExport={onExport}
             onResize={onResize}
             onPreview={onPreview}
             onAddSibling={onAddSibling}
+            onSchemeChange={onSchemeChange}
           />
         </div>
 

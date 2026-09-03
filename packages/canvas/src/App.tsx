@@ -100,6 +100,12 @@ export function App() {
       } else if (!cmd && !inEditable && e.key === "0") {
         e.preventDefault();
         state.zoomAtViewportCenter({ zoom: 1 });
+      } else if (!cmd && !inEditable && e.key === "[") {
+        e.preventDefault();
+        state.setLeftPaneCollapsed(!state.leftPaneCollapsed);
+      } else if (!cmd && !inEditable && e.key === "]") {
+        e.preventDefault();
+        state.setRightPaneCollapsed(!state.rightPaneCollapsed);
       } else if (!cmd && !inEditable && (e.key === "v" || e.key === "V")) {
         state.setCursorMode("select");
       } else if (!cmd && !inEditable && (e.key === "h" || e.key === "H")) {

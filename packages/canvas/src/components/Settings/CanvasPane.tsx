@@ -72,11 +72,11 @@ export function CanvasPane() {
       <SectionLabel className="mt-5">Layout</SectionLabel>
       <SettingRows>
         <SettingRow
-          label="Remember collapsed panels"
-          description="Boards list and screen tree stay as you left them."
+          label="Remember panel layout"
+          description="Side pane widths and collapse, boards list, and screen tree stay as you left them."
         >
           <Switch
-            aria-label="Remember collapsed panels"
+            aria-label="Remember panel layout"
             checked={rememberPanels}
             onCheckedChange={setRememberPanels}
           />

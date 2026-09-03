@@ -10,6 +10,7 @@ import {
   type Config,
   ConfigSchema,
   CURRENT_SCHEMA_VERSION,
+  type FrameScheme,
   isArchived,
   type Screen,
   ScreenSchema,
@@ -391,6 +392,40 @@ export function pinnedThemeForScreen(
   return {
     ok: false,
     message: `Screen "${screenId}" is hosted by boards with different themes: ${list}. Pass theme: to pick the one to render.`,
+  };
+}
+
+/**
+ * Effective screenshot scheme inferred from a screen's live frame placements.
+ * An unpinned frame is a distinct "canvas default" host: mixing it with a pin
+ * is ambiguous because the server cannot see the browser's local default.
+ */
+export function pinnedSchemeForScreen(
+  folder: Pick<DesignFolder, "boards">,
+  screenId: string,
+): { ok: true; scheme: FrameScheme | undefined } | { ok: false; message: string } {
+  const hostsByScheme = new Map<FrameScheme | "canvas default", string[]>();
+  for (const board of folder.boards.values()) {
+    if (isArchived(board)) continue;
+    for (const frame of board.frames) {
+      if (frame.screen !== screenId) continue;
+      const scheme = frame.scheme ?? "canvas default";
+      const hosts = hostsByScheme.get(scheme) ?? [];
+      hosts.push(`${board.id}/${frame.id}`);
+      hostsByScheme.set(scheme, hosts);
+    }
+  }
+  if (hostsByScheme.size === 0) return { ok: true, scheme: undefined };
+  if (hostsByScheme.size === 1) {
+    const [only] = hostsByScheme.keys();
+    return { ok: true, scheme: only === "canvas default" ? undefined : only };
+  }
+  const list = [...hostsByScheme.entries()]
+    .map(([scheme, hosts]) => `"${scheme}" (${hosts.join(", ")})`)
+    .join(", ");
+  return {
+    ok: false,
+    message: `Screen "${screenId}" is hosted by frames with different color schemes: ${list}. Pass mode: "light" or "dark" to pick the one to render.`,
   };
 }
 

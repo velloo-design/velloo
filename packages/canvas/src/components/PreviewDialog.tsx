@@ -1,6 +1,6 @@
 import type { ViewportPreset } from "@velloo/schema";
 import { useEffect, useRef, useState } from "react";
-import { renderUrl } from "../api.ts";
+import { previewRenderSrc } from "../frame-render-src.ts";
 import { useCanvas } from "../store.ts";
 import { Button } from "./ui/button.tsx";
 import {
@@ -99,7 +99,16 @@ export function PreviewDialog() {
   if (!target) return null;
 
   const effectiveW = draftWidth ?? width;
-  const src = `${renderUrl(target.screenId, width, renderH, target.boardTheme)}&mode=${designMode}&v=${screenRev}.${themeVersion}`;
+  const src = previewRenderSrc({
+    screenId: target.screenId,
+    width,
+    height: renderH,
+    ...(target.boardTheme ? { boardTheme: target.boardTheme } : {}),
+    ...(target.scheme ? { scheme: target.scheme } : {}),
+    canvasDefault: designMode,
+    screenRevision: screenRev,
+    themeVersion,
+  });
 
   return (
     <Dialog open onOpenChange={(open) => !open && setTarget(null)}>

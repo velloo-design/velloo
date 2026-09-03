@@ -63,6 +63,30 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
 
   lines.push(...WIZARD_PROVIDERS[answers.library].readmeComponentsSection(plan));
 
+  lines.push("## Composition helpers");
+  lines.push("");
+  lines.push("Alongside the component library, every design folder has a small set of");
+  lines.push("framework-neutral helpers:");
+  lines.push("");
+  lines.push("```");
+  lines.push("Box            layout div — use it for every flex/grid wrapper");
+  lines.push("Heading/Text   the type ladder");
+  lines.push("Icon           a lucide glyph by name");
+  lines.push("SVG            inline SVG markup");
+  lines.push("Image          a file from assets/");
+  lines.push("Gradient       a gradient fill surface");
+  lines.push("Layer          absolute-positioned overlay");
+  lines.push("Divider        a rule");
+  lines.push("Placeholder    sized stand-in for art you haven't made yet");
+  lines.push("```");
+  lines.push("");
+  lines.push("`SVG` is the one worth knowing about: it inlines the markup, so the art");
+  lines.push("inherits `currentColor` and flips with your theme the way an `Image`");
+  lines.push("never will. It's the right answer for a logo or a brand mark — including");
+  lines.push("the ones lucide deliberately doesn't ship (GitHub, Google, Apple, X), so");
+  lines.push("reach for `SVG` there rather than an `Icon` name that won't resolve.");
+  lines.push("");
+
   lines.push("## What the AI agent sees");
   lines.push("");
   lines.push("Velloo exposes ~55 MCP tools — discovery (`list_screens`, `list_components`,");

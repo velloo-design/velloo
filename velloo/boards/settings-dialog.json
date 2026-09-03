@@ -20,7 +20,8 @@
       "y": 0,
       "w": 1280,
       "h": 860,
-      "label": "Board scope"
+      "label": "Board scope",
+      "scheme": "dark"
     },
     {
       "id": "settings-canvas-1",
