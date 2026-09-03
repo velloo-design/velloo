@@ -3,6 +3,7 @@ import { Palette } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CollapsedPaneRail, PaneCollapseButton } from "../PaneRail.tsx";
 import { PaneResizer } from "../PaneResizer.tsx";
+import { PaneShell } from "../PaneShell.tsx";
 
 /**
  * The rail is the only way back into a collapsed pane, so its expand control
@@ -38,37 +39,80 @@ describe("CollapsedPaneRail", () => {
     expect(html).toContain('aria-label="Expand sidebar"');
   });
 
-  test("badges an action whose pane has something waiting", () => {
+  test("a badged action says in its tooltip what the badge means", () => {
     const withDot = renderToStaticMarkup(
       <CollapsedPaneRail
-        side="right"
-        expandLabel="Expand inspector"
+        side="left"
+        expandLabel="Expand sidebar"
         onExpand={() => {}}
-        actions={[{ icon: <Palette />, label: "Node", dot: true, onClick: () => {} }]}
+        actions={[
+          {
+            icon: <Palette />,
+            label: "Boards",
+            dot: { title: "an agent edited another board" },
+            onClick: () => {},
+          },
+        ]}
       />,
     );
-    expect(withDot).toContain('data-rail-dot="Node"');
+    expect(withDot).toContain('data-rail-dot="Boards"');
+    expect(withDot).toContain('title="Boards — an agent edited another board"');
 
     const without = renderToStaticMarkup(
       <CollapsedPaneRail
-        side="right"
-        expandLabel="Expand inspector"
+        side="left"
+        expandLabel="Expand sidebar"
         onExpand={() => {}}
-        actions={[{ icon: <Palette />, label: "Node", onClick: () => {} }]}
+        actions={[{ icon: <Palette />, label: "Boards", onClick: () => {} }]}
       />,
     );
     expect(without).not.toContain("data-rail-dot");
+    expect(without).toContain('title="Boards"');
   });
+});
+
+describe("PaneShell", () => {
+  const shell = (props: Partial<React.ComponentProps<typeof PaneShell>> = {}) =>
+    renderToStaticMarkup(
+      <PaneShell
+        side="left"
+        collapsed={false}
+        width={320}
+        onResize={() => {}}
+        rail={<div data-testid="rail" />}
+        {...props}
+      >
+        <div data-testid="content" />
+      </PaneShell>,
+    );
 
   test("borders on the side it sits against", () => {
-    const left = renderToStaticMarkup(
-      <CollapsedPaneRail side="left" expandLabel="Expand sidebar" onExpand={() => {}} />,
-    );
-    expect(left).toContain("border-r");
-    const right = renderToStaticMarkup(
-      <CollapsedPaneRail side="right" expandLabel="Expand inspector" onExpand={() => {}} />,
-    );
-    expect(right).toContain("border-l");
+    expect(shell({ side: "left" })).toContain("border-r");
+    expect(shell({ side: "right" })).toContain("border-l");
+  });
+
+  test("collapses to the rail width and swaps the content for the rail", () => {
+    const collapsed = shell({ collapsed: true });
+    expect(collapsed).toContain("width:36px");
+    expect(collapsed).toContain('data-testid="rail"');
+    expect(collapsed).not.toContain('data-testid="content"');
+    // Nothing to resize while collapsed — the rail's expand button is the way back.
+    expect(collapsed).not.toContain('role="separator"');
+  });
+
+  test("expands to the pane's own width, with content and a resize handle", () => {
+    const expanded = shell({ width: 420 });
+    expect(expanded).toContain("width:420px");
+    expect(expanded).toContain('data-testid="content"');
+    expect(expanded).toContain('role="separator"');
+  });
+
+  test("dims the content without touching the rail or the handle", () => {
+    const disabled = shell({ contentDisabled: true });
+    expect(disabled).toContain("pointer-events-none");
+    expect(disabled).toContain('aria-disabled="true"');
+    // The handle opts back in: resizing is chrome, not a design edit.
+    expect(disabled).toContain("pointer-events-auto");
   });
 });
 

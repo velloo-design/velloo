@@ -21,7 +21,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
-import { FrameSchemeControl } from "./FrameSchemeControl.tsx";
+import { FrameSchemeMenu } from "./FrameSchemeMenu.tsx";
 
 interface FrameHeaderProps {
   label: string;
@@ -130,12 +130,6 @@ export function FrameHeader({
         ) : null}
       </div>
       <div className="flex items-center gap-0.5">
-        <FrameSchemeControl
-          frameLabel={label}
-          scheme={scheme}
-          canvasDefault={canvasDefault}
-          onChange={onSchemeChange}
-        />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -153,9 +147,15 @@ export function FrameHeader({
               <Maximize2 />
               Full-screen preview
             </DropdownMenuItem>
+            <FrameSchemeMenu
+              frameLabel={label}
+              scheme={scheme}
+              canvasDefault={canvasDefault}
+              onChange={onSchemeChange}
+            />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <Plus className="mr-2 size-4 text-muted-foreground" />
+                <Plus />
                 New frame of this screen
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>

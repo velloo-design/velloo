@@ -6,8 +6,6 @@ import {
   Minus,
   Moon,
   MousePointer2,
-  PanelLeft,
-  PanelRight,
   Plus,
   Redo2,
   Search,
@@ -131,7 +129,6 @@ export function TopBar() {
     <TooltipProvider delayDuration={200}>
       <header className="h-11 shrink-0 border-b bg-card flex items-center gap-3 px-4 text-sm">
         <div className="flex items-center gap-2 min-w-0">
-          <PaneToggle side="left" />
           <LogoLockup fontSize={15} />
           {view === "library" ? (
             <>
@@ -275,47 +272,9 @@ export function TopBar() {
           </HotkeyTip>
 
           <SettingsMenu />
-
-          {view === "boards" ? (
-            <>
-              <Separator orientation="vertical" className="mx-1 h-5" />
-              <PaneToggle side="right" />
-            </>
-          ) : null}
         </div>
       </header>
     </TooltipProvider>
-  );
-}
-
-/**
- * Pane toggles sit at the two ends of the bar rather than in the cluster on
- * the right: each one is then on the side it acts on, and the cluster — which
- * is already the busiest part of the chrome — doesn't grow. The icon depicts
- * the pane and dims when it's collapsed, so the bar reads as a layout map.
- */
-function PaneToggle({ side }: { side: "left" | "right" }) {
-  const collapsed = useCanvas((s) =>
-    side === "left" ? s.leftPaneCollapsed : s.rightPaneCollapsed,
-  );
-  const setCollapsed = useCanvas((s) =>
-    side === "left" ? s.setLeftPaneCollapsed : s.setRightPaneCollapsed,
-  );
-  const name = side === "left" ? "sidebar" : "inspector";
-  const label = `${collapsed ? "Expand" : "Collapse"} ${name}`;
-  return (
-    <HotkeyTip label={label} hotkey={side === "left" ? "[" : "]"}>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={label}
-        aria-pressed={!collapsed}
-        onClick={() => setCollapsed(!collapsed)}
-        className={collapsed ? "text-muted-foreground/60" : ""}
-      >
-        {side === "left" ? <PanelLeft /> : <PanelRight />}
-      </Button>
-    </HotkeyTip>
   );
 }
 

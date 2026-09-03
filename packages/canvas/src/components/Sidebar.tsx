@@ -1,11 +1,10 @@
 import { LayoutDashboard, LibraryBig } from "lucide-react";
-import { useRef } from "react";
 import type { BoardMeta, ScreenMeta, SnippetMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { BoardsSidebar } from "./BoardsSidebar.tsx";
 import { LibrarySidebar } from "./LibrarySidebar.tsx";
 import { CollapsedPaneRail, PaneCollapseButton } from "./PaneRail.tsx";
-import { PaneResizer } from "./PaneResizer.tsx";
+import { PaneShell } from "./PaneShell.tsx";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs.tsx";
 
 interface Props {
@@ -39,47 +38,47 @@ export function Sidebar({
   const width = useCanvas((s) => s.leftPaneWidth);
   const setWidth = useCanvas((s) => s.setLeftPaneWidth);
   const boardPulse = useCanvas((s) => s.boardPulse);
-  const paneRef = useRef<HTMLElement | null>(null);
 
-  if (collapsed) {
-    const openOn = (next: "boards" | "library") => {
-      setView(next);
-      setCollapsed(false);
-    };
-    return (
-      <CollapsedPaneRail
-        side="left"
-        expandLabel="Expand sidebar"
-        hotkey="["
-        onExpand={() => setCollapsed(false)}
-        actions={[
-          {
-            icon: <LayoutDashboard />,
-            label: "Boards",
-            active: view === "boards",
-            // The per-board pulse dots are inside the collapsed list, so
-            // without this an agent's work on another board goes unseen.
-            dot: Object.keys(boardPulse).length > 0,
-            onClick: () => openOn("boards"),
-          },
-          {
-            icon: <LibraryBig />,
-            label: "Library",
-            active: view === "library",
-            onClick: () => openOn("library"),
-          },
-        ]}
-      />
-    );
-  }
+  const openOn = (next: "boards" | "library") => {
+    setView(next);
+    setCollapsed(false);
+  };
 
   return (
-    <aside
-      ref={paneRef}
-      style={{ width }}
-      className="relative flex h-full shrink-0 flex-col border-r bg-card"
+    <PaneShell
+      side="left"
+      collapsed={collapsed}
+      width={width}
+      onResize={setWidth}
+      rail={
+        <CollapsedPaneRail
+          side="left"
+          expandLabel="Expand sidebar"
+          hotkey="["
+          onExpand={() => setCollapsed(false)}
+          actions={[
+            {
+              icon: <LayoutDashboard />,
+              label: "Boards",
+              active: view === "boards",
+              // The per-board pulse dots are inside the collapsed list, so
+              // without this an agent's work on another board goes unseen.
+              dot:
+                Object.keys(boardPulse).length > 0
+                  ? { title: "an agent edited another board" }
+                  : undefined,
+              onClick: () => openOn("boards"),
+            },
+            {
+              icon: <LibraryBig />,
+              label: "Library",
+              active: view === "library",
+              onClick: () => openOn("library"),
+            },
+          ]}
+        />
+      }
     >
-      <PaneResizer side="left" width={width} onCommit={setWidth} paneRef={paneRef} />
       <div className="flex items-center gap-1 p-2 border-b">
         <Tabs
           value={view}
@@ -119,6 +118,6 @@ export function Sidebar({
       <footer className="px-4 py-2 text-xs text-muted-foreground border-t">
         shadcn snapshot {snapshotVersion}
       </footer>
-    </aside>
+    </PaneShell>
   );
 }

@@ -6,8 +6,11 @@ interface RailAction {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
-  /** Badge the button — something behind this tab wants attention. */
-  dot?: boolean;
+  /**
+   * Badge the button. The title spells out what the badge is reporting — a
+   * bare dot on an icon is a puzzle, not a notification.
+   */
+  dot?: { title: string };
   onClick: () => void;
 }
 
@@ -26,11 +29,11 @@ function titleWith(label: string, hotkey?: string): string {
 }
 
 /**
- * A collapsed side pane: a narrow rail that keeps the pane discoverable and
- * lets its tabs expand straight into the one you want. Rendered *instead* of
- * the pane, deliberately outside whatever disabled/dimmed treatment the pane
- * carries — expanding is chrome, not a design edit, so it stays live even
- * while the daemon is unreachable.
+ * The contents of a collapsed side pane: a narrow rail that keeps the pane
+ * discoverable and lets its tabs expand straight into the one you want.
+ * Rendered *instead* of the pane's content, deliberately outside whatever
+ * disabled/dimmed treatment that content carries — expanding is chrome, not a
+ * design edit, so it stays live even while the daemon is unreachable.
  */
 export function CollapsedPaneRail({
   side,
@@ -40,12 +43,7 @@ export function CollapsedPaneRail({
   actions = [],
 }: RailProps) {
   return (
-    <aside
-      className={
-        "flex w-9 shrink-0 flex-col items-center gap-1 bg-card py-2 " +
-        (side === "left" ? "border-r" : "border-l")
-      }
-    >
+    <div className="flex h-full w-full flex-col items-center gap-1 py-2">
       <Button
         variant="ghost"
         size="icon-sm"
@@ -63,7 +61,7 @@ export function CollapsedPaneRail({
           variant="ghost"
           size="icon-sm"
           onClick={a.onClick}
-          title={a.dot ? `${a.label} — has something new` : a.label}
+          title={a.dot ? `${a.label} — ${a.dot.title}` : a.label}
           aria-label={a.label}
           className={`relative ${a.active ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`}
         >
@@ -76,7 +74,7 @@ export function CollapsedPaneRail({
           ) : null}
         </Button>
       ))}
-    </aside>
+    </div>
   );
 }
 
