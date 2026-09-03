@@ -61,7 +61,7 @@ export function TopBar() {
   const zoomAtViewportCenter = useCanvas((s) => s.zoomAtViewportCenter);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const setCursorMode = useCanvas((s) => s.setCursorMode);
-  const enterAnnotateMode = useCanvas((s) => s.enterAnnotateMode);
+  const enterCommentMode = useCanvas((s) => s.enterCommentMode);
   const history = useCanvas((s) => s.history);
   const refreshHistory = useCanvas((s) => s.refreshHistory);
   const designMode = useCanvas((s) => s.designMode);
@@ -118,10 +118,10 @@ export function TopBar() {
       hotkey: "T",
     },
     {
-      value: "annotate",
+      value: "comment",
       icon: <MessageSquareText size={14} strokeWidth={2} />,
-      label: "Annotate a node",
-      hotkey: "Y",
+      label: "Comment on the design",
+      hotkey: "C",
     },
   ];
 
@@ -162,7 +162,7 @@ export function TopBar() {
             value={cursorMode}
             onValueChange={(v) => {
               if (!v) return;
-              if (v === "annotate") enterAnnotateMode();
+              if (v === "comment") enterCommentMode();
               else setCursorMode(v as CursorMode);
             }}
           >

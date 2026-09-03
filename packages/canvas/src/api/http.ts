@@ -36,6 +36,27 @@ async function post<T>(url: string, body: unknown, label: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export async function requestJson<T>(
+  method: "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  ensureConnected();
+  const res = await fetch(path, {
+    method,
+    ...(body === undefined
+      ? {}
+      : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  });
+  if (!res.ok) {
+    const response = (await res.json().catch(() => ({}))) as { error?: MutateError };
+    const err = new Error(response.error?.message ?? `${path}: ${res.status}`);
+    (err as Error & { payload?: MutateError }).payload = response.error;
+    throw err;
+  }
+  return (await res.json()) as T;
+}
+
 export function postMutate<T>(op: string, args: unknown): Promise<T> {
   return post<T>(`/api/mutate/${op}`, args, `mutate/${op}`);
 }

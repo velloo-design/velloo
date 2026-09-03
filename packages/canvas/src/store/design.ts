@@ -279,7 +279,13 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     } else {
       // Everything's archived — clear the canvas rather than opening onto a
       // board the user just put away.
-      set({ currentBoardId: null, currentScreenId: null, annotations: [], notes: [] });
+      set({
+        currentBoardId: null,
+        currentScreenId: null,
+        annotations: [],
+        notes: [],
+        commentThreads: [],
+      });
       get().setEditingMarkupId(null);
     }
   },
@@ -467,7 +473,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       if (!loaded) return;
       board = loaded;
     }
-    set({ currentBoardId: boardId, notes: [] });
+    set({ currentBoardId: boardId, notes: [], commentThreads: [], activeCommentId: null });
     // Keep the sidebar Tree scoped to the active board. If the current
     // screen isn't placed on this board, jump to the first frame's
     // screen — or clear the screen entirely when the board is empty.
@@ -486,6 +492,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       await get().refreshAnnotations();
     }
     await get().refreshNotes();
+    await get().refreshComments();
     // Boards can pin their own theme, so switching board can change which one
     // the panel is editing.
     await get().syncThemeToBoard();
@@ -516,6 +523,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       const boardId = get().currentBoardId;
       const board = boardId ? get().boards[boardId] : null;
       if (board?.frames.some((f) => f.screen === screenId)) await get().refreshAnnotations();
+      if (board?.frames.some((f) => f.screen === screenId)) await get().refreshComments();
     } catch {
       await get().loadDesign();
     }
@@ -541,6 +549,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       }
       await get().refreshAnnotations();
       await get().refreshNotes();
+      await get().refreshComments();
     } catch {
       // Reconnect resync is best-effort; the WS will retry on next connect.
     }
@@ -558,6 +567,8 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       currentScreenId: screenId && design.screens.some((s) => s.id === screenId) ? screenId : null,
       annotations: [],
       notes: [],
+      commentThreads: [],
+      activeCommentId: null,
     });
     get().setEditingMarkupId(null);
     await get().loadDesign();

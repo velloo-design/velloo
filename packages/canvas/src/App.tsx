@@ -42,7 +42,7 @@ export function App() {
   const loadDesign = useCanvas((s) => s.loadDesign);
   const setSelection = useCanvas((s) => s.setSelection);
   const initialized = useRef(false);
-  const spaceHeldRef = useRef<"select" | "hand" | "note" | "annotate" | null>(null);
+  const spaceHeldRef = useRef<"select" | "hand" | "note" | "comment" | null>(null);
   const [emptyBoardAddFrame, setEmptyBoardAddFrame] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,8 +112,8 @@ export function App() {
         state.setCursorMode("hand");
       } else if (!cmd && !inEditable && (e.key === "t" || e.key === "T")) {
         state.setCursorMode("note");
-      } else if (!cmd && !inEditable && (e.key === "y" || e.key === "Y")) {
-        state.enterAnnotateMode();
+      } else if (!cmd && !inEditable && (e.key === "c" || e.key === "C")) {
+        state.enterCommentMode();
       } else if (e.key === " " && !inEditable && !spaceHeldRef.current) {
         e.preventDefault();
         spaceHeldRef.current = state.cursorMode;
@@ -133,10 +133,6 @@ export function App() {
         const prior = spaceHeldRef.current;
         spaceHeldRef.current = null;
         const s = useCanvas.getState();
-        // Restoring armed annotate mode must keep its no-selection invariant:
-        // a live selection would swallow the next pick of that same node
-        // (setSelection dedupes, so the create-on-pick subscriber never fires).
-        if (prior === "annotate" && s.selection) s.setSelection(null);
         s.setCursorMode(prior);
       }
     };
@@ -148,26 +144,10 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => {
-    // Pick-a-node annotate mode: only create when a node is picked *while*
-    // already armed — enterAnnotateMode handles select-then-Y itself.
-    return useCanvas.subscribe((state, prev) => {
-      if (state.cursorMode !== "annotate" || prev.cursorMode !== "annotate") return;
-      const sel = state.selection;
-      if (!sel) return;
-      const selChanged =
-        !prev.selection ||
-        prev.selection.screenId !== sel.screenId ||
-        prev.selection.path !== sel.path;
-      if (!selChanged) return;
-      void state.createAnnotationOnSelection(sel);
-    });
-  }, []);
-
   // Body mode classes drive workspace-wide cursors (and hand/note iframe
   // pointer-events) via styles.css — including over chrome outside frames.
   useEffect(() => {
-    const modes = ["hand", "note", "annotate"] as const;
+    const modes = ["hand", "note", "comment"] as const;
     const sync = (mode: string) => {
       for (const m of modes) {
         document.body.classList.toggle(`velloo-${m}`, mode === m);

@@ -4,9 +4,10 @@ import { notes as notesApi } from "../api.ts";
 import { fitToContent, wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { AnnotationsLayer } from "./AnnotationsLayer.tsx";
+import { CommentPinsLayer } from "./CommentPinsLayer.tsx";
 import { Frame } from "./Frame.tsx";
 import { NotesLayer } from "./NotesLayer.tsx";
+import { PendingCommentComposer } from "./PendingCommentComposer.tsx";
 
 interface BoardProps {
   board: BoardT;
@@ -198,7 +199,16 @@ export function Board({ board }: BoardProps) {
       useCanvas.getState().setCursorMode("select");
       return;
     }
-    // Select / annotate: clicking the board chrome (not a frame/note/card)
+    if (
+      cursorMode === "comment" &&
+      (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.vellooBoardWorld)
+    ) {
+      const where = clientToBoard(e.clientX, e.clientY);
+      e.preventDefault();
+      useCanvas.getState().beginComment({ kind: "board", boardId: board.id, ...where });
+      return;
+    }
+    // Select / comment: clicking the board chrome (not a frame/note/card)
     // clears the current node selection.
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.vellooBoardWorld) {
       useCanvas.getState().setSelection(null);
@@ -273,7 +283,7 @@ export function Board({ board }: BoardProps) {
               : "grab"
             : cursorMode === "note"
               ? "crosshair"
-              : cursorMode === "annotate"
+              : cursorMode === "comment"
                 ? "cell"
                 : "default",
       }}
@@ -290,7 +300,8 @@ export function Board({ board }: BoardProps) {
           />
         ))}
         <NotesLayer />
-        <AnnotationsLayer />
+        <PendingCommentComposer />
+        <CommentPinsLayer />
       </BoardWorld>
     </div>
   );

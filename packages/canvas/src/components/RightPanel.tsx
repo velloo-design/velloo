@@ -1,6 +1,7 @@
-import { Palette, SquareMousePointer } from "lucide-react";
+import { MessageSquareText, Palette, SquareMousePointer } from "lucide-react";
 import { useEffect } from "react";
 import { useCanvas } from "../store.ts";
+import { CommentsPanel } from "./CommentsPanel.tsx";
 import { Inspector } from "./Inspector.tsx";
 import { Loading } from "./Loading.tsx";
 import { CollapsedPaneRail, PaneCollapseButton } from "./PaneRail.tsx";
@@ -16,6 +17,8 @@ export function RightPanel({ screenId }: Props) {
   const rightTab = useCanvas((s) => s.rightTab);
   const setRightTab = useCanvas((s) => s.setRightTab);
   const selection = useCanvas((s) => s.selection);
+  const pendingCommentAnchor = useCanvas((s) => s.pendingCommentAnchor);
+  const activeCommentId = useCanvas((s) => s.activeCommentId);
   const theme = useCanvas((s) => s.theme);
   const presets = useCanvas((s) => s.presets);
   const cursorMode = useCanvas((s) => s.cursorMode);
@@ -26,14 +29,16 @@ export function RightPanel({ screenId }: Props) {
   const setWidth = useCanvas((s) => s.setRightPaneWidth);
 
   useEffect(() => {
-    if (selection) setRightTab("node");
-  }, [selection, setRightTab]);
+    if (selection && !pendingCommentAnchor && !activeCommentId && cursorMode !== "comment") {
+      setRightTab("node");
+    }
+  }, [selection, pendingCommentAnchor, activeCommentId, cursorMode, setRightTab]);
 
   const handMode = cursorMode === "hand";
 
   // Collapsing is an explicit choice, so a selection doesn't reopen the pane
   // — the rail's Node button is the way back, and it lands on the selection.
-  const openOn = (tab: "node" | "theme") => {
+  const openOn = (tab: "node" | "theme" | "comments") => {
     setRightTab(tab);
     setCollapsed(false);
   };
@@ -61,6 +66,12 @@ export function RightPanel({ screenId }: Props) {
               onClick: () => openOn("node"),
             },
             {
+              icon: <MessageSquareText />,
+              label: "Comments",
+              active: rightTab === "comments",
+              onClick: () => openOn("comments"),
+            },
+            {
               icon: <Palette />,
               label: "Theme",
               active: rightTab === "theme",
@@ -79,7 +90,7 @@ export function RightPanel({ screenId }: Props) {
         />
         <Tabs
           value={rightTab}
-          onValueChange={(v) => setRightTab(v as "node" | "theme")}
+          onValueChange={(v) => setRightTab(v as "node" | "theme" | "comments")}
           className="min-w-0 flex-1"
         >
           <TabsList className="w-full h-8">
@@ -91,10 +102,16 @@ export function RightPanel({ screenId }: Props) {
               <Palette />
               Theme
             </TabsTrigger>
+            <TabsTrigger value="comments">
+              <MessageSquareText />
+              Comments
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
-      {rightTab === "node" ? (
+      {rightTab === "comments" ? (
+        <CommentsPanel />
+      ) : rightTab === "node" ? (
         handMode ? (
           <EmptyMessage>
             Hand tool active. Drag to pan; press V or Esc to return to select.

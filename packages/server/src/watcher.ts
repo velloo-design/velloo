@@ -8,6 +8,7 @@ export type WatchEvent =
   | { type: "snippet-changed"; snippetId: string }
   | { type: "annotations-changed"; screenId: string }
   | { type: "notes-changed"; boardId: string }
+  | { type: "comments-changed"; boardId: string; scope: "local" | "shared" }
   /**
    * `.design/config.json` changed — typically a Sprint-Y
    * `add_extension` / `update_extension` / `remove_extension`

@@ -215,10 +215,10 @@ body {
   -webkit-user-select: none;
 }
 
-/* Annotate mode: `cell` cursor — "pick a target" reticle. Iframe
+/* Comment mode: `cell` cursor — "pick a target" reticle. Iframe
  * pointer events stay live so the click reaches a node selection. */
-.velloo-annotate,
-.velloo-annotate * {
+.velloo-comment,
+.velloo-comment * {
   cursor: cell !important;
   user-select: none;
   -webkit-user-select: none;

@@ -12,10 +12,10 @@ import { detectTailwindMajor } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { withActor } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
-import { countUnresolvedPulledComments } from "../cloud-comments.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
+import type { LocalCommentsService } from "../local-comments.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import {
@@ -49,6 +49,7 @@ export interface McpServerOptions {
   jit: TailwindJit;
   bundler: LiveBundler;
   canvasBundler: CanvasBundler;
+  comments: LocalCommentsService;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
   assetOrigin?: string;
   /**
@@ -126,7 +127,7 @@ const INSTRUCTION_PARTS = [
   "",
   "",
   "**Reaching a page you can't load — browser capture.** When the target is behind a login, on staging, or on a third-party site, `start_capture_session { url }` opens a real browser window the USER drives. It returns a `sessionId` IMMEDIATELY and does not wait for the session — never treat it as blocking, and never re-call it to \"check\": poll `list_captures` instead, and tell the user plainly what to do (log in, then hit **Capture page** in the velloo toolbar on each page you need, then **Done**). Read each result with `get_capture`: you get a structural `outline` with repeated blocks marked (a run of identical siblings is ONE component instantiated N times — build a snippet, not N copies), `themeCss` (the page's real custom properties, including any dark block) to feed `import_theme` BEFORE composing, `fonts`, and downloaded image `assets` for `upload_asset`. Then **re-express the page with real components — do not transcribe the DOM node-for-node**; the extract is evidence, not a tree. Verify with `compare_to_url { captureId }` rather than `url`: a stored capture is already past the login and frozen, so it can't bounce to a login page or drift between calls. Captures live outside the design folder and the user can delete them; you never see session cookies.",
-  "**Designer annotations**: `list_annotations(screenId)` returns markdown notes attached to specific nodes. Treat them as addressable guidance (\"this CTA should land harder\"); a null `resolved` path means the targeted node is gone — low-priority. Pin your own with `add_annotation`, remove only your own. Board-level guidance that isn't node-specific goes in canvas notes (`add_note`). Annotations can also arrive from OUTSIDE reviewers: `pull_comments` fetches comments left on the folder's published share links and lands them as annotations whose body names the commenter + link (the daemon also syncs them at startup). Treat those like designer guidance; deleting one resolves the cloud comment on the next sync.",
+  "**Visual feedback threads** are persistent app state, not design files. Start by calling `list_comment_threads` when the instructions report open feedback; `requestedOnly: true` is the explicit agent inbox. Read the complete conversation and its node/board anchor with `get_comment_thread`, make the requested design change, reply with `reply_to_comment`, then `resolve_comment`. A stale anchor means the original node no longer exists: use its saved bounds/fingerprint as context, but don't silently attach it to a different node. Use `delete_comment_thread` only when the user explicitly asks for permanent deletion. Canvas notes are different: repo-owned board artifacts for durable design guidance, created with `add_note`.",
 ];
 
 /**
@@ -143,15 +144,15 @@ const FEEDBACK_INSTRUCTION =
  * the stdio transport, where the canvas binds an ephemeral port the user can't
  * predict. The feedback paragraph is appended only when opted in. `intro` is the
  * adapter-supplied framework framing (`FrameworkAdapter.mcpIntro`, resolved for
- * the folder's style channel; empty ⇒ the default shadcn framing). `unresolvedComments` (pulled
- * share-link comments waiting locally as annotations) adds ONE line when > 0.
+ * the folder's style channel; empty ⇒ the default shadcn framing). `openComments`
+ * adds one agent-inbox line when greater than zero.
  */
 export function buildInstructions(
   feedbackEnabled: boolean,
   canvasUrl?: string,
   tiered = false,
   intro: readonly string[] = [],
-  unresolvedComments = 0,
+  openComments = 0,
   hostTailwindMajor: 3 | 4 | null = null,
   bareFolder = false,
 ): string {
@@ -175,12 +176,12 @@ export function buildInstructions(
       `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can open it and watch your edits render in real time. (They can also open a canvas any time with \`velloo run\`.)`,
     );
   }
-  if (unresolvedComments > 0) {
+  if (openComments > 0) {
     parts.push(
       "",
-      unresolvedComments === 1
-        ? "**1 unresolved share-link comment is waiting as an annotation** — read it via `list_annotations`; refresh with `pull_comments`."
-        : `**${unresolvedComments} unresolved share-link comments are waiting as annotations** — read them via \`list_annotations\`; refresh with \`pull_comments\`.`,
+      openComments === 1
+        ? "**1 open visual feedback thread is waiting** — read it with `list_comment_threads`."
+        : `**${openComments} open visual feedback threads are waiting** — read them with \`list_comment_threads\`.`,
     );
   }
   if (feedbackEnabled) parts.push("", FEEDBACK_INSTRUCTION);
@@ -192,6 +193,7 @@ function buildMcpServer(
   jit: TailwindJit,
   bundler: LiveBundler,
   canvasBundler: CanvasBundler,
+  comments: LocalCommentsService,
   assetOrigin?: string,
   cloud?: CloudAuth,
 ): McpServer {
@@ -207,13 +209,9 @@ function buildMcpServer(
   const hostTailwindMajor = channel.needsTailwindJit
     ? detectTailwindMajor(hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp))
     : null;
-  // Waiting-comments count for the instructions, from LOCAL state only —
-  // initialize never touches the network. The daemon's boot + interval pulls
-  // (and any pull_comments call) keep `folder.annotations` fresh; each new
-  // session recomputes here. Cold cache: a comment that arrived since the
-  // last pull surfaces on the first connection built AFTER the pull lands,
-  // not this one.
-  const unresolvedComments = countUnresolvedPulledComments(ctx.folder);
+  // Synchronous local state only: initializing an agent session never needs
+  // a network call. Shared threads are folded into this service when synced.
+  const openComments = comments.countOpenSync();
   const bareFolder = ctx.folder.boards.size === 0;
   const mcp = new McpServer(
     { name: "velloo", version: "0.1.0" },
@@ -223,7 +221,7 @@ function buildMcpServer(
         assetOrigin?.replace(/\/+$/, ""),
         tiered,
         intro,
-        unresolvedComments,
+        openComments,
         hostTailwindMajor,
         bareFolder,
       ),
@@ -255,8 +253,7 @@ function buildMcpServer(
   // Opt-in, auth-gated. The token may be absent (logged out) — the tool then
   // returns a "run velloo login" message rather than failing.
   if (feedbackEnabled) registerFeedbackTool(mcp, ctx, cloud ?? { url: "" });
-  // Always on: logged-out / unpublished / offline are reported no-ops.
-  registerCommentTools(mcp, ctx, cloud ?? { url: "" });
+  registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
   // Progressive disclosure is OPT-IN (VELLOO_MCP_PROGRESSIVE=1): major agent
@@ -342,6 +339,7 @@ export async function createMcpServer(
             opts.jit,
             opts.bundler,
             opts.canvasBundler,
+            opts.comments,
             opts.assetOrigin,
             opts.cloud,
           );
@@ -419,6 +417,7 @@ export interface StdioMcpServerOptions {
   jit: TailwindJit;
   bundler: LiveBundler;
   canvasBundler: CanvasBundler;
+  comments: LocalCommentsService;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
   assetOrigin?: string;
   cloud?: CloudAuth;
@@ -443,6 +442,7 @@ export async function createStdioMcpServer(
     opts.jit,
     opts.bundler,
     opts.canvasBundler,
+    opts.comments,
     opts.assetOrigin,
     opts.cloud,
   );

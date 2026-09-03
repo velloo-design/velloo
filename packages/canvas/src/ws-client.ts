@@ -10,6 +10,7 @@ type ServerEvent =
   | { type: "snippet-changed"; snippetId: string }
   | { type: "annotations-changed"; screenId: string }
   | { type: "notes-changed"; boardId: string }
+  | { type: "comments-changed"; boardId: string; scope: "local" | "shared" }
   | { type: "config-changed" }
   | { type: "folder-reloaded" }
   | { type: "reload-error"; source: string; message: string }
@@ -81,6 +82,7 @@ export function connectWs(): () => void {
         refreshTheme,
         refreshAnnotations,
         refreshNotes,
+        refreshComments,
         screens,
         boards,
       } = useCanvas.getState();
@@ -123,6 +125,8 @@ export function connectWs(): () => void {
         else if (!board && payload.screenId === currentScreenId) void refreshAnnotations();
       } else if (payload.type === "notes-changed") {
         if (payload.boardId === currentBoardId) void refreshNotes();
+      } else if (payload.type === "comments-changed") {
+        if (payload.boardId === currentBoardId) void refreshComments();
       } else if (payload.type === "config-changed") {
         // Extensions / library config changed — the Library tab reads
         // from the design summary.

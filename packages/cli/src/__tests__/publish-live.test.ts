@@ -233,6 +233,33 @@ test("publish ships the live bundle and flags it in the design", async () => {
   expect(captured.design?.screens?.some((s) => s.id === "home")).toBe(true);
 });
 
+test("publish never uploads machine-local comment storage", async () => {
+  const design = join(tmp, "velloo");
+  const commentsPath = join(tmp, "machine-state", "comments.json");
+  await scaffold(design, false, undefined, "folder-local-comment-boundary");
+  await mkdir(join(tmp, "machine-state"), { recursive: true });
+  await writeFile(
+    commentsPath,
+    JSON.stringify({
+      version: 1,
+      folderId: "folder-local-comment-boundary",
+      threads: [{ body: "private session feedback must stay on this machine" }],
+    }),
+  );
+  const previous = process.env.VELLOO_COMMENTS_PATH;
+  process.env.VELLOO_COMMENTS_PATH = commentsPath;
+  try {
+    const { exitCode, stderr } = await runPublish(design);
+    if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+  } finally {
+    if (previous === undefined) delete process.env.VELLOO_COMMENTS_PATH;
+    else process.env.VELLOO_COMMENTS_PATH = previous;
+  }
+
+  expect(captured.names.some((name) => name.includes("comment"))).toBe(false);
+  expect(JSON.stringify(captured.design)).not.toContain("private session feedback");
+});
+
 test("publish preserves per-frame schemes in design.json", async () => {
   const design = join(tmp, "velloo");
   await scaffold(design, false);

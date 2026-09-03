@@ -1,27 +1,100 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CloudAuth } from "../../cloud.ts";
-import { pullComments } from "../../cloud-comments.ts";
-import type { MutationContext } from "../../mutations/index.ts";
+import { z } from "zod";
+import { CommentStoreError, type LocalCommentsService } from "../../local-comments.ts";
+import { jsonResult } from "./result.ts";
 
-/**
- * `pull_comments` — on-demand share-link comment sync. The daemon
- * already pulls at boot and on a slow interval; this lets the agent refresh
- * right now ("check for new feedback") and see the summary. Pull-only: the
- * cloud never writes into the repo — conversion to annotations happens here.
- * Registered unconditionally: logged-out / unpublished / offline are safe
- * no-ops that report their status instead of failing.
- */
-export function registerCommentTools(mcp: McpServer, ctx: MutationContext, cloud: CloudAuth): void {
+async function result<T>(operation: () => Promise<T>) {
+  try {
+    return jsonResult(await operation());
+  } catch (error) {
+    if (error instanceof CommentStoreError) {
+      return jsonResult({ ok: false, code: error.code, message: error.message });
+    }
+    throw error;
+  }
+}
+
+/** Threaded user feedback. Comments are persistent app state, never repo files. */
+export function registerCommentTools(mcp: McpServer, comments: LocalCommentsService): void {
   mcp.registerTool(
-    "pull_comments",
+    "list_comment_threads",
     {
       description:
-        "Fetch reviewer comments left on this folder's published share links (velloo-cloud) and land new unresolved ones as annotations — read them afterwards with list_annotations (pulled ones carry the commenter + link in the body). Resolution syncs both ways: a pulled annotation deleted locally resolves its cloud comment; a comment resolved in the cloud removes its local annotation. Returns {status, pulled, resolvedUp, resolvedDown, unresolvedTotal, links} — unresolvedTotal counts pulled comments still waiting as annotations; links maps each share-link slug to ok | revoked | unknown (revoked links no longer sync; mention that to the user). Requires `velloo login` and a prior `velloo publish`; logged-out or offline it is a safe no-op that reports why.",
-      inputSchema: {},
+        "List visual feedback threads. By default this returns every open thread across the folder; pass boardId to narrow it. requestedOnly is the explicit agent inbox. Anchors report attached paths or stale when their original node no longer exists.",
+      inputSchema: {
+        boardId: z.string().optional(),
+        status: z.enum(["open", "resolved", "all"]).optional(),
+        requestedOnly: z.boolean().optional(),
+      },
     },
-    async () => {
-      const summary = await pullComments(ctx, cloud);
-      return { content: [{ type: "text", text: JSON.stringify(summary) }] };
+    async ({ boardId, status = "open", requestedOnly = false }) =>
+      result(async () => ({
+        threads: boardId
+          ? (await comments.list(boardId, status)).filter(
+              (thread) =>
+                !requestedOnly ||
+                thread.scope === "shared" ||
+                thread.agentRequestedAt !== undefined,
+            )
+          : await comments.listAll(status, requestedOnly),
+      })),
+  );
+
+  mcp.registerTool(
+    "get_comment_thread",
+    {
+      description: "Read one complete visual feedback thread, including its anchor and replies.",
+      inputSchema: { threadId: z.string().uuid() },
     },
+    async ({ threadId }) => result(async () => ({ thread: await comments.get(threadId) })),
+  );
+
+  mcp.registerTool(
+    "reply_to_comment",
+    {
+      description:
+        "Reply to a visual feedback thread as the agent. Use resolve_comment separately once the requested change is complete.",
+      inputSchema: {
+        threadId: z.string().uuid(),
+        body: z.string().trim().min(1).max(4000),
+      },
+    },
+    async ({ threadId, body }) =>
+      result(async () => ({
+        thread: await comments.reply(threadId, {
+          body,
+          author: { kind: "agent", displayName: "Agent" },
+        }),
+      })),
+  );
+
+  mcp.registerTool(
+    "resolve_comment",
+    {
+      description: "Mark an addressed feedback thread resolved and remove it from the open inbox.",
+      inputSchema: { threadId: z.string().uuid() },
+    },
+    async ({ threadId }) =>
+      result(async () => ({ thread: await comments.setResolved(threadId, true) })),
+  );
+
+  mcp.registerTool(
+    "reopen_comment",
+    {
+      description: "Reopen a resolved feedback thread.",
+      inputSchema: { threadId: z.string().uuid() },
+    },
+    async ({ threadId }) =>
+      result(async () => ({ thread: await comments.setResolved(threadId, false) })),
+  );
+
+  mcp.registerTool(
+    "delete_comment_thread",
+    {
+      description:
+        "Permanently delete a local feedback thread when the user explicitly asks to remove it. Prefer resolving addressed work so the conversation remains available.",
+      inputSchema: { threadId: z.string().uuid() },
+    },
+    async ({ threadId }) => result(() => comments.delete(threadId)),
   );
 }

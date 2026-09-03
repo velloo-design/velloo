@@ -23,6 +23,26 @@ export {
   MAX_BOARD_NAME_LENGTH,
 } from "./board.ts";
 export {
+  type CommentAnchor,
+  CommentAnchorSchema,
+  type CommentAnchorState,
+  type CommentAuthor,
+  CommentAuthorSchema,
+  type CommentBounds,
+  CommentBoundsSchema,
+  type CommentLocator,
+  CommentLocatorSchema,
+  type CommentMessage,
+  CommentMessageSchema,
+  type CommentNodeFingerprint,
+  CommentNodeFingerprintSchema,
+  type CommentOrigin,
+  CommentOriginSchema,
+  type CommentThread,
+  CommentThreadSchema,
+  type CommentThreadView,
+} from "./comment.ts";
+export {
   type CodegenConfig,
   type Config,
   ConfigSchema,

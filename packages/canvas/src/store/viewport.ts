@@ -144,8 +144,6 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
   },
 
   setCursorMode(cursorMode) {
-    // Direct mode set — annotate-tool entry points should go through
-    // enterAnnotateMode, which handles an existing selection.
     set({ cursorMode, hover: null });
   },
 

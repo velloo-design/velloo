@@ -5,6 +5,7 @@ import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { fontDraftCss, fontDraftUrl } from "../font-draft.ts";
 import { frameRenderSrc } from "../frame-render-src.ts";
 import { IframeChannel } from "../iframe-channel.ts";
+import { selectedNode } from "../store/selection.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { typesetDraftCss } from "../typeset-draft.ts";
@@ -79,7 +80,7 @@ export const Frame = memo(function Frame({
   const setNodeRects = useCanvas((s) => s.setNodeRects);
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
   const setFrameInset = useCanvas((s) => s.setFrameInset);
-  const annotations = useCanvas((s) => s.annotations);
+  const commentThreads = useCanvas((s) => s.commentThreads);
   const activityFlash = useCanvas((s) => s.activityFlash[frame.screen]);
   const glowNonce = useCanvas((s) => s.frameGlow[frame.id]);
   const [glowing, setGlowing] = useState(false);
@@ -95,6 +96,20 @@ export const Frame = memo(function Frame({
   const x = draftPos?.x ?? frame.x;
   const y = draftPos?.y ?? frame.y;
   const hasScreen = Boolean(screen);
+  const commentPaths = useMemo(
+    () =>
+      commentThreads
+        .filter(
+          (thread) =>
+            thread.anchor?.kind === "node" &&
+            thread.anchor.frameId === frame.id &&
+            thread.anchorState.status === "attached",
+        )
+        .map((thread) =>
+          thread.anchorState.status === "attached" ? thread.anchorState.resolvedPath.join(".") : "",
+        ),
+    [commentThreads, frame.id],
+  );
 
   // The iframe src embeds only *committed* frame size — draft (mid-drag)
   // sizes stretch the element visually via width/height styling, so a resize
@@ -198,8 +213,39 @@ export const Frame = memo(function Frame({
     if (!iframe) return;
     const channel = new IframeChannel(iframe, {
       onSelect(path) {
-        if (path === null) setSelection(null);
-        else setSelection({ screenId: frame.screen, path });
+        if (path === null) {
+          setSelection(null);
+          return;
+        }
+        const state = useCanvas.getState();
+        if (state.cursorMode === "comment") {
+          const selection = { screenId: frame.screen, path };
+          const node = selectedNode(state.screens, selection);
+          const element = Array.from(
+            iframe.contentDocument?.querySelectorAll<HTMLElement>("[data-node-path]") ?? [],
+          ).find((candidate) => candidate.dataset.nodePath === path);
+          if (!node || !element) return;
+          const rect = element.getBoundingClientRect();
+          const locator =
+            "$id" in node && node.$id
+              ? (`@${node.$id}` as const)
+              : path === ""
+                ? []
+                : path.split(".").map(Number);
+          const ref = "$ref" in node ? node.$ref : "$snippet" in node ? node.$snippet : undefined;
+          const text = element.textContent?.trim().replace(/\s+/g, " ").slice(0, 500);
+          state.beginComment({
+            kind: "node",
+            boardId,
+            frameId: frame.id,
+            screenId: frame.screen,
+            locator,
+            bounds: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
+            ...((ref || text) && { fingerprint: { ...(ref && { ref }), ...(text && { text }) } }),
+          });
+          return;
+        }
+        setSelection({ screenId: frame.screen, path });
       },
       onHover(path) {
         if (path === null) setHover(null);
@@ -240,11 +286,20 @@ export const Frame = memo(function Frame({
         if (s.nodeState !== "default" && s.selection?.screenId === frame.screen) {
           channel.send({ type: "applyVelloState", path: s.selection.path, state: s.nodeState });
         }
-        const annotated = s.annotations
-          .filter((a) => a.screenId === frame.screen && a.resolved !== null)
-          .map((a) => (a.resolved ?? []).join("."));
-        if (annotated.length > 0) {
-          channel.send({ type: "requestRects", paths: annotated });
+        const anchored = s.commentThreads
+          .filter(
+            (thread) =>
+              thread.anchor?.kind === "node" &&
+              thread.anchor.frameId === frame.id &&
+              thread.anchorState.status === "attached",
+          )
+          .map((thread) =>
+            thread.anchorState.status === "attached"
+              ? thread.anchorState.resolvedPath.join(".")
+              : "",
+          );
+        if (anchored.length > 0) {
+          channel.send({ type: "requestRects", paths: anchored });
         }
       },
       // Cmd/Ctrl + wheel inside the iframe → zoom the board. Same
@@ -305,6 +360,7 @@ export const Frame = memo(function Frame({
   }, [
     frame.id,
     frame.screen,
+    boardId,
     hasScreen,
     frontRef,
     setSelection,
@@ -323,16 +379,16 @@ export const Frame = memo(function Frame({
     }
   }, [selection, frame.screen]);
 
-  // Annotate mode needs a pick-target cursor *inside* the iframe — parent CSS
+  // Comment mode needs a pick-target cursor *inside* the iframe — parent CSS
   // can't style cross-document content, so inject a style tag into the doc.
   // biome-ignore lint/correctness/useExhaustiveDependencies: front/screenRev/hasScreen re-apply the style after iframe swaps/reloads
   useEffect(() => {
     const apply = (iframe: HTMLIFrameElement | null) => {
       const doc = iframe?.contentDocument;
       if (!doc?.head) return;
-      const id = "__velloo-annotate-cursor";
+      const id = "__velloo-comment-cursor";
       let el = doc.getElementById(id);
-      if (cursorMode === "annotate") {
+      if (cursorMode === "comment") {
         if (!el) {
           el = doc.createElement("style");
           el.id = id;
@@ -436,20 +492,17 @@ export const Frame = memo(function Frame({
   }, [glowNonce]);
 
   // One-shot geometry probe for fly-to-node navigation: answer with the
-  // probed path's rect (plus the annotated paths, since a rects response
+  // probed path's rect (plus the comment paths, since a rects response
   // replaces this frame's whole registry entry).
   const rectProbe = useCanvas((s) => s.rectProbe);
   useEffect(() => {
     const channel = channelRef.current;
     if (!channel || !rectProbe || rectProbe.frameId !== frame.id) return;
-    const annotatedPaths = annotations
-      .filter((a) => a.screenId === frame.screen && a.resolved !== null)
-      .map((a) => (a.resolved ?? []).join("."));
     channel.send({
       type: "requestRects",
-      paths: [...new Set([rectProbe.path, ...annotatedPaths])],
+      paths: [...new Set([rectProbe.path, ...commentPaths])],
     });
-  }, [rectProbe, frame.id, frame.screen, annotations]);
+  }, [rectProbe, frame.id, commentPaths]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -472,24 +525,21 @@ export const Frame = memo(function Frame({
     channel.send({ type: "applyVelloState", path, state: path ? nodeState : "default" });
   }, [nodeState, selection, frame.screen]);
 
-  // Ask the iframe to report rects for every annotated path on this
+  // Ask the iframe to report rects for every comment path in this
   // screen. The channel buffers until handshake completes; once the
   // iframe re-renders (screenVersion bump), we re-request so the rects
   // stay fresh after edits. AnnotationsLayer reads what comes back and
-  // anchors each annotation to the actual node geometry.
+  // anchors each pin to the actual node geometry.
   useEffect(() => {
     void screenVersion;
     const channel = channelRef.current;
     if (!channel) return;
-    const annotatedPaths = annotations
-      .filter((a) => a.screenId === frame.screen && a.resolved !== null)
-      .map((a) => (a.resolved ?? []).join("."));
-    if (annotatedPaths.length === 0) {
+    if (commentPaths.length === 0) {
       clearNodeRects(frame.id);
       return;
     }
-    channel.send({ type: "requestRects", paths: annotatedPaths });
-  }, [annotations, frame.id, frame.screen, screenVersion, clearNodeRects]);
+    channel.send({ type: "requestRects", paths: commentPaths });
+  }, [commentPaths, frame.id, screenVersion, clearNodeRects]);
 
   const onPickPreset = (preset: ViewportPreset) => {
     if (preset.w === frame.w && preset.h === frame.h) return;

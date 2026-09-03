@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { type ActivitySlice, createActivitySlice } from "./activity.ts";
 import { type AnnotationsSlice, createAnnotationsSlice } from "./annotations.ts";
 import { type CloudSlice, createCloudSlice } from "./cloud.ts";
+import { type CommentsSlice, createCommentsSlice } from "./comments.ts";
 import { createDesignSlice, type DesignSlice } from "./design.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
@@ -34,7 +35,8 @@ export type CanvasState = DesignSlice &
   LibrarySlice &
   AnnotationsSlice &
   ActivitySlice &
-  CloudSlice;
+  CloudSlice &
+  CommentsSlice;
 
 export const useCanvas = create<CanvasState>()((...a) => ({
   ...createDesignSlice(...a),
@@ -46,4 +48,5 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createAnnotationsSlice(...a),
   ...createActivitySlice(...a),
   ...createCloudSlice(...a),
+  ...createCommentsSlice(...a),
 }));

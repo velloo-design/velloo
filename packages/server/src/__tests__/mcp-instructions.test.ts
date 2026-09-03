@@ -114,22 +114,22 @@ describe("buildInstructions", () => {
     expect(inline).toContain("Style with the `style` object");
   });
 
-  test("surfaces waiting share-link comments as one line when the count is positive", () => {
+  test("surfaces open visual feedback as one line when the count is positive", () => {
     const text = buildInstructions(false, undefined, false, [], 3);
     expect(text).toContain(
-      "**3 unresolved share-link comments are waiting as annotations** — read them via `list_annotations`; refresh with `pull_comments`.",
+      "**3 open visual feedback threads are waiting** — read them with `list_comment_threads`.",
     );
   });
 
   test("the waiting-comments line reads correctly for a single comment", () => {
     const text = buildInstructions(false, undefined, false, [], 1);
-    expect(text).toContain("**1 unresolved share-link comment is waiting as an annotation**");
+    expect(text).toContain("**1 open visual feedback thread is waiting**");
   });
 
   test("omits the waiting-comments line at zero (and by default)", () => {
-    expect(buildInstructions(false)).not.toContain("waiting as annotation");
+    expect(buildInstructions(false)).not.toContain("feedback thread is waiting");
     expect(buildInstructions(false, undefined, false, [], 0)).not.toContain(
-      "waiting as annotation",
+      "feedback thread is waiting",
     );
   });
 });

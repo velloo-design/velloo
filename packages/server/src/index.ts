@@ -14,7 +14,6 @@ import type { ActivityEvent } from "./activity.ts";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
 import type { CanvasAuth, CanvasPublish, CloudAuth } from "./cloud.ts";
-import { pullComments } from "./cloud-comments.ts";
 import {
   type DesignFolder,
   loadDesignFolder,
@@ -28,6 +27,7 @@ import {
 import { ASSET_MIME } from "./fs.ts";
 import { CanvasBundler } from "./live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
+import { LocalCommentsService } from "./local-comments.ts";
 import {
   createMcpServer,
   createStdioMcpServer,
@@ -316,6 +316,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         snapshotCss: () => jit.build(),
       }))
     : undefined;
+  const comments = new LocalCommentsService(() => ctx, undefined, opts.cloud);
   const app = createApp(
     () => ctx,
     jit,
@@ -324,6 +325,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     opts.auth,
     publishRunner,
     opts.cloud,
+    comments,
   );
 
   let watcher: Watcher | null = null;
@@ -393,22 +395,13 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const port = server.port ?? opts.port ?? 7300;
   const assetOrigin = `http://${opts.host ?? "127.0.0.1"}:${port}/`;
 
-  // Share-link comment sync: pull at boot, then on a slow cadence
-  // while the daemon lives. Logged-out / unpublished / offline are quiet
-  // no-ops inside pullComments — the folder keeps working fully offline; the
-  // one-line log fires only when something actually synced.
+  // Refresh the machine-local projection of cloud-owned conversations. This
+  // never writes annotations (or any other design-folder file).
   let commentTimer: ReturnType<typeof setInterval> | null = null;
   if (opts.cloud) {
-    const cloud = opts.cloud;
     const sync = async () => {
       try {
-        const s = await pullComments(ctx, cloud);
-        if (s.status === "ok" && s.pulled + s.resolvedUp + s.resolvedDown > 0) {
-          console.error(
-            `velloo: share-link comments — ${s.pulled} pulled, ${s.resolvedUp} resolved up, ${s.resolvedDown} resolved down, ${s.unresolvedTotal} unresolved waiting`,
-          );
-        }
-        if (s.status === "ok" && s.note) console.error(`velloo: ${s.note}`);
+        await comments.refreshShared();
       } catch {
         // sync must never break the server
       }
@@ -430,6 +423,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       jit,
       bundler,
       canvasBundler,
+      comments,
       assetOrigin,
       cloud: opts.cloud,
     });
@@ -438,6 +432,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       jit,
       bundler,
       canvasBundler,
+      comments,
       assetOrigin,
       cloud: opts.cloud,
     });
@@ -473,12 +468,7 @@ export type {
   CloudAuth,
   PublishHost,
 } from "./cloud.ts";
-export {
-  type CommentSyncContext,
-  countUnresolvedPulledComments,
-  type PullCommentsSummary,
-  pullComments,
-} from "./cloud-comments.ts";
+export { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { activeBoards, loadDesignFolder, orderedBoards } from "./design-folder.ts";
 export {
@@ -505,6 +495,7 @@ export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
 export { hostAppRootFrom } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
+export { LocalCommentsService, localCommentsPath } from "./local-comments.ts";
 export {
   type FormatGateUpgradeResult,
   runStdioFormatGate,
