@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useCanvas } from "../store.ts";
 
 type Tier = "AAA" | "AA" | "AAlarge" | "Fail";
 
@@ -39,13 +40,16 @@ const TIER_LABEL: Record<Tier, string> = {
  */
 export function ContrastReport({ bumpKey }: Props) {
   const [results, setResults] = useState<ContrastEntry[] | null>(null);
+  const themeName = useCanvas((s) => s.themeName);
 
   useEffect(() => {
     // The effect body doesn't read `bumpKey`, but its purpose is to
     // refetch whenever the theme changes — bumpKey is the trigger.
     void bumpKey;
     let alive = true;
-    void fetch("/api/theme/contrast")
+    // Score the theme the board on screen renders with, not the folder default.
+    const q = themeName === "default" ? "" : `?name=${encodeURIComponent(themeName)}`;
+    void fetch(`/api/theme/contrast${q}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
       .then((body: { results: ContrastEntry[] }) => {
         if (alive) setResults(body.results);
@@ -56,7 +60,7 @@ export function ContrastReport({ bumpKey }: Props) {
     return () => {
       alive = false;
     };
-  }, [bumpKey]);
+  }, [bumpKey, themeName]);
 
   if (!results) return null;
   if (results.length === 0) {

@@ -2,6 +2,7 @@ import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { mutate, renderUrl } from "../api.ts";
 import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
+import { fontDraftCss, fontDraftUrl } from "../font-draft.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -339,45 +340,56 @@ export const Frame = memo(function Frame({
     apply(slotBRef.current);
   }, [cursorMode, front, screenRev, hasScreen]);
 
-  // Live typeset preview: while a rhythm control is being dragged in the theme
-  // panel, paint the uncommitted typeset straight into this frame's document as
-  // a CSS-variable override. Same-origin, so it's a direct style write rather
-  // than a channel message, and the ladder re-derives from the three authored
-  // controls — the board re-rhythms continuously with no reload and no render.
+  // Live theme preview: while a rhythm control is being dragged or a family is
+  // highlighted in the font browser, paint the uncommitted values straight into
+  // this frame's document as CSS-variable overrides. Same-origin, so it's a
+  // direct style write rather than a channel message, and both the type ladder
+  // and the font roles re-derive from those variables — the board re-rhythms or
+  // re-faces continuously with no reload and no render.
   //
   // The override outlives the store draft by one document. A commit clears the
   // draft and bumps `themeVersion` in the same tick, and the reloaded document
   // takes a moment to arrive; dropping the override immediately would snap this
-  // frame back to the pre-drag rhythm for exactly that long. So it is held
-  // while a reload is in flight and released once the current document — which
-  // the server rendered with the committed typeset — is the one on screen.
+  // frame back to the pre-edit theme for exactly that long. So it is held while
+  // a reload is in flight and released once the current document — which the
+  // server rendered with the committed values — is the one on screen.
   const typesetDraft = useCanvas((s) => s.typesetDraft);
+  const fontDraft = useCanvas((s) => s.fontDraft);
   const frontIsCurrent = buffers.srcs[front] === src;
-  const heldDraftCssRef = useRef<string | null>(null);
-  if (typesetDraft) heldDraftCssRef.current = typesetDraftCss(typesetDraft);
-  else if (frontIsCurrent) heldDraftCssRef.current = null;
-  const draftCss = heldDraftCssRef.current;
+  const heldDraftRef = useRef<{ css: string; fontUrl: string | null } | null>(null);
+  if (typesetDraft || fontDraft) {
+    const css = [
+      typesetDraft ? typesetDraftCss(typesetDraft) : "",
+      fontDraft ? fontDraftCss(fontDraft) : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    heldDraftRef.current = { css, fontUrl: fontDraft ? fontDraftUrl(fontDraft) : null };
+  } else if (frontIsCurrent) {
+    heldDraftRef.current = null;
+  }
+  const draft = heldDraftRef.current;
+  const draftCss = draft?.css ?? "";
+  const draftFontUrl = draft?.fontUrl ?? null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: front/screenRev/hasScreen re-apply the override after iframe swaps and reloads
   useEffect(() => {
     const apply = (iframe: HTMLIFrameElement | null) => {
       const doc = iframe?.contentDocument;
       if (!doc?.head) return;
-      const id = "__velloo-typeset-draft";
-      const existing = doc.getElementById(id);
-      if (!draftCss) {
-        existing?.remove();
-        return;
-      }
-      const el = existing ?? doc.createElement("style");
-      if (!existing) {
-        el.id = id;
-        doc.head.appendChild(el);
-      }
-      el.textContent = draftCss;
+      // The webfont link goes in first: the override naming the family is inert
+      // until the face is actually being fetched.
+      upsertHeadElement(doc, "__velloo-font-draft", "link", draftFontUrl, (el) => {
+        const link = el as HTMLLinkElement;
+        link.rel = "stylesheet";
+        link.href = draftFontUrl as string;
+      });
+      upsertHeadElement(doc, "__velloo-theme-draft", "style", draftCss || null, (el) => {
+        el.textContent = draftCss;
+      });
     };
     apply(slotARef.current);
     apply(slotBRef.current);
-  }, [draftCss, front, screenRev, hasScreen]);
+  }, [draftCss, draftFontUrl, front, screenRev, hasScreen]);
 
   // Search jumps: scroll the revealed node into view inside the iframe (the
   // regular highlight effect above never scrolls — click selection is
@@ -664,3 +676,30 @@ export const Frame = memo(function Frame({
     </div>
   );
 });
+
+/**
+ * Add, update or drop one identified element in an iframe's `<head>`.
+ *
+ * Preview overrides are written into a document the canvas doesn't own and
+ * re-applied after every buffer swap, so each one has to be idempotent and
+ * removable by id rather than tracked in React state.
+ */
+function upsertHeadElement(
+  doc: Document,
+  id: string,
+  tag: "style" | "link",
+  wanted: string | null,
+  configure: (el: HTMLElement) => void,
+): void {
+  const existing = doc.getElementById(id);
+  if (wanted === null) {
+    existing?.remove();
+    return;
+  }
+  const el = existing ?? doc.createElement(tag);
+  if (!existing) {
+    el.id = id;
+    doc.head.appendChild(el);
+  }
+  configure(el as HTMLElement);
+}

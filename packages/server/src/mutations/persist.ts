@@ -93,9 +93,18 @@ export async function deletePersistedBoard(folder: DesignFolder, boardId: string
   folder.notes.delete(boardId);
 }
 
-export async function persistTheme(folder: DesignFolder, theme: Theme): Promise<Theme> {
+export async function persistTheme(
+  folder: DesignFolder,
+  theme: Theme,
+  coalesceKey?: string,
+): Promise<Theme> {
   const validated = ThemeSchema.parse(theme);
-  folder.history.push({ kind: "theme", theme: folder.theme });
+  folder.history.push({
+    kind: "theme",
+    themeName: "default",
+    theme: folder.theme,
+    ...(coalesceKey ? { coalesceKey } : {}),
+  });
   await writeJsonAtomic(join(folder.root, "theme", "default.json"), validated);
   folder.theme = validated;
   folder.themes.set("default", validated);
@@ -104,18 +113,29 @@ export async function persistTheme(folder: DesignFolder, theme: Theme): Promise<
 
 /**
  * Persist a named theme (`theme/<name>.json`). "default" routes through
- * persistTheme so undo history keeps covering the primary theme; named
- * themes skip history (board-scoped looks, edited deliberately).
+ * persistTheme, which owns the `folder.theme` pointer as well as the map.
+ *
+ * Named themes are undoable on the same terms as the default one: a board
+ * pinned to its own theme is edited through exactly the same panel, so ⌘Z
+ * doing nothing there would be indistinguishable from the edit not landing.
+ * A null snapshot means the file didn't exist, so undo deletes it.
  */
 export async function persistNamedTheme(
   folder: DesignFolder,
   name: string,
   theme: Theme,
+  coalesceKey?: string,
 ): Promise<Theme> {
-  if (name === "default") return persistTheme(folder, theme);
+  if (name === "default") return persistTheme(folder, theme, coalesceKey);
   // Clone-on-write copies of the default theme arrive with name "default";
   // the file's internal name must always match its stem.
   const validated = ThemeSchema.parse({ ...theme, name });
+  folder.history.push({
+    kind: "theme",
+    themeName: name,
+    theme: folder.themes.get(name) ?? null,
+    ...(coalesceKey ? { coalesceKey } : {}),
+  });
   await writeJsonAtomic(join(folder.root, "theme", `${name}.json`), validated);
   folder.themes.set(name, validated);
   return validated;

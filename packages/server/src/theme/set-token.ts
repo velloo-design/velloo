@@ -79,8 +79,11 @@ export async function setTokens(
   }
 
   const finalTheme = working;
+  // A colour picker drags: many writes to one token should be one undo step,
+  // while moving to the next token opens a new one.
+  const coalesceKey = `token:${applied.join(",")}`;
   const persisted = await tryCatchAsync(
-    () => persistNamedTheme(folder, themeName, finalTheme),
+    () => persistNamedTheme(folder, themeName, finalTheme, coalesceKey),
     (e) => invalidThemePath(`Persisting theme "${themeName}" failed: ${(e as Error).message}`),
   );
   return persisted.ok ? ok({ theme: persisted.value, applied }) : persisted;

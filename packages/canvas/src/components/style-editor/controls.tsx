@@ -154,15 +154,19 @@ export function MiniSelect({
   onChange,
   options,
   className,
+  label,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: Array<[string, string?]>;
   className?: string;
+  /** Accessible name. The visible `FieldRow` text isn't tied to the control. */
+  label?: string;
 }) {
   return (
     <select
       value={value}
+      aria-label={label}
       onChange={(e) => onChange(e.target.value)}
       className={`h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none ${className ?? "min-w-[7rem]"}`}
     >

@@ -1,8 +1,7 @@
 {
   "projects": {
     "velloo": "velloo",
-    "initial-board": "initial-board",
-    "delme": "delme"
+    "initial-board": "initial-board"
   },
   "defaultProject": "velloo"
 }

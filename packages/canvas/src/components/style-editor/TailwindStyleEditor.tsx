@@ -1,8 +1,9 @@
 import { ArrowDown, ArrowRight, Plus } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { mutate } from "../../api.ts";
 import { useDebouncedCommit } from "../../hooks/useDebouncedCommit.ts";
 import { pathFromString } from "../../path.ts";
+import { useCanvas } from "../../store.ts";
 import {
   argToPx,
   type BoxSides,
@@ -33,7 +34,24 @@ interface Props {
   screenId: string;
   path: string;
   debounceMs: number;
+  /**
+   * Open the face browser. Absent hides the "Browse faces…" entry, leaving the
+   * Font control to the faces the theme already declares.
+   */
+  onBrowseFaces?: () => void;
+  /**
+   * A face chosen in the browser, to apply on arrival.
+   *
+   * Routed back through the editor rather than written to the node directly,
+   * because the parsed model here is the authority between commits — an outside
+   * write would be overwritten by the next control the user touched.
+   */
+  pendingFace?: string | null;
+  onFaceApplied?: () => void;
 }
+
+/** Sentinel option that opens the browser instead of selecting a face. */
+const BROWSE = "\u0000browse";
 
 const DISPLAY = [
   { value: "block", label: "block" },
@@ -118,6 +136,29 @@ const SIZING: Array<[string, string?]> = [
   ["max"],
 ];
 
+/**
+ * The Font control's options: the theme's declared faces, plus a way to reach
+ * one it hasn't declared.
+ *
+ * Deliberately not a list of families. `—` here means the node inherits the
+ * ladder's face for its rung, which is the state most nodes should stay in;
+ * the readout above the editor says what that resolves to.
+ */
+function faceOptions(
+  fontFamily: Record<string, string> | undefined,
+  current: string | undefined,
+  canBrowse: boolean,
+): Array<[string, string?]> {
+  const roles = Object.keys(fontFamily ?? {}).sort();
+  // `withNone` keeps an unrecognized value (a hand-written `font-serif`, a role
+  // dropped from the theme) rather than silently rewriting it on the next edit.
+  const opts = withNone(
+    roles.map((r) => [r] as [string, string?]),
+    current,
+  );
+  return canBrowse ? [...opts, [BROWSE, "Browse faces…"]] : opts;
+}
+
 function sidesDisplay(sides: BoxSides): Record<Side, string> {
   const one = (a?: string) => {
     const px = argToPx(a);
@@ -140,19 +181,42 @@ function sideToArg(value: string): string | undefined {
   return v;
 }
 
-export function TailwindStyleEditor({ initialValue, screenId, path, debounceMs }: Props) {
+export function TailwindStyleEditor({
+  initialValue,
+  screenId,
+  path,
+  debounceMs,
+  onBrowseFaces,
+  pendingFace,
+  onFaceApplied,
+}: Props) {
   const [parsed, setParsed] = useState<ParsedClasses>(() => parseClasses(initialValue));
   const [adding, setAdding] = useState("");
+  // Faces are named by the theme, so the node picks a role rather than a
+  // family — `font-display`, not `font-[Fraunces]`. Re-pointing the role in the
+  // Theme tab then moves every node set in it, which a literal family wouldn't.
+  const faces = useCanvas((s) => s.theme?.typography.fontFamily);
 
   const push = useDebouncedCommit<ParsedClasses>(debounceMs, (next) => {
     void mutate
       .applyClasses({ screenId, path: pathFromString(path), classes: serializeClasses(next) })
       .catch((err) => toastError(err, "Could not apply classes"));
   });
-  const commit = (next: ParsedClasses) => {
-    setParsed(next);
-    push(next);
-  };
+  const commit = useCallback(
+    (next: ParsedClasses) => {
+      setParsed(next);
+      push(next);
+    },
+    [push],
+  );
+
+  // Clearing `pendingFace` batches with the commit, so this applies once per
+  // pick however often the effect re-runs.
+  useEffect(() => {
+    if (!pendingFace) return;
+    commit({ ...parsed, model: { ...parsed.model, fontFamily: pendingFace } });
+    onFaceApplied?.();
+  }, [pendingFace, parsed, commit, onFaceApplied]);
 
   const m = parsed.model;
   const setModel = (patch: Partial<TwModel>) => commit({ ...parsed, model: { ...m, ...patch } });
@@ -246,6 +310,21 @@ export function TailwindStyleEditor({ initialValue, screenId, path, debounceMs }
       </Section>
 
       <Section title="Typography">
+        <FieldRow label="Font">
+          <MiniSelect
+            value={m.fontFamily ?? NONE}
+            onChange={(v) => {
+              if (v === BROWSE) {
+                onBrowseFaces?.();
+                return;
+              }
+              setModel({ fontFamily: v === NONE ? undefined : v });
+            }}
+            options={faceOptions(faces, m.fontFamily, Boolean(onBrowseFaces))}
+            className="min-w-[7rem]"
+            label="Font"
+          />
+        </FieldRow>
         <FieldRow label="Size">
           <MiniSelect
             value={m.fontSize ?? NONE}

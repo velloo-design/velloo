@@ -2,6 +2,7 @@
   "id": "settings-dialog",
   "name": "Canvas settings dialog",
   "theme": "velloo-cloud",
+  "group": "canvas",
   "frames": [
     {
       "id": "settings-folder-1",

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { theme as themeApi } from "../api.ts";
+import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Button } from "./ui/button.tsx";
 
@@ -29,6 +30,7 @@ interface PresetSummary {
  */
 export function PresetPicker({ presets, activeName }: Props) {
   const [summaries, setSummaries] = useState<PresetSummary[] | null>(null);
+  const themeName = useCanvas((s) => s.themeName);
 
   useEffect(() => {
     let alive = true;
@@ -48,7 +50,9 @@ export function PresetPicker({ presets, activeName }: Props) {
   if (presets.length === 0) return null;
 
   const apply = (name: string) => {
-    void themeApi.applyPreset(name).catch((err) => toastError(err, "Could not apply preset"));
+    void themeApi
+      .applyPreset(themeName, name)
+      .catch((err) => toastError(err, "Could not apply preset"));
   };
 
   if (!summaries) {

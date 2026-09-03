@@ -19,7 +19,21 @@ import {
   type HistoryDepths,
   mutate,
 } from "../api.ts";
+import type { FontDraft } from "../font-draft.ts";
 import type { CanvasState } from "./index.ts";
+
+/**
+ * The theme the board on screen renders with.
+ *
+ * Frames pass `Board.theme` to the render route, so the theme panel has to read
+ * and write that same one. Reading the folder default while the frames render a
+ * pinned theme is the bug where dragging a rhythm control changes a file
+ * nothing on screen uses, and so appears to do nothing at all.
+ */
+export function activeThemeName(state: Pick<CanvasState, "currentBoardId" | "boards">): string {
+  const boardId = state.currentBoardId;
+  return (boardId ? state.boards[boardId]?.theme : undefined) ?? "default";
+}
 
 /**
  * The data core: design summary, boards + screens, components manifest, theme,
@@ -56,7 +70,22 @@ export interface DesignSlice {
   styleChannel: StyleChannel | null;
   /** Per-library channels, so a multi-library folder edits each screen in its own channel. */
   channelsByLibrary: Record<string, StyleChannel>;
+  /**
+   * The theme the active board renders with — the folder default, or the one
+   * that board pins. Panel edits target `theme.name`, so this is the object the
+   * frames on screen are actually styled by rather than always `default.json`.
+   */
   theme: Theme | null;
+  /**
+   * Which `theme/<name>.json` the loaded theme came from, and so the target of
+   * every panel edit.
+   *
+   * Tracked separately from `theme.name` because that field is content, not
+   * identity: applying the `violet` preset leaves `default.json` named
+   * "violet". Using it as the write target would send edits to a theme file
+   * that doesn't exist.
+   */
+  themeName: string;
   themeVersion: number;
   /**
    * A typeset being dragged in the theme panel, before it is committed.
@@ -68,6 +97,12 @@ export interface DesignSlice {
    * pointer-up, when the committed theme arrives the normal way.
    */
   typesetDraft: { name: string; typeset: Typeset } | null;
+  /**
+   * A font role being previewed from the font browser, before it is committed.
+   * Painted into every frame the same way as `typesetDraft`, with a webfont
+   * link alongside the variable override.
+   */
+  fontDraft: FontDraft | null;
   presets: string[];
   history: HistoryDepths;
   wsConnected: boolean;
@@ -103,8 +138,16 @@ export interface DesignSlice {
   loadGeneratedAssets(): Promise<void>;
   loadTheme(): Promise<void>;
   refreshTheme(): Promise<void>;
+  /**
+   * Reload the theme when the board on screen has come to render with a
+   * different one — after a board switch, or after its pin changed here or
+   * from an agent.
+   */
+  syncThemeToBoard(): Promise<void>;
   /** Paint (or clear, with null) an uncommitted typeset across every frame. */
   setTypesetDraft(draft: { name: string; typeset: Typeset } | null): void;
+  /** Paint (or clear, with null) a font role being tried on across every frame. */
+  setFontDraft(draft: FontDraft | null): void;
   selectBoard(boardId: string): Promise<void>;
   loadBoard(boardId: string): Promise<Board | null>;
   refreshBoard(boardId: string): Promise<void>;
@@ -153,8 +196,10 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   styleChannel: null,
   channelsByLibrary: {},
   theme: null,
+  themeName: "default",
   themeVersion: 0,
   typesetDraft: null,
+  fontDraft: null,
   presets: [],
   history: { undo: 0, redo: 0 },
   wsConnected: false,
@@ -274,19 +319,37 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   },
 
   async loadTheme() {
-    const [theme, { presets }] = await Promise.all([fetchTheme(), fetchPresets()]);
-    set({ theme, presets, themeVersion: get().themeVersion + 1 });
+    const themeName = activeThemeName(get());
+    const [theme, { presets }] = await Promise.all([fetchTheme(themeName), fetchPresets()]);
+    set({ theme, themeName, presets, themeVersion: get().themeVersion + 1 });
   },
 
   async refreshTheme() {
-    const theme = await fetchTheme();
-    // The committed stylesheet now carries whatever the draft was previewing,
-    // so drop it rather than leaving a duplicate override on top.
-    set({ theme, typesetDraft: null, themeVersion: get().themeVersion + 1 });
+    const themeName = activeThemeName(get());
+    const theme = await fetchTheme(themeName);
+    // The committed stylesheet now carries whatever the drafts were previewing,
+    // so drop them rather than leaving duplicate overrides on top.
+    set({
+      theme,
+      themeName,
+      typesetDraft: null,
+      fontDraft: null,
+      themeVersion: get().themeVersion + 1,
+    });
+  },
+
+  async syncThemeToBoard() {
+    // `theme` null means boot hasn't loaded one yet, and loadTheme is coming
+    // anyway — refetching here would just double the request.
+    if (get().theme && get().themeName !== activeThemeName(get())) await get().loadTheme();
   },
 
   setTypesetDraft(typesetDraft) {
     set({ typesetDraft });
+  },
+
+  setFontDraft(fontDraft) {
+    set({ fontDraft });
   },
 
   async loadScreen(screenId: string): Promise<Screen | null> {
@@ -355,6 +418,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       for (const f of board.frames) {
         if (!get().screens[f.screen]) await get().loadScreen(f.screen);
       }
+      // Repointing a board at another theme arrives here too — from the theme
+      // switcher, or from an agent's `update_board`.
+      if (boardId === get().currentBoardId) await get().syncThemeToBoard();
     } catch {
       // A deleted board also broadcasts `board-changed`, so this fetch 404s.
       // Confirm against a fresh summary before pruning so a transient
@@ -420,6 +486,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       await get().refreshAnnotations();
     }
     await get().refreshNotes();
+    // Boards can pin their own theme, so switching board can change which one
+    // the panel is editing.
+    await get().syncThemeToBoard();
   },
 
   async selectScreen(screenId: string) {

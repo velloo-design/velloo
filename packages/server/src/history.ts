@@ -16,17 +16,35 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
 export type HistoryEntry =
   | { kind: "screen"; screenId: string; screen: Screen | null; ts?: number }
   | { kind: "board"; boardId: string; board: Board | null; ts?: number }
-  | { kind: "theme"; theme: Theme; ts?: number }
+  | {
+      kind: "theme";
+      themeName: string;
+      theme: Theme | null;
+      /**
+       * What this write adjusted, e.g. `token:colors.primary` or
+       * `typeset:default:leading`. Present only for edits that stream — a
+       * dragged control writes many times and should collapse to one step.
+       * Absent means the write was a discrete act (a preset applied, a palette
+       * derived) and gets an undo step of its own.
+       */
+      coalesceKey?: string;
+      ts?: number;
+    }
   | { kind: "snippet"; snippetId: string; snippet: Snippet | null; ts?: number };
 
 const MAX = 50;
 const COALESCE_WINDOW_MS = 800;
 
-function keyOf(e: HistoryEntry): string {
+/** The identity two consecutive writes must share to merge. Null never merges. */
+function keyOf(e: HistoryEntry): string | null {
   if (e.kind === "screen") return `screen:${e.screenId}`;
   if (e.kind === "board") return `board:${e.boardId}`;
   if (e.kind === "snippet") return `snippet:${e.snippetId}`;
-  return "theme";
+  if (!e.coalesceKey) return null;
+  // Scoped by name as well as control: merging two different theme files into
+  // one entry would restore whichever the entry happens to name and silently
+  // strand the other's edit.
+  return `theme:${e.themeName}:${e.coalesceKey}`;
 }
 
 export class HistoryManager {
@@ -37,8 +55,9 @@ export class HistoryManager {
   push(entry: HistoryEntry): void {
     const stamped: HistoryEntry = { ...entry, ts: Date.now() };
     const top = this.undoStack[this.undoStack.length - 1];
-    if (top?.ts && stamped.ts && stamped.ts - top.ts < COALESCE_WINDOW_MS) {
-      if (keyOf(top) === keyOf(stamped)) {
+    const key = keyOf(stamped);
+    if (key !== null && top?.ts && stamped.ts && stamped.ts - top.ts < COALESCE_WINDOW_MS) {
+      if (keyOf(top) === key) {
         top.ts = stamped.ts;
         this.redoStack.length = 0;
         return;

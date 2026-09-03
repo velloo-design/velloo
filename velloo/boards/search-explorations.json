@@ -1,6 +1,7 @@
 {
   "id": "search-explorations",
   "name": "Canvas search explorations",
+  "group": "canvas",
   "frames": [
     {
       "id": "search-a-palette-1",

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { normalizeToOklch, parseTriplet } from "../color.ts";
+import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Input } from "./ui/input.tsx";
 import { Label } from "./ui/label.tsx";
@@ -24,6 +25,7 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
   const [draft, setDraft] = useState(value);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const themeName = useCanvas((s) => s.themeName);
 
   useEffect(() => {
     setDraft(value);
@@ -43,7 +45,7 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
       const oklch = normalizeToOklch(next);
       const valueToSend = oklch ?? next;
       void themeApi
-        .setToken(tokenPath, valueToSend)
+        .setToken(themeName, tokenPath, valueToSend)
         .catch((err) => toastError(err, "Could not set color token"));
     }, DEBOUNCE_MS);
   };

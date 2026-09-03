@@ -16,6 +16,8 @@
     "lint:dead": "knip",
     "format": "biome format --write .",
     "test": "bun test",
+    "fonts:build": "bun packages/schema/scripts/build-font-catalog.ts",
+    "fonts:check": "bun packages/schema/scripts/build-font-catalog.ts --check",
     "velloo": "bun packages/cli/src/cli.ts",
     "cli:build": "bun packages/cli/build.ts",
     "cli:install": "bun scripts/cli-install.ts",

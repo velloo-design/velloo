@@ -161,6 +161,25 @@ export async function setTypeset(
   if (!parsed.success) {
     return err(invalidThemePath(parsed.error.issues[0]?.message ?? "invalid theme"));
   }
-  const persisted = await persistNamedTheme(folder, themeName, parsed.data);
+  const persisted = await persistNamedTheme(folder, themeName, parsed.data, coalesceKey(typesets));
   return { ok: true, value: persisted };
+}
+
+/**
+ * Which typesets and controls this call touched, so re-adjusting one control
+ * collapses into a single undo step while moving to a different one opens a new
+ * one. A structural edit (add / rename / remove) returns undefined: those are
+ * discrete acts and each deserves its own step.
+ */
+function coalesceKey(typesets: TypesetSpec[]): string | undefined {
+  const parts: string[] = [];
+  for (const spec of typesets) {
+    if (spec.remove || spec.renameTo !== undefined) return undefined;
+    const fields = Object.keys(spec)
+      .filter((k) => k !== "name" && spec[k as keyof TypesetSpec] !== undefined)
+      .sort();
+    if (fields.length === 0) return undefined;
+    parts.push(`${spec.name ?? DEFAULT_TYPESET_NAME}:${fields.join(",")}`);
+  }
+  return parts.length > 0 ? `typeset:${parts.join("|")}` : undefined;
 }

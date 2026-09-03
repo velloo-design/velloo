@@ -11,7 +11,7 @@ import type { WatchEvent } from "../watcher.ts";
 type Reverted =
   | { kind: "screen"; screenId: string }
   | { kind: "board"; boardId: string }
-  | { kind: "theme" }
+  | { kind: "theme"; themeName: string }
   | { kind: "snippet"; snippetId: string };
 
 export function createUndoRouter(
@@ -99,13 +99,14 @@ async function applyRevert(
     return { kind: "snippet", snippetId: entry.snippetId };
   }
 
-  const current = folder.theme;
-  const back: HistoryEntry = { kind: "theme", theme: current };
+  const name = entry.themeName;
+  const current = name === "default" ? folder.theme : (folder.themes.get(name) ?? null);
+  const back: HistoryEntry = { kind: "theme", themeName: name, theme: current };
   if (pushOpposite === "redo") folder.history.pushRedo(back);
   else folder.history.pushUndoSilent(back);
-  await writeTheme(folder, entry.theme);
+  await writeTheme(folder, name, entry.theme);
   broadcast({ type: "theme-changed" });
-  return { kind: "theme" };
+  return { kind: "theme", themeName: name };
 }
 
 async function writeScreen(folder: DesignFolder, screenId: string, screen: Screen): Promise<void> {
@@ -128,9 +129,31 @@ async function deleteBoard(folder: DesignFolder, boardId: string): Promise<void>
   folder.boards.delete(boardId);
 }
 
-async function writeTheme(folder: DesignFolder, theme: Theme): Promise<void> {
-  await writeJsonAtomic(join(folder.root, "theme", "default.json"), theme);
-  folder.theme = theme;
+/**
+ * Restore one theme file.
+ *
+ * `folder.themes` has to be written alongside `folder.theme`, because
+ * `themeByName` reads the map and every theme mutation merges its edit onto
+ * whatever that returns. Leaving the map holding the pre-undo snapshot means
+ * the next single-control edit re-persists the state the undo just reverted,
+ * with only the touched control updated. The watcher does eventually reload and
+ * repair the map, but it debounces — so the bug is a race, and looks
+ * intermittent.
+ */
+async function writeTheme(folder: DesignFolder, name: string, theme: Theme | null): Promise<void> {
+  const path = join(folder.root, "theme", `${name}.json`);
+  // The default theme is the folder's floor — `folder.theme` is non-nullable
+  // and every render falls back to it, so there is no state where deleting it
+  // is the correct revert.
+  if (theme === null && name !== "default") {
+    await rm(path, { force: true });
+    folder.themes.delete(name);
+    return;
+  }
+  if (theme === null) return;
+  await writeJsonAtomic(path, theme);
+  folder.themes.set(name, theme);
+  if (name === "default") folder.theme = theme;
 }
 
 async function writeSnippet(

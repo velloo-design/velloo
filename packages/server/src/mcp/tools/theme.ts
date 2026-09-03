@@ -207,12 +207,19 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
               role: z
                 .string()
                 .describe('Token role, e.g. "display", "sans", "mono" — any utility-safe name'),
-              family: z.string().describe('Family name, e.g. "Unbounded"'),
+              family: z
+                .string()
+                .optional()
+                .describe('Family name, e.g. "Unbounded". Required unless removing'),
               fallback: z.string().optional().describe("CSS stack tail; sensible default per role"),
               google: z
                 .union([z.string(), z.literal(true)])
                 .optional()
                 .describe('Google Fonts axis spec ("wght@400..900") or true for a plain load'),
+              remove: z
+                .boolean()
+                .optional()
+                .describe("Drop this role; refused while a typeset still names it"),
             }),
           )
           .min(1),

@@ -131,8 +131,14 @@ export function fetchComponents(): Promise<ComponentsResponse> {
   return getJson("/api/components", "fetchComponents");
 }
 
-export function fetchTheme(): Promise<Theme> {
-  return getJson("/api/theme", "fetchTheme");
+/**
+ * The named theme, or the folder default when `name` is absent. A board can pin
+ * its own, and the panel edits whatever the board on screen renders with — so
+ * reading the default unconditionally would show one theme and write another.
+ */
+export function fetchTheme(name?: string): Promise<Theme> {
+  const q = name && name !== "default" ? `?name=${encodeURIComponent(name)}` : "";
+  return getJson(`/api/theme${q}`, "fetchTheme");
 }
 
 export function fetchPresets(): Promise<{ presets: string[] }> {

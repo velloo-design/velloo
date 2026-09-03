@@ -77,8 +77,8 @@
     },
     "typesets": {
       "default": {
-        "leading": 1.5,
         "fontBody": "sans",
+        "fontHeading": "sans",
         "fontMono": "mono"
       },
       "docs": {

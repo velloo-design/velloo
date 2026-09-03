@@ -1,30 +1,46 @@
 import { map } from "@velloo/result";
 import { Hono } from "hono";
 import { z } from "zod";
+import { themeByName } from "../design-folder.ts";
 import {
+  addTheme,
   applyPreset,
   derivePaletteFromColor,
   PRESET_NAMES,
   PRESETS,
   scoreThemeContrast,
+  setFonts,
   setToken,
   setTypeset,
   type ThemeContext,
 } from "../theme/index.ts";
 import { makeThemeRoute } from "./route.ts";
 
+/**
+ * Every write carries the theme it targets, because a board can pin its own
+ * (`Board.theme`) and the canvas edits whatever the board on screen renders
+ * with. Omitted means the folder default.
+ */
 const SetTokenBody = z.object({
   path: z.string().min(1),
   value: z.union([z.string(), z.number()]),
+  theme: z.string().min(1).optional(),
 });
 
 const ApplyPresetBody = z.object({
   presetName: z.string().min(1),
+  theme: z.string().min(1).optional(),
 });
 
 const DeriveFromColorBody = z.object({
   seedColor: z.string().min(1),
   name: z.string().min(1).optional(),
+});
+
+const AddThemeBody = z.object({
+  name: z.string().min(1),
+  /** Theme to clone. Omitted clones the folder default. */
+  from: z.string().min(1).optional(),
 });
 
 /**
@@ -49,11 +65,28 @@ const SetTypesetBody = z.object({
   theme: z.string().min(1).optional(),
 });
 
+/** Mirrors the `set_fonts` MCP tool. `family` is absent only when removing. */
+const FontSpecBody = z.object({
+  role: z.string().min(1),
+  family: z.string().min(1).optional(),
+  fallback: z.string().min(1).optional(),
+  google: z.union([z.string().min(1), z.literal(true)]).optional(),
+  remove: z.boolean().optional(),
+});
+
+const SetFontsBody = z.object({
+  fonts: z.array(FontSpecBody).min(1),
+  theme: z.string().min(1).optional(),
+});
+
 export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
   const r = new Hono();
   const route = makeThemeRoute(ctxFor);
 
-  r.get("/", (c) => c.json(ctxFor().folder.theme));
+  // `?name=` so the panel can read the theme the board on screen renders with,
+  // rather than always the folder default. An unknown name falls back to the
+  // default the same way the render route does.
+  r.get("/", (c) => c.json(themeByName(ctxFor().folder, c.req.query("name"))));
   r.get("/presets", (c) => c.json({ presets: PRESET_NAMES }));
   /**
    * Returns each preset's name plus a short list of swatch colors the
@@ -77,19 +110,21 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
     }).filter((x): x is NonNullable<typeof x> => x !== null);
     return c.json({ presets: summaries });
   });
-  r.get("/contrast", (c) => c.json({ results: scoreThemeContrast(ctxFor().folder.theme) }));
+  r.get("/contrast", (c) =>
+    c.json({ results: scoreThemeContrast(themeByName(ctxFor().folder, c.req.query("name"))) }),
+  );
 
   r.post(
     "/set_token",
     route(SetTokenBody, async (args, ctx) =>
-      map(await setToken(ctx, args.path, args.value), (theme) => ({ theme })),
+      map(await setToken(ctx, args.path, args.value, args.theme), (theme) => ({ theme })),
     ),
   );
 
   r.post(
     "/apply_preset",
     route(ApplyPresetBody, async (args, ctx) =>
-      map(await applyPreset(ctx, args.presetName), (theme) => ({ theme })),
+      map(await applyPreset(ctx, args.presetName, args.theme), (theme) => ({ theme })),
     ),
   );
 
@@ -98,6 +133,20 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
     route(SetTypesetBody, async (args, ctx) =>
       map(await setTypeset(ctx, args.typesets, args.theme), (theme) => ({ theme })),
     ),
+  );
+
+  r.post(
+    "/set_fonts",
+    route(SetFontsBody, async (args, ctx) =>
+      map(await setFonts(ctx, args.fonts, args.theme), (theme) => ({ theme })),
+    ),
+  );
+
+  // Mirrors the `add_theme` MCP tool. The theme switcher needs it so trying a
+  // variant on one board doesn't mean editing the theme its siblings share.
+  r.post(
+    "/add_theme",
+    route(AddThemeBody, (args, ctx) => addTheme(ctx, args.name, args.from)),
   );
 
   r.post(

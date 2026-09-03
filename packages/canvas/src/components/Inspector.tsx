@@ -1,7 +1,9 @@
-import { isComponentNode, isSnippetInstance, nodeId } from "@velloo/schema";
-import { useEffect, useMemo } from "react";
-import { mutate } from "../api.ts";
+import { isComponentNode, isSnippetInstance, nodeId, type Theme } from "@velloo/schema";
+import type { CatalogFont } from "@velloo/schema/fonts";
+import { useEffect, useMemo, useState } from "react";
+import { mutate, theme as theme_ } from "../api.ts";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
+import { nodeRung, nodeTypography } from "../node-typography.ts";
 import { pathFromString } from "../path.ts";
 import { selectedNode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -14,6 +16,9 @@ import { SnippetSubstitutions } from "./SnippetSubstitutions.tsx";
 import { StyleObjectEditor } from "./style-editor/StyleObjectEditor.tsx";
 import { SxStyleEditor } from "./style-editor/SxStyleEditor.tsx";
 import { TailwindStyleEditor } from "./style-editor/TailwindStyleEditor.tsx";
+import { FontBrowser } from "./typography/FontBrowser.tsx";
+import { assignSpec, leadFamily } from "./typography/FontsSection.tsx";
+import { NodeTypographyReadout } from "./typography/NodeTypography.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
@@ -26,6 +31,8 @@ export function Inspector() {
   const screens = useCanvas((s) => s.screens);
   const styleChannel = useCanvas((s) => s.styleChannel);
   const channelsByLibrary = useCanvas((s) => s.channelsByLibrary);
+  const theme = useCanvas((s) => s.theme);
+  const themeName = useCanvas((s) => s.themeName);
   const loadComponents = useCanvas((s) => s.loadComponents);
   const loadGeneratedAssets = useCanvas((s) => s.loadGeneratedAssets);
 
@@ -37,7 +44,13 @@ export function Inspector() {
     void loadGeneratedAssets();
   }, [loadGeneratedAssets]);
 
+  const [browsingFaces, setBrowsingFaces] = useState(false);
+  const [pendingFace, setPendingFace] = useState<string | null>(null);
+
   const node = useMemo(() => selectedNode(screens, selection), [screens, selection]);
+  // The screen root, for the typeset-region ancestor walk — a typeset applies to
+  // a subtree, so the node alone can't say which one it renders under.
+  const tree = selection ? screens[selection.screenId]?.tree : undefined;
   const descriptor = useMemo(() => {
     if (!node || !components || !isComponentNode(node)) return null;
     return components.find((c) => c.id === node.$ref) ?? null;
@@ -102,6 +115,7 @@ export function Inspector() {
   // dedicated field (so a MUI node's `sx` doesn't also show as a raw string prop).
   const hiddenProps = new Set([...HIDDEN_PROPS, channelProp]);
 
+  const rung = nodeRung(node);
   const selectionKey = `${selection.screenId}:${selection.path}`;
   const initialClasses =
     typeof node.props?.className === "string" ? (node.props.className as string) : "";
@@ -118,10 +132,42 @@ export function Inspector() {
   // would keep showing the asset that was just replaced.
   const propsKey = `${selectionKey}:${imageSrc ?? ""}`;
 
+  if (browsingFaces && theme) {
+    // Open on the face already in play, so the list starts filtered to what
+    // this rung is for and ticks what it currently uses.
+    const facts = tree ? nodeTypography(theme, tree, pathFromString(selection.path), node) : null;
+    const role =
+      facts?.overrides.family?.replace(/^font-/, "") ??
+      facts?.face.role ??
+      facts?.face.slot ??
+      "body";
+    const stack = theme.typography.fontFamily?.[role];
+    return (
+      <div className="flex-1 min-h-0">
+        <FontBrowser
+          role={role}
+          current={stack ? leadFamily(stack) : undefined}
+          onBack={() => setBrowsingFaces(false)}
+          onPick={(font) => {
+            setBrowsingFaces(false);
+            void declareFace(theme, themeName, font)
+              .then(setPendingFace)
+              .catch((err) => toastError(err, "Could not set the face"));
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="px-4 py-3 border-b">
-        <div className="font-semibold text-sm truncate">{node.$ref}</div>
+        <div className="font-semibold text-sm truncate">
+          {node.$ref}
+          {rung ? (
+            <span className="ml-1.5 font-mono text-xs text-muted-foreground">{rung}</span>
+          ) : null}
+        </div>
         <div className="text-xs text-muted-foreground mt-0.5">
           {selection.screenId} · {selection.path === "" ? "(root)" : selection.path}
         </div>
@@ -154,6 +200,15 @@ export function Inspector() {
             path={selection.path}
             src={imageSrc}
             nodeAspect={typeof node.props?.aspect === "string" ? node.props.aspect : undefined}
+          />
+        ) : null}
+
+        {theme && tree ? (
+          <NodeTypographyReadout
+            theme={theme}
+            tree={tree}
+            path={pathFromString(selection.path)}
+            node={node}
           />
         ) : null}
 
@@ -204,11 +259,50 @@ export function Inspector() {
             screenId={selection.screenId}
             path={selection.path}
             debounceMs={DEBOUNCE_MS}
+            onBrowseFaces={() => setBrowsingFaces(true)}
+            pendingFace={pendingFace}
+            onFaceApplied={() => setPendingFace(null)}
           />
         )}
       </div>
     </div>
   );
+}
+
+/**
+ * Get a theme face for a browsed family and return the role to set on the node.
+ *
+ * A node never names a family directly. Declaring the face on the theme first
+ * is what keeps `font-<role>` meaningful: re-point the role later and every node
+ * set in it follows, which is the whole reason roles exist. It also puts the
+ * webfont in one place — a family named only at a node would never be requested.
+ */
+async function declareFace(theme: Theme, themeName: string, font: CatalogFont): Promise<string> {
+  const faces = theme.typography.fontFamily ?? {};
+  // Reuse before declaring: picking Fraunces twice from two nodes should land
+  // on one role, not `fraunces` and `fraunces-2`.
+  const existing = Object.entries(faces).find(([, stack]) => leadFamily(stack) === font.family);
+  if (existing) return existing[0];
+  const role = freeRole(faceSlug(font.family), faces);
+  await theme_.setFonts(themeName, [assignSpec(role, font)]);
+  return role;
+}
+
+/** A family as a role name the schema accepts: `IBM Plex Sans` → `ibm-plex-sans`. */
+function faceSlug(family: string): string {
+  const slug = family
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return /^[a-z]/.test(slug) ? slug : `font-${slug}`;
+}
+
+/** Never re-point a role someone else's nodes are already using. */
+function freeRole(base: string, faces: Record<string, string>): string {
+  if (!(base in faces)) return base;
+  let n = 2;
+  while (`${base}-${n}` in faces) n++;
+  return `${base}-${n}`;
 }
 
 const STATES = ["default", "hover", "focus", "active", "disabled"] as const;

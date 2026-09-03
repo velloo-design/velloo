@@ -195,12 +195,13 @@ export type { CustomCssResult, FontSpec, TypesetSpec };
 export async function applyPreset(
   ctx: ThemeContext,
   presetName: string,
+  themeName?: string,
 ): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
-    const r = await applyPresetImpl(ctx.folder, presetName);
+    const r = await applyPresetImpl(ctx.folder, presetName, themeName);
     if (r.ok) {
       broadcastThemeChanged(ctx);
-      emitActivity(ctx, "apply_preset", {});
+      emitActivity(ctx, "apply_preset", themeName ? { themeName } : {});
     }
     return r;
   });

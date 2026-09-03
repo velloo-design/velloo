@@ -8,6 +8,7 @@ import {
 } from "@velloo/schema";
 import { Crosshair, PanelsTopLeft } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { nodeRung } from "../node-typography.ts";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 
@@ -47,7 +48,8 @@ function describeNode(node: Node): string | null {
 function nodeLabel(node: Node): string {
   if (isSnippetInstance(node)) return `@${node.$snippet}`;
   if (isParamRef(node)) return `\${${node.$param}}`;
-  return node.$ref;
+  const rung = nodeRung(node);
+  return rung ? `${node.$ref} ${rung}` : node.$ref;
 }
 
 function nodeChildren(node: Node): Node[] | undefined {

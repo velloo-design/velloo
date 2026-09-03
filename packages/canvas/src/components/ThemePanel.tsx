@@ -2,9 +2,13 @@ import type { ColorPair, Theme } from "@velloo/schema";
 import { useEffect, useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 import { ColorSwatch } from "./ColorSwatch.tsx";
 import { ContrastReport } from "./ContrastReport.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
+import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
+import { FontBrowser } from "./typography/FontBrowser.tsx";
+import { assignSpec, FontsSection, leadFamily } from "./typography/FontsSection.tsx";
 import { TypographySection } from "./typography/TypographySection.tsx";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion.tsx";
 import { Button } from "./ui/button.tsx";
@@ -70,8 +74,16 @@ export function ThemePanel({ theme, presets }: Props) {
   const [busy, setBusy] = useState<null | "derive">(null);
   const [status, setStatus] = useState<string | null>(null);
   const themeVersion = useCanvas((s) => s.themeVersion);
+  const themeName = useCanvas((s) => s.themeName);
+  const refreshTheme = useCanvas((s) => s.refreshTheme);
 
   const [openSections, setOpenSections] = useState<string[]>(() => readStoredSections());
+  /**
+   * The role whose face is being chosen. Non-null swaps the rail for the font
+   * browser rather than opening a dialog over the canvas: the preview being
+   * browsed is painted on the board, so covering the board would defeat it.
+   */
+  const [browsingRole, setBrowsingRole] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -83,7 +95,7 @@ export function ThemePanel({ theme, presets }: Props) {
     setBusy("derive");
     setStatus(null);
     try {
-      await themeApi.deriveFromColor(seed.trim());
+      await themeApi.deriveFromColor(themeName, seed.trim());
       setStatus(`palette derived from ${seed.trim()}`);
     } catch (err) {
       setStatus(`derive failed: ${(err as Error).message}`);
@@ -92,8 +104,31 @@ export function ThemePanel({ theme, presets }: Props) {
     }
   };
 
+  if (browsingRole !== null) {
+    const stack = theme.typography.fontFamily?.[browsingRole];
+    return (
+      <div className="flex-1 min-h-0">
+        <FontBrowser
+          role={browsingRole}
+          current={stack ? leadFamily(stack) : undefined}
+          onBack={() => setBrowsingRole(null)}
+          onPick={(font) => {
+            setBrowsingRole(null);
+            void themeApi.setFonts(themeName, [assignSpec(browsingRole, font)]).catch((err) => {
+              toastError(err, "Could not set the face");
+              void refreshTheme();
+            });
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto scroll-stable p-4">
+      {/* Named after what it edits, above everything that edits it: which theme
+          file the rail is pointed at is the frame for every control below. */}
+      <ThemeSwitcher />
       <Accordion
         type="multiple"
         value={openSections}
@@ -150,6 +185,15 @@ export function ThemePanel({ theme, presets }: Props) {
           </AccordionTrigger>
           <AccordionContent>
             <ContrastReport bumpKey={themeVersion} />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="fonts">
+          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
+            Fonts
+          </AccordionTrigger>
+          <AccordionContent>
+            <FontsSection theme={theme} onBrowse={setBrowsingRole} />
           </AccordionContent>
         </AccordionItem>
 

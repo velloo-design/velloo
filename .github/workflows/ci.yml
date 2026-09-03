@@ -8,6 +8,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The font catalogue can rot without anyone touching the repo — a family gets
+  # renamed or withdrawn upstream and its picker row silently renders as the
+  # fallback. Weekly is how that gets noticed.
+  schedule:
+    - cron: "0 6 * * 1"
 
 jobs:
   checks:
@@ -36,3 +41,25 @@ jobs:
 
       - name: Test
         run: bun test
+
+  # Separate job because it is the one check that needs the network: a Google
+  # outage should read as "the font check is red", not fail the suite that was
+  # about to tell you something real.
+  fonts:
+    name: Font catalogue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Asserts the committed catalogue is what the generator produces, and
+      # that every css2 spec in it still resolves.
+      - name: Check font catalogue
+        run: bun run fonts:check

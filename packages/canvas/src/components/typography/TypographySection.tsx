@@ -55,6 +55,7 @@ export function TypographySection({ theme }: { theme: Theme }) {
   const setTypesetDraft = useCanvas((s) => s.setTypesetDraft);
   const draft = useCanvas((s) => s.typesetDraft);
   const refreshTheme = useCanvas((s) => s.refreshTheme);
+  const themeName = useCanvas((s) => s.themeName);
 
   // Derived rather than corrected in an effect, because the two directions
   // race: a preset just created here isn't in `names` until its theme refresh
@@ -86,7 +87,7 @@ export function TypographySection({ theme }: { theme: Theme }) {
 
   const send = (spec: TypesetSpec, onDone?: () => void) => {
     void themeApi
-      .setTypeset([spec])
+      .setTypeset(themeName, [spec])
       .then(() => onDone?.())
       .catch((err) => {
         toastError(err, "Could not update the typeset");

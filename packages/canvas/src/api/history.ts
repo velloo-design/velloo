@@ -8,7 +8,7 @@ export interface HistoryDepths {
 export type RevertedEntry =
   | { kind: "screen"; screenId: string }
   | { kind: "board"; boardId: string }
-  | { kind: "theme" }
+  | { kind: "theme"; themeName: string }
   | { kind: "snippet"; snippetId: string };
 
 export interface HistoryResponse extends HistoryDepths {
