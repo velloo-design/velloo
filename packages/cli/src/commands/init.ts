@@ -41,7 +41,7 @@ import {
   runUpgrade,
 } from "../existing-folder.ts";
 import { fail } from "../fail.ts";
-import { hasDesignConfig } from "../folder.ts";
+import { existingDesignFolder, hasDesignConfig } from "../folder.ts";
 import { registerProject } from "../manifest.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import {
@@ -576,212 +576,228 @@ export default defineCommand({
         "Project name to register in the repo's velloo.json (default: derived from the folder path)",
     },
   },
-  async run({ args }) {
-    const cliArgs = args as InitCliArgs;
-    const appRoot = resolve(cliArgs.folder ?? ".");
-    const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
-    const allowNonEmpty = cliArgs.force;
-    // True when the user chose "Create another design folder" — the wizard's
-    // folder prompt then defaults to a fresh name instead of the taken one.
-    let secondFolder = false;
-    let inherited: { library: string | undefined; componentsDir: string | undefined } = {
-      library: undefined,
-      componentsDir: undefined,
-    };
-
-    // An explicit --scan-dir that doesn't exist is a typo, not a degrade-to-blank.
-    if (cliArgs.scanDir && !(await dirExists(resolve(appRoot, cliArgs.scanDir)))) {
-      fail("init", `--scan-dir "${cliArgs.scanDir}" doesn't exist under ${appRoot}.`);
-    }
-
-    if (interactive) printLogo();
-
-    // Already a Velloo design here? Don't re-run the whole scaffold wizard —
-    // offer the actions that make sense on an existing folder.
-    if (interactive && !cliArgs.force) {
-      const existing = resolve(appRoot, cliArgs.designFolder ?? "velloo");
-      if (await hasDesignConfig(existing)) {
-        const facts = await readFolderFacts(existing, appRoot);
-        const action = await promptExistingFolderAction(facts, existing);
-        if (action === null || action === "cancel") {
-          console.log(pc.dim("  Nothing changed."));
-          return;
-        }
-        if (action === "connect") {
-          const wiring = await askAgentWiring({
-            skipWhenCovered: true,
-            projectRoot: await resolveProjectRoot(existing),
-          });
-          const wireOutcome = wiring ? await applyAgentWiring(existing, wiring) : NOT_WIRED;
-          printWired(wireOutcome);
-          printNextSteps(existing, wireOutcome);
-          return;
-        }
-        if (action !== "another") {
-          if (action === "upgrade") await runUpgrade(existing);
-          if (action === "scan") await runScan(existing, appRoot, cliArgs.scanDir);
-          if (action === "theme") await runThemeReimport(existing, appRoot);
-          if (action === "check") await runCheckSetup(existing, appRoot);
-          if (action === "open") await runOpenCanvas(existing);
-          return;
-        }
-        // "another" falls through to the normal wizard, which asks where the
-        // new folder goes — and rejects a path that's already a design folder
-        // at the prompt, not after the whole wizard has run. The app is the
-        // same one, so the sibling's library + components dir carry over
-        // instead of being asked again.
-        secondFolder = true;
-        inherited = await inheritedFromFolder(existing);
-      }
-    }
-
-    let answers: WizardAnswers;
-
-    if (interactive) {
-      console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
-      console.log("");
-      const inheritedLibrary =
-        inherited.library && isValidLibraryId(inherited.library) ? inherited.library : undefined;
-      const result = await runInteractive({
-        appRoot,
-        secondFolder,
-        scanDir: cliArgs.scanDir,
-        connectEnabled: cliArgs.connect !== false,
-        // An explicit --library still wins over what the sibling folder uses.
-        pinnedLibrary:
-          cliArgs.library && isValidLibraryId(cliArgs.library) ? cliArgs.library : inheritedLibrary,
-        ...(inheritedLibrary && !cliArgs.library
-          ? { pinnedLibraryReason: "same as the design folder already in this repo" }
-          : {}),
-        ...(inherited.componentsDir ? { inheritComponentsDir: inherited.componentsDir } : {}),
-      });
-      if (result.status === "abort") {
-        printExitInstructions(undefined, NOT_WIRED);
-        process.exit(1);
-      }
-      answers = result.answers;
-    } else {
-      try {
-        answers = answersFromArgs(cliArgs);
-      } catch (err) {
-        fail("init", (err as Error).message);
-      }
-      console.log(`velloo: app root ${answers.appRoot}`);
-    }
-
-    // Non-interactive scan / redesign still wants host detection.
-    if (
-      (answers.initialContent === "scan" || answers.initialContent === "redesign-screen") &&
-      !answers.detected
-    ) {
-      const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
-      const primary = scanned.apps[0];
-      if (primary) answers.scanRoot = primary.dir;
-      if (scanned.apps.length > 1) {
-        console.log(
-          pc.dim(
-            `  Found ${scanned.apps.length} apps (${scanned.apps.map((a) => a.rel || ".").join(", ")}) — one board per app.`,
-          ),
-        );
-      } else if (primary?.rel && primary.rel !== ".") {
-        console.log(pc.dim(`  Scanning UI in ${primary.rel} (app root has no package.json).`));
-      }
-      answers.selectedRoutes =
-        answers.initialContent === "redesign-screen" ? scanned.routes.slice(0, 1) : scanned.routes;
-      answers.agentPicksFirst = answers.initialContent === "scan";
-      if (answers.initialContent === "redesign-screen" && scanned.routes[0]) {
-        answers.screenName = answers.screenName ?? scanned.routes[0].name;
-      }
-      answers.detected = detectHost(answers.scanRoot);
-      // The "existing project" flow: when the user didn't pin a library, adopt
-      // the framework the app actually uses so the scan renders + emits in the
-      // host's framework (a MUI app → the MUI adapter), not a default mismatch.
-      // Which provider claims what — including the unsupported-framework
-      // (Chakra/Mantine/…) → no-framework fallback — lives in the registry.
-      const adopted = cliArgs.library ? undefined : scanAdoption(answers.detected);
-      if (adopted) {
-        answers.library = adopted.library;
-        answers.source = "binary";
-        console.log(pc.dim(`  ${adopted.note}`));
-      }
-    }
-
-    const folder = answers.folder;
-    if (!allowNonEmpty && !(await isEmptyOrMissing(folder))) {
-      fail(
-        "init",
-        `design folder is not empty: ${folder}\n  Pick an empty path, or pass --force to scaffold over it.`,
-      );
-    }
-
-    let plan: InstallPlan;
-    try {
-      plan = planInstall(answers);
-    } catch (err) {
-      fail("init", (err as Error).message);
-    }
-
-    // The wizard's last prompt otherwise cuts straight to silence while the
-    // theme import + scaffold writes run — say what's happening.
-    if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
-
-    const { theme, importedFrom } = resolveTheme(answers);
-    let scaffold: Scaffold;
-    try {
-      scaffold = await buildScaffold(answers, theme);
-    } catch (err) {
-      fail("init", (err as Error).message);
-    }
-    await writeScaffold(folder, scaffold, plan, answers);
-
-    // Echo for non-interactive callers that grep the output for
-    // "scaffolded" — keeps the existing CLI test passing.
-    console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
-
-    // Name the folder in the repo manifest so a second design folder in the
-    // same repo stays resolvable. The scaffold already succeeded — a manifest
-    // problem is a warning to fix by hand, not a failed init.
-    try {
-      const reg = await registerProject(folder, answers.appRoot, cliArgs.project);
-      if (reg.created) {
-        console.log(
-          pc.dim(
-            `  Registered as project "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
-          ),
-        );
-      }
-      // Feedback consent belongs to the repo, not this folder — write it
-      // now that a manifest is guaranteed to exist. A folder outside any
-      // repo has nowhere higher to put it and keeps the default (off).
-      if (answers.feedback) await writeRepoFeedback(folder, answers.feedback);
-    } catch (err) {
-      console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
-    }
-    if (importedFrom) {
-      console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
-    }
-    if (answers.initialContent === "scan" && scaffold.screens.length === 0) {
-      console.log(
-        pc.dim("  No routes detected — started you with a blank folder instead of a scan."),
-      );
-    }
-
-    printSummary(folder, scaffold, plan, answers, importedFrom);
-
-    // Apply the wiring chosen in the wizard (or the project defaults when
-    // non-interactive), then check the screenshot browser, then hand off to
-    // the agent for scans.
-    let wireOutcome = NOT_WIRED;
-    if (cliArgs.connect !== false) {
-      const wiring = interactive
-        ? answers.agentWiring
-        : { agents: PROJECT_AGENT_IDS, manual: false, preWired: [] };
-      if (wiring) wireOutcome = await applyAgentWiring(folder, wiring);
-    }
-    printWired(wireOutcome);
-    await printScreenshotReadiness(interactive);
-    await promptShellCompletions(interactive);
-    await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
-    printExitInstructions(folder, wireOutcome);
-  },
+  run: ({ args }) => runInit(args as InitCliArgs),
 });
+
+/**
+ * The init flow, callable outside the command — `velloo folder add` runs
+ * exactly this with the design folder already chosen, so there is one
+ * scaffold path rather than a second, drifting copy.
+ */
+export async function runInit(cliArgs: InitCliArgs): Promise<void> {
+  const appRoot = resolve(cliArgs.folder ?? ".");
+  const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
+  const allowNonEmpty = cliArgs.force;
+  // True when the user chose "Create another design folder" — the wizard's
+  // folder prompt then defaults to a fresh name instead of the taken one.
+  let secondFolder = false;
+  let inherited: { library: string | undefined; componentsDir: string | undefined } = {
+    library: undefined,
+    componentsDir: undefined,
+  };
+
+  // An explicit --scan-dir that doesn't exist is a typo, not a degrade-to-blank.
+  if (cliArgs.scanDir && !(await dirExists(resolve(appRoot, cliArgs.scanDir)))) {
+    fail("init", `--scan-dir "${cliArgs.scanDir}" doesn't exist under ${appRoot}.`);
+  }
+
+  if (interactive) printLogo();
+
+  // Already a Velloo design here? Don't re-run the whole scaffold wizard —
+  // offer the actions that make sense on an existing folder.
+  if (interactive && !cliArgs.force) {
+    // With --add-folder the design-folder arg names the folder being *created*,
+    // so the sibling to read defaults from is whichever one the repo already
+    // has — not that path.
+    const existing = cliArgs.addFolder
+      ? ((await existingDesignFolder(appRoot)) ?? resolve(appRoot, "velloo"))
+      : resolve(appRoot, cliArgs.designFolder ?? "velloo");
+    if (await hasDesignConfig(existing)) {
+      const facts = await readFolderFacts(existing, appRoot);
+      // `velloo folder add` skips the menu — the caller already said what they
+      // came for.
+      const action = cliArgs.addFolder
+        ? "another"
+        : await promptExistingFolderAction(facts, existing);
+      if (action === null || action === "cancel") {
+        console.log(pc.dim("  Nothing changed."));
+        return;
+      }
+      if (action === "connect") {
+        const wiring = await askAgentWiring({
+          skipWhenCovered: true,
+          projectRoot: await resolveProjectRoot(existing),
+        });
+        const wireOutcome = wiring ? await applyAgentWiring(existing, wiring) : NOT_WIRED;
+        printWired(wireOutcome);
+        printNextSteps(existing, wireOutcome);
+        return;
+      }
+      if (action !== "another") {
+        if (action === "upgrade") await runUpgrade(existing);
+        if (action === "scan") await runScan(existing, appRoot, cliArgs.scanDir);
+        if (action === "theme") await runThemeReimport(existing, appRoot);
+        if (action === "check") await runCheckSetup(existing, appRoot);
+        if (action === "open") await runOpenCanvas(existing);
+        return;
+      }
+      // "another" falls through to the normal wizard, which asks where the
+      // new folder goes — and rejects a path that's already a design folder
+      // at the prompt, not after the whole wizard has run. The app is the
+      // same one, so the sibling's library + components dir carry over
+      // instead of being asked again.
+      secondFolder = true;
+      inherited = await inheritedFromFolder(existing);
+    }
+  }
+
+  let answers: WizardAnswers;
+
+  if (interactive) {
+    console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
+    console.log("");
+    const inheritedLibrary =
+      inherited.library && isValidLibraryId(inherited.library) ? inherited.library : undefined;
+    const result = await runInteractive({
+      appRoot,
+      secondFolder,
+      ...(cliArgs.addFolder && cliArgs.designFolder ? { presetFolder: cliArgs.designFolder } : {}),
+      scanDir: cliArgs.scanDir,
+      connectEnabled: cliArgs.connect !== false,
+      // An explicit --library still wins over what the sibling folder uses.
+      pinnedLibrary:
+        cliArgs.library && isValidLibraryId(cliArgs.library) ? cliArgs.library : inheritedLibrary,
+      ...(inheritedLibrary && !cliArgs.library
+        ? { pinnedLibraryReason: "same as the design folder already in this repo" }
+        : {}),
+      ...(inherited.componentsDir ? { inheritComponentsDir: inherited.componentsDir } : {}),
+    });
+    if (result.status === "abort") {
+      printExitInstructions(undefined, NOT_WIRED);
+      process.exit(1);
+    }
+    answers = result.answers;
+  } else {
+    try {
+      answers = answersFromArgs(cliArgs);
+    } catch (err) {
+      fail("init", (err as Error).message);
+    }
+    console.log(`velloo: app root ${answers.appRoot}`);
+  }
+
+  // Non-interactive scan / redesign still wants host detection.
+  if (
+    (answers.initialContent === "scan" || answers.initialContent === "redesign-screen") &&
+    !answers.detected
+  ) {
+    const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
+    const primary = scanned.apps[0];
+    if (primary) answers.scanRoot = primary.dir;
+    if (scanned.apps.length > 1) {
+      console.log(
+        pc.dim(
+          `  Found ${scanned.apps.length} apps (${scanned.apps.map((a) => a.rel || ".").join(", ")}) — one board per app.`,
+        ),
+      );
+    } else if (primary?.rel && primary.rel !== ".") {
+      console.log(pc.dim(`  Scanning UI in ${primary.rel} (app root has no package.json).`));
+    }
+    answers.selectedRoutes =
+      answers.initialContent === "redesign-screen" ? scanned.routes.slice(0, 1) : scanned.routes;
+    answers.agentPicksFirst = answers.initialContent === "scan";
+    if (answers.initialContent === "redesign-screen" && scanned.routes[0]) {
+      answers.screenName = answers.screenName ?? scanned.routes[0].name;
+    }
+    answers.detected = detectHost(answers.scanRoot);
+    // The "existing project" flow: when the user didn't pin a library, adopt
+    // the framework the app actually uses so the scan renders + emits in the
+    // host's framework (a MUI app → the MUI adapter), not a default mismatch.
+    // Which provider claims what — including the unsupported-framework
+    // (Chakra/Mantine/…) → no-framework fallback — lives in the registry.
+    const adopted = cliArgs.library ? undefined : scanAdoption(answers.detected);
+    if (adopted) {
+      answers.library = adopted.library;
+      answers.source = "binary";
+      console.log(pc.dim(`  ${adopted.note}`));
+    }
+  }
+
+  const folder = answers.folder;
+  if (!allowNonEmpty && !(await isEmptyOrMissing(folder))) {
+    fail(
+      "init",
+      `design folder is not empty: ${folder}\n  Pick an empty path, or pass --force to scaffold over it.`,
+    );
+  }
+
+  let plan: InstallPlan;
+  try {
+    plan = planInstall(answers);
+  } catch (err) {
+    fail("init", (err as Error).message);
+  }
+
+  // The wizard's last prompt otherwise cuts straight to silence while the
+  // theme import + scaffold writes run — say what's happening.
+  if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
+
+  const { theme, importedFrom } = resolveTheme(answers);
+  let scaffold: Scaffold;
+  try {
+    scaffold = await buildScaffold(answers, theme);
+  } catch (err) {
+    fail("init", (err as Error).message);
+  }
+  await writeScaffold(folder, scaffold, plan, answers);
+
+  // Echo for non-interactive callers that grep the output for
+  // "scaffolded" — keeps the existing CLI test passing.
+  console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
+
+  // Name the folder in the repo manifest so a second design folder in the
+  // same repo stays resolvable. The scaffold already succeeded — a manifest
+  // problem is a warning to fix by hand, not a failed init.
+  try {
+    const reg = await registerProject(folder, answers.appRoot, cliArgs.project);
+    if (reg.created) {
+      console.log(
+        pc.dim(
+          `  Registered as project "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
+        ),
+      );
+    }
+    // Feedback consent belongs to the repo, not this folder — write it
+    // now that a manifest is guaranteed to exist. A folder outside any
+    // repo has nowhere higher to put it and keeps the default (off).
+    if (answers.feedback) await writeRepoFeedback(folder, answers.feedback);
+  } catch (err) {
+    console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
+  }
+  if (importedFrom) {
+    console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
+  }
+  if (answers.initialContent === "scan" && scaffold.screens.length === 0) {
+    console.log(
+      pc.dim("  No routes detected — started you with a blank folder instead of a scan."),
+    );
+  }
+
+  printSummary(folder, scaffold, plan, answers, importedFrom);
+
+  // Apply the wiring chosen in the wizard (or the project defaults when
+  // non-interactive), then check the screenshot browser, then hand off to
+  // the agent for scans.
+  let wireOutcome = NOT_WIRED;
+  if (cliArgs.connect !== false) {
+    const wiring = interactive
+      ? answers.agentWiring
+      : { agents: PROJECT_AGENT_IDS, manual: false, preWired: [] };
+    if (wiring) wireOutcome = await applyAgentWiring(folder, wiring);
+  }
+  printWired(wireOutcome);
+  await printScreenshotReadiness(interactive);
+  await promptShellCompletions(interactive);
+  await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
+  printExitInstructions(folder, wireOutcome);
+}

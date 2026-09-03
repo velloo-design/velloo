@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
 
@@ -113,6 +113,48 @@ export async function projectLabel(folder: string): Promise<string | null> {
   return `${entry[0]} — ${rel} (in ${found.dir})`;
 }
 
+export interface UnregisterResult {
+  /** Project name that was removed, or null when the folder wasn't registered. */
+  name: string | null;
+  /** Manifest path, when there was one. */
+  path: string | null;
+  /** True when the manifest went away entirely (its last project left). */
+  removedManifest: boolean;
+}
+
+/**
+ * Drop a design folder from the repo manifest. When its last project goes the
+ * file goes with it: a manifest with no projects shadows the `./velloo`
+ * convention while naming nothing, which is worse than having no manifest.
+ */
+export async function unregisterProject(
+  folder: string,
+  appRoot: string,
+): Promise<UnregisterResult> {
+  const abs = resolve(folder);
+  const found = await findManifest(appRoot);
+  if (!found) return { name: null, path: null, removedManifest: false };
+  let name: string | null = null;
+  for (const [candidate, target] of found.folders) {
+    if (target === abs) name = candidate;
+  }
+  if (!name) return { name: null, path: found.path, removedManifest: false };
+
+  const { [name]: _dropped, ...projects } = found.manifest.projects;
+  if (Object.keys(projects).length === 0) {
+    await rm(found.path, { force: true });
+    return { name, path: found.path, removedManifest: true };
+  }
+  const manifest: Manifest = {
+    ...found.manifest,
+    projects,
+    ...(found.manifest.defaultProject === name ? { defaultProject: undefined } : {}),
+  };
+  if (manifest.defaultProject === undefined) delete manifest.defaultProject;
+  await writeFile(found.path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return { name, path: found.path, removedManifest: false };
+}
+
 /** Walk up from `start` for a `.git` entry (dir, or file for worktrees). */
 async function findGitRoot(start: string): Promise<string | null> {
   let dir = resolve(start);
@@ -148,7 +190,7 @@ const SCAN_SKIP = new Set([
  * one, because a manifest shadows the `./velloo` convention entirely — the
  * older folder would vanish from every command that resolves through it.
  */
-async function discoverDesignFolders(root: string, maxDepth = 3): Promise<string[]> {
+export async function discoverDesignFolders(root: string, maxDepth = 3): Promise<string[]> {
   const out: string[] = [];
   const walk = async (dir: string, depth: number): Promise<void> => {
     let entries: Dirent[];

@@ -72,7 +72,8 @@ If a screenshot fails, run exactly that command, then retry. Ports busy? Pass `-
 
 The local tool is free, complete, account-free, and telemetry-free — nothing in the solo loop phones home. The only outbound calls are the optional, opt-in cloud paths, and every one of them is gated behind an explicit `velloo login`:
 
-- `velloo login` / `velloo publish` — publish boards as a read-only share link
+- `velloo login` / `velloo publish` — publish boards as a read-only share link (`--list` what you've published, `--remove` to take one down)
+- `velloo folder` — the repo's design folders: `list`, `add` another, `remove` one
 - `pull_comments` — pull comments left on your share links back into the canvas as annotations
 - `generate_asset` — hosted image/SVG generation, metered against your account
 - `send_feedback` — agent-side product feedback, registered only when enabled in the folder config

@@ -5,7 +5,12 @@ import { isCancel, multiselect, select } from "@clack/prompts";
 import { BoardSchema, isArchived, ScreenSchema } from "@velloo/schema";
 import { findDesignConfig } from "./design-config.ts";
 import { fail } from "./fail.ts";
-import { type FoundManifest, findManifest, pickProject } from "./manifest.ts";
+import {
+  discoverDesignFolders,
+  type FoundManifest,
+  findManifest,
+  pickProject,
+} from "./manifest.ts";
 
 const DEFAULT_FOLDER = "velloo";
 
@@ -16,6 +21,26 @@ const DEFAULT_FOLDER = "velloo";
  */
 export const FOLDER_ARG_DESCRIPTION =
   "A velloo.json project name or a design-folder path (default: resolve via velloo.json, else ./velloo or the nearest design folder above the cwd)";
+
+/**
+ * A design folder the repo already has — the manifest's first entry, else the
+ * first one on disk. `velloo folder add` reads its library and components dir
+ * so the new folder agrees with its siblings about the app.
+ */
+export async function existingDesignFolder(appRoot: string): Promise<string | null> {
+  try {
+    const found = await findManifest(appRoot);
+    for (const folder of found?.folders.values() ?? []) {
+      if (await hasDesignConfig(folder)) return folder;
+    }
+  } catch {
+    // A broken manifest is someone else's error to report.
+  }
+  const conventional = join(resolve(appRoot), DEFAULT_FOLDER);
+  if (await hasDesignConfig(conventional)) return conventional;
+  const [first] = await discoverDesignFolders(resolve(appRoot));
+  return first ?? null;
+}
 
 /**
  * Sync twins of {@link hasDesignConfig} and the empty-folder check, for

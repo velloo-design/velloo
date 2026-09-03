@@ -62,6 +62,18 @@ async function resolveComponentsDir(
   return { value: typed || DEFAULT_COMPONENTS_DIR };
 }
 
+/**
+ * Why this path can't hold a new design folder, or undefined when it can.
+ * Shared by the wizard's prompt and the preset path `velloo folder add` passes.
+ */
+function folderPathProblem(abs: string, shown: string): string | undefined {
+  if (isDesignFolderSync(abs))
+    return `${shown} is already a Velloo design folder — pick another path.`;
+  if (!isEmptyOrMissingSync(abs))
+    return `${shown} isn't empty — pick an empty path (or delete it first).`;
+  return undefined;
+}
+
 /** A `select` message with a dim second line — clack bar-prefixes it for us. */
 function subtitled(message: string, subtitle: string): string {
   return `${message}\n${pc.dim(subtitle)}`;
@@ -374,6 +386,8 @@ export async function runInteractive(ctx: {
   connectEnabled: boolean;
   /** The repo already has a design folder — this run is adding a second one. */
   secondFolder?: boolean;
+  /** Design-folder path already chosen by the caller — skips the prompt. */
+  presetFolder?: string;
   /**
    * The sibling folder's components directory, when adding a second folder to
    * a repo that already answered that question.
@@ -387,30 +401,34 @@ export async function runInteractive(ctx: {
   // A second design folder in the same repo can't reuse the default name, and
   // "velloo-2" reads worse than a purpose name — suggest one they'll rename.
   const folderDefault = ctx.secondFolder ? "velloo-brand" : "velloo";
-  const folderInput = await text({
-    message: subtitledText(
-      "Where should the design folder live?",
-      ctx.secondFolder
-        ? "A second canvas in this repo — its own boards, theme, daemon and MCP endpoint."
-        : "Your designs are plain files that live in this repo — commit them alongside your code.",
-    ),
-    placeholder: folderDefault,
-    defaultValue: folderDefault,
-    // Validating here is the point: an occupied path is caught the moment
-    // it's typed, not after the whole wizard has run and it's time to write.
-    validate(value) {
-      const raw = (value || folderDefault).trim();
-      if (raw === "") return "Path can't be empty.";
-      const abs = resolve(ctx.appRoot, raw);
-      if (isDesignFolderSync(abs)) {
-        return `${raw} is already a Velloo design folder — pick another path.`;
-      }
-      if (!isEmptyOrMissingSync(abs)) {
-        return `${raw} isn't empty — pick an empty path (or delete it first).`;
-      }
-      return undefined;
-    },
-  });
+  // `velloo folder add <path>` already answered this — validate the path the
+  // way the prompt would, so a bad one fails the same from either entry point.
+  if (ctx.presetFolder) {
+    const problem = folderPathProblem(resolve(ctx.appRoot, ctx.presetFolder), ctx.presetFolder);
+    if (problem) {
+      cancel(problem);
+      return cancelled();
+    }
+  }
+  const folderInput =
+    ctx.presetFolder ??
+    (await text({
+      message: subtitledText(
+        "Where should the design folder live?",
+        ctx.secondFolder
+          ? "A second canvas in this repo — its own boards, theme, daemon and MCP endpoint."
+          : "Your designs are plain files that live in this repo — commit them alongside your code.",
+      ),
+      placeholder: folderDefault,
+      defaultValue: folderDefault,
+      // Validating here is the point: an occupied path is caught the moment
+      // it's typed, not after the whole wizard has run and it's time to write.
+      validate(value) {
+        const raw = (value || folderDefault).trim();
+        if (raw === "") return "Path can't be empty.";
+        return folderPathProblem(resolve(ctx.appRoot, raw), raw);
+      },
+    }));
   if (isAborted(folderInput)) return cancelled();
   const folder = resolve(ctx.appRoot, folderInput || folderDefault);
 
@@ -677,10 +695,10 @@ async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | nu
  * wizard's list (`interactive: false` hides MUI), so offering the list would
  * silently drop the pinned answer on the floor. Returns null on cancel.
  */
-async function resolveLibrary(ctx: {
-  pinnedLibrary?: LibraryId;
-  pinnedLibraryReason?: string;
-}): Promise<LibraryId | null> {
+async function resolveLibrary(
+  ctx: { pinnedLibrary?: LibraryId; pinnedLibraryReason?: string },
+  initial: LibraryId = DEFAULT_LIBRARY_ID,
+): Promise<LibraryId | null> {
   if (ctx.pinnedLibrary) {
     if (ctx.pinnedLibraryReason) {
       log.info(
@@ -695,7 +713,7 @@ async function resolveLibrary(ctx: {
       "What the canvas draws with, and what your emitted code imports.",
     ),
     options: interactiveLibraryChoices(),
-    initialValue: DEFAULT_LIBRARY_ID,
+    initialValue: initial,
   });
   return isAborted(picked) ? null : picked;
 }
@@ -777,19 +795,8 @@ async function buildBlankAnswers(
   agentWiring: AgentWiring | undefined,
   defaultLibrary: LibraryId = "none",
 ): Promise<WizardAnswers | null> {
-  let library: LibraryId = ctx.pinnedLibrary ?? defaultLibrary;
-  if (!ctx.pinnedLibrary) {
-    const picked = await select<LibraryId>({
-      message: subtitled(
-        "Component library",
-        "What the canvas draws with, and what your emitted code imports.",
-      ),
-      options: interactiveLibraryChoices(),
-      initialValue: defaultLibrary,
-    });
-    if (isAborted(picked)) return null;
-    library = picked;
-  }
+  const library = await resolveLibrary(ctx, defaultLibrary);
+  if (library === null) return null;
   const share = await promptShareAndFeedback(ctx.appRoot);
   if (share === null) return null;
 

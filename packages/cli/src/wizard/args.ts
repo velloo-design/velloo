@@ -15,6 +15,12 @@ export interface InitCliArgs {
   folder?: string;
   /** Design folder, relative to the app root (default: `velloo`). */
   designFolder?: string;
+  /**
+   * Skip the existing-folder menu and go straight to adding another design
+   * folder — what `velloo folder add` runs. With `designFolder`, the wizard's
+   * "where should it live?" prompt is answered too.
+   */
+  addFolder?: boolean;
   force?: boolean;
   nonInteractive?: boolean;
   /** Wire MCP config + guidance for Claude Code + Cursor (default true). */

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Server } from "bun";
 import { type CloudPublishedDesign, publishedDesignSubtitle } from "../cloud-published.ts";
-import { designFromReference, resolveUnpublishSelection } from "../commands/unpublish.ts";
+import { designFromReference, resolveUnpublishSelection } from "../publish/manage.ts";
 
 const cliPath = resolve(import.meta.dir, "../cli.ts");
 let server: Server<undefined>;
@@ -78,7 +78,10 @@ async function runCli(
     [
       "bun",
       cliPath,
-      command,
+      // Both verbs are flags on `publish` now; the tests keep naming the
+      // behaviour they exercise.
+      "publish",
+      command === "published" ? "--list" : "--remove",
       ...args,
       "--url",
       baseUrl,

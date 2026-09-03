@@ -32,18 +32,33 @@ import {
   recommendedPublishSlot,
   resolveTeam,
 } from "../publish/core.ts";
+import { listPublished, removePublished } from "../publish/manage.ts";
 import { resolvePublishPrivacy } from "../publish/privacy.ts";
 
 export default defineCommand({
   meta: {
     name: "publish",
-    description: "Publish the design folder as a velloo-cloud share link (the cloud renders it)",
+    description:
+      "Publish the design folder as a velloo-cloud share link (the cloud renders it). --list shows what you've published; --remove takes one down",
   },
   args: {
     folder: {
       type: "positional",
       required: false,
-      description: FOLDER_ARG_DESCRIPTION,
+      description: `${FOLDER_ARG_DESCRIPTION}. With --remove, the share URL to take down instead`,
+    },
+    list: {
+      type: "boolean",
+      description: "List your published designs instead of publishing",
+    },
+    remove: {
+      type: "boolean",
+      description:
+        "Take a published design down instead of publishing — pass its share URL, or pick one interactively",
+    },
+    yes: {
+      type: "boolean",
+      description: "Skip the --remove confirmation (required without an interactive terminal)",
     },
     url: {
       type: "string",
@@ -113,6 +128,14 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    // Listing and removing don't touch a design folder, so they're checked
+    // before any folder resolution — `velloo publish --list` outside a repo
+    // is a perfectly ordinary thing to type.
+    if (args.list && args.remove) fail("publish", "--list and --remove do different things");
+    if (args.list) return listPublished(args);
+    if (args.remove) {
+      return removePublished({ ...args, design: args.folder, yes: args.yes });
+    }
     if (args["changed-since"] && args.screenshots === false) {
       fail("publish", "--changed-since cannot be combined with --no-screenshots");
     }
