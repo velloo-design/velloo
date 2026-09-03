@@ -1,0 +1,16 @@
+// Result discipline, enforced.
+//
+// CLAUDE.md invariant: "Every mutation returns Result<T, MutationError>. Don't
+// throw across mutation boundaries." The mutation and theme layers hold to that
+// today — this keeps it true. A thrown error skips the typed union entirely, so
+// the HTTP status table, the MCP error envelope and the canvas's renderer all
+// lose their guarantee at once.
+//
+// Scoped by `overrides` in biome.json to the layers that owe a Result; every
+// other package still throws freely. Lifting a throwing API into a Result is
+// what `tryCatchAsync` is for.
+language js
+
+`throw $error` where {
+  register_diagnostic(span=$error, message="This layer returns Result<T, E> — return `err(...)` instead of throwing. Wrap a throwing dependency with tryCatchAsync at the boundary.")
+}

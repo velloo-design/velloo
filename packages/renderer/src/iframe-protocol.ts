@@ -103,10 +103,13 @@ export const PARENT_MESSAGE_TYPES = [
 type AssertNever<T extends never> = T;
 const _childTypesValid: readonly ChildMessage["type"][] = CHILD_MESSAGE_TYPES;
 const _parentTypesValid: readonly ParentMessage["type"][] = PARENT_MESSAGE_TYPES;
-type _ChildComplete = AssertNever<
+// Exported so the completeness pins survive `noUnusedLocals`, which flags an
+// unused *type* the way it flags an unused value — and a `void` reference can
+// only silence the value half.
+export type ChildComplete = AssertNever<
   Exclude<ChildMessage["type"], (typeof CHILD_MESSAGE_TYPES)[number]>
 >;
-type _ParentComplete = AssertNever<
+export type ParentComplete = AssertNever<
   Exclude<ParentMessage["type"], (typeof PARENT_MESSAGE_TYPES)[number]>
 >;
 void _childTypesValid;

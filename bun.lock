@@ -15,6 +15,7 @@
       "name": "@velloo/canvas",
       "version": "0.1.0",
       "dependencies": {
+        "@velloo/protocol": "workspace:*",
         "@velloo/provider": "workspace:*",
         "@velloo/renderer": "workspace:*",
         "@velloo/schema": "workspace:*",
@@ -99,6 +100,14 @@
         "@types/react-dom": "19.2.3",
         "lucide-react": "1.25.0",
         "react-dom": "19.2.7",
+      },
+    },
+    "packages/protocol": {
+      "name": "@velloo/protocol",
+      "version": "0.1.0",
+      "dependencies": {
+        "@velloo/schema": "workspace:*",
+        "zod": "4.4.3",
       },
     },
     "packages/provider": {
@@ -249,6 +258,7 @@
         "@velloo/canvas": "workspace:*",
         "@velloo/codegen": "workspace:*",
         "@velloo/helpers": "workspace:*",
+        "@velloo/protocol": "workspace:*",
         "@velloo/provider": "workspace:*",
         "@velloo/provider-antd": "workspace:*",
         "@velloo/provider-chakra": "workspace:*",
@@ -804,6 +814,8 @@
     "@velloo/codegen": ["@velloo/codegen@workspace:packages/codegen"],
 
     "@velloo/helpers": ["@velloo/helpers@workspace:packages/helpers"],
+
+    "@velloo/protocol": ["@velloo/protocol@workspace:packages/protocol"],
 
     "@velloo/provider": ["@velloo/provider@workspace:packages/provider"],
 

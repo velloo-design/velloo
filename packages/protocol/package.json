@@ -1,0 +1,16 @@
+{
+  "name": "@velloo/protocol",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "The Velloo wire contract \u2014 mutation argument schemas, typed error unions, watch events, and the published-comment surface shared with velloo-cloud",
+  "exports": {
+    ".": "./src/index.ts",
+    "./comments": "./src/comments.ts"
+  },
+  "dependencies": {
+    "@velloo/schema": "workspace:*",
+    "zod": "4.4.3"
+  }
+}

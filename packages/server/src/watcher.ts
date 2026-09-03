@@ -1,35 +1,12 @@
 import { type FSWatcher, watch } from "node:fs";
 import { join, sep } from "node:path";
+import type { WatchEvent } from "@velloo/protocol";
 
-export type WatchEvent =
-  | { type: "screen-changed"; screenId: string }
-  | { type: "board-changed"; boardId: string }
-  | { type: "theme-changed" }
-  | { type: "snippet-changed"; snippetId: string }
-  | { type: "annotations-changed"; screenId: string }
-  | { type: "notes-changed"; boardId: string }
-  | { type: "comments-changed"; boardId: string; scope: "local" | "shared" }
-  /**
-   * `.design/config.json` changed — typically a Sprint-Y
-   * `add_extension` / `update_extension` / `remove_extension`
-   * mutation. The canvas refreshes its Library tab so new extensions
-   * appear without a full page reload.
-   */
-  | { type: "config-changed" }
-  /**
-   * The whole folder was rewritten out-of-band (git revert-all) and
-   * reloaded server-side. Clients drop every cache and refetch. Emitted
-   * by the revert route, never by the watcher itself.
-   */
-  | { type: "folder-reloaded" }
-  /**
-   * A watched file changed but failed to reload into memory
-   * (unparseable JSON, schema violation). Emitted by the server's
-   * reload pipeline rather than the watcher itself; clients surface it
-   * so an on-disk edit is never silently dropped while the canvas
-   * keeps rendering stale state.
-   */
-  | { type: "reload-error"; source: string; message: string };
+/**
+ * The event union is the canvas's wire contract, so it is declared in
+ * `@velloo/protocol` and re-exported here for the watcher's own callers.
+ */
+export type { WatchEvent } from "@velloo/protocol";
 
 export interface Watcher {
   close(): void;

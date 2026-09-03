@@ -54,7 +54,7 @@ export {
   redo,
   undo,
 } from "./api/history.ts";
-export type { MutateError } from "./api/http.ts";
+export type { ApiError } from "./api/http.ts";
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
 export {

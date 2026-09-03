@@ -4,16 +4,31 @@
  * the typed payload attached, so call-sites can `toastError(err)` and get
  * the right message + suggestions.
  */
+import type { ErrorEnvelope } from "@velloo/protocol";
 import { ensureConnected } from "./connection.ts";
+import { type ApiError, describeApiError } from "./errors.ts";
 
-export interface MutateError {
-  code: string;
-  message: string;
-  /** Theme errors say `reason` where mutation errors say `message`. */
-  reason?: string;
-  path?: number[];
-  ref?: string;
-  suggestions?: string[];
+export type { ApiError } from "./errors.ts";
+
+/**
+ * Read the server's `{error}` envelope. The body is untrusted, so the shape is
+ * checked rather than asserted: anything that is not a kinded object yields
+ * `undefined` and the caller falls back to its own label.
+ */
+async function readError(res: Response): Promise<ApiError | undefined> {
+  const body: unknown = await res.json().catch(() => undefined);
+  if (!body || typeof body !== "object") return undefined;
+  const error = (body as Partial<ErrorEnvelope<ApiError>>).error;
+  if (!error || typeof error !== "object" || typeof error.kind !== "string") return undefined;
+  return error;
+}
+
+/** Rethrow a server failure as an Error carrying the typed payload. */
+export async function toApiError(res: Response, label: string): Promise<Error> {
+  const payload = await readError(res);
+  const err = new Error(payload ? describeApiError(payload) : `${label}: ${res.status}`);
+  (err as Error & { payload?: ApiError }).payload = payload;
+  return err;
 }
 
 async function post<T>(url: string, body: unknown, label: string): Promise<T> {
@@ -25,14 +40,7 @@ async function post<T>(url: string, body: unknown, label: string): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const respBody = (await res.json().catch(() => ({}))) as { error?: MutateError };
-    const err = new Error(
-      respBody.error?.message ?? respBody.error?.reason ?? `${label}: ${res.status}`,
-    );
-    (err as Error & { payload?: MutateError }).payload = respBody.error;
-    throw err;
-  }
+  if (!res.ok) throw await toApiError(res, label);
   return (await res.json()) as T;
 }
 
@@ -48,12 +56,7 @@ export async function requestJson<T>(
       ? {}
       : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
-  if (!res.ok) {
-    const response = (await res.json().catch(() => ({}))) as { error?: MutateError };
-    const err = new Error(response.error?.message ?? `${path}: ${res.status}`);
-    (err as Error & { payload?: MutateError }).payload = response.error;
-    throw err;
-  }
+  if (!res.ok) throw await toApiError(res, path);
   return (await res.json()) as T;
 }
 

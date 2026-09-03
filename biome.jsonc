@@ -1,0 +1,136 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/dist-types",
+      "!**/node_modules",
+      "!**/.design",
+      "!velloo",
+      "!**/tailwind-entry.css",
+      "!**/canvas/src/styles.css",
+      "!**/*.svg"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noNonNullAssertion": "error",
+        "useImportType": "error",
+        "useNodejsImportProtocol": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noThenProperty": "off",
+        "noConsole": {
+          "level": "error",
+          "options": { "allow": ["error"] }
+        }
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "json": {
+    "formatter": {
+      "indentWidth": 2,
+      "trailingCommas": "none"
+    }
+  },
+  "css": {
+    "formatter": {
+      "enabled": true
+    }
+  },
+  "overrides": [
+    {
+      // Printing IS the product here — the CLI's user-facing output, build scripts, and CI
+      // actions. Everywhere else `console.error` is the only sanctioned channel (CLAUDE.md),
+      // and console.log is debugging cruft.
+      "includes": [
+        "packages/cli/**",
+        "**/scripts/**",
+        ".github/**",
+        "**/build.ts",
+        "**/__tests__/**"
+      ],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      // The layers that owe a Result<T, E>. See .biome/no-throw-in-result-layer.grit.
+      // Tests may throw freely — they assert, they do not serve callers.
+      "includes": [
+        "packages/server/src/mutations/**",
+        "packages/server/src/theme/**",
+        "!**/__tests__/**"
+      ],
+      "plugins": ["./.biome/no-throw-in-result-layer.grit"]
+    },
+    {
+      // Architecture invariant (CLAUDE.md): the canvas ships its own real shadcn for IDE chrome
+      // and must never reach for the design-mode snapshot, whose overlays are pinned-open
+      // stubs. It has no helpers dependency either.
+      "includes": ["packages/canvas/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@velloo/shadcn-snapshot": "The snapshot is design-mode-only — its overlays are inline stubs. Canvas chrome uses its own real shadcn in src/components/ui/.",
+                  "@velloo/helpers": "The canvas has no helpers dependency by design — never reintroduce one."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // Architecture invariant (CLAUDE.md): components come from a ComponentProvider. The
+      // snapshot is reached only through the providers.ts factory registration (exempted below)
+      // or test fixtures.
+      "includes": ["packages/server/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@velloo/shadcn-snapshot": "Read components through the ComponentProvider interface — resolve the per-screen provider with registryForScreen, never a direct snapshot import."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // The sanctioned exceptions to the rule above.
+      "includes": ["packages/server/src/providers.ts", "packages/server/src/**/__tests__/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    }
+  ]
+}

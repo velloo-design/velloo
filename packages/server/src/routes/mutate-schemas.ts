@@ -1,213 +1,39 @@
-import {
-  FrameSchemeSchema,
-  MAX_BOARD_NAME_LENGTH,
-  NodeIdSchema,
-  NodeSchema,
-  SnippetParamSchema,
-} from "@velloo/schema";
-import { z } from "zod";
-
-const Path = z.array(z.number().int().nonnegative());
-const IdLocator = z.string().regex(/^@[a-zA-Z][a-zA-Z0-9_-]*$/, {
-  message: "id locator must match /^@[a-zA-Z][a-zA-Z0-9_-]*$/",
-});
-const Locator = z.union([Path, IdLocator]);
-const LocatorOrRoot = Locator.default([] as number[] | string);
-
-const FramePatch = z.object({
-  x: z.number().optional(),
-  y: z.number().optional(),
-  w: z.number().int().positive().optional(),
-  h: z.number().int().positive().optional(),
-  label: z.string().nullable().optional(),
-  group: z.string().nullable().optional(),
-  scheme: FrameSchemeSchema.nullable().optional(),
-});
-
-// ── Tree mutations ─────────────────────────────────────────────────────
-export const AddNodeBody = z.object({
-  screenId: z.string().min(1),
-  parentPath: LocatorOrRoot,
-  componentRef: z.string().min(1),
-  id: NodeIdSchema.optional(),
-  props: z.record(z.string(), z.unknown()).optional(),
-  children: z.array(NodeSchema).optional(),
-  index: z.number().int().nonnegative().optional(),
-});
-
-export const UpdatePropsBody = z.object({
-  screenId: z.string().min(1),
-  path: LocatorOrRoot,
-  propPatch: z.record(z.string(), z.unknown()),
-});
-
-export const ApplyClassesBody = z.object({
-  screenId: z.string().min(1),
-  path: LocatorOrRoot,
-  classes: z.string(),
-});
-
-export const SetNodeIdBody = z.object({
-  screenId: z.string().min(1),
-  path: Locator,
-  id: NodeIdSchema.nullable(),
-});
-
-// ── Board lifecycle ────────────────────────────────────────────────────
-export const AddBoardBody = z.object({
-  name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH),
-  id: z.string().min(1).optional(),
-  group: z.string().min(1).optional(),
-});
-export const UpdateBoardBody = z.object({
-  boardId: z.string().min(1),
-  patch: z.object({
-    name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH).optional(),
-    theme: z.string().min(1).nullable().optional(),
-    archived: z.boolean().optional(),
-    group: z.string().min(1).nullable().optional(),
-  }),
-});
-export const RemoveBoardBody = z.object({
-  boardId: z.string().min(1),
-});
-export const ReorderBoardsBody = z.object({
-  order: z.array(z.string().min(1)),
-});
-
-// ── Board groups (sidebar groups of boards) ────────────────────────────
-export const AddBoardGroupBody = z.object({
-  name: z.string().min(1),
-  color: z.string().min(1).optional(),
-});
-export const UpdateBoardGroupBody = z.object({
-  groupId: z.string().min(1),
-  patch: z.object({
-    name: z.string().min(1).optional(),
-    color: z.string().min(1).nullable().optional(),
-  }),
-});
-export const RemoveBoardGroupBody = z.object({
-  groupId: z.string().min(1),
-});
-export const ReorderBoardGroupsBody = z.object({
-  order: z.array(z.string().min(1)),
-});
-
-// ── Folder config ──────────────────────────────────────────────────────
-export const UpdateViewportPresetsBody = z.object({
-  presets: z.array(
-    z.object({
-      name: z.string().min(1),
-      w: z.number().int().positive(),
-      h: z.number().int().positive(),
-    }),
-  ),
-});
-// `null` clears the default, an absent key leaves it alone — so the dialog
-// can write one picker without echoing the other back.
-export const UpdateDefaultsBody = z.object({
-  defaultBoard: z.string().min(1).nullable().optional(),
-  defaultScreen: z.string().min(1).nullable().optional(),
-});
-export const UpdateCodegenBody = z.object({
-  componentsAlias: z.string().nullable().optional(),
-});
-export const UpdateFeedbackBody = z.object({
-  enabled: z.boolean().optional(),
-  contactOk: z.boolean().optional(),
-});
-
-// ── Frame lifecycle ────────────────────────────────────────────────────
-export const AddFrameBody = z.object({
-  boardId: z.string().min(1),
-  screenId: z.string().min(1),
-  x: z.number().optional(),
-  y: z.number().optional(),
-  w: z.number().int().positive(),
-  h: z.number().int().positive(),
-  label: z.string().optional(),
-  group: z.string().optional(),
-  id: z.string().min(1).optional(),
-});
-
-export const UpdateFrameBody = z.object({
-  boardId: z.string().min(1),
-  frameId: z.string().min(1),
-  patch: FramePatch,
-});
-
-export const RemoveFrameBody = z.object({
-  boardId: z.string().min(1),
-  frameId: z.string().min(1),
-});
-
-// ── Snippets ───────────────────────────────────────────────────────────
-export const UpdateSnippetBody = z.object({
-  snippetId: z.string().min(1),
-  patch: z.object({
-    name: z.string().min(1).optional(),
-    params: z.array(SnippetParamSchema).optional(),
-    tree: NodeSchema.optional(),
-  }),
-});
-
-export const UpdateSnippetArgsBody = z.object({
-  screenId: z.string().min(1),
-  path: Locator,
-  argPatch: z.record(z.string(), z.unknown()).default({}),
-  extraClassName: z.string().nullable().optional(),
-});
-
-// ── Annotations + board notes ──────────────────────────────────────────
-const AnnotationPositionSchema = z.union([
-  z.object({ x: z.number(), y: z.number() }),
-  z.literal("auto"),
-]);
-
-export const AddAnnotationBody = z.object({
-  screenId: z.string().min(1),
-  target: z.object({ locator: Locator }),
-  body: z.string(),
-  position: AnnotationPositionSchema.optional(),
-  collapsed: z.boolean().optional(),
-});
-
-export const UpdateAnnotationBody = z.object({
-  screenId: z.string().min(1),
-  annotationId: z.string().min(1),
-  patch: z.object({
-    body: z.string().optional(),
-    position: AnnotationPositionSchema.optional(),
-    collapsed: z.boolean().nullable().optional(),
-  }),
-});
-
-export const RemoveAnnotationBody = z.object({
-  screenId: z.string().min(1),
-  annotationId: z.string().min(1),
-});
-
-export const AddNoteBody = z.object({
-  boardId: z.string().min(1),
-  x: z.number(),
-  y: z.number(),
-  width: z.number().positive().optional(),
-  body: z.string(),
-});
-
-export const UpdateNoteBody = z.object({
-  boardId: z.string().min(1),
-  noteId: z.string().min(1),
-  patch: z.object({
-    x: z.number().optional(),
-    y: z.number().optional(),
-    width: z.number().positive().optional(),
-    body: z.string().optional(),
-  }),
-});
-
-export const RemoveNoteBody = z.object({
-  boardId: z.string().min(1),
-  noteId: z.string().min(1),
-});
+/**
+ * The canvas's HTTP mutation bodies.
+ *
+ * These schemas used to be declared here and again, differently, as inline MCP
+ * `inputSchema` blocks — the two drifted (MCP's `add_node` accepted `emitAs`
+ * and a `propPatch` alias this file did not, so a capability existed for
+ * agents and not for the canvas). Both surfaces and `batch` now read the same
+ * declarations from `@velloo/protocol`; this module re-exports them under the
+ * names the route table already uses.
+ */
+export {
+  AddAnnotationBody,
+  AddBoardBody,
+  AddBoardGroupBody,
+  AddFrameBody,
+  AddNodeBody,
+  AddNoteBody,
+  ApplyClassesBody,
+  RemoveAnnotationBody,
+  RemoveBoardBody,
+  RemoveBoardGroupBody,
+  RemoveFrameBody,
+  RemoveNoteBody,
+  ReorderBoardGroupsBody,
+  ReorderBoardsBody,
+  SetNodeIdBody,
+  UpdateAnnotationBody,
+  UpdateBoardBody,
+  UpdateBoardGroupBody,
+  UpdateCodegenBody,
+  UpdateDefaultsBody,
+  UpdateFeedbackBody,
+  UpdateFrameBody,
+  UpdateNoteBody,
+  UpdatePropsBody,
+  UpdateSnippetArgsBody,
+  UpdateSnippetBody,
+  UpdateViewportPresetsBody,
+} from "@velloo/protocol";

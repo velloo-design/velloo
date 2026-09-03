@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/result" },
     { "path": "./packages/schema" },
+    { "path": "./packages/protocol" },
     { "path": "./packages/provider" },
     { "path": "./packages/helpers" },
     { "path": "./packages/shadcn-snapshot" },

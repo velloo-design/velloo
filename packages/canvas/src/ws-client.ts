@@ -1,40 +1,17 @@
+import { parseSocketFrame } from "@velloo/protocol";
 import { setApiConnected } from "./api/connection.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
 
-type ServerEvent =
-  | { type: "screen-changed"; screenId: string }
-  | { type: "board-changed"; boardId: string }
-  | { type: "theme-changed" }
-  | { type: "snippet-changed"; snippetId: string }
-  | { type: "annotations-changed"; screenId: string }
-  | { type: "notes-changed"; boardId: string }
-  | { type: "comments-changed"; boardId: string; scope: "local" | "shared" }
-  | { type: "config-changed" }
-  | { type: "folder-reloaded" }
-  | { type: "reload-error"; source: string; message: string }
-  /** Agent-activity metadata — validated separately by parseActivityEntry. */
-  | { type: "activity" };
-
 /**
- * Validate a raw WebSocket frame at the trust boundary: it must be a JSON
- * object carrying a string `type` discriminant before the dispatch below can
- * safely narrow on it. Anything else (non-string data, malformed JSON, a
- * payload without `type`) is dropped.
+ * Socket frames are the server's `WatchEvent` union plus the presentation-only
+ * `activity` metadata that rides the same channel. Both the union and
+ * its runtime validator come from `@velloo/protocol` — this file used to carry
+ * a hand-typed copy of the server's declaration with nothing checking the two
+ * agreed, and validated a frame by asserting `as ServerEvent` after testing
+ * only that `type` was a string.
  */
-function parseServerEvent(data: unknown): ServerEvent | null {
-  if (typeof data !== "string") return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(data);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object") return null;
-  if (typeof (parsed as { type?: unknown }).type !== "string") return null;
-  return parsed as ServerEvent;
-}
 
 export function connectWs(): () => void {
   let socket: WebSocket | null = null;
@@ -63,7 +40,7 @@ export function connectWs(): () => void {
     };
 
     socket.onmessage = (ev) => {
-      const payload = parseServerEvent(ev.data);
+      const payload = parseSocketFrame(ev.data);
       if (!payload) return;
       // Activity events are presentation-only metadata riding the same
       // channel — they never trigger refreshes; WatchEvents do.

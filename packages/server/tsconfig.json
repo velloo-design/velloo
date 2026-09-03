@@ -15,6 +15,7 @@
   "references": [
     { "path": "../result" },
     { "path": "../schema" },
+    { "path": "../protocol" },
     { "path": "../provider" },
     { "path": "../helpers" },
     { "path": "../shadcn-snapshot" },

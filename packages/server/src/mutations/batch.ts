@@ -1,14 +1,40 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { err, type Result } from "@velloo/result";
+import {
+  AddBoardBody,
+  AddFrameBody,
+  AddNodeBody,
+  AddNoteBody,
+  AddScreenBody,
+  AddSnippetBody,
+  InstantiateSnippetBody,
+  MoveNodeBody,
+  type Normalized,
+  normalizeAddNode,
+  normalizeUpdateFrame,
+  normalizeUpdateProps,
+  OverrideSnippetPropsBody,
+  RemoveFrameBody,
+  RemoveNodeBody,
+  RemoveScreenBody,
+  RemoveSnippetBody,
+  SetNodeIdBody,
+  SetScreenTreeBody,
+  UpdateFrameBody,
+  UpdatePropsBody,
+  UpdateSnippetArgsBody,
+  UpdateSnippetBody,
+  type WatchEvent,
+} from "@velloo/protocol";
+import type { Result } from "@velloo/result";
 import type { Annotation, Board, CanvasNote, Screen, Snippet } from "@velloo/schema";
+import type { z } from "zod";
 import type { ActivityEvent } from "../activity.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
-import type { WatchEvent } from "../watcher.ts";
 import { addNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
-import { addFrame, removeFrame, updateFrame } from "./api/frames.ts";
+import { addFrame, removeFrame, updateFrame, updateFrames } from "./api/frames.ts";
 import { addScreen, removeScreen, setScreenTree } from "./api/screens.ts";
 import {
   addSnippet,
@@ -27,7 +53,7 @@ import {
   updatePropsBulk,
 } from "./api/tree.ts";
 import { type MutationContext, withBoardLock, withScreenLock, withSnippetLock } from "./context.ts";
-import { badRequest, type MutationError, scalarChildrenHint } from "./errors.ts";
+import { badRequest, type MutationError } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 
 /**
@@ -59,89 +85,101 @@ export interface BatchResult {
   results: BatchCallResult[];
 }
 
-type BatchFn = (ctx: MutationContext, args: never) => Promise<Result<unknown, MutationError>>;
+/**
+ * A validated, argument-bound call, ready to run against a context.
+ *
+ * `prepare` is the only way to reach a mutation through batch, which is the
+ * point: batch used to type its dispatch table as `args: never` and cast every
+ * entry with `as never`, so it accepted literally any object and handed it
+ * straight to an impl. The same mutations were schema-validated over HTTP and
+ * by their own MCP tools — batch alone skipped it, and the resulting crashes
+ * (a missing `propPatch` reaching `Object.entries`, sample app dogfood 2026-06-11)
+ * were patched one hand-written guard at a time. Each entry now carries the
+ * shared schema from `@velloo/protocol` instead.
+ */
+type BatchPrepared =
+  | { ok: true; run: (ctx: MutationContext) => Promise<Result<unknown, MutationError>> }
+  | { ok: false; error: MutationError };
+
+interface BatchTool {
+  prepare(args: unknown): BatchPrepared;
+}
+
+/** Normalization for the mutations whose arguments need no reconciling. */
+const asIs = <T>(args: T): Normalized<T> => ({ ok: true, args });
 
 /**
- * Batch's update_props mirrors the standalone tool: `patches` for bulk,
- * `path` + `propPatch` for one node. Guarded here because batch
- * dispatches past the MCP layer's arg validation — without this, a
- * missing propPatch crashed with a raw `Object.entries` TypeError
- * (sample app dogfood, 2026-06-11).
+ * Bind a schema, its normalization, and the impl into one entry. The generics
+ * tie them together: a schema whose output stops matching its impl's arguments
+ * fails to compile here rather than at a call site somewhere in a batch.
  */
-const updatePropsBatch: BatchFn = (ctx, args) => {
-  const a = args as {
-    screenId: string;
-    path?: unknown;
-    propPatch?: Record<string, unknown>;
-    props?: Record<string, unknown>;
-    patches?: unknown;
-  };
-  if (Array.isArray(a.patches)) {
-    return updatePropsBulk(ctx, { screenId: a.screenId, patches: a.patches } as never);
-  }
-  // `props` is an accepted alias for `propPatch` (matches add_node's key).
-  const propPatch = a.propPatch ?? a.props;
-  if (a.path === undefined || propPatch === undefined) {
-    return Promise.resolve(
-      err(
-        badRequest(
-          "update_props: pass path + propPatch (single node) or patches: [{ path, propPatch }] (bulk).",
-        ),
-      ),
-    );
-  }
-  return updateProps(ctx, { screenId: a.screenId, path: a.path, propPatch } as never);
-};
-
-/** add_node's `propPatch` is an accepted alias for `props` (matches update_props). */
-const addNodeBatch: BatchFn = (ctx, args) => {
-  const a = args as Record<string, unknown> & {
-    props?: Record<string, unknown>;
-    propPatch?: Record<string, unknown>;
-    children?: unknown;
-  };
-  // Batch dispatches past the MCP arg schema, so mirror add_node's jsonTolerant: parse a
-  // stringified `children` array (a common agent mistake) into a real array.
-  let children = a.children;
-  if (typeof children === "string") {
-    const t = children.trim();
-    if (t.startsWith("[") || t.startsWith("{")) {
-      try {
-        children = JSON.parse(t);
-      } catch {
-        /* leave as-is; addNode will reject with the props.children nudge */
+function batchTool<S extends z.ZodTypeAny, A>(
+  name: string,
+  body: S,
+  normalize: (input: z.output<S>) => Normalized<A>,
+  run: (ctx: MutationContext, args: A) => Promise<Result<unknown, MutationError>>,
+): BatchTool {
+  return {
+    prepare(rawArgs) {
+      const parsed = body.safeParse(rawArgs);
+      if (!parsed.success) {
+        return {
+          ok: false,
+          error: badRequest(
+            `batch ${name}: invalid or missing args — match the standalone ${name} tool's schema.`,
+            parsed.error.issues,
+          ),
+        };
       }
-    }
-  }
-  return addNode(ctx, { ...a, props: a.props ?? a.propPatch, children } as never);
-};
+      const normalized = normalize(parsed.data);
+      if (!normalized.ok) {
+        return { ok: false, error: badRequest(normalized.message, normalized.issues) };
+      }
+      const args = normalized.args;
+      return { ok: true, run: (ctx) => run(ctx, args) };
+    },
+  };
+}
 
-/** Batch skips the MCP layer's zod defaults, so mirror update_snippet_args's `argPatch: {}`. */
-const updateSnippetArgsBatch: BatchFn = (ctx, args) => {
-  const a = args as Record<string, unknown> & { argPatch?: Record<string, unknown> };
-  return updateSnippetArgs(ctx, { ...a, argPatch: a.argPatch ?? {} } as never);
-};
-
-export const BATCH_TOOLS: Record<string, BatchFn> = {
-  add_screen: addScreen as BatchFn,
-  remove_screen: removeScreen as BatchFn,
-  set_screen_tree: setScreenTree as BatchFn,
-  add_board: addBoard as BatchFn,
-  add_frame: addFrame as BatchFn,
-  remove_frame: removeFrame as BatchFn,
-  add_node: addNodeBatch,
-  update_props: updatePropsBatch,
-  override_snippet_props: overrideSnippetProps as BatchFn,
-  remove_node: removeNode as BatchFn,
-  move_node: moveNode as BatchFn,
-  set_node_id: setNodeId as BatchFn,
-  add_snippet: addSnippet as BatchFn,
-  update_snippet: updateSnippet as BatchFn,
-  remove_snippet: removeSnippet as BatchFn,
-  instantiate_snippet: instantiateSnippet as BatchFn,
-  update_snippet_args: updateSnippetArgsBatch,
-  update_frame: updateFrame as BatchFn,
-  add_note: addNote as BatchFn,
+export const BATCH_TOOLS: Record<string, BatchTool> = {
+  add_screen: batchTool("add_screen", AddScreenBody, asIs, addScreen),
+  remove_screen: batchTool("remove_screen", RemoveScreenBody, asIs, removeScreen),
+  set_screen_tree: batchTool("set_screen_tree", SetScreenTreeBody, asIs, setScreenTree),
+  add_board: batchTool("add_board", AddBoardBody, asIs, addBoard),
+  add_frame: batchTool("add_frame", AddFrameBody, asIs, addFrame),
+  remove_frame: batchTool("remove_frame", RemoveFrameBody, asIs, removeFrame),
+  add_node: batchTool("add_node", AddNodeBody, normalizeAddNode, addNode),
+  update_props: batchTool("update_props", UpdatePropsBody, normalizeUpdateProps, (ctx, plan) =>
+    plan.mode === "bulk" ? updatePropsBulk(ctx, plan.args) : updateProps(ctx, plan.args),
+  ),
+  override_snippet_props: batchTool(
+    "override_snippet_props",
+    OverrideSnippetPropsBody,
+    asIs,
+    overrideSnippetProps,
+  ),
+  remove_node: batchTool("remove_node", RemoveNodeBody, asIs, removeNode),
+  move_node: batchTool("move_node", MoveNodeBody, asIs, moveNode),
+  set_node_id: batchTool("set_node_id", SetNodeIdBody, asIs, setNodeId),
+  add_snippet: batchTool("add_snippet", AddSnippetBody, asIs, addSnippet),
+  update_snippet: batchTool("update_snippet", UpdateSnippetBody, asIs, updateSnippet),
+  remove_snippet: batchTool("remove_snippet", RemoveSnippetBody, asIs, removeSnippet),
+  instantiate_snippet: batchTool(
+    "instantiate_snippet",
+    InstantiateSnippetBody,
+    asIs,
+    instantiateSnippet,
+  ),
+  update_snippet_args: batchTool(
+    "update_snippet_args",
+    UpdateSnippetArgsBody,
+    asIs,
+    updateSnippetArgs,
+  ),
+  update_frame: batchTool("update_frame", UpdateFrameBody, normalizeUpdateFrame, (ctx, plan) =>
+    plan.mode === "bulk" ? updateFrames(ctx, plan.args) : updateFrame(ctx, plan.args),
+  ),
+  add_note: batchTool("add_note", AddNoteBody, asIs, addNote),
 };
 
 type ResourceKind = "screen" | "board" | "snippet" | "notes" | "annotations";
@@ -408,44 +446,30 @@ export async function runBatch(
 
   const results: BatchCallResult[] = [];
   for (const call of calls) {
-    const fn = BATCH_TOOLS[call.tool];
-    if (!fn) {
+    const tool = BATCH_TOOLS[call.tool];
+    if (!tool) {
       results.push({
         tool: call.tool,
         ok: false,
-        error: { kind: "BadRequest", message: `batch: unsupported tool "${call.tool}"` },
+        error: badRequest(`batch: unsupported tool "${call.tool}"`),
       });
       break;
     }
+    // Validate BEFORE snapshotting: a malformed call is now rejected without
+    // touching the folder at all, rather than reaching an impl and throwing.
+    const prepared = tool.prepare(call.args);
+    if (!prepared.ok) {
+      results.push({ tool: call.tool, ok: false, error: prepared.error });
+      break;
+    }
     if (atomic) for (const res of touchedResources(ctx, call)) snapshot(res.kind, res.id);
-    try {
-      const r = await fn(stagedCtx, call.args as never);
-      if (r.ok) {
-        const made = createdResource(call, r.value);
-        if (made) created.push(made);
-        results.push({ tool: call.tool, ok: true, value: r.value });
-      } else {
-        results.push({ tool: call.tool, ok: false, error: r.error });
-        break;
-      }
-    } catch (thrown) {
-      // An impl threw instead of returning a Result — almost always
-      // malformed args (batch skips the MCP layer's schema validation).
-      // Name the tool and point at the schema instead of leaking a bare
-      // runtime error.
-      const detail = thrown instanceof Error ? thrown.message : String(thrown);
-      // A thrown ZodError (e.g. the persist-time schema parse) carries
-      // `.issues` — surface the scalar-`children` nudge from a malformed tree.
-      const hint = scalarChildrenHint((thrown as { issues?: unknown })?.issues);
-      results.push({
-        tool: call.tool,
-        ok: false,
-        error: {
-          kind: "BadRequest",
-          message: `batch ${call.tool}: invalid or missing args — match the standalone ${call.tool} tool's schema (${detail})`,
-          ...(hint !== undefined ? { hint } : {}),
-        },
-      });
+    const r = await prepared.run(stagedCtx);
+    if (r.ok) {
+      const made = createdResource(call, r.value);
+      if (made) created.push(made);
+      results.push({ tool: call.tool, ok: true, value: r.value });
+    } else {
+      results.push({ tool: call.tool, ok: false, error: r.error });
       break;
     }
   }

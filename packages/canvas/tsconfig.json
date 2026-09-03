@@ -15,5 +15,10 @@
     }
   },
   "include": ["src/**/*", "vite.config.ts"],
-  "references": [{ "path": "../schema" }, { "path": "../provider" }, { "path": "../renderer" }]
+  "references": [
+    { "path": "../schema" },
+    { "path": "../protocol" },
+    { "path": "../provider" },
+    { "path": "../renderer" }
+  ]
 }

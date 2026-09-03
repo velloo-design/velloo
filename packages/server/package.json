@@ -16,6 +16,7 @@
     "@velloo/canvas": "workspace:*",
     "@velloo/codegen": "workspace:*",
     "@velloo/helpers": "workspace:*",
+    "@velloo/protocol": "workspace:*",
     "@velloo/provider": "workspace:*",
     "@velloo/provider-antd": "workspace:*",
     "@velloo/provider-chakra": "workspace:*",

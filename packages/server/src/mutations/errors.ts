@@ -1,53 +1,14 @@
+import type { MutationError } from "@velloo/protocol";
+
 /**
- * Mutation failure modes as a discriminated union. Pair with
- * Result<T, MutationError> across the layer; consumers `switch (error.kind)`
- * with a `const _: never = error` exhaustiveness guard.
+ * Mutation failure modes. The union itself is the canvas's wire contract, so
+ * it is declared in `@velloo/protocol`; what lives here are the constructors,
+ * which carry agent-facing hint prose and the nearest-component search.
+ *
+ * Consumers get exhaustiveness from a total `Record<MutationError["kind"], _>`
+ * — see `routes/error-http.ts`.
  */
-export type MutationError =
-  | { kind: "ScreenNotFound"; screenId: string }
-  | { kind: "BoardNotFound"; boardId: string }
-  | { kind: "FrameNotFound"; boardId: string; frameId: string }
-  | { kind: "BoardGroupNotFound"; groupId: string }
-  | { kind: "UnknownComponent"; ref: string; suggestions: string[]; hint?: string }
-  | { kind: "InvalidPath"; reason: string; path?: number[]; hint?: string }
-  | { kind: "InvalidMove"; reason: string }
-  | { kind: "LastScreen"; screenId: string }
-  | { kind: "ScreenIdConflict"; screenId: string; hint?: string }
-  | { kind: "ScreenIdExhausted"; base: string }
-  | { kind: "BoardIdConflict"; boardId: string }
-  | { kind: "BoardIdExhausted"; base: string }
-  | { kind: "FrameIdConflict"; boardId: string; frameId: string }
-  /** Request body failed zod validation. */
-  | { kind: "BadRequest"; message: string; issues?: unknown; hint?: string }
-  | { kind: "SnippetNotFound"; snippetId: string }
-  | { kind: "SnippetParamMismatch"; snippetId: string; reason: string; details?: unknown }
-  | { kind: "SnippetCycle"; snippetId: string; viaPath: string[] }
-  | { kind: "SnippetInUse"; snippetId: string; screenIds: string[] }
-  | { kind: "SnippetIdConflict"; snippetId: string }
-  | { kind: "IdNotFound"; screenId: string; id: string; hint?: string }
-  | { kind: "IdConflict"; screenId: string; id: string; paths: number[][] }
-  | {
-      kind: "AnnotationConflict";
-      screenId: string;
-      locator: number[] | string;
-      existingId: string;
-    }
-  | { kind: "AnnotationNotFound"; screenId: string; annotationId: string }
-  | { kind: "CanvasNoteNotFound"; noteId: string }
-  | { kind: "ExtensionIdConflict"; extensionId: string; message: string }
-  | { kind: "ExtensionNotFound"; extensionId: string; message: string }
-  | {
-      kind: "ExtensionInUse";
-      extensionId: string;
-      message: string;
-      references: { screenId: string; path: string }[];
-    }
-  | {
-      kind: "InvalidExtensionProp";
-      extensionId: string;
-      message: string;
-      prop: string;
-    };
+export type { MutationError } from "@velloo/protocol";
 
 // Constructor helpers.
 export const screenNotFound = (screenId: string): MutationError => ({

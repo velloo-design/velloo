@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { AddNodeBody, normalizeAddNode } from "@velloo/protocol";
 import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { ActivityEvent } from "../../../activity.ts";
@@ -10,15 +11,16 @@ import { type DesignFolder, loadDesignFolder } from "../../../design-folder.ts";
 import { runBatch } from "../../../mutations/batch.ts";
 import { badRequest, scalarChildrenHint } from "../../../mutations/errors.ts";
 import type { MutationContext } from "../../../mutations/index.ts";
-import { AddNodeBody } from "../../../routes/mutate-schemas.ts";
 import type { WatchEvent } from "../../../watcher.ts";
 import { registerMutationTools } from "../mutations.ts";
 
 /**
  * Guards the "did you mean props.children?" nudge for the scalar-as-children
- * footgun across the three surfaces where the failure is ours to shape: the
- * detector itself, the standalone `add_node` MCP tool, and the `batch` path
- * (which skips MCP arg validation and so trips the persist-time schema parse).
+ * footgun across every surface that can hit it: the detector itself, the
+ * standalone `add_node` MCP tool, `batch`, and the shared body + normalization
+ * both of them now run. The scalar reaches a handler on purpose — the schema
+ * admits it so the answer can be this nudge rather than an opaque
+ * "expected array".
  */
 
 const provider = createShadcnProvider();
@@ -233,21 +235,30 @@ describe("batch path", () => {
   });
 });
 
-describe("HTTP route body validation", () => {
-  test("a scalar children body yields the hint through badRequest(issues)", () => {
+describe("shared add_node body", () => {
+  /**
+   * The scalar is accepted by the schema on purpose and rejected by
+   * `normalizeAddNode` — every surface shares both, so the nudge reaches
+   * agents identically through MCP, batch, and any future HTTP route rather
+   * than depending on which one remembered to special-case it.
+   */
+  test("a scalar children is rejected by normalization, with the hint", () => {
     const parsed = AddNodeBody.safeParse({
       screenId: "landing",
       parentPath: [],
       componentRef: "Button",
       children: "Save",
     });
-    expect(parsed.success).toBe(false);
-    if (parsed.success) return;
-    const error = badRequest("Request body failed validation.", parsed.error.issues);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const normalized = normalizeAddNode(parsed.data);
+    expect(normalized.ok).toBe(false);
+    if (normalized.ok) return;
+    const error = badRequest(normalized.message, normalized.issues);
     if (error.kind === "BadRequest") expect(error.hint).toContain("props.children");
   });
 
-  test("a valid children array body passes validation", () => {
+  test("a valid children array body passes validation and normalization", () => {
     const parsed = AddNodeBody.safeParse({
       screenId: "landing",
       parentPath: [],
@@ -255,6 +266,24 @@ describe("HTTP route body validation", () => {
       children: [{ $ref: "Button" }],
     });
     expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const normalized = normalizeAddNode(parsed.data);
+    expect(normalized.ok).toBe(true);
+  });
+
+  test("`propPatch` is accepted as an alias for `props`", () => {
+    const parsed = AddNodeBody.safeParse({
+      screenId: "landing",
+      parentPath: [],
+      componentRef: "Button",
+      propPatch: { children: "Save" },
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const normalized = normalizeAddNode(parsed.data);
+    expect(normalized.ok).toBe(true);
+    if (!normalized.ok) return;
+    expect(normalized.args.props).toEqual({ children: "Save" });
   });
 
   test("an unrelated body failure carries no children hint", () => {

@@ -1,7 +1,7 @@
 import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Screen, Snippet, SnippetParam, Theme, ViewportPreset } from "@velloo/schema";
 import type { AnnotationEntry, CanvasNoteEntry } from "../store.ts";
-import type { MutateError } from "./http.ts";
+import { toApiError } from "./http.ts";
 
 export interface DesignSummary {
   snapshotVersion: string;
@@ -78,12 +78,7 @@ export interface SnippetMeta {
  */
 export async function getJson<T>(path: string, label: string): Promise<T> {
   const res = await fetch(path);
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: MutateError };
-    const err = new Error(body.error?.message ?? `${label}: ${res.status}`);
-    (err as Error & { payload?: MutateError }).payload = body.error;
-    throw err;
-  }
+  if (!res.ok) throw await toApiError(res, label);
   return (await res.json()) as T;
 }
 
