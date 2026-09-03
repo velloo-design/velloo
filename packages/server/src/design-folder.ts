@@ -21,6 +21,7 @@ import {
 } from "@velloo/schema";
 import { HistoryManager } from "./history.ts";
 import { readRepoFeedback } from "./repo-config.ts";
+import { readFeedbackContactOk } from "./user-prefs.ts";
 
 export interface DesignFolder {
   root: string;
@@ -175,7 +176,12 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   // stored. A folder outside a registered repo (or written before the move)
   // falls back to its own recorded answer.
   const repoFeedback = await readRepoFeedback(root);
-  const config = repoFeedback ? { ...parsedConfig, feedback: repoFeedback } : parsedConfig;
+  const feedback = repoFeedback ?? parsedConfig.feedback;
+  // `contactOk` is the person's, not the repo's: it comes from this machine
+  // regardless of what any committed file says.
+  const config = feedback
+    ? { ...parsedConfig, feedback: { ...feedback, contactOk: await readFeedbackContactOk() } }
+    : parsedConfig;
   const theme = ThemeSchema.parse(themeRaw);
 
   const screens = await loadDir(

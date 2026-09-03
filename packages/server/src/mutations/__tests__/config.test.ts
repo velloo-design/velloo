@@ -46,6 +46,8 @@ const sampleTheme: Theme = {
 };
 
 let tmp: string;
+/** Machine-level prefs, redirected per test so the suite never touches ~/.velloo. */
+let prefsPath: string;
 let folder: DesignFolder;
 let ctx: MutationContext;
 let events: (WatchEvent | ActivityEvent)[];
@@ -63,6 +65,8 @@ const broadcasts = () => events.filter((e) => e.type !== "activity");
 
 beforeEach(async () => {
   tmp = join(tmpdir(), `velloo-config-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  prefsPath = join(tmp, "prefs.json");
+  process.env.VELLOO_PREFS_PATH = prefsPath;
   await mkdir(join(tmp, ".design"), { recursive: true });
   await mkdir(join(tmp, "theme"), { recursive: true });
   await mkdir(join(tmp, "boards"), { recursive: true });
@@ -92,6 +96,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  process.env.VELLOO_PREFS_PATH = undefined;
   await rm(tmp, { recursive: true, force: true });
 });
 
@@ -177,10 +182,13 @@ describe("update_codegen", () => {
 });
 
 describe("update_feedback", () => {
-  test("contactOk survives toggling enabled off and on", async () => {
+  test("the folder records whether the tool is on; contact consent stays off-repo", async () => {
     unwrap(await updateFeedback(ctx, { enabled: true, contactOk: true }));
     unwrap(await updateFeedback(ctx, { enabled: false }));
-    expect((await onDisk()).feedback).toEqual({ enabled: false, contactOk: true });
+    // `contactOk` is the person's — it never lands in a committed file.
+    expect((await onDisk()).feedback).toEqual({ enabled: false });
+    expect(JSON.parse(await readFile(prefsPath, "utf8")).feedbackContactOk).toBe(true);
+    // …and it still rides along in the result, read back from this machine.
     expect(unwrap(await updateFeedback(ctx, { enabled: true }))).toEqual({
       enabled: true,
       contactOk: true,

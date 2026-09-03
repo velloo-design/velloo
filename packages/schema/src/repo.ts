@@ -1,9 +1,15 @@
 import { z } from "zod";
 
 /**
- * Consent for the `send_feedback` tool. `contactOk` records consent to be
- * contacted about that feedback. Absent ⇒ disabled (the default; the local
- * tool stays account-free + offline).
+ * Consent for the `send_feedback` tool.
+ *
+ * `enabled` is a repo decision (committed in `velloo.json`) — whether the tool
+ * exists for this project at all. `contactOk` records consent to be *contacted*
+ * about what was sent, which is personal: it is read from and written to the
+ * machine's `~/.velloo/prefs.json`, never committed, so cloning a repo can't
+ * opt a different person into being emailed. It stays in this shape because
+ * every reader wants the pair, and because folders written before the split
+ * still carry it on disk (where it is now ignored).
  */
 export const FeedbackPrefsSchema = z.object({
   enabled: z.boolean(),

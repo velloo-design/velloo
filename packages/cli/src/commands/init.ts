@@ -11,7 +11,12 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
-import { writeJsonAtomic, writeRepoFeedback, writeText } from "@velloo/server";
+import {
+  writeFeedbackContactOk,
+  writeJsonAtomic,
+  writeRepoFeedback,
+  writeText,
+} from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { defineCommand } from "citty";
 import pc from "picocolors";
@@ -767,10 +772,14 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         ),
       );
     }
-    // Feedback consent belongs to the repo, not this folder — write it
-    // now that a manifest is guaranteed to exist. A folder outside any
-    // repo has nowhere higher to put it and keeps the default (off).
-    if (answers.feedback) await writeRepoFeedback(folder, answers.feedback);
+    // Whether the tool exists is a repo decision, written now that a manifest
+    // is guaranteed to exist (a folder outside any repo has nowhere higher to
+    // put it and keeps the default, off). Consent to be contacted is the
+    // person's and goes to ~/.velloo, never into a committed file.
+    if (answers.feedback) {
+      await writeRepoFeedback(folder, answers.feedback);
+      await writeFeedbackContactOk(answers.feedback.contactOk === true);
+    }
   } catch (err) {
     console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
   }

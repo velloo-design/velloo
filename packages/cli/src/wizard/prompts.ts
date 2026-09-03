@@ -144,7 +144,7 @@ async function promptShareAndFeedback(appRoot: string): Promise<{
   const answered = await readRepoFeedback(appRoot);
   if (answered) {
     log.info(
-      `Feedback tool: ${answered.enabled ? (answered.contactOk ? "on, contact OK" : "on, anonymous") : "off"} ${pc.dim("(already set for this repo)")}`,
+      `Feedback tool: ${answered.enabled ? "on" : "off"} ${pc.dim("(already set for this repo)")}`,
     );
     return {};
   }

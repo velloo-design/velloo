@@ -1,6 +1,7 @@
 import { err, ok, type Result } from "@velloo/result";
 import { type Config, type ViewportPreset, ViewportPresetSchema } from "@velloo/schema";
 import { writeRepoFeedback } from "../repo-config.ts";
+import { readFeedbackContactOk, writeFeedbackContactOk } from "../user-prefs.ts";
 import type { MutationContext } from "./context.ts";
 import { badRequest, boardNotFound, type MutationError, screenNotFound } from "./errors.ts";
 import { persistConfig } from "./persist.ts";
@@ -182,10 +183,11 @@ export async function updateFeedback(
   args: UpdateFeedbackArgs,
 ): Promise<Result<UpdateFeedbackResult, MutationError>> {
   const current = ctx.folder.config.feedback;
-  const feedback = {
-    enabled: args.enabled ?? current?.enabled ?? false,
-    contactOk: args.contactOk ?? current?.contactOk ?? false,
-  };
+  // Contact consent is the person's: this machine is the only source of truth
+  // for it, and the only place it's written.
+  const contactOk = args.contactOk ?? (await readFeedbackContactOk());
+  const feedback = { enabled: args.enabled ?? current?.enabled ?? false, contactOk };
+  if (args.contactOk !== undefined) await writeFeedbackContactOk(args.contactOk);
   const wroteRepo = await writeRepoFeedback(ctx.folder.root, feedback);
   if (wroteRepo) {
     // The folder config didn't change, but every reader reads through it —
@@ -194,9 +196,9 @@ export async function updateFeedback(
     ctx.broadcast({ type: "config-changed" });
     return ok({ enabled: feedback.enabled, contactOk: feedback.contactOk });
   }
-  const saved = await commit(ctx, { ...ctx.folder.config, feedback });
-  return ok({
-    enabled: saved.feedback?.enabled ?? false,
-    contactOk: saved.feedback?.contactOk ?? false,
+  const saved = await commit(ctx, {
+    ...ctx.folder.config,
+    feedback: { enabled: feedback.enabled },
   });
+  return ok({ enabled: saved.feedback?.enabled ?? false, contactOk: feedback.contactOk });
 }

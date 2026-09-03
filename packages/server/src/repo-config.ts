@@ -41,13 +41,19 @@ export async function findRepoManifest(startDir: string): Promise<FoundRepoManif
  */
 export async function readRepoFeedback(startDir: string): Promise<FeedbackPrefs | null> {
   const found = await findRepoManifest(startDir);
-  return found?.manifest.feedback ?? null;
+  const feedback = found?.manifest.feedback;
+  // A committed `contactOk` is ignored — see {@link writeRepoFeedback}.
+  return feedback ? { enabled: feedback.enabled } : null;
 }
 
 /**
  * Persist feedback consent at the repo root, leaving the projects map alone.
  * Returns the file written, or null when there's no manifest to write into —
  * a folder outside any registered repo keeps its answer in its own config.
+ *
+ * Only `enabled` is written: `contactOk` is the person's, and lives in
+ * `~/.velloo/prefs.json`. A `contactOk` left in an older manifest is dropped
+ * here rather than migrated, so it can't leak to whoever clones the repo next.
  */
 export async function writeRepoFeedback(
   startDir: string,
@@ -55,6 +61,9 @@ export async function writeRepoFeedback(
 ): Promise<string | null> {
   const found = await findRepoManifest(startDir);
   if (!found) return null;
-  await writeJsonAtomic(found.path, { ...found.manifest, feedback });
+  await writeJsonAtomic(found.path, {
+    ...found.manifest,
+    feedback: { enabled: feedback.enabled },
+  });
   return found.path;
 }

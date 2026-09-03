@@ -145,7 +145,8 @@ export function FolderPane({ cfg }: { cfg: FolderConfig }) {
           </div>
           {/* Consent is a property of the feedback itself, so it hangs off the
               switch rather than standing as a peer row — and it stays visible
-              when feedback is off, because it records what was agreed to. */}
+              when feedback is off, because it records what was agreed to.
+              Unlike the switch above it, this one is yours, not the repo's. */}
           <label
             htmlFor={contactId}
             className="mt-2 flex items-start gap-2 border-l-2 border-border pl-3"
@@ -166,6 +167,7 @@ export function FolderPane({ cfg }: { cfg: FolderConfig }) {
               </span>
               <span className="block text-[11px] text-muted-foreground">
                 Attaches your account email to each report. Unchecked, feedback goes in anonymously.
+                Saved on this machine, not in the repo — nobody who clones it inherits your answer.
               </span>
             </span>
           </label>

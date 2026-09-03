@@ -533,4 +533,5 @@ export {
   scoreThemeContrastBoth,
 } from "./theme/contrast.ts";
 export { derivePalette } from "./theme/derive-palette.ts";
+export { readFeedbackContactOk, writeFeedbackContactOk } from "./user-prefs.ts";
 export type { WatchEvent } from "./watcher.ts";
