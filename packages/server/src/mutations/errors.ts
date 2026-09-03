@@ -1,9 +1,16 @@
-import type { MutationError } from "@velloo/protocol";
+import type { ErrorOf, MutationError } from "@velloo/protocol";
 
 /**
  * Mutation failure modes. The union itself is the canvas's wire contract, so
  * it is declared in `@velloo/protocol`; what lives here are the constructors,
  * which carry agent-facing hint prose and the nearest-component search.
+ *
+ * Each constructor returns its OWN variant, not the whole union. A function
+ * that can only fail one way then says so in its signature, instead of
+ * claiming all 28 — which is what makes `catchKind` able to narrow, and what
+ * lets a reader see a function's real failure modes without reading its body.
+ * The narrow types are assignable to the wide one, so callers that do want
+ * `Result<T, MutationError>` are unaffected.
  *
  * Consumers get exhaustiveness from a total `Record<MutationError["kind"], _>`
  * — see `routes/error-http.ts`.
@@ -11,20 +18,25 @@ import type { MutationError } from "@velloo/protocol";
 export type { MutationError } from "@velloo/protocol";
 
 // Constructor helpers.
-export const screenNotFound = (screenId: string): MutationError => ({
+export const screenNotFound = (screenId: string): ErrorOf<MutationError, "ScreenNotFound"> => ({
   kind: "ScreenNotFound",
   screenId,
 });
-export const boardNotFound = (boardId: string): MutationError => ({
+export const boardNotFound = (boardId: string): ErrorOf<MutationError, "BoardNotFound"> => ({
   kind: "BoardNotFound",
   boardId,
 });
-export const frameNotFound = (boardId: string, frameId: string): MutationError => ({
+export const frameNotFound = (
+  boardId: string,
+  frameId: string,
+): ErrorOf<MutationError, "FrameNotFound"> => ({
   kind: "FrameNotFound",
   boardId,
   frameId,
 });
-export const boardGroupNotFound = (groupId: string): MutationError => ({
+export const boardGroupNotFound = (
+  groupId: string,
+): ErrorOf<MutationError, "BoardGroupNotFound"> => ({
   kind: "BoardGroupNotFound",
   groupId,
 });
@@ -32,27 +44,31 @@ export const unknownComponent = (
   ref: string,
   suggestions: string[],
   hint?: string,
-): MutationError => ({
+): ErrorOf<MutationError, "UnknownComponent"> => ({
   kind: "UnknownComponent",
   ref,
   suggestions,
   ...(hint !== undefined ? { hint } : {}),
 });
-export const invalidPath = (reason: string, path?: number[], hint?: string): MutationError => ({
+export const invalidPath = (
+  reason: string,
+  path?: number[],
+  hint?: string,
+): ErrorOf<MutationError, "InvalidPath"> => ({
   kind: "InvalidPath",
   reason,
   ...(path !== undefined ? { path } : {}),
   ...(hint !== undefined ? { hint } : {}),
 });
-export const invalidMove = (reason: string): MutationError => ({
+export const invalidMove = (reason: string): ErrorOf<MutationError, "InvalidMove"> => ({
   kind: "InvalidMove",
   reason,
 });
-export const lastScreen = (screenId: string): MutationError => ({
+export const lastScreen = (screenId: string): ErrorOf<MutationError, "LastScreen"> => ({
   kind: "LastScreen",
   screenId,
 });
-export const screenIdConflict = (screenId: string): MutationError => ({
+export const screenIdConflict = (screenId: string): ErrorOf<MutationError, "ScreenIdConflict"> => ({
   kind: "ScreenIdConflict",
   screenId,
   hint:
@@ -61,24 +77,30 @@ export const screenIdConflict = (screenId: string): MutationError => ({
     `placeholder first with remove_node if needed). To replace it, remove_screen then add_screen. ` +
     `To create a separate screen, omit \`id\` (add_screen auto-suffixes a unique one).`,
 });
-export const screenIdExhausted = (base: string): MutationError => ({
+export const screenIdExhausted = (base: string): ErrorOf<MutationError, "ScreenIdExhausted"> => ({
   kind: "ScreenIdExhausted",
   base,
 });
-export const boardIdConflict = (boardId: string): MutationError => ({
+export const boardIdConflict = (boardId: string): ErrorOf<MutationError, "BoardIdConflict"> => ({
   kind: "BoardIdConflict",
   boardId,
 });
-export const boardIdExhausted = (base: string): MutationError => ({
+export const boardIdExhausted = (base: string): ErrorOf<MutationError, "BoardIdExhausted"> => ({
   kind: "BoardIdExhausted",
   base,
 });
-export const frameIdConflict = (boardId: string, frameId: string): MutationError => ({
+export const frameIdConflict = (
+  boardId: string,
+  frameId: string,
+): ErrorOf<MutationError, "FrameIdConflict"> => ({
   kind: "FrameIdConflict",
   boardId,
   frameId,
 });
-export const badRequest = (message: string, issues?: unknown): MutationError => {
+export const badRequest = (
+  message: string,
+  issues?: unknown,
+): ErrorOf<MutationError, "BadRequest"> => {
   const hint = scalarChildrenHint(issues);
   return {
     kind: "BadRequest",
@@ -127,7 +149,7 @@ function hasScalarChildrenIssue(issues: unknown): boolean {
     return Array.isArray(i.errors) && i.errors.some((branch) => hasScalarChildrenIssue(branch));
   });
 }
-export const snippetNotFound = (snippetId: string): MutationError => ({
+export const snippetNotFound = (snippetId: string): ErrorOf<MutationError, "SnippetNotFound"> => ({
   kind: "SnippetNotFound",
   snippetId,
 });
@@ -135,33 +157,49 @@ export const snippetParamMismatch = (
   snippetId: string,
   reason: string,
   details?: unknown,
-): MutationError => ({
+): ErrorOf<MutationError, "SnippetParamMismatch"> => ({
   kind: "SnippetParamMismatch",
   snippetId,
   reason,
   ...(details !== undefined ? { details } : {}),
 });
-export const snippetCycle = (snippetId: string, viaPath: string[]): MutationError => ({
+export const snippetCycle = (
+  snippetId: string,
+  viaPath: string[],
+): ErrorOf<MutationError, "SnippetCycle"> => ({
   kind: "SnippetCycle",
   snippetId,
   viaPath,
 });
-export const snippetInUse = (snippetId: string, screenIds: string[]): MutationError => ({
+export const snippetInUse = (
+  snippetId: string,
+  screenIds: string[],
+): ErrorOf<MutationError, "SnippetInUse"> => ({
   kind: "SnippetInUse",
   snippetId,
   screenIds,
 });
-export const snippetIdConflict = (snippetId: string): MutationError => ({
+export const snippetIdConflict = (
+  snippetId: string,
+): ErrorOf<MutationError, "SnippetIdConflict"> => ({
   kind: "SnippetIdConflict",
   snippetId,
 });
-export const idNotFound = (screenId: string, id: string, hint?: string): MutationError => ({
+export const idNotFound = (
+  screenId: string,
+  id: string,
+  hint?: string,
+): ErrorOf<MutationError, "IdNotFound"> => ({
   kind: "IdNotFound",
   screenId,
   id,
   ...(hint !== undefined ? { hint } : {}),
 });
-export const idConflict = (screenId: string, id: string, paths: number[][]): MutationError => ({
+export const idConflict = (
+  screenId: string,
+  id: string,
+  paths: number[][],
+): ErrorOf<MutationError, "IdConflict"> => ({
   kind: "IdConflict",
   screenId,
   id,
@@ -171,27 +209,36 @@ export const annotationConflict = (
   screenId: string,
   locator: number[] | string,
   existingId: string,
-): MutationError => ({
+): ErrorOf<MutationError, "AnnotationConflict"> => ({
   kind: "AnnotationConflict",
   screenId,
   locator,
   existingId,
 });
-export const annotationNotFound = (screenId: string, annotationId: string): MutationError => ({
+export const annotationNotFound = (
+  screenId: string,
+  annotationId: string,
+): ErrorOf<MutationError, "AnnotationNotFound"> => ({
   kind: "AnnotationNotFound",
   screenId,
   annotationId,
 });
-export const canvasNoteNotFound = (noteId: string): MutationError => ({
+export const canvasNoteNotFound = (
+  noteId: string,
+): ErrorOf<MutationError, "CanvasNoteNotFound"> => ({
   kind: "CanvasNoteNotFound",
   noteId,
 });
-export const extensionIdConflict = (extensionId: string): MutationError => ({
+export const extensionIdConflict = (
+  extensionId: string,
+): ErrorOf<MutationError, "ExtensionIdConflict"> => ({
   kind: "ExtensionIdConflict",
   message: `Extension "${extensionId}" already exists. Use update_extension to patch it.`,
   extensionId,
 });
-export const extensionNotFound = (extensionId: string): MutationError => ({
+export const extensionNotFound = (
+  extensionId: string,
+): ErrorOf<MutationError, "ExtensionNotFound"> => ({
   kind: "ExtensionNotFound",
   message: `Extension "${extensionId}" doesn't exist.`,
   extensionId,
@@ -199,7 +246,7 @@ export const extensionNotFound = (extensionId: string): MutationError => ({
 export const extensionInUse = (
   extensionId: string,
   references: { screenId: string; path: string }[],
-): MutationError => ({
+): ErrorOf<MutationError, "ExtensionInUse"> => ({
   kind: "ExtensionInUse",
   message: `Extension "${extensionId}" is referenced by ${references.length} node${references.length === 1 ? "" : "s"} — remove the usages first.`,
   extensionId,
