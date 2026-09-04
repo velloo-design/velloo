@@ -3,7 +3,13 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import { deleteGeneratedAsset, readAssetsFile } from "../assets-store.ts";
 import type { CloudAuth } from "../cloud.ts";
-import { ASPECTS, fetchIntentCatalog, generateAsset, INTENTS } from "../cloud-generate.ts";
+import {
+  ASPECTS,
+  describeGenerateFailure,
+  fetchIntentCatalog,
+  generateAsset,
+  INTENTS,
+} from "../cloud-generate.ts";
 import type { DesignFolder } from "../design-folder.ts";
 
 /**
@@ -81,10 +87,23 @@ export function createAssetsRouter(folder: () => DesignFolder, cloud?: CloudAuth
     }
     const r = await generateAsset(folder().root, cloud, parsed.data);
     if (!r.ok) {
-      // The cloud's own status when it rejected; 502 for everything local
-      // (unreachable, unparseable) so a failure never reads as a client error.
-      const status = r.error.kind === "LoggedOut" ? 401 : (r.error.status ?? 502);
-      return fail(c, status as ContentfulStatusCode, r.error.kind, r.error.message);
+      // The cloud's own status when it rejected; 400 for a request that was
+      // wrong before it left; 502 for everything else local (unreachable,
+      // unparseable) so a failure never reads as a client error.
+      const status =
+        r.error.kind === "LoggedOut"
+          ? 401
+          : r.error.kind === "InvalidRequest"
+            ? 400
+            : r.error.kind === "HttpFailure"
+              ? r.error.status
+              : 502;
+      return fail(
+        c,
+        status as ContentfulStatusCode,
+        r.error.kind,
+        describeGenerateFailure(r.error),
+      );
     }
     return c.json(r.value);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type CloudError, describeCloudError } from "../cloud-errors.ts";
+import { type CloudError, describeCloudError } from "@velloo/protocol";
 import { describePublishError, type PublishError } from "../publish/errors.ts";
 
 /**

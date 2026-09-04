@@ -13,6 +13,7 @@
     "./cloud-codes": "./src/cloud-codes.ts"
   },
   "dependencies": {
+    "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
     "zod": "4.4.3"
   }

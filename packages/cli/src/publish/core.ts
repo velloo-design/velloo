@@ -2,6 +2,13 @@ import { type ExecFileSyncOptionsWithStringEncoding, execFileSync } from "node:c
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  type CloudError,
+  type CloudTeam,
+  cloudFetch,
+  TeamsResponseSchema,
+  unreachable,
+} from "@velloo/protocol";
+import {
   DESIGN_BUNDLE_FORMAT,
   type DesignBundle,
   DesignBundleSchema,
@@ -23,7 +30,6 @@ import {
 import { z } from "zod";
 import { withAssetServer } from "../asset-server.ts";
 import { checkCloudHealth } from "../cloud.ts";
-import { type CloudError, httpFailureFrom, unreachable } from "../cloud-errors.ts";
 import { type CloudPublishSlot, uploadLinkBundle } from "../cloud-upload.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
 import {
@@ -334,25 +340,18 @@ export async function resolveTeam(
   return ok(exact[0]?.id);
 }
 
-export interface CloudTeam {
-  id: string;
-  name: string;
-  /** The team a publish lands in when none is named. Absent on older clouds. */
-  isDefault?: boolean;
-}
+export type { CloudTeam } from "@velloo/protocol";
 
 /** The caller's teams, for a publish-target picker. */
 export async function listTeams(
   baseUrl: string,
   token: string,
 ): Promise<Result<CloudTeam[], CloudError>> {
-  const res = await fetch(`${baseUrl}/v1/teams/mine`, {
-    headers: { authorization: `Bearer ${token}` },
-  }).catch((error: unknown) => error);
-  if (!(res instanceof Response)) return err(unreachable(res, { url: baseUrl }));
-  if (!res.ok) return err(await httpFailureFrom("listing teams", res));
-  const body = (await res.json()) as { teams: CloudTeam[] };
-  return ok(body.teams);
+  const body = await cloudFetch(`${baseUrl}/v1/teams/mine`, TeamsResponseSchema, {
+    operation: "listing teams",
+    token,
+  });
+  return body.ok ? ok(body.value.teams) : body;
 }
 
 /**

@@ -1,5 +1,21 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
+import {
+  type CloudError,
+  cloudFetch,
+  cloudJson,
+  describeCloudError,
+  GenerateResponseSchema,
+  httpFailure,
+  IntentCatalogResponseSchema,
+  type IntentPrice,
+  insecureCloudUrl,
+  invalidRequest,
+  loggedOut,
+  protocolViolation,
+  readFailure,
+  unreachable,
+} from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
 import { svgLooksActive } from "@velloo/schema";
 import { recordGeneratedAssets } from "./assets-store.ts";
@@ -103,13 +119,14 @@ export interface GeneratedAsset {
   content?: string;
 }
 
-export interface GenerateAssetError {
-  kind: "LoggedOut" | "Unreachable" | "CloudRejected" | "BadResponse" | "BadRequest";
-  /** HTTP status for CloudRejected. */
-  status?: number;
-  /** Complete agent-facing message: cloud text + the actionable hint. */
-  message: string;
-}
+/**
+ * Generation fails the same five ways every other cloud call does, so it uses
+ * the same union. It used to declare its own — `LoggedOut | Unreachable |
+ * CloudRejected | BadResponse | BadRequest` — which was four fifths of
+ * `CloudError` under different names, written that way only because the union
+ * lived in the CLI where this package could not reach it.
+ */
+export type GenerateAssetError = CloudError;
 
 /** Generation can take a while (raster models run tens of seconds). */
 const FETCH_TIMEOUT_MS = 120_000;
@@ -162,61 +179,33 @@ export function formatDollars(micros: number): string {
   return Number(fixed) === value ? `$${fixed}` : `$${value}`;
 }
 
-interface GenerateResponseAsset {
-  kind: GenerateKind;
-  dataUrl: string;
-}
-
-interface GenerateResponse {
-  id: string;
-  intent: string;
-  assets: GenerateResponseAsset[];
-  chargedMicros: number;
-  balanceMicros: number;
-}
-
-function parseSuccess(body: unknown): GenerateResponse | null {
-  if (!body || typeof body !== "object") return null;
-  const r = body as Record<string, unknown>;
-  if (
-    typeof r.id !== "string" ||
-    typeof r.chargedMicros !== "number" ||
-    typeof r.balanceMicros !== "number"
-  ) {
-    return null;
+/**
+ * The agent-facing sentence for a failed generation.
+ *
+ * Not `describeCloudError`: that renders for a person at a terminal ("run
+ * `velloo login`"), while this is read by an agent deciding whether to retry,
+ * ask the user for credit, or give up — and the cloud's own `message` fields
+ * are already written for that reader, so they pass through verbatim with one
+ * hint appended.
+ */
+export function describeGenerateFailure(error: GenerateAssetError): string {
+  // Whether the account was charged is the first thing an agent needs to know
+  // before deciding to retry, and a request that never arrived cannot have been.
+  if (error.kind === "Unreachable") {
+    return `${describeCloudError(error)}. Nothing was generated or charged.`;
   }
-  const raw = Array.isArray(r.assets)
-    ? r.assets
-    : // Pre-variant clouds answered with a single top-level kind/dataUrl.
-      typeof r.dataUrl === "string"
-      ? [{ kind: r.kind, dataUrl: r.dataUrl }]
-      : null;
-  if (!raw || raw.length === 0) return null;
-  const assets: GenerateResponseAsset[] = [];
-  for (const entry of raw) {
-    if (!entry || typeof entry !== "object") return null;
-    const a = entry as Record<string, unknown>;
-    if ((a.kind !== "image" && a.kind !== "svg") || typeof a.dataUrl !== "string") return null;
-    assets.push({ kind: a.kind, dataUrl: a.dataUrl });
-  }
-  return {
-    id: r.id,
-    intent: typeof r.intent === "string" ? r.intent : "",
-    assets,
-    chargedMicros: r.chargedMicros,
-    balanceMicros: r.balanceMicros,
-  };
-}
-
-function cloudMessage(body: unknown, status: number): string {
-  if (
-    body &&
-    typeof body === "object" &&
-    typeof (body as { message?: unknown }).message === "string"
-  ) {
-    return (body as { message: string }).message;
-  }
-  return `velloo-cloud rejected the generation request (${status}).`;
+  if (error.kind !== "HttpFailure") return describeCloudError(error);
+  const hint = HINTS[error.status];
+  // The cloud's messages don't reliably end in punctuation, and run together
+  // "…as a data URI Fix the arguments" reads as one mangled sentence.
+  // `readFailure`'s "unknown" means the cloud sent no message at all (a proxy
+  // page, a bare 500) — the status is then the only thing worth saying.
+  const detail =
+    error.detail === "unknown"
+      ? `velloo-cloud rejected the generation request (${error.status}).`
+      : error.detail.trimEnd();
+  const sentence = /[.!?]$/.test(detail) ? detail : `${detail}.`;
+  return hint ? `${sentence} ${hint}` : sentence;
 }
 
 const DATA_URL = /^data:image\/(png|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/;
@@ -249,55 +238,47 @@ async function encodeReference(
   // containment check below be the actual guard.
   const cleaned = ref.replace(/^\/+/, "");
   if (isAbsolute(cleaned) || normalize(cleaned).startsWith("..")) {
-    return err({
-      kind: "BadRequest",
-      message: `Reference "${ref}" is outside the design folder — pass a folder-relative path like "assets/hero.png".`,
-    });
+    return err(
+      invalidRequest(
+        `Reference "${ref}" is outside the design folder — pass a folder-relative path like "assets/hero.png".`,
+      ),
+    );
   }
   const full = resolve(join(root, cleaned));
   const rel = relative(resolve(root), full);
   if (rel.startsWith("..") || isAbsolute(rel)) {
-    return err({
-      kind: "BadRequest",
-      message: `Reference "${ref}" is outside the design folder — pass a folder-relative path like "assets/hero.png".`,
-    });
+    return err(
+      invalidRequest(
+        `Reference "${ref}" is outside the design folder — pass a folder-relative path like "assets/hero.png".`,
+      ),
+    );
   }
   const ext = (full.split(".").pop() ?? "").toLowerCase();
   const mime = REFERENCE_MIME[ext];
   if (!mime) {
-    return err({
-      kind: "BadRequest",
-      message: `Reference "${ref}" isn't a supported image (expected ${Object.keys(REFERENCE_MIME).join(", ")}).`,
-    });
+    return err(
+      invalidRequest(
+        `Reference "${ref}" isn't a supported image (expected ${Object.keys(REFERENCE_MIME).join(", ")}).`,
+      ),
+    );
   }
   let bytes: Buffer;
   try {
     bytes = await readFile(full);
   } catch {
-    return err({
-      kind: "BadRequest",
-      message: `Reference "${ref}" doesn't exist in this design folder.`,
-    });
+    return err(invalidRequest(`Reference "${ref}" doesn't exist in this design folder.`));
   }
   if (bytes.length > MAX_REFERENCE_BYTES) {
-    return err({
-      kind: "BadRequest",
-      message: `Reference "${ref}" is ${(bytes.length / (1024 * 1024)).toFixed(1)} MB — the limit is ${MAX_REFERENCE_BYTES / (1024 * 1024)} MB. Use a smaller source image.`,
-    });
+    return err(
+      invalidRequest(
+        `Reference "${ref}" is ${(bytes.length / (1024 * 1024)).toFixed(1)} MB — the limit is ${MAX_REFERENCE_BYTES / (1024 * 1024)} MB. Use a smaller source image.`,
+      ),
+    );
   }
   return ok(`data:${mime};base64,${bytes.toString("base64")}`);
 }
 
-export interface IntentPrice {
-  intent: string;
-  summary: string;
-  /** List price per asset in micros; what a run actually costs is in its reply. */
-  priceMicros: number;
-  output: "image" | "svg";
-  aspects: string[];
-  defaultAspect: string;
-  reference: "forbidden" | "optional" | "required";
-}
+export type { IntentPrice } from "@velloo/protocol";
 
 /**
  * The cloud's live intent catalogue. Read per request rather than cached: the
@@ -306,48 +287,15 @@ export interface IntentPrice {
  */
 export async function fetchIntentCatalog(
   cloud: CloudAuth,
-): Promise<Result<{ intents: IntentPrice[]; maxCount?: number }, GenerateAssetError>> {
+): Promise<Result<{ intents: IntentPrice[]; maxCount?: number | undefined }, GenerateAssetError>> {
   const token = await currentToken(cloud);
-  if (!token) return err({ kind: "LoggedOut", message: "Not signed in to velloo-cloud." });
-  if (!isSecureCloudUrl(cloud.url)) {
-    return err({
-      kind: "Unreachable",
-      message: `Refusing to use a non-HTTPS cloud URL (${cloud.url}).`,
-    });
-  }
-  try {
-    const res = await fetch(`${cloud.url}/v1/assets/intents`, {
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) {
-      return err({
-        kind: "CloudRejected",
-        status: res.status,
-        message: `velloo-cloud returned ${res.status} for the intent catalogue.`,
-      });
-    }
-    const body = (await res.json()) as { intents?: unknown; maxCount?: unknown };
-    if (!Array.isArray(body.intents)) {
-      return err({ kind: "BadResponse", message: "Unexpected intent catalogue shape." });
-    }
-    const intents = body.intents.filter(
-      (i): i is IntentPrice =>
-        !!i &&
-        typeof i === "object" &&
-        typeof (i as IntentPrice).intent === "string" &&
-        typeof (i as IntentPrice).priceMicros === "number",
-    );
-    return ok({
-      intents,
-      ...(typeof body.maxCount === "number" ? { maxCount: body.maxCount } : {}),
-    });
-  } catch (e) {
-    return err({
-      kind: "Unreachable",
-      message: `Couldn't reach velloo-cloud (${e instanceof Error ? e.message : String(e)}).`,
-    });
-  }
+  if (!token) return err(loggedOut("Not signed in to velloo-cloud"));
+  if (!isSecureCloudUrl(cloud.url)) return err(insecureCloudUrl(cloud.url));
+  return cloudFetch(`${cloud.url}/v1/assets/intents`, IntentCatalogResponseSchema, {
+    operation: "reading the generation catalogue",
+    token,
+    timeoutMs: 10_000,
+  });
 }
 
 export async function generateAsset(
@@ -356,27 +304,18 @@ export async function generateAsset(
   req: GenerateAssetRequest,
 ): Promise<Result<GeneratedAsset, GenerateAssetError>> {
   const token = await currentToken(cloud);
-  if (!token) {
-    return err({
-      kind: "LoggedOut",
-      message: "Not signed in to velloo-cloud — run `velloo login`, then retry.",
-    });
-  }
+  if (!token) return err(loggedOut("Not signed in to velloo-cloud"));
 
   // Never send the bearer token over a cleartext channel (https or loopback only).
-  if (!isSecureCloudUrl(cloud.url)) {
-    return err({
-      kind: "Unreachable",
-      message: `Refusing to send credentials to a non-HTTPS cloud URL (${cloud.url}). Use https:// or a loopback host.`,
-    });
-  }
+  if (!isSecureCloudUrl(cloud.url)) return err(insecureCloudUrl(cloud.url));
 
   const refPaths = req.reference ?? [];
   if (refPaths.length > MAX_REFERENCES) {
-    return err({
-      kind: "BadRequest",
-      message: `At most ${MAX_REFERENCES} reference images per generation (got ${refPaths.length}).`,
-    });
+    return err(
+      invalidRequest(
+        `At most ${MAX_REFERENCES} reference images per generation (got ${refPaths.length}).`,
+      ),
+    );
   }
   const references: string[] = [];
   for (const ref of refPaths) {
@@ -386,7 +325,6 @@ export async function generateAsset(
   }
 
   let res: Response;
-  let body: unknown;
   try {
     res = await fetch(`${cloud.url}/v1/assets/generate`, {
       method: "POST",
@@ -400,56 +338,41 @@ export async function generateAsset(
       }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    body = await res.json().catch(() => undefined);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return err({
-      kind: "Unreachable",
-      message: `Couldn't reach velloo-cloud (${msg}) — nothing was generated or charged. Check the connection and retry.`,
-    });
+    return err(unreachable(e, { url: cloud.url }));
   }
 
   if (!res.ok) {
-    const hint = HINTS[res.status];
-    // The cloud's messages don't reliably end in punctuation, and this one is
-    // read by an agent — run together, "...as a data URI Fix the arguments"
-    // reads as a single mangled sentence.
-    const detail = cloudMessage(body, res.status).trimEnd();
-    const sentence = /[.!?]$/.test(detail) ? detail : `${detail}.`;
-    return err({
-      kind: "CloudRejected",
-      status: res.status,
-      message: hint ? `${sentence} ${hint}` : sentence,
-    });
+    const { detail, code } = await readFailure(res);
+    // The hint that names the way out is appended when this is rendered
+    // (`describeGenerateFailure`), so the cloud's own wording survives intact
+    // here for anything that wants to branch on it.
+    return err(httpFailure("generation", res.status, detail, code));
   }
 
-  const payload = parseSuccess(body);
-  if (!payload) {
-    return err({
-      kind: "BadResponse",
-      message: "velloo-cloud returned an unexpected response shape for /v1/assets/generate.",
-    });
-  }
+  const parsed = await cloudJson(res, GenerateResponseSchema, "generation");
+  if (!parsed.ok) return parsed;
+  const payload = parsed.value;
 
   const stem = req.filename?.replace(/\.(png|svg)$/i, "") ?? payload.id;
   const files: GeneratedAssetFile[] = [];
   for (const [i, asset] of payload.assets.entries()) {
     const match = DATA_URL.exec(asset.dataUrl);
     if (!match) {
-      return err({
-        kind: "BadResponse",
-        message:
-          "velloo-cloud returned a data URL this server doesn't understand (expected base64 png or svg).",
-      });
+      return err(
+        protocolViolation(
+          "velloo-cloud returned a data URL this server doesn't understand (expected base64 png or svg)",
+        ),
+      );
     }
     const ext = match[1] === "png" ? "png" : "svg";
     const bytes = Buffer.from(match[2] as string, "base64");
     if (ext === "svg" && svgLooksActive(bytes.toString("utf8"))) {
-      return err({
-        kind: "BadResponse",
-        message:
-          "velloo-cloud returned SVG containing active content (script/event handlers) — refusing to store it. Retry the generation.",
-      });
+      return err(
+        protocolViolation(
+          "velloo-cloud returned SVG containing active content (script/event handlers) — refusing to store it; retry the generation",
+        ),
+      );
     }
     // Single results keep the bare stem; variants get -1, -2, … so a caller's
     // `filename` still names the file they asked for in the common case.

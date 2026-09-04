@@ -2,9 +2,9 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { describeCloudError } from "@velloo/protocol";
 import type { Server } from "bun";
 import { checkCloudHealth } from "../cloud.ts";
-import { describeCloudError } from "../cloud-errors.ts";
 import { uploadLinkBundle } from "../cloud-upload.ts";
 
 /**

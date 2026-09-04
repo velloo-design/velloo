@@ -1,3 +1,4 @@
+import { describeCloudError } from "@velloo/protocol";
 import type {
   CanvasPublish,
   CanvasPublishProgress,
@@ -6,7 +7,6 @@ import type {
   PublishHost,
 } from "@velloo/server";
 import { loadCredential } from "../cloud-credentials.ts";
-import { describeCloudError } from "../cloud-errors.ts";
 import { listPublishDestinations } from "../cloud-upload.ts";
 import { gitContext, listTeams, PUBLISH_VIEWPORT, publishDesign } from "../publish/core.ts";
 import { describePublishError } from "../publish/errors.ts";

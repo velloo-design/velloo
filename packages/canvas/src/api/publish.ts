@@ -1,3 +1,4 @@
+import type { CloudTeam } from "@velloo/protocol";
 import { getJson } from "./discovery.ts";
 import { postJson } from "./http.ts";
 
@@ -45,7 +46,7 @@ export interface PublishTargets {
    * The teams of this account's one organization. Empty for a personal account,
    * and a single entry needs no choosing — only two or more is a real decision.
    */
-  teams: { id: string; name: string; isDefault?: boolean }[];
+  teams: CloudTeam[];
   effectiveTeamId?: string | null;
   provenance?: { repo: string | null; branch: string | null };
   slots: {

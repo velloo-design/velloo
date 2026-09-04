@@ -7,7 +7,12 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { Server } from "bun";
-import { formatDollars, generateAsset, svgLooksActive } from "../cloud-generate.ts";
+import {
+  describeGenerateFailure,
+  formatDollars,
+  generateAsset,
+  svgLooksActive,
+} from "../cloud-generate.ts";
 import { loadDesignFolder } from "../design-folder.ts";
 import { registerGenerateTools } from "../mcp/tools/generate.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -146,10 +151,10 @@ test("logged out never touches the network and points at `velloo login`", async 
   expect(r.ok).toBe(false);
   if (!r.ok) {
     expect(r.error.kind).toBe("LoggedOut");
-    expect(r.error.message).toContain("velloo login");
+    expect(describeGenerateFailure(r.error)).toContain("velloo login");
     // Error messages name the way forward on THIS path; they don't advertise
     // authoring the art by hand as a consolation.
-    expect(r.error.message).not.toContain("upload_asset");
+    expect(describeGenerateFailure(r.error)).not.toContain("upload_asset");
   }
   expect(stub.requests.length).toBe(0);
 });
@@ -163,7 +168,7 @@ test("an unreachable cloud reports the failure without charging language ambigui
   expect(r.ok).toBe(false);
   if (!r.ok) {
     expect(r.error.kind).toBe("Unreachable");
-    expect(r.error.message).toContain("velloo-cloud");
+    expect(describeGenerateFailure(r.error)).toContain("Nothing was generated or charged");
   }
 });
 
@@ -373,7 +378,7 @@ describe("success", () => {
         reference: [bad],
       });
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.error.kind).toBe("BadRequest");
+      if (!r.ok) expect(r.error.kind).toBe("InvalidRequest");
     }
     expect(stub.requests.length).toBe(0);
   });
@@ -385,7 +390,7 @@ describe("success", () => {
       reference: ["assets/nope.png"],
     });
     expect(missing.ok).toBe(false);
-    if (!missing.ok) expect(missing.error.message).toContain("doesn't exist");
+    if (!missing.ok) expect(describeGenerateFailure(missing.error)).toContain("doesn't exist");
 
     await mkdir(join(tmp, "assets"), { recursive: true });
     await writeFile(join(tmp, "assets", "notes.txt"), "hello");
@@ -395,7 +400,8 @@ describe("success", () => {
       reference: ["assets/notes.txt"],
     });
     expect(wrongType.ok).toBe(false);
-    if (!wrongType.ok) expect(wrongType.error.message).toContain("supported image");
+    if (!wrongType.ok)
+      expect(describeGenerateFailure(wrongType.error)).toContain("supported image");
     expect(stub.requests.length).toBe(0);
   });
 });
@@ -410,7 +416,8 @@ describe("failure statuses map to actionable messages", () => {
     const r = await generateAsset(tmp, cloud(), { prompt: "x", intent: "photo" });
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("expected failure");
-    expect(r.error.kind).toBe("CloudRejected");
+    if (r.error.kind !== "HttpFailure")
+      throw new Error(`expected HttpFailure, got ${r.error.kind}`);
     return r.error;
   };
 
@@ -418,14 +425,14 @@ describe("failure statuses map to actionable messages", () => {
     reject(401, "unauthorized", "Invalid or expired token.");
     const e = await generate();
     expect(e.status).toBe(401);
-    expect(e.message).toContain("Invalid or expired token.");
-    expect(e.message).toContain("velloo login");
+    expect(describeGenerateFailure(e)).toContain("Invalid or expired token.");
+    expect(describeGenerateFailure(e)).toContain("velloo login");
   });
 
   test("400 passes the cloud's validation message through", async () => {
     reject(400, "bad_request", "prompt must be 1..2000 characters");
     const e = await generate();
-    expect(e.message).toContain("prompt must be 1..2000 characters");
+    expect(describeGenerateFailure(e)).toContain("prompt must be 1..2000 characters");
   });
 
   test("an unpunctuated cloud message and the hint stay two sentences", async () => {
@@ -434,7 +441,7 @@ describe("failure statuses map to actionable messages", () => {
     // read as one mangled sentence to the agent that has to act on it.
     reject(400, "bad_request", "intent 'edit' works on an existing image — name the source asset");
     const e = await generate();
-    expect(e.message).toBe(
+    expect(describeGenerateFailure(e)).toBe(
       "intent 'edit' works on an existing image — name the source asset. " +
         "Fix the arguments and retry — nothing was generated or charged.",
     );
@@ -443,8 +450,8 @@ describe("failure statuses map to actionable messages", () => {
   test("a cloud message that already ends in punctuation gains no second period", async () => {
     reject(400, "bad_request", "prompt must be 1..2000 characters.");
     const e = await generate();
-    expect(e.message).toContain("characters. Fix the arguments");
-    expect(e.message).not.toContain("characters.. ");
+    expect(describeGenerateFailure(e)).toContain("characters. Fix the arguments");
+    expect(describeGenerateFailure(e)).not.toContain("characters.. ");
   });
 
   test("400 for an unknown intent relays the server's catalogue verbatim", async () => {
@@ -456,9 +463,9 @@ describe("failure statuses map to actionable messages", () => {
     const r = await generateAsset(tmp, cloud(), { prompt: "x", intent: "photo" });
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("expected failure");
-    expect(r.error.status).toBe(400);
-    expect(r.error.message).toContain("valid intents: photo");
-    expect(r.error.message).toContain("vector (True SVG output…)");
+    expect(r.error).toMatchObject({ kind: "HttpFailure", status: 400 });
+    expect(describeGenerateFailure(r.error)).toContain("valid intents: photo");
+    expect(describeGenerateFailure(r.error)).toContain("vector (True SVG output…)");
   });
 
   test("402 keeps the cloud's price/balance/top-up text and adds the way out", async () => {
@@ -469,47 +476,49 @@ describe("failure statuses map to actionable messages", () => {
     );
     const e = await generate();
     expect(e.status).toBe(402);
-    expect(e.message).toContain("Top up at https://velloo.design/account");
-    expect(e.message).toContain("top up credits");
+    expect(describeGenerateFailure(e)).toContain("Top up at https://velloo.design/account");
+    expect(describeGenerateFailure(e)).toContain("top up credits");
   });
 
   test("404 (feature off) says hosted generation isn't available here", async () => {
     reject(404, "not_found", "Asset generation is not enabled on this server.");
     const e = await generate();
-    expect(e.message).toContain("not enabled");
-    expect(e.message).toContain("isn't available");
-    expect(e.message).not.toContain("upload_asset");
+    expect(describeGenerateFailure(e)).toContain("not enabled");
+    expect(describeGenerateFailure(e)).toContain("isn't available");
+    expect(describeGenerateFailure(e)).not.toContain("upload_asset");
   });
 
   test("429 says to wait and retry", async () => {
     reject(429, "rate_limited", "Rate limit exceeded: 10 generations per minute per account.");
     const e = await generate();
-    expect(e.message).toContain("10 generations per minute");
-    expect(e.message).toContain("wait a minute");
+    expect(describeGenerateFailure(e)).toContain("10 generations per minute");
+    expect(describeGenerateFailure(e)).toContain("wait a minute");
   });
 
   test("502 generation_failed relays that no credits were charged, and says it once", async () => {
     reject(502, "generation_failed", "The provider failed to generate; no credits were charged.");
     const e = await generate();
-    expect(e.message).toContain("no credits were charged");
-    expect(e.message).toContain("Retry once");
+    expect(describeGenerateFailure(e)).toContain("no credits were charged");
+    expect(describeGenerateFailure(e)).toContain("Retry once");
     // The hint used to restate the cloud's own closing clause back at the agent.
-    expect(e.message.toLowerCase().split("no credits were charged").length - 1).toBe(1);
+    expect(
+      describeGenerateFailure(e).toLowerCase().split("no credits were charged").length - 1,
+    ).toBe(1);
   });
 
   test("503 (provider unconfigured) says hosted generation isn't available here", async () => {
     reject(503, "unavailable", "No generation provider is configured.");
     const e = await generate();
-    expect(e.message).toContain("No generation provider is configured.");
-    expect(e.message).toContain("isn't available");
-    expect(e.message).not.toContain("upload_asset");
+    expect(describeGenerateFailure(e)).toContain("No generation provider is configured.");
+    expect(describeGenerateFailure(e)).toContain("isn't available");
+    expect(describeGenerateFailure(e)).not.toContain("upload_asset");
   });
 
   test("a body without a message still yields a readable error", async () => {
     stub.status = 500;
     stub.body = "gateway soup";
     const e = await generate();
-    expect(e.message).toContain("500");
+    expect(describeGenerateFailure(e)).toContain("500");
   });
 });
 
@@ -517,7 +526,7 @@ test("a malformed dataUrl is rejected without writing anything", async () => {
   stub.body = imageSuccess("gen_ab12cd34", 1, "data:image/webp;base64,AAAA");
   const r = await generateAsset(tmp, cloud(), { prompt: "x", intent: "photo" });
   expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.error.kind).toBe("BadResponse");
+  if (!r.ok) expect(r.error.kind).toBe("ProtocolViolation");
 });
 
 describe("active-SVG defense in depth", () => {
@@ -541,8 +550,8 @@ describe("active-SVG defense in depth", () => {
     const r = await generateAsset(tmp, cloud(), { prompt: "a mark", intent: "mark" });
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.error.kind).toBe("BadResponse");
-      expect(r.error.message).toContain("refusing");
+      expect(r.error.kind).toBe("ProtocolViolation");
+      expect(describeGenerateFailure(r.error)).toContain("refusing");
     }
     expect(await readFile(join(tmp, "assets", "gen_ef56ab78.svg")).catch(() => null)).toBeNull();
   });

@@ -1,5 +1,5 @@
 import type { ErrorOf } from "@velloo/protocol";
-import { type CloudError, describeCloudError } from "../cloud-errors.ts";
+import { type CloudError, describeCloudError } from "@velloo/protocol";
 
 /**
  * How `velloo publish` can fail.

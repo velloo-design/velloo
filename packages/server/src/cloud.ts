@@ -1,3 +1,4 @@
+import type { CloudAccount, CloudTeam } from "@velloo/protocol";
 import type { ComponentProvider } from "@velloo/provider";
 import type { DesignFolder } from "./design-folder.ts";
 
@@ -43,20 +44,11 @@ export async function currentToken(cloud: CloudAuth): Promise<string | undefined
   return cloud.token;
 }
 
-/** Who the canvas is signed in as, as velloo-cloud describes them (`GET /v1/me`). */
-export interface CanvasAccount {
-  email: string;
-  /** Display name, when the cloud knows one. */
-  name?: string;
-  /** Plan tier — "free" | "team" | "business" | "enterprise". */
-  tier?: string;
-  /**
-   * Pay-as-you-go credit balance in micros ($1 = 1_000_000). Null when the
-   * cloud couldn't price it (its account service briefly down) — distinct from
-   * absent, which means an older cloud that doesn't report a balance at all.
-   */
-  creditMicros?: number | null;
-}
+/**
+ * Who the canvas is signed in as. Exactly what `GET /v1/me` answers, so it is
+ * that response's schema rather than a third hand-copy of the same fields.
+ */
+export type CanvasAccount = CloudAccount;
 
 /**
  * A sign-in the canvas started. The OAuth device flow needs the user to type a
@@ -206,7 +198,7 @@ export interface CanvasPublish {
    * the cloud allows no other target. `isDefault` marks where a publish lands
    * when none is named.
    */
-  teams(): Promise<{ id: string; name: string; isDefault?: boolean }[]>;
+  teams(): Promise<CloudTeam[]>;
   /** Existing link slots plus this folder's best-effort Git provenance. */
   destinations(host: PublishHost): Promise<CanvasPublishDestinations>;
   /** Whether a credential exists at all — the dialog asks for sign-in if not. */

@@ -1,34 +1,17 @@
+import {
+  AccountResponseSchema,
+  AuthConfigResponseSchema,
+  CliTokenResponseSchema,
+  type CloudAccount,
+  DeviceCodeResponseSchema,
+  type DeviceLoginResult,
+  DeviceTokenResponseSchema,
+  readFailure,
+} from "@velloo/protocol";
 import { assertSecureCloudUrl, isSecureCloudUrl } from "./cloud.ts";
 import { openUrl } from "./open-url.ts";
 
-interface DeviceCodeResponse {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete: string;
-  expires_in: number;
-  interval: number;
-}
-
-export interface DeviceLoginResult {
-  token: string;
-  email: string;
-}
-
-/** The account behind a CLI token, as `GET /v1/me` describes it. */
-export interface CloudAccount {
-  email: string;
-  name?: string;
-  /** Plan tier — "free" | "team" | "business" | "enterprise". */
-  tier?: string;
-  /**
-   * Pay-as-you-go credit balance in micros ($1 = 1_000_000), for the canvas's
-   * settings menu. Null when the cloud couldn't price it (its account service
-   * briefly down) — distinct from absent, which is a cloud that doesn't report
-   * a balance at all. The menu shows "—" for both, but only one is a fault.
-   */
-  creditMicros?: number | null;
-}
+export type { CloudAccount, DeviceLoginResult } from "@velloo/protocol";
 
 /**
  * The cloud's verdict on a stored token. `rejected` means revoked or expired —
@@ -61,13 +44,9 @@ export async function fetchAccount(
   // the cloud's problem and must not log the user out of the canvas.
   if (res.status === 401 || res.status === 403) return { status: "rejected" };
   if (!res.ok) return { status: "unreachable" };
-  const body = (await res.json().catch(() => null)) as {
-    email?: string;
-    name?: string;
-    tier?: string;
-    creditMicros?: number | null;
-  } | null;
-  if (!body?.email) return { status: "unreachable" };
+  const parsed = AccountResponseSchema.safeParse(await res.json().catch(() => null));
+  if (!parsed.success) return { status: "unreachable" };
+  const body = parsed.data;
   return {
     status: "ok",
     account: {
@@ -140,7 +119,12 @@ export async function performDeviceLogin(
   assertSecureCloudUrl(cloudUrl);
   const configRes = await fetch(`${cloudUrl}/v1/auth/config`).catch(() => null);
   if (!configRes?.ok) throw new Error(`cannot reach ${cloudUrl} — is velloo-cloud up?`);
-  const { issuer, clientId } = (await configRes.json()) as { issuer: string; clientId: string };
+  const config = AuthConfigResponseSchema.safeParse(await configRes.json().catch(() => null));
+  const issuer = config.success ? config.data.issuer : undefined;
+  const clientId = config.success ? config.data.clientId : undefined;
+  if (issuer === undefined || clientId === undefined) {
+    throw new Error(`${cloudUrl} does not advertise a sign-in service — is velloo-cloud current?`);
+  }
 
   const codeRes = await fetch(`${issuer}/api/auth/device/code`, {
     method: "POST",
@@ -148,7 +132,11 @@ export async function performDeviceLogin(
     body: JSON.stringify({ client_id: clientId }),
   }).catch(() => null);
   if (!codeRes?.ok) throw new Error(`the auth service at ${issuer} is not answering — is it up?`);
-  const device = (await codeRes.json()) as DeviceCodeResponse;
+  const deviceBody = DeviceCodeResponseSchema.safeParse(await codeRes.json().catch(() => null));
+  if (!deviceBody.success) {
+    throw new Error(`the auth service at ${issuer} answered something this velloo can't read`);
+  }
+  const device = deviceBody.data;
 
   // Await the prompt so a caller can confirm (e.g. "press Enter") before we open
   // the browser; the browser opens only once it resolves.
@@ -177,11 +165,8 @@ export async function performDeviceLogin(
       }),
       signal: abortSignal,
     });
-    const body = (await res.json().catch(() => ({}))) as {
-      access_token?: string;
-      error?: string;
-      error_description?: string;
-    };
+    const polled = DeviceTokenResponseSchema.safeParse(await res.json().catch(() => ({})));
+    const body = polled.success ? polled.data : {};
     if (body.access_token) {
       accessToken = body.access_token;
       break;
@@ -201,8 +186,12 @@ export async function performDeviceLogin(
     body: JSON.stringify({ accessToken }),
   });
   if (exchangeRes.status !== 201) {
-    const body = (await exchangeRes.json().catch(() => ({}))) as { message?: string | undefined };
-    throw new Error(`token exchange failed (${exchangeRes.status}): ${body.message ?? "unknown"}`);
+    const { detail } = await readFailure(exchangeRes);
+    throw new Error(`token exchange failed (${exchangeRes.status}): ${detail}`);
   }
-  return (await exchangeRes.json()) as DeviceLoginResult;
+  const exchanged = CliTokenResponseSchema.safeParse(await exchangeRes.json().catch(() => null));
+  if (!exchanged.success) {
+    throw new Error(`${cloudUrl} returned a sign-in token this velloo can't read`);
+  }
+  return exchanged.data;
 }

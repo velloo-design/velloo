@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { RSABSSA } from "@cloudflare/blindrsa-ts";
+import { FeedbackIssuerResponseSchema, FeedbackSignaturesResponseSchema } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
 import type { CloudAuth } from "./cloud.ts";
 import { PINNED_ISSUER_KEYS } from "./feedback-issuer-pins.ts";
@@ -84,8 +85,10 @@ async function fetchIssuerKey(
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new TokenIssueError("rejected", `token key fetch failed (${res.status})`);
-  const { scheme, publicKey } = (await res.json()) as { scheme?: string; publicKey?: string };
-  if (scheme !== TOKEN_SCHEME || !publicKey) {
+  const parsed = FeedbackIssuerResponseSchema.safeParse(await res.json().catch(() => null));
+  if (!parsed.success) throw new Error("the cloud's feedback token key reply was malformed");
+  const { scheme, publicKey } = parsed.data;
+  if (scheme !== TOKEN_SCHEME) {
     throw new Error(`unsupported feedback token scheme ${JSON.stringify(scheme)}`);
   }
 
@@ -159,10 +162,11 @@ export async function topUpTokens(
       `token issuance failed (${res.status})`,
     );
   }
-  const { signatures } = (await res.json()) as { signatures?: string[] | undefined };
-  if (!Array.isArray(signatures) || signatures.length !== blinds.length) {
+  const issued = FeedbackSignaturesResponseSchema.safeParse(await res.json().catch(() => null));
+  if (!issued.success || issued.data.signatures.length !== blinds.length) {
     throw new Error("token issuance returned a malformed signature batch");
   }
+  const { signatures } = issued.data;
 
   const tokens: StoredToken[] = [];
   for (let i = 0; i < blinds.length; i++) {

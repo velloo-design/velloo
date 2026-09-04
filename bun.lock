@@ -108,6 +108,7 @@
       "name": "@velloo/protocol",
       "version": "0.1.0",
       "dependencies": {
+        "@velloo/result": "workspace:*",
         "@velloo/schema": "workspace:*",
         "zod": "4.4.3",
       },

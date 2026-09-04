@@ -1,19 +1,14 @@
+import {
+  type CloudError,
+  type CloudPublishedDesign,
+  cloudFetch,
+  httpFailureFrom,
+  PublishedDesignsResponseSchema,
+  unreachable,
+} from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
-import { type CloudError, httpFailureFrom, unreachable } from "./cloud-errors.ts";
 
-export interface CloudPublishedDesign {
-  slug: string;
-  title: string | null;
-  url: string;
-  visibility: "public" | "private";
-  passwordProtected: boolean;
-  canManage: boolean;
-  mine: boolean;
-  ownerEmail?: string | null;
-  git?: { repo?: string; branch?: string } | null;
-  published: boolean;
-  lastPublishedAt: string | null;
-}
+export type { CloudPublishedDesign } from "@velloo/protocol";
 
 /** Human context shared by list output and the unpublish picker. */
 export function publishedDesignSubtitle(
@@ -35,16 +30,13 @@ export async function listPublishedDesigns(opts: {
   baseUrl: string;
   token: string;
 }): Promise<Result<CloudPublishedDesign[], CloudError>> {
-  const res = await fetch(`${opts.baseUrl}/v1/links`, {
-    headers: { authorization: `Bearer ${opts.token}` },
-  }).catch((error: unknown) => error);
-  if (!(res instanceof Response)) return err(unreachable(res, { url: opts.baseUrl }));
-  if (!res.ok) {
-    return err(await httpFailureFrom("listing published designs", res));
-  }
-  const body = (await res.json()) as { links?: CloudPublishedDesign[] | undefined };
+  const body = await cloudFetch(`${opts.baseUrl}/v1/links`, PublishedDesignsResponseSchema, {
+    operation: "listing published designs",
+    token: opts.token,
+  });
+  if (!body.ok) return body;
   return ok(
-    (body.links ?? [])
+    (body.value.links ?? [])
       .filter((link) => link.published)
       .map((link) => ({
         ...link,

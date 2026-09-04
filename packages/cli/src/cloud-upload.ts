@@ -10,16 +10,23 @@
  * are in the signature and each command renders them through one place
  * (`describeCloudError`) instead of matching on message text.
  */
-import { err, ok, type Result } from "@velloo/result";
 import {
   type CloudError,
+  type CloudPublishDestinations,
+  cloudFetch,
+  cloudJson,
   httpFailure,
   httpFailureFrom,
+  LinkAccessResponseSchema,
+  LinkResponseSchema,
+  PublishDestinationsResponseSchema,
   protocolViolation,
   readFailure,
   unreachable,
   uploadRaceLost,
-} from "./cloud-errors.ts";
+  VersionUploadResponseSchema,
+} from "@velloo/protocol";
+import { err, ok, type Result } from "@velloo/result";
 
 export const VERSION_UPLOAD_TIMEOUT_MS = 60_000;
 export const VERSION_UPLOAD_RETRIES = 1;
@@ -42,28 +49,7 @@ export interface CloudLinkRequest {
   passwordExpiresAt?: string | undefined;
 }
 
-export interface CloudPublishSlot {
-  slug: string;
-  url: string;
-  title: string;
-  teamId: string | null;
-  visibility: "public" | "private";
-  passwordProtected: boolean;
-  latestVersionId: string | null;
-  lastPublishedAt: string | null;
-  context: {
-    boardIds: string[];
-    selectionFingerprint: string | null;
-    contextKnown: boolean;
-    repo: string | null;
-    branch: string | null;
-  };
-}
-
-export interface CloudPublishDestinations {
-  effectiveTeamId: string | null;
-  slots: CloudPublishSlot[];
-}
+export type { CloudPublishDestinations, CloudPublishSlot } from "@velloo/protocol";
 
 export async function listPublishDestinations(opts: {
   baseUrl: string;
@@ -73,14 +59,11 @@ export async function listPublishDestinations(opts: {
 }): Promise<Result<CloudPublishDestinations, CloudError>> {
   const query = new URLSearchParams({ folderId: opts.folderId });
   if (opts.teamId) query.set("teamId", opts.teamId);
-  const res = await fetch(`${opts.baseUrl}/v1/publish-destinations?${query}`, {
-    headers: { authorization: `Bearer ${opts.token}` },
-  }).catch((error: unknown) => error);
-  if (!(res instanceof Response)) return err(unreachable(res, { url: opts.baseUrl }));
-  if (!res.ok) {
-    return err(await httpFailureFrom("listing publish destinations", res));
-  }
-  return ok((await res.json()) as CloudPublishDestinations);
+  return cloudFetch(
+    `${opts.baseUrl}/v1/publish-destinations?${query}`,
+    PublishDestinationsResponseSchema,
+    { operation: "listing publish destinations", token: opts.token },
+  );
 }
 
 export interface LinkUploadOutcome {
@@ -121,11 +104,9 @@ export async function uploadLinkBundle(opts: {
     return err(await httpFailureFrom("link creation", createRes));
   }
   const created = createRes.status === 201;
-  let link = (await createRes.json()) as {
-    slug: string;
-    visibility?: "public" | "private";
-    passwordProtected?: boolean;
-  };
+  const createdLink = await cloudJson(createRes, LinkResponseSchema, "link creation");
+  if (!createdLink.ok) return createdLink;
+  let link = createdLink.value;
 
   if (opts.link.publishMode === "new" && !created) {
     return err(
@@ -163,11 +144,9 @@ export async function uploadLinkBundle(opts: {
     if (!accessRes.ok) {
       return err(await httpFailureFrom("privacy update", accessRes));
     }
-    const access = (await accessRes.json()) as {
-      visibility: "public" | "private";
-      passwordProtected: boolean;
-    };
-    link = { ...link, ...access };
+    const access = await cloudJson(accessRes, LinkAccessResponseSchema, "privacy update");
+    if (!access.ok) return access;
+    link = { ...link, ...access.value };
   }
 
   form.append("publishMode", opts.link.publishMode);
@@ -204,13 +183,9 @@ export async function uploadLinkBundle(opts: {
     }
     return err(httpFailure("upload", uploadRes.status, detail, code));
   }
-  const uploaded = (await uploadRes.json()) as {
-    files: number;
-    bytes: number;
-    url: string;
-    tier?: string;
-    history?: { retained: boolean; versions: number; pruned: number };
-  };
+  const parsed = await cloudJson(uploadRes, VersionUploadResponseSchema, "upload");
+  if (!parsed.ok) return parsed;
+  const uploaded = parsed.value;
   return ok({
     link: {
       slug: link.slug,

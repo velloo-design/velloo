@@ -10,5 +10,5 @@
     "types": ["bun"]
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../schema" }]
+  "references": [{ "path": "../schema" }, { "path": "../result" }]
 }

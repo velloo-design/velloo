@@ -12,17 +12,37 @@
  * server's event union and invented an error shape the server never sent, and
  * each mutation's arguments were spelled up to three different ways.
  *
+ * The cloud-facing half — `CloudError`, the per-endpoint response schemas, and
+ * the `cloudFetch` boundary that turns one into the other — lives here too,
+ * because both the CLI and the server talk to velloo-cloud and were
+ * classifying the same failures separately.
+ *
  * The published-comment surface is also reachable as `@velloo/protocol/comments`
  * — a subpath so velloo-cloud can take the wire contract without the mutation
  * schemas, which mean nothing to it.
  */
 
+export * from "./cloud-api.ts";
 export {
   CLOUD_ERROR_CODES,
   type CloudErrorBody,
   type CloudErrorCode,
   isCloudErrorCode,
 } from "./cloud-codes.ts";
+export {
+  type CloudError,
+  describeCloudError,
+  httpFailure,
+  httpFailureFrom,
+  insecureCloudUrl,
+  invalidRequest,
+  loggedOut,
+  protocolViolation,
+  readFailure,
+  unreachable,
+  uploadRaceLost,
+} from "./cloud-errors.ts";
+export { type CloudFetchOptions, cloudFetch, cloudJson } from "./cloud-fetch.ts";
 export type { PublishedThreadIsIngestible } from "./comments-compat.ts";
 export type {
   ErrorEnvelope,

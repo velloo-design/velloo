@@ -5,6 +5,8 @@
  * A from-source run (`bun run velloo`, no define) falls back to localhost.
  * `VELLOO_CLOUD_URL` (or a command's `--url`) always overrides at runtime.
  */
+import { AuthConfigResponseSchema, cloudJson, HealthResponseSchema } from "@velloo/protocol";
+
 declare const __VELLOO_DEFAULT_CLOUD_URL__: string;
 
 const BUILT_DEFAULT =
@@ -44,10 +46,10 @@ export async function fetchCloudAppUrl(
     return fallback;
   }
   if (!res.ok) return fallback;
-  const body = (await res.json().catch(() => null)) as { appUrl?: unknown } | null;
-  if (typeof body?.appUrl !== "string") return fallback;
+  const config = await cloudJson(res, AuthConfigResponseSchema, "reading the cloud's config");
+  if (!config.ok || config.value.appUrl === undefined) return fallback;
   try {
-    const advertised = new URL(body.appUrl).origin;
+    const advertised = new URL(config.value.appUrl).origin;
     return isSecureCloudUrl(advertised) ? advertised : fallback;
   } catch {
     return fallback;
@@ -108,15 +110,11 @@ export async function checkCloudHealth(baseUrl: string): Promise<CloudHealth> {
       reason: error instanceof Error ? error.message : String(error),
     };
   }
-  const body = (await res.json().catch(() => null)) as {
-    ok?: boolean;
-    db?: { ok?: boolean | undefined };
-    blob?: { ok?: boolean | undefined };
-  } | null;
-  if (!body || typeof body.ok !== "boolean" || body.ok) return { status: "ok" };
+  const health = await cloudJson(res, HealthResponseSchema, "reading the cloud's health");
+  if (!health.ok || health.value.ok !== false) return { status: "ok" };
   const down = [
-    body.db?.ok === false ? "database" : null,
-    body.blob?.ok === false ? "storage backend" : null,
+    health.value.db?.ok === false ? "database" : null,
+    health.value.blob?.ok === false ? "storage backend" : null,
   ].filter((part): part is string => part !== null);
   const what = down.length > 0 ? down.join(" and ") : "a dependency";
   return {

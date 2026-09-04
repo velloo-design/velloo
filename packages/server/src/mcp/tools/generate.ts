@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
-import { ASPECTS, generateAsset, INTENTS } from "../../cloud-generate.ts";
+import { ASPECTS, describeGenerateFailure, generateAsset, INTENTS } from "../../cloud-generate.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { errorResult, jsonResult } from "./result.ts";
 
@@ -75,7 +75,7 @@ export function registerGenerateTools(
         reference,
         filename,
       });
-      if (!r.ok) return errorResult(`generate_asset: ${r.error.message}`);
+      if (!r.ok) return errorResult(`generate_asset: ${describeGenerateFailure(r.error)}`);
       return jsonResult(r.value);
     },
   );

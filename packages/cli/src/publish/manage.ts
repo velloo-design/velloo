@@ -1,7 +1,7 @@
 import { confirm, isCancel, select } from "@clack/prompts";
+import { type CloudError, describeCloudError } from "@velloo/protocol";
 import { defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
-import { type CloudError, describeCloudError } from "../cloud-errors.ts";
 import {
   type CloudPublishedDesign,
   listPublishedDesigns,

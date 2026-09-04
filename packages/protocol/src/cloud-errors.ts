@@ -1,8 +1,13 @@
-import type { ErrorOf } from "@velloo/protocol";
-import { type CloudErrorCode, isCloudErrorCode } from "@velloo/protocol/cloud-codes";
+import { type CloudErrorCode, isCloudErrorCode } from "./cloud-codes.ts";
+import type { ErrorOf } from "./errors.ts";
 
 /**
  * How talking to the cloud can fail.
+ *
+ * Lives in the protocol package because both sides of velloo need it: the CLI
+ * publishes and manages links, the server generates assets and pulls shared
+ * comments, and before this they classified the same HTTP outcomes twice under
+ * different names.
  *
  * CLI errors *are* the product — they are the only thing a user sees when a
  * publish does not work — so they get the same treatment as the server's
@@ -46,7 +51,14 @@ export type CloudError =
    */
   | { kind: "UploadRaceLost" }
   /** Refusing to send a bearer token over a channel that isn't safe. */
-  | { kind: "InsecureCloudUrl"; url: string };
+  | { kind: "InsecureCloudUrl"; url: string }
+  /**
+   * The *caller's* request was wrong before it left — too many reference
+   * images, an unreadable file. Not a cloud failure at all, but it shares
+   * every call site with one, and splitting it into its own union is what
+   * produced a second dialect last time.
+   */
+  | { kind: "InvalidRequest"; detail: string };
 
 export const unreachable = (
   error: unknown,
@@ -86,6 +98,11 @@ export const uploadRaceLost = (): ErrorOf<CloudError, "UploadRaceLost"> => ({
 export const insecureCloudUrl = (url: string): ErrorOf<CloudError, "InsecureCloudUrl"> => ({
   kind: "InsecureCloudUrl",
   url,
+});
+
+export const invalidRequest = (detail: string): ErrorOf<CloudError, "InvalidRequest"> => ({
+  kind: "InvalidRequest",
+  detail,
 });
 
 /**
@@ -147,6 +164,8 @@ export function describeCloudError(error: CloudError): string {
       );
     case "InsecureCloudUrl":
       return `refusing to send credentials to ${error.url} over an insecure connection`;
+    case "InvalidRequest":
+      return error.detail;
     default: {
       const exhaustive: never = error;
       void exhaustive;

@@ -334,8 +334,9 @@ describe("POST /api/assets/generate", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error?: { code?: string; message?: string } };
     expect(body.error?.code).toBe("Unreachable");
-    expect(body.error?.message).toContain("velloo-cloud");
-    expect(body.error?.message).toContain("nothing was generated or charged");
+    // Names the host it could not reach, rather than "the cloud".
+    expect(body.error?.message).toContain("cannot reach http://");
+    expect(body.error?.message).toContain("Nothing was generated or charged");
   });
 });
 
