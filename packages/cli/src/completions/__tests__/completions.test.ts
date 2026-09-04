@@ -14,6 +14,7 @@ describe("commandSpecs", () => {
     for (const expected of ["init", "connect", "run", "status", "theme:export", "completions"]) {
       expect(names).toContain(expected);
     }
+    expect(names).not.toContain("ci");
     expect(names).not.toContain("__daemon");
   });
 

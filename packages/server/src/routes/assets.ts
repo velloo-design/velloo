@@ -41,13 +41,13 @@ export function createAssetsRouter(folder: () => DesignFolder, cloud?: CloudAuth
     return c.json({ generated: file.generated });
   });
 
-  // The canvas reads `{ error: { code, message } }` (see routes/error-http.ts
-  // and the api/http.ts client) and falls back to a bare "<route>: <status>"
-  // when it can't find a message there. Every failure on this path already
-  // carries a written-for-humans next step — sign in, top up, retry, or author
-  // it yourself — so getting the envelope right is the whole point.
-  const fail = (c: Context, status: ContentfulStatusCode, code: string, message: string) =>
-    c.json({ error: { code, message } }, status);
+  // Every failing route in velloo answers `{ error: { kind, … } }` — the client
+  // (api/http.ts) reads `kind` and falls back to a bare "<route>: <status>"
+  // without one. This router used to send `code` instead, so every carefully
+  // written next step on this path — sign in, top up, retry, author it yourself
+  // — was serialized, shipped and dropped, and the user saw "…/generate: 401".
+  const fail = (c: Context, status: ContentfulStatusCode, kind: string, message: string) =>
+    c.json({ error: { kind, message } }, status);
 
   /**
    * The cloud's intent catalogue, proxied so the canvas can price the picker.

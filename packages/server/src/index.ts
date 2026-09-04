@@ -460,6 +460,7 @@ export type {
   CanvasAccount,
   CanvasAuth,
   CanvasAuthStatus,
+  CanvasCloudAccess,
   CanvasLogin,
   CanvasPublish,
   CanvasPublishDestinations,
@@ -469,7 +470,9 @@ export type {
   CanvasPublishSlot,
   CloudAuth,
   PublishHost,
+  SignInRequired,
 } from "./cloud.ts";
+export { asSignInRequired, signInRequired } from "./cloud.ts";
 export { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { activeBoards, loadDesignFolder, orderedBoards } from "./design-folder.ts";
@@ -506,7 +509,7 @@ export {
 export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";
 // Verification cores (dark-mode audit / class validation / contrast) — the
 // same checks the MCP audit + validate_classes tools run, exported for
-// headless consumers (`velloo ci`).
+// headless consumers (render, export, and publish).
 export {
   type DarkModeAuditResult,
   darkModeAuditTree,

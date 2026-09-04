@@ -50,7 +50,7 @@ export function selectChangedPreviews(
   return { screenIds, boardIds };
 }
 
-/** Compare a base ref with HEAD plus working-tree changes, exactly like velloo ci. */
+/** Compare a base ref with HEAD plus working-tree changes for focused publishing. */
 export function changedPreviewsSince(
   designFolder: string,
   baseRef: string,

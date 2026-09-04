@@ -14,7 +14,9 @@ Design and code, finally the same shape.
 
 ---
 
-Velloo is a **local-first, code-shaped design canvas**. Your AI agent does the design labor — composing screens from your real components and writing them into your app in your conventions — while you keep the taste and the calls. Designs live in your repo as JSON made of real components, not behind a seat in a vector tool you have to translate back into code.
+Velloo is a **local, agent-driven canvas for designing React apps**. Your AI coding agent creates real screens, explores alternatives, and checks the result visually against the implementation. You direct the work on the canvas, then carry the chosen direction back into your application in its own conventions.
+
+Designs stay beside your code as readable JSON. The local workflow needs no account; when a review benefits from other people, publish a board into a lightweight team workspace or send an external share link. Teammates and outside reviewers can comment on the result, and those comments return to the local canvas for the agent to resolve.
 
 No Figma seats. No paste-ready JSX you babysit. No translation tax.
 
@@ -72,20 +74,22 @@ If a screenshot fails, run exactly that command, then retry. Ports busy? Pass `-
 
 ## What it does
 
+- **Existing-screen redesign.** Start from one React route or captured authenticated page, recreate a faithful baseline, explore alternatives, and compare the result with the running product at the same viewport.
 - **Board + Screen + Frame** mental model. A design folder hosts many boards; frames sharing a screen stay in sync.
-- **Framework-native.** A folder targets a framework — shadcn (Tailwind `className`), MUI (`sx` + emotion, real `@mui/material`), or no-framework (bare primitives) — each rendered, styled, and emitted in its own idiom.
-- **MCP surface for agents.** Discovery, tree mutations, screen / frame / board / snippet lifecycle, theme ops, inspect + dark-diff, screenshot + render_snippet, and an agent-consumed `emit_code` IR.
-- **Pulse sample** ships with `velloo init` — three boards (Marketing + App + Playground), seven screens, with full dark-mode coverage.
+- **Current React adapters.** shadcn + Tailwind, Material UI, Ant Design, Chakra UI, and no-library React folders each render and emit through their implemented adapter.
+- **Visual verification.** The agent can inspect rendered nodes, take screenshots, compare with a live URL or authenticated capture, and resolve visible differences instead of guessing from code.
+- **MCP surface for agents.** Discovery, focused tree mutations, themes, screenshots, comparison, comments, and agent-consumed implementation IR.
 - **Components come from a `ComponentProvider`.** The design folder is pure data (no `components/*.tsx`); customization happens through snippets.
+- **Optional collaboration.** Create an organization/team, invite a teammate, publish a board into that team, share externally, and bring review comments back to the local canvas.
 
 ## Local-first by default
 
 The local tool is free, complete, account-free, and telemetry-free. The CLI makes one anonymous infrastructure request outside the solo loop: at most daily, a detached check reads the public npm release version and caches it locally; it sends no project or account data and can be disabled with `VELLOO_DISABLE_UPDATE_CHECK=1`. Product cloud calls remain optional and opt-in, and every one is gated behind an explicit `velloo login`:
 
-- `velloo login` / `velloo publish` — publish boards as a read-only share link (`--list` what you've published, `--remove` to take one down)
+- `velloo login` / `velloo publish` — publish boards to a personal or team workspace and create an external review link (`--list` what you've published, `--remove` to take one down)
 - `velloo folder` — the repo's design folders: `list`, `add` another, `remove` one
-- `pull_comments` — pull comments left on your share links back into the canvas as annotations
-- `generate_asset` — hosted image/SVG generation, metered against your account
+- comment tools — read and resolve local, team, and external-review feedback on the canvas
+- `generate_asset` — hosted image/SVG generation, metered against your image-generation credit balance
 - `send_feedback` — agent-side product feedback, registered only when enabled in the folder config
 
 You choose when — and whether — to make any of them.

@@ -37,11 +37,26 @@ export type PublishState =
       warnings: string[];
     }
   | { state: "done"; result: PublishResult; warnings: string[]; finishedAt: string }
-  | { state: "error"; message: string; warnings: string[]; finishedAt: string };
+  | {
+      state: "error";
+      message: string;
+      /** Set when the credential is what failed — the dialog offers a sign-in. */
+      signInRequired?: "signed-out" | "expired";
+      warnings: string[];
+      finishedAt: string;
+    };
+
+/** Whether this account can publish, and why not when it can't. */
+export type PublishAccess = "ready" | "signed-out" | "expired";
 
 export interface PublishTargets {
-  /** False when nothing is signed in — the dialog asks for sign-in instead. */
+  /** Convenience mirror of `access === "ready"`. */
   ready: boolean;
+  /**
+   * Absent on daemons older than this field, where `ready: false` meant only
+   * "no credential stored" — a rejected one looked signed in and failed later.
+   */
+  access?: PublishAccess;
   /**
    * The teams of this account's one organization. Empty for a personal account,
    * and a single entry needs no choosing — only two or more is a real decision.

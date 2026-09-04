@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type AuthStatus, loginAttemptSucceeded } from "../../api/auth.ts";
+import { type AuthStatus, credentialJustRejected, loginAttemptSucceeded } from "../../api/auth.ts";
 
 const status = (overrides: Partial<AuthStatus>): AuthStatus => ({
   loggedIn: false,
@@ -35,5 +35,26 @@ describe("loginAttemptSucceeded", () => {
       ),
     ).toBe(false);
     expect(loginAttemptSucceeded(status({ loggedIn: false }))).toBe(false);
+  });
+});
+
+describe("credentialJustRejected", () => {
+  const rejected = status({ loggedIn: true, verified: false, account: { email: "a@b.dev" } });
+
+  test("fires once on the edge, not on every poll that finds the same state", () => {
+    expect(credentialJustRejected(null, rejected)).toBe(true);
+    expect(credentialJustRejected(status({ loggedIn: true, verified: true }), rejected)).toBe(true);
+    expect(credentialJustRejected(rejected, rejected)).toBe(false);
+  });
+
+  test("an unreachable cloud is not a rejection", () => {
+    // `verified: null` means the daemon could not ask. Announcing an ended
+    // session on a dropped connection would send people to re-authenticate
+    // over a working credential.
+    expect(credentialJustRejected(null, status({ loggedIn: true, verified: null }))).toBe(false);
+  });
+
+  test("signing out is not a rejection either — the user did that on purpose", () => {
+    expect(credentialJustRejected(rejected, status({ loggedIn: false }))).toBe(false);
   });
 });

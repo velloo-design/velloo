@@ -246,8 +246,8 @@ describe("POST /api/assets/delete", () => {
       }),
     );
     expect(res.status).toBe(409);
-    const body = (await res.json()) as { error?: { code?: string; message?: string } };
-    expect(body.error?.code).toBe("AssetInUse");
+    const body = (await res.json()) as { error?: { kind?: string; message?: string } };
+    expect(body.error?.kind).toBe("AssetInUse");
     expect(body.error?.message).toContain('screen "s1"');
   });
 
@@ -260,7 +260,7 @@ describe("POST /api/assets/delete", () => {
       }),
     );
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error?: { code?: string } }).error?.code).toBe("BadRequest");
+    expect(((await res.json()) as { error?: { kind?: string } }).error?.kind).toBe("BadRequest");
   });
 });
 
@@ -299,32 +299,33 @@ describe("POST /api/assets/generate", () => {
     );
 
   /**
-   * The canvas reads `{ error: { code, message } }` and falls back to a bare
-   * "<route>: <status>" when it can't find a message there. Every failure on
-   * this path carries a written next step — sign in, top up, retry — so a flat
-   * envelope turns all of them into an opaque status code on screen.
+   * The canvas reads `{ error: { kind, message } }` — the envelope every other
+   * velloo route uses — and falls back to a bare "<route>: <status>" without a
+   * `kind`. Every failure on this path carries a written next step (sign in,
+   * top up, retry), and this router used to send `code` instead, so all of them
+   * arrived on screen as an opaque status code.
    */
   test("failures use the envelope the canvas can read a message out of", async () => {
     // createApp above is built without CloudAuth — the logged-out daemon.
     const res = await generate({ prompt: "a teapot", intent: "illustration" });
     expect(res.status).toBe(503);
-    const body = (await res.json()) as { error?: { code?: string; message?: string } };
-    expect(body.error?.code).toBe("LoggedOut");
+    const body = (await res.json()) as { error?: { kind?: string; message?: string } };
+    expect(body.error?.kind).toBe("LoggedOut");
     expect(body.error?.message).toContain("velloo login");
   });
 
   test("a malformed body is a 400 with a reason, before any cloud call", async () => {
     const res = await generate({ prompt: "", intent: "illustration" }, appOffline);
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error?: { code?: string; message?: string } };
-    expect(body.error?.code).toBe("BadRequest");
+    const body = (await res.json()) as { error?: { kind?: string; message?: string } };
+    expect(body.error?.kind).toBe("BadRequest");
     expect(body.error?.message).toBeTruthy();
   });
 
   test("an intent outside the catalogue never reaches the cloud", async () => {
     const res = await generate({ prompt: "a teapot", intent: "nonsense" }, appOffline);
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error?: { code?: string } }).error?.code).toBe("BadRequest");
+    expect(((await res.json()) as { error?: { kind?: string } }).error?.kind).toBe("BadRequest");
   });
 
   test("an unreachable cloud explains itself rather than showing a bare status", async () => {
@@ -332,8 +333,8 @@ describe("POST /api/assets/generate", () => {
     // to arrive as a sentence, not as "/api/assets/generate: 502".
     const res = await generate({ prompt: "a teapot", intent: "illustration" }, appOffline);
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error?: { code?: string; message?: string } };
-    expect(body.error?.code).toBe("Unreachable");
+    const body = (await res.json()) as { error?: { kind?: string; message?: string } };
+    expect(body.error?.kind).toBe("Unreachable");
     // Names the host it could not reach, rather than "the cloud".
     expect(body.error?.message).toContain("cannot reach http://");
     expect(body.error?.message).toContain("Nothing was generated or charged");

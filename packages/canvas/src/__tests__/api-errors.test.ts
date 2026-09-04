@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MutationError, ThemeError } from "@velloo/protocol";
-import { type ApiError, describeApiError } from "../api/errors.ts";
+import { type ApiError, describeApiError, isSignInRequired } from "../api/errors.ts";
 
 /**
  * The canvas renders the server's typed failures. It used to read a `message`
@@ -106,5 +106,43 @@ describe("describeApiError", () => {
     });
     expect(message).toContain("colors.accent");
     expect(message).toContain("Nothing was saved.");
+  });
+});
+
+/**
+ * Cloud-backed routes (asset generation) re-serve a `CloudError` kind with the
+ * sentence already written for it. They used to send `{ code, message }`, which
+ * the client's `kind` check dropped on the floor — so "sign in again", "top up
+ * credits" and "retry" all arrived as "/api/assets/generate: <status>".
+ */
+describe("failures a cloud-backed route re-serves", () => {
+  test("the sentence written at the source reaches the user unchanged", () => {
+    const failures: ApiError[] = [
+      { kind: "LoggedOut", message: "velloo-cloud rejected the stored credential." },
+      { kind: "HttpFailure", message: "Top up credits before retrying." },
+      { kind: "Unreachable", message: "cannot reach the cloud. Nothing was charged." },
+      { kind: "AssetInUse", message: "hero.png is used on 2 screens." },
+    ];
+    for (const failure of failures) {
+      expect(describeApiError(failure)).toBe((failure as { message: string }).message);
+    }
+  });
+
+  test("only a LoggedOut asks the canvas for a sign-in", () => {
+    const withPayload = (payload: ApiError): Error =>
+      Object.assign(new Error(describeApiError(payload)), { payload });
+
+    expect(isSignInRequired(withPayload({ kind: "LoggedOut", message: "session ended" }))).toBe(
+      true,
+    );
+    expect(isSignInRequired(withPayload({ kind: "HttpFailure", message: "out of credits" }))).toBe(
+      false,
+    );
+    expect(isSignInRequired(withPayload({ kind: "ScreenNotFound", screenId: "landing" }))).toBe(
+      false,
+    );
+    // A bare network Error carries no payload and must not open a dialog.
+    expect(isSignInRequired(new Error("Failed to fetch"))).toBe(false);
+    expect(isSignInRequired("not an error")).toBe(false);
   });
 });

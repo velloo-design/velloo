@@ -6,7 +6,7 @@ import { join, relative, resolve } from "node:path";
 import type { Screen, Snippet } from "@velloo/schema";
 
 /**
- * Changed-screen detection for `velloo ci`: diff the design
+ * Changed-screen detection for `publish --changed-since`: diff the design
  * folder between two git refs and expand indirect dependencies — the cheap
  * correct rules:
  *

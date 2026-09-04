@@ -421,12 +421,16 @@ describe("failure statuses map to actionable messages", () => {
     return r.error;
   };
 
-  test("401 passes the message through and says how to re-auth", async () => {
+  // A 401 is the one status that is not an HTTP fault: it classifies as
+  // `LoggedOut` so every caller can offer a sign-in instead of a status line.
+  test("401 becomes LoggedOut, keeping the cloud's message and the way back", async () => {
     reject(401, "unauthorized", "Invalid or expired token.");
-    const e = await generate();
-    expect(e.status).toBe(401);
-    expect(describeGenerateFailure(e)).toContain("Invalid or expired token.");
-    expect(describeGenerateFailure(e)).toContain("velloo login");
+    const r = await generateAsset(tmp, cloud(), { prompt: "x", intent: "photo" });
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("expected failure");
+    expect(r.error.kind).toBe("LoggedOut");
+    expect(describeGenerateFailure(r.error)).toContain("Invalid or expired token.");
+    expect(describeGenerateFailure(r.error)).toContain("velloo login");
   });
 
   test("400 passes the cloud's validation message through", async () => {

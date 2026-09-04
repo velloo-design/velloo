@@ -40,7 +40,12 @@ export type CloudError =
       detail: string;
       code?: CloudErrorCode;
     }
-  /** No stored credential, or the cloud rejected the one we have. */
+  /**
+   * No stored credential, or the cloud rejected the one we have. Every 401
+   * classifies here rather than as an `HttpFailure`: "the credential is gone"
+   * is a state the product has a next step for, and rendering it as a status
+   * line is what made a revoked token read as a server fault.
+   */
   | { kind: "LoggedOut"; detail?: string }
   /** The cloud did something the protocol forbids — always a bug, ours or theirs. */
   | { kind: "ProtocolViolation"; detail: string }
@@ -106,6 +111,29 @@ export const invalidRequest = (detail: string): ErrorOf<CloudError, "InvalidRequ
 });
 
 /**
+ * Every `CloudError` kind as data, so a client can recognize one in an
+ * untrusted payload without keeping a second hand-written list.
+ *
+ * `Record<CloudError["kind"], true>` is total over the union, so adding a
+ * variant without listing it here is a compile error — the same guarantee
+ * `describeCloudError`'s `never` guard gives at the other end.
+ */
+const CLOUD_ERROR_KINDS: Record<CloudError["kind"], true> = {
+  Unreachable: true,
+  HttpFailure: true,
+  LoggedOut: true,
+  ProtocolViolation: true,
+  UploadRaceLost: true,
+  InsecureCloudUrl: true,
+  InvalidRequest: true,
+};
+
+/** Narrow an untrusted `kind` from a cloud-backed route's error envelope. */
+export function isCloudErrorKind(value: unknown): value is CloudError["kind"] {
+  return typeof value === "string" && value in CLOUD_ERROR_KINDS;
+}
+
+/**
  * Read a failure body without trusting its shape. The cloud sends
  * `{ error, message }`; an unrecognized `error` is dropped rather than
  * widening the union to `string`.
@@ -120,13 +148,43 @@ export async function readFailure(
   return isCloudErrorCode(error) ? { detail, code: error } : { detail };
 }
 
-/** Convenience for the common `httpFailure(op, status, ...await readFailure(res))` shape. */
+/**
+ * What a failing status actually means.
+ *
+ * Identical to `httpFailure` except for 401, which is the credential being
+ * absent, expired or revoked rather than a fault worth reporting as one. Every
+ * cloud caller classifies here, so publish, teams, destinations, asset
+ * generation and shared comments all reach the same "sign in again" outcome
+ * instead of each rendering a bare status line.
+ *
+ * 403 stays an `HttpFailure`: that caller is authenticated and simply not
+ * allowed, and signing in again would not change it.
+ */
+export function cloudFailure(
+  operation: string,
+  status: number,
+  detail?: string,
+  code?: CloudErrorCode,
+): ErrorOf<CloudError, "HttpFailure"> | ErrorOf<CloudError, "LoggedOut"> {
+  if (status !== 401 && code !== "unauthorized") {
+    return httpFailure(operation, status, detail, code);
+  }
+  // `readFailure` yields "unknown" when the cloud sent no message; the bare
+  // sentence is better than quoting that back.
+  return loggedOut(
+    detail && detail.length > 0 && detail !== "unknown"
+      ? `velloo-cloud rejected the stored credential (${detail})`
+      : "velloo-cloud rejected the stored credential",
+  );
+}
+
+/** Convenience for the common `cloudFailure(op, status, ...await readFailure(res))` shape. */
 export async function httpFailureFrom(
   operation: string,
   res: Response,
-): Promise<ErrorOf<CloudError, "HttpFailure">> {
+): Promise<ErrorOf<CloudError, "HttpFailure"> | ErrorOf<CloudError, "LoggedOut">> {
   const { detail, code } = await readFailure(res);
-  return httpFailure(operation, res.status, detail, code);
+  return cloudFailure(operation, res.status, detail, code);
 }
 
 /**

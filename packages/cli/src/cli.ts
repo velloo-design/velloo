@@ -9,7 +9,7 @@ const main = defineCommand({
     name: "velloo",
     version: TOOL_VERSION,
     description:
-      "Code-shaped design tool for developers. A repo-root velloo.json names design folders as projects; any directory with .design/config.json is a design folder — folder-taking commands accept a project name or a path.",
+      "Local, agent-driven canvas for designing React apps, verifying the implementation, and sharing the result with a team or external reviewers.",
   },
   subCommands: COMMANDS,
 });
@@ -17,6 +17,6 @@ const main = defineCommand({
 await runMain(main);
 
 const command = process.argv[2];
-if (!["mcp", "__daemon", "__update_check", "ci", "run"].includes(command ?? "")) {
+if (!["mcp", "__daemon", "__update_check", "run"].includes(command ?? "")) {
   await maybeNotifyAboutUpdate();
 }

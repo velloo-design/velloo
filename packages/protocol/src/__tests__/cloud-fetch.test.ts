@@ -87,3 +87,57 @@ test("a schema with a transform still reports its own failure as a violation", a
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.error.kind).toBe("ProtocolViolation");
 });
+
+/**
+ * A 401 is the one status that is not a fault to report. Rendering it as
+ * `HttpFailure` is what produced "listing publish destinations failed (401):
+ * invalid or revoked token" in the canvas — a sentence that names no way out
+ * of the one state the user could have fixed in a click.
+ */
+test("a 401 is a LoggedOut, keeping the cloud's reason and naming the way back", async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch: () =>
+      Response.json(
+        { error: "unauthorized", message: "invalid or revoked token" },
+        { status: 401 },
+      ),
+  });
+  try {
+    const result = await cloudFetch(
+      `http://localhost:${server.port}/v1/publish-destinations`,
+      TeamsResponseSchema,
+      { operation: "listing publish destinations", token: "vlk_stale" },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("LoggedOut");
+    const sentence = describeCloudError(result.error);
+    expect(sentence).toContain("invalid or revoked token");
+    expect(sentence).toContain("velloo login");
+    expect(sentence).not.toContain("401");
+  } finally {
+    server.stop(true);
+  }
+});
+
+/** 403 is authenticated-but-not-allowed: signing in again would not help. */
+test("a 403 stays an HttpFailure", async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch: () => Response.json({ error: "forbidden", message: "not your team" }, { status: 403 }),
+  });
+  try {
+    const result = await cloudFetch(
+      `http://localhost:${server.port}/v1/teams/mine`,
+      TeamsResponseSchema,
+      {
+        operation: "listing teams",
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ kind: "HttpFailure", status: 403 });
+  } finally {
+    server.stop(true);
+  }
+});

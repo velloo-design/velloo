@@ -14,7 +14,7 @@ import {
   type CommentThreadView,
 } from "@velloo/schema";
 import { z } from "zod";
-import type { CanvasPublishSlot, CloudAuth } from "./cloud.ts";
+import type { CanvasCloudAccess, CanvasPublishSlot, CloudAuth } from "./cloud.ts";
 import { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import type { MutationContext } from "./mutations/index.ts";
@@ -60,13 +60,18 @@ export type CommentScopeFilter = CommentScope | "all";
  * publisher, and so it never learns how publishing actually works.
  */
 export interface CloudCommentTargets {
-  ready(): Promise<boolean>;
+  access(): Promise<CanvasCloudAccess>;
   destinations(): Promise<{ slots: CanvasPublishSlot[] }>;
 }
 
 export type CloudCommentAvailability =
   | { available: true; slug: string; url: string }
-  | { available: false; reason: "signed-out" | "unpublished" | "unsupported" };
+  /**
+   * `expired` is separate from `signed-out` because the way out differs in
+   * one word — sign in *again* — and because conflating them is what let a
+   * rejected credential look like a working one until the write failed.
+   */
+  | { available: false; reason: "signed-out" | "expired" | "unpublished" | "unsupported" };
 
 /**
  * The newest published link carrying this board. A board can sit in several
@@ -145,9 +150,10 @@ export class LocalCommentsService {
    */
   async cloudAvailability(boardId: string): Promise<CloudCommentAvailability> {
     if (!this.shared || !this.publish) return { available: false, reason: "unsupported" };
-    if (!(await this.publish.ready().catch(() => false))) {
-      return { available: false, reason: "signed-out" };
-    }
+    const access = await this.publish
+      .access()
+      .catch(() => ({ state: "signed-out" }) as CanvasCloudAccess);
+    if (access.state !== "ready") return { available: false, reason: access.state };
     const slots = await this.publish
       .destinations()
       .then((value) => value.slots)
@@ -161,8 +167,16 @@ export class LocalCommentsService {
     if (!this.shared || !this.publish) {
       throw new CommentStoreError("invalid", "This canvas cannot write cloud comments.");
     }
-    if (!(await this.publish.ready().catch(() => false))) {
-      throw new CommentStoreError("invalid", "Sign in to velloo cloud to write cloud comments.");
+    const access = await this.publish
+      .access()
+      .catch(() => ({ state: "signed-out" }) as CanvasCloudAccess);
+    if (access.state !== "ready") {
+      throw new CommentStoreError(
+        "invalid",
+        access.state === "expired"
+          ? "Your velloo-cloud session ended — sign in again to write cloud comments."
+          : "Sign in to velloo cloud to write cloud comments.",
+      );
     }
     const slots = await this.publish
       .destinations()

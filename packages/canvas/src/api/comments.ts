@@ -9,7 +9,13 @@ export type CommentScopeFilter = CommentScope | "all";
 /** Whether this board can take a cloud thread, and why not when it can't. */
 export type CloudCommentAvailability =
   | { available: true; slug: string; url: string }
-  | { available: false; reason: "signed-out" | "unpublished" | "unsupported" };
+  | { available: false; reason: CloudCommentBlocker };
+
+export type CloudCommentBlocker = "signed-out" | "expired" | "unpublished" | "unsupported";
+
+/** The blockers a sign-in clears — the picker offers one for these. */
+export const signInClears = (reason: CloudCommentBlocker): boolean =>
+  reason === "signed-out" || reason === "expired";
 
 export const comments = {
   async list(

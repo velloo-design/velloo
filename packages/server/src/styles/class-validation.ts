@@ -4,7 +4,7 @@ import type { TailwindJit } from "./tailwind-jit.ts";
 /**
  * Tailwind class validation against the folder's merged design system —
  * the core behind the MCP `validate_classes` tool, extracted so headless
- * callers (`velloo ci`) can run the same checks without an MCP transport.
+ * headless callers can run the same checks without an MCP transport.
  */
 
 type DesignSystem = Awaited<ReturnType<typeof __unstable__loadDesignSystem>>;

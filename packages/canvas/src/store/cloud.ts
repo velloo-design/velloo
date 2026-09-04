@@ -1,5 +1,7 @@
 import type { StateCreator } from "zustand";
-import { type AuthStatus, auth } from "../api/auth.ts";
+import { type AuthStatus, auth, credentialJustRejected } from "../api/auth.ts";
+import type { SignInPrompt } from "../api/sign-in-gate.ts";
+import { pushToast } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
 
 /**
@@ -12,7 +14,11 @@ import type { CanvasState } from "./index.ts";
 export interface CloudSlice {
   /** Null until the first fetch resolves. */
   authStatus: AuthStatus | null;
-  signInOpen: boolean;
+  /**
+   * The open sign-in dialog and what it should say. Null = closed, so there is
+   * one field to read instead of a boolean that can disagree with its context.
+   */
+  signInPrompt: SignInPrompt | null;
   publishOpen: boolean;
   /**
    * Set when the publish dialog was opened for one board from its own menu: it
@@ -23,16 +29,17 @@ export interface CloudSlice {
   publishScope: { id: string; name: string; mode: PublishAccessMode } | null;
 
   refreshAuth(): Promise<void>;
-  setSignInOpen(open: boolean): void;
+  openSignIn(prompt?: SignInPrompt): void;
+  closeSignIn(): void;
   setPublishOpen(open: boolean): void;
   publishBoardNow(board: { id: string; name: string }, mode: PublishAccessMode): void;
 }
 
 export type PublishAccessMode = "public" | "private" | "password";
 
-export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (set) => ({
+export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (set, get) => ({
   authStatus: null,
-  signInOpen: false,
+  signInPrompt: null,
   publishOpen: false,
   publishScope: null,
 
@@ -40,11 +47,29 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
     // A daemon that can't answer is indistinguishable from being logged out for
     // every decision the UI makes, and api/auth already folds failures into
     // that shape — so this never rejects.
-    set({ authStatus: await auth.status() });
+    const next = await auth.status();
+    const announce = credentialJustRejected(get().authStatus, next);
+    set({ authStatus: next });
+    // A toast rather than the dialog: nothing was interrupted, so opening a
+    // modal over whatever the user is doing would be the wrong size of
+    // interruption. The action makes it one click either way.
+    if (announce) {
+      pushToast({
+        kind: "error",
+        title: "velloo-cloud session ended",
+        message: "Publishing and cloud comments need you to sign in again.",
+        ttl: 10_000,
+        action: { label: "Sign in", onClick: () => get().openSignIn({ expired: true }) },
+      });
+    }
   },
 
-  setSignInOpen(signInOpen) {
-    set({ signInOpen });
+  openSignIn(prompt = {}) {
+    set({ signInPrompt: prompt });
+  },
+
+  closeSignIn() {
+    set({ signInPrompt: null });
   },
 
   // Both entry points clear the scope: opening the full form must not inherit

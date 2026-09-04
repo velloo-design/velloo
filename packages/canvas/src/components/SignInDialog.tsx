@@ -1,5 +1,6 @@
 import { AlertTriangle, ExternalLink, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SignInPrompt } from "../api/sign-in-gate.ts";
 import { type AuthStatus, auth, type LoginState, loginAttemptSucceeded } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast } from "../toast.ts";
@@ -27,10 +28,42 @@ import {
 /** Fast enough to feel immediate after the browser approval, cheap enough to poll. */
 const POLL_MS = 1500;
 
+/**
+ * What the dialog leads with. A sign-in the user asked for needs no
+ * explanation; one the canvas asked for has to say which door it just closed,
+ * or it reads as an interruption rather than the way through.
+ */
+function signInHeading(prompt: SignInPrompt): { title: string; description: string } {
+  const goal = prompt.action ?? "use velloo-cloud";
+  if (prompt.expired) {
+    return {
+      title: "Sign in again to continue",
+      description: `Your velloo-cloud session has ended, so velloo can't ${goal} until you sign back in.`,
+    };
+  }
+  if (prompt.action) {
+    return {
+      title: "Sign in to continue",
+      description: `Signing in to velloo-cloud lets velloo ${goal}.`,
+    };
+  }
+  return {
+    title: "Sign in to velloo-cloud",
+    description: "Publishing boards and pulling share-link comments need an account.",
+  };
+}
+
 export function SignInDialog() {
-  const open = useCanvas((s) => s.signInOpen);
-  const setOpen = useCanvas((s) => s.setSignInOpen);
+  const prompt = useCanvas((s) => s.signInPrompt);
+  const closeSignIn = useCanvas((s) => s.closeSignIn);
   const refreshAuth = useCanvas((s) => s.refreshAuth);
+  const open = prompt !== null;
+  // Latched, because closing clears the prompt while the dialog is still
+  // animating out — reading it directly would flip the heading to the generic
+  // wording on the way off screen.
+  const shown = useRef<SignInPrompt>({});
+  if (prompt) shown.current = prompt;
+  const heading = signInHeading(shown.current);
 
   const [login, setLogin] = useState<LoginState>({ state: "idle" });
   const [starting, setStarting] = useState(false);
@@ -58,7 +91,7 @@ export function SignInDialog() {
           ? `Signed in as ${status.account.email}.`
           : "Signed in to velloo-cloud.",
       });
-      setOpen(false);
+      closeSignIn();
     };
 
     void (async () => {
@@ -99,7 +132,7 @@ export function SignInDialog() {
         });
       }, POLL_MS);
     })();
-  }, [refreshAuth, setOpen]);
+  }, [refreshAuth, closeSignIn]);
 
   useEffect(() => {
     if (!open) {
@@ -117,7 +150,7 @@ export function SignInDialog() {
   }, [open, begin]);
 
   const close = () => {
-    setOpen(false);
+    closeSignIn();
     // Abandon a half-finished device code rather than leaving the daemon
     // polling the issuer for a sign-in nobody is waiting on.
     if (login.state === "pending") void auth.cancelLogin().catch(() => undefined);
@@ -127,10 +160,8 @@ export function SignInDialog() {
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Sign in to velloo-cloud</DialogTitle>
-          <DialogDescription>
-            Publishing boards and pulling share-link comments need an account.
-          </DialogDescription>
+          <DialogTitle>{heading.title}</DialogTitle>
+          <DialogDescription>{heading.description}</DialogDescription>
         </DialogHeader>
 
         {starting || login.state === "idle" ? (

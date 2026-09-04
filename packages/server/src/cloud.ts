@@ -138,6 +138,50 @@ export interface CanvasPublishSlot {
   };
 }
 
+/**
+ * Whether the daemon can act as an account right now.
+ *
+ * Not a boolean, because "no credential" and "a credential the cloud rejected"
+ * need different words in front of the user — and because the difference used
+ * to be invisible: `ready()` answered "a credential exists", so a revoked token
+ * passed every gate and failed later as a raw 401 from whatever call happened
+ * to go first. The verdict comes from the same `GET /v1/me` the account menu
+ * reads, so the two can never disagree.
+ */
+export type CanvasCloudAccess =
+  | { state: "ready" }
+  /** Nothing stored for this cloud. */
+  | { state: "signed-out" }
+  /** A credential exists, but the cloud rejected it — revoked or expired. */
+  | { state: "expired" };
+
+/**
+ * A cloud call that failed because the account is unusable, thrown across an
+ * RPC surface whose contract is a rejected promise ({@link CanvasPublish}).
+ *
+ * A marker field rather than an `Error` subclass: the thrower is the CLI and
+ * the catcher is the server, so an `instanceof` would depend on both resolving
+ * the same module instance. The routes turn this back into structured JSON,
+ * which is what lets the canvas offer a sign-in instead of printing a status.
+ */
+export interface SignInRequired {
+  readonly signInRequired: "signed-out" | "expired";
+}
+
+export function signInRequired(
+  access: "signed-out" | "expired",
+  message: string,
+): Error & SignInRequired {
+  return Object.assign(new Error(message), { signInRequired: access } as const);
+}
+
+/** The access state behind a rejection, or null when it was something else. */
+export function asSignInRequired(error: unknown): "signed-out" | "expired" | null {
+  if (!error || typeof error !== "object") return null;
+  const marker = (error as Partial<SignInRequired>).signInRequired;
+  return marker === "signed-out" || marker === "expired" ? marker : null;
+}
+
 export interface CanvasPublishDestinations {
   effectiveTeamId: string | null;
   provenance: { repo: string | null; branch: string | null };
@@ -201,8 +245,11 @@ export interface CanvasPublish {
   teams(): Promise<CloudTeam[]>;
   /** Existing link slots plus this folder's best-effort Git provenance. */
   destinations(host: PublishHost): Promise<CanvasPublishDestinations>;
-  /** Whether a credential exists at all — the dialog asks for sign-in if not. */
-  ready(): Promise<boolean>;
+  /**
+   * Whether the account is usable — the canvas offers a sign-in when it isn't,
+   * rather than letting the first cloud call fail with a status code.
+   */
+  access(): Promise<CanvasCloudAccess>;
   run(
     host: PublishHost,
     request: CanvasPublishRequest,

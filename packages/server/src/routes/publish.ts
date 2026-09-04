@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { asSignInRequired } from "../cloud.ts";
 import type { PublishRunner } from "../publish-run.ts";
 
 /**
@@ -22,13 +23,24 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
     return c.json(runner.state());
   });
 
-  /** What the publish dialog needs to fill itself in: sign-in state + teams. */
+  /**
+   * What the publish dialog needs to fill itself in: whether the account can
+   * publish at all, the teams it may publish into, and the links it could
+   * update.
+   *
+   * `access` is the load-bearing field. It used to be a bare `ready` boolean
+   * meaning "a credential file entry exists", which let a revoked token walk
+   * straight past the dialog's sign-in branch and fail on the first cloud call
+   * instead — so the dialog offered no way out of the one state it could fix.
+   */
   app.get("/targets", async (c) => {
-    if (!runner) return c.json({ ready: false, teams: [], slots: [] });
-    const ready = await runner.ready();
-    // Teams need a live cloud call, so a logged-out or offline account offers
-    // none rather than failing the whole dialog.
-    if (!ready) return c.json({ ready: false, teams: [], slots: [] });
+    const closed = (access: "signed-out" | "expired") =>
+      c.json({ ready: false, access, teams: [], slots: [] });
+    if (!runner) return closed("signed-out");
+    const access = await runner.access();
+    // Teams need a live cloud call, so an unusable account offers none rather
+    // than failing the whole dialog.
+    if (access.state !== "ready") return closed(access.state);
     const [teams, destinationResult] = await Promise.all([
       runner.teams().catch(() => []),
       runner
@@ -36,12 +48,23 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
         .then((value) => ({ value }))
         .catch((error: unknown) => ({
           error: error instanceof Error ? error.message : String(error),
+          // A credential can be revoked between `access()` and this call — the
+          // verdict behind `access` is cached for a minute. Classify it here so
+          // a race still lands the user on a sign-in rather than on red text.
+          signInRequired: asSignInRequired(error),
         })),
     ]);
     if ("error" in destinationResult) {
-      return c.json({ ready: true, teams, slots: [], destinationError: destinationResult.error });
+      if (destinationResult.signInRequired) return closed(destinationResult.signInRequired);
+      return c.json({
+        ready: true,
+        access: "ready",
+        teams,
+        slots: [],
+        destinationError: destinationResult.error,
+      });
     }
-    return c.json({ ready: true, teams, ...destinationResult.value });
+    return c.json({ ready: true, access: "ready", teams, ...destinationResult.value });
   });
 
   app.post("/", async (c) => {

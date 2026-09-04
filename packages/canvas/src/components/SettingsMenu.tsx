@@ -95,7 +95,7 @@ function cloudLabel(cloudUrl: string | undefined): string {
 
 export function SettingsMenu() {
   const status = useCanvas((s) => s.authStatus);
-  const setSignInOpen = useCanvas((s) => s.setSignInOpen);
+  const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
 
   // Revert availability, refreshed each time the menu opens. Null while
@@ -282,7 +282,7 @@ export function SettingsMenu() {
               Log out
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem onSelect={() => setSignInOpen(true)}>
+            <DropdownMenuItem onSelect={() => openSignIn(expired ? { expired: true } : {})}>
               <LogIn />
               {expired ? "Sign in again…" : "Sign in to velloo-cloud…"}
             </DropdownMenuItem>

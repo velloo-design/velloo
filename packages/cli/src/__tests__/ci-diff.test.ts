@@ -15,7 +15,7 @@ import {
 } from "../ci/diff.ts";
 
 /**
- * Changed-screen detection for `velloo ci`: a temp git repo
+ * Changed-screen detection for `publish --changed-since`: a temp git repo
  * fixture exercises the git plumbing end to end, and the pure classify/expand
  * functions cover the dependency rules — screen change → that screen,
  * theme/config change → all screens, snippet change → screens using it

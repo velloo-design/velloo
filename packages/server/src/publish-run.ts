@@ -1,10 +1,12 @@
 import type {
+  CanvasCloudAccess,
   CanvasPublish,
   CanvasPublishDestinations,
   CanvasPublishRequest,
   CanvasPublishResult,
   PublishHost,
 } from "./cloud.ts";
+import { asSignInRequired } from "./cloud.ts";
 
 /**
  * One publish at a time per daemon, with progress the canvas can poll.
@@ -28,7 +30,19 @@ export type PublishRunState =
       warnings: string[];
     }
   | { state: "done"; result: CanvasPublishResult; warnings: string[]; finishedAt: string }
-  | { state: "error"; message: string; warnings: string[]; finishedAt: string };
+  | {
+      state: "error";
+      message: string;
+      /**
+       * Set when the run died on the credential rather than on the bundle. The
+       * dialog offers a sign-in instead of a "Back" button — the failure is
+       * one click from being fixed, and a publish that fails after a full
+       * capture pass is the worst place to make someone go hunting.
+       */
+      signInRequired?: "signed-out" | "expired";
+      warnings: string[];
+      finishedAt: string;
+    };
 
 export class PublishRunner {
   private current: PublishRunState = { state: "idle" };
@@ -55,8 +69,8 @@ export class PublishRunner {
     return this.publisher.destinations(this.host());
   }
 
-  ready(): Promise<boolean> {
-    return this.publisher.ready();
+  access(): Promise<CanvasCloudAccess> {
+    return this.publisher.access();
   }
 
   /** Begin a publish, or return null when one is already running. */
@@ -102,9 +116,11 @@ export class PublishRunner {
         };
       })
       .catch((err: unknown) => {
+        const access = asSignInRequired(err);
         this.current = {
           state: "error",
           message: err instanceof Error ? err.message : String(err),
+          ...(access ? { signInRequired: access } : {}),
           warnings: this.warnings,
           finishedAt: new Date().toISOString(),
         };

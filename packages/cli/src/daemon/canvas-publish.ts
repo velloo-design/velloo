@@ -1,11 +1,14 @@
-import { describeCloudError } from "@velloo/protocol";
+import { type CloudError, describeCloudError } from "@velloo/protocol";
 import type {
+  CanvasAuth,
+  CanvasCloudAccess,
   CanvasPublish,
   CanvasPublishProgress,
   CanvasPublishRequest,
   CanvasPublishResult,
   PublishHost,
 } from "@velloo/server";
+import { signInRequired } from "@velloo/server";
 import { loadCredential } from "../cloud-credentials.ts";
 import { listPublishDestinations } from "../cloud-upload.ts";
 import { gitContext, listTeams, PUBLISH_VIEWPORT, publishDesign } from "../publish/core.ts";
@@ -28,13 +31,37 @@ import { describePublishError } from "../publish/errors.ts";
  * error is rendered here, once, rather than each failure inventing its own
  * message on the way out.
  */
-export function createCanvasPublish(cloudUrl: string): CanvasPublish {
+export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasPublish {
   const tokenFor = async (): Promise<string | undefined> => (await loadCredential(cloudUrl))?.token;
 
+  /**
+   * A stored token is not the same as a usable one. `auth.status()` already
+   * asks the cloud (and caches the answer for a minute), so reusing it here
+   * costs nothing and keeps the publish dialog and the account menu from
+   * disagreeing about whether the user is signed in.
+   *
+   * `verified: null` — the cloud could not be asked — counts as ready: the
+   * local credential stands, and refusing to publish because the network
+   * blinked would be worse than letting the attempt fail with a real reason.
+   */
+  const access = async (): Promise<CanvasCloudAccess> => {
+    if (!(await tokenFor())) return { state: "signed-out" };
+    const status = await auth.status().catch(() => null);
+    return status?.verified === false ? { state: "expired" } : { state: "ready" };
+  };
+
+  /**
+   * Results become throws at this boundary — `CanvasPublish` is an RPC surface
+   * whose contract is a rejected promise. A `LoggedOut` keeps its identity on
+   * the way out so the canvas can answer it with a sign-in.
+   */
+  const rejection = (error: CloudError): Error =>
+    error.kind === "LoggedOut"
+      ? signInRequired("expired", describeCloudError(error))
+      : new Error(describeCloudError(error));
+
   return {
-    async ready() {
-      return Boolean(await tokenFor());
-    },
+    access,
 
     async teams() {
       const token = await tokenFor();
@@ -47,12 +74,12 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
 
     async destinations(host) {
       const token = await tokenFor();
-      if (!token) throw new Error("not signed in to velloo-cloud");
+      if (!token) throw signInRequired("signed-out", "not signed in to velloo-cloud");
       const provenance = gitContext(host.folder.root);
       const folderId = host.folder.config.folderId;
       if (!folderId) {
         const teams = await listTeams(cloudUrl, token);
-        if (!teams.ok) throw new Error(describeCloudError(teams.error));
+        if (!teams.ok) throw rejection(teams.error);
         return {
           effectiveTeamId: teams.value.find((team) => team.isDefault)?.id ?? null,
           provenance,
@@ -64,7 +91,7 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
         token,
         folderId,
       });
-      if (!listed.ok) throw new Error(describeCloudError(listed.error));
+      if (!listed.ok) throw rejection(listed.error);
       return { ...listed.value, provenance };
     },
 
@@ -76,7 +103,10 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
     ): Promise<CanvasPublishResult> {
       const token = await tokenFor();
       if (!token) {
-        throw new Error("not signed in to velloo-cloud — sign in from the account menu first.");
+        throw signInRequired(
+          "signed-out",
+          "not signed in to velloo-cloud — sign in from the account menu first.",
+        );
       }
 
       // Capture counters arrive without a step label, so carry the last one.
@@ -125,7 +155,14 @@ export function createCanvasPublish(cloudUrl: string): CanvasPublish {
           onProgress({ step, message });
         },
       );
-      if (!published.ok) throw new Error(describePublishError(published.error));
+      // A publish dies on the credential often enough to be worth naming: the
+      // token can be revoked during the minutes a capture pass takes.
+      if (!published.ok) {
+        const reason = describePublishError(published.error);
+        throw published.error.kind === "LoggedOut"
+          ? signInRequired("expired", reason)
+          : new Error(reason);
+      }
       const outcome = published.value;
 
       return {

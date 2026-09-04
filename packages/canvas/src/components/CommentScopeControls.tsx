@@ -1,5 +1,12 @@
 import { Cloud, MessageCircle } from "lucide-react";
-import type { CloudCommentAvailability, CommentScope, CommentScopeFilter } from "../api.ts";
+import {
+  type CloudCommentAvailability,
+  type CloudCommentBlocker,
+  type CommentScope,
+  type CommentScopeFilter,
+  signInClears,
+} from "../api.ts";
+import { useCanvas } from "../store.ts";
 import { Button } from "./ui/button.tsx";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
 
@@ -7,12 +14,12 @@ export const LOCAL_COMMENT_SCOPE_HELP =
   "Local comments stay on this machine. Cloud comments live on the published board, where reviewers can see and answer them.";
 
 /** Why the cloud target is closed, in the words the composer shows. */
-export function cloudUnavailableHint(
-  reason: Extract<CloudCommentAvailability, { available: false }>["reason"],
-): string {
+export function cloudUnavailableHint(reason: CloudCommentBlocker): string {
   switch (reason) {
     case "signed-out":
       return "Sign in to velloo cloud to write a cloud comment.";
+    case "expired":
+      return "Your velloo-cloud session has ended — sign in again to write a cloud comment.";
     case "unpublished":
       return "Publish this board to write a cloud comment on it.";
     default:
@@ -68,6 +75,7 @@ export function CommentTargetPicker({
   cloud: CloudCommentAvailability | undefined;
   onPublish?: (() => void) | undefined;
 }) {
+  const openSignIn = useCanvas((s) => s.openSignIn);
   const pending = cloud === undefined;
   const blocked = cloud?.available === false ? cloud.reason : null;
   const hint = blocked ? cloudUnavailableHint(blocked) : null;
@@ -98,9 +106,25 @@ export function CommentTargetPicker({
           <Cloud /> Cloud
         </ToggleGroupItem>
       </ToggleGroup>
+      {/* Each blocker that has a way out gets the control that takes it —
+          a disabled toggle with an explanation is only half an answer. */}
       {blocked === "unpublished" && onPublish ? (
         <Button variant="ghost" size="sm" className="text-[11px]" onClick={onPublish}>
           Publish
+        </Button>
+      ) : blocked && signInClears(blocked) ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-[11px]"
+          onClick={() =>
+            openSignIn({
+              action: "post comments to the published board",
+              expired: blocked === "expired",
+            })
+          }
+        >
+          Sign in
         </Button>
       ) : null}
     </div>

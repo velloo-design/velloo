@@ -1,5 +1,3 @@
-import type { MutationError, ThemeError } from "@velloo/protocol";
-
 /**
  * Turning the server's typed failures into something a person can read.
  *
@@ -15,11 +13,43 @@ import type { MutationError, ThemeError } from "@velloo/protocol";
  * the switch makes a new server-side variant a compile error here rather than
  * a silent regression to a status-code string.
  */
-export type ApiError = MutationError | ThemeError;
+import {
+  type CloudError,
+  isCloudErrorKind,
+  type MutationError,
+  type ThemeError,
+} from "@velloo/protocol";
+
+/**
+ * A failure a cloud-backed route re-serves (asset generation today).
+ *
+ * The route sends the `CloudError` kind alongside the sentence it already
+ * rendered, rather than a shape of its own: the wording belongs to whoever
+ * knows what failed, and `LoggedOut` is the one kind the canvas must *act* on
+ * rather than print. `AssetInUse` is the assets router's own refusal.
+ */
+export type CloudRouteError = { kind: CloudError["kind"] | "AssetInUse"; message: string };
+
+export type ApiError = MutationError | ThemeError | CloudRouteError;
+
+const isCloudRouteError = (error: ApiError): error is CloudRouteError =>
+  error.kind === "AssetInUse" || isCloudErrorKind(error.kind);
+
+/**
+ * Whether this failure is fixed by signing in — the canvas answers these with
+ * the sign-in dialog rather than a toast the user can only read.
+ */
+export function isSignInRequired(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (error as Error & { payload?: ApiError }).payload?.kind === "LoggedOut";
+}
 
 const list = (items: string[]): string => items.join(", ");
 
 function baseMessage(error: ApiError): string {
+  // Already a sentence, written where the failure happened. Split out so the
+  // `never` guard below stays total over the two unions the canvas owns.
+  if (isCloudRouteError(error)) return error.message;
   switch (error.kind) {
     // `BadRequest` is the one kind both unions carry; both spell it `message`.
     case "BadRequest":

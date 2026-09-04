@@ -66,7 +66,9 @@ export default defineCommand({
     const auth: CanvasAuth = createCanvasAuth(cloudUrl);
     // Publishing from the canvas runs the same core as `velloo publish`, over
     // the pipeline this daemon already has warm.
-    const publish: CanvasPublish = createCanvasPublish(cloudUrl);
+    // Takes `auth` so both read one verdict on the stored credential: the
+    // account menu and the publish dialog must never disagree about it.
+    const publish: CanvasPublish = createCanvasPublish(cloudUrl, auth);
 
     // Prefer the requested port (7300 by default), fall back to a free one.
     const preferred = args.port ? Number(args.port) : 7300;

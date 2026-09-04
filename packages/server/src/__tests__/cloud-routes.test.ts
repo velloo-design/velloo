@@ -8,12 +8,14 @@ import { createApp } from "../app.ts";
 import type {
   CanvasAuth,
   CanvasAuthStatus,
+  CanvasCloudAccess,
   CanvasPublish,
   CanvasPublishProgress,
   CanvasPublishRequest,
   CanvasPublishResult,
   PublishHost,
 } from "../cloud.ts";
+import { signInRequired } from "../cloud.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
@@ -213,7 +215,13 @@ describe("/api/auth with a CLI controller", () => {
  * A publisher whose run is resolved by the test, so progress and completion can
  * be observed at exact points instead of raced against.
  */
-function fakePublisher(opts: { ready?: boolean; teams?: { id: string; name: string }[] } = {}) {
+function fakePublisher(
+  opts: {
+    access?: CanvasCloudAccess["state"];
+    teams?: { id: string; name: string }[];
+    destinationsFail?: unknown;
+  } = {},
+) {
   let settle: ((result: CanvasPublishResult) => void) | undefined;
   let fail: ((err: unknown) => void) | undefined;
   let emit: ((progress: CanvasPublishProgress) => void) | undefined;
@@ -222,13 +230,14 @@ function fakePublisher(opts: { ready?: boolean; teams?: { id: string; name: stri
   let hostSeen: PublishHost | undefined;
 
   const publisher: CanvasPublish = {
-    async ready() {
-      return opts.ready ?? true;
+    async access() {
+      return { state: opts.access ?? "ready" };
     },
     async teams() {
       return opts.teams ?? [];
     },
     async destinations() {
+      if (opts.destinationsFail) throw opts.destinationsFail;
       return {
         effectiveTeamId: null,
         provenance: { repo: null, branch: null },
@@ -287,6 +296,7 @@ describe("/api/publish without a CLI publisher", () => {
     expect(await (await get(app, "/api/publish/status")).json()).toEqual({ state: "unavailable" });
     expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
       ready: false,
+      access: "signed-out",
       teams: [],
       slots: [],
     });
@@ -300,6 +310,7 @@ describe("/api/publish", () => {
     const app = appWith({ publish: runnerFor(fake.publisher) });
     expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
       ready: true,
+      access: "ready",
       teams: [{ id: "t1", name: "Design" }],
       effectiveTeamId: null,
       provenance: { repo: null, branch: null },
@@ -308,12 +319,52 @@ describe("/api/publish", () => {
   });
 
   test("a signed-out account offers no teams to publish into", async () => {
-    const fake = fakePublisher({ ready: false, teams: [{ id: "t1", name: "Design" }] });
+    const fake = fakePublisher({ access: "signed-out", teams: [{ id: "t1", name: "Design" }] });
     const app = appWith({ publish: runnerFor(fake.publisher) });
     expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
       ready: false,
+      access: "signed-out",
       teams: [],
       slots: [],
+    });
+  });
+
+  // The dialog's sign-in branch keys off `access`, so a credential the cloud
+  // has rejected has to reach it as such — reporting `ready: true` is what let
+  // a revoked token render the whole form and then fail on Publish.
+  test("a rejected credential reads as expired, not as a working account", async () => {
+    const fake = fakePublisher({ access: "expired", teams: [{ id: "t1", name: "Design" }] });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
+      ready: false,
+      access: "expired",
+      teams: [],
+      slots: [],
+    });
+  });
+
+  // `access` is answered from a cached /v1/me verdict, so a token revoked
+  // inside that window still reaches the destinations call.
+  test("a 401 racing past the access check still lands on a sign-in", async () => {
+    const fake = fakePublisher({
+      destinationsFail: signInRequired("expired", "velloo-cloud rejected the stored credential"),
+    });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect(await (await get(app, "/api/publish/targets")).json()).toEqual({
+      ready: false,
+      access: "expired",
+      teams: [],
+      slots: [],
+    });
+  });
+
+  test("a destinations failure that is not about the credential stays an error", async () => {
+    const fake = fakePublisher({ destinationsFail: new Error("cannot reach the cloud") });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect(await (await get(app, "/api/publish/targets")).json()).toMatchObject({
+      ready: true,
+      access: "ready",
+      destinationError: "cannot reach the cloud",
     });
   });
 

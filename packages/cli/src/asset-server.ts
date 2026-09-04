@@ -2,7 +2,7 @@ import { join, sep } from "node:path";
 
 /**
  * Ephemeral static server for headless capture passes (`velloo publish`,
- * `velloo ci`): rendered documents reference the folder's `/assets/…` (and
+ * headless render/export): rendered documents reference the folder's `/assets/…` (and
  * the live-island bundle) by root-relative URL, which in the daemon resolve
  * against the canvas server. One-shot commands have no canvas running, so
  * serve them ourselves for the duration and hand the origin to

@@ -23,10 +23,12 @@ export {
 } from "./api/auth.ts";
 export {
   type CloudCommentAvailability,
+  type CloudCommentBlocker,
   type CommentScope,
   type CommentScopeFilter,
   type CommentStatusFilter,
   comments,
+  signInClears,
 } from "./api/comments.ts";
 export { config, type FolderConfig, fetchConfig } from "./api/config.ts";
 export {
@@ -64,6 +66,7 @@ export type { ApiError } from "./api/http.ts";
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
 export {
+  type PublishAccess,
   type PublishRequest,
   type PublishResult,
   type PublishState,
@@ -84,4 +87,5 @@ export {
   type SearchScreenHit,
   type SearchTextHit,
 } from "./api/search.ts";
+export { askToSignIn, onSignInRequired, type SignInPrompt } from "./api/sign-in-gate.ts";
 export { type FontSpec, type TypesetSpec, theme } from "./api/theme.ts";

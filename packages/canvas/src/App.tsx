@@ -1,6 +1,6 @@
 import { Plus, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { mutate, redo as redoApi, undo as undoApi } from "./api.ts";
+import { mutate, onSignInRequired, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { formatBrowserTitle } from "./browser-title.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
@@ -27,6 +27,37 @@ import { useCanvas } from "./store.ts";
 import { toastError } from "./toast.ts";
 import { readUrlState, useUrlState } from "./url-state.ts";
 import { connectWs } from "./ws-client.ts";
+
+/**
+ * Keeps the canvas honest about its velloo-cloud account.
+ *
+ * Two halves of the same problem. The gate lets the API layer ask for a
+ * sign-in from wherever a call failed on the credential, without importing the
+ * store. The poll is what makes a revoked token show up on its own: the daemon
+ * caches the cloud's verdict for a minute, so asking less often than that would
+ * only delay the news, and asking more often would not learn anything new.
+ */
+const AUTH_POLL_MS = 60_000;
+
+function useCloudSession(): void {
+  useEffect(() => {
+    const stop = onSignInRequired((prompt) => useCanvas.getState().openSignIn(prompt));
+    const refresh = () => void useCanvas.getState().refreshAuth();
+    refresh();
+    const timer = setInterval(refresh, AUTH_POLL_MS);
+    // A backgrounded tab stops firing timers reliably; the moment it comes back
+    // is exactly when the user is about to act on stale account state.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stop();
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+}
 
 export function App() {
   const design = useCanvas((s) => s.design);
@@ -64,6 +95,7 @@ export function App() {
 
   useUrlState();
   useApplyAppTheme();
+  useCloudSession();
 
   // Browser tab: `<repo> · <board> - velloo` (middle-dot between repo/board).
   useEffect(() => {

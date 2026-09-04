@@ -73,12 +73,12 @@ export async function hasDesignConfig(dir: string): Promise<boolean> {
 export interface ResolveDesignFolderOptions {
   /** Reject an explicit arg that isn't a design folder (default: accept it unchecked). */
   requireConfig?: boolean | undefined;
-  /** Abort override — `velloo ci` exits 2 for operational errors, not fail()'s 1. */
+  /** Abort override for commands that need a non-default operational exit code. */
   onFail?: ((message: string) => never) | undefined;
   /**
    * Offer a picker when the repo manifest lists several projects and nothing
    * disambiguates (TTY only). Commands that own stdio (mcp) or run headless
-   * (ci) must leave this off.
+   * must leave this off.
    */
   interactive?: boolean | undefined;
   /** Resolution base (default: process.cwd()) — injectable so tests avoid chdir. */

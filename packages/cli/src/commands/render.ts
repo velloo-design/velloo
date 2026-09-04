@@ -104,7 +104,7 @@ export default defineCommand({
     const progress = createProgress();
     progress.start("preparing render");
     try {
-      // Reuse the same headless pipeline as `velloo ci`/`publish`: the JIT carries
+      // Reuse the same headless pipeline as `publish`: the JIT carries
       // `extraThemeBlock` (so palette/font utilities compile), and the render gets
       // the folder's custom.css — both of which the old hand-rolled path dropped,
       // making `velloo render` diverge from the canvas.

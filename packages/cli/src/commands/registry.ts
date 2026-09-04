@@ -27,7 +27,6 @@ const LOADERS: Record<string, LazyCommand> = {
   export: () => import("./export.ts").then((m) => m.default),
   upgrade: () => import("./upgrade.ts").then((m) => m.default),
   publish: () => import("./publish.ts").then((m) => m.default),
-  ci: () => import("./ci.ts").then((m) => m.default),
   emit: () => import("./emit.ts").then((m) => m.default),
   "theme:export": () => import("./theme-export.ts").then((m) => m.default),
   completions: () => import("./completions.ts").then((m) => m.default),

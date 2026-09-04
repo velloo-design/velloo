@@ -15,7 +15,7 @@ import {
 import { withAssetServer } from "../asset-server.ts";
 
 /**
- * The before/after capture side of `velloo ci` — the same
+ * The shared headless capture pipeline used by render, export, and publish — the same
  * renderScreen → captureScreenshot pipeline `velloo publish` ships bundle
  * screenshots through, pointed at an arbitrary design folder (the working
  * tree for 'after', a git-archive temp dir for 'before').

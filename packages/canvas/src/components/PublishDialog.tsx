@@ -47,7 +47,7 @@ const POLL_MS = 700;
 export function PublishDialog() {
   const open = useCanvas((s) => s.publishOpen);
   const setOpen = useCanvas((s) => s.setPublishOpen);
-  const setSignInOpen = useCanvas((s) => s.setSignInOpen);
+  const openSignIn = useCanvas((s) => s.openSignIn);
   const design = useCanvas((s) => s.design);
   const scope = useCanvas((s) => s.publishScope);
 
@@ -198,7 +198,12 @@ export function PublishDialog() {
     }
   };
 
-  const signedOut = targets !== null && !targets.ready;
+  // `access` names *why* publishing is closed; `ready` is the fallback for a
+  // daemon too old to send it, where the only knowable reason is no credential.
+  const access =
+    targets === null ? null : (targets.access ?? (targets.ready ? "ready" : "signed-out"));
+  const signedOut = access !== null && access !== "ready";
+  const expired = access === "expired";
   const unavailable = run.state === "unavailable";
   // No boards is legitimate — a board-less folder publishes all its screens.
   const nothingSelected = boards.length > 0 && boardIds.length === 0;
@@ -223,16 +228,18 @@ export function PublishDialog() {
         ) : signedOut ? (
           <div className="flex flex-col gap-3 py-2">
             <p className="text-sm text-muted-foreground">
-              Publishing needs a velloo-cloud account.
+              {expired
+                ? "Your velloo-cloud session has ended. Sign in again to publish these boards."
+                : "Publishing needs a velloo-cloud account."}
             </p>
             <Button
               onClick={() => {
                 setOpen(false);
-                setSignInOpen(true);
+                openSignIn({ action: "publish these boards", ...(expired ? { expired } : {}) });
               }}
               className="self-start"
             >
-              Sign in…
+              {expired ? "Sign in again…" : "Sign in…"}
             </Button>
           </div>
         ) : run.state === "running" ? (
@@ -289,6 +296,23 @@ export function PublishDialog() {
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>{run.message}</span>
             </div>
+            {/* A token can be revoked during the minutes a capture pass takes.
+                Losing that work to a dead end, with the fix one click away, is
+                the worst version of this failure. */}
+            {run.signInRequired ? (
+              <Button
+                onClick={() => {
+                  setOpen(false);
+                  openSignIn({
+                    action: "publish these boards",
+                    expired: run.signInRequired === "expired",
+                  });
+                }}
+                className="self-start"
+              >
+                Sign in and try again…
+              </Button>
+            ) : null}
             <Warnings messages={run.warnings} />
           </div>
         ) : (

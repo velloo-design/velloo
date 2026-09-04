@@ -2,11 +2,11 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import {
   type CloudError,
+  cloudFailure,
   cloudFetch,
   cloudJson,
   describeCloudError,
   GenerateResponseSchema,
-  httpFailure,
   IntentCatalogResponseSchema,
   type IntentPrice,
   insecureCloudUrl,
@@ -149,7 +149,8 @@ const NOT_AVAILABLE = "Hosted generation isn't available on this velloo-cloud se
 /** One-line, actionable follow-up per failure status (appended after the cloud's message). */
 const HINTS: Record<number, string> = {
   400: "Fix the arguments and retry — nothing was generated or charged.",
-  401: "Run `velloo login` to sign in again, then retry.",
+  // No 401: `cloudFailure` classifies that as `LoggedOut`, which carries its
+  // own "run `velloo login`" sentence and never reaches this table.
   402: "Ask the user to top up credits before retrying.",
   404: NOT_AVAILABLE,
   429: "The limit is per-account per minute — wait a minute, then retry.",
@@ -347,7 +348,7 @@ export async function generateAsset(
     // The hint that names the way out is appended when this is rendered
     // (`describeGenerateFailure`), so the cloud's own wording survives intact
     // here for anything that wants to branch on it.
-    return err(httpFailure("generation", res.status, detail, code));
+    return err(cloudFailure("generation", res.status, detail, code));
   }
 
   const parsed = await cloudJson(res, GenerateResponseSchema, "generation");

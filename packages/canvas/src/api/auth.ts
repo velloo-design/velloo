@@ -39,6 +39,19 @@ export function loginAttemptSucceeded(status: AuthStatus): boolean {
   return status.loggedIn && status.login.state === "idle";
 }
 
+/**
+ * A credential the cloud has *started* rejecting.
+ *
+ * Only the transition counts. Status is re-read on a timer, and the point of
+ * noticing is to say it once — a canvas that re-announced a rejected token
+ * every minute would be nagging about a state the user may have chosen to
+ * leave alone. `verified: null` is not a rejection: the cloud could not be
+ * asked, and the local credential stands.
+ */
+export function credentialJustRejected(before: AuthStatus | null, after: AuthStatus): boolean {
+  return after.loggedIn && after.verified === false && before?.verified !== false;
+}
+
 const LOGGED_OUT: AuthStatus = { loggedIn: false, verified: null, login: { state: "idle" } };
 
 export const auth = {

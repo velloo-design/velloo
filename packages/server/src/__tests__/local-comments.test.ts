@@ -6,9 +6,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CommentThread } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { Hono } from "hono";
-import type { CanvasPublishSlot } from "../cloud.ts";
+import type { CanvasCloudAccess, CanvasPublishSlot } from "../cloud.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
-import { LocalCommentsService } from "../local-comments.ts";
+import { type CloudCommentTargets, LocalCommentsService } from "../local-comments.ts";
 import { registerCommentTools } from "../mcp/tools/comments.ts";
 import type { McpResult } from "../mcp/tools/result.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -258,9 +258,9 @@ describe("cloud comment scope", () => {
 
   const targets = (
     slots: CanvasPublishSlot[],
-    ready = true,
-  ): { ready(): Promise<boolean>; destinations(): Promise<{ slots: CanvasPublishSlot[] }> } => ({
-    ready: async () => ready,
+    access: CanvasCloudAccess["state"] = "ready",
+  ): CloudCommentTargets => ({
+    access: async () => ({ state: access }),
     destinations: async () => ({ slots }),
   });
 
@@ -347,9 +347,15 @@ describe("cloud comment scope", () => {
       available: false,
       reason: "unsupported",
     });
-    expect(await withCloud(targets([], false)).cloudAvailability("main")).toEqual({
+    expect(await withCloud(targets([], "signed-out")).cloudAvailability("main")).toEqual({
       available: false,
       reason: "signed-out",
+    });
+    // Separate from "signed-out" because the way out is worded differently and
+    // because a rejected credential used to pass for a working one.
+    expect(await withCloud(targets([], "expired")).cloudAvailability("main")).toEqual({
+      available: false,
+      reason: "expired",
     });
     expect(await withCloud(targets([slot(["other"])])).cloudAvailability("main")).toEqual({
       available: false,
@@ -376,6 +382,13 @@ describe("cloud comment scope", () => {
     expect(cloudThreads.size).toBe(1);
     // Nothing landed in the machine-local store.
     expect(await shared.list("main", "all", "local")).toHaveLength(0);
+  });
+
+  test("a rejected credential refuses a cloud thread and says to sign in again", async () => {
+    const shared = withCloud(targets([slot(["main"])], "expired"));
+    await expect(
+      shared.create({ boardId: "main", body: "Nowhere to put this", scope: "shared" }),
+    ).rejects.toThrow("sign in again");
   });
 
   test("an unpublished board refuses a cloud thread instead of writing it locally", async () => {

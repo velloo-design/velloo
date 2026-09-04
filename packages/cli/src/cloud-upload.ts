@@ -1,6 +1,6 @@
 /**
  * The link-create → upload → cleanup-on-fail flow shared by `velloo publish`
- * and `velloo ci`: `POST /v1/links` creates a share link (or returns the
+ * and publishing: `POST /v1/links` creates a share link (or returns the
  * folder's existing one when a `folderId` travels), then
  * `POST /v1/links/:slug/versions` stores the multipart bundle. A failed upload
  * deletes a link this call created — a link with no version is a dead /s/
@@ -13,9 +13,9 @@
 import {
   type CloudError,
   type CloudPublishDestinations,
+  cloudFailure,
   cloudFetch,
   cloudJson,
-  httpFailure,
   httpFailureFrom,
   LinkAccessResponseSchema,
   LinkResponseSchema,
@@ -181,7 +181,7 @@ export async function uploadLinkBundle(opts: {
         headers: authorized,
       }).catch(() => {});
     }
-    return err(httpFailure("upload", uploadRes.status, detail, code));
+    return err(cloudFailure("upload", uploadRes.status, detail, code));
   }
   const parsed = await cloudJson(uploadRes, VersionUploadResponseSchema, "upload");
   if (!parsed.ok) return parsed;
