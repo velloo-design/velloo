@@ -21,7 +21,7 @@ MUI folder.
   (`overlays.ts`) render their surface **open + inline** (no escaping portal, no
   fixed backdrop) so a screenshot shows them; the sub-parts (`DialogTitle`/`Content`/
   `Actions`) are MUI's real inline components.
-- **`sx` style channel.** `styleChannel = SX_PROP` — the agent's `set_style` and the
+- **`sx` style channel.** `styleChannel = SX_PROP` — the agent's `update_props` `style` and the
   canvas inspector edit an `sx` object, not Tailwind classes.
 - **Theme projection (both ways).** `muiThemeOptions` projects velloo's token tree
   onto MUI `ThemeOptions` (oklch→rgb via culori, since MUI's color manipulator can't

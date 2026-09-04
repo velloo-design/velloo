@@ -8,8 +8,6 @@ import {
   instantiateSnippetShape,
   moveNodeShape,
   normalizeAddNode,
-  normalizeUpdateFrame,
-  normalizeUpdateProps,
   normalizeUpdateSnippetInstance,
   removeBoardShape,
   removeFrameShape,
@@ -48,13 +46,9 @@ import {
   reorderBoards,
   setNodeId,
   setScreenTree,
-  type UpdateFrameResult,
-  type UpdateFramesResult,
   updateBoard,
-  updateFrame,
   updateFrames,
   updateProps,
-  updatePropsBulk,
   updateScreen,
   updateSnippet,
   updateSnippetInstance,
@@ -115,37 +109,23 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_props",
     {
       description:
-        "Shallow-merge `propPatch` into the node at `path` (null removes a key), and/or restyle it through `style` — the screen's *native* style channel, which the framework adapter routes to a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object. Object channels merge shallowly (an inner null drops that key); `style: null` clears it. Both channels can travel in one call. For many nodes in one atomic write, pass `patches: [{ path, propPatch?, style? }]`. This patches a plain screen node; to patch a node *inside a snippet* use update_snippet_instance (one instance) or update_snippet's innerPatch (the definition, all instances).",
+        "Patch nodes on a screen: one entry per node in `patches`, applied in one atomic write (one lock, one broadcast) — use length 1 for a single edit. `propPatch` shallow-merges props (null removes a key); `style` restyles through the screen's *native* channel, which the framework adapter routes to a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object. Object channels merge shallowly (an inner null drops that key); `style: null` clears. An entry may carry either or both. This patches plain screen nodes; to patch a node *inside a snippet* use update_snippet_instance (one instance) or update_snippet's innerPatch (the definition, all instances).",
       inputSchema: updatePropsShape,
     },
-    async (args) => {
-      const plan = normalizeUpdateProps(args);
-      if (!plan.ok) return errorResult(badRequest(plan.message, plan.issues));
-      if (plan.args.mode === "bulk") {
-        const bulkArgs = plan.args.args;
-        return toMcpWithWarnings(await updatePropsBulk(ctx, bulkArgs), async () => {
-          const screen = ctx.folder.screens.get(args.screenId);
-          if (!screen) return [];
-          const all: string[] = [];
-          for (const patch of bulkArgs.patches) {
-            if (!Array.isArray(patch.path)) continue;
-            const node = pathAt(screen.tree, patch.path);
-            if (node && isComponentNode(node)) {
-              all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch ?? {})));
-            }
-          }
-          return all;
-        });
-      }
-      const single = plan.args.args;
-      return toMcpWithWarnings(await updateProps(ctx, single), async (value) => {
+    async (args) =>
+      toMcpWithWarnings(await updateProps(ctx, args), async () => {
         const screen = ctx.folder.screens.get(args.screenId);
         if (!screen) return [];
-        const node = pathAt(screen.tree, value.path);
-        if (!node || !isComponentNode(node)) return [];
-        return propWarnings(ctx, screen, node.$ref, single.propPatch ?? {});
-      });
-    },
+        const all: string[] = [];
+        for (const patch of args.patches) {
+          if (!Array.isArray(patch.path)) continue;
+          const node = pathAt(screen.tree, patch.path);
+          if (node && isComponentNode(node)) {
+            all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch ?? {})));
+          }
+        }
+        return all;
+      }),
   );
 
   mcp.registerTool(
@@ -302,18 +282,10 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_frame",
     {
       description:
-        'Move/resize/relabel/regroup a frame on a board. `label: null`, `group: null`, or `scheme: null` clears that field; omitting a field leaves it unchanged. `scheme: "light" | "dark"` pins this frame\'s render scheme; it is a review affordance over the screen\'s one shared tree, not a separate design variant. One frame: pass `frameId` + `patch`. For many frames in one atomic write — single persist + broadcast + undo entry — pass `patches: [{ frameId, patch }]` instead (the same single-or-bulk shape as update_props).',
+        'Move/resize/relabel/regroup frames on a board: one entry per frame in `patches`, applied in one atomic write (single persist, broadcast and undo entry) — use length 1 for a single frame. `label: null`, `group: null` or `scheme: null` clears that field; omitting a field leaves it unchanged. `scheme: "light" | "dark"` pins that frame\'s render scheme — a review affordance over the screen\'s one shared tree, not a separate design variant.',
       inputSchema: updateFrameShape,
     },
-    async (args) => {
-      const plan = normalizeUpdateFrame(args);
-      if (!plan.ok) return errorResult(badRequest(plan.message, plan.issues));
-      const result: Result<UpdateFrameResult | UpdateFramesResult, MutationError> =
-        plan.args.mode === "bulk"
-          ? await updateFrames(ctx, plan.args.args)
-          : await updateFrame(ctx, plan.args.args);
-      return toMcp(result);
-    },
+    async (args) => toMcp(await updateFrames(ctx, args)),
   );
 
   mcp.registerTool(
@@ -343,7 +315,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet",
     {
       description:
-        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast. To tweak ONE node's props inside the body without resending the whole tree, pass `innerPatch` — the definition-level member of the prop-patch trio: update_props (a plain screen node), override_snippet_props (one instance's body), update_snippet innerPatch (this — the shared definition, every instance at once). Pass `tree` only for a full body replacement.",
+        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast. To tweak ONE node's props inside the body without resending the whole tree, pass `innerPatch` — the definition-level member of the prop-patch trio: update_props (a plain screen node), update_snippet_instance (one instance's body), update_snippet innerPatch (this — the shared definition, every instance at once). Pass `tree` only for a full body replacement.",
       inputSchema: updateSnippetShape,
     },
     async (args) =>
@@ -390,7 +362,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "instantiate_snippet",
     {
       description:
-        "Add a `$snippet` instance to a screen tree under parentPath. `args` must satisfy the snippet's declared params — pass every required param (check `list_snippets`/`get_snippet` first: each param reports name, type, and `required`). Omitting a required param or passing an undeclared key returns SnippetParamMismatch listing the offending names. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` to patch interior body nodes for THIS instance only (the active nav item, a red badge) at placement — no follow-up `override_snippet_props` needed. Stamp a shared snippet on many screens, each with its own `overrides`.",
+        "Add a `$snippet` instance to a screen tree under parentPath. `args` must satisfy the snippet's declared params — pass every required param (check `list_snippets`/`get_snippet` first: each param reports name, type, and `required`). Omitting a required param or passing an undeclared key returns SnippetParamMismatch listing the offending names. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` to patch interior body nodes for THIS instance only (the active nav item, a red badge) at placement — no follow-up `update_snippet_instance` needed. Stamp a shared snippet on many screens, each with its own `overrides`.",
       inputSchema: instantiateSnippetShape,
     },
     async (args) => toMcp(await instantiateSnippet(ctx, args)),

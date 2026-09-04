@@ -18,7 +18,7 @@ import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot"
 import { loadDesignFolder } from "../src/design-folder.ts";
 import { registerGuideResources } from "../src/mcp/resources.ts";
 import { buildInstructions } from "../src/mcp/server.ts";
-import { enforceStrictToolInputs } from "../src/mcp/strict-tools.ts";
+import { applyToolPolicy } from "../src/mcp/tool-policy.ts";
 import { registerAssetTools } from "../src/mcp/tools/assets.ts";
 import { registerBatchTool } from "../src/mcp/tools/batch.ts";
 import { registerCaptureTools } from "../src/mcp/tools/captures.ts";
@@ -94,7 +94,7 @@ async function main(): Promise<void> {
     };
 
     const mcp = new McpServer({ name: "velloo", version: "0.1.0" });
-    enforceStrictToolInputs(mcp);
+    applyToolPolicy(mcp);
     // Schema measurement never invokes a handler, so the jit/bundler/comments
     // dependencies of the IO-bound tools can be inert stubs.
     const stub = <T>(): T => ({}) as T;

@@ -6,7 +6,7 @@ import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
-import { type MutationContext, updateFrame } from "../index.ts";
+import { type MutationContext, updateFrames } from "../index.ts";
 
 const sampleConfig = {
   schemaVersion: 3,
@@ -73,15 +73,21 @@ afterEach(async () => {
 describe("update_frame scheme", () => {
   test("sets and explicitly clears a frame scheme", async () => {
     const pinned = unwrap(
-      await updateFrame(ctx, { boardId: "main", frameId: "home", patch: { scheme: "dark" } }),
+      await updateFrames(ctx, {
+        boardId: "main",
+        patches: [{ frameId: "home", patch: { scheme: "dark" } }],
+      }),
     );
-    expect(pinned.frame.scheme).toBe("dark");
+    expect(pinned.frames[0]?.scheme).toBe("dark");
     expect(folder.boards.get("main")?.frames[0]?.scheme).toBe("dark");
 
     const cleared = unwrap(
-      await updateFrame(ctx, { boardId: "main", frameId: "home", patch: { scheme: null } }),
+      await updateFrames(ctx, {
+        boardId: "main",
+        patches: [{ frameId: "home", patch: { scheme: null } }],
+      }),
     );
-    expect(cleared.frame.scheme).toBeUndefined();
+    expect(cleared.frames[0]?.scheme).toBeUndefined();
     expect(folder.boards.get("main")?.frames[0]?.scheme).toBeUndefined();
 
     const persisted = JSON.parse(await readFile(join(root, "boards/main.json"), "utf8")) as {
@@ -92,11 +98,17 @@ describe("update_frame scheme", () => {
 
   test("an omitted scheme leaves the existing pin unchanged", async () => {
     unwrap(
-      await updateFrame(ctx, { boardId: "main", frameId: "home", patch: { scheme: "light" } }),
+      await updateFrames(ctx, {
+        boardId: "main",
+        patches: [{ frameId: "home", patch: { scheme: "light" } }],
+      }),
     );
     const updated = unwrap(
-      await updateFrame(ctx, { boardId: "main", frameId: "home", patch: { x: 12 } }),
+      await updateFrames(ctx, {
+        boardId: "main",
+        patches: [{ frameId: "home", patch: { x: 12 } }],
+      }),
     );
-    expect(updated.frame.scheme).toBe("light");
+    expect(updated.frames[0]?.scheme).toBe("light");
   });
 });

@@ -18,7 +18,6 @@ export async function applyClasses(
   const className = args.classes.trim();
   return updateProps(ctx, {
     screenId: args.screenId,
-    path: args.path,
-    propPatch: { className: className === "" ? null : className },
+    patches: [{ path: args.path, propPatch: { className: className === "" ? null : className } }],
   });
 }

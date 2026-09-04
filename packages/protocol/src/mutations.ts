@@ -93,19 +93,27 @@ const AnnotationPositionSchema = z.union([
 
 // ── Tree mutations ─────────────────────────────────────────────────────
 
+/**
+ * Every `*Body` is a `z.strictObject`, so an argument the schema doesn't
+ * declare fails loudly with the valid keys rather than being dropped.
+ *
+ * This used to differ by surface: the MCP layer rewrapped each raw shape as
+ * `strictObject` at registration, while `Body` — the form `batch` and the HTTP
+ * routes parse — was a plain `z.object`. The same typo was a hard error
+ * standalone and a silent no-op inside a batch, which is the harder failure to
+ * notice: a 40-call batch returned green with one node unstyled.
+ */
 export const addNodeShape = {
   screenId: ScreenId,
   parentPath: LocatorOrRootSchema,
   componentRef: z.string().min(1),
   id: NodeIdSchema.optional(),
   props: PatchRecordSchema.optional(),
-  /** Accepted alias for `props`, so the key matches update_props. */
-  propPatch: PatchRecordSchema.optional().describe("Alias for `props`."),
   children: jsonTolerant(z.union([z.array(NodeSchema), z.string(), z.number()])).optional(),
   index: z.number().int().nonnegative().optional(),
   emitAs: EmitAsSchema.optional(),
 } satisfies z.ZodRawShape;
-export const AddNodeBody = z.object(addNodeShape);
+export const AddNodeBody = z.strictObject(addNodeShape);
 export type AddNodeInput = z.infer<typeof AddNodeBody>;
 
 /**
@@ -128,18 +136,17 @@ export interface AddNodeArgs {
 }
 
 /**
- * `props` and `propPatch` are the same field under two names. A scalar
- * `children` ("just put the label here") is rejected with the array issue the
- * `props.children` nudge keys off, rather than silently dropped.
+ * A scalar `children` ("just put the label here") is rejected with the array
+ * issue the `props.children` nudge keys off, rather than silently dropped.
  */
 export function normalizeAddNode(input: AddNodeInput): Normalized<AddNodeArgs> {
-  const { propPatch, children, ...rest } = input;
+  const { children, ...rest } = input;
   if (typeof children === "string" || typeof children === "number") {
     return invalid("add_node: `children` must be an array of nodes.", [
       { code: "invalid_type", expected: "array", path: ["children"] },
     ]);
   }
-  const props = input.props ?? propPatch;
+  const props = input.props;
   return {
     ok: true,
     args: {
@@ -160,40 +167,35 @@ export const StylePayloadSchema = jsonTolerant(
   "Native style channel: a className string (Tailwind), an object of properties (sx / style), or null to clear",
 );
 
+export const PropsPatchEntrySchema = z
+  .object({
+    path: LocatorSchema,
+    propPatch: PatchRecordSchema.optional(),
+    style: StylePayloadSchema.optional(),
+  })
+  .refine((e) => e.propPatch !== undefined || e.style !== undefined, {
+    message: "each patch needs propPatch, style, or both",
+  });
+
+/**
+ * One node per entry, many entries per call — a single write, one lock, one
+ * broadcast. Deliberately has no single-node shorthand: the previous
+ * `path`+`propPatch` OR `patches` pair declared five optional fields where two
+ * combinations were legal, so the real contract lived in prose and a runtime
+ * check rather than in the schema.
+ */
 export const updatePropsShape = {
   screenId: ScreenId,
-  path: LocatorSchema.optional(),
-  propPatch: PatchRecordSchema.optional(),
-  /** Accepted alias for `propPatch`, so the key matches add_node. */
-  props: PatchRecordSchema.optional().describe("Alias for `propPatch`."),
-  style: StylePayloadSchema.optional(),
-  patches: jsonTolerant(
-    z
-      .array(
-        z.object({
-          path: LocatorSchema,
-          propPatch: PatchRecordSchema.optional(),
-          style: StylePayloadSchema.optional(),
-        }),
-      )
-      .min(1),
-  )
-    .optional()
-    .describe("Bulk mode — mutually exclusive with path/propPatch"),
+  patches: jsonTolerant(z.array(PropsPatchEntrySchema).min(1)).describe(
+    "One entry per node; length 1 for a single edit",
+  ),
 } satisfies z.ZodRawShape;
-export const UpdatePropsBody = z.object(updatePropsShape);
+export const UpdatePropsBody = z.strictObject(updatePropsShape);
 export type UpdatePropsInput = z.infer<typeof UpdatePropsBody>;
 
 export type StylePayloadInput = z.infer<typeof StylePayloadSchema>;
 
-export interface UpdatePropsSingleArgs {
-  screenId: string;
-  path: Locator;
-  propPatch?: Record<string, unknown> | undefined;
-  style?: StylePayloadInput | undefined;
-}
-
-export interface UpdatePropsBulkArgs {
+export interface UpdatePropsArgs {
   screenId: string;
   patches: Array<{
     path: Locator;
@@ -202,52 +204,18 @@ export interface UpdatePropsBulkArgs {
   }>;
 }
 
-export type UpdatePropsPlan =
-  | { mode: "single"; args: UpdatePropsSingleArgs }
-  | { mode: "bulk"; args: UpdatePropsBulkArgs };
-
-/**
- * Resolve which of the two forms was meant. Deliberately liberal: when a
- * single edit arrives *alongside* a bulk list, it is prepended to the list
- * rather than rejected — agents routinely send both.
- */
-export function normalizeUpdateProps(input: UpdatePropsInput): Normalized<UpdatePropsPlan> {
-  const propPatch = input.propPatch ?? input.props;
-  const single =
-    propPatch !== undefined || input.style !== undefined
-      ? {
-          ...(propPatch !== undefined ? { propPatch } : {}),
-          ...(input.style !== undefined ? { style: input.style } : {}),
-        }
-      : undefined;
-  if (input.patches) {
-    const patches =
-      input.path !== undefined && single !== undefined
-        ? [{ path: input.path, ...single }, ...input.patches]
-        : input.patches;
-    return { ok: true, args: { mode: "bulk", args: { screenId: input.screenId, patches } } };
-  }
-  if (input.path === undefined || single === undefined) {
-    return invalid("update_props: path plus propPatch and/or style required (or pass patches).");
-  }
-  return {
-    ok: true,
-    args: { mode: "single", args: { screenId: input.screenId, path: input.path, ...single } },
-  };
-}
-
 export const applyClassesShape = {
   screenId: ScreenId,
   path: LocatorOrRootSchema,
   classes: z.string(),
 } satisfies z.ZodRawShape;
-export const ApplyClassesBody = z.object(applyClassesShape);
+export const ApplyClassesBody = z.strictObject(applyClassesShape);
 
 export const removeNodeShape = {
   screenId: ScreenId,
   path: LocatorSchema,
 } satisfies z.ZodRawShape;
-export const RemoveNodeBody = z.object(removeNodeShape);
+export const RemoveNodeBody = z.strictObject(removeNodeShape);
 
 export const moveNodeShape = {
   screenId: ScreenId,
@@ -255,14 +223,14 @@ export const moveNodeShape = {
   toParent: LocatorSchema,
   toIndex: z.number().int().nonnegative().optional(),
 } satisfies z.ZodRawShape;
-export const MoveNodeBody = z.object(moveNodeShape);
+export const MoveNodeBody = z.strictObject(moveNodeShape);
 
 export const setNodeIdShape = {
   screenId: ScreenId,
   path: LocatorSchema,
   id: NodeIdSchema.nullable(),
 } satisfies z.ZodRawShape;
-export const SetNodeIdBody = z.object(setNodeIdShape);
+export const SetNodeIdBody = z.strictObject(setNodeIdShape);
 
 // ── Screens ────────────────────────────────────────────────────────────
 
@@ -272,22 +240,22 @@ export const addScreenShape = {
   fromScreenId: z.string().min(1).optional(),
   tree: NodeSchema.optional(),
 } satisfies z.ZodRawShape;
-export const AddScreenBody = z.object(addScreenShape);
+export const AddScreenBody = z.strictObject(addScreenShape);
 
 export const removeScreenShape = { screenId: ScreenId } satisfies z.ZodRawShape;
-export const RemoveScreenBody = z.object(removeScreenShape);
+export const RemoveScreenBody = z.strictObject(removeScreenShape);
 
 export const setScreenTreeShape = {
   screenId: ScreenId,
   tree: NodeSchema,
 } satisfies z.ZodRawShape;
-export const SetScreenTreeBody = z.object(setScreenTreeShape);
+export const SetScreenTreeBody = z.strictObject(setScreenTreeShape);
 
 export const updateScreenShape = {
   screenId: ScreenId,
   patch: z.object({ name: z.string().min(1).optional() }),
 } satisfies z.ZodRawShape;
-export const UpdateScreenBody = z.object(updateScreenShape);
+export const UpdateScreenBody = z.strictObject(updateScreenShape);
 
 // ── Boards ─────────────────────────────────────────────────────────────
 
@@ -296,7 +264,7 @@ export const addBoardShape = {
   id: z.string().min(1).optional(),
   group: z.string().min(1).optional(),
 } satisfies z.ZodRawShape;
-export const AddBoardBody = z.object(addBoardShape);
+export const AddBoardBody = z.strictObject(addBoardShape);
 
 export const updateBoardShape = {
   boardId: BoardId,
@@ -307,15 +275,15 @@ export const updateBoardShape = {
     group: z.string().min(1).nullable().optional(),
   }),
 } satisfies z.ZodRawShape;
-export const UpdateBoardBody = z.object(updateBoardShape);
+export const UpdateBoardBody = z.strictObject(updateBoardShape);
 
 export const removeBoardShape = { boardId: BoardId } satisfies z.ZodRawShape;
-export const RemoveBoardBody = z.object(removeBoardShape);
+export const RemoveBoardBody = z.strictObject(removeBoardShape);
 
 export const reorderBoardsShape = {
   order: z.array(z.string().min(1)),
 } satisfies z.ZodRawShape;
-export const ReorderBoardsBody = z.object(reorderBoardsShape);
+export const ReorderBoardsBody = z.strictObject(reorderBoardsShape);
 
 // ── Board groups (canvas-only — agents file boards via update_board) ────
 
@@ -323,7 +291,7 @@ export const addBoardGroupShape = {
   name: z.string().min(1),
   color: z.string().min(1).optional(),
 } satisfies z.ZodRawShape;
-export const AddBoardGroupBody = z.object(addBoardGroupShape);
+export const AddBoardGroupBody = z.strictObject(addBoardGroupShape);
 
 export const updateBoardGroupShape = {
   groupId: z.string().min(1),
@@ -332,17 +300,17 @@ export const updateBoardGroupShape = {
     color: z.string().min(1).nullable().optional(),
   }),
 } satisfies z.ZodRawShape;
-export const UpdateBoardGroupBody = z.object(updateBoardGroupShape);
+export const UpdateBoardGroupBody = z.strictObject(updateBoardGroupShape);
 
 export const removeBoardGroupShape = {
   groupId: z.string().min(1),
 } satisfies z.ZodRawShape;
-export const RemoveBoardGroupBody = z.object(removeBoardGroupShape);
+export const RemoveBoardGroupBody = z.strictObject(removeBoardGroupShape);
 
 export const reorderBoardGroupsShape = {
   order: z.array(z.string().min(1)),
 } satisfies z.ZodRawShape;
-export const ReorderBoardGroupsBody = z.object(reorderBoardGroupsShape);
+export const ReorderBoardGroupsBody = z.strictObject(reorderBoardGroupsShape);
 
 // ── Frames ─────────────────────────────────────────────────────────────
 
@@ -357,63 +325,30 @@ export const addFrameShape = {
   group: z.string().optional(),
   id: z.string().min(1).optional(),
 } satisfies z.ZodRawShape;
-export const AddFrameBody = z.object(addFrameShape);
+export const AddFrameBody = z.strictObject(addFrameShape);
 
 /** Single-or-bulk, on the same terms as `update_props`. */
 export const updateFrameShape = {
   boardId: BoardId,
-  frameId: FrameId.optional(),
-  patch: FramePatchSchema.optional(),
-  patches: jsonTolerant(z.array(z.object({ frameId: FrameId, patch: FramePatchSchema })).min(1))
-    .optional()
-    .describe("Bulk mode — mutually exclusive with frameId/patch"),
+  patches: jsonTolerant(
+    z.array(z.object({ frameId: FrameId, patch: FramePatchSchema })).min(1),
+  ).describe("One entry per frame; length 1 for a single edit"),
 } satisfies z.ZodRawShape;
-export const UpdateFrameBody = z.object(updateFrameShape);
+export const UpdateFrameBody = z.strictObject(updateFrameShape);
 export type UpdateFrameInput = z.infer<typeof UpdateFrameBody>;
 
 export type FramePatchValue = z.infer<typeof FramePatchSchema>;
-
-export interface UpdateFrameSingleArgs {
-  boardId: string;
-  frameId: string;
-  patch: FramePatchValue;
-}
 
 export interface UpdateFramesArgs {
   boardId: string;
   patches: Array<{ frameId: string; patch: FramePatchValue }>;
 }
 
-export type UpdateFramePlan =
-  | { mode: "single"; args: UpdateFrameSingleArgs }
-  | { mode: "bulk"; args: UpdateFramesArgs };
-
-/** Same liberal reconciliation as `normalizeUpdateProps`. */
-export function normalizeUpdateFrame(input: UpdateFrameInput): Normalized<UpdateFramePlan> {
-  if (input.patches) {
-    const patches =
-      input.frameId !== undefined && input.patch !== undefined
-        ? [{ frameId: input.frameId, patch: input.patch }, ...input.patches]
-        : input.patches;
-    return { ok: true, args: { mode: "bulk", args: { boardId: input.boardId, patches } } };
-  }
-  if (input.frameId === undefined || input.patch === undefined) {
-    return invalid("update_frame: frameId+patch required (or pass patches).");
-  }
-  return {
-    ok: true,
-    args: {
-      mode: "single",
-      args: { boardId: input.boardId, frameId: input.frameId, patch: input.patch },
-    },
-  };
-}
-
 export const removeFrameShape = {
   boardId: BoardId,
   frameId: FrameId,
 } satisfies z.ZodRawShape;
-export const RemoveFrameBody = z.object(removeFrameShape);
+export const RemoveFrameBody = z.strictObject(removeFrameShape);
 
 // ── Snippets ───────────────────────────────────────────────────────────
 
@@ -423,7 +358,7 @@ export const addSnippetShape = {
   params: z.array(SnippetParamSchema).default([]),
   tree: NodeSchema,
 } satisfies z.ZodRawShape;
-export const AddSnippetBody = z.object(addSnippetShape);
+export const AddSnippetBody = z.strictObject(addSnippetShape);
 
 export const updateSnippetShape = {
   snippetId: SnippetId,
@@ -434,10 +369,10 @@ export const updateSnippetShape = {
     innerPatch: z.object({ innerPath: InnerPathSchema, propPatch: PatchRecordSchema }).optional(),
   }),
 } satisfies z.ZodRawShape;
-export const UpdateSnippetBody = z.object(updateSnippetShape);
+export const UpdateSnippetBody = z.strictObject(updateSnippetShape);
 
 export const removeSnippetShape = { snippetId: SnippetId } satisfies z.ZodRawShape;
-export const RemoveSnippetBody = z.object(removeSnippetShape);
+export const RemoveSnippetBody = z.strictObject(removeSnippetShape);
 
 export const instantiateSnippetShape = {
   screenId: ScreenId,
@@ -449,7 +384,7 @@ export const instantiateSnippetShape = {
   overrides: z.record(z.string(), z.object({ props: PatchRecordSchema })).optional(),
   index: z.number().int().nonnegative().optional(),
 } satisfies z.ZodRawShape;
-export const InstantiateSnippetBody = z.object(instantiateSnippetShape);
+export const InstantiateSnippetBody = z.strictObject(instantiateSnippetShape);
 
 export const overrideSnippetPropsShape = {
   screenId: ScreenId,
@@ -457,7 +392,7 @@ export const overrideSnippetPropsShape = {
   innerPath: InnerPathSchema,
   propPatch: PatchRecordSchema,
 } satisfies z.ZodRawShape;
-export const OverrideSnippetPropsBody = z.object(overrideSnippetPropsShape);
+export const OverrideSnippetPropsBody = z.strictObject(overrideSnippetPropsShape);
 
 export const updateSnippetArgsShape = {
   screenId: ScreenId,
@@ -465,7 +400,7 @@ export const updateSnippetArgsShape = {
   argPatch: PatchRecordSchema.default({}),
   extraClassName: z.string().nullable().optional(),
 } satisfies z.ZodRawShape;
-export const UpdateSnippetArgsBody = z.object(updateSnippetArgsShape);
+export const UpdateSnippetArgsBody = z.strictObject(updateSnippetArgsShape);
 
 /**
  * One instance of a snippet, edited from either side: `argPatch` /
@@ -481,7 +416,7 @@ export const updateSnippetInstanceShape = {
   innerPath: InnerPathSchema.optional(),
   propPatch: PatchRecordSchema.optional(),
 } satisfies z.ZodRawShape;
-export const UpdateSnippetInstanceBody = z.object(updateSnippetInstanceShape);
+export const UpdateSnippetInstanceBody = z.strictObject(updateSnippetInstanceShape);
 export type UpdateSnippetInstanceInput = z.infer<typeof UpdateSnippetInstanceBody>;
 
 export interface UpdateSnippetInstancePlan {
@@ -542,7 +477,7 @@ export const addAnnotationShape = {
   position: AnnotationPositionSchema.optional(),
   collapsed: z.boolean().optional(),
 } satisfies z.ZodRawShape;
-export const AddAnnotationBody = z.object(addAnnotationShape);
+export const AddAnnotationBody = z.strictObject(addAnnotationShape);
 
 export const updateAnnotationShape = {
   screenId: ScreenId,
@@ -553,13 +488,13 @@ export const updateAnnotationShape = {
     collapsed: z.boolean().nullable().optional(),
   }),
 } satisfies z.ZodRawShape;
-export const UpdateAnnotationBody = z.object(updateAnnotationShape);
+export const UpdateAnnotationBody = z.strictObject(updateAnnotationShape);
 
 export const removeAnnotationShape = {
   screenId: ScreenId,
   annotationId: z.string().min(1),
 } satisfies z.ZodRawShape;
-export const RemoveAnnotationBody = z.object(removeAnnotationShape);
+export const RemoveAnnotationBody = z.strictObject(removeAnnotationShape);
 
 /** Node a note is about. `frameId` picks which frame of the screen hosts it. */
 export const NoteAttachmentSchema = z.object({
@@ -594,13 +529,13 @@ export const updateNoteShape = {
     body: z.string().optional(),
   }),
 } satisfies z.ZodRawShape;
-export const UpdateNoteBody = z.object(updateNoteShape);
+export const UpdateNoteBody = z.strictObject(updateNoteShape);
 
 export const removeNoteShape = {
   boardId: BoardId,
   noteId: z.string().min(1),
 } satisfies z.ZodRawShape;
-export const RemoveNoteBody = z.object(removeNoteShape);
+export const RemoveNoteBody = z.strictObject(removeNoteShape);
 
 // ── Folder config ──────────────────────────────────────────────────────
 
@@ -613,7 +548,7 @@ export const updateViewportPresetsShape = {
     }),
   ),
 } satisfies z.ZodRawShape;
-export const UpdateViewportPresetsBody = z.object(updateViewportPresetsShape);
+export const UpdateViewportPresetsBody = z.strictObject(updateViewportPresetsShape);
 
 /**
  * `null` clears the default, an absent key leaves it alone — so the dialog can
@@ -623,15 +558,15 @@ export const updateDefaultsShape = {
   defaultBoard: z.string().min(1).nullable().optional(),
   defaultScreen: z.string().min(1).nullable().optional(),
 } satisfies z.ZodRawShape;
-export const UpdateDefaultsBody = z.object(updateDefaultsShape);
+export const UpdateDefaultsBody = z.strictObject(updateDefaultsShape);
 
 export const updateCodegenShape = {
   componentsAlias: z.string().nullable().optional(),
 } satisfies z.ZodRawShape;
-export const UpdateCodegenBody = z.object(updateCodegenShape);
+export const UpdateCodegenBody = z.strictObject(updateCodegenShape);
 
 export const updateFeedbackShape = {
   enabled: z.boolean().optional(),
   contactOk: z.boolean().optional(),
 } satisfies z.ZodRawShape;
-export const UpdateFeedbackBody = z.object(updateFeedbackShape);
+export const UpdateFeedbackBody = z.strictObject(updateFeedbackShape);

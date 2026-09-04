@@ -299,7 +299,7 @@ The snapshot's `snapshotVersion` (`2026.05.22`) records the upstream shadcn pull
 
 **Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the shared `@velloo/helpers` sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
 
-Tailwind v4 stays embedded in the velloo binary regardless of which provider is active. Per-instance styling goes through the screen's **style channel** (`set_style`): Tailwind `className` for shadcn/no-lib, an `sx` object for MUI, an inline `style` object for none/none — authored natively at design time, never translated at emit time. Codegen serializes whatever the channel holds (`className="…"` / `sx={{…}}` / `style={{…}}`). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
+Tailwind v4 stays embedded in the velloo binary regardless of which provider is active. Per-instance styling goes through the screen's **style channel** (`update_props`'s `style`): Tailwind `className` for shadcn/no-lib, an `sx` object for MUI, an inline `style` object for none/none — authored natively at design time, never translated at emit time. Codegen serializes whatever the channel holds (`className="…"` / `sx={{…}}` / `style={{…}}`). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
 
 ### Customizing components
 

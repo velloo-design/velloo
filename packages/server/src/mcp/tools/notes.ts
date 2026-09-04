@@ -7,6 +7,7 @@ import {
   type MutationContext,
   removeAnnotation,
   removeNote,
+  updateAnnotation,
   updateNote,
 } from "../../mutations/index.ts";
 import { errorResult, toMcp } from "./result.ts";
@@ -95,6 +96,43 @@ export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
           author: "agent",
         }),
       ),
+  );
+
+  mcp.registerTool(
+    "update_annotation",
+    {
+      description:
+        "Edit one of your own annotations — its body, or `collapsed` (null clears the override). Refuses user-authored ones: those are the designer's channel to you, so answer them with your own annotation rather than rewriting theirs.",
+      inputSchema: {
+        screenId: z.string(),
+        annotationId: z.string(),
+        body: z.string().optional(),
+        collapsed: z.boolean().nullable().optional(),
+      },
+    },
+    async ({ screenId, annotationId, body, collapsed }) => {
+      if (body === undefined && collapsed === undefined) {
+        return errorResult(badRequest("update_annotation: pass body, collapsed, or both."));
+      }
+      const existing = ctx.folder.annotations.get(screenId)?.find((a) => a.id === annotationId);
+      if (existing && existing.author !== "agent") {
+        return errorResult(
+          badRequest(
+            `Annotation ${annotationId} is user-authored — agents may only edit their own.`,
+          ),
+        );
+      }
+      return toMcp(
+        await updateAnnotation(ctx, {
+          screenId,
+          annotationId,
+          patch: {
+            ...(body !== undefined ? { body } : {}),
+            ...(collapsed !== undefined ? { collapsed } : {}),
+          },
+        }),
+      );
+    },
   );
 
   mcp.registerTool(

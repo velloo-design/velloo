@@ -278,16 +278,16 @@ describe("MCP list_boards", () => {
     expect(listBoardsPayload(folder).some((b) => "archivedAt" in b)).toBe(false);
   });
 
-  test("include_archived restores them, stamped and in sidebar order", async () => {
+  test("includeArchived restores them, stamped and in sidebar order", async () => {
     const { board } = await archiveParked();
-    const rows = listBoardsPayload(folder, { include_archived: true });
+    const rows = listBoardsPayload(folder, { includeArchived: true });
     expect(rows.map((b) => b.id)).toEqual(["live", "parked", "second"]);
     expect(rows.find((b) => b.id === "parked")?.archivedAt).toBe(board.archivedAt as string);
   });
 
-  test("include_frames still embeds an archived board's frames", async () => {
+  test("includeFrames still embeds an archived board's frames", async () => {
     await archiveParked();
-    const rows = listBoardsPayload(folder, { include_archived: true, include_frames: true });
+    const rows = listBoardsPayload(folder, { includeArchived: true, includeFrames: true });
     const parked = rows.find((b) => b.id === "parked") as { frames: { id: string }[] };
     expect(parked.frames.map((f) => f.id)).toEqual(["f-home-2", "f-pricing"]);
   });

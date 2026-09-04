@@ -16,7 +16,6 @@ import {
 } from "@velloo/schema";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
-import { updateFrame } from "../../mutations/api/frames.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import {
   libraryIdForScreen,
@@ -240,36 +239,4 @@ export function framesShorterThan(
     }
   }
   return out;
-}
-
-export interface FittedFrame {
-  board: string;
-  frame: string;
-  from: number;
-  to: number;
-}
-
-/**
- * Resize every clipping frame up to the rendered content height — the auto-fit
- * counterpart of `framesShorterThan`. Lets `fitFrames: true` close the loop in
- * one call instead of the agent reading the overflow list and firing
- * `update_frame` per placement.
- */
-export async function fitFramesToContent(
-  ctx: MutationContext,
-  shortFrames: FrameOverflow[],
-  contentHeight: number,
-): Promise<FittedFrame[]> {
-  const fitted: FittedFrame[] = [];
-  for (const f of shortFrames) {
-    const r = await updateFrame(ctx, {
-      boardId: f.board,
-      frameId: f.frame,
-      patch: { h: contentHeight },
-    });
-    if (r.ok) {
-      fitted.push({ board: f.board, frame: f.frame, from: f.frameHeight, to: contentHeight });
-    }
-  }
-  return fitted;
 }

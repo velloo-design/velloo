@@ -19,7 +19,7 @@ import type { LocalCommentsService } from "../local-comments.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { registerGuideResources } from "./resources.ts";
-import { enforceStrictToolInputs } from "./strict-tools.ts";
+import { applyToolPolicy } from "./tool-policy.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
@@ -180,7 +180,10 @@ function buildMcpServer(
   assetOrigin?: string,
   cloud?: CloudAuth,
 ): McpServer {
-  const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled);
+  // Opt-in AND reachable: with no cloud configured the tool could never do
+  // anything, so neither it nor its instruction paragraph is worth a session's
+  // context.
+  const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled && cloud?.url);
   // Framework framing comes from the adapter itself (its style channel picks
   // the variant for multi-channel providers) — no provider ids here.
   const channel = styleChannelOf(ctx.defaultProvider, ctx.folder.config.styling?.framework);
@@ -208,11 +211,11 @@ function buildMcpServer(
       ),
     },
   );
-  // Before any tool registers: rewrap each raw input shape as z.strictObject,
-  // so a typo'd argument fails loudly with the valid keys instead of being
-  // silently dropped.
-  enforceStrictToolInputs(mcp);
-  // Hidden, env-gated session tape (VELLOO_TRACE). Wrap after the strict rewrap
+  // Before any tool registers: strict input shapes (a typo'd argument fails
+  // loudly with the valid keys instead of being silently dropped) and the
+  // behavioural annotations a host reads to decide what to auto-approve.
+  applyToolPolicy(mcp);
+  // Hidden, env-gated session tape (VELLOO_TRACE). Wrap after the policy patch
   // so every handler is taped; no-op when the flag is unset.
   const recorder = createTraceRecorder(ctx.folder.root);
   if (recorder) withCallRecording(mcp, recorder);
@@ -229,9 +232,10 @@ function buildMcpServer(
   registerAssetTools(mcp, ctx);
   registerBatchTool(mcp, ctx);
   registerCaptureTools(mcp, ctx);
-  // Opt-in, auth-gated. The token may be absent (logged out) — the tool then
-  // returns a "run velloo login" message rather than failing.
-  if (feedbackEnabled) registerFeedbackTool(mcp, ctx, cloud ?? { url: "" });
+  // Opt-in, auth-gated. The credential may be absent (logged out) or go stale
+  // mid-session, so the tool checks at call time and reports a kinded
+  // `signed-out` error the agent can act on.
+  if (feedbackEnabled && cloud) registerFeedbackTool(mcp, ctx, cloud);
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });

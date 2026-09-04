@@ -11,8 +11,6 @@ import {
   MoveNodeBody,
   type Normalized,
   normalizeAddNode,
-  normalizeUpdateFrame,
-  normalizeUpdateProps,
   normalizeUpdateSnippetInstance,
   RemoveFrameBody,
   RemoveNodeBody,
@@ -34,17 +32,10 @@ import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { addNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
-import { addFrame, removeFrame, updateFrame, updateFrames } from "./api/frames.ts";
+import { addFrame, removeFrame, updateFrames } from "./api/frames.ts";
 import { addScreen, removeScreen, setScreenTree } from "./api/screens.ts";
 import { addSnippet, instantiateSnippet, removeSnippet, updateSnippet } from "./api/snippets.ts";
-import {
-  addNode,
-  moveNode,
-  removeNode,
-  setNodeId,
-  updateProps,
-  updatePropsBulk,
-} from "./api/tree.ts";
+import { addNode, moveNode, removeNode, setNodeId, updateProps } from "./api/tree.ts";
 import { type MutationContext, withBoardLock, withScreenLock, withSnippetLock } from "./context.ts";
 import { badRequest, type MutationError } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
@@ -96,6 +87,13 @@ type BatchPrepared =
   | { ok: false; error: MutationError };
 
 interface BatchTool {
+  /**
+   * The shared wire schema for this tool's arguments. Exposed (not just closed
+   * over by `prepare`) so `batch` can advertise a discriminated union of the
+   * real argument shapes instead of `Record<string, unknown>` plus a prose
+   * list of tool names.
+   */
+  body: z.ZodTypeAny;
   prepare(args: unknown): BatchPrepared;
 }
 
@@ -114,6 +112,7 @@ function batchTool<S extends z.ZodTypeAny, A>(
   run: (ctx: MutationContext, args: A) => Promise<Result<unknown, MutationError>>,
 ): BatchTool {
   return {
+    body,
     prepare(rawArgs) {
       const parsed = body.safeParse(rawArgs);
       if (!parsed.success) {
@@ -143,9 +142,7 @@ export const BATCH_TOOLS: Record<string, BatchTool> = {
   add_frame: batchTool("add_frame", AddFrameBody, asIs, addFrame),
   remove_frame: batchTool("remove_frame", RemoveFrameBody, asIs, removeFrame),
   add_node: batchTool("add_node", AddNodeBody, normalizeAddNode, addNode),
-  update_props: batchTool("update_props", UpdatePropsBody, normalizeUpdateProps, (ctx, plan) =>
-    plan.mode === "bulk" ? updatePropsBulk(ctx, plan.args) : updateProps(ctx, plan.args),
-  ),
+  update_props: batchTool("update_props", UpdatePropsBody, asIs, updateProps),
   remove_node: batchTool("remove_node", RemoveNodeBody, asIs, removeNode),
   move_node: batchTool("move_node", MoveNodeBody, asIs, moveNode),
   set_node_id: batchTool("set_node_id", SetNodeIdBody, asIs, setNodeId),
@@ -164,9 +161,7 @@ export const BATCH_TOOLS: Record<string, BatchTool> = {
     normalizeUpdateSnippetInstance,
     updateSnippetInstance,
   ),
-  update_frame: batchTool("update_frame", UpdateFrameBody, normalizeUpdateFrame, (ctx, plan) =>
-    plan.mode === "bulk" ? updateFrames(ctx, plan.args) : updateFrame(ctx, plan.args),
-  ),
+  update_frame: batchTool("update_frame", UpdateFrameBody, asIs, updateFrames),
   add_note: batchTool("add_note", AddNoteBody, asIs, addNote),
 };
 

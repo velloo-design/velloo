@@ -105,7 +105,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "list_captures",
     {
       description:
-        "Stored browser captures for this folder, newest first. Each entry's `captureId` can be read with `get_capture` and diffed against a screen with `compare_to_url { captureId }`. Captures come from `start_capture_session` or the user running `velloo capture`.",
+        "Stored browser captures for this folder, newest first. Each entry's `captureId` can be read with `get_capture` and diffed against a screen with `compare_to_url { source: { captureId } }`. Captures come from `start_capture_session` or the user running `velloo capture`.",
       inputSchema: {},
     },
     async () => {
@@ -190,7 +190,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
         files: manifest.files,
         ...(manifest.files.includes("page.png")
           ? {
-              verifyWith: `compare_to_url { screenId: "<your screen>", captureId: "${captureId}" }`,
+              verifyWith: `compare_to_url { screenId: "<your screen>", source: { captureId: "${captureId}" } }`,
             }
           : {}),
       });

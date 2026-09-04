@@ -38,7 +38,11 @@ export const mutate = {
       scheme?: "light" | "dark" | null;
     };
   }) {
-    return postMutate<{ frame: unknown }>("update_frame", args);
+    const { boardId, frameId, patch } = args;
+    return postMutate<{ frames: unknown[] }>("update_frame", {
+      boardId,
+      patches: [{ frameId, patch }],
+    });
   },
   removeFrame(args: { boardId: string; frameId: string }) {
     return postMutate<{ removedFrameId: string }>("remove_frame", args);
@@ -80,7 +84,11 @@ export const mutate = {
     return postMutate<{ order: string[] }>("reorder_board_groups", args);
   },
   updateProps(args: { screenId: string; path: number[]; propPatch: Record<string, unknown> }) {
-    return postMutate<{ path: number[] }>("update_props", args);
+    const { screenId, path, propPatch } = args;
+    return postMutate<{ paths: number[][] }>("update_props", {
+      screenId,
+      patches: [{ path, propPatch }],
+    });
   },
   applyClasses(args: { screenId: string; path: number[]; classes: string }) {
     return postMutate<{ path: number[] }>("apply_classes", args);

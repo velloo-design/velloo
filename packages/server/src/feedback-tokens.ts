@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { RSABSSA } from "@cloudflare/blindrsa-ts";
+import { err, ok, type Result } from "@velloo/result";
 import type { CloudAuth } from "./cloud.ts";
 import { PINNED_ISSUER_KEYS } from "./feedback-issuer-pins.ts";
 import { writeJsonAtomic } from "./fs.ts";
@@ -82,7 +83,7 @@ async function fetchIssuerKey(
   const res = await fetch(`${cloudUrl}/v1/feedback/token-key`, {
     signal: AbortSignal.timeout(5000),
   });
-  if (!res.ok) throw new Error(`token key fetch failed (${res.status})`);
+  if (!res.ok) throw new TokenIssueError("rejected", `token key fetch failed (${res.status})`);
   const { scheme, publicKey } = (await res.json()) as { scheme?: string; publicKey?: string };
   if (scheme !== TOKEN_SCHEME || !publicKey) {
     throw new Error(`unsupported feedback token scheme ${JSON.stringify(scheme)}`);
@@ -125,7 +126,12 @@ export async function topUpTokens(
   const origin = originOf(cloud.url);
   const entry = store[origin];
   if ((entry?.tokens.length ?? 0) >= min) return;
-  if (!cloud.token) throw new Error("not signed in — run `velloo login` to fetch feedback tokens");
+  if (!cloud.token) {
+    throw new TokenIssueError(
+      "signed-out",
+      "not signed in — run `velloo login` to fetch feedback tokens",
+    );
+  }
 
   const issuer = await fetchIssuerKey(cloud.url, entry);
 
@@ -145,7 +151,14 @@ export async function topUpTokens(
     }),
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new Error(`token issuance failed (${res.status})`);
+  if (!res.ok) {
+    // 402/429 mean the account's anonymous-feedback allowance is spent — a
+    // different situation for the agent than a cloud that is simply unwell.
+    throw new TokenIssueError(
+      res.status === 402 || res.status === 429 ? "no-tokens" : "rejected",
+      `token issuance failed (${res.status})`,
+    );
+  }
   const { signatures } = (await res.json()) as { signatures?: string[] | undefined };
   if (!Array.isArray(signatures) || signatures.length !== blinds.length) {
     throw new Error("token issuance returned a malformed signature batch");
@@ -191,9 +204,49 @@ async function popToken(cloudUrl: string, storePath: string): Promise<StoredToke
   return token;
 }
 
-export interface AnonymousFeedbackResult {
-  ok: boolean;
+/**
+ * Why a feedback send did not happen. Every one of these is recoverable by the
+ * agent — it either tells the user to sign in, or drops the idea and carries
+ * on — which is why they are kinds on an `isError` result rather than an
+ * `{ ok: false }` body that reads like a success.
+ */
+export type FeedbackErrorReason =
+  /** No credential at all. Both paths need one: even the anonymous send spends
+   *  a token that only a signed-in session can mint. */
+  | "signed-out"
+  /** The cloud will not issue more anonymous tokens (monthly quota spent). */
+  | "no-tokens"
+  /** velloo-cloud could not be reached. */
+  | "unreachable"
+  /** The cloud was reached and refused the message. */
+  | "rejected"
+  /** This server has already sent its per-session maximum. */
+  | "session-limit";
+
+export interface FeedbackError {
+  kind: "FeedbackNotSent";
+  reason: FeedbackErrorReason;
   message: string;
+  /** Whether the same call could succeed later without the user doing anything. */
+  retryable: boolean;
+}
+
+export function feedbackError(
+  reason: FeedbackErrorReason,
+  message: string,
+  retryable: boolean,
+): FeedbackError {
+  return { kind: "FeedbackNotSent", reason, message, retryable };
+}
+
+/** A failure inside token issuance, carrying the reason its caller reports. */
+class TokenIssueError extends Error {
+  constructor(
+    readonly reason: FeedbackErrorReason,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 /**
@@ -206,15 +259,24 @@ export async function sendAnonymousFeedback(
   cloud: CloudAuth,
   payload: { body: string; toolVersion?: string; source?: string },
   storePath = defaultTokenStorePath(),
-): Promise<AnonymousFeedbackResult> {
+): Promise<Result<string, FeedbackError>> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       await topUpTokens(cloud, 1, storePath);
-    } catch (err) {
-      return { ok: false, message: err instanceof Error ? err.message : String(err) };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (e instanceof TokenIssueError) {
+        return err(feedbackError(e.reason, message, e.reason !== "signed-out"));
+      }
+      // Anything else out of issuance is a transport or crypto failure.
+      return err(feedbackError("unreachable", message, true));
     }
     const token = await popToken(cloud.url, storePath);
-    if (!token) return { ok: false, message: "no feedback tokens available" };
+    if (!token) {
+      return err(
+        feedbackError("no-tokens", "no anonymous feedback tokens available for this account", true),
+      );
+    }
 
     try {
       // Deliberately no authorization header — this request carries nothing
@@ -232,11 +294,17 @@ export async function sendAnonymousFeedback(
         signal: AbortSignal.timeout(5000),
       });
       if (res.status === 409) continue; // stale/spent token — try the next one
-      if (!res.ok) return { ok: false, message: `feedback not sent (${res.status})` };
-      return { ok: true, message: "Thanks — your feedback was sent (anonymously)." };
+      if (!res.ok) {
+        return err(
+          feedbackError("rejected", `velloo-cloud refused the message (${res.status}).`, false),
+        );
+      }
+      return ok("Thanks — your feedback was sent (anonymously).");
     } catch {
-      return { ok: false, message: "Couldn't reach velloo-cloud; feedback not sent." };
+      return err(
+        feedbackError("unreachable", "Couldn't reach velloo-cloud; feedback not sent.", true),
+      );
     }
   }
-  return { ok: false, message: "feedback tokens kept colliding — try again later" };
+  return err(feedbackError("rejected", "feedback tokens kept colliding — try again later", true));
 }

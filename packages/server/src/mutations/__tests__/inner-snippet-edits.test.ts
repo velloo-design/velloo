@@ -117,18 +117,17 @@ describe("update_snippet innerPatch", () => {
 });
 
 describe("update_props on an inner-instance id", () => {
-  test("IdNotFound carries a hint pointing at override_snippet_props", async () => {
+  test("IdNotFound carries a hint pointing at update_snippet_instance", async () => {
     const { ctx } = ctxOf("/tmp/velloo-inner-edit-4");
     const r = await updateProps(ctx, {
       screenId: "home",
-      path: "@nav-errors",
-      propPatch: { variant: "destructive" },
+      patches: [{ path: "@nav-errors", propPatch: { variant: "destructive" } }],
     });
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("expected failure");
     expect(r.error.kind).toBe("IdNotFound");
     const hint = (r.error as { hint?: string }).hint ?? "";
-    expect(hint).toContain("override_snippet_props");
+    expect(hint).toContain("update_snippet_instance");
     expect(hint).toContain("@app-sidebar");
     expect(hint).toContain("@nav-errors");
   });

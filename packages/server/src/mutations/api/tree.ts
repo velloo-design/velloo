@@ -26,11 +26,6 @@ import {
   type UpdatePropsResult,
   updateProps as updatePropsImpl,
 } from "../update-props.ts";
-import {
-  type UpdatePropsBulkArgs,
-  type UpdatePropsBulkResult,
-  updatePropsBulk as updatePropsBulkImpl,
-} from "../update-props-bulk.ts";
 
 export function addNode(
   ctx: MutationContext,
@@ -50,7 +45,7 @@ export function updateProps(
   return tracked(
     ctx,
     "update_props",
-    (v) => ({ screenId: args.screenId, path: v.path }),
+    (v) => ({ screenId: args.screenId, ...(v.paths[0] ? { path: v.paths[0] } : {}) }),
     () => withScreenLock(ctx.folder, args.screenId, () => updatePropsImpl(ctx, args)),
   );
 }
@@ -80,16 +75,8 @@ export function applyClasses(
   return tracked(
     ctx,
     "apply_classes",
-    (v) => ({ screenId: args.screenId, path: v.path }),
+    (v) => ({ screenId: args.screenId, ...(v.paths[0] ? { path: v.paths[0] } : {}) }),
     () => withScreenLock(ctx.folder, args.screenId, () => applyClassesImpl(ctx, args)),
-  );
-}
-export function updatePropsBulk(
-  ctx: MutationContext,
-  args: UpdatePropsBulkArgs,
-): Promise<Result<UpdatePropsBulkResult, MutationError>> {
-  return tracked(ctx, "update_props_bulk", { screenId: args.screenId }, () =>
-    withScreenLock(ctx.folder, args.screenId, () => updatePropsBulkImpl(ctx, args)),
   );
 }
 export function setNodeId(
@@ -115,8 +102,6 @@ export type {
   SetNodeIdArgs,
   SetNodeIdResult,
   UpdatePropsArgs,
-  UpdatePropsBulkArgs,
-  UpdatePropsBulkResult,
   UpdatePropsResult,
 };
 

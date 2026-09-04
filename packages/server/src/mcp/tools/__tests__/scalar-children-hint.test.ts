@@ -271,19 +271,16 @@ describe("shared add_node body", () => {
     expect(normalized.ok).toBe(true);
   });
 
-  test("`propPatch` is accepted as an alias for `props`", () => {
+  test("the removed `propPatch` alias is rejected rather than silently dropped", () => {
     const parsed = AddNodeBody.safeParse({
       screenId: "landing",
       parentPath: [],
-      componentRef: "Button",
-      propPatch: { children: "Save" },
+      componentRef: "Box",
+      propPatch: { className: "p-4" },
     });
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    const normalized = normalizeAddNode(parsed.data);
-    expect(normalized.ok).toBe(true);
-    if (!normalized.ok) return;
-    expect(normalized.args.props).toEqual({ children: "Save" });
+    // `props` is add_node's only name for this. Under the strict Body an
+    // undeclared key fails loudly instead of vanishing mid-batch.
+    expect(parsed.success).toBe(false);
   });
 
   test("an unrelated body failure carries no children hint", () => {

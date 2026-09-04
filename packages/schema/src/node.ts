@@ -56,7 +56,7 @@ export type SnippetInstance = {
    * Extra Tailwind classes merged into the snippet body's root element at
    * render time. Lets one-off instances tweak styling (e.g. wider, accent
    * border) without forking the snippet definition. Pass it via
-   * `instantiate_snippet({extraClassName})` or `update_snippet_args`.
+   * `instantiate_snippet({extraClassName})` or `update_snippet_instance`.
    */
   $extraClassName?: string | undefined;
   args?: Record<string, unknown> | undefined;
@@ -202,10 +202,12 @@ export const NodeSchema: z.ZodType<Node> = z
     }
     return parsed.data;
   })
+  // Kept short on purpose: this string is inlined into five tools' schemas, so
+  // every character is paid five times by every session. The full shapes —
+  // $overrides, $extraClassName, $if, param placement — are in
+  // velloo://guide/components and velloo://guide/snippets.
   .describe(
-    'Node tree. Component: {"$ref":"Button","$id?":"cta","props?":{"className":"...","children":"text"},"children?":[Node]}. ' +
-      'Snippet instance: {"$snippet":"<id>","$id?":"...","args?":{...},"$extraClassName?":"...","$overrides?":{"@row-active":{"props":{"className":"bg-accent"}}}}. ' +
-      'Param ref (snippet bodies only): {"$param":"<name>"}.',
+    '{"$ref":"Button","$id?":"cta","props?":{...},"children?":[Node]}, or {"$snippet":"<id>","args?":{...}}. Guide: velloo://guide/components',
   )
   // `z.unknown()` emits a JSON Schema with no `type`, so strict MCP clients
   // can't tell `tree`/`children` params are objects and serialize them as

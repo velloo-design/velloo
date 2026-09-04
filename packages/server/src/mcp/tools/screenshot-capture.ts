@@ -22,19 +22,12 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { resolve as resolveLocator } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { errorResult, type McpResult } from "./result.ts";
-import {
-  PathSchema,
-  RenderModeSchema,
-  resolveViewport,
-  ThemeNameSchema,
-  ViewportSchema,
-} from "./schemas.ts";
+import { PathSchema, RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  fitFramesToContent,
   framesShorterThan,
   makeCanvasBundle,
   makeLiveUrl,
@@ -88,13 +81,11 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        "Render a screen to PNG. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture: no change returns text only, a small change returns a highlight crop naming the changed nodes. `scale` (0.25–1) shrinks the payload for layout checks; `path` captures one element. The render uses its OWN viewport, not the board frame's — the result's `contentHeight` and `framesShorterThanContent` name placements that clip below the fold, and `fitFrames: true` resizes them in the same call. Guide: velloo://guide/verification.",
+        "Render a screen to PNG. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture: no change returns text only, a small change returns a highlight crop naming the changed nodes. `scale` (0.25–1) shrinks the payload for layout checks; `path` captures one element. The render uses its OWN viewport, not the board frame's — the result's `contentHeight` and `framesShorterThanContent` name placements that clip below the fold — resize them with `update_frame`. Guide: velloo://guide/verification.",
       inputSchema: {
         screenId: z.string(),
-        w: z.number().int().positive().optional(),
-        h: z.number().int().positive().optional(),
         viewport: ViewportSchema.optional().describe(
-          "Alternative to flat w/h; explicit w/h win if both are given",
+          "Render size; defaults to the folder's Desktop preset",
         ),
         mode: RenderModeSchema,
         fullPage: z.boolean().optional(),
@@ -107,31 +98,11 @@ export function registerScreenshotCaptureTool(
         ),
         diff: z.boolean().optional().describe("Compare against the previous same-params capture"),
         resetBaseline: z.boolean().optional(),
-        fitFrames: z
-          .boolean()
-          .optional()
-          .describe(
-            "Resize any board frame that clips this screen up to its content height (returns `fittedFrames`). Default false — the capture stays read-only.",
-          ),
       },
     },
-    async ({
-      screenId,
-      w,
-      h,
-      viewport: vp,
-      mode,
-      fullPage,
-      scale,
-      path,
-      theme,
-      diff,
-      resetBaseline,
-      fitFrames,
-    }) => {
+    async ({ screenId, viewport: vp, mode, fullPage, scale, path, theme, diff, resetBaseline }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
-      ({ w, h } = resolveViewport(w, h, vp));
 
       const resolvedMode = resolveScreenshotMode(ctx.folder, screenId, mode);
       if (!resolvedMode.ok) return errorResult(resolvedMode.message);
@@ -167,7 +138,7 @@ export function registerScreenshotCaptureTool(
       }
 
       const defaults = defaultViewport(ctx.folder);
-      const viewport: Viewport = { w: w ?? defaults.w, h: h ?? defaults.h };
+      const viewport: Viewport = { w: vp?.w ?? defaults.w, h: vp?.h ?? defaults.h };
 
       if (diff) {
         try {
@@ -315,19 +286,11 @@ export function registerScreenshotCaptureTool(
             buf = capture.png;
             const contentHeight = contentHeightFromRects(capture.nodeRects);
             const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
-            const fitted =
-              fitFrames && shortFrames.length
-                ? await fitFramesToContent(ctx, shortFrames, contentHeight)
-                : [];
             contentText = JSON.stringify({
               contentHeight,
               theme: themeName ?? "default",
               viewport: { w: viewport.w, h: viewport.h },
-              ...(fitted.length
-                ? { fittedFrames: fitted }
-                : shortFrames.length
-                  ? { framesShorterThanContent: shortFrames }
-                  : {}),
+              ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
             });
           }
         }

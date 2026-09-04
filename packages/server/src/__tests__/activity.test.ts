@@ -110,7 +110,10 @@ describe("activity emission", () => {
   test("a node mutation emits verb + resolved path + actor, ALONGSIDE the WatchEvent", async () => {
     const before = Date.now();
     const r = await withActor({ source: "mcp", session: "sess-1234" }, () =>
-      updateProps(ctx, { screenId: "home", path: [0], propPatch: { className: "p-2" } }),
+      updateProps(ctx, {
+        screenId: "home",
+        patches: [{ path: [0], propPatch: { className: "p-2" } }],
+      }),
     );
     expect(r.ok).toBe(true);
 
@@ -130,7 +133,10 @@ describe("activity emission", () => {
   });
 
   test("no actor context defaults to source cli; canvas route tags source canvas", async () => {
-    await updateProps(ctx, { screenId: "home", path: [0], propPatch: { className: "m-1" } });
+    await updateProps(ctx, {
+      screenId: "home",
+      patches: [{ path: [0], propPatch: { className: "m-1" } }],
+    });
     expect(activityEvents()[0]?.source).toBe("cli");
 
     const jit = new TailwindJit(provider, join(folder.root, "screens"));
@@ -149,7 +155,10 @@ describe("activity emission", () => {
       new Request("http://localhost/api/mutate/update_props", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ screenId: "home", path: [0], propPatch: { className: "m-2" } }),
+        body: JSON.stringify({
+          screenId: "home",
+          patches: [{ path: [0], propPatch: { className: "m-2" } }],
+        }),
       }),
     );
     expect(res.status).toBe(200);
@@ -169,8 +178,7 @@ describe("activity emission", () => {
   test("a failed mutation emits nothing", async () => {
     const r = await updateProps(ctx, {
       screenId: "no-such-screen",
-      path: [0],
-      propPatch: { className: "x" },
+      patches: [{ path: [0], propPatch: { className: "x" } }],
     });
     expect(r.ok).toBe(false);
     expect(activityEvents().length).toBe(0);

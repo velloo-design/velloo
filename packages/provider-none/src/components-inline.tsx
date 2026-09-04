@@ -9,7 +9,7 @@ import type { ButtonProps, ContainerProps, InputProps, StackProps } from "./comp
  * object instead of a Tailwind class — so they paint with the JIT off. Theme
  * tokens reach them as the CSS variables `themeToCss` injects
  * (`var(--color-foreground)`, `var(--radius)`, …), so a `none/none` folder still
- * themes. The node's authored `style` (set via `set_style`) merges last and wins.
+ * themes. The node's authored `style` (set via `update_props`) merges last and wins.
  *
  * Typography is the same story one level deeper: Heading/Text reference the
  * typeset's `var(--text-*)` / `var(--leading-*)` tokens rather than hardcoded

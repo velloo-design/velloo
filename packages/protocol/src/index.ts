@@ -41,7 +41,6 @@ export {
 export {
   IdLocatorSchema,
   InnerPathSchema,
-  JsonPathStringSchema,
   jsonTolerant,
   type Locator,
   LocatorOrRootSchema,

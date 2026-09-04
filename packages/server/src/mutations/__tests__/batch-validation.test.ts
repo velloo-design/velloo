@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isComponentNode, type Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import { z } from "zod";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
@@ -170,23 +171,13 @@ describe("batch keeps the standalone tools' tolerances", () => {
     expect(result.completed).toBe(1);
   });
 
-  test("`propPatch` works as an alias for add_node's `props`", async () => {
-    const result = await runBatch(ctx, [
-      {
-        tool: "add_node",
-        args: {
-          screenId: "landing",
-          parentPath: [],
-          componentRef: "Button",
-          propPatch: { children: "Save" },
-        },
-      },
-    ]);
-    expect(result.rolledBack).toBe(false);
-    expect(childrenOf("landing")[0]).toMatchObject({
-      $ref: "Button",
-      props: { children: "Save" },
+  test("add_node's removed `propPatch` alias is rejected, not silently dropped", async () => {
+    const prepared = BATCH_TOOLS.add_node?.prepare({
+      screenId: "landing",
+      componentRef: "Box",
+      propPatch: { className: "p-4" },
     });
+    expect(prepared?.ok).toBe(false);
   });
 
   test("update_snippet_instance rejects a call that names neither side", async () => {
@@ -227,11 +218,59 @@ describe("batch keeps the standalone tools' tolerances", () => {
     const result = await runBatch(ctx, [
       {
         tool: "update_props",
-        args: { screenId: "landing", path: "[]", propPatch: { className: "p-8" } },
+        args: { screenId: "landing", patches: [{ path: "[]", propPatch: { className: "p-8" } }] },
       },
     ]);
     expect(result.rolledBack).toBe(false);
-    const tree = folder.screens.get("landing")?.tree;
-    expect(tree && isComponentNode(tree) ? tree.props?.className : undefined).toBe("p-8");
+    expect(result.results[0]?.ok).toBe(true);
+  });
+
+  /**
+   * The advertised schema and the runtime one are now the same thing: `batch`
+   * builds a discriminated union on `tool` from these very bodies. These cases
+   * are what the SDK rejects before a handler ever runs.
+   */
+  describe("the advertised call union", () => {
+    const callUnion = z.discriminatedUnion(
+      "tool",
+      Object.entries(BATCH_TOOLS).map(([tool, entry]) =>
+        z.strictObject({ tool: z.literal(tool), args: entry.body }),
+      ) as never,
+    );
+    const accepts = (value: unknown) => callUnion.safeParse(value).success;
+
+    test("accepts a well-formed call for each supported tool", () => {
+      expect(
+        accepts({
+          tool: "add_node",
+          args: { screenId: "landing", parentPath: [], componentRef: "Button" },
+        }),
+      ).toBe(true);
+      expect(
+        accepts({
+          tool: "update_frame",
+          args: { boardId: "b", patches: [{ frameId: "f", patch: { h: 10 } }] },
+        }),
+      ).toBe(true);
+    });
+
+    test("rejects a tool that is not batchable", () => {
+      expect(accepts({ tool: "set_style", args: { screenId: "landing" } })).toBe(false);
+    });
+
+    test("rejects a typo'd argument instead of dropping it", () => {
+      expect(
+        accepts({
+          tool: "add_node",
+          args: { screenId: "landing", parentPath: [], componentRef: "Button", propPatch: {} },
+        }),
+      ).toBe(false);
+    });
+
+    test("rejects a removed single-node form", () => {
+      expect(
+        accepts({ tool: "update_frame", args: { boardId: "b", frameId: "f", patch: { h: 10 } } }),
+      ).toBe(false);
+    });
   });
 });

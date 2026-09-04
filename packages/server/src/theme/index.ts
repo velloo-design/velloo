@@ -1,9 +1,11 @@
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { createLockMap } from "../locks.ts";
-import { persistNamedTheme } from "../mutations/persist.ts";
+import { persistBoard, persistNamedTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import {
@@ -158,6 +160,78 @@ export async function addTheme(
     emitActivity(ctx, "add_theme", { themeName: name });
     return { ok: true as const, value: { name, theme: persisted } };
   });
+}
+
+/**
+ * Rename a named theme, repointing every board that pinned it. A rename that
+ * left boards pointing at a gone name would silently fall them back to the
+ * default palette, so the two moves are one operation.
+ */
+export async function renameTheme(
+  ctx: ThemeContext,
+  name: string,
+  renameTo: string,
+): Promise<Result<{ name: string; repointedBoards: string[] }, ThemeError>> {
+  return withThemeLock(ctx.folder, async () => {
+    const guard = namedThemeGuard(ctx, name, "rename");
+    if (guard) return guard;
+    if (!/^[a-z][a-z0-9-]*$/.test(renameTo) || renameTo === "default") {
+      return themeErr(`theme name "${renameTo}" must be lowercase kebab (and not "default")`);
+    }
+    if (ctx.folder.themes.has(renameTo)) return themeErr(`theme "${renameTo}" already exists`);
+
+    const source = ctx.folder.themes.get(name) as Theme;
+    await persistNamedTheme(ctx.folder, renameTo, { ...source, name: renameTo });
+    await rm(join(ctx.folder.root, "theme", `${name}.json`), { force: true });
+    ctx.folder.themes.delete(name);
+
+    const repointedBoards: string[] = [];
+    for (const board of ctx.folder.boards.values()) {
+      if (board.theme !== name) continue;
+      await persistBoard(ctx.folder, board.id, { ...board, theme: renameTo });
+      repointedBoards.push(board.id);
+    }
+    broadcastThemeChanged(ctx);
+    emitActivity(ctx, "rename_theme", { themeName: renameTo });
+    return { ok: true as const, value: { name: renameTo, repointedBoards } };
+  });
+}
+
+/**
+ * Delete a named theme. Refuses while a board still pins it — unpinning those
+ * boards silently would change how their frames render, so the caller decides.
+ */
+export async function removeTheme(
+  ctx: ThemeContext,
+  name: string,
+): Promise<Result<{ removedTheme: string }, ThemeError>> {
+  return withThemeLock(ctx.folder, async () => {
+    const guard = namedThemeGuard(ctx, name, "remove");
+    if (guard) return guard;
+    const pinned = [...ctx.folder.boards.values()].filter((b) => b.theme === name).map((b) => b.id);
+    if (pinned.length > 0) {
+      return themeErr(
+        `theme "${name}" is pinned by ${pinned.join(", ")} — repoint or unpin those boards first (update_board { patch: { theme: null } })`,
+      );
+    }
+    await rm(join(ctx.folder.root, "theme", `${name}.json`), { force: true });
+    ctx.folder.themes.delete(name);
+    broadcastThemeChanged(ctx);
+    emitActivity(ctx, "remove_theme", { themeName: name });
+    return { ok: true as const, value: { removedTheme: name } };
+  });
+}
+
+const themeErr = (reason: string) => ({
+  ok: false as const,
+  error: { kind: "InvalidThemePath" as const, reason },
+});
+
+/** Both edits refuse the same two cases: the default theme, and an unknown name. */
+function namedThemeGuard(ctx: ThemeContext, name: string, verb: string) {
+  if (name === "default") return themeErr(`cannot ${verb} the default theme`);
+  if (!ctx.folder.themes.has(name)) return themeErr(`theme "${name}" does not exist`);
+  return null;
 }
 
 export function listThemes(ctx: ThemeContext): {

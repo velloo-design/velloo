@@ -6,7 +6,7 @@ Chakra UI v2 provider for Velloo — a first-class `FrameworkAdapter`.
   cache (`renderPass`, the same machinery as provider-mui); no client bundle
   needed.
 - **`sx` channel** (`SX_PROP`) — chakra's native style prop rides the existing
-  sx editor + `set_style` semantics; values take chakra theme tokens
+  sx editor + `update_props` style-channel semantics; values take chakra theme tokens
   (`brand.500`, `chakra-body-bg`, spacing-scale numbers).
 - **Canvas-safe overlays**: chakra's Modal/Drawer portal and SSR to nothing,
   and every overlay sub-part throws outside its parent's context — so

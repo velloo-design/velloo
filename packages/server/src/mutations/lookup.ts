@@ -157,7 +157,7 @@ export function resolveWithSnippetHint(
   const hint =
     `"${r.error.id}" isn't a top-level node, but a node with that id lives inside snippet instance ` +
     `${found.instanceLocator} (snippet "${found.snippetId}"), which is opaque to @id addressing. ` +
-    `To change its props for just this instance: override_snippet_props { path: "${found.instanceLocator}", ` +
+    `To change its props for just this instance: update_snippet_instance { path: "${found.instanceLocator}", ` +
     `innerPath: "@${r.error.id}", propPatch: {…} }. To change it across all instances, edit the snippet ` +
     `body with update_snippet.`;
   return err(idNotFound(screenId, r.error.id, hint));

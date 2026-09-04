@@ -32,28 +32,3 @@ export const ThemeNameSchema = z
 
 /** Render mode for the screenshot/snippet renderers. */
 export const RenderModeSchema = z.enum(["light", "dark", "compare"]).optional();
-
-/**
- * Resolve the flat `w`/`h` + `viewport` object dual form shared by screenshot
- * and compare_to_url: explicit flat `w`/`h` win, else fall back to the object.
- */
-export function resolveViewport(
-  w: number | undefined,
-  h: number | undefined,
-  viewport: { w: number; h: number } | undefined,
-): { w: number | undefined; h: number | undefined } {
-  return { w: w ?? viewport?.w, h: h ?? viewport?.h };
-}
-
-/**
- * Consistent error messages for the single-or-bulk param shape shared by
- * update_props / update_frame / set_token — pass EITHER the single fields OR a
- * bulk array, never both, never neither. The control flow stays per-tool (so
- * the single fields narrow naturally); only the message wording is shared.
- */
-export const singleOrBulkError = {
-  both: (tool: string, single: string, bulk: string): string =>
-    `${tool}: pass either ${single} or ${bulk}, not both.`,
-  missing: (tool: string, single: string, bulk: string): string =>
-    `${tool}: ${single} required (or pass ${bulk}).`,
-};

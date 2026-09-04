@@ -71,11 +71,8 @@ export {
   type RemoveFrameArgs,
   type RemoveFrameResult,
   removeFrame,
-  type UpdateFrameArgs,
-  type UpdateFrameResult,
   type UpdateFramesArgs,
   type UpdateFramesResult,
-  updateFrame,
   updateFrames,
 } from "./api/frames.ts";
 export {
@@ -138,11 +135,8 @@ export {
   type SetNodeIdResult,
   setNodeId,
   type UpdatePropsArgs,
-  type UpdatePropsBulkArgs,
-  type UpdatePropsBulkResult,
   type UpdatePropsResult,
   updateProps,
-  updatePropsBulk,
 } from "./api/tree.ts";
 export type { MutationContext } from "./context.ts";
 export type { MutationError } from "./errors.ts";

@@ -280,37 +280,25 @@ describe("runBatch", () => {
     expect(await Bun.file(join(tmp, "screens", "promo.annotations.json")).exists()).toBe(true);
   });
 
-  test("add_node in a batch accepts `propPatch` as an alias for `props`", async () => {
+  test("add_node in a batch rejects the removed `propPatch` alias", async () => {
     const result = await runBatch(ctx, [
       {
         tool: "add_node",
-        args: {
-          screenId: "landing",
-          parentPath: [],
-          componentRef: "Badge",
-          id: "tag",
-          propPatch: { className: "ml-2" },
-        },
+        args: { screenId: "landing", componentRef: "Box", propPatch: { className: "p-4" } },
       },
     ]);
-    expect(result.completed).toBe(1);
-    expect(result.rolledBack).toBe(false);
-    const tree = folder.screens.get("landing")?.tree as {
-      children?: Array<{ props?: { className?: string } }>;
-    };
-    expect(tree.children?.[0]?.props?.className).toBe("ml-2");
+    // `props` is add_node's only name for this now — it sets initial props
+    // rather than patching, so the patch-shaped alias was also a misnomer.
+    expect(result.results[0]?.ok).toBe(false);
   });
 
-  test("update_props in a batch accepts `props` as an alias for `propPatch`", async () => {
+  test("update_props in a batch rejects the removed `props` alias", async () => {
     const result = await runBatch(ctx, [
       {
         tool: "update_props",
-        args: { screenId: "landing", path: [], props: { className: "p-8" } },
+        args: { screenId: "landing", patches: [{ path: [], props: { className: "p-4" } }] },
       },
     ]);
-    expect(result.completed).toBe(1);
-    expect(result.rolledBack).toBe(false);
-    const tree = folder.screens.get("landing")?.tree as { props?: { className?: string } };
-    expect(tree.props?.className).toBe("p-8");
+    expect(result.results[0]?.ok).toBe(false);
   });
 });

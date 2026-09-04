@@ -141,7 +141,7 @@ File a board you create into the group its work belongs to rather than leaving i
 
 \`list_boards\` shows live boards only. A board the user archived is hidden there, in the canvas sidebar, and in a default publish — but its frames and screens are intact and still editable.
 
-Pass \`include_archived: true\` to see them; they carry \`archivedAt\`. Don't design into an archived board unless the user names it, and prefer \`update_board { patch: { archived: true } }\` over \`remove_board\` when they want one out of the way.
+Pass \`includeArchived: true\` to see them; they carry \`archivedAt\`. Don't design into an archived board unless the user names it, and prefer \`update_board { patch: { archived: true } }\` over \`remove_board\` when they want one out of the way.
 
 ## Themes attach to boards
 
@@ -221,12 +221,12 @@ add_extension({
 
 **If the result is \`unverified\`, STOP — the similarity is meaningless there.**
 
-- \`redirected\` / \`authWall\` — the URL bounced to a login page. Pass \`storageStatePath\`, or \`cookies\`/\`localStorage\`, or use a capture session (below).
+- \`redirected\` / \`authWall\` — the URL bounced to a login page. Pass \`source.auth\` (\`storageStatePath\`, or \`cookies\`/\`localStorage\`), or use a capture session (below).
 - \`pageError\` — the target app is throwing or rendered blank. Fix its dev server first; a data-heavy page that paints a loading spinner needs a higher \`settleTimeoutMs\`.
 
 If you cannot get a real capture, leave the screen flagged unverified and tell the user, rather than iterating against a page you never saw.
 
-For a DYNAMIC page whose content changes between loads (feed, dashboard, per-user content), pass \`cacheUrl: true\` so repeated calls diff against ONE frozen capture instead of drifting live content. \`urlCacheTtlMs\` bounds staleness; \`refreshUrl: true\` re-samples after you have changed the target app.
+For a DYNAMIC page whose content changes between loads (feed, dashboard, per-user content), pass \`source.cache.freeze: true\` so repeated calls diff against ONE frozen capture instead of drifting live content. \`cache.ttlMs\` bounds staleness; \`cache.refresh: true\` re-samples after you have changed the target app.
 
 ## Known canvas-vs-app gaps
 
@@ -266,9 +266,9 @@ Then **re-express the page with real components — do not transcribe the DOM no
 
 ## Verifying against a capture
 
-Verify with \`compare_to_url { captureId }\` rather than \`url\`. A stored capture is already past the login and frozen, so it cannot bounce to a login page or drift between calls — a stability a live gated URL never has.
+Verify with \`compare_to_url { source: { captureId } }\` rather than a live \`url\`. A stored capture is already past the login and frozen, so it cannot bounce to a login page or drift between calls — a stability a live gated URL never has.
 
-\`storageStatePath\` / \`cookies\` / \`localStorage\` remain the manual alternative when you already hold a session.
+\`source.auth\` (\`storageStatePath\` / \`cookies\` / \`localStorage\`) remains the manual alternative when you already hold a session.
 
 Captures live outside the design folder and the user can delete them. You never see session cookies.`,
   },
@@ -338,7 +338,7 @@ When a screen feels done, run \`screenshot mode: "compare"\` — one PNG with li
 
 While iterating, \`diff: true\` compares against your previous capture: zero change costs no image at all, and small changes return a highlight crop naming the changed nodes. Pass \`scale: 0.5\` when checking layout (smaller payload), and \`path\` to capture a single node close-up.
 
-**Frames are not viewports.** A frame's \`w\`/\`h\` is canvas layout only. \`screenshot\` and \`compare_to_url\` render at their OWN viewport (explicit \`w\`/\`h\`/\`viewport\` argument, defaulting to the Desktop preset), and \`fullPage: true\` (the default) captures the screen's full natural height. So a screenshot can look complete while the board frame still clips below the fold. The returned \`contentHeight\` and \`framesShorterThanContent\` are the signal that a placement needs a taller frame (\`update_frame\`, or \`fitFrames: true\` in the same call) or the screen needs splitting.
+**Frames are not viewports.** A frame's \`w\`/\`h\` is canvas layout only. \`screenshot\` and \`compare_to_url\` render at their OWN viewport (explicit \`w\`/\`h\`/\`viewport\` argument, defaulting to the Desktop preset), and \`fullPage: true\` (the default) captures the screen's full natural height. So a screenshot can look complete while the board frame still clips below the fold. The returned \`contentHeight\` and \`framesShorterThanContent\` are the signal that a placement needs a taller frame (\`update_frame\`) or the screen needs splitting.
 
 A frame's optional light/dark \`scheme\` is placement-level and only a review affordance: it pins how that one frame renders the screen's shared tree. It does not create a dark layout variant. \`scheme: null\` returns the frame to the canvas default. An omitted \`screenshot\` mode follows an agreed hosting-frame pin, and asks for an explicit mode when placements disagree.
 

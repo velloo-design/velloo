@@ -133,9 +133,14 @@ describe("feedback tokens (client)", () => {
     );
   }, 20_000);
 
-  test("signed out with an empty store fails with guidance, not a crash", async () => {
+  test("signed out with an empty store fails with a kinded reason, not a crash", async () => {
     const result = await sendAnonymousFeedback({ url: cloudUrl }, { body: "hello" }, storePath);
     expect(result.ok).toBe(false);
-    expect(result.message).toContain("velloo login");
+    if (result.ok) return;
+    expect(result.error.kind).toBe("FeedbackNotSent");
+    expect(result.error.reason).toBe("signed-out");
+    expect(result.error.message).toContain("velloo login");
+    // Nothing the agent can retry its way out of — the user has to sign in.
+    expect(result.error.retryable).toBe(false);
   });
 });

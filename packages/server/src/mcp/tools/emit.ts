@@ -20,7 +20,8 @@ import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
-import { errorResult, jsonResult } from "./result.ts";
+import { EmitCodeOutput } from "./outputs.ts";
+import { errorResult, jsonResult, structuredResult } from "./result.ts";
 
 /**
  * v4→v3 class advisory for a Tailwind-channel emit when the host app is still
@@ -76,7 +77,8 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen: the JSX body (library identifiers + the screen framework's native styling — Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions (for MUI, components import from `@mui/material`). When the host app is on Tailwind v3, a `tailwindV3Compat` list flags classes to rename (with the v3 spelling) or that have no v3 equivalent — apply those renames while writing the file.",
+        "Return agent-consumed IR for a screen: the JSX body (library identifiers + the screen framework's native styling — Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions (for MUI, components import from `@mui/material`). On a Tailwind v3 host, apply the `tailwindV3Compat` renames while writing the file.",
+      outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
         componentsAlias: z.string().optional(),
@@ -105,8 +107,8 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
               ...result.value.classesUsed,
               ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
             ]);
-      return jsonResult(
-        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : result.value,
+      return structuredResult(
+        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : { ...result.value },
       );
     },
   );
@@ -137,8 +139,8 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
       if (!result.ok) return errorResult(result.error);
       const compat =
         target || inlineStyle ? [] : v3CompatFor(ctx, classNamesInJsx(result.value.jsx));
-      return jsonResult(
-        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : result.value,
+      return structuredResult(
+        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : { ...result.value },
       );
     },
   );

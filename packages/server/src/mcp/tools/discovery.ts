@@ -22,7 +22,8 @@ import {
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
-import { errorResult, jsonResult } from "./result.ts";
+import { ListComponentsOutput } from "./outputs.ts";
+import { errorResult, jsonResult, structuredResult } from "./result.ts";
 
 /**
  * Snippets mark a param required by the *absence* of `default`/`optional`. Agents reliably
@@ -138,9 +139,9 @@ function toSummary(c: ComponentDescriptor): ComponentSummary {
  */
 export function listBoardsPayload(
   folder: DesignFolder,
-  opts: { include_frames?: boolean | undefined; include_archived?: boolean | undefined } = {},
+  opts: { includeFrames?: boolean | undefined; includeArchived?: boolean | undefined } = {},
 ): Record<string, unknown>[] {
-  const entries = opts.include_archived ? orderedBoards(folder) : activeBoards(folder);
+  const entries = opts.includeArchived ? orderedBoards(folder) : activeBoards(folder);
   const groups = new Map((folder.config.boardGroups ?? []).map((g) => [g.id, g.name]));
   return entries.map(([id, board]) => ({
     id,
@@ -148,7 +149,7 @@ export function listBoardsPayload(
     frameCount: board.frames.length,
     ...(board.group ? { group: groups.get(board.group) ?? board.group } : {}),
     ...(board.archivedAt ? { archivedAt: board.archivedAt } : {}),
-    ...(opts.include_frames ? { frames: board.frames, groups: board.groups } : {}),
+    ...(opts.includeFrames ? { frames: board.frames, groups: board.groups } : {}),
   }));
 }
 
@@ -157,16 +158,16 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_screens",
     {
       description:
-        "List every screen in the design folder. Pass `include_tree: true` to embed each screen's full tree — one round-trip instead of list_screens + N get_screen calls. Default false to keep responses small.",
-      inputSchema: { include_tree: z.boolean().optional() },
+        "List every screen in the design folder. Pass `includeTree: true` to embed each screen's full tree — one round-trip instead of list_screens + N get_screen calls. Default false to keep responses small.",
+      inputSchema: { includeTree: z.boolean().optional() },
     },
-    async ({ include_tree }) => {
+    async ({ includeTree }) => {
       const screens = [...ctx.folder.screens.entries()].map(([id, screen]) => ({
         id,
         name: screen.name,
-        ...(include_tree ? { tree: screen.tree } : {}),
+        ...(includeTree ? { tree: screen.tree } : {}),
       }));
-      return jsonResult({ snapshotVersion: ctx.defaultProvider.version, screens });
+      return jsonResult({ screens });
     },
   );
 
@@ -192,14 +193,14 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_boards",
     {
       description:
-        "List the design folder's live boards, in sidebar order. Each board has its own collection of frames; `group` names the sidebar group it's filed under (absent ⇒ ungrouped) — pass that name to add_board/update_board to file another board alongside it. Pass `include_frames: true` to embed the full frame list for each board, or `include_archived: true` to also list boards the user has archived (those carry `archivedAt`).",
+        "List the design folder's live boards, in sidebar order. Each board has its own collection of frames; `group` names the sidebar group it's filed under (absent ⇒ ungrouped) — pass that name to add_board/update_board to file another board alongside it. Pass `includeFrames: true` to embed the full frame list for each board, or `includeArchived: true` to also list boards the user has archived (those carry `archivedAt`).",
       inputSchema: {
-        include_frames: z.boolean().optional(),
-        include_archived: z.boolean().optional(),
+        includeFrames: z.boolean().optional(),
+        includeArchived: z.boolean().optional(),
       },
     },
-    async ({ include_frames, include_archived }) =>
-      jsonResult({ boards: listBoardsPayload(ctx.folder, { include_frames, include_archived }) }),
+    async ({ includeFrames, includeArchived }) =>
+      jsonResult({ boards: listBoardsPayload(ctx.folder, { includeFrames, includeArchived }) }),
   );
 
   mcp.registerTool(
@@ -221,6 +222,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     {
       description:
         'List the available components — library entries first, then registered extensions. Default `mode: "summary"` returns id/source/category/prop-names; `mode: "full"` returns the complete descriptors. `filter` substring-matches ids (case-insensitive). `kind: "library"` or `kind: "extension"` narrows the result; extensions are user-declared custom components (DataTable, BrandHero, …) that shadow library entries with the same id.',
+      outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
         mode: z.enum(["summary", "full"]).optional(),
@@ -263,7 +265,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
                 ...("importPath" in c ? { importPath: c.importPath } : {}),
               };
             });
-      return jsonResult(out);
+      return structuredResult({ snapshotVersion: ctx.defaultProvider.version, components: out });
     },
   );
 

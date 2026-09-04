@@ -8,6 +8,8 @@ import {
   inspect,
   type MutationContext,
 } from "../../mutations/index.ts";
+import { AuditOutput, FindNodesOutput } from "./outputs.ts";
+import { errorResult, jsonResult, structuredResult } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
 
 export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void {
@@ -29,13 +31,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     },
     async (args) => {
       const result = await inspect(ctx, args);
-      if (result.ok) {
-        return { content: [{ type: "text", text: JSON.stringify(result.value) }] };
-      }
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify(result.error) }],
-      };
+      return result.ok ? jsonResult(result.value) : errorResult(result.error);
     },
   );
 
@@ -43,7 +39,8 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     "find_nodes",
     {
       description:
-        'Query a screen tree for nodes matching filters (ANDed): exact $ref, exact $snippet, exact $id, className substring, or prop presence/value. Returns paths + ids + summaries — use this to locate targets for update_props/move_node instead of fetching and walking the whole tree. Example: { screenId: "home", ref: "Icon", prop: "name", propValue: "Github" }.',
+        'Query a screen tree for nodes matching filters (ANDed): exact $ref, exact $snippet, exact $id, className substring, or prop presence/value. Use this to locate targets for update_props/move_node instead of fetching and walking the whole tree. Example: { screenId: "home", ref: "Icon", prop: "name", propValue: "Github" }.',
+      outputSchema: FindNodesOutput,
       inputSchema: {
         screenId: z.string(),
         ref: z.string().optional().describe("Exact component $ref, e.g. 'Button'"),
@@ -57,13 +54,7 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     },
     async (args) => {
       const result = await findNodes(ctx, args);
-      if (result.ok) {
-        return { content: [{ type: "text", text: JSON.stringify(result.value) }] };
-      }
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify(result.error) }],
-      };
+      return result.ok ? structuredResult({ ...result.value }) : errorResult(result.error);
     },
   );
 
@@ -71,7 +62,8 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     "audit",
     {
       description:
-        "Dark-mode audit for a screen (screenId) or snippet body (snippetId) — exactly one. Flags color classes that won't theme-flip; structural utilities exempt; set data-accent on a node to exempt it. Returns coverage + per-node problems with token suggestions. Pass theme to evaluate against a named theme — when that theme declares no colorsDark block, the result says so and coverage is informational.",
+        "Dark-mode audit for a screen (screenId) or snippet body (snippetId) — exactly one. Flags color classes that won't theme-flip; structural utilities exempt; set data-accent on a node to exempt it. Pass theme to evaluate against a named theme.",
+      outputSchema: AuditOutput,
       inputSchema: {
         screenId: z.string().optional(),
         snippetId: z.string().optional(),
@@ -80,18 +72,10 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     },
     async ({ screenId, snippetId, theme }) => {
       if ((screenId === undefined) === (snippetId === undefined)) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                kind: "BadRequest",
-                message: "audit: pass exactly one of screenId or snippetId.",
-              }),
-            },
-          ],
-        };
+        return errorResult({
+          kind: "BadRequest",
+          message: "audit: pass exactly one of screenId or snippetId.",
+        });
       }
       const result =
         screenId !== undefined
@@ -109,14 +93,9 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
                 note: `theme "${theme ?? "default"}" declares no colorsDark block — semantic tokens render identically in both modes, so dark-mode coverage here is informational only`,
               }),
         };
-        return {
-          content: [{ type: "text", text: JSON.stringify({ ...result.value, themeInfo }) }],
-        };
+        return structuredResult({ ...result.value, themeInfo });
       }
-      return {
-        isError: true,
-        content: [{ type: "text", text: JSON.stringify(result.error) }],
-      };
+      return errorResult(result.error);
     },
   );
 }

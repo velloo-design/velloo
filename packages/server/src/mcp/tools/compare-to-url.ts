@@ -22,14 +22,14 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
-import { errorResult, type McpResult } from "./result.ts";
-import { resolveViewport, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
+import { CompareToUrlOutput } from "./outputs.ts";
+import { errorResult, type McpContent, structuredResult } from "./result.ts";
+import { ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  fitFramesToContent,
   framesShorterThan,
   makeCanvasBundle,
   makeLiveUrl,
@@ -51,6 +51,76 @@ const UrlCookieSchema = z.object({
   domain: z.string().optional(),
   path: z.string().optional(),
 }) satisfies z.ZodType<UrlCookie>;
+
+/**
+ * Fetch the page live. Auth, settling and caching hang off this branch on
+ * purpose: all four are meaningless against a stored capture, which arrives
+ * already authenticated, already settled and frozen by construction. The
+ * mutual exclusion used to be prose plus a runtime check; here the schema
+ * simply doesn\'t offer the combinations that do nothing.
+ */
+const LiveUrlSource = z.strictObject({
+  url: z.string().describe("e.g. http://localhost:3000/pricing"),
+  auth: z
+    .strictObject({
+      storageStatePath: z
+        .string()
+        .optional()
+        .describe(
+          "Playwright storage-state JSON (logged-in cookies + localStorage) — absolute, or relative to the design folder. The robust way past an auth gate.",
+        ),
+      cookies: z
+        .array(UrlCookieSchema)
+        .optional()
+        .describe("Session cookies seeded before navigating (each needs url OR domain+path)"),
+      localStorage: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("localStorage entries seeded before any page script runs (e.g. a JWT)"),
+    })
+    .optional()
+    .describe("Credentials for a page behind a login"),
+  settleTimeoutMs: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Max ms to wait for network quiet before capturing (default 8000). Raise it for a data-heavy page that paints a spinner first, so the shot fires once async data has settled rather than capturing the spinner (which reads as unverified).",
+    ),
+  cache: z
+    .strictObject({
+      freeze: z
+        .boolean()
+        .optional()
+        .describe(
+          "Capture the page once and diff every later call against that frozen reference. Essential for a DYNAMIC page (feed, dashboard, per-user content): without it each call re-fetches, the content drifts, and `similarity` jitters so you cannot tell a design change from a page change.",
+        ),
+      ttlMs: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("How long a frozen capture stays valid; default 300000 (5 min)"),
+      refresh: z
+        .boolean()
+        .optional()
+        .describe(
+          "Re-capture now and replace the frozen reference — after fixing the target app. Implies freeze.",
+        ),
+    })
+    .optional(),
+});
+
+/**
+ * Diff against a capture already on disk (`velloo capture` /
+ * `start_capture_session`). This is the way to verify a page behind a login:
+ * the capture was taken in a real browser the user drove and logged into, so
+ * it is authenticated by construction and identical on every call.
+ */
+const StoredCaptureSource = z.strictObject({
+  captureId: z.string().describe("From list_captures"),
+});
 
 export function registerCompareToUrlTool(
   mcp: McpServer,
@@ -76,25 +146,14 @@ export function registerCompareToUrlTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and capture a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. Returns similarity (1 = identical), `topMismatches` ranking the worst regions and naming the node responsible, and a side-by-side PNG. 0.85+ is a faithful structural port; fix topMismatches in order and don't chase 1.0. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** For a page whose content drifts between loads, pass `cacheUrl: true`. Guide: velloo://guide/porting.",
+        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. Returns similarity (1 = identical), `topMismatches` ranking the worst regions and naming the node responsible, and a side-by-side PNG. 0.85+ is a faithful structural port; fix topMismatches in order and don't chase 1.0. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Guide: velloo://guide/porting.",
       inputSchema: {
         screenId: z.string(),
-        url: z
-          .string()
-          .optional()
-          .describe(
-            "Live URL to compare against, e.g. http://localhost:3000/pricing. Mutually exclusive with captureId.",
-          ),
-        captureId: z
-          .string()
-          .optional()
-          .describe(
-            "Diff against a stored browser capture (from `velloo capture` / `start_capture_session`) instead of fetching a live URL. This is the way to verify a page that needs a login — the capture was taken in a real browser the user drove and logged into, so it is authenticated and frozen by construction: no auth wall, no page drift, identical reference on every call. Mutually exclusive with url.",
-          ),
-        w: z.number().int().positive().optional(),
-        h: z.number().int().positive().optional(),
+        source: z
+          .union([LiveUrlSource, StoredCaptureSource])
+          .describe("What to diff against: a live page, or a capture already on disk"),
         viewport: ViewportSchema.optional().describe(
-          "Alternative to flat w/h; explicit w/h win if both are given",
+          "Render size; defaults to the folder's Desktop preset",
         ),
         mode: z.enum(["light", "dark"]).optional(),
         fullPage: z.boolean().optional(),
@@ -102,83 +161,25 @@ export function registerCompareToUrlTool(
         theme: ThemeNameSchema.describe(
           "Named theme for the Velloo side; default = the hosting board's pin, else the folder default",
         ),
-        storageStatePath: z
-          .string()
-          .optional()
-          .describe(
-            "Path to a Playwright storage-state JSON (logged-in cookies + localStorage) — absolute, or relative to the design folder. The robust way past auth gates.",
-          ),
-        cookies: z
-          .array(UrlCookieSchema)
-          .optional()
-          .describe("Session cookies to seed before navigating (each needs url OR domain+path)"),
-        localStorage: z
-          .record(z.string(), z.string())
-          .optional()
-          .describe("localStorage entries seeded before any page script runs (e.g. a JWT)"),
-        settleTimeoutMs: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe(
-            "Max ms to wait for network quiet before capturing (default 8000). Raise it for data-heavy pages that paint a loading spinner first, so the shot fires once async data/charts have settled instead of capturing the spinner (which reads as a blank/unverified page).",
-          ),
-        cacheUrl: z
-          .boolean()
-          .optional()
-          .describe(
-            "Reuse a frozen capture of this URL across calls instead of re-fetching every time. Essential for DYNAMIC pages (feeds, dashboards, per-user content): without it, each call hits the live page and its content drifts, so `similarity` jitters and you can't tell design changes from page changes. With it, the first call captures the page once and every later call (same url + viewport + scale + mode + auth) diffs against that frozen reference. Default false.",
-          ),
-        urlCacheTtlMs: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe(
-            "How long a cached URL capture stays valid, ms (default 300000 = 5 min). Only applies with cacheUrl. Raise it to freeze a reference for a long iteration session; lower it to re-sample a slowly-changing page periodically.",
-          ),
-        refreshUrl: z
-          .boolean()
-          .optional()
-          .describe(
-            "Force a fresh capture and replace the cached reference (re-establish the frozen baseline) — use after you've fixed the target app or want a new sample. Implies caching. Default false.",
-          ),
         image: z
           .boolean()
           .optional()
           .describe("Include the side-by-side PNG (default true; false = metrics only)"),
-        fitFrames: z
-          .boolean()
-          .optional()
-          .describe(
-            "Resize any board frame that clips this screen up to its content height (returns `fittedFrames`). Default false.",
-          ),
       },
+      outputSchema: CompareToUrlOutput,
     },
-    async ({
-      screenId,
-      url,
-      captureId,
-      w,
-      h,
-      viewport: vp,
-      mode,
-      fullPage,
-      scale,
-      theme,
-      storageStatePath,
-      cookies,
-      localStorage,
-      settleTimeoutMs,
-      cacheUrl,
-      urlCacheTtlMs,
-      refreshUrl,
-      image,
-      fitFrames,
-    }) => {
+    async ({ screenId, source, viewport: vp, mode, fullPage, scale, theme, image }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
+
+      const live = "url" in source ? source : null;
+      const url = live?.url;
+      const captureId = live
+        ? undefined
+        : (source as z.infer<typeof StoredCaptureSource>).captureId;
+      const { storageStatePath, cookies, localStorage } = live?.auth ?? {};
+      const settleTimeoutMs = live?.settleTimeoutMs;
+      const cache = live?.cache;
 
       // Match what the canvas shows: no explicit theme → the hosting board's pin.
       let themeName = theme;
@@ -186,12 +187,6 @@ export function registerCompareToUrlTool(
         const pinned = pinnedThemeForScreen(ctx.folder, screenId);
         if (!pinned.ok) return errorResult(pinned.message);
         themeName = pinned.name;
-      }
-
-      if ((url === undefined) === (captureId === undefined)) {
-        return errorResult(
-          "compare_to_url: pass exactly one of `url` (fetch a live page) or `captureId` (diff against a stored browser capture).",
-        );
       }
 
       // A stored capture replaces the live fetch entirely: it was taken in a
@@ -242,8 +237,7 @@ export function registerCompareToUrlTool(
       }
 
       const defaults = defaultViewport(ctx.folder);
-      const resolved = resolveViewport(w, h, vp);
-      let viewport: Viewport = { w: resolved.w ?? defaults.w, h: resolved.h ?? defaults.h };
+      let viewport: Viewport = { w: vp?.w ?? defaults.w, h: vp?.h ?? defaults.h };
       let scaleFactor = scale ?? 0.5;
       // How far the stored PNG has to shrink to land in the same pixel space as
       // the fresh render. A capture taken in a real window is at the display's
@@ -299,11 +293,11 @@ export function registerCompareToUrlTool(
         const plan = planUrlCache({
           // A stored capture is already frozen — the live-page cache has no
           // role to play, and reporting cache state would just be noise.
-          cacheUrl: storedPng === null && cacheUrl === true,
-          refreshUrl: storedPng === null && refreshUrl === true,
+          cacheUrl: storedPng === null && cache?.freeze === true,
+          refreshUrl: storedPng === null && cache?.refresh === true,
           prior: urlCaptures.get(urlKey),
           now,
-          ttlMs: urlCacheTtlMs ?? DEFAULT_URL_CACHE_TTL_MS,
+          ttlMs: cache?.ttlMs ?? DEFAULT_URL_CACHE_TTL_MS,
         });
         // The Velloo render is deterministic from the design JSON, so it's
         // always re-rendered (it's the side you're iterating on). Only the URL
@@ -376,12 +370,6 @@ export function registerCompareToUrlTool(
             : "it shows a login form";
         const contentHeight = contentHeightFromRects(velloo.nodeRects);
         const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
-        // Fit against the Velloo render's height — independent of whether the
-        // URL capture verified, so it's safe even on an unverified diff.
-        const fitted =
-          fitFrames && shortFrames.length
-            ? await fitFramesToContent(ctx, shortFrames, contentHeight)
-            : [];
         const similarity = Number((1 - result.changedRatio).toFixed(4));
         const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
         const heightDiffers = result.heightDelta !== 0;
@@ -400,11 +388,7 @@ export function registerCompareToUrlTool(
           heightDelta: result.heightDelta,
           /** Velloo render's full content height in CSS px (frame-independent). */
           contentHeight,
-          ...(fitted.length
-            ? { fittedFrames: fitted }
-            : shortFrames.length
-              ? { framesShorterThanContent: shortFrames }
-              : {}),
+          ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
           ...(!unverified && heightDominated
             ? {
                 note:
@@ -429,7 +413,7 @@ export function registerCompareToUrlTool(
                       hit: true,
                       capturedAt: new Date(plan.reuse.capturedAt).toISOString(),
                       ageMs: now - plan.reuse.capturedAt,
-                      note: "diffed against a frozen capture — similarity reflects design changes only, not page drift. Pass refreshUrl: true to re-sample.",
+                      note: "diffed against a frozen capture — similarity reflects design changes only, not page drift. Pass cache.refresh to re-sample.",
                     }
                   : { hit: false, stored: !unverified },
               }
@@ -453,12 +437,12 @@ export function registerCompareToUrlTool(
             : {}),
         };
 
-        const content: McpResult["content"] = [{ type: "text", text: JSON.stringify(summary) }];
+        const extra: McpContent[] = [];
         if (image !== false) {
           const side = sideBySidePng(urlCapture.png, velloo.png);
-          content.push({ type: "image", data: side.toString("base64"), mimeType: "image/png" });
+          extra.push({ type: "image", data: side.toString("base64"), mimeType: "image/png" });
         }
-        return { content };
+        return structuredResult(summary, ...extra);
       } catch (err) {
         const bm = browserErrorMessage(err);
         if (bm) return errorResult(bm);

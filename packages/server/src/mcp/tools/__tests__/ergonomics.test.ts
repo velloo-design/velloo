@@ -133,8 +133,7 @@ describe("error hints + fuzzy matching", () => {
   test("a stale numeric path returns InvalidPath with a find_nodes hint", async () => {
     const r = await callTool("update_props", {
       screenId: "landing",
-      path: [5],
-      propPatch: { className: "x" },
+      patches: [{ path: [5], propPatch: { className: "x" } }],
     });
     expect(r.isError).toBe(true);
     const e = parse(r);

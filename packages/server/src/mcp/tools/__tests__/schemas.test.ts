@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  InnerPathSchema,
-  NodeIdInputSchema,
-  PathSchema,
-  resolveViewport,
-  singleOrBulkError,
-  ViewportSchema,
-} from "../schemas.ts";
+import { InnerPathSchema, NodeIdInputSchema, PathSchema, ViewportSchema } from "../schemas.ts";
 
 describe("PathSchema", () => {
   test("accepts a path array, an @id, and the JSON string form of a path array", () => {
@@ -48,21 +41,9 @@ describe("ViewportSchema", () => {
   });
 });
 
-describe("resolveViewport", () => {
-  test("flat w/h win, else fall back to the viewport object", () => {
-    expect(resolveViewport(800, 600, { w: 1440, h: 900 })).toEqual({ w: 800, h: 600 });
-    expect(resolveViewport(undefined, undefined, { w: 1440, h: 900 })).toEqual({ w: 1440, h: 900 });
-    expect(resolveViewport(800, undefined, undefined)).toEqual({ w: 800, h: undefined });
-  });
-});
-
-describe("singleOrBulkError", () => {
-  test("produces consistent both/missing messages", () => {
-    expect(singleOrBulkError.both("update_props", "path+propPatch", "patches")).toBe(
-      "update_props: pass either path+propPatch or patches, not both.",
-    );
-    expect(singleOrBulkError.missing("set_token", "path+value", "tokens")).toBe(
-      "set_token: path+value required (or pass tokens).",
-    );
+describe("ViewportSchema", () => {
+  test("is the single render-size form — no flat w/h to reconcile", () => {
+    expect(ViewportSchema.safeParse({ w: 1440, h: 900 }).success).toBe(true);
+    expect(ViewportSchema.safeParse({ w: 1440 }).success).toBe(false);
   });
 });

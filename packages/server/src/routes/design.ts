@@ -239,7 +239,7 @@ export function createComponentsRouter(ctxFor: () => MutationContext): Hono {
     const manifest = await loadManifestForCtx(ctx);
     // Resolve each library's channel against the folder's CSS framework so a
     // none/none folder reports the inline-`style` channel (not Tailwind) — that
-    // drives the inspector's editor + the agent's set_style shape.
+    // drives the inspector's editor + the agent's `update_props` style shape.
     const css = ctx.folder.config.styling?.framework;
     const channelsByLibrary: Record<string, StyleChannel> = {};
     for (const [id, provider] of Object.entries(ctx.providers)) {

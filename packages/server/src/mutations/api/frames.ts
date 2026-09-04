@@ -10,11 +10,8 @@ import {
   removeFrame as removeFrameImpl,
 } from "../remove-frame.ts";
 import {
-  type UpdateFrameArgs,
-  type UpdateFrameResult,
   type UpdateFramesArgs,
   type UpdateFramesResult,
-  updateFrame as updateFrameImpl,
   updateFrames as updateFramesImpl,
 } from "../update-frame.ts";
 
@@ -29,19 +26,11 @@ export function addFrame(
     () => withBoardLock(ctx.folder, args.boardId, () => addFrameImpl(ctx, args)),
   );
 }
-export function updateFrame(
-  ctx: MutationContext,
-  args: UpdateFrameArgs,
-): Promise<Result<UpdateFrameResult, MutationError>> {
-  return tracked(ctx, "update_frame", { boardId: args.boardId, frameId: args.frameId }, () =>
-    withBoardLock(ctx.folder, args.boardId, () => updateFrameImpl(ctx, args)),
-  );
-}
 export function updateFrames(
   ctx: MutationContext,
   args: UpdateFramesArgs,
 ): Promise<Result<UpdateFramesResult, MutationError>> {
-  return tracked(ctx, "update_frames", { boardId: args.boardId }, () =>
+  return tracked(ctx, "update_frame", { boardId: args.boardId }, () =>
     withBoardLock(ctx.folder, args.boardId, () => updateFramesImpl(ctx, args)),
   );
 }
@@ -59,8 +48,6 @@ export type {
   AddFrameResult,
   RemoveFrameArgs,
   RemoveFrameResult,
-  UpdateFrameArgs,
-  UpdateFrameResult,
   UpdateFramesArgs,
   UpdateFramesResult,
 };

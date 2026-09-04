@@ -1,7 +1,4 @@
-import { normalizeUpdateFrame, normalizeUpdateProps } from "@velloo/protocol";
-import { err, type Result } from "@velloo/result";
 import { Hono } from "hono";
-import { badRequest, type MutationError } from "../mutations/errors.ts";
 import {
   addBoard,
   addBoardGroup,
@@ -14,19 +11,13 @@ import {
   reorderBoardGroups,
   reorderBoards,
   setNodeId,
-  type UpdateFrameResult,
-  type UpdateFramesResult,
-  type UpdatePropsBulkResult,
-  type UpdatePropsResult,
   updateBoard,
   updateBoardGroup,
   updateCodegen,
   updateDefaults,
   updateFeedback,
-  updateFrame,
   updateFrames,
   updateProps,
-  updatePropsBulk,
   updateSnippet,
   updateSnippetArgs,
   updateViewportPresets,
@@ -71,16 +62,7 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   // "one or the other" failure with the same wording the MCP tool uses.
   r.post(
     "/update_props",
-    route(
-      UpdatePropsBody,
-      (a, ctx): Promise<Result<UpdatePropsResult | UpdatePropsBulkResult, MutationError>> => {
-        const plan = normalizeUpdateProps(a);
-        if (!plan.ok) return Promise.resolve(err(badRequest(plan.message)));
-        return plan.args.mode === "bulk"
-          ? updatePropsBulk(ctx, plan.args.args)
-          : updateProps(ctx, plan.args.args);
-      },
-    ),
+    route(UpdatePropsBody, (a, ctx) => updateProps(ctx, a)),
   );
   r.post(
     "/apply_classes",
@@ -153,16 +135,7 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   );
   r.post(
     "/update_frame",
-    route(
-      UpdateFrameBody,
-      (a, ctx): Promise<Result<UpdateFrameResult | UpdateFramesResult, MutationError>> => {
-        const plan = normalizeUpdateFrame(a);
-        if (!plan.ok) return Promise.resolve(err(badRequest(plan.message)));
-        return plan.args.mode === "bulk"
-          ? updateFrames(ctx, plan.args.args)
-          : updateFrame(ctx, plan.args.args);
-      },
-    ),
+    route(UpdateFrameBody, (a, ctx) => updateFrames(ctx, a)),
   );
   r.post(
     "/remove_frame",

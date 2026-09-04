@@ -101,7 +101,10 @@ function rootProps(screenId: string): Record<string, unknown> | undefined {
 
 describe("update_props style channel — Tailwind (shadcn)", () => {
   test("a className string replaces the node's className", async () => {
-    const r = await updateProps(ctx, { screenId: "dashboard", path: [], style: "flex gap-4 p-6" });
+    const r = await updateProps(ctx, {
+      screenId: "dashboard",
+      patches: [{ path: [], style: "flex gap-4 p-6" }],
+    });
     expect(r.ok).toBe(true);
     expect(rootProps("dashboard")?.className).toBe("flex gap-4 p-6");
   });
@@ -109,8 +112,7 @@ describe("update_props style channel — Tailwind (shadcn)", () => {
   test("an object payload is rejected on a Tailwind folder", async () => {
     const r = await updateProps(ctx, {
       screenId: "dashboard",
-      path: [],
-      style: { display: "flex" },
+      patches: [{ path: [], style: { display: "flex" } }],
     });
     expect(r.ok).toBe(false);
     if (!r.ok && r.error.kind === "BadRequest")
@@ -118,7 +120,7 @@ describe("update_props style channel — Tailwind (shadcn)", () => {
   });
 
   test("an empty string clears className", async () => {
-    const r = await updateProps(ctx, { screenId: "dashboard", path: [], style: "" });
+    const r = await updateProps(ctx, { screenId: "dashboard", patches: [{ path: [], style: "" }] });
     expect(r.ok).toBe(true);
     expect(rootProps("dashboard")?.className).toBeUndefined();
   });
@@ -128,8 +130,7 @@ describe("update_props style channel — sx (MUI)", () => {
   test("an object payload lands on the sx prop", async () => {
     const r = await updateProps(ctx, {
       screenId: "panel",
-      path: [],
-      style: { display: "flex", gap: 2, p: 3 },
+      patches: [{ path: [], style: { display: "flex", gap: 2, p: 3 } }],
     });
     expect(r.ok).toBe(true);
     expect(rootProps("panel")?.sx).toEqual({ display: "flex", gap: 2, p: 3 });
@@ -138,21 +139,30 @@ describe("update_props style channel — sx (MUI)", () => {
   });
 
   test("a second call merges shallowly; inner null removes one key", async () => {
-    await updateProps(ctx, { screenId: "panel", path: [], style: { display: "flex", gap: 2 } });
-    const r = await updateProps(ctx, { screenId: "panel", path: [], style: { gap: null, p: 4 } });
+    await updateProps(ctx, {
+      screenId: "panel",
+      patches: [{ path: [], style: { display: "flex", gap: 2 } }],
+    });
+    const r = await updateProps(ctx, {
+      screenId: "panel",
+      patches: [{ path: [], style: { gap: null, p: 4 } }],
+    });
     expect(r.ok).toBe(true);
     expect(rootProps("panel")?.sx).toEqual({ display: "flex", p: 4 });
   });
 
   test("a string payload is rejected on a MUI folder", async () => {
-    const r = await updateProps(ctx, { screenId: "panel", path: [], style: "p-6" });
+    const r = await updateProps(ctx, { screenId: "panel", patches: [{ path: [], style: "p-6" }] });
     expect(r.ok).toBe(false);
     if (!r.ok && r.error.kind === "BadRequest") expect(r.error.message).toContain("object");
   });
 
   test("style: null clears the sx prop entirely", async () => {
-    await updateProps(ctx, { screenId: "panel", path: [], style: { display: "flex" } });
-    const r = await updateProps(ctx, { screenId: "panel", path: [], style: null });
+    await updateProps(ctx, {
+      screenId: "panel",
+      patches: [{ path: [], style: { display: "flex" } }],
+    });
+    const r = await updateProps(ctx, { screenId: "panel", patches: [{ path: [], style: null }] });
     expect(r.ok).toBe(true);
     expect(rootProps("panel")?.sx).toBeUndefined();
   });
@@ -162,9 +172,7 @@ describe("update_props applies propPatch and style in one call", () => {
   test("both channels land, and the style routes to the framework's prop", async () => {
     const r = await updateProps(ctx, {
       screenId: "panel",
-      path: [],
-      propPatch: { elevation: 2 },
-      style: { display: "flex", gap: 2 },
+      patches: [{ path: [], propPatch: { elevation: 2 }, style: { display: "flex", gap: 2 } }],
     });
     expect(r.ok).toBe(true);
     expect(rootProps("panel")?.elevation).toBe(2);
@@ -175,9 +183,7 @@ describe("update_props applies propPatch and style in one call", () => {
     const before = rootProps("dashboard")?.className;
     const r = await updateProps(ctx, {
       screenId: "dashboard",
-      path: [],
-      propPatch: { id: "hero" },
-      style: { display: "flex" },
+      patches: [{ path: [], propPatch: { id: "hero" }, style: { display: "flex" } }],
     });
     expect(r.ok).toBe(false);
     // The propPatch must not have been written either.

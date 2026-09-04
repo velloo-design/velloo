@@ -15,16 +15,6 @@ export interface FramePatch {
   scheme?: "light" | "dark" | null | undefined;
 }
 
-export interface UpdateFrameArgs {
-  boardId: string;
-  frameId: string;
-  patch: FramePatch;
-}
-
-export interface UpdateFrameResult {
-  frame: Frame;
-}
-
 function applyPatch(frame: Frame, patch: FramePatch): Frame {
   const next: Frame = { ...frame };
   if (patch.x !== undefined) next.x = patch.x;
@@ -53,24 +43,6 @@ function applyPatch(frame: Frame, patch: FramePatch): Frame {
     }
   }
   return next;
-}
-
-export async function updateFrame(
-  ctx: MutationContext,
-  args: UpdateFrameArgs,
-): Promise<Result<UpdateFrameResult, MutationError>> {
-  return DoAsync<UpdateFrameResult, MutationError>(async function* () {
-    const board = yield* $(getBoard(ctx, args.boardId));
-    const idx = board.frames.findIndex((f) => f.id === args.frameId);
-    if (idx === -1) return yield* $(err(frameNotFound(args.boardId, args.frameId)));
-
-    const updated = applyPatch(board.frames[idx] as Frame, args.patch);
-    const nextFrames = [...board.frames];
-    nextFrames[idx] = updated;
-    await persistBoard(ctx.folder, args.boardId, { ...board, frames: nextFrames });
-    ctx.broadcast({ type: "board-changed", boardId: args.boardId });
-    return { frame: updated };
-  });
 }
 
 export interface UpdateFramesArgs {

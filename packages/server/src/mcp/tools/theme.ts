@@ -12,6 +12,8 @@ import {
   importThemeCss,
   listThemes,
   PRESET_NAMES,
+  removeTheme,
+  renameTheme,
   scoreThemeContrast,
   scoreThemeContrastBoth,
   setCustomCss,
@@ -290,6 +292,29 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       },
     },
     async (args) => toMcp(await addTheme(ctx, args.name, args.from, args.overwrite ?? false)),
+  );
+
+  mcp.registerTool(
+    "update_theme",
+    {
+      description:
+        "Rename a named theme, repointing every board that pinned it (the response lists them). To change a theme's *tokens*, use set_theme with its `theme` param.",
+      inputSchema: {
+        name: z.string().describe("Theme to rename"),
+        renameTo: z.string().describe("New name — lowercase kebab, not 'default'"),
+      },
+    },
+    async (args) => toMcp(await renameTheme(ctx, args.name, args.renameTo)),
+  );
+
+  mcp.registerTool(
+    "remove_theme",
+    {
+      description:
+        "Delete a named theme. Refuses while any board still pins it, naming those boards — repoint or unpin them first with update_board { patch: { theme } }. The default theme cannot be removed.",
+      inputSchema: { name: z.string() },
+    },
+    async (args) => toMcp(await removeTheme(ctx, args.name)),
   );
 
   mcp.registerTool(
