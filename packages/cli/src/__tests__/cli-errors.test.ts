@@ -63,7 +63,7 @@ describe("cli error presentation", () => {
     const { exitCode, stderr } = await runPublish(folder);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("velloo publish:");
-    expect(stderr).toContain("Run `velloo upgrade` to migrate it.");
+    expect(stderr).toContain("Run `velloo upgrade ");
     // No Bun uncaught dump: no stack frames, no source excerpt, no debug hint.
     expect(stderr).not.toMatch(/at \w+ \(/);
     expect(stderr).not.toContain("throw new Error");
@@ -92,7 +92,7 @@ describe("cli error presentation", () => {
     const { exitCode, stderr } = await runRun(folder);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("velloo run:");
-    expect(stderr).toContain("Run `velloo upgrade` to migrate it.");
+    expect(stderr).toContain("Run `velloo upgrade ");
     expect(stderr).not.toContain("didn't come up");
   }, 30_000);
 

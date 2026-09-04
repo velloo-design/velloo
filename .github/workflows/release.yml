@@ -1,12 +1,13 @@
-# Release: publish `velloo` to npm and attach the tarball to a GitHub release.
+# Release: publish Velloo, direct archives, and checksums.
 #
 # Trigger: push a tag `vX.Y.Z` whose version matches
 # packages/cli/package.json (see RELEASING.md for the full process).
 #
-# Required repository secret:
-#   NPM_TOKEN — an npm access token (type: Automation, or Granular with
-#   read/write on the `velloo` package). Add it under
-#   Settings → Secrets and variables → Actions → New repository secret.
+# Required repository secrets:
+#   NPM_TOKEN — a granular npm access token with read/write on `velloo` and
+#   bypass 2FA enabled. Prefer npm trusted publishing after the first release.
+#   BLOB_ENDPOINT, BLOB_BUCKET, BLOB_ACCESS_KEY, BLOB_SECRET_KEY — the download
+#   bucket served by get.velloo.design.
 #
 # `npm publish --provenance` additionally needs the `id-token: write`
 # permission below (OIDC attestation) and the `repository` field in the
@@ -25,13 +26,13 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
 
       # npm (for `npm publish`) + the registry .npmrc that reads NODE_AUTH_TOKEN.
       - uses: actions/setup-node@v4
@@ -60,23 +61,41 @@ jobs:
             exit 1
           fi
 
-      # The published binary defaults its opt-in cloud commands to the hosted
-      # velloo-cloud; VELLOO_CLOUD_URL / --url still override at runtime.
-      - name: Build the publishable bundle
-        run: bun packages/cli/build.ts
+      - name: Build npm and direct-install artifacts
+        run: bun scripts/build-release-artifacts.ts
         env:
           VELLOO_BUILD_CLOUD_URL: https://api.velloo.ai
 
-      - name: Publish to npm
+      - name: Smoke-test npm global install without scripts or Bun on PATH
+        run: bun scripts/package-smoke-test.ts
+
+      - name: Smoke-test curl install and checksum rejection
+        run: bun scripts/direct-install-smoke-test.ts
+
+      # Put immutable direct artifacts in place before advancing npm `latest`;
+      # a direct upgrader that sees the new npm version can then fetch it.
+      - name: Publish curl installer and immutable artifacts
+        run: bun scripts/publish-cli.ts prod --no-build
+        env:
+          BLOB_ENDPOINT: ${{ secrets.BLOB_ENDPOINT }}
+          BLOB_BUCKET: ${{ secrets.BLOB_BUCKET }}
+          BLOB_ACCESS_KEY: ${{ secrets.BLOB_ACCESS_KEY }}
+          BLOB_SECRET_KEY: ${{ secrets.BLOB_SECRET_KEY }}
+
+      - name: Publish Velloo to npm
         run: npm publish --provenance --access public
         working-directory: packages/cli/dist
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create the GitHub release with the tarball
+      - name: Create the GitHub release
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            "velloo-${GITHUB_REF_NAME#v}.tgz" \
+            release-artifacts/*.tgz \
+            release-artifacts/*.tar.gz \
+            release-artifacts/*.sha256 \
+            release-artifacts/SHA256SUMS \
+            release-artifacts/install.sh \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes
         env:

@@ -103,7 +103,7 @@ describe("design-folder format gate", () => {
 
   test("an outdated folder is refused with the upgrade hint", async () => {
     await writeConfig({ schemaVersion: 1 });
-    expect(() => assertFolderFormatCurrent(root)).toThrow(/Run `velloo upgrade`/);
+    expect(() => assertFolderFormatCurrent(root)).toThrow(/Run `velloo upgrade /);
     try {
       assertFolderFormatCurrent(root);
       throw new Error("expected the gate to throw");
@@ -128,7 +128,7 @@ describe("design-folder format gate", () => {
   test("ensureDaemon refuses an outdated folder before spawning anything", async () => {
     await writeConfig({ schemaVersion: 1 });
     const start = Date.now();
-    await expect(ensureDaemon(root)).rejects.toThrow(/Run `velloo upgrade`/);
+    await expect(ensureDaemon(root)).rejects.toThrow(/Run `velloo upgrade /);
     // The pre-spawn gate, not the 15s health timeout.
     expect(Date.now() - start).toBeLessThan(2000);
     expect(await readLock(root)).toBeNull();

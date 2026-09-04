@@ -1,6 +1,7 @@
 {
   "name": "velloo",
   "version": "0.1.0",
+  "packageManager": "bun@1.4.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
@@ -21,6 +22,10 @@
     "fonts:check": "bun packages/schema/scripts/build-font-catalog.ts --check",
     "velloo": "bun packages/cli/src/cli.ts",
     "cli:build": "bun packages/cli/build.ts",
+    "direct:build": "bun scripts/build-direct-artifact.ts",
+    "release:build": "bun scripts/build-release-artifacts.ts",
+    "release:smoke": "bun scripts/package-smoke-test.ts",
+    "release:smoke:direct": "bun scripts/direct-install-smoke-test.ts",
     "cli:install": "bun scripts/cli-install.ts",
     "cli:watch": "bun scripts/cli-watch.ts",
     "cli:dev": "VELLOO_BUILD_CLOUD_URL=https://api.dev.velloo.ai bun scripts/cli-install.ts",
@@ -35,6 +40,6 @@
     "typescript": "7.0.2"
   },
   "engines": {
-    "bun": ">=1.3.0"
+    "bun": ">=1.4.0"
   }
 }

@@ -6,7 +6,7 @@ import type { Screen, Theme, Viewport } from "@velloo/schema";
 import { registry } from "@velloo/shadcn-snapshot";
 import { renderScreen, screenshot } from "../index.ts";
 
-// Opt-in: requires `bunx playwright install chromium`.
+// Opt-in: requires `velloo browser install`.
 const RUN = process.env.VELLOO_E2E === "1";
 
 describe.skipIf(!RUN)("screenshot (Playwright)", () => {

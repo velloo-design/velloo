@@ -15,7 +15,7 @@ bun run velloo init /tmp/velloo-smoke
 bun run velloo run /tmp/velloo-smoke           # canvas :7300, MCP :7301
 ```
 
-The screenshot path needs Chromium once: `bunx playwright install chromium`.
+The screenshot path needs Chromium once: `velloo browser install`.
 
 ## Before you open a PR
 

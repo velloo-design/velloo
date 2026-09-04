@@ -22,10 +22,20 @@ See [`docs/`](./docs) for the architecture and the MCP reference.
 
 ## Quickstart
 
-Velloo isn't on npm yet — install the hosted build (it runs on the [Bun](https://bun.sh) runtime, ≥ 1.3.0; the installer offers to set that up too):
+Install Velloo globally with npm. The package selects an exact official Bun
+platform package with no install scripts; you do not need to install or manage
+Bun yourself:
 
 ```bash
-curl -fsSL https://get.velloo.dev/install.sh | bash
+npm install -g velloo
+```
+
+pnpm works too: `pnpm add -g velloo`.
+
+Or use the standalone installer (macOS and Linux):
+
+```bash
+curl -fsSL https://get.velloo.design/install.sh | bash
 ```
 
 Then, from inside your app:
@@ -48,14 +58,14 @@ Two files define the model: a repo-root **`velloo.json`** names each design fold
 - **Canvas:** http://localhost:7300
 - **MCP server (for your AI agent):** http://localhost:7301/mcp
 
-`Ctrl-C` stops the server. Re-run the install command anytime to update to the latest build; `bun remove -g velloo` uninstalls.
+`Ctrl-C` stops the server. Velloo periodically checks for a newer release without delaying commands and prints a small notice when one is available. Run `velloo upgrade` to update through the channel that installed it (npm-global or standalone). To migrate an older design-folder format, pass the folder explicitly: `velloo upgrade <folder>`.
 
 ### Screenshots — the one optional extra
 
 A headless Chromium is used for exactly two things: your agent's `screenshot` tool (so it can *see* a design) and `velloo render <screen> --to=out.png`. The canvas, editing, `velloo publish`, `velloo emit`, and everything else work without it. Install it anytime (one-time, ~150 MB):
 
 ```bash
-bunx playwright install chromium
+velloo browser install
 ```
 
 If a screenshot fails, run exactly that command, then retry. Ports busy? Pass `--port` / `--mcp-port` to `velloo run`.
@@ -70,7 +80,7 @@ If a screenshot fails, run exactly that command, then retry. Ports busy? Pass `-
 
 ## Local-first by default
 
-The local tool is free, complete, account-free, and telemetry-free — nothing in the solo loop phones home. The only outbound calls are the optional, opt-in cloud paths, and every one of them is gated behind an explicit `velloo login`:
+The local tool is free, complete, account-free, and telemetry-free. The CLI makes one anonymous infrastructure request outside the solo loop: at most daily, a detached check reads the public npm release version and caches it locally; it sends no project or account data and can be disabled with `VELLOO_DISABLE_UPDATE_CHECK=1`. Product cloud calls remain optional and opt-in, and every one is gated behind an explicit `velloo login`:
 
 - `velloo login` / `velloo publish` — publish boards as a read-only share link (`--list` what you've published, `--remove` to take one down)
 - `velloo folder` — the repo's design folders: `list`, `add` another, `remove` one
@@ -101,7 +111,7 @@ bun run velloo init /tmp/velloo-smoke
 bun run velloo run /tmp/velloo-smoke            # canvas at :7300, MCP at :7301
 ```
 
-The Playwright screenshot path requires `bunx playwright install chromium` once.
+The Playwright screenshot path requires `velloo browser install` once.
 
 ## License
 

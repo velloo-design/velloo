@@ -3,17 +3,16 @@
 #
 # Boots a pristine Linux container (nothing installed — no bun, no node, no
 # playwright) and runs velloo's REAL one-liner install flow
-# (scripts/install.sh, what `curl -fsSL https://get.velloo.dev/install.sh |
-# bash` serves) against the locally packed tarball — so you watch exactly
-# what a new user sees: the Bun prompt, the Bun installer's output, then the
-# global velloo install. It then hands you an interactive shell where
+# (scripts/install.sh, what `curl -fsSL https://get.velloo.design/install.sh |
+# bash` serves) against a locally built direct archive — so you watch exactly
+# what a new user sees: platform detection, checksum verification, and the
+# app-owned private Bun install. It then hands you an interactive shell where
 # `velloo` is on PATH — the closest thing to ssh-ing into a fresh box:
 #
 #   velloo --version
 #   mkdir app && cd app && velloo init
 #
-# Build the tarball first with `bun run cli:build` (velloo-*.tgz at the repo
-# root).
+# Build release artifacts first with `bun run release:build`.
 #
 # Usage:
 #   scripts/blank-install-test.sh [distro] [--arch amd64|arm64] [--publish <port>]
@@ -33,11 +32,11 @@
 #              "velloo-blankbox" — resume it with `docker start -ai
 #              velloo-blankbox`, discard it with `docker rm -f velloo-blankbox`.
 #   --cmd      run this instead of the interactive shell (CI / smoke tests;
-#              implies VELLOO_ASSUME_YES=1 so the Bun prompt doesn't block),
+#              runs non-interactively),
 #              e.g. --cmd 'velloo --version'
 #
 # Other experiments worth running inside:
-#   - screenshot deps:  bunx playwright-core install --with-deps chromium
+#   - screenshot deps:  velloo browser install --with-deps
 #   - offline runtime:  re-run with docker's --network none after an install
 # A second shell into a running box: docker exec -it velloo-blankbox bash
 # (with --keep; unnamed --rm boxes: docker ps → docker exec -it <id> bash)
@@ -83,29 +82,38 @@ done
 case "$distro" in
   ubuntu)
     image="ubuntu:24.04"
-    prereqs="apt-get update -qq >/dev/null && apt-get install -y -qq curl unzip ca-certificates >/dev/null"
+    prereqs="apt-get update -qq >/dev/null && apt-get install -y -qq curl ca-certificates >/dev/null"
     ;;
   debian)
     image="debian:bookworm"
-    prereqs="apt-get update -qq >/dev/null && apt-get install -y -qq curl unzip ca-certificates >/dev/null"
+    prereqs="apt-get update -qq >/dev/null && apt-get install -y -qq curl ca-certificates >/dev/null"
     ;;
   fedora)
     image="fedora:latest"
-    prereqs="dnf install -y -q curl unzip >/dev/null"
+    prereqs="dnf install -y -q curl >/dev/null"
     ;;
   alpine)
-    # musl: bun's installer picks its musl build; bash isn't preinstalled.
+    # musl: Velloo picks its musl private runtime; bash isn't preinstalled.
     image="alpine:latest"
     prereqs="apk add --no-cache -q curl unzip bash libgcc libstdc++"
     ;;
 esac
 
-tgz="$(ls -t "$repo_root"/velloo-*.tgz 2>/dev/null | head -1 || true)"
-if [ -z "$tgz" ]; then
-  echo "no velloo-*.tgz at the repo root — run \`bun run cli:build\` first." >&2
+version="$(bun -e 'console.log(require(process.argv[1]).version)' "$repo_root/packages/cli/package.json")"
+machine_arch="${arch:-$(uname -m)}"
+case "$machine_arch" in
+  amd64 | x86_64) artifact_arch=x64 ;;
+  arm64 | aarch64) artifact_arch=arm64 ;;
+  *) artifact_arch="$machine_arch" ;;
+esac
+musl=""
+[ "$distro" != "alpine" ] || musl="-musl"
+artifact="$repo_root/release-artifacts/velloo-$version-linux-$artifact_arch$musl.tar.gz"
+if [ ! -f "$artifact" ] || [ ! -f "$artifact.sha256" ]; then
+  echo "missing $(basename "$artifact") + checksum — run \`bun run release:build\` first." >&2
   exit 1
 fi
-echo "▸ testing $(basename "$tgz") on $image${arch:+ (linux/$arch)}"
+echo "▸ testing $(basename "$artifact") on $image${arch:+ (linux/$arch)}"
 
 docker_args=(--hostname blankbox --workdir /root)
 if [ -n "$keep" ]; then
@@ -117,7 +125,7 @@ if [ -n "$keep" ]; then
 else
   docker_args+=(--rm)
 fi
-docker_args+=(-v "$tgz:/tmp/velloo.tgz:ro")
+docker_args+=(-v "$repo_root/release-artifacts:/tmp/downloads:ro")
 docker_args+=(-v "$repo_root/scripts/install.sh:/tmp/install.sh:ro")
 [ -n "$arch" ] && docker_args+=(--platform "linux/$arch")
 # `:` no-op default — this line lands inside the bootstrap string, and an
@@ -129,16 +137,15 @@ for p in "${publish[@]+"${publish[@]}"}"; do
 done
 
 # `cat | bash` (not `bash /tmp/install.sh`) keeps the real pipe-from-curl
-# semantics: install.sh reads its Bun-install prompt from /dev/tty because
-# stdin is the pipe. VELLOO_TARBALL_URL is a curl URL, so file:// serves the
-# local tarball through the script's own download path unchanged.
+# semantics. file:// serves the local archive through the installer's real
+# download and checksum path unchanged.
 bootstrap="
 set -e
 echo \"── blank box: \$(. /etc/os-release && echo \$PRETTY_NAME) \$(uname -m) ──\"
 $prereqs
-echo '── curl -fsSL https://get.velloo.dev/install.sh | bash  (served from the local tarball) ──'
-cat /tmp/install.sh | VELLOO_TARBALL_URL=file:///tmp/velloo.tgz bash
-export PATH=\"\$HOME/.bun/bin:\$PATH\"
+echo '── curl -fsSL https://get.velloo.design/install.sh | bash  (served from local artifacts) ──'
+cat /tmp/install.sh | VELLOO_VERSION=$version VELLOO_DOWNLOAD_BASE=file:///tmp/downloads bash
+export PATH=\"\$HOME/.local/bin:\$PATH\"
 echo
 echo \"── velloo \$(velloo --version) on a box that had nothing ──\"
 echo '   try: mkdir app && cd app && velloo init'
@@ -148,9 +155,8 @@ echo
 
 # Outer shell is sh, not bash — alpine has no bash until prereqs install it.
 if [ -n "$cmd" ]; then
-  exec docker run -e VELLOO_ASSUME_YES=1 "${docker_args[@]}" "$image" sh -c "$bootstrap$cmd"
+  exec docker run "${docker_args[@]}" "$image" sh -c "$bootstrap$cmd"
 fi
 
-# Hand the console over (bash exists everywhere post-prereqs); the Bun
-# question inside install.sh is answered by you, on the real prompt.
+# Hand the console over (bash exists everywhere post-prereqs).
 exec docker run -it "${docker_args[@]}" "$image" sh -c "${bootstrap}exec bash -i"

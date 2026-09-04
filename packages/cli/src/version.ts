@@ -8,5 +8,6 @@ import pkg from "../package.json" with { type: "json" };
  */
 declare const __VELLOO_BUILD_VERSION__: string;
 
+export const PACKAGE_VERSION: string = pkg.version;
 export const TOOL_VERSION: string =
-  typeof __VELLOO_BUILD_VERSION__ === "string" ? __VELLOO_BUILD_VERSION__ : pkg.version;
+  typeof __VELLOO_BUILD_VERSION__ === "string" ? __VELLOO_BUILD_VERSION__ : PACKAGE_VERSION;

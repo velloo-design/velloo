@@ -7,12 +7,13 @@ import { daemonRoot, stopDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { createProgress } from "../progress.ts";
+import { upgradeInstalledVelloo } from "../update.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
 
 export default defineCommand({
   meta: {
     name: "upgrade",
-    description: "Migrate a design folder to this velloo's on-disk format",
+    description: "Upgrade Velloo, or migrate a design folder when one is supplied",
   },
   args: {
     folder: {
@@ -25,6 +26,11 @@ export default defineCommand({
       default: false,
       description: "Show what would change without writing",
     },
+    check: {
+      type: "boolean",
+      default: false,
+      description: "Check for a Velloo update without installing it",
+    },
     skills: {
       type: "boolean",
       default: true,
@@ -33,8 +39,17 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    if (!args.folder) {
+      try {
+        await upgradeInstalledVelloo({ checkOnly: args.check || args["dry-run"] });
+      } catch (error) {
+        fail("upgrade", error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+
     const folder = await resolveDesignFolder(args.folder, "upgrade", { requireConfig: true });
-    const dryRun = args["dry-run"];
+    const dryRun = args["dry-run"] || args.check;
     const progress = createProgress();
     progress.start(dryRun ? "checking upgrade" : "preparing upgrade");
 

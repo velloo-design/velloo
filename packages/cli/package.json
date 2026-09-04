@@ -11,6 +11,9 @@
   "exports": {
     ".": "./src/cli.ts"
   },
+  "engines": {
+    "bun": ">=1.4.0"
+  },
   "scripts": {
     "build": "bun run build.ts"
   },

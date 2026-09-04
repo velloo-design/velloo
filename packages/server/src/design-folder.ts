@@ -168,7 +168,7 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   if (version < CURRENT_SCHEMA_VERSION) {
     throw new Error(
       `velloo: ${root} uses design-folder schema version ${version} ` +
-        `(current: ${CURRENT_SCHEMA_VERSION}). Run \`velloo upgrade\` to migrate it.`,
+        `(current: ${CURRENT_SCHEMA_VERSION}). Run \`velloo upgrade ${root}\` to migrate it.`,
     );
   }
   const parsedConfig = ConfigSchema.parse(configRaw);

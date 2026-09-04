@@ -1,9 +1,10 @@
 # Releasing
 
-Velloo publishes as **one bundled npm package named `velloo`** (Bun required at
-runtime; `bunx velloo init` is the canonical install). The publish surface is
-the `dist/package.json` that `packages/cli/build.ts` generates — the workspace
-manifests all stay private.
+Velloo publishes as one npm package named `velloo`. It declares exact-version
+official `@oven/bun-*` optional dependencies, so npm selects a private Bun 1.4
+binary without running an install script. `npm install -g velloo` is canonical;
+users do not install Bun. The release also ships checksum-verified standalone
+archives for the macOS/Linux curl installer. Workspace manifests stay private.
 
 ## Versioning
 
@@ -29,18 +30,20 @@ or the MCP surface bump the **minor**; everything else bumps the **patch**.
    - verifies the tag matches `packages/cli/package.json`,
    - builds the bundle with the hosted cloud default baked in
      (`VELLOO_BUILD_CLOUD_URL=https://api.velloo.ai`),
-   - `npm publish --provenance --access public` from `packages/cli/dist`
-     (needs the `NPM_TOKEN` repository secret — see the workflow header),
-   - creates the GitHub release with the tarball attached.
+   - resolves exact official `@oven/bun-*` binaries for each direct target,
+   - builds immutable direct archives + SHA-256 files and a version-baked
+     `install.sh`,
+   - publishes `velloo` with npm provenance,
+   - uploads the direct surface to the download bucket and attaches all
+     artifacts to the GitHub release.
 
-5. **Verify**: `bunx velloo@X.Y.Z --version` from a scratch directory.
+5. **Verify**: `npm install -g velloo@X.Y.Z && velloo --version` from a clean prefix.
 
 ## Local dry run
 
 ```bash
-bun packages/cli/build.ts        # builds dist/ + packs velloo-X.Y.Z.tgz
-cd "$(mktemp -d)" && bun init -y && bun add /path/to/velloo/velloo-X.Y.Z.tgz
-./node_modules/.bin/velloo --help
+bun packages/cli/build.ts
+bun scripts/package-smoke-test.ts
 ```
 
 `bun run cli:install` installs the same artifact globally (localhost cloud
@@ -50,8 +53,9 @@ and `bun run cli:dev` bakes the dev environment (`https://api.dev.velloo.ai`).
 ## Dogfood channel
 
 `bun run cli:release` (prod) / `bun run cli:release:dev` build the bundle with
-the environment's cloud URL baked in and upload `install.sh` + the tarball to
-that environment's R2 bucket under `downloads/` — velloo-cloud serves them at
-`get.velloo.dev` / `get.dev.velloo.dev`. Credentials come from the sibling
+the environment's cloud URL baked in and upload `install.sh`, the npm tarball,
+direct archives, and checksums to that environment's R2 bucket
+under `downloads/` — velloo-cloud serves them at `get.velloo.design` /
+`get.dev.velloo.design`. Credentials come from the sibling
 velloo-cloud checkout's `.env.prod` / `.env.dev` (override the checkout with
 `VELLOO_CLOUD_DIR`, or pass `BLOB_*` directly).

@@ -5,8 +5,8 @@
  *
  *   bun run cli:install
  *
- * Rebuilds the canvas + bundles the CLI + packs the tarball, then
- * `bun install -g` it, replacing any previously installed version.
+ * Rebuilds the canvas + bundles the CLI, then installs the tarball with npm
+ * like a real end user. npm selects the matching official Bun runtime package.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -27,24 +27,24 @@ function run(cmd: string[]): void {
 // 1. Build the self-contained bundle (canvas + cli + skills + tarball).
 run(["bun", join(repoRoot, "packages", "cli", "build.ts")]);
 
-// 2. Drop any prior global install first. `bun add -g <tarball-path>` appends a
-//    duplicate `velloo` dependency to the global package.json each run (keyed by
-//    path, not name), so reinstalls accumulate noisy duplicate-key warnings.
-//    Best-effort — a missing prior install is fine.
-Bun.spawnSync(["bun", "remove", "-g", "velloo"], {
-  cwd: repoRoot,
-  stdout: "ignore",
-  stderr: "ignore",
-});
-
-// 3. Install the freshly packed tarball globally.
+// 2. Install the freshly packed package globally. Its exact @oven/bun-* optional
+// dependency supplies the current platform binary without an install script.
 const tgz = join(repoRoot, `velloo-${version}.tgz`);
-run(["bun", "install", "-g", tgz]);
+run([
+  "npm",
+  "install",
+  "-g",
+  "--include=optional",
+  "--cache",
+  join(repoRoot, "release-artifacts", ".npm-cache"),
+  tgz,
+]);
 
-// 4. Report where it landed + a PATH hint.
-const binDir = Bun.spawnSync(["bun", "pm", "bin", "-g"], { cwd: repoRoot })
+// 3. Report where it landed + a PATH hint.
+const npmPrefix = Bun.spawnSync(["npm", "prefix", "-g"], { cwd: repoRoot })
   .stdout.toString()
   .trim();
+const binDir = process.platform === "win32" ? npmPrefix : join(npmPrefix, "bin");
 console.log(`\n\x1b[32m✓ velloo ${version} installed globally\x1b[0m → ${join(binDir, "velloo")}`);
 const prodUrl = process.env.VELLOO_BUILD_CLOUD_URL;
 if (prodUrl) {

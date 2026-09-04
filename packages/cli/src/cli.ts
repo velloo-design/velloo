@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
 import { COMMANDS } from "./commands/registry.ts";
+import { maybeNotifyAboutUpdate } from "./update.ts";
 import { TOOL_VERSION } from "./version.ts";
 
 const main = defineCommand({
@@ -13,4 +14,9 @@ const main = defineCommand({
   subCommands: COMMANDS,
 });
 
-runMain(main);
+await runMain(main);
+
+const command = process.argv[2];
+if (!["mcp", "__daemon", "__update_check", "ci", "run"].includes(command ?? "")) {
+  await maybeNotifyAboutUpdate();
+}

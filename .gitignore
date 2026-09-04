@@ -4,6 +4,7 @@ dist-types
 build
 *.tsbuildinfo
 *.tgz
+/release-artifacts/
 
 .DS_Store
 .env

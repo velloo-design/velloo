@@ -190,7 +190,7 @@ export async function runUpgrade(folder: string): Promise<void> {
   }
   console.log(`velloo: upgraded ${displayPath(folder)} (v${result.from} → v${result.to})`);
   for (const step of result.applied) console.log(pc.dim(`  ${step}`));
-  console.log(pc.dim("  Refresh agent skills too with `velloo upgrade`."));
+  console.log(pc.dim(`  Refresh agent skills too with \`velloo upgrade ${displayPath(folder)}\`.`));
 }
 
 /**
@@ -318,7 +318,7 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
 
   if (facts.pendingMigrations.length > 0) {
     bad(
-      `folder format v${facts.schemaVersion} — v${CURRENT_SCHEMA_VERSION} available (\`velloo upgrade\`)`,
+      `folder format v${facts.schemaVersion} — v${CURRENT_SCHEMA_VERSION} available (\`velloo upgrade <folder>\`)`,
     );
   } else {
     ok(`folder format v${facts.schemaVersion} (current)`);
@@ -326,7 +326,7 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
 
   if (facts.toolVersionStale) {
     bad(
-      `agent skills recorded for velloo ${String(config.toolVersion)} — refresh with \`velloo upgrade\``,
+      `agent skills recorded for velloo ${String(config.toolVersion)} — refresh with \`velloo upgrade <folder>\``,
     );
   } else {
     ok(`agent skills current (velloo ${TOOL_VERSION})`);

@@ -1,0 +1,67 @@
+#!/usr/bin/env bun
+import { existsSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { currentRuntimeTarget } from "./distribution/targets.ts";
+
+if (process.platform === "win32") {
+  throw new Error("the release smoke test currently runs on the POSIX release runner");
+}
+
+const repoRoot = dirname(dirname(import.meta.path));
+const version = (
+  await import(join(repoRoot, "packages", "cli", "package.json"), {
+    with: { type: "json" },
+  })
+).default.version as string;
+const target = currentRuntimeTarget();
+const prefix = await mkdtemp(join(tmpdir(), "velloo-package-smoke-"));
+const node = Bun.which("node");
+if (!node) throw new Error("Node is required to smoke-test the npm launcher");
+
+function run(command: string[], env = process.env): Bun.SpawnSyncReturns<Uint8Array> {
+  return Bun.spawnSync(command, { cwd: repoRoot, stdout: "pipe", stderr: "pipe", env });
+}
+
+try {
+  const install = run([
+    "npm",
+    "install",
+    "-g",
+    "--prefix",
+    prefix,
+    "--cache",
+    join(repoRoot, "release-artifacts", ".npm-cache"),
+    "--include=optional",
+    "--ignore-scripts",
+    existsSync(join(repoRoot, "release-artifacts", `velloo-${version}.tgz`))
+      ? join(repoRoot, "release-artifacts", `velloo-${version}.tgz`)
+      : join(repoRoot, `velloo-${version}.tgz`),
+  ]);
+  if (!install.success) throw new Error(install.stderr.toString() || "npm install failed");
+
+  const pathWithoutBun = `${dirname(node)}:/usr/bin:/bin`;
+  const command = join(prefix, "bin", "velloo");
+  const result = run([command, "--version"], { ...process.env, PATH: pathWithoutBun });
+  const output = result.stdout.toString().trim();
+  if (!result.success || !output.startsWith(`${version} `)) {
+    throw new Error(result.stderr.toString() || `unexpected version output: ${output}`);
+  }
+  const bunNotice = join(prefix, "lib", "node_modules", "velloo", "BUN-LICENSE.md");
+  if (!existsSync(bunNotice)) throw new Error("packaged Bun license notice is missing");
+  const upgradeCheck = run([command, "upgrade", "--check"], {
+    ...process.env,
+    PATH: pathWithoutBun,
+    VELLOO_UPDATE_URL: `data:application/json,${encodeURIComponent(JSON.stringify({ version }))}`,
+    VELLOO_DISABLE_UPDATE_CHECK: "1",
+  });
+  if (!upgradeCheck.success) {
+    throw new Error(upgradeCheck.stderr.toString() || "packaged upgrade command failed to load");
+  }
+  console.log(
+    `✓ npm-global smoke passed for ${target.id} with install scripts disabled and no global Bun on PATH (${output})`,
+  );
+} finally {
+  await rm(prefix, { recursive: true, force: true });
+}

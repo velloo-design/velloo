@@ -3,8 +3,8 @@
  * Build the velloo bundle and publish it to an environment's download host, so
  * testers update with a single command. Run:
  *
- *   bun run cli:release        # prod → get.velloo.dev     (bakes api.velloo.ai)
- *   bun run cli:release:dev    # dev  → get.dev.velloo.dev (bakes api.dev.velloo.ai)
+ *   bun run cli:release        # prod → get.velloo.design     (bakes api.velloo.ai)
+ *   bun run cli:release:dev    # dev  → get.dev.velloo.design (bakes api.dev.velloo.ai)
  *
  * The download host is velloo-cloud itself serving the env's R2 bucket under
  * the `downloads/` prefix (src/routes/downloads.ts). Uploads go through the R2
@@ -15,7 +15,7 @@
  * BLOB_ENDPOINT / BLOB_BUCKET / BLOB_ACCESS_KEY / BLOB_SECRET_KEY (skip the
  * env-file read entirely), VELLOO_BUILD_CLOUD_URL (baked cloud default).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,12 +24,13 @@ const version = JSON.parse(readFileSync(join(repoRoot, "packages", "cli", "packa
   .version as string;
 
 const ENVS = {
-  prod: { cloudUrl: "https://api.velloo.ai", getHost: "get.velloo.dev" },
-  dev: { cloudUrl: "https://api.dev.velloo.ai", getHost: "get.dev.velloo.dev" },
+  prod: { cloudUrl: "https://api.velloo.ai", getHost: "get.velloo.design" },
+  dev: { cloudUrl: "https://api.dev.velloo.ai", getHost: "get.dev.velloo.design" },
 } as const;
 type EnvName = keyof typeof ENVS;
 
-const envArg = process.argv[2] ?? "prod";
+const envArg = process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? "prod";
+const noBuild = process.argv.includes("--no-build");
 if (!(envArg in ENVS)) {
   console.error(`✗ unknown environment "${envArg}" — expected ${Object.keys(ENVS).join(" | ")}`);
   process.exit(1);
@@ -101,8 +102,13 @@ function run(cmd: string[], env?: Record<string, string>): void {
   }
 }
 
-// 1. Build the self-contained bundle with the env's cloud URL baked in.
-run(["bun", join(repoRoot, "packages", "cli", "build.ts")], { VELLOO_BUILD_CLOUD_URL: cloudUrl });
+// 1. Build the npm package, direct archives, checksums, and the version-baked
+//    installer from one source version.
+if (!noBuild) {
+  run(["bun", join(repoRoot, "scripts", "build-release-artifacts.ts")], {
+    VELLOO_BUILD_CLOUD_URL: cloudUrl,
+  });
+}
 
 // 2. Upload the tarball (stable + versioned) and the installer to the env's
 //    bucket under downloads/ — the app serves them on GET_HOST, deriving
@@ -114,18 +120,31 @@ const s3 = new Bun.S3Client({
   secretAccessKey: blob.BLOB_SECRET_KEY,
 });
 
-const tgz = Bun.file(join(repoRoot, `velloo-${version}.tgz`));
-// install.sh defaults its tarball URL to the prod host; retarget for dev so
-// the dev installer never pulls the prod build.
-const installSh = readFileSync(join(repoRoot, "scripts", "install.sh"), "utf8").replaceAll(
-  "get.velloo.dev",
-  target.getHost,
+const artifactDir = join(repoRoot, "release-artifacts");
+const files = readdirSync(artifactDir).filter(
+  (name) =>
+    !name.startsWith(".") &&
+    !name.startsWith("direct-") &&
+    (name === "install.sh" ||
+      name === "SHA256SUMS" ||
+      name.endsWith(".tgz") ||
+      name.endsWith(".tar.gz") ||
+      name.endsWith(".sha256")),
 );
 
 console.log(`\x1b[36m▸\x1b[0m uploading to ${blob.BLOB_BUCKET}/downloads/ (${target.getHost})…`);
-await s3.write("downloads/velloo.tgz", tgz);
-await s3.write(`downloads/velloo-${version}.tgz`, tgz);
-await s3.write("downloads/install.sh", installSh);
+for (const name of files) {
+  if (name === "install.sh") {
+    const installer = readFileSync(join(artifactDir, name), "utf8").replaceAll(
+      "get.velloo.design",
+      target.getHost,
+    );
+    await s3.write(`downloads/${name}`, installer);
+  } else {
+    await s3.write(`downloads/${name}`, Bun.file(join(artifactDir, name)));
+  }
+}
+await s3.write("downloads/velloo.tgz", Bun.file(join(artifactDir, `velloo-${version}.tgz`)));
 
 console.log(
   [

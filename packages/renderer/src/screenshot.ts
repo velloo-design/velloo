@@ -75,7 +75,7 @@ async function settleForCapture(
 /**
  * The command that installs the headless browser screenshots need. Pinned to
  * the same version as the `playwright` / `playwright-core` devDeps in this
- * package's package.json: an unpinned `bunx playwright install` resolves the
+ * package's package.json: an unpinned Playwright install resolves the
  * latest CLI and downloads a Chromium revision that the pinned runtime then
  * refuses to launch. Bump both together.
  *
@@ -83,15 +83,16 @@ async function settleForCapture(
  * download) instead of shell + full Chrome for Testing (~300MB) — velloo only
  * ever launches headless, and playwright's headless launches use the shell.
  */
-const PLAYWRIGHT_PIN = "playwright@1.61.1";
+export const PLAYWRIGHT_PIN = "playwright@1.61.1";
 export const CHROMIUM_INSTALL_ARGV = [
-  "bunx",
+  process.execPath,
+  "x",
   PLAYWRIGHT_PIN,
   "install",
   "chromium",
   "--only-shell",
 ] as const;
-export const CHROMIUM_INSTALL_CMD = CHROMIUM_INSTALL_ARGV.join(" ");
+export const CHROMIUM_INSTALL_CMD = "velloo browser install";
 
 /**
  * The full Chrome-for-Testing install (~300MB) — the fallback for the *headed*
@@ -99,8 +100,14 @@ export const CHROMIUM_INSTALL_CMD = CHROMIUM_INSTALL_ARGV.join(" ");
  * shell has no UI to show a user. Only needed when the machine has no regular
  * Chrome for `channel: "chrome"` to borrow.
  */
-export const CHROMIUM_FULL_INSTALL_ARGV = ["bunx", PLAYWRIGHT_PIN, "install", "chromium"] as const;
-export const CHROMIUM_FULL_INSTALL_CMD = CHROMIUM_FULL_INSTALL_ARGV.join(" ");
+export const CHROMIUM_FULL_INSTALL_ARGV = [
+  process.execPath,
+  "x",
+  PLAYWRIGHT_PIN,
+  "install",
+  "chromium",
+] as const;
+export const CHROMIUM_FULL_INSTALL_CMD = "velloo browser install --full";
 
 /**
  * Linux only: the browser download can succeed while the host is missing the
@@ -109,12 +116,13 @@ export const CHROMIUM_FULL_INSTALL_CMD = CHROMIUM_FULL_INSTALL_ARGV.join(" ");
  * distro package manager — needs root/sudo.
  */
 export const CHROMIUM_DEPS_INSTALL_ARGV = [
-  "bunx",
+  process.execPath,
+  "x",
   PLAYWRIGHT_PIN,
   "install-deps",
   "chromium",
 ] as const;
-export const CHROMIUM_DEPS_INSTALL_CMD = CHROMIUM_DEPS_INSTALL_ARGV.join(" ");
+export const CHROMIUM_DEPS_INSTALL_CMD = "velloo browser install --with-deps";
 
 const INSTALL_HINT =
   "Velloo screenshots need a headless browser. Install it once with:\n" +

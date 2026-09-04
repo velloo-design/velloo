@@ -33,7 +33,7 @@ export interface FormatResult {
 const BIOME_PIN = "@biomejs/biome@2.5.4";
 
 async function runBiome(args: string[]): Promise<{ exitCode: number; stderr: string }> {
-  const proc = Bun.spawn(["bunx", BIOME_PIN, ...args], {
+  const proc = Bun.spawn([process.execPath, "x", BIOME_PIN, ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });

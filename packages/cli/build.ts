@@ -13,15 +13,17 @@
  *      inlining `@velloo/*` AND every pure-JS third-party dep. Only packages
  *      that must resolve from disk at install time stay external: the
  *      Tailwind family (native `@tailwindcss/oxide` binary + the CSS assets
- *      the JIT reads) and the optional `playwright-core`. Framework providers
+ *      the JIT reads) and `playwright-core`. Framework providers
  *      (antd/MUI/chakra/shadcn-snapshot) are dynamic imports in
  *      `packages/server/src/providers.ts`, so `splitting` turns each into a
  *      chunk that only loads for folders targeting that framework.
  *   3. Generate `dist/package.json` pinned to the exact installed versions
  *      of the few remaining external deps.
  *
- * The Bun runtime is still required at run time (the server uses `Bun.serve`),
- * so the binary ships with a `#!/usr/bin/env bun` shebang.
+ * The published package is launched by Node, which selects the matching
+ * optional official `@oven/bun-*` package and invokes its private Bun binary.
+ * These packages contain the executable directly and run no install scripts.
+ * End users therefore need Node/npm for installation, but never a global Bun.
  */
 import {
   chmodSync,
@@ -35,6 +37,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { BUN_VERSION, RUNTIME_TARGETS } from "../../scripts/distribution/targets.ts";
 
 const cliRoot = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(cliRoot, "..", "..");
@@ -42,6 +45,7 @@ const distDir = join(cliRoot, "dist");
 const canvasPkg = join(repoRoot, "packages", "canvas");
 const canvasDist = join(canvasPkg, "dist");
 const entry = join(cliRoot, "src", "cli.ts");
+const launcher = join(cliRoot, "launcher.cjs");
 
 const cliPkg = JSON.parse(readFileSync(join(cliRoot, "package.json"), "utf8"));
 const VERSION: string = cliPkg.version;
@@ -78,10 +82,6 @@ function declaredVersions(): Map<string, string> {
 }
 const DECLARED = declaredVersions();
 
-// playwright-core is the only optional dep — screenshots are opt-in, and we
-// never want its absence to fail `npm install velloo`.
-const OPTIONAL = new Set(["playwright-core"]);
-
 // The only packages that stay npm-installed. Everything else — react, zod,
 // hono, the MCP SDK, antd, MUI, chakra, echarts, radix, … — is inlined into
 // the bundle, which is what keeps `npm install velloo` at a handful of deps
@@ -90,9 +90,14 @@ const OPTIONAL = new Set(["playwright-core"]);
 //   - @tailwindcss/oxide is a per-platform native binary npm must resolve.
 //   - @tailwindcss/node loads that binary and resolves `tailwindcss`'s
 //     on-disk CSS assets, which the JIT also reads at runtime.
-//   - playwright-core is optional AND locates browsers/assets from its own
-//     package directory.
-const EXTERNAL = new Set(["tailwindcss", "@tailwindcss/node", "@tailwindcss/oxide", ...OPTIONAL]);
+//   - playwright-core locates browsers/assets from its own package directory;
+//     the large Chromium download remains opt-in via `velloo browser install`.
+const EXTERNAL = new Set([
+  "tailwindcss",
+  "@tailwindcss/node",
+  "@tailwindcss/oxide",
+  "playwright-core",
+]);
 
 function step(msg: string): void {
   console.log(`\x1b[36m▸\x1b[0m ${msg}`);
@@ -325,11 +330,11 @@ for (const { pkg, paths } of PKG_ASSETS) {
 }
 
 // 4d. Ship the docs npm renders/expects: README (the npmjs page), LICENSE +
-//     NOTICE (Apache-2.0), and the bundled third-party license texts.
-//     README/LICENSE/NOTICE are auto-included by pack; THIRD-PARTY-NOTICES.md
-//     rides the files whitelist.
+//     NOTICE (Apache-2.0), the bundled third-party license texts, and the exact
+//     Bun 1.4 linked-library notice. README/LICENSE/NOTICE are auto-included by
+//     pack; the two third-party files ride the files whitelist.
 step("copying docs → dist/");
-for (const doc of ["README.md", "LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md"]) {
+for (const doc of ["README.md", "LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md", "BUN-LICENSE.md"]) {
   cpSync(join(repoRoot, doc), join(distDir, doc));
 }
 
@@ -343,10 +348,11 @@ step("writing dist/package.json");
 externals.add("tailwindcss");
 
 const dependencies: Record<string, string> = {};
-const optionalDependencies: Record<string, string> = {};
+const optionalDependencies: Record<string, string> = Object.fromEntries(
+  RUNTIME_TARGETS.map((target) => [target.packageName, BUN_VERSION]),
+);
 for (const pkg of [...externals].sort()) {
-  const target = OPTIONAL.has(pkg) ? optionalDependencies : dependencies;
-  target[pkg] = installedVersion(pkg);
+  dependencies[pkg] = installedVersion(pkg);
 }
 
 const manifest = {
@@ -372,10 +378,11 @@ const manifest = {
     "local-first",
     "bun",
   ],
-  bin: { velloo: "./cli.js" },
-  engines: { bun: ">=1.3.0" },
+  bin: { velloo: "./launcher.cjs" },
+  engines: { node: ">=18" },
   files: [
     "cli.js",
+    "launcher.cjs",
     "chunk-*.js",
     "canvas",
     "skills",
@@ -383,11 +390,14 @@ const manifest = {
     "pkgs",
     "NOTICE",
     "THIRD-PARTY-NOTICES.md",
+    "BUN-LICENSE.md",
   ],
   dependencies,
   ...(Object.keys(optionalDependencies).length ? { optionalDependencies } : {}),
 };
 writeFileSync(join(distDir, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+cpSync(launcher, join(distDir, "launcher.cjs"));
+chmodSync(join(distDir, "launcher.cjs"), 0o755);
 
 // 6. Pack a tarball at the repo root for handoff.
 step("packing tarball…");
@@ -411,7 +421,7 @@ console.log(
         : ""),
     `  tarball:  ${tgz}`,
     "",
-    `  install:  bun install -g ./${tgz}   (needs Bun ≥ 1.3.0)`,
+    `  install:  npm install -g ./${tgz}   (private Bun ${process.versions.bun})`,
     "",
   ].join("\n"),
 );

@@ -10,7 +10,7 @@ import { buildCanvasBundle } from "../live/canvas-bundle.ts";
  * End-to-end proof of the #18 canvas mount: build the installed-MUI bundle, load
  * a screen doc in headless chromium, and confirm the client mount renders REAL
  * MUI over the SSR (the SSR fallback is hidden once the mount commits). Opt-in
- * (needs `bunx playwright install chromium`): `VELLOO_E2E=1 bun test`.
+ * (needs `velloo browser install`): `VELLOO_E2E=1 bun test`.
  *
  * provider-mui's own dir is the "host app" — it has @mui/material + emotion +
  * react installed, exactly like a user's MUI project.

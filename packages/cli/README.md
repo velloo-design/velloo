@@ -13,6 +13,8 @@ The `velloo` binary. Citty-based.
 - **`velloo render <folder>`** — render a screen to HTML or PNG on stdout/disk.
 - **`velloo theme export <folder>`** — write DTCG `tokens.json` plus the framework-specific theme artifacts into a target app folder, with a diff against existing files.
 - **`velloo upgrade <folder>`** — upgrade a design folder to the current schema version.
+- **`velloo upgrade`** — upgrade the installed CLI through npm or the standalone installer.
+- **`velloo browser install`** — install the optional headless browser used for screenshots.
 
 ## Layout
 

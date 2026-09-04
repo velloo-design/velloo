@@ -70,7 +70,7 @@ export async function runStdioFormatGate(
       {
         description:
           `Migrate the design folder at ${opts.root} from format v${opts.found} to ` +
-          `v${opts.current} in place — the same migration as \`velloo upgrade\`. ` +
+          `v${opts.current} in place — the same migration as \`velloo upgrade <folder>\`. ` +
           `After it succeeds, reconnect this MCP server to load the design tools.`,
       },
       async () => {

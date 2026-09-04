@@ -110,7 +110,7 @@ export function assertFolderFormatCurrent(root: string): void {
       ? `velloo: ${root} uses design-folder schema version ${found}, but this velloo ` +
         `only knows version ${CURRENT_SCHEMA_VERSION}. Upgrade velloo to open it.`
       : `velloo: ${root} uses design-folder schema version ${found} ` +
-        `(current: ${CURRENT_SCHEMA_VERSION}). Run \`velloo upgrade\` to migrate it.`;
+        `(current: ${CURRENT_SCHEMA_VERSION}). Run \`velloo upgrade ${root}\` to migrate it.`;
   throw new DesignFolderFormatError(message, root, found, CURRENT_SCHEMA_VERSION);
 }
 
