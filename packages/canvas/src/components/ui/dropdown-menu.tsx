@@ -41,8 +41,8 @@ export function DropdownMenuContent({
 }
 
 interface DropdownMenuItemProps extends React.ComponentProps<typeof DropdownMenuPrimitive.Item> {
-  inset?: boolean;
-  variant?: "default" | "destructive";
+  inset?: boolean | undefined;
+  variant?: "default" | "destructive" | undefined;
 }
 
 export function DropdownMenuItem({
@@ -84,7 +84,7 @@ export function DropdownMenuCheckboxItem({
         MENU_ICON,
         className,
       )}
-      checked={checked}
+      {...(checked === undefined ? {} : { checked })}
       {...props}
     >
       <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
@@ -123,7 +123,7 @@ export function DropdownMenuRadioItem({
 }
 
 interface DropdownMenuLabelProps extends React.ComponentProps<typeof DropdownMenuPrimitive.Label> {
-  inset?: boolean;
+  inset?: boolean | undefined;
 }
 
 export function DropdownMenuLabel({ className, inset, ...props }: DropdownMenuLabelProps) {
@@ -165,7 +165,7 @@ export function DropdownMenuShortcut({ className, ...props }: React.ComponentPro
 
 interface DropdownMenuSubTriggerProps
   extends React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> {
-  inset?: boolean;
+  inset?: boolean | undefined;
 }
 
 export function DropdownMenuSubTrigger({

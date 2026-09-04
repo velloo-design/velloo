@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import {
   type ColorPair,
   DEFAULT_TYPESET_NAME,
+  resolveColors,
   resolveTypeset,
   type Theme,
   typesetScale,
@@ -141,7 +142,7 @@ function colorGroup(
 }
 
 function resolvedDarkColors(theme: Theme): Theme["colors"] {
-  return { ...theme.colors, ...theme.colorsDark } as Theme["colors"];
+  return resolveColors(theme, true);
 }
 
 function modeGroup(theme: Theme, dark: boolean, warnings: string[]): DtcgGroup {
@@ -205,7 +206,7 @@ export function emitDtcgTokens(theme: Theme): { contents: string; warnings: stri
 
 export async function emitDtcgFile(
   theme: Theme,
-  options: { outputDir: string; apply?: boolean },
+  options: { outputDir: string; apply?: boolean | undefined },
 ): Promise<{ file: EmitThemeFile; warnings: string[] }> {
   const { contents, warnings } = emitDtcgTokens(theme);
   const path = join(options.outputDir, "tokens.json");

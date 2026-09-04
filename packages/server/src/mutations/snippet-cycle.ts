@@ -29,7 +29,7 @@ export function detectSnippetCycle(
       return null;
     }
     // Component or param ref — descend into children if present.
-    if ((node as { children?: Node[] }).children) {
+    if ((node as { children?: Node[] | undefined }).children) {
       for (const child of (node as { children: Node[] }).children) {
         const found = walk(child);
         if (found) return found;

@@ -23,8 +23,8 @@ export interface ServeOptions {
   /** 0 picks an ephemeral port. */
   port: number;
   /** Pin one tape dir (absolute) instead of following the newest. */
-  session?: string;
-  pollMs?: number;
+  session?: string | undefined;
+  pollMs?: number | undefined;
 }
 
 export interface LiveServer {

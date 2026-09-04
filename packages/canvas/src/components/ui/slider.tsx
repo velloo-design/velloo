@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface SliderProps extends React.ComponentProps<typeof SliderPrimitive.Root> {
   /** `muted` for a live control whose value isn't its own — an inherited one. */
-  tone?: "primary" | "muted";
+  tone?: "primary" | "muted" | undefined;
 }
 
 export function Slider({

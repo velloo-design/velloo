@@ -2,6 +2,7 @@ import { identifierRef } from "@velloo/provider";
 import {
   type ColorPair,
   DEFAULT_TYPESET_NAME,
+  resolveColors,
   typesetScale,
   type Theme as VellooTheme,
 } from "@velloo/schema";
@@ -49,7 +50,7 @@ function radiusPx(theme: VellooTheme): number {
  * derive from the light color values.
  */
 function antdTokens(theme: VellooTheme, dark: boolean): NonNullable<ThemeConfig["token"]> {
-  const c = dark && theme.colorsDark ? { ...theme.colors, ...theme.colorsDark } : theme.colors;
+  const c = resolveColors(theme, dark);
   return {
     colorPrimary: base(c.primary, "#4f46e5"),
     colorBgBase: antdColor(c.background),

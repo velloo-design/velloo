@@ -3,8 +3,8 @@ import { dirname, join, relative } from "node:path";
 
 export interface CursorRulesResult {
   installed: boolean;
-  path?: string;
-  reason?: string;
+  path?: string | undefined;
+  reason?: string | undefined;
 }
 
 /**

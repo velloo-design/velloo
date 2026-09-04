@@ -5,12 +5,12 @@ import { Button } from "./ui/button.tsx";
 interface RailAction {
   icon: React.ReactNode;
   label: string;
-  active?: boolean;
+  active?: boolean | undefined;
   /**
    * Badge the button. The title spells out what the badge is reporting — a
    * bare dot on an icon is a puzzle, not a notification.
    */
-  dot?: { title: string };
+  dot?: { title: string } | undefined;
   onClick: () => void;
 }
 
@@ -18,9 +18,9 @@ interface RailProps {
   side: "left" | "right";
   /** Accessible name for the expand button; the hotkey rides in its tooltip. */
   expandLabel: string;
-  hotkey?: string;
+  hotkey?: string | undefined;
   onExpand: () => void;
-  actions?: RailAction[];
+  actions?: RailAction[] | undefined;
 }
 
 /** Hotkeys belong in the tooltip, not in the name a screen reader announces. */
@@ -81,7 +81,7 @@ export function CollapsedPaneRail({
 interface CollapseButtonProps {
   side: "left" | "right";
   label: string;
-  hotkey?: string;
+  hotkey?: string | undefined;
   onCollapse: () => void;
 }
 

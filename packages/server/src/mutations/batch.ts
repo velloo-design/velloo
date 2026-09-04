@@ -341,7 +341,7 @@ function createdResource(
 export async function runBatch(
   ctx: MutationContext,
   calls: BatchCall[],
-  opts: { atomic?: boolean } = {},
+  opts: { atomic?: boolean | undefined } = {},
 ): Promise<BatchResult> {
   const atomic = opts.atomic ?? true;
   const snapshots = new Map<ResourceKey, Snapshot>();

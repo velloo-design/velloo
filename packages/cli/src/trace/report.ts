@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import { z } from "zod";
 
 /**
  * Offline reader + HTML renderer for a recorded MCP session tape (written by
@@ -9,41 +10,59 @@ import { join, resolve, sep } from "node:path";
  * no server and no canvas. The same row renderer feeds the live `--watch` mode.
  */
 
-interface AssetRef {
-  file: string;
-  mimeType: string;
-  bytes: number;
-}
+const AssetRefSchema = z.object({
+  file: z.string(),
+  mimeType: z.string(),
+  bytes: z.number(),
+});
+type AssetRef = z.infer<typeof AssetRefSchema>;
 
-interface TapeRecord {
-  seq?: number;
-  ts?: string;
-  tool?: string;
-  durationMs?: number;
-  ok?: boolean;
-  params?: unknown;
-  text?: string;
-  images?: AssetRef[];
-  isError?: boolean;
-  error?: { name?: string; message?: string; stack?: string };
-  sessionId?: string;
-}
+/**
+ * A tape is written by a *different, still-running* process, one line at a
+ * time — so every read here is untrusted input: a half-written final line, a
+ * file from an older recorder, a `null` where an object was expected. Fields
+ * stay optional (the report renders whatever a call managed to record), but
+ * the shape is parsed rather than asserted, because `JSON.parse("null") as
+ * TapeRecord` reads fine and then throws on first property access.
+ */
+const TapeRecordSchema = z.object({
+  seq: z.number().optional(),
+  ts: z.string().optional(),
+  tool: z.string().optional(),
+  durationMs: z.number().optional(),
+  ok: z.boolean().optional(),
+  params: z.unknown().optional(),
+  text: z.string().optional(),
+  images: z.array(AssetRefSchema).optional(),
+  isError: z.boolean().optional(),
+  error: z
+    .object({
+      name: z.string().optional(),
+      message: z.string().optional(),
+      stack: z.string().optional(),
+    })
+    .optional(),
+  sessionId: z.string().optional(),
+});
+type TapeRecord = z.infer<typeof TapeRecordSchema>;
 
-interface TapeMeta {
-  tapeId?: string;
-  startedAt?: string;
-  folder?: string;
-  pid?: number;
-}
+const TapeMetaSchema = z.object({
+  tapeId: z.string().optional(),
+  startedAt: z.string().optional(),
+  folder: z.string().optional(),
+  pid: z.number().optional(),
+});
+type TapeMeta = z.infer<typeof TapeMetaSchema>;
 
 /** A call still in flight (from `pending.json`) — never completed/recorded. */
-export interface PendingCall {
-  seq?: number;
-  ts?: string;
-  tool?: string;
-  params?: unknown;
-  sessionId?: string;
-}
+const PendingCallSchema = z.object({
+  seq: z.number().optional(),
+  ts: z.string().optional(),
+  tool: z.string().optional(),
+  params: z.unknown().optional(),
+  sessionId: z.string().optional(),
+});
+export type PendingCall = z.infer<typeof PendingCallSchema>;
 
 export interface Tape {
   dir: string;
@@ -62,7 +81,10 @@ export interface TapeStats {
 export function loadTape(dir: string): Tape {
   let meta: TapeMeta = {};
   try {
-    meta = JSON.parse(readFileSync(join(dir, "meta.json"), "utf8")) as TapeMeta;
+    const parsed = TapeMetaSchema.safeParse(
+      JSON.parse(readFileSync(join(dir, "meta.json"), "utf8")),
+    );
+    if (parsed.success) meta = parsed.data;
   } catch {
     // meta is optional; the jsonl is the source of truth.
   }
@@ -77,15 +99,21 @@ export function loadTape(dir: string): Tape {
     const t = line.trim();
     if (!t) continue;
     try {
-      records.push(JSON.parse(t) as TapeRecord);
+      const parsed = TapeRecordSchema.safeParse(JSON.parse(t));
+      if (parsed.success) records.push(parsed.data);
     } catch {
       // skip a half-written final line
     }
   }
   let pending: PendingCall[] = [];
   try {
-    const parsed = JSON.parse(readFileSync(join(dir, "pending.json"), "utf8"));
-    if (Array.isArray(parsed)) pending = parsed as PendingCall[];
+    const raw: unknown = JSON.parse(readFileSync(join(dir, "pending.json"), "utf8"));
+    if (Array.isArray(raw)) {
+      pending = raw.flatMap((entry) => {
+        const parsed = PendingCallSchema.safeParse(entry);
+        return parsed.success ? [parsed.data] : [];
+      });
+    }
   } catch {
     // no in-flight calls (or no pending.json) — fine.
   }
@@ -383,7 +411,7 @@ function pageScript(live: boolean, initialCount: number): string {
   es.onerror = function() { setLive(false); };`;
 }
 
-export function renderReport(tape: Tape, opts: { live?: boolean } = {}): string {
+export function renderReport(tape: Tape, opts: { live?: boolean | undefined } = {}): string {
   const { dir, meta, records, pending } = tape;
   const live = opts.live === true;
   const stats = tapeStats(tape);

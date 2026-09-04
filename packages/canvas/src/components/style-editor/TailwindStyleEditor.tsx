@@ -38,7 +38,7 @@ interface Props {
    * Open the face browser. Absent hides the "Browse faces…" entry, leaving the
    * Font control to the faces the theme already declares.
    */
-  onBrowseFaces?: () => void;
+  onBrowseFaces?: (() => void) | undefined;
   /**
    * A face chosen in the browser, to apply on arrival.
    *
@@ -46,8 +46,8 @@ interface Props {
    * because the parsed model here is the authority between commits — an outside
    * write would be overwritten by the next control the user touched.
    */
-  pendingFace?: string | null;
-  onFaceApplied?: () => void;
+  pendingFace?: string | null | undefined;
+  onFaceApplied?: (() => void) | undefined;
 }
 
 /** Sentinel option that opens the browser instead of selecting a face. */

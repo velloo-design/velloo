@@ -46,7 +46,7 @@ export interface CompletionsInstallResult {
   shell: Shell;
   scriptPath: string;
   /** rc file that sources the script; absent for fish (autoloaded). */
-  rcPath?: string;
+  rcPath?: string | undefined;
   /** false when the rc already carried the source line. */
   rcUpdated: boolean;
 }

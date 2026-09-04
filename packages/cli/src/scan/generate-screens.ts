@@ -265,7 +265,7 @@ interface BuildScreensOpts {
    * Heading/Text + sx) instead of the shadcn/no-lib one. Absent ⇒ the shared
    * Box/Heading/Text placeholder.
    */
-  tree?: "mui" | "antd" | "chakra";
+  tree?: "mui" | "antd" | "chakra" | undefined;
 }
 
 export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
@@ -395,11 +395,14 @@ export function buildBoardsFromScan(opts: BuildBoardsOpts): Board[] {
     cols: opts.columns ?? 3,
     gutter: opts.gutter ?? 80,
   };
-  const byApp = new Map<string | undefined, ScannedRoute[]>();
+  const byApp = new Map<string, ScannedRoute[]>();
   for (const route of opts.routes) {
-    const list = byApp.get(route.appRel);
+    // Routes scanned from a single-app repo carry no appRel; they all share
+    // one bucket rather than each becoming its own undefined-keyed group.
+    const appRel = route.appRel ?? "";
+    const list = byApp.get(appRel);
     if (list) list.push(route);
-    else byApp.set(route.appRel, [route]);
+    else byApp.set(appRel, [route]);
   }
   return [...byApp.entries()].map(([appRel, routes]) =>
     appRel === undefined

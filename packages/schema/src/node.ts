@@ -14,6 +14,13 @@ import { z } from "zod";
  *   appear as a child node OR anywhere inside a `props` value via the
  *   normal JSON walk during substitution.
  *
+ * Optional fields are spelled `?: T | undefined` rather than `?: T`. Under
+ * `exactOptionalPropertyTypes` those differ, but not for a shape that round-
+ * trips through JSON: `JSON.stringify` drops an explicitly-undefined key, so
+ * "absent" and "present but undefined" are the same node on disk. Writing it
+ * this way lets the zod schemas below (whose `.optional()` yields
+ * `T | undefined`) describe these types exactly.
+ *
  * `ComponentNode` and `SnippetInstance` may carry an optional `$id` —
  * a stable anchor that survives sibling insertions and deletions. Ids
  * are unique within a single screen tree (validated at persist time).
@@ -27,9 +34,9 @@ import { z } from "zod";
  */
 export type ComponentNode = {
   $ref: string;
-  $id?: string;
-  props?: Record<string, unknown>;
-  children?: Node[];
+  $id?: string | undefined;
+  props?: Record<string, unknown> | undefined;
+  children?: Node[] | undefined;
   /**
    * Host-component facade (scan/import of a host-app component). When
    * set, the canvas renders this node's real
@@ -39,20 +46,20 @@ export type ComponentNode = {
    * subtree — preserving the app's real component identity through
    * capture → design → emit. Absent ⇒ the node emits as itself.
    */
-  $emitAs?: { name: string; importPath: string };
+  $emitAs?: { name: string; importPath: string } | undefined;
 };
 
 export type SnippetInstance = {
   $snippet: string;
-  $id?: string;
+  $id?: string | undefined;
   /**
    * Extra Tailwind classes merged into the snippet body's root element at
    * render time. Lets one-off instances tweak styling (e.g. wider, accent
    * border) without forking the snippet definition. Pass it via
    * `instantiate_snippet({extraClassName})` or `update_snippet_args`.
    */
-  $extraClassName?: string;
-  args?: Record<string, unknown>;
+  $extraClassName?: string | undefined;
+  args?: Record<string, unknown> | undefined;
   /**
    * Per-instance interior prop patches, keyed by dotted path into the
    * *resolved* snippet body ("" = root, "0.2" = third child of root's
@@ -62,7 +69,7 @@ export type SnippetInstance = {
    * overrides are inlined (not emitted as the shared component) by
    * emit_code, since a shared React component can't express them.
    */
-  $overrides?: Record<string, { props: Record<string, unknown> }>;
+  $overrides?: Record<string, { props: Record<string, unknown> }> | undefined;
 };
 
 export type ParamRef = {

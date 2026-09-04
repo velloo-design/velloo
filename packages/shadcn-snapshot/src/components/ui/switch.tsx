@@ -9,10 +9,11 @@ import { cn } from "../../lib/utils.ts";
 export function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
   // Canvas-safe: `checked` without a handler → `defaultChecked` to
   // suppress React's controlled-component warning in design mode.
-  const isStaticControlled = props.checked !== undefined && props.onCheckedChange === undefined;
-  const finalProps = isStaticControlled
-    ? { ...props, checked: undefined, defaultChecked: props.checked }
-    : props;
+  const { checked, ...rest } = props;
+  const isStaticControlled = checked !== undefined && props.onCheckedChange === undefined;
+  // Drop `checked` by omitting it, not by setting it to undefined: Radix reads
+  // "present but undefined" as a controlled component with no value.
+  const finalProps = isStaticControlled ? { ...rest, defaultChecked: checked } : props;
   return (
     <SwitchPrimitive.Root
       data-slot="switch"

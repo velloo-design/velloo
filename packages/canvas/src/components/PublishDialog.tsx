@@ -554,7 +554,7 @@ function Warnings({ messages }: { messages: string[] }) {
 function HistoryNote({
   history,
 }: {
-  history?: { retained: boolean; versions: number; pruned: number };
+  history?: { retained: boolean; versions: number; pruned: number } | undefined;
 }) {
   if (!history) return null;
   if (!history.retained && history.pruned > 0) {

@@ -12,24 +12,24 @@ export interface PlaceholderProps extends React.HTMLAttributes<HTMLDivElement> {
    * `"avatar"` is a circle with a fallback letter — both honor a custom
    * className for sizing.
    */
-  kind?: "image" | "avatar";
+  kind?: "image" | "avatar" | undefined;
   /**
    * Fallback letter or short label inside the placeholder. For avatars
    * this is typically a single initial; for images it's a hint about
    * the content ("Hero", "Logo", "Product").
    */
-  label?: string;
+  label?: string | undefined;
   /**
    * Aspect ratio — `"16/9"`, `"4/3"`, `"1/1"`, `"3/4"`. Only used when
    * `kind: "image"`. Defaults to `"16/9"`.
    */
-  aspect?: "1/1" | "4/3" | "3/4" | "16/9" | "21/9";
+  aspect?: "1/1" | "4/3" | "3/4" | "16/9" | "21/9" | undefined;
   /**
    * Size ladder for `kind: "avatar"`. Mirrors shadcn Avatar conventions:
    * `sm` (size-8) / `md` (size-10, default) / `lg` (size-14) / `xl` (size-20).
    * Ignored when `kind: "image"` — sizing there is driven by aspect + width.
    */
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | undefined;
 }
 
 const ASPECT_CLASS: Record<NonNullable<PlaceholderProps["aspect"]>, string> = {

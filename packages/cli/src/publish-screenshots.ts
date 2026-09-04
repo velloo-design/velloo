@@ -51,15 +51,19 @@ export interface CaptureBundleScreenshotsOptions {
   /** Published boards, in publish order — the first becomes the cover. */
   boards: Board[];
   /** Optional changed-only slice. All screens still remain available to board composites. */
-  screenIds?: ReadonlySet<string>;
+  screenIds?: ReadonlySet<string> | undefined;
   /** Optional changed-only board slice. */
-  boardIds?: ReadonlySet<string>;
+  boardIds?: ReadonlySet<string> | undefined;
   viewport: Viewport;
   /**
    * Render a screen to a full HTML document (same render the cloud shows).
    * `themeName` carries a board's pinned theme for its composite.
    */
-  renderHtml: (screen: Screen, themeName?: string, scheme?: FrameScheme) => Promise<string>;
+  renderHtml: (
+    screen: Screen,
+    themeName?: string | undefined,
+    scheme?: FrameScheme,
+  ) => Promise<string>;
   capture: CaptureFn;
   warn: (message: string) => void;
   /**
@@ -67,9 +71,9 @@ export interface CaptureBundleScreenshotsOptions {
    * plus the boards with frames; skipped and failed shots still advance `done`,
    * since it tracks work completed rather than files produced.
    */
-  progress?: (done: number, total: number) => void;
+  progress?: ((done: number, total: number) => void) | undefined;
   /** Test/benchmark seam; production follows the renderer's process-wide cap. */
-  concurrency?: number;
+  concurrency?: number | undefined;
 }
 
 function isBrowserMissing(err: unknown): boolean {

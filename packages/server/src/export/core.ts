@@ -30,10 +30,15 @@ export interface ExportPipeline {
   providers: Record<string, ComponentProvider>;
   defaultProvider: ComponentProvider;
   snapshotCss: () => Promise<string>;
-  /** Origin Playwright pages resolve /assets/… against during PNG/PDF capture. */
-  assetOrigin?: () => string | undefined;
-  /** Live-island bundle URL for captures (daemon only). */
-  liveBundleUrl?: () => string | undefined;
+  /**
+   * Origin Playwright pages resolve /assets/… against during PNG/PDF capture,
+   * or undefined when the export has no origin yet (a standalone bundle, or a
+   * caller that starts its asset server lazily) — the callback is consulted
+   * per render, so it can begin unset.
+   */
+  assetOrigin?: (() => string | undefined) | undefined;
+  /** Live-island bundle URL for captures (daemon only); undefined when the folder has no live islands. */
+  liveBundleUrl?: (() => string | undefined) | undefined;
   /** Installed-component client mount for captures (daemon only, #18). */
   canvasBundleFor?: (
     screen: Screen,
@@ -43,11 +48,11 @@ export interface ExportPipeline {
 }
 
 export interface ExportOptions {
-  mode?: ExportMode;
+  mode?: ExportMode | undefined;
   /** Device scale factor for PNG output (retina); clamped by the surfaces. */
-  scale?: number;
+  scale?: number | undefined;
   /** Named theme override; default = the board's pin (frames/boards) or the folder default. */
-  theme?: string;
+  theme?: string | undefined;
 }
 
 /** Find a frame by id across every board. Frame ids are unique per folder. */
@@ -73,7 +78,7 @@ interface RenderHtmlOptions {
   themeName?: string | undefined;
   viewport: Viewport;
   /** Standalone documents carry no runtime script, live bundle, or client mount. */
-  standalone?: boolean;
+  standalone?: boolean | undefined;
 }
 
 async function renderExportHtml(

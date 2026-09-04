@@ -104,8 +104,9 @@ function parseObjectRoutes(src: string): RouteNode[] {
     if (top && c && /[A-Za-z]/.test(c) && atPropertyPosition(src, i)) {
       const rest = src.slice(i, i + 200);
       const path = rest.match(/^path\s*:\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/);
-      if (path) {
-        top.path = path[1] ?? path[2] ?? path[3];
+      const pathValue = path ? (path[1] ?? path[2] ?? path[3]) : undefined;
+      if (path && pathValue !== undefined) {
+        top.path = pathValue;
         i += path[0].length;
         continue;
       }
@@ -116,7 +117,7 @@ function parseObjectRoutes(src: string): RouteNode[] {
         continue;
       }
       const element = rest.match(/^(?:element|Component)\s*:\s*\(?\s*<?\s*([A-Z][\w.]*)/);
-      if (element) {
+      if (element?.[1] !== undefined) {
         top.element = element[1];
         i += element[0].length;
         continue;
@@ -174,10 +175,11 @@ function parseJsxRoutes(src: string): RouteNode[] {
     const path = attrs.match(
       /\bpath\s*=\s*(?:"([^"]*)"|'([^']*)'|\{\s*(?:"([^"]*)"|'([^']*)')\s*\})/,
     );
-    if (path) node.path = path[1] ?? path[2] ?? path[3] ?? path[4];
+    const pathAttr = path ? (path[1] ?? path[2] ?? path[3] ?? path[4]) : undefined;
+    if (pathAttr !== undefined) node.path = pathAttr;
     if (/\bindex\b(?!\s*=\s*\{?\s*false)/.test(attrs)) node.index = true;
     const element = attrs.match(/\b(?:element|Component)\s*=\s*\{?\s*<?\s*([A-Z][\w.]*)/);
-    if (element) node.element = element[1];
+    if (element?.[1] !== undefined) node.element = element[1];
     tags.push({ at: start, kind: "open", node, selfClosing });
   }
   for (const m of src.matchAll(close)) {

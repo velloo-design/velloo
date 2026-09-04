@@ -8,10 +8,10 @@ export interface PublishPrivacyChoice {
 }
 
 export interface PublishPrivacyArgs {
-  visibility?: string;
-  private?: boolean;
-  public?: boolean;
-  password?: boolean;
+  visibility?: string | undefined;
+  private?: boolean | undefined;
+  public?: boolean | undefined;
+  password?: boolean | undefined;
 }
 
 type ChoosePrivacyMode = () => Promise<PublishPrivacyMode | symbol>;

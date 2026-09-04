@@ -39,7 +39,13 @@ const LOADING_CSS = `
  * The animated mark on its own. Reads well from ~16px (inline, in a panel
  * header) up to hero sizes; 40-48px suits a full-surface boot state.
  */
-export function LoadingMark({ size = 22, className }: { size?: number; className?: string }) {
+export function LoadingMark({
+  size = 22,
+  className,
+}: {
+  size?: number | undefined;
+  className?: string | undefined;
+}) {
   // Each instance clips its own weave: duplicate SVG ids across simultaneously
   // mounted loaders (a board full of pending frames) resolve to whichever one
   // happens to be first in the document.
@@ -117,9 +123,9 @@ export function Loading({
   size,
   className,
 }: {
-  label?: string;
-  size?: number;
-  className?: string;
+  label?: string | undefined;
+  size?: number | undefined;
+  className?: string | undefined;
 }) {
   return (
     <div

@@ -69,7 +69,7 @@ async function readConfig(folder: string): Promise<Record<string, unknown>> {
 /** What the menu needs to know about the folder it's about to act on. */
 export async function readFolderFacts(folder: string, appRoot: string): Promise<FolderFacts> {
   const config = await readConfig(folder);
-  const libraries = (config.libraries ?? {}) as Record<string, { id?: string }>;
+  const libraries = (config.libraries ?? {}) as Record<string, { id?: string | undefined }>;
   const defaultLibrary = typeof config.defaultLibrary === "string" ? config.defaultLibrary : "";
   const library = libraries[defaultLibrary]?.id ?? Object.values(libraries)[0]?.id ?? "unknown";
   let project: string | undefined;
@@ -114,9 +114,9 @@ export async function inheritedFromFolder(
 ): Promise<{ library: string | undefined; componentsDir: string | undefined }> {
   try {
     const config = await readConfig(folder);
-    const libraries = (config.libraries ?? {}) as Record<string, { id?: string }>;
+    const libraries = (config.libraries ?? {}) as Record<string, { id?: string | undefined }>;
     const defaultLibrary = typeof config.defaultLibrary === "string" ? config.defaultLibrary : "";
-    const codegen = (config.codegen ?? {}) as { componentsDir?: string };
+    const codegen = (config.codegen ?? {}) as { componentsDir?: string | undefined };
     return {
       library: libraries[defaultLibrary]?.id ?? Object.values(libraries)[0]?.id,
       componentsDir: codegen.componentsDir,
@@ -233,7 +233,7 @@ export async function runScan(folder: string, appRoot: string, scanDir?: string)
   }
 
   const config = await readConfig(folder);
-  const libraries = (config.libraries ?? {}) as Record<string, { id?: string }>;
+  const libraries = (config.libraries ?? {}) as Record<string, { id?: string | undefined }>;
   const libraryId = (Object.values(libraries)[0]?.id ?? "shadcn-upstream") as LibraryId;
   const scanOpts = WIZARD_PROVIDERS[libraryId]?.scanScreenOpts ?? { hasBadge: true };
   const screens: Screen[] = buildScreensFromScan({ routes: fresh, ...scanOpts });
@@ -335,7 +335,7 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
   if (facts.project) ok(`registered in velloo.json as "${facts.project}"`);
   else bad("not registered in velloo.json — commands must name the path");
 
-  const hostApp = config.hostApp as { root?: string } | undefined;
+  const hostApp = config.hostApp as { root?: string | undefined } | undefined;
   if (hostApp?.root) {
     const abs = resolve(folder, hostApp.root);
     if (existsSync(abs)) ok(`host app at ${displayPath(abs)}`);

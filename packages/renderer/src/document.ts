@@ -15,37 +15,37 @@ export interface DocumentOptions {
    * critical emotion CSS extracted while SSR-ing MUI. Layered above theme,
    * below the user's custom.css. Empty for Tailwind-class frameworks.
    */
-  adapterCss?: string;
+  adapterCss?: string | undefined;
   /**
    * Folder-scoped escape-hatch CSS (theme/custom.css) — keyframes,
    * textures, clip-paths. Injected last so it can override anything.
    */
-  customCss?: string;
+  customCss?: string | undefined;
   /** Google Fonts css2 family specs to load via <link>. */
-  googleFonts?: string[];
+  googleFonts?: string[] | undefined;
   /**
    * Origin for resolving root-relative URLs (/assets/…) when the doc is
    * rendered outside the server origin (Playwright setContent pages).
    */
-  baseHref?: string;
-  title?: string;
+  baseHref?: string | undefined;
+  title?: string | undefined;
   /** When true, omit the iframe runtime script. Defaults to true. */
-  includeRuntime?: boolean;
+  includeRuntime?: boolean | undefined;
   /** Mount the dark-mode class on <html>. */
-  dark?: boolean;
+  dark?: boolean | undefined;
   /**
    * Root-relative URL of the live-island bundle (e.g.
    * "/api/live/bundle.js?v=3"). Set only when the screen has live nodes;
    * injects the client mount runtime that fills the SSR markers.
    */
-  liveBundleUrl?: string;
+  liveBundleUrl?: string | undefined;
   /**
    * Framework-native canvas bundle (#18): the installed-component `mountScreen`
    * URL + the resolved screen tree + native theme options. When set, the SSR
    * body is wrapped in `#velloo-ssr` and the canvas runtime client-mounts the
    * exact installed version over it (restoring the SSR on any failure).
    */
-  canvasBundle?: { url: string; tree: unknown; themeOptions: unknown };
+  canvasBundle?: { url: string; tree: unknown; themeOptions: unknown } | undefined;
 }
 
 /**

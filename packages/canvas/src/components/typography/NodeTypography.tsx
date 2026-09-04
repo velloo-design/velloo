@@ -135,8 +135,8 @@ function Row({
 }: {
   label: string;
   value: string;
-  override?: string;
-  mono?: boolean;
+  override?: string | undefined;
+  mono?: boolean | undefined;
 }) {
   return (
     <div className="flex items-baseline gap-2 py-1">

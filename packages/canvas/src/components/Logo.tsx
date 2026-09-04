@@ -5,8 +5,8 @@
  * through hero sizes. See velloo-brand/brand/2-guidelines for the full spec.
  */
 interface Props {
-  className?: string;
-  size?: number;
+  className?: string | undefined;
+  size?: number | undefined;
 }
 
 export function Logo({ className, size = 24 }: Props) {

@@ -16,8 +16,8 @@ export interface UrlCacheKeyParams {
   dark: boolean;
   /** Resolved absolute path, or null when no storage state. */
   storageStatePath: string | null;
-  cookies?: UrlCookie[];
-  localStorage?: Record<string, string>;
+  cookies?: UrlCookie[] | undefined;
+  localStorage?: Record<string, string> | undefined;
 }
 
 /**

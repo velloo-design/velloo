@@ -17,9 +17,9 @@ export interface StdioMcpProxyOptions {
    * re-reading the runtime lockfile and respawning the daemon if it died.
    * Return null when no live daemon could be found or brought up.
    */
-  rediscover?: () => Promise<string | null>;
+  rediscover?: (() => Promise<string | null>) | undefined;
   /** Fires when either side closes (agent disconnects, daemon drops). */
-  onExit?: () => void;
+  onExit?: (() => void) | undefined;
 }
 
 /**

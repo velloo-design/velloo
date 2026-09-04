@@ -11,9 +11,9 @@ export interface UpdateSnippetArgs {
   snippetId: string;
   /** Sparse patch — pass only the fields you want to change. */
   patch: {
-    name?: string;
-    params?: SnippetParam[];
-    tree?: Node;
+    name?: string | undefined;
+    params?: SnippetParam[] | undefined;
+    tree?: Node | undefined;
     /**
      * Patch the props of one node *inside* the snippet body without
      * resending the whole tree — the definition-level counterpart of
@@ -22,7 +22,7 @@ export interface UpdateSnippetArgs {
      * ("0.2"), or "" for the body root. `null` values in `propPatch` remove
      * keys. Applied on top of `tree` when both are present.
      */
-    innerPatch?: { innerPath: string; propPatch: Record<string, unknown> };
+    innerPatch?: { innerPath: string; propPatch: Record<string, unknown> } | undefined;
   };
 }
 

@@ -15,9 +15,9 @@ export interface GeneratedAsset {
 export interface GenerateRequest {
   prompt: string;
   intent: string;
-  aspect?: string;
-  reference?: string[];
-  replaces?: string;
+  aspect?: string | undefined;
+  reference?: string[] | undefined;
+  replaces?: string | undefined;
 }
 
 export interface GenerateResult {
@@ -27,8 +27,8 @@ export interface GenerateResult {
   cost: string;
   chargedMicros: number;
   balanceMicros: number;
-  width?: number;
-  height?: number;
+  width?: number | undefined;
+  height?: number | undefined;
 }
 
 export interface IntentPrice {

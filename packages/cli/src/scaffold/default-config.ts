@@ -4,23 +4,23 @@ import { TOOL_VERSION } from "../version.ts";
 
 interface DefaultConfigOpts {
   /** Library declaration. Defaults to shadcn-upstream on the snapshot runtime. */
-  library?: Library;
+  library?: Library | undefined;
   /** Default screen id to focus on first load. */
-  defaultScreen?: string;
+  defaultScreen?: string | undefined;
   /** Default board id to open on first load. */
-  defaultBoard?: string;
+  defaultBoard?: string | undefined;
   /**
    * Host app location for the live-island bundler — set at init so
    * `render:"live"` extensions resolve against the user's app (their real
    * recharts &c.) without a manual config edit. See `HostApp`.
    */
-  hostApp?: HostApp;
+  hostApp?: HostApp | undefined;
   /**
    * Named host apps for a monorepo scan — one entry per route-bearing app,
    * keyed by the same short prefix the scan used for screen ids ("web",
    * "admin"), so `extension.app` can route a live island to the right app.
    */
-  hostApps?: Record<string, HostApp>;
+  hostApps?: Record<string, HostApp> | undefined;
   /**
    * Opt-in product feedback, captured by the interactive wizard after the
    * user signs in. Absent ⇒ feedback stays off (the default).
@@ -31,12 +31,12 @@ interface DefaultConfigOpts {
    * no-framework library — shadcn carries Tailwind and MUI carries `sx`, so
    * their channel is intrinsic and `styling` stays absent.
    */
-  styling?: Config["styling"];
+  styling?: Config["styling"] | undefined;
   /**
    * Codegen defaults — set when the wizard's stack prompt picked an import
    * alias. Absent ⇒ codegen falls back to `@/components/ui`.
    */
-  codegen?: Config["codegen"];
+  codegen?: Config["codegen"] | undefined;
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {

@@ -27,21 +27,28 @@ import { isCssIdent, sanitizeCssTokenValue } from "./css-sanitize.ts";
 /** The three rhythm controls plus font roles. Every field is optional; `TYPESET_DEFAULT` fills the gaps. */
 export interface Typeset {
   /** Base text size. `1em` follows the surrounding layout (the container-relative default). */
-  size?: string | number;
+  size?: string | number | undefined;
   /** Body line-height, unitless. Heading leading derives from it. */
-  leading?: number;
+  leading?: number | undefined;
   /** Vertical space between blocks. Heading margins and rule spacing derive from it. */
-  flow?: string | number;
+  flow?: string | number | undefined;
   /** Font *role* name (a key of `typography.fontFamily`) for body copy. */
-  fontBody?: string;
+  fontBody?: string | undefined;
   /** Font role name for headings. */
-  fontHeading?: string;
+  fontHeading?: string | undefined;
   /** Font role name for code. */
-  fontMono?: string;
+  fontMono?: string | undefined;
 }
 
-/** Baseline rhythm — shadcn/typeset's defaults, which read well on long-form content. */
-export const TYPESET_DEFAULT: Required<Pick<Typeset, "size" | "leading" | "flow">> = {
+/**
+ * Baseline rhythm — shadcn/typeset's defaults, which read well on long-form
+ * content.
+ *
+ * Spelled out rather than `Required<Pick<Typeset, …>>`: `Required` strips the
+ * `?` but not an explicit `| undefined`, which `Typeset`'s fields carry so
+ * they can hold zod's output. The defaults are concrete, so say so.
+ */
+export const TYPESET_DEFAULT: { size: string | number; leading: number; flow: string | number } = {
   size: "1em",
   leading: 1.75,
   flow: "1.25em",

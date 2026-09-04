@@ -8,7 +8,7 @@ export const SelectGroup = SelectPrimitive.Group;
 export const SelectValue = SelectPrimitive.Value;
 
 interface SelectTriggerProps extends React.ComponentProps<typeof SelectPrimitive.Trigger> {
-  size?: "default" | "sm";
+  size?: "default" | "sm" | undefined;
 }
 
 export function SelectTrigger({

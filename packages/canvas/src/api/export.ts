@@ -14,7 +14,7 @@ export interface ExportRequest {
   format: ExportFormat;
   mode: ExportMode;
   /** PNG raster density (1 = css px, 2 = retina). */
-  scale?: number;
+  scale?: number | undefined;
 }
 
 export async function downloadExport(req: ExportRequest): Promise<string[]> {

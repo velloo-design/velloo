@@ -1,16 +1,25 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { z } from "zod";
 
-export interface CloudCredential {
-  token: string;
-  email: string;
-}
+/**
+ * The credentials file is hand-editable, shared across velloo versions, and
+ * holds bearer tokens — so it is parsed rather than asserted. A malformed
+ * entry read as a good one sends a garbage Authorization header to the cloud;
+ * an unreadable file simply starts fresh, which is what a missing one does.
+ */
+const CloudCredentialSchema = z.object({
+  token: z.string().min(1),
+  email: z.string().min(1),
+});
+export type CloudCredential = z.infer<typeof CloudCredentialSchema>;
 
-interface CredentialsFile {
-  version: 1;
-  clouds: Record<string, CloudCredential>;
-}
+const CredentialsFileSchema = z.object({
+  version: z.literal(1),
+  clouds: z.record(z.string(), CloudCredentialSchema),
+});
+type CredentialsFile = z.infer<typeof CredentialsFileSchema>;
 
 const credentialsPath = () =>
   process.env.VELLOO_CREDENTIALS_PATH ?? join(homedir(), ".velloo", "credentials.json");
@@ -19,8 +28,10 @@ export const normalizeCloudUrl = (url: string) => url.replace(/\/+$/, "");
 
 async function readAll(): Promise<CredentialsFile> {
   try {
-    const raw = JSON.parse(await readFile(credentialsPath(), "utf8")) as CredentialsFile;
-    if (raw.version === 1 && raw.clouds) return raw;
+    const parsed = CredentialsFileSchema.safeParse(
+      JSON.parse(await readFile(credentialsPath(), "utf8")),
+    );
+    if (parsed.success) return parsed.data;
   } catch {
     // missing or corrupt — start fresh
   }

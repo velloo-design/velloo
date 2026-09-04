@@ -39,13 +39,13 @@ export class CommentStoreError extends Error {
 export interface CreateLocalCommentInput {
   boardId: string;
   body: string;
-  anchor?: CommentAnchor;
-  author?: CommentAuthor;
+  anchor?: CommentAnchor | undefined;
+  author?: CommentAuthor | undefined;
 }
 
 export interface ReplyToCommentInput {
   body: string;
-  author?: CommentAuthor;
+  author?: CommentAuthor | undefined;
 }
 
 const defaultAuthor = (): CommentAuthor => ({ kind: "user" });

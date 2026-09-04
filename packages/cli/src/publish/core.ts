@@ -81,31 +81,33 @@ export interface PublishPipeline {
 
 export interface PublishRequest {
   /** Board ids to publish; empty/absent = every board in the folder. */
-  boardIds?: string[];
+  boardIds?: string[] | undefined;
   /** Link title (default: "<folder name> designs"). */
-  title?: string;
+  title?: string | undefined;
   visibility: "public" | "private";
   /**
    * A password anyone can use to view, whatever the visibility. Sent once at
    * publish and never written anywhere local.
    */
-  password?: string;
-  passwordExpiresAt?: string;
+  password?: string | undefined;
+  passwordExpiresAt?: string | undefined;
   /** The link slot the user deliberately selected before rendering begins. */
   destination:
-    | { mode: "new"; slug?: string }
+    | { mode: "new"; slug?: string | undefined }
     | { mode: "update"; slug: string; expectedVersionId: string | null };
   /** Publish into a team rather than the personal workspace. */
-  teamId?: string;
+  teamId?: string | undefined;
   /** Captured before destination selection so matching and upload agree. */
-  provenance?: PublishProvenance;
+  provenance?: PublishProvenance | undefined;
   viewport: Viewport;
   screenshots: boolean;
   /** Optional git-diff slice: the full design still publishes, only previews are skipped. */
-  screenshotSelection?: {
-    screenIds: ReadonlySet<string>;
-    boardIds: ReadonlySet<string>;
-  };
+  screenshotSelection?:
+    | {
+        screenIds: ReadonlySet<string>;
+        boardIds: ReadonlySet<string>;
+      }
+    | undefined;
 }
 
 export interface PublishOutcome {
@@ -121,8 +123,8 @@ export interface PublishOutcome {
   commitSha: string | null;
   /** True when this created the link rather than updating the folder's. */
   created: boolean;
-  tier?: string;
-  history?: { retained: boolean; versions: number; pruned: number };
+  tier?: string | undefined;
+  history?: { retained: boolean; versions: number; pruned: number } | undefined;
 }
 
 export interface CloudTarget {

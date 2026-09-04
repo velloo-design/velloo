@@ -15,7 +15,7 @@ interface Props {
   /** Shown in place of the content once the pane has finished collapsing. */
   rail: React.ReactNode;
   /** Dim and disable the content — never the rail or the resize handle. */
-  contentDisabled?: boolean;
+  contentDisabled?: boolean | undefined;
   children: React.ReactNode;
 }
 

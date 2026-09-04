@@ -31,25 +31,25 @@ export type ChartColor = "primary" | "accent" | "muted";
 export type TickFormat = "number" | "compact" | "currency" | "percent";
 
 export interface ChartSpec {
-  kind?: ChartKind;
+  kind?: ChartKind | undefined;
   /** Single-series convenience: a list of `{ x label, y value }` points. */
-  data?: { x: string | number; y: number }[];
+  data?: { x: string | number; y: number }[] | undefined;
   /** Multi-series: shared categories + named series. Takes precedence over `data`. */
-  categories?: (string | number)[];
-  series?: { name?: string; data: number[] }[];
+  categories?: (string | number)[] | undefined;
+  series?: { name?: string | undefined; data: number[] }[] | undefined;
   /** Axis titles. */
-  xLabel?: string;
-  yLabel?: string;
+  xLabel?: string | undefined;
+  yLabel?: string | undefined;
   /** Y-axis tick formatting. */
-  tickFormat?: TickFormat;
+  tickFormat?: TickFormat | undefined;
   /** Accent for single-series charts; multi-series cycles a fixed palette. */
-  color?: ChartColor;
+  color?: ChartColor | undefined;
   /** Force the legend on/off; defaults on for multi-series, off otherwise. */
-  legend?: boolean;
+  legend?: boolean | undefined;
   /** Stack multiple bar/area series into cumulative totals; default off. */
-  stacked?: boolean;
+  stacked?: boolean | undefined;
   /** Show axes, tick labels, and gridlines; set false for sparkline mode. */
-  axes?: boolean;
+  axes?: boolean | undefined;
 }
 
 const AXIS = "var(--color-muted-foreground)";
@@ -84,7 +84,7 @@ const FORMATTERS: Record<TickFormat, ((v: number) => string) | undefined> = {
 
 function normalize(spec: ChartSpec): {
   categories: (string | number)[];
-  series: { name?: string; data: number[] }[];
+  series: { name?: string | undefined; data: number[] }[];
 } {
   if (spec.series && spec.series.length > 0) {
     const first = spec.series[0];

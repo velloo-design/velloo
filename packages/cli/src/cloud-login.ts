@@ -201,7 +201,7 @@ export async function performDeviceLogin(
     body: JSON.stringify({ accessToken }),
   });
   if (exchangeRes.status !== 201) {
-    const body = (await exchangeRes.json().catch(() => ({}))) as { message?: string };
+    const body = (await exchangeRes.json().catch(() => ({}))) as { message?: string | undefined };
     throw new Error(`token exchange failed (${exchangeRes.status}): ${body.message ?? "unknown"}`);
   }
   return (await exchangeRes.json()) as DeviceLoginResult;

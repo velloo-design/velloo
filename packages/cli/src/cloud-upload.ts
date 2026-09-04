@@ -25,21 +25,21 @@ export const VERSION_UPLOAD_TIMEOUT_MS = 60_000;
 export const VERSION_UPLOAD_RETRIES = 1;
 
 export interface CloudLinkRequest {
-  slug?: string;
-  folderId?: string;
+  slug?: string | undefined;
+  folderId?: string | undefined;
   publishMode: "new" | "update";
   /** Latest version observed when the user selected an update destination. */
-  expectedVersionId?: string | null;
+  expectedVersionId?: string | null | undefined;
   title: string;
   visibility: "public" | "private";
   /** Explicit collaboration context; omitted keeps the board personal. */
-  teamId?: string;
+  teamId?: string | undefined;
   /**
    * Password protection, independent of visibility — anyone who has it can
    * view. Only ever sent, never echoed back or stored locally.
    */
-  password?: string;
-  passwordExpiresAt?: string;
+  password?: string | undefined;
+  passwordExpiresAt?: string | undefined;
 }
 
 export interface CloudPublishSlot {
@@ -92,7 +92,7 @@ export interface LinkUploadOutcome {
   /** Absolute share URL (the cloud returns it relative in dev). */
   shareUrl: string;
   /** Effective plan + version retention, from folderId-aware clouds. */
-  tier?: string;
+  tier?: string | undefined;
   history?: { retained: boolean; versions: number; pruned: number };
 }
 

@@ -14,22 +14,22 @@ export interface FontSpec {
   /** Token role, e.g. "display". Must be utility-name safe. */
   role: string;
   /** Family name as the CSS stack's first entry, e.g. "Unbounded". */
-  family?: string;
+  family?: string | undefined;
   /** Stack tail. Defaults to a sensible generic per common roles. */
-  fallback?: string;
+  fallback?: string | undefined;
   /**
    * Google Fonts axis spec to load (the part after "family=<name>"),
    * e.g. "wght@400..900" or "ital,wght@0,300..900;1,300..900".
    * Pass `true` for a plain regular-weight load; omit for local/system
    * fonts that need no webfont.
    */
-  google?: string | true;
+  google?: string | true | undefined;
   /**
    * Drop this role. Refused while a typeset still names it, because the
    * dangling reference would resolve to an undefined var and quietly fall back
    * to whatever the browser inherits.
    */
-  remove?: boolean;
+  remove?: boolean | undefined;
 }
 
 const DEFAULT_FALLBACK: Record<string, string> = {

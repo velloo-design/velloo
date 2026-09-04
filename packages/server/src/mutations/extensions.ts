@@ -57,11 +57,11 @@ export interface AddExtensionArgs {
   id: string;
   importPath: string;
   props: ExtensionPropDescriptor[];
-  category?: "ui" | "typography";
-  description?: string;
-  render?: "static" | "live";
-  app?: string;
-  fit?: "aspect-video" | "content";
+  category?: "ui" | "typography" | undefined;
+  description?: string | undefined;
+  render?: "static" | "live" | undefined;
+  app?: string | undefined;
+  fit?: "aspect-video" | "content" | undefined;
 }
 
 /** Reject an `app` that isn't a `config.hostApps` key (a typo, not a warning). */
@@ -86,12 +86,12 @@ export interface AddExtensionResult {
    * shadows it. We return the shadowed component id so the agent can
    * decide whether to rename their extension. Empty when no shadow.
    */
-  shadowedLibraryComponent?: string;
+  shadowedLibraryComponent?: string | undefined;
   /**
    * Set when `render:"live"` but the importPath can't be resolved from the
    * host app — the canvas will show the placeholder until it's fixed.
    */
-  liveResolveWarning?: string;
+  liveResolveWarning?: string | undefined;
 }
 
 export async function addExtension(
@@ -155,13 +155,13 @@ export async function addExtension(
 export interface UpdateExtensionArgs {
   id: string;
   patch: {
-    importPath?: string;
-    props?: ExtensionPropDescriptor[];
-    category?: "ui" | "typography";
-    description?: string;
-    render?: "static" | "live";
-    app?: string;
-    fit?: "aspect-video" | "content";
+    importPath?: string | undefined;
+    props?: ExtensionPropDescriptor[] | undefined;
+    category?: "ui" | "typography" | undefined;
+    description?: string | undefined;
+    render?: "static" | "live" | undefined;
+    app?: string | undefined;
+    fit?: "aspect-video" | "content" | undefined;
   };
 }
 
@@ -169,7 +169,7 @@ export interface UpdateExtensionResult {
   id: string;
   extension: Extension;
   /** Set when the updated extension is `render:"live"` but won't resolve. */
-  liveResolveWarning?: string;
+  liveResolveWarning?: string | undefined;
 }
 
 export async function updateExtension(

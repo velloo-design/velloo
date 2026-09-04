@@ -328,7 +328,7 @@ function printSummary(
  * included) — the launch offers downstream must only name wired agents.
  */
 interface WireOutcome {
-  connected?: ConnectResult;
+  connected?: ConnectResult | undefined;
   wiredIds: string[];
 }
 

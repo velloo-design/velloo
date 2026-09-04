@@ -30,11 +30,11 @@ export interface ActivityEntry {
   ts: number;
   verb: string;
   source: ActivitySource;
-  session?: string;
+  session?: string | undefined;
   target: ActivityTarget;
   /** Grouped bursts (batch): per-op detail, capped server-side. */
   ops?: Array<{ verb: string; target: ActivityTarget }>;
-  opCount?: number;
+  opCount?: number | undefined;
 }
 
 /** Client-side ring cap — the feed shows at most this many entries. */

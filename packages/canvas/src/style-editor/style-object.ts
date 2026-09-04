@@ -10,24 +10,24 @@ export type CssVal = string | number;
 export type CssSides = Sides<CssVal>;
 
 export interface StyleModel {
-  display?: CssVal;
-  flexDirection?: CssVal;
-  justifyContent?: CssVal;
-  alignItems?: CssVal;
-  gap?: CssVal;
+  display?: CssVal | undefined;
+  flexDirection?: CssVal | undefined;
+  justifyContent?: CssVal | undefined;
+  alignItems?: CssVal | undefined;
+  gap?: CssVal | undefined;
   padding: CssSides;
   margin: CssSides;
-  width?: CssVal;
-  height?: CssVal;
-  fontFamily?: CssVal;
-  fontSize?: CssVal;
-  fontWeight?: CssVal;
-  lineHeight?: CssVal;
-  letterSpacing?: CssVal;
-  textAlign?: CssVal;
-  color?: CssVal;
-  backgroundColor?: CssVal;
-  borderRadius?: CssVal;
+  width?: CssVal | undefined;
+  height?: CssVal | undefined;
+  fontFamily?: CssVal | undefined;
+  fontSize?: CssVal | undefined;
+  fontWeight?: CssVal | undefined;
+  lineHeight?: CssVal | undefined;
+  letterSpacing?: CssVal | undefined;
+  textAlign?: CssVal | undefined;
+  color?: CssVal | undefined;
+  backgroundColor?: CssVal | undefined;
+  borderRadius?: CssVal | undefined;
 }
 
 export interface ParsedStyle {

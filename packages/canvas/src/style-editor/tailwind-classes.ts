@@ -22,27 +22,27 @@ export interface BoxSides {
 }
 
 export interface TwModel {
-  display?: string; // "flex" | "grid" | "block" | "inline-flex" | "none" …
-  flexDirection?: string; // "row" | "row-reverse" | "col" | "col-reverse"
-  flexWrap?: string; // "wrap" | "nowrap" | "wrap-reverse"
-  justify?: string; // "start" | "center" | "end" | "between" | "around" | "evenly"
-  items?: string; // "start" | "center" | "end" | "stretch" | "baseline"
-  gap?: string;
+  display?: string | undefined; // "flex" | "grid" | "block" | "inline-flex" | "none" …
+  flexDirection?: string | undefined; // "row" | "row-reverse" | "col" | "col-reverse"
+  flexWrap?: string | undefined; // "wrap" | "nowrap" | "wrap-reverse"
+  justify?: string | undefined; // "start" | "center" | "end" | "between" | "around" | "evenly"
+  items?: string | undefined; // "start" | "center" | "end" | "stretch" | "baseline"
+  gap?: string | undefined;
   padding: BoxSides;
   margin: BoxSides;
-  width?: string; // "full" | "fit" | "auto" | "screen" | "1/2" | "40" | "[12rem]"
-  height?: string;
-  fontFamily?: string; // "sans" | "mono" | "display" …
-  fontSize?: string; // "sm" | "base" | "lg" | "[15px]"
-  fontWeight?: string; // "medium" | "bold" …
-  leading?: string; // "tight" | "normal" | "6" | "[1.4]"
-  tracking?: string; // "tight" | "normal" | "wide" | "[-0.01em]"
-  textAlign?: string; // "left" | "center" | "right" | "justify"
-  textColor?: string; // "foreground" | "red-500" | "[#fff]"
-  bg?: string;
-  rounded?: string; // "" (base `rounded`) | "sm" | "lg" | "full" | "[6px]"
-  borderColor?: string;
-  borderWidth?: string; // "" (1px `border`) | "0" | "2" | "4" | "8"
+  width?: string | undefined; // "full" | "fit" | "auto" | "screen" | "1/2" | "40" | "[12rem]"
+  height?: string | undefined;
+  fontFamily?: string | undefined; // "sans" | "mono" | "display" …
+  fontSize?: string | undefined; // "sm" | "base" | "lg" | "[15px]"
+  fontWeight?: string | undefined; // "medium" | "bold" …
+  leading?: string | undefined; // "tight" | "normal" | "6" | "[1.4]"
+  tracking?: string | undefined; // "tight" | "normal" | "wide" | "[-0.01em]"
+  textAlign?: string | undefined; // "left" | "center" | "right" | "justify"
+  textColor?: string | undefined; // "foreground" | "red-500" | "[#fff]"
+  bg?: string | undefined;
+  rounded?: string | undefined; // "" (base `rounded`) | "sm" | "lg" | "full" | "[6px]"
+  borderColor?: string | undefined;
+  borderWidth?: string | undefined; // "" (1px `border`) | "0" | "2" | "4" | "8"
 }
 
 export interface ParsedClasses {

@@ -12,40 +12,40 @@ import { isValidStack } from "./stacks.ts";
  */
 export interface InitCliArgs {
   /** Positional: the app root where Velloo installs (default: cwd). */
-  folder?: string;
+  folder?: string | undefined;
   /** Design folder, relative to the app root (default: `velloo`). */
-  designFolder?: string;
+  designFolder?: string | undefined;
   /**
    * Skip the existing-folder menu and go straight to adding another design
    * folder — what `velloo folder add` runs. With `designFolder`, the wizard's
    * "where should it live?" prompt is answered too.
    */
-  addFolder?: boolean;
-  force?: boolean;
-  nonInteractive?: boolean;
+  addFolder?: boolean | undefined;
+  force?: boolean | undefined;
+  nonInteractive?: boolean | undefined;
   /** Wire MCP config + guidance for Claude Code + Cursor (default true). */
-  connect?: boolean;
+  connect?: boolean | undefined;
   /**
    * Start goal: redesign-screen | redesign-component | custom |
    * sample | blank | scratch (→ sample) | scan (legacy multi-route).
    */
-  start?: string;
+  start?: string | undefined;
   /** Subfolder (relative to the app root) to scan when the UI isn't at the root. */
-  scanDir?: string;
-  library?: string;
-  componentsDir?: string;
-  initialContent?: string;
-  themePreset?: string;
+  scanDir?: string | undefined;
+  library?: string | undefined;
+  componentsDir?: string | undefined;
+  initialContent?: string | undefined;
+  themePreset?: string | undefined;
   /** App stack: nextjs | vite | astro | remix — sets codegen.componentsAlias. */
-  stack?: string;
+  stack?: string | undefined;
   /** Project name for the repo's velloo.json (default: derived from the folder path). */
-  project?: string;
+  project?: string | undefined;
   /** Screen name for redesign-screen (typed; optional if routes are scanned). */
-  screenName?: string;
+  screenName?: string | undefined;
   /** Component name/description for redesign-component. */
-  component?: string;
+  component?: string | undefined;
   /** Free-text custom design request. */
-  request?: string;
+  request?: string | undefined;
 }
 
 const START_TO_CONTENT: Record<string, InitialContent> = {
@@ -83,7 +83,10 @@ export function isValidStart(v: string): boolean {
  * passes `--non-interactive`. The TTY state is a parameter so tests
  * can exercise both branches.
  */
-export function shouldRunWizard(args: { nonInteractive?: boolean }, stdinIsTTY: boolean): boolean {
+export function shouldRunWizard(
+  args: { nonInteractive?: boolean | undefined },
+  stdinIsTTY: boolean,
+): boolean {
   if (args.nonInteractive) return false;
   return stdinIsTTY;
 }

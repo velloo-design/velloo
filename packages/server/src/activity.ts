@@ -76,7 +76,10 @@ export const GROUP_DETAIL_CAP = 20;
 export interface ActivityContext {
   folder: {
     root: string;
-    boards?: Map<string, { id: string; archivedAt?: string; frames: Array<{ screen: string }> }>;
+    boards?: Map<
+      string,
+      { id: string; archivedAt?: string | undefined; frames: Array<{ screen: string }> }
+    >;
   };
   broadcast: (e: ActivityEvent) => void;
 }

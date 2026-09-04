@@ -29,9 +29,9 @@ export interface StdioFormatGateOptions {
    * rewrite, validate). Only offered when the folder is OLDER than the binary;
    * a folder from the future can't be migrated backwards.
    */
-  upgrade?: () => Promise<FormatGateUpgradeResult>;
+  upgrade?: (() => Promise<FormatGateUpgradeResult>) | undefined;
   /** Fires when the session ends (agent disconnects) so the caller can exit. */
-  onExit?: () => void;
+  onExit?: (() => void) | undefined;
 }
 
 export interface StdioFormatGateHandle {

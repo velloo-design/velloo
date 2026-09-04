@@ -102,8 +102,11 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
         swatches: {
           background: t.colors.background,
           primary:
-            (t.colors.primary as { DEFAULT?: string })?.DEFAULT ?? (t.colors.primary as string),
-          accent: (t.colors.accent as { DEFAULT?: string })?.DEFAULT ?? (t.colors.accent as string),
+            (t.colors.primary as { DEFAULT?: string | undefined })?.DEFAULT ??
+            (t.colors.primary as string),
+          accent:
+            (t.colors.accent as { DEFAULT?: string | undefined })?.DEFAULT ??
+            (t.colors.accent as string),
           foreground: t.colors.foreground,
         },
       };

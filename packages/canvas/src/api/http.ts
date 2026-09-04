@@ -27,7 +27,7 @@ async function readError(res: Response): Promise<ApiError | undefined> {
 export async function toApiError(res: Response, label: string): Promise<Error> {
   const payload = await readError(res);
   const err = new Error(payload ? describeApiError(payload) : `${label}: ${res.status}`);
-  (err as Error & { payload?: ApiError }).payload = payload;
+  if (payload) (err as Error & { payload?: ApiError }).payload = payload;
   return err;
 }
 

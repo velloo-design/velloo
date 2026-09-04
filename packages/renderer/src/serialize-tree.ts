@@ -21,7 +21,7 @@ export interface SerializedNode {
 }
 
 export interface SerializeOptions {
-  snippets?: Map<string, Snippet>;
+  snippets?: Map<string, Snippet> | undefined;
 }
 
 type Child = SerializedNode | string | number;

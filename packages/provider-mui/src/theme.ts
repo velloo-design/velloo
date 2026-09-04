@@ -2,6 +2,7 @@ import { createTheme, type Theme as MuiTheme, type ThemeOptions } from "@mui/mat
 import {
   type ColorPair,
   DEFAULT_TYPESET_NAME,
+  resolveColors,
   typesetScale,
   type Theme as VellooTheme,
 } from "@velloo/schema";
@@ -57,7 +58,7 @@ function radiusPx(theme: VellooTheme): number {
 export function muiThemeOptions(theme: VellooTheme, dark = false): ThemeOptions {
   // In dark mode, overlay the theme's dark color slots — otherwise flipping
   // palette.mode to "dark" would keep the light color values.
-  const c = dark && theme.colorsDark ? { ...theme.colors, ...theme.colorsDark } : theme.colors;
+  const c = resolveColors(theme, dark);
   return {
     palette: {
       mode: dark ? "dark" : "light",

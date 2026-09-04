@@ -22,9 +22,14 @@ type Props = Record<string, unknown> & { children?: ReactNode };
 
 /** Pass-through props every node carries — className for styling, data-node-path for canvas selection. */
 function chrome(props: Props): { className?: string; "data-node-path"?: string } {
+  // Only the keys that are actually present: the return type says these may be
+  // *absent*, and under `exactOptionalPropertyTypes` an explicit `undefined` is
+  // a different thing from an omitted key.
+  const className = typeof props.className === "string" ? props.className : undefined;
+  const nodePath = props["data-node-path"];
   return {
-    className: typeof props.className === "string" ? props.className : undefined,
-    "data-node-path": props["data-node-path"] as string | undefined,
+    ...(className !== undefined ? { className } : {}),
+    ...(typeof nodePath === "string" ? { "data-node-path": nodePath } : {}),
   };
 }
 

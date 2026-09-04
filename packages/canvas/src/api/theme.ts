@@ -6,15 +6,15 @@ import { postTheme } from "./http.ts";
  * alone, `null` clears it back to inherited.
  */
 export interface TypesetSpec {
-  name?: string;
-  renameTo?: string;
-  remove?: boolean;
-  size?: string | number | null;
-  leading?: number | null;
-  flow?: string | number | null;
-  fontBody?: string | null;
-  fontHeading?: string | null;
-  fontMono?: string | null;
+  name?: string | undefined;
+  renameTo?: string | undefined;
+  remove?: boolean | undefined;
+  size?: string | number | null | undefined;
+  leading?: number | null | undefined;
+  flow?: string | number | null | undefined;
+  fontBody?: string | null | undefined;
+  fontHeading?: string | null | undefined;
+  fontMono?: string | null | undefined;
 }
 
 /**
@@ -23,10 +23,10 @@ export interface TypesetSpec {
  */
 export interface FontSpec {
   role: string;
-  family?: string;
-  fallback?: string;
-  google?: string | true;
-  remove?: boolean;
+  family?: string | undefined;
+  fallback?: string | undefined;
+  google?: string | true | undefined;
+  remove?: boolean | undefined;
 }
 
 /**

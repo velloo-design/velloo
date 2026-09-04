@@ -68,7 +68,7 @@ export interface UpgradeResult {
  */
 export async function upgradeFolder(
   folder: string,
-  opts: { dryRun?: boolean } = {},
+  opts: { dryRun?: boolean | undefined } = {},
 ): Promise<UpgradeResult> {
   const configPath = join(folder, ".design", "config.json");
   const rawConfig: unknown = JSON.parse(await readFile(configPath, "utf8"));

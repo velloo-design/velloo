@@ -75,9 +75,9 @@ export async function updateViewportPresets(
 
 export interface UpdateDefaultsArgs {
   /** Board id to open on; `null` clears back to "first board". Omit to leave alone. */
-  defaultBoard?: string | null;
+  defaultBoard?: string | null | undefined;
   /** Screen id to focus on load; `null` clears. Omit to leave alone. */
-  defaultScreen?: string | null;
+  defaultScreen?: string | null | undefined;
 }
 
 export interface UpdateDefaultsResult {
@@ -124,7 +124,7 @@ export async function updateDefaults(
 
 export interface UpdateCodegenArgs {
   /** Import prefix for emitted library imports; `null` restores the default. */
-  componentsAlias?: string | null;
+  componentsAlias?: string | null | undefined;
 }
 
 export interface UpdateCodegenResult {
@@ -157,9 +157,9 @@ export async function updateCodegen(
 
 export interface UpdateFeedbackArgs {
   /** Whether the `send_feedback` MCP tool is exposed. Omit to leave alone. */
-  enabled?: boolean;
+  enabled?: boolean | undefined;
   /** Consent to be contacted about submitted feedback. Omit to leave alone. */
-  contactOk?: boolean;
+  contactOk?: boolean | undefined;
 }
 
 export interface UpdateFeedbackResult {

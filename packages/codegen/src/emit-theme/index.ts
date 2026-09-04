@@ -22,26 +22,26 @@ export interface EmitThemeOptions {
    * `globals.css` or `src/index.css` — pass it here rather than being
    * surprised by an `app/` segment.
    */
-  cssPath?: string;
+  cssPath?: string | undefined;
   /** Skip emitting tailwind.config.ts when true. Default false. */
-  cssOnly?: boolean;
+  cssOnly?: boolean | undefined;
   /** Whether to actually write files. Default false → returns diffs only. */
-  apply?: boolean;
+  apply?: boolean | undefined;
   /**
    * `content` globs for the emitted tailwind.config.ts. Defaults to the
    * Next.js layout (app/, components/, pages/) — Vite/Astro hosts pass
    * the globs matching their structure.
    */
-  contentGlobs?: readonly string[];
+  contentGlobs?: readonly string[] | undefined;
   /** Folder custom.css contents — appended verbatim to globals.css. */
-  customCss?: string;
+  customCss?: string | undefined;
   /**
    * Target app's Tailwind major. `3` emits the v3 projection — a
    * `velloo-theme.css` (HSL-triplet vars next to the globals path, never the
    * globals file itself) plus a `velloo.preset.{ts,cjs}` the user's config
    * registers under `presets`. Default 4 (today's `@theme` globals.css).
    */
-  tailwindMajor?: 3 | 4;
+  tailwindMajor?: 3 | 4 | undefined;
 }
 
 export interface EmitThemeFile {

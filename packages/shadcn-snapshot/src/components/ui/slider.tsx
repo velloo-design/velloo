@@ -17,7 +17,14 @@ export function Slider({
   // Static "controlled" value with no handler → promote to defaultValue
   // so React doesn't warn in design mode.
   const isStatic = value !== undefined && props.onValueChange === undefined;
-  const resolved = isStatic ? { defaultValue: value } : { value, defaultValue };
+  // Only the keys that are set — an explicit `value: undefined` reads to Radix
+  // as a controlled slider with no value, which is not what "unset" means.
+  const resolved: { value?: typeof value; defaultValue?: typeof defaultValue } = isStatic
+    ? { defaultValue: value }
+    : {
+        ...(value !== undefined ? { value } : {}),
+        ...(defaultValue !== undefined ? { defaultValue } : {}),
+      };
   const fallback = Array.isArray(resolved.defaultValue ?? resolved.value)
     ? (resolved.defaultValue ?? resolved.value)
     : [min];
@@ -26,9 +33,7 @@ export function Slider({
       data-slot="slider"
       min={min}
       max={max}
-      {...(isStatic
-        ? { defaultValue: resolved.defaultValue }
-        : { value: resolved.value, defaultValue: resolved.defaultValue })}
+      {...resolved}
       className={cn(
         "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
         className,

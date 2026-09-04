@@ -221,7 +221,7 @@ export async function printAgentHandoff(
       const pick = await select<string>({
         message: "Launch which agent?",
         options: launchers.map((l) => ({ value: l.bin, label: l.label })),
-        initialValue: launchers[0]?.bin,
+        ...(launchers[0] ? { initialValue: launchers[0].bin } : {}),
       });
       if (isCancel(pick)) return;
       launcher = launchers.find((l) => l.bin === pick);

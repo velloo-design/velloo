@@ -11,17 +11,17 @@ export interface AddNodeArgs {
   screenId: string;
   parentPath: Locator;
   componentRef: string;
-  id?: string;
-  props?: Record<string, unknown>;
-  children?: Node[];
-  index?: number;
+  id?: string | undefined;
+  props?: Record<string, unknown> | undefined;
+  children?: Node[] | undefined;
+  index?: number | undefined;
   /**
    * Mark this node a host-component facade: the canvas renders the subtree you
    * build here (your approximation of a scanned app component), but `emit_code`
    * emits `<name />` from `importPath` instead — preserving the app's real
    * component. See ComponentNode.$emitAs.
    */
-  emitAs?: { name: string; importPath: string };
+  emitAs?: { name: string; importPath: string } | undefined;
 }
 
 export interface AddNodeResult {

@@ -8,13 +8,13 @@ import { persistBoard } from "./persist.ts";
 export interface AddFrameArgs {
   boardId: string;
   screenId: string;
-  x?: number;
-  y?: number;
+  x?: number | undefined;
+  y?: number | undefined;
   w: number;
   h: number;
-  label?: string;
-  group?: string;
-  id?: string;
+  label?: string | undefined;
+  group?: string | undefined;
+  id?: string | undefined;
 }
 
 export interface AddFrameResult {

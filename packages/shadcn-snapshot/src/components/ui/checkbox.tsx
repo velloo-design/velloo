@@ -14,10 +14,11 @@ export function Checkbox({
   // Canvas-safe contract: a `checked` prop without `onCheckedChange`
   // means the design is showing a static "ticked" state — promote it to
   // `defaultChecked` so React doesn't warn about a missing handler.
-  const isStaticControlled = props.checked !== undefined && props.onCheckedChange === undefined;
-  const finalProps = isStaticControlled
-    ? { ...props, checked: undefined, defaultChecked: props.checked }
-    : props;
+  const { checked, ...rest } = props;
+  const isStaticControlled = checked !== undefined && props.onCheckedChange === undefined;
+  // Drop `checked` by omitting it, not by setting it to undefined: Radix reads
+  // "present but undefined" as a controlled component with no value.
+  const finalProps = isStaticControlled ? { ...rest, defaultChecked: checked } : props;
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"

@@ -42,7 +42,7 @@ export interface TextHit {
   kind: "component" | "snippet";
   /** Component `$ref`, or the snippet id for snippet-instance arg matches. */
   ref: string;
-  nodeId?: string;
+  nodeId?: string | undefined;
   /** The prop (or snippet arg) whose value matched. */
   prop: string;
   /** Match context, ellipsized to ~{@link EXCERPT_WINDOW} chars. */

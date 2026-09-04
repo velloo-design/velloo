@@ -12,7 +12,7 @@ export interface UpdateSnippetArgsArgs {
   path: Locator;
   argPatch: Record<string, unknown>;
   /** Pass `null` to clear, omit to leave unchanged. */
-  extraClassName?: string | null;
+  extraClassName?: string | null | undefined;
 }
 
 export interface UpdateSnippetArgsResult {

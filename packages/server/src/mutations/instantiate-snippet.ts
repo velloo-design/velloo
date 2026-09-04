@@ -12,9 +12,9 @@ export interface InstantiateSnippetArgs {
   screenId: string;
   parentPath: Locator;
   snippetId: string;
-  id?: string;
-  args?: Record<string, unknown>;
-  extraClassName?: string;
+  id?: string | undefined;
+  args?: Record<string, unknown> | undefined;
+  extraClassName?: string | undefined;
   /**
    * Per-instance interior prop patches, keyed by a body-node selector ("@id",
    * a dotted index path, or "" for the root). Sets the active nav item / a
@@ -22,8 +22,8 @@ export interface InstantiateSnippetArgs {
    * `override_snippet_props` patches on an already-placed instance, set in
    * the one instantiate call instead of a follow-up.
    */
-  overrides?: Record<string, { props: Record<string, unknown> }>;
-  index?: number;
+  overrides?: Record<string, { props: Record<string, unknown> }> | undefined;
+  index?: number | undefined;
 }
 
 export interface InstantiateSnippetResult {

@@ -306,7 +306,9 @@ export function importThemeFromMui(filePath: string, presetId?: string): Importe
   let tokenCount = 0;
 
   if (palette) {
-    const pairOf = (key: string): { main?: string; contrastText?: string } => {
+    const pairOf = (
+      key: string,
+    ): { main?: string | undefined; contrastText?: string | undefined } => {
       const o = asObject(prop(palette, key));
       return {
         main: o && asString(prop(o, "main")),

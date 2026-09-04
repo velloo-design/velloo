@@ -26,23 +26,23 @@ import { invalidThemePath, type ThemeError } from "./errors.ts";
  */
 export interface TypesetSpec {
   /** Typeset name. `default` is the folder baseline that styles every screen. */
-  name?: string;
+  name?: string | undefined;
   /** Rename this typeset, carrying its authored controls over to the new name. */
-  renameTo?: string;
+  renameTo?: string | undefined;
   /** Delete this typeset. Regions still carrying its class fall back to the baseline. */
-  remove?: boolean;
+  remove?: boolean | undefined;
   /** Base text size — `"1em"` follows the container, `16` / `"16px"` pins it. */
-  size?: string | number | null;
+  size?: string | number | null | undefined;
   /** Body line-height, unitless. Heading leading derives from it. */
-  leading?: number | null;
+  leading?: number | null | undefined;
   /** Vertical space between blocks. Heading margins derive from it. */
-  flow?: string | number | null;
+  flow?: string | number | null | undefined;
   /** A `fontFamily` role name for body copy, e.g. "sans". */
-  fontBody?: string | null;
+  fontBody?: string | null | undefined;
   /** A `fontFamily` role name for headings, e.g. "display". */
-  fontHeading?: string | null;
+  fontHeading?: string | null | undefined;
   /** A `fontFamily` role name for code. */
-  fontMono?: string | null;
+  fontMono?: string | null | undefined;
 }
 
 /** Field names on a typeset that name a font role, for validation messages. */

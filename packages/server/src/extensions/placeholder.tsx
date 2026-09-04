@@ -63,9 +63,9 @@ interface PlaceholderProps {
   /** Props the agent set on the node. */
   resolvedProps: Record<string, unknown>;
   /** Pass through any data-* attributes the renderer attached for selection. */
-  "data-node-path"?: string;
+  "data-node-path"?: string | undefined;
   /** Rendering this with className lets agents tweak layout without bypassing the placeholder. */
-  className?: string;
+  className?: string | undefined;
 }
 
 export function ExtensionPlaceholder({

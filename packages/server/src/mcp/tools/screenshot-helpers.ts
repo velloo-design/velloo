@@ -182,10 +182,11 @@ export function regionNode(
   const path = best.path === "" ? [] : best.path.split(".").map(Number);
   const node = pathAt(screen.tree, path);
   if (!node) return { path };
+  const id = nodeId(node);
   return {
     path,
     ...(isComponentNode(node) ? { ref: node.$ref } : {}),
-    ...(nodeId(node) ? { id: nodeId(node) } : {}),
+    ...(id !== undefined ? { id } : {}),
   };
 }
 

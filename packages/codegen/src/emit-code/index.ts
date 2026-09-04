@@ -122,10 +122,10 @@ export interface EmitCodeOptions {
    * snippet-instance JSX uniformly. The agent ignores this field when
    * writing imports.
    */
-  componentsAlias?: string;
-  snippetsAlias?: string;
+  componentsAlias?: string | undefined;
+  snippetsAlias?: string | undefined;
   /** Snippets registry — required if the screen tree contains $snippet instances. */
-  snippets?: Map<string, Snippet>;
+  snippets?: Map<string, Snippet> | undefined;
   /**
    * Extensions registry — folder-global custom components.
    * Required for emit_code to emit imports for any extension $refs in the
@@ -133,20 +133,20 @@ export interface EmitCodeOptions {
    * `UnknownComponent`. Pass `Object.entries(config.extensions ?? {})`
    * mapped to importPath-only records.
    */
-  extensions?: Record<string, Extension>;
+  extensions?: Record<string, Extension> | undefined;
   /**
    * Framework target (MUI, …). When set, component ids resolve to the
    * framework's native imports instead of the shadcn REGISTRY, and the
    * shadcn-only `componentsToInstall` / `helpersToMaterialize` lists are
    * suppressed (they don't apply to a non-shadcn framework). Absent ⇒ shadcn.
    */
-  target?: CodegenTarget;
+  target?: CodegenTarget | undefined;
   /**
    * No-CSS-framework folder (`config.styling.framework === "none"`): the no-lib
    * primitives emit as plain HTML with inline `style` defaults (Tailwind-free),
    * and the shadcn install lists are suppressed. Absent ⇒ class-based.
    */
-  inlineStyle?: boolean;
+  inlineStyle?: boolean | undefined;
 }
 
 const DEFAULT_ALIAS = "@/components/ui";
@@ -314,15 +314,15 @@ export async function emitCode(
 }
 
 export interface EmitSnippetOptions {
-  componentsAlias?: string;
-  snippetsAlias?: string;
-  snippets?: Map<string, Snippet>;
+  componentsAlias?: string | undefined;
+  snippetsAlias?: string | undefined;
+  snippets?: Map<string, Snippet> | undefined;
   /** Folder-global extensions — same shape as `EmitCodeOptions.extensions`. */
-  extensions?: Record<string, Extension>;
+  extensions?: Record<string, Extension> | undefined;
   /** Framework target — same shape + meaning as `EmitCodeOptions.target`. */
-  target?: CodegenTarget;
+  target?: CodegenTarget | undefined;
   /** No-CSS-framework folder — same shape + meaning as `EmitCodeOptions.inlineStyle`. */
-  inlineStyle?: boolean;
+  inlineStyle?: boolean | undefined;
 }
 
 function buildExtensionsMap(

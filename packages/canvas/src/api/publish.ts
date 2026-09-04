@@ -14,7 +14,7 @@ export interface PublishResult {
   screens: number;
   /** True when this created the link rather than updating the folder's. */
   created: boolean;
-  tier?: string;
+  tier?: string | undefined;
   history?: { retained: boolean; versions: number; pruned: number };
 }
 
@@ -68,12 +68,12 @@ export interface PublishTargets {
 export interface PublishRequest {
   /** Board ids to publish; empty = every board in the folder. */
   boardIds: string[];
-  title?: string;
+  title?: string | undefined;
   visibility: "public" | "private";
   /** Anyone with the password can view, whatever the visibility. */
-  password?: string;
+  password?: string | undefined;
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
-  teamId?: string;
+  teamId?: string | undefined;
   screenshots: boolean;
 }
 

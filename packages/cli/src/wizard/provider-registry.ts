@@ -68,7 +68,7 @@ export interface WizardProviderEntry {
   /** Ask where inside the app the upstream components should land. */
   asksComponentsSubfolder: boolean;
   /** Placeholder-tree options for screens scaffolded from a scan. */
-  scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" | "chakra" };
+  scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" | "chakra" | undefined };
   /** Resolve the wizard's answers into this provider's library declaration. */
   planInstall(answers: WizardAnswers): InstallPlan;
   /**
@@ -82,9 +82,9 @@ export interface WizardProviderEntry {
    */
   stylingFor(answers: WizardAnswers): Config["styling"];
   /** Scan adoption: claims a detected host when the user didn't pin `--library`. */
-  scanMatch?: (detected: DetectedHost) => boolean;
+  scanMatch?: ((detected: DetectedHost) => boolean) | undefined;
   /** Console note printed when `scanMatch` adopts this provider. */
-  scanNote?: (detected: DetectedHost) => string;
+  scanNote?: ((detected: DetectedHost) => string) | undefined;
   /** How the agent handoff names the components ("the project's X components"). */
   handoffComponentsLabel: string;
   /** The design-folder README's per-provider components section. */

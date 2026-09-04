@@ -9,13 +9,13 @@ import { detectSnippetCycle } from "./snippet-cycle.ts";
 export interface AddSnippetArgs {
   /** Display name. Id is slug(name) unless `id` provided. */
   name: string;
-  id?: string;
+  id?: string | undefined;
   /**
    * Declared params. Optional + defaulted here (not just via the standalone
    * tool's Zod `.default([])`) so the `batch` path — which dispatches raw args
    * and bypasses Zod defaults — accepts a params-less `add_snippet` too.
    */
-  params?: SnippetParam[];
+  params?: SnippetParam[] | undefined;
   tree: Node;
 }
 

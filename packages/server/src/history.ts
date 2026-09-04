@@ -14,7 +14,7 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
  * parallel folders — and tests — never share stacks.
  */
 export type HistoryEntry =
-  | { kind: "screen"; screenId: string; screen: Screen | null; ts?: number }
+  | { kind: "screen"; screenId: string; screen: Screen | null; ts?: number | undefined }
   | { kind: "board"; boardId: string; board: Board | null; ts?: number }
   | {
       kind: "theme";

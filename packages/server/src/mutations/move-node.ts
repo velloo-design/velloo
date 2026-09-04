@@ -11,7 +11,7 @@ export interface MoveNodeArgs {
   screenId: string;
   fromPath: Locator;
   toParent: Locator;
-  toIndex?: number;
+  toIndex?: number | undefined;
 }
 
 export interface MoveNodeResult {

@@ -13,30 +13,30 @@ import { getScreen } from "./lookup.ts";
 export interface FindNodesArgs {
   screenId: string;
   /** Exact `$ref` (component id) match. */
-  ref?: string;
+  ref?: string | undefined;
   /** Exact `$snippet` (snippet instance) match. */
-  snippetId?: string;
+  snippetId?: string | undefined;
   /** Exact `$id` match. */
-  id?: string;
+  id?: string | undefined;
   /** Substring match on `props.className`. */
-  classContains?: string;
+  classContains?: string | undefined;
   /** Prop key that must be present (e.g. "name"). */
-  prop?: string;
+  prop?: string | undefined;
   /** With `prop`: the value must also strictly equal this. */
   propValue?: unknown;
   /** Max matches returned. Default 50. */
-  limit?: number;
+  limit?: number | undefined;
 }
 
 export interface FoundNode {
   path: number[];
   kind: "component" | "snippet" | "param";
   /** `$ref` for components, `$snippet` for snippet instances. */
-  ref?: string;
-  id?: string;
-  className?: string;
+  ref?: string | undefined;
+  id?: string | undefined;
+  className?: string | undefined;
   /** First 80 chars of a string `children` prop, when present. */
-  textPreview?: string;
+  textPreview?: string | undefined;
   childCount: number;
 }
 

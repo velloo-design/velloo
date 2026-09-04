@@ -17,12 +17,12 @@ function boardNameTooLong(name: string): MutationError | null {
 
 export interface AddBoardArgs {
   name: string;
-  id?: string;
+  id?: string | undefined;
   /**
    * Sidebar group to file the board under — an existing group's id or name,
    * or a new name, which creates the group (see {@link resolveGroup}).
    */
-  group?: string;
+  group?: string | undefined;
 }
 
 export interface AddBoardResult {
@@ -74,16 +74,16 @@ export async function addBoard(
 export interface UpdateBoardArgs {
   boardId: string;
   patch: {
-    name?: string;
+    name?: string | undefined;
     /** Named theme for the board's frames; null clears back to default. */
-    theme?: string | null;
+    theme?: string | null | undefined;
     /** true stamps `archivedAt` with now; false clears it. */
-    archived?: boolean;
+    archived?: boolean | undefined;
     /**
      * Sidebar group — an existing group's id or name, or a new name (which
      * creates the group). null files the board back under Ungrouped.
      */
-    group?: string | null;
+    group?: string | null | undefined;
   };
 }
 

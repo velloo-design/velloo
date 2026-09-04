@@ -20,7 +20,7 @@ export interface AnnotationEntry {
   target: { locator: number[] | string };
   position: { x: number; y: number } | "auto";
   body: string;
-  collapsed?: boolean;
+  collapsed?: boolean | undefined;
   resolved: number[] | null;
 }
 

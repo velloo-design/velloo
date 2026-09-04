@@ -16,9 +16,9 @@ export interface ValueFieldProps {
   /** Human name — feeds the color picker's aria-label. */
   name: string;
   label: ReactNode;
-  labelClassName?: string;
+  labelClassName?: string | undefined;
   /** Wrapper tooltip (snippet params carry a description). */
-  title?: string;
+  title?: string | undefined;
   /**
    * Seeds local draft state on mount. Key the field on selection/param
    * identity so switching targets remounts with a fresh value; within one
@@ -29,19 +29,19 @@ export interface ValueFieldProps {
   /** Fires on every edit. The caller owns debounce + endpoint. */
   onCommit(next: unknown): void;
   /** Dense sizing for tight panels (snippet param editor). */
-  compact?: boolean;
+  compact?: boolean | undefined;
   /** string/color: commit `undefined` instead of "" when cleared; number: `undefined` instead of 0. */
-  emptyAsUndefined?: boolean;
+  emptyAsUndefined?: boolean | undefined;
   /** enum options; an all-number list commits numbers. */
-  enumValues?: ReadonlyArray<string | number>;
+  enumValues?: ReadonlyArray<string | number> | undefined;
   /** enum: prepend an "(unset)" entry that commits `undefined`. */
-  allowUnset?: boolean;
+  allowUnset?: boolean | undefined;
   /** icon: the full icon-name list (see useIconNames). */
-  iconNames?: string[];
-  min?: number;
-  max?: number;
-  step?: number;
-  placeholder?: string;
+  iconNames?: string[] | undefined;
+  min?: number | undefined;
+  max?: number | undefined;
+  step?: number | undefined;
+  placeholder?: string | undefined;
 }
 
 function toDraftText(kind: ValueKind, v: unknown): string {

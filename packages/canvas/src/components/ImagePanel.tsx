@@ -164,7 +164,7 @@ interface Props {
    * picks 16:9 on a node styled `1/1` gets a wide image silently cropped
    * square, with nothing on screen explaining why.
    */
-  nodeAspect?: string;
+  nodeAspect?: string | undefined;
 }
 
 export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {

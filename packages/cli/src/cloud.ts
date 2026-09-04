@@ -110,8 +110,8 @@ export async function checkCloudHealth(baseUrl: string): Promise<CloudHealth> {
   }
   const body = (await res.json().catch(() => null)) as {
     ok?: boolean;
-    db?: { ok?: boolean };
-    blob?: { ok?: boolean };
+    db?: { ok?: boolean | undefined };
+    blob?: { ok?: boolean | undefined };
   } | null;
   if (!body || typeof body.ok !== "boolean" || body.ok) return { status: "ok" };
   const down = [

@@ -79,7 +79,7 @@ export function resolveGroup(
 
 export interface AddBoardGroupArgs {
   name: string;
-  color?: string;
+  color?: string | undefined;
 }
 
 export interface AddBoardGroupResult {
@@ -114,9 +114,9 @@ export async function addBoardGroup(
 export interface UpdateBoardGroupArgs {
   groupId: string;
   patch: {
-    name?: string;
+    name?: string | undefined;
     /** CSS color for the chip; null clears back to no explicit color. */
-    color?: string | null;
+    color?: string | null | undefined;
   };
 }
 

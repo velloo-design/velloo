@@ -108,15 +108,23 @@ export const addNodeShape = {
 export const AddNodeBody = z.object(addNodeShape);
 export type AddNodeInput = z.infer<typeof AddNodeBody>;
 
+/**
+ * Optional fields are `?: T | undefined` here and throughout: these shapes are
+ * built from zod output, whose `.optional()` yields `T | undefined`, and they
+ * describe arguments where an absent key and an undefined one mean the same
+ * thing. `exactOptionalPropertyTypes` keeps that a stated choice rather than
+ * an accident — the places that genuinely distinguish the two (prop patches,
+ * where `null` removes and absent leaves alone) stay narrow.
+ */
 export interface AddNodeArgs {
   screenId: string;
   parentPath: Locator;
   componentRef: string;
-  id?: string;
-  props?: Record<string, unknown>;
-  children?: Node[];
-  index?: number;
-  emitAs?: { name: string; importPath: string };
+  id?: string | undefined;
+  props?: Record<string, unknown> | undefined;
+  children?: Node[] | undefined;
+  index?: number | undefined;
+  emitAs?: { name: string; importPath: string } | undefined;
 }
 
 /**

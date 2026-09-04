@@ -56,22 +56,22 @@ export interface GenerateAssetRequest {
   prompt: string;
   intent: Intent;
   /** Cloud defaults per intent (16:9 for photo, 1:1 for icon/vector, …). */
-  aspect?: Aspect;
+  aspect?: Aspect | undefined;
   /** Variants to generate, 1..4. Each is charged. */
-  count?: number;
+  count?: number | undefined;
   /**
    * Existing assets to work from, as folder-relative paths ("assets/hero.png")
    * or canvas URLs ("/assets/hero.png"). `edit`/`cutout`/`upscale` require one;
    * `photo`/`illustration`/`graphic` accept them as style guidance.
    */
-  reference?: string[];
+  reference?: string[] | undefined;
   /** Filename stem for `assets/<stem>.<png|svg>`; defaults to the generation id. */
-  filename?: string;
+  filename?: string | undefined;
   /**
    * The asset this generation replaces, recorded in the provenance store.
    * Set by the canvas's regenerate action; agents don't pass it.
    */
-  replaces?: string;
+  replaces?: string | undefined;
 }
 
 export interface GeneratedAssetFile {

@@ -1,6 +1,7 @@
 import {
   type ColorPair,
   type Colors,
+  type ColorsOverride,
   sanitizeCssTokenValue as cssv,
   isCssIdent,
   neutralizeCssText,
@@ -173,7 +174,7 @@ function appendAnimations(animation: Theme["animation"], lines: string[]): void 
   }
 }
 
-function appendColorBlock(colors: Partial<Colors>, lines: string[]): void {
+function appendColorBlock(colors: ColorsOverride, lines: string[]): void {
   for (const { key, pair } of COLOR_SLOTS) {
     const value = colors[key];
     if (value === undefined) continue;
@@ -188,9 +189,9 @@ function appendColorBlock(colors: Partial<Colors>, lines: string[]): void {
 
 export interface GlobalsCssOptions {
   /** Emit `/* TODO: load this font ... *​/` next to --font-sans. Default true. */
-  fontLoadingNote?: boolean;
+  fontLoadingNote?: boolean | undefined;
   /** Folder custom.css contents to append verbatim at the end. */
-  customCss?: string;
+  customCss?: string | undefined;
 }
 
 export function emitGlobalsCss(theme: Theme, opts: GlobalsCssOptions = {}): string {

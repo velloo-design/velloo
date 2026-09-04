@@ -38,7 +38,7 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ComponentProps<"button">,
     VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
+  asChild?: boolean | undefined;
 }
 
 export function Button({ className, variant, size, asChild = false, ...props }: ButtonProps) {

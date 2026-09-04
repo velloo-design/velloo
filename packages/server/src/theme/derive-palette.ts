@@ -9,8 +9,8 @@ interface Oklch {
   mode: "oklch";
   l: number;
   c: number;
-  h?: number;
-  alpha?: number;
+  h?: number | undefined;
+  alpha?: number | undefined;
 }
 
 function r(n: number | undefined, p = 3): number {

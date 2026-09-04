@@ -44,6 +44,35 @@ export const ColorsSchema = z.object({
 export type Colors = z.infer<typeof ColorsSchema>;
 
 /**
+ * A sparse color override: every slot optional and explicitly undefined-able,
+ * matching what zod's `.partial()` produces for `colorsDark`. `Partial<Colors>`
+ * is NOT the same thing under `exactOptionalPropertyTypes` — it adds `?` but
+ * still rejects an explicit `undefined`.
+ */
+export type ColorsOverride = { [K in keyof Colors]?: Colors[K] | undefined };
+
+/**
+ * The effective colors for a mode: `colors`, with `colorsDark` layered on when
+ * rendering dark.
+ *
+ * Every caller used to spread this inline, and the spread does not type as a
+ * complete `Colors`: `colorsDark` is a zod `.partial()`, so each of its fields
+ * is `T | undefined`, and spreading that over the full set widens even the
+ * required `background`/`foreground` to possibly-undefined. Callers coped by
+ * casting (codegen's dtcg) or by not noticing. Skipping undefined values keeps
+ * the result a real `Colors` — and matches the intent: an override that is not
+ * set must not blank the base color.
+ */
+export function resolveColors(theme: Theme, dark = false): Colors {
+  if (!dark || !theme.colorsDark) return theme.colors;
+  const merged: Colors = { ...theme.colors };
+  for (const [key, value] of Object.entries(theme.colorsDark)) {
+    if (value !== undefined) (merged as Record<string, unknown>)[key] = value;
+  }
+  return merged;
+}
+
+/**
  * Numeric color scales + extra semantic roles captured verbatim from a host
  * app — `primary-600`, `success-500`, `danger`, `border-primary-300`. Keyed by
  * the Tailwind color name (no `--color-` prefix), values are CSS colors.

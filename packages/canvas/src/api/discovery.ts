@@ -43,14 +43,14 @@ export interface BoardGroupMeta {
   id: string;
   name: string;
   /** CSS color for the group's chip and rail. */
-  color?: string;
+  color?: string | undefined;
 }
 
 export interface ScreenMeta {
   id: string;
   name: string;
   /** Resolved library id — falls back to defaultLibrary server-side. */
-  library?: string | null;
+  library?: string | null | undefined;
 }
 
 export interface BoardMeta {
@@ -58,9 +58,9 @@ export interface BoardMeta {
   name: string;
   frameCount: number;
   /** Id of the `boardGroups` entry this board sits under; null = ungrouped. */
-  group?: string | null;
+  group?: string | null | undefined;
   /** ISO stamp when archived; null/absent = live. */
-  archivedAt?: string | null;
+  archivedAt?: string | null | undefined;
 }
 
 export interface SnippetMeta {
@@ -68,7 +68,7 @@ export interface SnippetMeta {
   name: string;
   params: SnippetParam[];
   /** Resolved library id. */
-  library?: string | null;
+  library?: string | null | undefined;
 }
 
 /**

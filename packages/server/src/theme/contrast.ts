@@ -9,7 +9,7 @@
  * raw input strings so the canvas can show "primary/foreground 5.4:1 AA".
  */
 
-import type { Theme } from "@velloo/schema";
+import { resolveColors, type Theme } from "@velloo/schema";
 import { type Color, formatHex, parse as parseCulori } from "culori";
 
 export type ContrastTier = "AAA" | "AA" | "AAlarge" | "Fail";
@@ -104,7 +104,7 @@ export function scoreThemeContrast(
   mode: "light" | "dark" = "light",
 ): ContrastResult[] {
   // colorsDark is a partial overlay — undefined slots inherit light values.
-  const c = mode === "dark" ? { ...theme.colors, ...(theme.colorsDark ?? {}) } : theme.colors;
+  const c = resolveColors(theme, mode === "dark");
   const pairs: Pair[] = [
     { label: "foreground on background", fg: c.foreground as string, bg: c.background as string },
     {

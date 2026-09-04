@@ -42,13 +42,13 @@ const VALID_IMPORT_SPECIFIER = /^[\w@./~-]+$/;
 export interface EmitContext {
   componentsAlias: string;
   /** Where snippet React components live. Defaults to `<componentsAlias>/../snippets`. */
-  snippetsAlias?: string;
+  snippetsAlias?: string | undefined;
   /** PascalCase names for each snippet id. Used to emit `<FeatureCard />` from `$snippet: "feature-card"`. */
-  snippetPascalById?: Map<string, string>;
+  snippetPascalById?: Map<string, string> | undefined;
   /** Snippet definitions — required to inline instances carrying `$overrides`. */
-  snippets?: Map<string, Snippet>;
+  snippets?: Map<string, Snippet> | undefined;
   /** Set when emitting *inside* a snippet body: `$param` nodes become `{name}`. */
-  snippetParamNames?: Set<string>;
+  snippetParamNames?: Set<string> | undefined;
   /**
    * Folder-scoped extensions. Keyed by component id, value carries the
    * import specifier emit_code should produce. When a `$ref` isn't in the
@@ -56,7 +56,7 @@ export interface EmitContext {
    * emits `import { <id> } from <importPath>` (verbatim, no alias rewrite)
    * so the agent's emit lands in the user's app at the path they declared.
    */
-  extensions?: Map<string, { importPath: string }>;
+  extensions?: Map<string, { importPath: string }> | undefined;
   /**
    * Active framework target (e.g. MUI). When it resolves a `$ref`, the
    * component emits as a bare import from the framework's module and skips the
@@ -64,20 +64,20 @@ export interface EmitContext {
    * Absent ⇒ default shadcn behavior. Consulted *before* the REGISTRY so a MUI
    * screen's `Card`/`Box` resolve to MUI, not the shadcn primitive of that id.
    */
-  target?: CodegenTarget;
+  target?: CodegenTarget | undefined;
   /**
    * The folder is a no-CSS-framework (`none/none`) folder: the no-lib primitives
    * lower to plain HTML with inline `style` defaults (no Tailwind), consulted
    * before the REGISTRY. Set from `config.styling.framework === "none"`.
    */
-  inlineStyle?: boolean;
+  inlineStyle?: boolean | undefined;
   /**
    * Non-fatal emit caveats accumulated during the walk (e.g. an Icon whose
    * `name` is a dynamic param, which can't survive lowering — see
    * renderComponent). Surfaced on the emit result so the agent self-corrects
    * instead of silently shipping the fallback.
    */
-  warnings?: string[];
+  warnings?: string[] | undefined;
   /** 2-space indentation, baked once. */
   indent(depth: number): string;
 }
@@ -172,7 +172,7 @@ function renderComponent(
     return ok(`${ctx.indent(depth)}<${emitAs.name} />`);
   }
 
-  type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean };
+  type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean | undefined };
   // none/none folder: a no-lib primitive (Box/Stack/Card/Button/…) lowers to
   // plain HTML + inline `style` defaults — consulted FIRST so `Card`/`Button`
   // resolve to a styled `<div>`/`<button>`, not the shadcn import of that id.

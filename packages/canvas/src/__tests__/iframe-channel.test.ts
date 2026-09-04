@@ -58,7 +58,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  (globalThis as { MessageChannel?: typeof MessageChannel }).MessageChannel = prevMC;
+  const g = globalThis as { MessageChannel?: typeof MessageChannel };
+  // Restore by deleting rather than assigning undefined — the global is either
+  // there or it is not, which is what the optional property means.
+  if (prevMC) g.MessageChannel = prevMC;
+  else delete g.MessageChannel;
 });
 
 async function tick(): Promise<void> {

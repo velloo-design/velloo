@@ -13,7 +13,7 @@ export interface CloudAuth {
   /** velloo-cloud base URL, already normalized (no trailing slash). */
   url: string;
   /** `vlk_` CLI token, absent when the user is logged out. */
-  token?: string;
+  token?: string | undefined;
   /**
    * Re-read the token from wherever the embedder keeps it. The CLI resolves
    * credentials once at daemon boot, so without this a user who signs in
@@ -155,16 +155,16 @@ export interface CanvasPublishDestinations {
 export interface CanvasPublishRequest {
   /** Board ids to publish; empty = every board in the folder. */
   boardIds: string[];
-  title?: string;
+  title?: string | undefined;
   visibility: "public" | "private";
   /**
    * Password-protect the link. Independent of visibility — anyone who has the
    * password can view. Sent straight through to the cloud, never persisted.
    */
-  password?: string;
+  password?: string | undefined;
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
   /** Publish into a team rather than the personal workspace. */
-  teamId?: string;
+  teamId?: string | undefined;
   screenshots: boolean;
 }
 
@@ -189,7 +189,7 @@ export interface CanvasPublishResult {
   screens: number;
   /** True when this created the link rather than updating the folder's. */
   created: boolean;
-  tier?: string;
+  tier?: string | undefined;
   history?: { retained: boolean; versions: number; pruned: number };
 }
 

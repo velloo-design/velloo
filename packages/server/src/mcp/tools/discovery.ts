@@ -29,7 +29,7 @@ import { errorResult, jsonResult } from "./result.ts";
  * miss inferred-from-absence contracts, so surface it as an explicit `required` flag — this
  * is the pre-call visibility that prevents the SnippetParamMismatch first-try failure.
  */
-function withRequiredFlag<T extends { default?: unknown; optional?: boolean }>(
+function withRequiredFlag<T extends { default?: unknown; optional?: boolean | undefined }>(
   param: T,
 ): T & { required: boolean } {
   return { ...param, required: param.default === undefined && !param.optional };
@@ -57,7 +57,9 @@ function shortClass(cls: string, max = 40): string {
  */
 const MAX_ENUM_VALUES = 40;
 
-function trimLargeEnums<T extends { props: { enumValues?: (string | number)[] }[] }>(entry: T): T {
+function trimLargeEnums<T extends { props: { enumValues?: (string | number)[] | undefined }[] }>(
+  entry: T,
+): T {
   if (!entry.props.some((p) => p.enumValues && p.enumValues.length > MAX_ENUM_VALUES)) {
     return entry;
   }

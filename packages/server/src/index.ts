@@ -47,38 +47,40 @@ import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
  * (`velloo run`). `http` listens on its own port; `stdio` binds this process's
  * stdin/stdout, so the process must be agent-spawned and keep stdout clean.
  */
-export type McpTransportOptions = { transport: "http"; port?: number } | { transport: "stdio" };
+export type McpTransportOptions =
+  | { transport: "http"; port?: number | undefined }
+  | { transport: "stdio" };
 
 export interface ServerOptions {
   folder: string;
   /** Canvas port. Default 7300; pass 0 for an OS-assigned free port. */
-  port?: number;
-  host?: string;
+  port?: number | undefined;
+  host?: string | undefined;
   /** Attach an MCP server to this process. Omit for canvas only. */
-  mcp?: McpTransportOptions;
+  mcp?: McpTransportOptions | undefined;
   /**
    * velloo-cloud credentials, resolved by the CLI from
    * `~/.velloo/credentials.json`. Enables the opt-in `send_feedback` tool.
    */
-  cloud?: CloudAuth;
+  cloud?: CloudAuth | undefined;
   /**
    * Live login state + logout for the canvas account menu, provided by the CLI.
    * Omit ⇒ the canvas reports logged out.
    */
-  auth?: CanvasAuth;
+  auth?: CanvasAuth | undefined;
   /**
    * Publish-to-cloud for the canvas, provided by the CLI (it owns the
    * credential and the cloud transport). Omit ⇒ the canvas can't publish.
    */
-  publish?: CanvasPublish;
+  publish?: CanvasPublish | undefined;
 }
 
 export interface ServerHandle {
   url: string;
   port: number;
   /** Present only when an HTTP MCP transport was attached. */
-  mcpUrl?: string;
-  mcpPort?: number;
+  mcpUrl?: string | undefined;
+  mcpPort?: number | undefined;
   /** Live client counts (canvas WS + MCP sessions) for idle-shutdown decisions. */
   connections(): { canvas: number; mcp: number };
   close(): Promise<void>;

@@ -1,6 +1,7 @@
 import {
   type ColorPair,
   DEFAULT_TYPESET_NAME,
+  resolveColors,
   typesetScale,
   type Theme as VellooTheme,
 } from "@velloo/schema";
@@ -56,7 +57,9 @@ export function brandScale(primary: string): Record<string, string> {
       mode: "oklch",
       l: Math.min(Math.max(lightness, 0), 1),
       c: Math.max(chroma, 0),
-      h,
+      // An achromatic color has no hue — omit the key rather than passing
+      // undefined, which culori's Oklch type (rightly) does not accept.
+      ...(h === undefined ? {} : { h }),
     });
   return {
     50: at(0.982, c * 0.12),
@@ -152,7 +155,7 @@ function chakraTypography(
  * (`useColorModeValue`) styling agrees.
  */
 export function chakraThemeOptions(theme: VellooTheme, dark = false): ChakraThemeOptions {
-  const c = dark && theme.colorsDark ? { ...theme.colors, ...theme.colorsDark } : theme.colors;
+  const c = resolveColors(theme, dark);
   const fg = chakraColor(c.foreground);
   const sans = theme.typography.fontFamily?.sans ?? "system-ui, -apple-system, sans-serif";
   return {

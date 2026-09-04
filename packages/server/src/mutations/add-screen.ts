@@ -10,11 +10,11 @@ import { slugify } from "./slugify.ts";
 export interface AddScreenArgs {
   /** Display name. Screen id is slug(name) unless `id` is provided. */
   name: string;
-  id?: string;
+  id?: string | undefined;
   /** If provided, deep-copy the named screen's tree. */
-  fromScreenId?: string;
+  fromScreenId?: string | undefined;
   /** Otherwise, provide an explicit starting tree. Defaults to a bare Card. */
-  tree?: Node;
+  tree?: Node | undefined;
 }
 
 export interface AddScreenResult {

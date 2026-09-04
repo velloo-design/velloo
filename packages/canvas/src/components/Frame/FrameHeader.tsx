@@ -33,11 +33,11 @@ interface FrameHeaderProps {
    * skip rendering the badge — a single-library folder doesn't need
    * the extra chrome.
    */
-  library?: string | null;
+  library?: string | null | undefined;
   /** Viewport presets offered by the "new frame of this screen" menu. */
   presets: ViewportPreset[];
   /** Persisted frame pin; absent means follow canvasDefault. */
-  scheme?: FrameScheme;
+  scheme?: FrameScheme | undefined;
   canvasDefault: FrameScheme;
   onPointerDownGrip: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;

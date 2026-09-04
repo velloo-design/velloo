@@ -14,6 +14,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { CURRENT_SCHEMA_VERSION, schemaVersionOf } from "@velloo/schema";
 import { writeJsonAtomic } from "@velloo/server";
+import { z } from "zod";
 import { defaultCloudUrl } from "../cloud.ts";
 import { TOOL_VERSION } from "../version.ts";
 
@@ -24,19 +25,28 @@ import { TOOL_VERSION } from "../version.ts";
  * in-memory state + the HTTP MCP). It outlives any session and auto-exits when
  * idle.
  */
-export interface DaemonRecord {
+/**
+ * Parsed, not asserted. The lockfile and the registry are written by a
+ * *different process* — possibly an older velloo, possibly one that crashed
+ * mid-write — so their contents are untrusted input, not our own state. A bad
+ * record read as a good one sends a publish at a stale cloud, or has `stop`
+ * signal a pid that now belongs to something else.
+ */
+export const DaemonRecordSchema = z.object({
   /** realpath of the design folder — the daemon's identity. */
-  root: string;
-  pid: number;
-  canvasUrl: string;
-  canvasPort: number;
-  mcpUrl: string;
-  mcpPort: number;
+  root: z.string().min(1),
+  pid: z.number().int().positive(),
+  canvasUrl: z.string().min(1),
+  canvasPort: z.number().int().positive(),
+  mcpUrl: z.string().min(1),
+  mcpPort: z.number().int().positive(),
   /** Cloud target captured at daemon startup. */
-  cloudUrl: string;
-  version: string;
-  startedAt: string;
-}
+  cloudUrl: z.string().min(1),
+  version: z.string().min(1),
+  startedAt: z.string().min(1),
+});
+
+export type DaemonRecord = z.infer<typeof DaemonRecordSchema>;
 
 /**
  * A daemon is reusable only when both its code and cloud target match this
@@ -106,7 +116,8 @@ export function assertFolderFormatCurrent(root: string): void {
 
 export async function readLock(root: string): Promise<DaemonRecord | null> {
   try {
-    return JSON.parse(await readFile(lockPath(root), "utf8")) as DaemonRecord;
+    const parsed = DaemonRecordSchema.safeParse(JSON.parse(await readFile(lockPath(root), "utf8")));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -124,6 +135,9 @@ export function removeLock(root: string): void {
   }
 }
 
+/** What `/api/health` answers; anything else is not our daemon. */
+const HealthSchema = z.object({ app: z.string().optional(), root: z.string().optional() });
+
 /**
  * Confirm a record points at a live velloo daemon for *this* folder — not a
  * stale entry and not some foreign process that happens to hold the port.
@@ -134,8 +148,9 @@ export async function isLive(rec: DaemonRecord): Promise<boolean> {
       signal: AbortSignal.timeout(1000),
     });
     if (!res.ok) return false;
-    const body = (await res.json()) as { app?: string; root?: string };
-    return body.app === "velloo" && body.root === rec.root;
+    const body: unknown = await res.json();
+    const health = HealthSchema.safeParse(body);
+    return health.success && health.data.app === "velloo" && health.data.root === rec.root;
   } catch {
     return false;
   }
@@ -147,8 +162,14 @@ export async function isLive(rec: DaemonRecord): Promise<boolean> {
 
 async function registryRead(): Promise<DaemonRecord[]> {
   try {
-    const raw = JSON.parse(await readFile(registryPath(), "utf8"));
-    return Array.isArray(raw) ? (raw as DaemonRecord[]) : [];
+    const raw: unknown = JSON.parse(await readFile(registryPath(), "utf8"));
+    if (!Array.isArray(raw)) return [];
+    // Drop unreadable entries rather than the whole file: the registry is a
+    // best-effort index, and one stale record must not hide the live ones.
+    return raw.flatMap((entry) => {
+      const parsed = DaemonRecordSchema.safeParse(entry);
+      return parsed.success ? [parsed.data] : [];
+    });
   } catch {
     return [];
   }
@@ -291,14 +312,14 @@ async function waitForHealthy(root: string, spawned?: SpawnedDaemon): Promise<Da
 
 export interface EnsureOptions {
   /** Preferred canvas port when *spawning* a fresh daemon (ignored if one exists). */
-  preferredPort?: number;
-  host?: string;
+  preferredPort?: number | undefined;
+  host?: string | undefined;
   /**
    * Called when this call spawns a *fresh* daemon (vs. attaching to a live one).
    * Lets a caller report whether daemon-time settings — e.g. the trace env var —
    * actually took effect, since they only apply to a daemon this process spawns.
    */
-  onSpawn?: () => void;
+  onSpawn?: (() => void) | undefined;
 }
 
 /**

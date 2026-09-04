@@ -45,7 +45,7 @@ export interface InlineOptions {
   /** Design-folder root — /assets/… refs resolve inside it. */
   assetRoot: string;
   /** Board composites size-check once on the final document, not per frame. */
-  skipSizeWarning?: boolean;
+  skipSizeWarning?: boolean | undefined;
 }
 
 export async function inlineStandaloneDocument(

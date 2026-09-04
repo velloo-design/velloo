@@ -443,9 +443,9 @@ export interface UrlCookie {
   name: string;
   value: string;
   /** Either `url` OR `domain`+`path` is required (Playwright's rule). */
-  url?: string;
-  domain?: string;
-  path?: string;
+  url?: string | undefined;
+  domain?: string | undefined;
+  path?: string | undefined;
 }
 
 export interface UrlCaptureResult {
@@ -465,10 +465,10 @@ export interface UrlCaptureResult {
 export interface UrlScreenshotOptions {
   url: string;
   viewport: Viewport;
-  deviceScaleFactor?: number;
-  fullPage?: boolean;
+  deviceScaleFactor?: number | undefined;
+  fullPage?: boolean | undefined;
   /** Bounded wait for network quiet before capture, ms. Default 8000. */
-  settleTimeoutMs?: number;
+  settleTimeoutMs?: number | undefined;
   /**
    * Inject an authenticated session so auth-gated pages capture the real page
    * instead of a login redirect. `storageStatePath` points at a Playwright
@@ -476,9 +476,9 @@ export interface UrlScreenshotOptions {
    * path; produce it once with `playwright codegen`/a login script). `cookies`
    * and `localStorage` are simpler one-offs layered on top.
    */
-  storageStatePath?: string;
-  cookies?: UrlCookie[];
-  localStorage?: Record<string, string>;
+  storageStatePath?: string | undefined;
+  cookies?: UrlCookie[] | undefined;
+  localStorage?: Record<string, string> | undefined;
   /**
    * Drive the target page into dark mode before capture so a Velloo dark
    * render diffs against the app's actual dark theme (not its light default).
@@ -488,7 +488,7 @@ export interface UrlScreenshotOptions {
    * `data-theme="dark"` to `<html>` (covers class-strategy Tailwind). An app
    * with a bespoke theme mechanism may not flip — verify the capture.
    */
-  dark?: boolean;
+  dark?: boolean | undefined;
 }
 
 /**
@@ -506,7 +506,17 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
     },
     async (context) => {
       if (opts.cookies && opts.cookies.length > 0) {
-        await context.addCookies(opts.cookies);
+        // Playwright's cookie type wants each optional key absent rather than
+        // explicitly undefined — strip the ones the caller left unset.
+        await context.addCookies(
+          opts.cookies.map((cookie) => ({
+            name: cookie.name,
+            value: cookie.value,
+            ...(cookie.url !== undefined ? { url: cookie.url } : {}),
+            ...(cookie.domain !== undefined ? { domain: cookie.domain } : {}),
+            ...(cookie.path !== undefined ? { path: cookie.path } : {}),
+          })),
+        );
       }
       if (opts.localStorage && Object.keys(opts.localStorage).length > 0) {
         await context.addInitScript((entries: Array<[string, string]>) => {

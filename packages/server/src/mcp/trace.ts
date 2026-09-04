@@ -36,13 +36,13 @@ export interface CallRecord {
   ok: boolean;
   params: unknown;
   /** Concatenated text content of the result (the JSON a tool returns). */
-  text?: string;
-  images?: AssetRef[];
+  text?: string | undefined;
+  images?: AssetRef[] | undefined;
   /** The result envelope's own `isError` flag, distinct from a thrown error. */
-  isError?: boolean;
+  isError?: boolean | undefined;
   /** Present only when the handler threw. */
-  error?: { name?: string; message: string; stack?: string };
-  sessionId?: string;
+  error?: { name?: string | undefined; message: string; stack?: string | undefined } | undefined;
+  sessionId?: string | undefined;
 }
 
 export interface TapeMeta {
@@ -122,7 +122,7 @@ export interface RecordInput {
   tool: string;
   params: unknown;
   durationMs: number;
-  sessionId?: string;
+  sessionId?: string | undefined;
   /** The handler's return value (an MCP result envelope) when it resolved. */
   result?: unknown;
   /** The thrown value when the handler rejected. */
@@ -135,7 +135,7 @@ export interface PendingCall {
   ts: string;
   tool: string;
   params: unknown;
-  sessionId?: string;
+  sessionId?: string | undefined;
 }
 
 export class TraceRecorder {
@@ -154,7 +154,7 @@ export class TraceRecorder {
    * just being absent). Pair every `start` with an `end`. Returns -1 when the
    * recorder is disabled, which `end` treats as a no-op.
    */
-  start(input: { tool: string; params: unknown; sessionId?: string }): number {
+  start(input: { tool: string; params: unknown; sessionId?: string | undefined }): number {
     if (this.broken) return -1;
     const seq = this.seq++;
     const call: PendingCall = {
@@ -243,7 +243,7 @@ export class TraceRecorder {
   private splitResult(
     seq: number,
     result: unknown,
-  ): { text?: string; images: AssetRef[]; isError: boolean } {
+  ): { text?: string | undefined; images: AssetRef[]; isError: boolean } {
     const images: AssetRef[] = [];
     const texts: string[] = [];
     const envelope = result as { content?: unknown; isError?: unknown } | null | undefined;
@@ -328,7 +328,7 @@ export function withCallRecording(mcp: McpServer, recorder: TraceRecorder): McpS
   const patched: typeof original = (name, config, cb) => {
     const handler = cb as (args: unknown, extra: unknown) => unknown;
     const wrapped = async (args: unknown, extra: unknown): Promise<unknown> => {
-      const sessionId = (extra as { sessionId?: string } | undefined)?.sessionId;
+      const sessionId = (extra as { sessionId?: string | undefined } | undefined)?.sessionId;
       // Mark in-flight first, so a handler that hangs (e.g. a stalled
       // compare_to_url) shows as a "running" row instead of vanishing.
       const seq = recorder.start({ tool: name, params: args, sessionId });

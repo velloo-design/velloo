@@ -16,7 +16,7 @@ export interface AddNoteArgs {
   boardId: string;
   x: number;
   y: number;
-  width?: number;
+  width?: number | undefined;
   body: string;
 }
 
@@ -48,10 +48,10 @@ export interface UpdateNoteArgs {
   boardId: string;
   noteId: string;
   patch: {
-    x?: number;
-    y?: number;
-    width?: number;
-    body?: string;
+    x?: number | undefined;
+    y?: number | undefined;
+    width?: number | undefined;
+    body?: string | undefined;
   };
 }
 

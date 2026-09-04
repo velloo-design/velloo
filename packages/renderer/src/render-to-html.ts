@@ -48,23 +48,23 @@ export interface RenderOptions {
   /** Component registry from the active provider. */
   registry: ComponentRegistry;
   /** Snippets registry — required if the screen tree contains $snippet nodes. */
-  snippets?: Map<string, Snippet>;
+  snippets?: Map<string, Snippet> | undefined;
   /** Render with the dark color block active. */
-  dark?: boolean;
+  dark?: boolean | undefined;
   /** Folder-scoped custom CSS (theme/custom.css) — injected last. */
-  customCss?: string;
+  customCss?: string | undefined;
   /** Origin for root-relative asset URLs in out-of-origin renders. */
-  baseHref?: string;
+  baseHref?: string | undefined;
   /**
    * Root-relative URL of the live-island bundle. Set only when the screen
    * has `render:"live"` extension nodes; injects the client mount runtime.
    */
-  liveBundleUrl?: string;
+  liveBundleUrl?: string | undefined;
   /**
    * The active framework adapter's render pass (MUI/emotion). Absent for
    * Tailwind-class frameworks (shadcn / no-lib) — the SSR path is unchanged.
    */
-  renderPass?: RenderPass;
+  renderPass?: RenderPass | undefined;
   /**
    * Framework-native canvas bundle (#18): the installed-component `mountScreen`
    * URL + native theme options. When set, the document embeds the resolved tree
@@ -72,13 +72,13 @@ export interface RenderOptions {
    * over the SSR (which stays as the fallback). The SSR still runs — so a build
    * miss or mount failure is invisible.
    */
-  canvasBundle?: { url: string; themeOptions: unknown };
+  canvasBundle?: { url: string; themeOptions: unknown } | undefined;
   /**
    * Include the canvas iframe runtime script (selection channel). Defaults
    * true; standalone exports pass false — the document must carry no
    * canvas-facing behavior.
    */
-  includeRuntime?: boolean;
+  includeRuntime?: boolean | undefined;
 }
 
 /**

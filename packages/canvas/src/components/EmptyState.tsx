@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 
 interface Props {
   title: string;
-  hint?: string;
+  hint?: string | undefined;
   /** Optional call-to-action rendered under the hint. */
-  action?: ReactNode;
+  action?: ReactNode | undefined;
 }
 
 export function EmptyState({ title, hint, action }: Props) {

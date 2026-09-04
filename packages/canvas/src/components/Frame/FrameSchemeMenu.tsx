@@ -10,7 +10,7 @@ import { frameSchemeOptions } from "./frame-scheme.ts";
 
 interface FrameSchemeMenuProps {
   frameLabel: string;
-  scheme?: FrameScheme;
+  scheme?: FrameScheme | undefined;
   canvasDefault: FrameScheme;
   onChange: (scheme: FrameScheme | null) => void;
 }

@@ -6,13 +6,13 @@ import { getBoard } from "./lookup.ts";
 import { persistBoard } from "./persist.ts";
 
 export interface FramePatch {
-  x?: number;
-  y?: number;
-  w?: number;
-  h?: number;
-  label?: string | null;
-  group?: string | null;
-  scheme?: "light" | "dark" | null;
+  x?: number | undefined;
+  y?: number | undefined;
+  w?: number | undefined;
+  h?: number | undefined;
+  label?: string | null | undefined;
+  group?: string | null | undefined;
+  scheme?: "light" | "dark" | null | undefined;
 }
 
 export interface UpdateFrameArgs {

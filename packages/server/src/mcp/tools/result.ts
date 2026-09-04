@@ -13,7 +13,7 @@ export type McpContent =
 
 export type McpResult = {
   content: McpContent[];
-  isError?: true;
+  isError?: true | undefined;
 };
 
 /** The discriminant every typed error union shares (MutationError, ThemeError, CodegenError). */

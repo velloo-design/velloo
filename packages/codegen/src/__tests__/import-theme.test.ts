@@ -41,7 +41,7 @@ describe("parseThemeCss round-trip", () => {
     const parsed = parseThemeCss(css);
 
     expect(parsed.colors).toEqual(theme.colors);
-    expect(parsed.colorsDark).toEqual(theme.colorsDark ?? {});
+    expect(parsed.colorsDark).toEqual((theme.colorsDark ?? {}) as typeof parsed.colorsDark);
     expect(parsed.radius).toBe("0.625rem");
     expect(parsed.fontFamily).toEqual(theme.typography.fontFamily ?? {});
     expect(parsed.warnings).toEqual([]);

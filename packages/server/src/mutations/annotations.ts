@@ -20,10 +20,10 @@ export interface AddAnnotationArgs {
   screenId: string;
   target: AnnotationTarget;
   body: string;
-  position?: { x: number; y: number } | "auto";
-  collapsed?: boolean;
+  position?: { x: number; y: number } | "auto" | undefined;
+  collapsed?: boolean | undefined;
   /** Authorship marker — the MCP layer forces "agent"; defaults to "user". */
-  author?: "user" | "agent";
+  author?: "user" | "agent" | undefined;
 }
 
 export interface AnnotationResult {
@@ -71,9 +71,9 @@ export interface UpdateAnnotationArgs {
   screenId: string;
   annotationId: string;
   patch: {
-    body?: string;
-    position?: { x: number; y: number } | "auto";
-    collapsed?: boolean | null;
+    body?: string | undefined;
+    position?: { x: number; y: number } | "auto" | undefined;
+    collapsed?: boolean | null | undefined;
   };
 }
 
@@ -105,7 +105,7 @@ export async function updateAnnotation(
       ...(args.patch.position !== undefined ? { position: args.patch.position } : {}),
     };
     if (args.patch.collapsed === null) {
-      delete (next as { collapsed?: boolean }).collapsed;
+      delete (next as { collapsed?: boolean | undefined }).collapsed;
     } else if (args.patch.collapsed !== undefined) {
       next.collapsed = args.patch.collapsed;
     }

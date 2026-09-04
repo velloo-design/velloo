@@ -42,8 +42,8 @@ interface LiveMarkerProps {
   extension: Extension;
   /** Props the agent set on the node (plus renderer-injected attrs to strip). */
   resolvedProps: Record<string, unknown>;
-  "data-node-path"?: string;
-  className?: string;
+  "data-node-path"?: string | undefined;
+  className?: string | undefined;
 }
 
 export function LiveIslandMarker({

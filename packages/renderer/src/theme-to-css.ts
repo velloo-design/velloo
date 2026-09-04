@@ -1,5 +1,6 @@
 import {
   type Colors,
+  type ColorsOverride,
   isCssIdent,
   sanitizeCssTokenValue,
   type Theme,
@@ -99,7 +100,7 @@ function emitContainer(container: Theme["container"], lines: string[]): void {
   lines.push("", ".container {", ...decls, "}");
 }
 
-function emitColorBlock(colors: Partial<Colors>, lines: string[]): void {
+function emitColorBlock(colors: ColorsOverride, lines: string[]): void {
   for (const [token, target] of Object.entries(COLOR_TOKEN_MAP)) {
     const value = colors[token as keyof Colors];
     if (value === undefined) continue;

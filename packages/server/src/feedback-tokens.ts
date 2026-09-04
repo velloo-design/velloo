@@ -146,7 +146,7 @@ export async function topUpTokens(
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) throw new Error(`token issuance failed (${res.status})`);
-  const { signatures } = (await res.json()) as { signatures?: string[] };
+  const { signatures } = (await res.json()) as { signatures?: string[] | undefined };
   if (!Array.isArray(signatures) || signatures.length !== blinds.length) {
     throw new Error("token issuance returned a malformed signature batch");
   }

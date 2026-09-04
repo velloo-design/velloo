@@ -21,7 +21,7 @@ export interface RunTarget {
  */
 export async function resolveRunTargets(
   arg: string | undefined,
-  opts: { cwd?: string } = {},
+  opts: { cwd?: string | undefined } = {},
 ): Promise<RunTarget[]> {
   const cwd = resolve(opts.cwd ?? ".");
   const single = async (): Promise<RunTarget[]> => {

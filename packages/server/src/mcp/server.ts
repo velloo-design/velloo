@@ -51,12 +51,12 @@ export interface McpServerOptions {
   canvasBundler: CanvasBundler;
   comments: LocalCommentsService;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
-  assetOrigin?: string;
+  assetOrigin?: string | undefined;
   /**
    * velloo-cloud credentials, resolved by the CLI and threaded in. Enables
    * the opt-in `send_feedback` tool. Absent ⇒ no cloud calls.
    */
-  cloud?: CloudAuth;
+  cloud?: CloudAuth | undefined;
 }
 
 export interface McpServerHandle {
@@ -288,7 +288,8 @@ function isInitializeRequest(body: unknown): boolean {
   // JSON-RPC initialize can be either a single message or a batched array.
   const messages = Array.isArray(body) ? body : [body];
   return messages.some(
-    (m) => m && typeof m === "object" && (m as { method?: string }).method === "initialize",
+    (m) =>
+      m && typeof m === "object" && (m as { method?: string | undefined }).method === "initialize",
   );
 }
 
@@ -347,7 +348,12 @@ export async function createMcpServer(
             if (transport.sessionId) sessions.delete(transport.sessionId);
             void server.close().catch(() => undefined);
           };
-          await server.connect(transport);
+          // The SDK's own `Transport` declares `onclose?: () => void` while
+          // its `StreamableHTTPServerTransport` implements it as
+          // `(() => void) | undefined` — internally inconsistent under
+          // exactOptionalPropertyTypes. The value is the SDK's own transport;
+          // only its declaration disagrees with itself.
+          await server.connect(transport as Parameters<typeof server.connect>[0]);
           session = { transport, server };
         }
 
@@ -419,8 +425,8 @@ export interface StdioMcpServerOptions {
   canvasBundler: CanvasBundler;
   comments: LocalCommentsService;
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
-  assetOrigin?: string;
-  cloud?: CloudAuth;
+  assetOrigin?: string | undefined;
+  cloud?: CloudAuth | undefined;
 }
 
 export interface StdioMcpServerHandle {

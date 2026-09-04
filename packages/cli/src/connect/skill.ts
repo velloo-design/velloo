@@ -24,8 +24,8 @@ export const SKILLS_ROOT = resolveSkillsRoot();
 export interface SkillResult {
   name: string;
   installed: boolean;
-  path?: string;
-  reason?: string;
+  path?: string | undefined;
+  reason?: string | undefined;
 }
 
 /**

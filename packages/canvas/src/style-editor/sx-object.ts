@@ -17,26 +17,26 @@ export type SxVal = string | number;
 export type SxSides = Sides<SxVal>;
 
 export interface SxModel {
-  display?: SxVal;
-  flexDirection?: SxVal;
-  justifyContent?: SxVal;
-  alignItems?: SxVal;
-  gap?: SxVal;
+  display?: SxVal | undefined;
+  flexDirection?: SxVal | undefined;
+  justifyContent?: SxVal | undefined;
+  alignItems?: SxVal | undefined;
+  gap?: SxVal | undefined;
   padding: SxSides;
   margin: SxSides;
-  width?: SxVal;
-  height?: SxVal;
-  fontSize?: SxVal;
-  fontWeight?: SxVal;
-  lineHeight?: SxVal;
-  letterSpacing?: SxVal;
-  textAlign?: SxVal;
-  typography?: SxVal;
-  color?: SxVal;
-  bgcolor?: SxVal;
-  boxShadow?: SxVal;
-  borderRadius?: SxVal;
-  fontFamily?: SxVal;
+  width?: SxVal | undefined;
+  height?: SxVal | undefined;
+  fontSize?: SxVal | undefined;
+  fontWeight?: SxVal | undefined;
+  lineHeight?: SxVal | undefined;
+  letterSpacing?: SxVal | undefined;
+  textAlign?: SxVal | undefined;
+  typography?: SxVal | undefined;
+  color?: SxVal | undefined;
+  bgcolor?: SxVal | undefined;
+  boxShadow?: SxVal | undefined;
+  borderRadius?: SxVal | undefined;
+  fontFamily?: SxVal | undefined;
 }
 
 export interface ParsedSx {

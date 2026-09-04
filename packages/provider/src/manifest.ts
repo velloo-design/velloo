@@ -12,11 +12,11 @@ export interface PropDescriptor {
   /** Raw TS type string from ts-morph (e.g. "boolean | undefined"). */
   type: string;
   optional: boolean;
-  defaultValue?: string;
+  defaultValue?: string | undefined;
   /** Inferred control type for the inspector. */
   control: ControlType;
   /** Allowed values when `control === "enum"`. */
-  enumValues?: (string | number)[];
+  enumValues?: (string | number)[] | undefined;
 }
 
 export interface ComponentDescriptor {
@@ -31,14 +31,14 @@ export interface ComponentDescriptor {
    */
   source: "shadcn" | "velloo" | (string & {});
   props: PropDescriptor[];
-  designModeNotes?: string;
+  designModeNotes?: string | undefined;
   /**
    * Canonical props for one working instance — the fastest way for an
    * agent to use an unfamiliar component correctly (prop names tell
    * you *what* exists; the example shows *shapes*, e.g. Chart's
    * `data: [{ x, y }]`).
    */
-  example?: Record<string, unknown>;
+  example?: Record<string, unknown> | undefined;
 }
 
 export type Manifest = ComponentDescriptor[];

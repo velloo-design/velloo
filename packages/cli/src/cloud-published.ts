@@ -42,7 +42,7 @@ export async function listPublishedDesigns(opts: {
   if (!res.ok) {
     return err(await httpFailureFrom("listing published designs", res));
   }
-  const body = (await res.json()) as { links?: CloudPublishedDesign[] };
+  const body = (await res.json()) as { links?: CloudPublishedDesign[] | undefined };
   return ok(
     (body.links ?? [])
       .filter((link) => link.published)

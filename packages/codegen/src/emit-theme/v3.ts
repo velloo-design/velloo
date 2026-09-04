@@ -127,7 +127,7 @@ function radiusBase(theme: Theme): string | undefined {
 export function emitGlobalsCssV3(
   theme: Theme,
   vars: ThemeVar[],
-  opts: { customCss?: string } = {},
+  opts: { customCss?: string | undefined } = {},
 ): string {
   const lines: string[] = [];
   lines.push(`/**`);

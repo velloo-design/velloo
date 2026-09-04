@@ -58,11 +58,11 @@ export function parseTailwindContainer(src: string): ContainerConfig | null {
 
   // padding: "2rem"  OR  padding: { DEFAULT: "2rem", … }
   const padStr = /\bpadding\s*:\s*["'`]([^"'`]+)["'`]/.exec(body);
-  if (padStr) {
+  if (padStr?.[1] !== undefined) {
     out.padding = padStr[1];
   } else {
     const padObj = /\bpadding\s*:\s*\{[^}]*?DEFAULT\s*:\s*["'`]([^"'`]+)["'`]/.exec(body);
-    if (padObj) out.padding = padObj[1];
+    if (padObj?.[1] !== undefined) out.padding = padObj[1];
   }
 
   // screens: { "2xl": "1400px", … } → the largest px cap

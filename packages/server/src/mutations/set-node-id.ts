@@ -51,9 +51,9 @@ export async function setNodeId(
     }
 
     if (args.id === null) {
-      delete (node as { $id?: string }).$id;
+      delete (node as { $id?: string | undefined }).$id;
     } else {
-      (node as { $id?: string }).$id = args.id;
+      (node as { $id?: string | undefined }).$id = args.id;
     }
 
     yield* $(await commitScreen(ctx.folder, args.screenId, next));

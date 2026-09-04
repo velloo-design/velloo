@@ -68,7 +68,7 @@ export interface BuildTreeOptions {
    */
   registry: ComponentRegistry;
   /** Snippet registry used to resolve `$snippet` nodes. Required if the tree contains any. */
-  snippets?: Map<string, Snippet>;
+  snippets?: Map<string, Snippet> | undefined;
 }
 
 /**

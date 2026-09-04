@@ -4,7 +4,7 @@ import { type SpinnerResult, spinner } from "@clack/prompts";
 
 export interface ProgressStepOptions {
   /** Update a live spinner, but do not emit a separate line in CI or a pipe. */
-  transient?: boolean;
+  transient?: boolean | undefined;
 }
 
 export interface Progress {
@@ -22,11 +22,11 @@ interface ProgressOutput extends Writable {
 
 interface ProgressOptions {
   /** Suppress every progress write, for commands whose output is machine-readable. */
-  silent?: boolean;
-  output?: ProgressOutput;
+  silent?: boolean | undefined;
+  output?: ProgressOutput | undefined;
   /** Override terminal detection. Primarily useful to exercise both modes in tests. */
-  interactive?: boolean;
-  createSpinner?: (output: Writable) => SpinnerResult;
+  interactive?: boolean | undefined;
+  createSpinner?: ((output: Writable) => SpinnerResult) | undefined;
 }
 
 /**

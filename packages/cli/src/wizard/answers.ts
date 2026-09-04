@@ -50,11 +50,11 @@ export interface DetectedHost {
   /** A shadcn `components.json` was found. */
   shadcn: boolean;
   /** shadcn style (`new-york` / `default`) from components.json, if present. */
-  shadcnStyle?: string;
+  shadcnStyle?: string | undefined;
   /** Host Tailwind major version, or null if undetectable. */
   tailwindMajor: 3 | 4 | null;
   /** Resolved path to the host's global stylesheet, if found. */
-  globalsCssPath?: string;
+  globalsCssPath?: string | undefined;
   /**
    * The host's UI framework, inferred from dependencies — drives which adapter
    * a scanned folder defaults to (the "existing project" flow). `mui` / `antd`
@@ -62,7 +62,7 @@ export interface DetectedHost {
    * `components.json` is present; undefined ⇒ none of them, so the caller
    * keeps the explicit/default library.
    */
-  uiLibrary?: "shadcn" | "mui" | "antd" | "chakra";
+  uiLibrary?: "shadcn" | "mui" | "antd" | "chakra" | undefined;
   /**
    * A UI framework velloo doesn't adapt yet (Mantine, NextUI, …), by
    * display name. Set only when no supported framework was found. The scan
@@ -70,7 +70,7 @@ export interface DetectedHost {
    * agent approximates the app's components and preserves their real imports
    * via `$emitAs`. Undefined ⇒ no unsupported framework detected.
    */
-  unsupportedUi?: string;
+  unsupportedUi?: string | undefined;
 }
 
 export interface WizardAnswers {
@@ -102,11 +102,11 @@ export interface WizardAnswers {
    * Typed screen name for `redesign-screen` when the user didn't pick a
    * scanned route (or to override the display name).
    */
-  screenName?: string;
+  screenName?: string | undefined;
   /** Free-text target for `component` redesign. */
-  componentDescription?: string;
+  componentDescription?: string | undefined;
   /** Free-text job for `custom` mode. */
-  customRequest?: string;
+  customRequest?: string | undefined;
   /**
    * A live site the user wants to design from, offered only when the repo has
    * no UI code to scan — the one case where a running site is the only input
@@ -114,39 +114,39 @@ export interface WizardAnswers {
    * heavy interruption); this just carries the URL into the handoff so the
    * agent starts with a capture session.
    */
-  captureUrl?: string;
+  captureUrl?: string | undefined;
   /** Built-in theme preset id. Undefined → the default sample theme. */
-  themePreset?: string;
+  themePreset?: string | undefined;
   /**
    * The host app's stack (see `wizard/stacks.ts`). Sets
    * `codegen.componentsAlias` in the folder config so `emit_code` mentions
    * imports under the alias the app actually uses. Undefined ⇒ codegen's
    * `@/components/ui` default.
    */
-  stack?: string;
+  stack?: string | undefined;
   /** Host detection result (populated for scan / redesign-screen from routes). */
-  detected?: DetectedHost;
+  detected?: DetectedHost | undefined;
   /**
    * Routes chosen for redesign-screen or legacy scan. Interactive redesign
    * keeps at most one; non-interactive `--start=scan` may keep every route.
    */
-  selectedRoutes?: ScannedRoute[];
+  selectedRoutes?: ScannedRoute[] | undefined;
   /**
    * Legacy scan: handoff tells the agent to choose the highest-impact
    * screen first. Unused for single-screen redesign.
    */
-  agentPicksFirst?: boolean;
+  agentPicksFirst?: boolean | undefined;
   /**
    * Cloud feedback opt-in, set by the interactive wizard only after the user
    * signs in. `contactOk` records consent to be contacted about the feedback.
    * Absent ⇒ feedback disabled (and always so on the non-interactive path).
    */
-  feedback?: { enabled: boolean; contactOk: boolean };
+  feedback?: { enabled: boolean; contactOk: boolean } | undefined;
   /**
    * Agent-wiring choices, asked early in the wizard (config before content)
    * but applied by init only after the scaffold is written — cancelling the
    * wizard must still mean no files were touched. Absent under --no-connect
    * and on the non-interactive path (which wires the project defaults).
    */
-  agentWiring?: AgentWiring;
+  agentWiring?: AgentWiring | undefined;
 }

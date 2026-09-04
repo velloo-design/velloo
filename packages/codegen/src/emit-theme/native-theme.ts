@@ -13,7 +13,7 @@ export interface EmitNativeThemeOptions {
   /** Directory to write into (or diff against). e.g. ../my-app/src */
   outputDir: string;
   /** Where the theme module lands, relative to `outputDir`. Default `spec.defaultPath`. */
-  themePath?: string;
+  themePath?: string | undefined;
   /**
    * The dark projection of the theme (`themeToNative(theme, true)`). When set,
    * a second `darkTheme` is emitted alongside `theme` so the app can pair them
@@ -22,9 +22,9 @@ export interface EmitNativeThemeOptions {
    */
   darkThemeOptions?: unknown;
   /** Source Velloo theme; when present, also emits framework-neutral tokens.json. */
-  sourceTheme?: Theme;
+  sourceTheme?: Theme | undefined;
   /** Whether to actually write the file. Default false → returns the diff only. */
-  apply?: boolean;
+  apply?: boolean | undefined;
 }
 
 /**

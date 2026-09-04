@@ -340,7 +340,7 @@ export async function choosePublishDestination(opts: {
   interactive: boolean;
   createNew: boolean;
   updateExisting: boolean;
-  customSlug?: string;
+  customSlug?: string | undefined;
   manageUrl: string;
   log?: (message: string) => void;
 }): Promise<DestinationChoice> {

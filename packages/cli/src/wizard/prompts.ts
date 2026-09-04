@@ -42,7 +42,7 @@ const DEFAULT_COMPONENTS_DIR = "src/components/ui";
 async function resolveComponentsDir(
   appRoot: string,
   hasHostApp: boolean,
-  inherited?: string,
+  inherited?: string | undefined,
 ): Promise<{ value: string } | null> {
   // A sibling design folder already answered this for the same app — don't
   // ask twice, and don't let a second folder drift from the first.
@@ -132,7 +132,7 @@ function describeDetected(d: DetectedHost): string {
  * A sign-in failure is soft: we note it and continue without feedback.
  */
 async function promptShareAndFeedback(appRoot: string): Promise<{
-  feedback?: { enabled: boolean; contactOk: boolean };
+  feedback?: { enabled: boolean; contactOk: boolean } | undefined;
 } | null> {
   const cloudUrl = defaultCloudUrl();
   let signedIn = false;
@@ -381,22 +381,22 @@ export function hostGoalOptions(
 
 export async function runInteractive(ctx: {
   appRoot: string;
-  scanDir?: string;
+  scanDir?: string | undefined;
   /** Ask the agent-wiring question (false under --no-connect). */
   connectEnabled: boolean;
   /** The repo already has a design folder — this run is adding a second one. */
-  secondFolder?: boolean;
+  secondFolder?: boolean | undefined;
   /** Design-folder path already chosen by the caller — skips the prompt. */
-  presetFolder?: string;
+  presetFolder?: string | undefined;
   /**
    * The sibling folder's components directory, when adding a second folder to
    * a repo that already answered that question.
    */
-  inheritComponentsDir?: string;
+  inheritComponentsDir?: string | undefined;
   /** A valid --library flag pins the library — scan adoption won't override it. */
-  pinnedLibrary?: LibraryId;
+  pinnedLibrary?: LibraryId | undefined;
   /** Why the library is pinned, when it's worth saying (a sibling folder's choice). */
-  pinnedLibraryReason?: string;
+  pinnedLibraryReason?: string | undefined;
 }): Promise<InteractiveOutcome> {
   // A second design folder in the same repo can't reuse the default name, and
   // "velloo-2" reads worse than a purpose name — suggest one they'll rename.
@@ -537,11 +537,11 @@ export async function runInteractive(ctx: {
 async function promptRedesignScreen(
   ctx: {
     appRoot: string;
-    scanDir?: string;
-    pinnedLibrary?: LibraryId;
-    pinnedLibraryReason?: string;
+    scanDir?: string | undefined;
+    pinnedLibrary?: LibraryId | undefined;
+    pinnedLibraryReason?: string | undefined;
     hasHostApp: boolean;
-    inheritComponentsDir?: string;
+    inheritComponentsDir?: string | undefined;
   },
   folder: string,
   agentWiring: AgentWiring | undefined,
@@ -682,7 +682,7 @@ async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | nu
       label: r.name,
       hint: r.routePath,
     })),
-    initialValue: routes[0]?.id,
+    ...(routes[0] ? { initialValue: routes[0].id } : {}),
   });
   if (isAborted(choice)) return null;
   return routes.find((r) => r.id === choice) ?? null;
@@ -696,7 +696,7 @@ async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | nu
  * silently drop the pinned answer on the floor. Returns null on cancel.
  */
 async function resolveLibrary(
-  ctx: { pinnedLibrary?: LibraryId; pinnedLibraryReason?: string },
+  ctx: { pinnedLibrary?: LibraryId | undefined; pinnedLibraryReason?: string | undefined },
   initial: LibraryId = DEFAULT_LIBRARY_ID,
 ): Promise<LibraryId | null> {
   if (ctx.pinnedLibrary) {
@@ -721,10 +721,10 @@ async function resolveLibrary(
 async function promptSample(
   ctx: {
     appRoot: string;
-    pinnedLibrary?: LibraryId;
-    pinnedLibraryReason?: string;
+    pinnedLibrary?: LibraryId | undefined;
+    pinnedLibraryReason?: string | undefined;
     hasHostApp: boolean;
-    inheritComponentsDir?: string;
+    inheritComponentsDir?: string | undefined;
   },
   folder: string,
   agentWiring: AgentWiring | undefined,
@@ -761,7 +761,7 @@ async function promptSample(
 
 /** The zero-question blank folder: no boards, neutral theme, default stack. */
 function blankAnswers(
-  ctx: { appRoot: string; inheritComponentsDir?: string },
+  ctx: { appRoot: string; inheritComponentsDir?: string | undefined },
   folder: string,
   agentWiring: AgentWiring | undefined,
   library: LibraryId,
@@ -786,10 +786,10 @@ function blankAnswers(
 async function buildBlankAnswers(
   ctx: {
     appRoot: string;
-    scanDir?: string;
-    pinnedLibrary?: LibraryId;
-    pinnedLibraryReason?: string;
-    inheritComponentsDir?: string;
+    scanDir?: string | undefined;
+    pinnedLibrary?: LibraryId | undefined;
+    pinnedLibraryReason?: string | undefined;
+    inheritComponentsDir?: string | undefined;
   },
   folder: string,
   agentWiring: AgentWiring | undefined,
@@ -811,11 +811,11 @@ async function buildBlankAnswers(
 async function promptGoalWithAdoptedLibrary(
   ctx: {
     appRoot: string;
-    scanDir?: string;
-    pinnedLibrary?: LibraryId;
-    pinnedLibraryReason?: string;
+    scanDir?: string | undefined;
+    pinnedLibrary?: LibraryId | undefined;
+    pinnedLibraryReason?: string | undefined;
     hasHostApp: boolean;
-    inheritComponentsDir?: string;
+    inheritComponentsDir?: string | undefined;
   },
   folder: string,
   agentWiring: AgentWiring | undefined,
@@ -853,7 +853,7 @@ async function promptGoalWithAdoptedLibrary(
 /** Soft host scan — returns null when nothing adoptable is found. */
 async function tryAdoptLibraryFromApp(
   appRoot: string,
-  scanDir?: string,
+  scanDir?: string | undefined,
 ): Promise<{
   library: LibraryId;
   detected: DetectedHost;
@@ -889,10 +889,10 @@ async function tryAdoptLibraryFromApp(
 async function promptLibraryThemePath(
   ctx: {
     appRoot: string;
-    pinnedLibrary?: LibraryId;
-    pinnedLibraryReason?: string;
+    pinnedLibrary?: LibraryId | undefined;
+    pinnedLibraryReason?: string | undefined;
     hasHostApp: boolean;
-    inheritComponentsDir?: string;
+    inheritComponentsDir?: string | undefined;
   },
   folder: string,
   agentWiring: AgentWiring | undefined,

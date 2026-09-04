@@ -22,7 +22,7 @@ export interface InspectArgs {
    * declared in the body, or "" for the body root (the default). Ignored
    * for plain component nodes.
    */
-  innerPath?: string;
+  innerPath?: string | undefined;
 }
 
 export interface InspectResult {
@@ -32,7 +32,7 @@ export interface InspectResult {
   /** SSR'd HTML for the subtree (no surrounding document). */
   bodyHtml: string;
   /** Present when the inspected node lives inside a snippet instance. */
-  note?: string;
+  note?: string | undefined;
 }
 
 /**

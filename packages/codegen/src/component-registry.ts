@@ -38,7 +38,7 @@ export type LoweredEntry = {
     tag: string;
     extraClasses: string;
     extraProps?: Record<string, unknown>;
-    fallbackChild?: string;
+    fallbackChild?: string | undefined;
   };
 };
 
@@ -58,7 +58,7 @@ export type DynamicEntry = {
   resolve(props: Record<string, unknown>): {
     jsxName: string;
     extraClasses: string;
-    fallbackName?: string;
+    fallbackName?: string | undefined;
   };
 };
 

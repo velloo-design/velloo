@@ -322,15 +322,15 @@ export interface ConnectOptions {
   /** Agent ids to wire (see AGENT_IDS). */
   agents: string[];
   /** Override the auto-detected config write location. */
-  projectRoot?: string;
+  projectRoot?: string | undefined;
   /** MCP transport to wire. Default "stdio" — the agent spawns `velloo mcp`. */
-  transport?: "stdio" | "http";
+  transport?: "stdio" | "http" | undefined;
   /** HTTP endpoint, only used when transport is "http". Default DEFAULT_MCP_URL. */
-  mcpUrl?: string;
+  mcpUrl?: string | undefined;
   /** Install the Claude Code skill (only acts when claude-code is targeted). */
-  installSkill?: boolean;
+  installSkill?: boolean | undefined;
   /** Home dir for global-scope agent configs. Defaults to os.homedir(); injectable for tests. */
-  homeDir?: string;
+  homeDir?: string | undefined;
 }
 
 export interface ConnectResult {
@@ -338,13 +338,13 @@ export interface ConnectResult {
   transport: "stdio" | "http";
   configs: WriteResult[];
   /** Neutral `.agents/skills/` copies, installed for the SKILL.md ecosystem. */
-  skills?: SkillResult[];
+  skills?: SkillResult[] | undefined;
   /** The velloo Claude Code plugin (local-path marketplace), for claude targets. */
-  plugin?: ClaudePluginResult;
+  plugin?: ClaudePluginResult | undefined;
   /** The velloo Gemini CLI extension, materialized when gemini is a target. */
-  geminiExtension?: GeminiExtensionResult;
+  geminiExtension?: GeminiExtensionResult | undefined;
   /** Cursor project rule, installed when cursor is a target. */
-  cursorRules?: CursorRulesResult;
+  cursorRules?: CursorRulesResult | undefined;
   /** Requested agent ids that aren't recognized. */
   unknownAgents: string[];
 }

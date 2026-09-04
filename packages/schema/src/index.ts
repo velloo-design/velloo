@@ -114,7 +114,9 @@ export { sanitizeSvgMarkup, svgLooksActive } from "./svg-sanitize.ts";
 export {
   type ColorPair,
   type Colors,
+  type ColorsOverride,
   ColorsSchema,
+  resolveColors,
   type Theme,
   ThemeSchema,
   TypographySchema,

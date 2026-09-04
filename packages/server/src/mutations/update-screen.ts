@@ -9,7 +9,7 @@ import { persistScreen } from "./persist.ts";
 export interface UpdateScreenArgs {
   screenId: string;
   /** Sparse patch — only `name` is supported today. */
-  patch: { name?: string };
+  patch: { name?: string | undefined };
 }
 
 export interface UpdateScreenResult {
