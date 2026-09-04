@@ -1,13 +1,13 @@
 import { confirm, isCancel, select } from "@clack/prompts";
 import { defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
+import { type CloudError, describeCloudError } from "../cloud-errors.ts";
 import {
   type CloudPublishedDesign,
   listPublishedDesigns,
   publishedDesignSubtitle,
   unpublishDesign,
 } from "../cloud-published.ts";
-import { CloudUnreachableError } from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
 
 /**
@@ -33,19 +33,17 @@ async function resolveCloud(
   return { baseUrl, token };
 }
 
-function cloudFailure(command: string, baseUrl: string, error: unknown): never {
-  if (error instanceof CloudUnreachableError) {
-    fail(command, `cannot reach ${baseUrl} (${error.message})`);
-  }
-  fail(command, error instanceof Error ? error.message : String(error));
+/** One rendering for every typed cloud failure this command can hit. */
+function cloudFailure(command: string, error: CloudError): never {
+  fail(command, describeCloudError(error));
 }
 
 /** `velloo publish --list` */
 export async function listPublished(args: CloudArgs): Promise<void> {
   const { baseUrl, token } = await resolveCloud("publish", args);
-  const designs = await listPublishedDesigns({ baseUrl, token }).catch((error: unknown) => {
-    cloudFailure("publish", baseUrl, error);
-  });
+  const listed = await listPublishedDesigns({ baseUrl, token });
+  if (!listed.ok) cloudFailure("publish", listed.error);
+  const designs = listed.value;
   if (designs.length === 0) {
     console.log("velloo publish: no published designs.");
     console.log(`  ${await publishedBoardsUrl(baseUrl)}`);
@@ -80,9 +78,9 @@ export async function removePublished(
     fail("publish", "refusing to remove a published design without --yes");
   }
 
-  const designs = await listPublishedDesigns({ baseUrl, token }).catch((error: unknown) => {
-    cloudFailure("publish", baseUrl, error);
-  });
+  const listed = await listPublishedDesigns({ baseUrl, token });
+  if (!listed.ok) cloudFailure("publish", listed.error);
+  const designs = listed.value;
   const manageable = designs.filter((design) => design.canManage);
   if (manageable.length === 0) {
     fail(
@@ -122,9 +120,8 @@ export async function removePublished(
     if (isCancel(approved) || !approved) fail("publish", "cancelled");
   }
 
-  await unpublishDesign({ baseUrl, token, slug: target.slug }).catch((error: unknown) => {
-    cloudFailure("publish", baseUrl, error);
-  });
+  const removed = await unpublishDesign({ baseUrl, token, slug: target.slug });
+  if (!removed.ok) cloudFailure("publish", removed.error);
   console.log(`velloo publish: removed ${target.title?.trim() || "Untitled design"}`);
   console.log(`  ${target.url}`);
 }

@@ -17,6 +17,12 @@
  * schemas, which mean nothing to it.
  */
 
+export {
+  CLOUD_ERROR_CODES,
+  type CloudErrorBody,
+  type CloudErrorCode,
+  isCloudErrorCode,
+} from "./cloud-codes.ts";
 export type { PublishedThreadIsIngestible } from "./comments-compat.ts";
 export type {
   ErrorEnvelope,

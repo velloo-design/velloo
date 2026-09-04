@@ -4,19 +4,25 @@
  * folder's existing one when a `folderId` travels), then
  * `POST /v1/links/:slug/versions` stores the multipart bundle. A failed upload
  * deletes a link this call created — a link with no version is a dead /s/
- * page. Throws (CloudUnreachableError when the cloud can't be reached at link
- * creation) instead of exiting, so each command keeps its own failure style.
+ * page.
+ *
+ * Returns `Result<T, CloudError>` rather than throwing, so the failure modes
+ * are in the signature and each command renders them through one place
+ * (`describeCloudError`) instead of matching on message text.
  */
-
-export class CloudUnreachableError extends Error {}
+import { err, ok, type Result } from "@velloo/result";
+import {
+  type CloudError,
+  httpFailure,
+  httpFailureFrom,
+  protocolViolation,
+  readFailure,
+  unreachable,
+  uploadRaceLost,
+} from "./cloud-errors.ts";
 
 export const VERSION_UPLOAD_TIMEOUT_MS = 60_000;
 export const VERSION_UPLOAD_RETRIES = 1;
-
-// A 5xx is the cloud's trouble, not the user's bundle — say so instead of
-// leaving a bare "internal error".
-const serverTroubleHint = (status: number): string =>
-  status >= 500 ? " — the cloud is having trouble; check its status or try again later" : "";
 
 export interface CloudLinkRequest {
   slug?: string;
@@ -64,21 +70,17 @@ export async function listPublishDestinations(opts: {
   token: string;
   folderId: string;
   teamId?: string;
-}): Promise<CloudPublishDestinations> {
+}): Promise<Result<CloudPublishDestinations, CloudError>> {
   const query = new URLSearchParams({ folderId: opts.folderId });
   if (opts.teamId) query.set("teamId", opts.teamId);
   const res = await fetch(`${opts.baseUrl}/v1/publish-destinations?${query}`, {
     headers: { authorization: `Bearer ${opts.token}` },
-  }).catch((error: unknown) => {
-    throw new CloudUnreachableError(error instanceof Error ? error.message : String(error));
-  });
+  }).catch((error: unknown) => error);
+  if (!(res instanceof Response)) return err(unreachable(res, { url: opts.baseUrl }));
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new Error(
-      `could not list publish destinations (${res.status}): ${body.message ?? "unknown"}${serverTroubleHint(res.status)}`,
-    );
+    return err(await httpFailureFrom("listing publish destinations", res));
   }
-  return (await res.json()) as CloudPublishDestinations;
+  return ok((await res.json()) as CloudPublishDestinations);
 }
 
 export interface LinkUploadOutcome {
@@ -103,7 +105,7 @@ export async function uploadLinkBundle(opts: {
   uploadTimeoutMs?: number;
   /** Test seam; production retries one transient version-upload failure. */
   uploadRetries?: number;
-}): Promise<LinkUploadOutcome> {
+}): Promise<Result<LinkUploadOutcome, CloudError>> {
   const { baseUrl, token, form } = opts;
   const authorized = { authorization: `Bearer ${token}` };
 
@@ -111,16 +113,12 @@ export async function uploadLinkBundle(opts: {
     method: "POST",
     headers: authorized,
     body: JSON.stringify(opts.link),
-  }).catch((error: unknown) => {
-    throw new CloudUnreachableError(error instanceof Error ? error.message : String(error));
-  });
+  }).catch((error: unknown) => error);
+  if (!(createRes instanceof Response)) return err(unreachable(createRes, { url: baseUrl }));
   // 201 = created here; 200 = the folder's existing link — the same share URL
   // gets updated.
   if (createRes.status !== 200 && createRes.status !== 201) {
-    const body = (await createRes.json().catch(() => ({}))) as { message?: string };
-    throw new Error(
-      `link creation failed (${createRes.status}): ${body.message ?? "unknown"}${serverTroubleHint(createRes.status)}`,
-    );
+    return err(await httpFailureFrom("link creation", createRes));
   }
   const created = createRes.status === 201;
   let link = (await createRes.json()) as {
@@ -130,14 +128,22 @@ export async function uploadLinkBundle(opts: {
   };
 
   if (opts.link.publishMode === "new" && !created) {
-    throw new Error("the cloud reused a link even though a new publish destination was requested");
+    return err(
+      protocolViolation(
+        "the cloud reused a link even though a new publish destination was requested",
+      ),
+    );
   }
   if (opts.link.publishMode === "update" && created) {
     await fetch(`${baseUrl}/v1/links/${link.slug}`, {
       method: "DELETE",
       headers: authorized,
     }).catch(() => {});
-    throw new Error("the cloud created a link even though an existing destination was selected");
+    return err(
+      protocolViolation(
+        "the cloud created a link even though an existing destination was selected",
+      ),
+    );
   }
 
   // A folder reuses its stable link. The privacy choice made for this publish
@@ -155,10 +161,7 @@ export async function uploadLinkBundle(opts: {
       }),
     });
     if (!accessRes.ok) {
-      const body = (await accessRes.json().catch(() => ({}))) as { message?: string };
-      throw new Error(
-        `privacy update failed (${accessRes.status}): ${body.message ?? "unknown"}${serverTroubleHint(accessRes.status)}`,
-      );
+      return err(await httpFailureFrom("privacy update", accessRes));
     }
     const access = (await accessRes.json()) as {
       visibility: "public" | "private";
@@ -172,25 +175,25 @@ export async function uploadLinkBundle(opts: {
     form.append("expectedVersionId", opts.link.expectedVersionId);
   }
 
-  const upload = await uploadVersionWithRetry({
+  const attempt = await uploadVersionWithRetry({
     url: `${baseUrl}/v1/links/${link.slug}/versions`,
     headers: authorized,
     form,
     timeoutMs: opts.uploadTimeoutMs ?? VERSION_UPLOAD_TIMEOUT_MS,
     retries: opts.uploadRetries ?? VERSION_UPLOAD_RETRIES,
   });
+  if (!attempt.ok) return attempt;
+  const upload = attempt.value;
   const uploadRes = upload.response;
   if (uploadRes.status !== 201) {
-    const body = (await uploadRes.json().catch(() => ({}))) as { message?: string };
+    // The body is read once here because the race check below needs it; the
+    // typed code rides along rather than being re-fetched.
+    const { detail, code } = await readFailure(uploadRes);
     const slotChangedAfterTransientFailure =
       upload.transientFailures > 0 &&
       uploadRes.status === 409 &&
-      /slot changed|already has a version/i.test(body.message ?? "");
-    if (slotChangedAfterTransientFailure) {
-      throw new Error(
-        "upload confirmation was lost and the retry found the publish slot changed — the publish may have succeeded; check your published boards before retrying",
-      );
-    }
+      /slot changed|already has a version/i.test(detail);
+    if (slotChangedAfterTransientFailure) return err(uploadRaceLost());
     // Clean up a link we just created so a failed upload — e.g. over the size
     // limit — doesn't leave a broken board in the user's home.
     if (created) {
@@ -199,9 +202,7 @@ export async function uploadLinkBundle(opts: {
         headers: authorized,
       }).catch(() => {});
     }
-    throw new Error(
-      `upload failed (${uploadRes.status}): ${body.message ?? "unknown"}${serverTroubleHint(uploadRes.status)}`,
-    );
+    return err(httpFailure("upload", uploadRes.status, detail, code));
   }
   const uploaded = (await uploadRes.json()) as {
     files: number;
@@ -210,7 +211,7 @@ export async function uploadLinkBundle(opts: {
     tier?: string;
     history?: { retained: boolean; versions: number; pruned: number };
   };
-  return {
+  return ok({
     link: {
       slug: link.slug,
       visibility: link.visibility ?? opts.link.visibility,
@@ -222,7 +223,7 @@ export async function uploadLinkBundle(opts: {
     shareUrl: uploaded.url.startsWith("http") ? uploaded.url : `${baseUrl}${uploaded.url}`,
     ...(uploaded.tier !== undefined ? { tier: uploaded.tier } : {}),
     ...(uploaded.history !== undefined ? { history: uploaded.history } : {}),
-  };
+  });
 }
 
 interface VersionUploadAttempt {
@@ -237,7 +238,7 @@ async function uploadVersionWithRetry(opts: {
   form: FormData;
   timeoutMs: number;
   retries: number;
-}): Promise<VersionUploadAttempt> {
+}): Promise<Result<VersionUploadAttempt, CloudError>> {
   const attempts = Math.max(1, Math.floor(opts.retries) + 1);
   let transientFailures = 0;
   let lastNetworkError = "unknown network error";
@@ -261,7 +262,7 @@ async function uploadVersionWithRetry(opts: {
         signal: controller.signal,
       });
       if (response.status < 500 || attempt === attempts) {
-        return { response, transientFailures };
+        return ok({ response, transientFailures });
       }
       transientFailures += 1;
       await response.body?.cancel().catch(() => {});
@@ -271,13 +272,13 @@ async function uploadVersionWithRetry(opts: {
       lastNetworkError = error instanceof Error ? error.message : String(error);
       if (attempt === attempts) {
         const retried = attempts > 1 ? ` after ${attempts} attempts` : "";
-        if (timedOut) {
-          throw new CloudUnreachableError(
-            `version upload timed out after ${formatDuration(opts.timeoutMs)}${retried} — check your connection and try again`,
-          );
-        }
-        throw new CloudUnreachableError(
-          `version upload could not reach the cloud${retried} (${lastNetworkError}) — check your connection and try again`,
+        return err(
+          timedOut
+            ? unreachable(`timed out after ${formatDuration(opts.timeoutMs)}${retried}`, {
+                url: opts.url,
+                timedOut: true,
+              })
+            : unreachable(`version upload${retried}: ${lastNetworkError}`, { url: opts.url }),
         );
       }
     } finally {
@@ -285,12 +286,15 @@ async function uploadVersionWithRetry(opts: {
     }
   }
 
-  // The loop always returns or throws. Keep TypeScript honest if its bounds
-  // analysis changes, while retaining the most useful terminal verdict.
-  throw new CloudUnreachableError(
+  // The loop always returns. Keep TypeScript honest if its bounds analysis
+  // changes, while retaining the most useful terminal verdict.
+  return err(
     lastTimedOut
-      ? `version upload timed out after ${formatDuration(opts.timeoutMs)} — check your connection and try again`
-      : `version upload could not reach the cloud (${lastNetworkError}) — check your connection and try again`,
+      ? unreachable(`timed out after ${formatDuration(opts.timeoutMs)}`, {
+          url: opts.url,
+          timedOut: true,
+        })
+      : unreachable(`version upload: ${lastNetworkError}`, { url: opts.url }),
   );
 }
 

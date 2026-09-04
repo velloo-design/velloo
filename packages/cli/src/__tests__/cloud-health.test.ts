@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Server } from "bun";
 import { checkCloudHealth } from "../cloud.ts";
+import { describeCloudError } from "../cloud-errors.ts";
 import { uploadLinkBundle } from "../cloud-upload.ts";
 
 /**
@@ -84,14 +85,18 @@ test("a 5xx upload failure carries the trouble hint, not a bare internal error",
   });
   const form = new FormData();
   form.append("file", new File(["{}"], "design.json", { type: "application/json" }));
-  expect(
-    uploadLinkBundle({
-      baseUrl: url,
-      token: "t",
-      link: { title: "x", visibility: "public", publishMode: "new" },
-      form,
-    }),
-  ).rejects.toThrow(/storage backend unavailable.*the cloud is having trouble/);
+  const failed = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { title: "x", visibility: "public", publishMode: "new" },
+    form,
+  });
+  expect(failed.ok).toBe(false);
+  if (failed.ok) return;
+  expect(failed.error.kind).toBe("HttpFailure");
+  expect(describeCloudError(failed.error)).toMatch(
+    /storage backend unavailable.*the cloud is having trouble/,
+  );
 });
 
 test("version upload retries one transient 5xx and succeeds", async () => {
@@ -114,14 +119,16 @@ test("version upload retries one transient 5xx and succeeds", async () => {
   });
   const form = new FormData();
   form.append("file", new File(["{}"], "design.json"));
-  const result = await uploadLinkBundle({
+  const uploaded = await uploadLinkBundle({
     baseUrl: url,
     token: "t",
     link: { title: "x", visibility: "public", publishMode: "new" },
     form,
   });
   expect(attempts).toBe(2);
-  expect(result.shareUrl).toBe(`${url}/s/retry/`);
+  expect(uploaded.ok).toBe(true);
+  if (!uploaded.ok) return;
+  expect(uploaded.value.shareUrl).toBe(`${url}/s/retry/`);
 });
 
 test("version upload times out, retries once, and reports an actionable failure", async () => {
@@ -143,15 +150,19 @@ test("version upload times out, retries once, and reports an actionable failure"
   });
   const form = new FormData();
   form.append("file", new File(["{}"], "design.json"));
-  await expect(
-    uploadLinkBundle({
-      baseUrl: url,
-      token: "t",
-      link: { title: "x", visibility: "public", publishMode: "new" },
-      form,
-      uploadTimeoutMs: 5,
-    }),
-  ).rejects.toThrow(/timed out.*2 attempts.*check your connection/i);
+  const timedOut = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { title: "x", visibility: "public", publishMode: "new" },
+    form,
+    uploadTimeoutMs: 5,
+  });
+  expect(timedOut.ok).toBe(false);
+  if (timedOut.ok) return;
+  expect(timedOut.error.kind).toBe("Unreachable");
+  expect(describeCloudError(timedOut.error)).toMatch(
+    /timed out.*2 attempts.*check your connection/i,
+  );
   expect(attempts).toBe(2);
 });
 
@@ -183,7 +194,7 @@ test("reusing a stable link applies the privacy mode before uploading", async ()
   const form = new FormData();
   form.append("file", new File(["{}"], "design.json", { type: "application/json" }));
 
-  const result = await uploadLinkBundle({
+  const uploaded = await uploadLinkBundle({
     baseUrl: url,
     token: "t",
     link: {
@@ -197,7 +208,9 @@ test("reusing a stable link applies the privacy mode before uploading", async ()
     form,
   });
 
-  expect(result.link).toEqual({
+  expect(uploaded.ok).toBe(true);
+  if (!uploaded.ok) return;
+  expect(uploaded.value.link).toEqual({
     slug: "stable",
     visibility: "private",
     passwordProtected: false,

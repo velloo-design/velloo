@@ -1,4 +1,5 @@
-import { CloudUnreachableError } from "./cloud-upload.ts";
+import { err, ok, type Result } from "@velloo/result";
+import { type CloudError, httpFailureFrom, unreachable } from "./cloud-errors.ts";
 
 export interface CloudPublishedDesign {
   slug: string;
@@ -30,48 +31,40 @@ export function publishedDesignSubtitle(
   return `${published} · ${publisher} · ${source}`;
 }
 
-const troubleHint = (status: number): string =>
-  status >= 500 ? " — the cloud is having trouble; try again later" : "";
-
 export async function listPublishedDesigns(opts: {
   baseUrl: string;
   token: string;
-}): Promise<CloudPublishedDesign[]> {
+}): Promise<Result<CloudPublishedDesign[], CloudError>> {
   const res = await fetch(`${opts.baseUrl}/v1/links`, {
     headers: { authorization: `Bearer ${opts.token}` },
-  }).catch((error: unknown) => {
-    throw new CloudUnreachableError(error instanceof Error ? error.message : String(error));
-  });
+  }).catch((error: unknown) => error);
+  if (!(res instanceof Response)) return err(unreachable(res, { url: opts.baseUrl }));
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new Error(
-      `could not list published designs (${res.status}): ${body.message ?? "unknown"}${troubleHint(res.status)}`,
-    );
+    return err(await httpFailureFrom("listing published designs", res));
   }
   const body = (await res.json()) as { links?: CloudPublishedDesign[] };
-  return (body.links ?? [])
-    .filter((link) => link.published)
-    .map((link) => ({
-      ...link,
-      url: link.url.startsWith("http") ? link.url : `${opts.baseUrl}${link.url}`,
-    }));
+  return ok(
+    (body.links ?? [])
+      .filter((link) => link.published)
+      .map((link) => ({
+        ...link,
+        url: link.url.startsWith("http") ? link.url : `${opts.baseUrl}${link.url}`,
+      })),
+  );
 }
 
 export async function unpublishDesign(opts: {
   baseUrl: string;
   token: string;
   slug: string;
-}): Promise<void> {
+}): Promise<Result<void, CloudError>> {
   const res = await fetch(`${opts.baseUrl}/v1/links/${encodeURIComponent(opts.slug)}`, {
     method: "DELETE",
     headers: { authorization: `Bearer ${opts.token}` },
-  }).catch((error: unknown) => {
-    throw new CloudUnreachableError(error instanceof Error ? error.message : String(error));
-  });
+  }).catch((error: unknown) => error);
+  if (!(res instanceof Response)) return err(unreachable(res, { url: opts.baseUrl }));
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new Error(
-      `could not unpublish design (${res.status}): ${body.message ?? "unknown"}${troubleHint(res.status)}`,
-    );
+    return err(await httpFailureFrom("unpublishing the design", res));
   }
+  return ok(undefined);
 }

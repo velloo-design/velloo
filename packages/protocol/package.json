@@ -7,7 +7,8 @@
   "description": "The Velloo wire contract \u2014 mutation argument schemas, typed error unions, watch events, and the published-comment surface shared with velloo-cloud",
   "exports": {
     ".": "./src/index.ts",
-    "./comments": "./src/comments.ts"
+    "./comments": "./src/comments.ts",
+    "./cloud-codes": "./src/cloud-codes.ts"
   },
   "dependencies": {
     "@velloo/schema": "workspace:*",

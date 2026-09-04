@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ComponentProvider } from "@velloo/provider";
 import { captureScreenshot, renderScreen } from "@velloo/renderer";
+import { err, ok, type Result } from "@velloo/result";
 import type { Board, Config, Screen, Theme, Viewport } from "@velloo/schema";
 import {
   activeBoards,
@@ -16,13 +17,17 @@ import {
 } from "@velloo/server";
 import { withAssetServer } from "../asset-server.ts";
 import { checkCloudHealth } from "../cloud.ts";
-import {
-  type CloudPublishSlot,
-  CloudUnreachableError,
-  type LinkUploadOutcome,
-  uploadLinkBundle,
-} from "../cloud-upload.ts";
+import { type CloudError, httpFailureFrom, unreachable } from "../cloud-errors.ts";
+import { type CloudPublishSlot, uploadLinkBundle } from "../cloud-upload.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
+import {
+  cloudUnhealthy,
+  noBoardScreens,
+  noScreens,
+  type PublishError,
+  teamAmbiguous,
+  teamNotFound,
+} from "./errors.ts";
 
 /**
  * The publish core: design folder → multipart bundle → velloo-cloud share
@@ -303,21 +308,21 @@ export function gitContext(folder: string): PublishProvenance {
   };
 }
 
-/** A team by name or UUID, or throw with what's available. */
+/** A team by name or UUID. */
 export async function resolveTeam(
   baseUrl: string,
   token: string,
   requested?: string,
-): Promise<string | undefined> {
-  if (!requested) return undefined;
-  const teams = await listTeams(baseUrl, token);
-  const exact = teams.filter(
+): Promise<Result<string | undefined, PublishError>> {
+  if (!requested) return ok(undefined);
+  const listed = await listTeams(baseUrl, token);
+  if (!listed.ok) return listed;
+  const exact = listed.value.filter(
     (team) => team.id === requested || team.name.toLowerCase() === requested.toLowerCase(),
   );
-  if (exact.length === 0) throw new Error(`no team named or identified by '${requested}'`);
-  if (exact.length > 1)
-    throw new Error(`more than one team is named '${requested}'; pass its UUID`);
-  return exact[0]?.id;
+  if (exact.length === 0) return err(teamNotFound(requested));
+  if (exact.length > 1) return err(teamAmbiguous(requested));
+  return ok(exact[0]?.id);
 }
 
 export interface CloudTeam {
@@ -328,13 +333,17 @@ export interface CloudTeam {
 }
 
 /** The caller's teams, for a publish-target picker. */
-export async function listTeams(baseUrl: string, token: string): Promise<CloudTeam[]> {
+export async function listTeams(
+  baseUrl: string,
+  token: string,
+): Promise<Result<CloudTeam[], CloudError>> {
   const res = await fetch(`${baseUrl}/v1/teams/mine`, {
     headers: { authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`could not list teams (${res.status})`);
+  }).catch((error: unknown) => error);
+  if (!(res instanceof Response)) return err(unreachable(res, { url: baseUrl }));
+  if (!res.ok) return err(await httpFailureFrom("listing teams", res));
   const body = (await res.json()) as { teams: CloudTeam[] };
-  return body.teams;
+  return ok(body.teams);
 }
 
 /**
@@ -354,16 +363,18 @@ export function selectBoards(design: DesignFolder, boardIds?: string[]): Board[]
 }
 
 /**
- * Publish `pipeline.folder` to velloo-cloud and return the share link. Throws
- * {@link CloudUnreachableError} when the cloud can't be reached, and a plain
- * Error (carrying the cloud's own message) for anything it refuses.
+ * Publish `pipeline.folder` to velloo-cloud and return the share link.
+ *
+ * Every way this can fail is in `PublishError` — the cloud's own refusals plus
+ * publishing's (an unwell cloud, a folder with nothing in it, an unresolvable
+ * team). Callers render them through `describePublishError`.
  */
 export async function publishDesign(
   cloud: CloudTarget,
   pipeline: PublishPipeline,
   request: PublishRequest,
   report: PublishReporter = () => {},
-): Promise<PublishOutcome> {
+): Promise<Result<PublishOutcome, PublishError>> {
   const { folder: design } = pipeline;
   const root = design.root;
   const config: Config = design.config;
@@ -372,12 +383,11 @@ export async function publishDesign(
   // a dead cloud must not cost a full capture pass first.
   report({ kind: "step", step: "check", message: "checking the cloud" });
   const health = await checkCloudHealth(cloud.baseUrl);
-  if (health.status === "unreachable") throw new CloudUnreachableError(health.reason);
-  if (health.status === "unhealthy") throw new Error(health.detail);
+  if (health.status === "unreachable")
+    return err(unreachable(health.reason, { url: cloud.baseUrl }));
+  if (health.status === "unhealthy") return err(cloudUnhealthy(health.detail));
 
-  if (design.screens.size === 0) {
-    throw new Error(`no screens found in ${root} — is this a velloo design folder?`);
-  }
+  if (design.screens.size === 0) return err(noScreens(root));
 
   // Publish whole boards: the selected ones plus every screen they place. A
   // board-less folder publishes all its screens.
@@ -388,7 +398,7 @@ export async function publishDesign(
   const screens = screenIds
     ? [...design.screens.values()].filter((s) => screenIds.has(s.id))
     : [...design.screens.values()];
-  if (screens.length === 0) throw new Error("the selected boards have no screens.");
+  if (screens.length === 0) return err(noBoardScreens());
 
   const viewport = request.viewport ?? PUBLISH_VIEWPORT;
   const title = request.title?.trim() || defaultPublishTitle(root);
@@ -603,7 +613,7 @@ export async function publishDesign(
     step: "upload",
     message: `uploading ${bundleFiles} file${bundleFiles === 1 ? "" : "s"} (${formatBytes(bundleBytes)})`,
   });
-  const upload: LinkUploadOutcome = await uploadLinkBundle({
+  const uploaded = await uploadLinkBundle({
     baseUrl: cloud.baseUrl,
     token: cloud.token,
     link: {
@@ -621,8 +631,10 @@ export async function publishDesign(
     },
     form,
   });
+  if (!uploaded.ok) return uploaded;
+  const upload = uploaded.value;
 
-  return {
+  return ok({
     shareUrl: upload.shareUrl,
     visibility: upload.link.visibility,
     passwordProtected: upload.link.passwordProtected,
@@ -635,7 +647,7 @@ export async function publishDesign(
     created: upload.created,
     ...(upload.tier !== undefined ? { tier: upload.tier } : {}),
     ...(upload.history !== undefined ? { history: upload.history } : {}),
-  };
+  });
 }
 
 function formatBytes(bytes: number): string {

@@ -12,11 +12,7 @@ import {
 import { defineCommand } from "citty";
 import { checkCloudHealth, defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
-import {
-  type CloudPublishSlot,
-  CloudUnreachableError,
-  listPublishDestinations,
-} from "../cloud-upload.ts";
+import { type CloudPublishSlot, listPublishDestinations } from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, pickBoards, resolveDesignFolder } from "../folder.ts";
 import { createProgress, type Progress } from "../progress.ts";
@@ -32,6 +28,7 @@ import {
   recommendedPublishSlot,
   resolveTeam,
 } from "../publish/core.ts";
+import { describePublishError } from "../publish/errors.ts";
 import { listPublished, removePublished } from "../publish/manage.ts";
 import { resolvePublishPrivacy } from "../publish/privacy.ts";
 
@@ -147,7 +144,9 @@ export default defineCommand({
       fail("publish", "not logged in. Run `velloo login` (or pass --token / VELLOO_CLOUD_TOKEN).");
     }
     const interactive = Boolean(process.stdin.isTTY);
-    const teamId = await resolveTeam(baseUrl, token, args.team);
+    const team = await resolveTeam(baseUrl, token, args.team);
+    if (!team.ok) fail("publish", describePublishError(team.error));
+    const teamId = team.value;
     const viewport: Viewport = {
       w: args.w ? Number(args.w) : 1440,
       h: args.h ? Number(args.h) : 900,
@@ -197,17 +196,19 @@ export default defineCommand({
           }
         })()
       : undefined;
-    const listed =
-      config.folderId && args.new !== true
-        ? await listPublishDestinations({
-            baseUrl,
-            token,
-            folderId: config.folderId,
-            ...(teamId ? { teamId } : {}),
-          }).catch((error: unknown) =>
-            fail("publish", error instanceof Error ? error.message : String(error)),
-          )
-        : { effectiveTeamId: teamId ?? null, slots: [] };
+    const listed = await (async () => {
+      if (!config.folderId || args.new === true) {
+        return { effectiveTeamId: teamId ?? null, slots: [] as CloudPublishSlot[] };
+      }
+      const destinations = await listPublishDestinations({
+        baseUrl,
+        token,
+        folderId: config.folderId,
+        ...(teamId ? { teamId } : {}),
+      });
+      if (!destinations.ok) fail("publish", describePublishError(destinations.error));
+      return destinations.value;
+    })();
     const source: PublishSourceContext = {
       boardIds: selected.map((board) => board.id),
       teamId: listed.effectiveTeamId,
@@ -255,7 +256,7 @@ export default defineCommand({
     const report = createPublishReporter(progress);
     let outcome: PublishOutcome;
     try {
-      outcome = await publishDesign(
+      const published = await publishDesign(
         { baseUrl, token },
         {
           folder: design,
@@ -279,15 +280,14 @@ export default defineCommand({
         },
         report,
       );
+      if (!published.ok) {
+        progress.fail("publish failed");
+        fail("publish", describePublishError(published.error));
+      }
+      outcome = published.value;
       progress.succeed("published design");
     } catch (error) {
       progress.fail("publish failed");
-      if (error instanceof CloudUnreachableError) {
-        fail(
-          "publish",
-          `cannot reach ${baseUrl} (${error.message}). Is velloo-cloud up? (bun cloud:up)`,
-        );
-      }
       fail("publish", error instanceof Error ? error.message : String(error));
     } finally {
       // Release the shared Chromium — publish is a one-shot process, and an
