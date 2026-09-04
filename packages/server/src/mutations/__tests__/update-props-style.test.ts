@@ -8,12 +8,16 @@ import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot"
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
-import { type MutationContext, setStyle } from "../index.ts";
+import { type MutationContext, updateProps } from "../index.ts";
 
 /**
- * `set_style` routes a style payload through the screen's *native* channel:
- * a className string on a Tailwind (shadcn) folder, an `sx`
- * object on a MUI folder. The tool rejects a payload whose shape doesn't fit.
+ * `update_props`'s `style` channel routes a payload through the screen's
+ * *native* channel: a className string on a Tailwind (shadcn) folder, an `sx`
+ * object on a MUI folder. It rejects a payload whose shape doesn't fit.
+ *
+ * This was its own `set_style` tool until the MCP consolidation; folding it
+ * into `update_props` is what makes it batchable and lets one call change props
+ * and style together (see the last test).
  */
 
 const sampleTheme: Theme = {
@@ -95,30 +99,34 @@ function rootProps(screenId: string): Record<string, unknown> | undefined {
   return (s?.tree as { props?: Record<string, unknown> } | undefined)?.props;
 }
 
-describe("set_style — Tailwind (shadcn) channel", () => {
+describe("update_props style channel — Tailwind (shadcn)", () => {
   test("a className string replaces the node's className", async () => {
-    const r = await setStyle(ctx, { screenId: "dashboard", path: [], style: "flex gap-4 p-6" });
+    const r = await updateProps(ctx, { screenId: "dashboard", path: [], style: "flex gap-4 p-6" });
     expect(r.ok).toBe(true);
     expect(rootProps("dashboard")?.className).toBe("flex gap-4 p-6");
   });
 
   test("an object payload is rejected on a Tailwind folder", async () => {
-    const r = await setStyle(ctx, { screenId: "dashboard", path: [], style: { display: "flex" } });
+    const r = await updateProps(ctx, {
+      screenId: "dashboard",
+      path: [],
+      style: { display: "flex" },
+    });
     expect(r.ok).toBe(false);
     if (!r.ok && r.error.kind === "BadRequest")
       expect(r.error.message).toContain("className string");
   });
 
   test("an empty string clears className", async () => {
-    const r = await setStyle(ctx, { screenId: "dashboard", path: [], style: "" });
+    const r = await updateProps(ctx, { screenId: "dashboard", path: [], style: "" });
     expect(r.ok).toBe(true);
     expect(rootProps("dashboard")?.className).toBeUndefined();
   });
 });
 
-describe("set_style — sx (MUI) channel", () => {
+describe("update_props style channel — sx (MUI)", () => {
   test("an object payload lands on the sx prop", async () => {
-    const r = await setStyle(ctx, {
+    const r = await updateProps(ctx, {
       screenId: "panel",
       path: [],
       style: { display: "flex", gap: 2, p: 3 },
@@ -130,22 +138,50 @@ describe("set_style — sx (MUI) channel", () => {
   });
 
   test("a second call merges shallowly; inner null removes one key", async () => {
-    await setStyle(ctx, { screenId: "panel", path: [], style: { display: "flex", gap: 2 } });
-    const r = await setStyle(ctx, { screenId: "panel", path: [], style: { gap: null, p: 4 } });
+    await updateProps(ctx, { screenId: "panel", path: [], style: { display: "flex", gap: 2 } });
+    const r = await updateProps(ctx, { screenId: "panel", path: [], style: { gap: null, p: 4 } });
     expect(r.ok).toBe(true);
     expect(rootProps("panel")?.sx).toEqual({ display: "flex", p: 4 });
   });
 
   test("a string payload is rejected on a MUI folder", async () => {
-    const r = await setStyle(ctx, { screenId: "panel", path: [], style: "p-6" });
+    const r = await updateProps(ctx, { screenId: "panel", path: [], style: "p-6" });
     expect(r.ok).toBe(false);
     if (!r.ok && r.error.kind === "BadRequest") expect(r.error.message).toContain("object");
   });
 
   test("style: null clears the sx prop entirely", async () => {
-    await setStyle(ctx, { screenId: "panel", path: [], style: { display: "flex" } });
-    const r = await setStyle(ctx, { screenId: "panel", path: [], style: null });
+    await updateProps(ctx, { screenId: "panel", path: [], style: { display: "flex" } });
+    const r = await updateProps(ctx, { screenId: "panel", path: [], style: null });
     expect(r.ok).toBe(true);
     expect(rootProps("panel")?.sx).toBeUndefined();
+  });
+});
+
+describe("update_props applies propPatch and style in one call", () => {
+  test("both channels land, and the style routes to the framework's prop", async () => {
+    const r = await updateProps(ctx, {
+      screenId: "panel",
+      path: [],
+      propPatch: { elevation: 2 },
+      style: { display: "flex", gap: 2 },
+    });
+    expect(r.ok).toBe(true);
+    expect(rootProps("panel")?.elevation).toBe(2);
+    expect(rootProps("panel")?.sx).toEqual({ display: "flex", gap: 2 });
+  });
+
+  test("a style payload that doesn't fit the channel rejects the whole call", async () => {
+    const before = rootProps("dashboard")?.className;
+    const r = await updateProps(ctx, {
+      screenId: "dashboard",
+      path: [],
+      propPatch: { id: "hero" },
+      style: { display: "flex" },
+    });
+    expect(r.ok).toBe(false);
+    // The propPatch must not have been written either.
+    expect(rootProps("dashboard")?.id).toBeUndefined();
+    expect(rootProps("dashboard")?.className).toBe(before);
   });
 });

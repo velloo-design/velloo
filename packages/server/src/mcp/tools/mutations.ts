@@ -10,7 +10,7 @@ import {
   normalizeAddNode,
   normalizeUpdateFrame,
   normalizeUpdateProps,
-  overrideSnippetPropsShape,
+  normalizeUpdateSnippetInstance,
   removeBoardShape,
   removeFrameShape,
   removeNodeShape,
@@ -19,12 +19,11 @@ import {
   reorderBoardsShape,
   setNodeIdShape,
   setScreenTreeShape,
-  setStyleShape,
   updateBoardShape,
   updateFrameShape,
   updatePropsShape,
   updateScreenShape,
-  updateSnippetArgsShape,
+  updateSnippetInstanceShape,
   updateSnippetShape,
   updateViewportPresetsShape,
 } from "@velloo/protocol";
@@ -41,7 +40,6 @@ import {
   type MutationContext,
   type MutationError,
   moveNode,
-  overrideSnippetProps,
   removeBoard,
   removeFrame,
   removeNode,
@@ -50,7 +48,6 @@ import {
   reorderBoards,
   setNodeId,
   setScreenTree,
-  setStyle,
   type UpdateFrameResult,
   type UpdateFramesResult,
   updateBoard,
@@ -60,7 +57,7 @@ import {
   updatePropsBulk,
   updateScreen,
   updateSnippet,
-  updateSnippetArgs,
+  updateSnippetInstance,
   updateViewportPresets,
 } from "../../mutations/index.ts";
 import {
@@ -118,7 +115,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_props",
     {
       description:
-        "Shallow-merge propPatch into the node at path (null removes a key; className restyles). For many nodes in one atomic write, pass `patches: [{ path, propPatch }]` instead. This patches a plain screen node; to patch a node *inside a snippet* use override_snippet_props (one instance only) or update_snippet's innerPatch (the shared definition, all instances).",
+        "Shallow-merge `propPatch` into the node at `path` (null removes a key), and/or restyle it through `style` — the screen's *native* style channel, which the framework adapter routes to a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object. Object channels merge shallowly (an inner null drops that key); `style: null` clears it. Both channels can travel in one call. For many nodes in one atomic write, pass `patches: [{ path, propPatch?, style? }]`. This patches a plain screen node; to patch a node *inside a snippet* use update_snippet_instance (one instance) or update_snippet's innerPatch (the definition, all instances).",
       inputSchema: updatePropsShape,
     },
     async (args) => {
@@ -134,7 +131,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
             if (!Array.isArray(patch.path)) continue;
             const node = pathAt(screen.tree, patch.path);
             if (node && isComponentNode(node)) {
-              all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch)));
+              all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch ?? {})));
             }
           }
           return all;
@@ -146,43 +143,9 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         if (!screen) return [];
         const node = pathAt(screen.tree, value.path);
         if (!node || !isComponentNode(node)) return [];
-        return propWarnings(ctx, screen, node.$ref, single.propPatch);
+        return propWarnings(ctx, screen, node.$ref, single.propPatch ?? {});
       });
     },
-  );
-
-  mcp.registerTool(
-    "set_style",
-    {
-      description:
-        "Style a node through the screen's *native* channel — the framework adapter picks where the payload lands: a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object (no-framework). One verb across frameworks: pass a class string on a Tailwind folder, an object of properties on an sx/style folder. Objects merge shallowly (an inner `null` removes that key); `style: null` clears it entirely. A payload whose shape doesn't fit the channel is rejected with the expected shape. On a Tailwind folder this is equivalent to setting `className` via update_props.",
-      inputSchema: setStyleShape,
-    },
-    async (args) => {
-      return toMcpWithWarnings(
-        await setStyle(ctx, { screenId: args.screenId, path: args.path, style: args.style }),
-        async (value) => {
-          const screen = ctx.folder.screens.get(args.screenId);
-          if (!screen) return [];
-          const node = pathAt(screen.tree, value.path);
-          if (!node || !isComponentNode(node)) return [];
-          // Surface prop warnings for object channels (sx keys), mirroring update_props.
-          return typeof args.style === "object" && args.style !== null
-            ? propWarnings(ctx, screen, node.$ref, args.style)
-            : [];
-        },
-      );
-    },
-  );
-
-  mcp.registerTool(
-    "override_snippet_props",
-    {
-      description:
-        'Patch props on one node INSIDE a snippet instance\'s body — the one-off escape hatch ("this instance\'s badge is red") without forking the snippet. path locates the instance; innerPath addresses the body node: "@id" when the body node carries a $id (preferred — survives body restructures), a dotted index path ("0.2" = third child of first child), or "" for the body root. Merges into the instance\'s $overrides; null values remove keys; an empty result clears the override. emit_code inlines overridden instances instead of emitting the shared component. Siblings: update_props patches a plain screen node; update_snippet\'s innerPatch changes the shared definition (every instance at once).',
-      inputSchema: overrideSnippetPropsShape,
-    },
-    async (args) => toMcp(await overrideSnippetProps(ctx, args)),
   );
 
   mcp.registerTool(
@@ -367,7 +330,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_snippet",
     {
       description:
-        'Create a reusable subtree. `params` declares typed inputs; placeholders inside the body are `{ "$param": "name" }` refs substituted at render time. Placement depends on the param type: a `node` param fills a child slot (put `{"$param":"slot"}` directly in a `children` array); a scalar param (string/number/boolean/icon/color/enum) fills a prop value (put `{"$param":"title"}` as a prop, e.g. `{"$ref":"Heading","props":{"children":{"$param":"title"}}}`). A scalar `$param` placed directly in a `children` array is an error — it renders as nothing.\n\n**If the STRUCTURE varies between instances, that is still one snippet — declare a `node` param.** Rows whose leading mark is an icon, or a logo, or nothing at all are three fillings of one `node` slot, not three snippets and not a reason to inline the repetition. Add `optional: true` and an omitted slot renders and emits nothing, so the "or nothing at all" case needs no placeholder. A `node` param accepts one node or an array that renders as siblings. Only scalar values belong in scalar params: notably an `icon` param bakes ONE lucide glyph into the emitted JSX for every instance, so a per-instance icon must be a `node` param. Inlining repeated structure instead of parameterizing it is the most common and most expensive mistake here — it bloats the screen JSON and turns every later edit into N edits.',
+        'Create a reusable subtree with typed `params`; placeholders in the body are `{ "$param": "name" }`. A `node` param fills a child slot, a scalar param fills a prop value — a scalar $param in a `children` array renders as nothing. **Structure that varies between instances is still ONE snippet: declare a `node` param** rather than inlining the repetition, which is the most expensive mistake here. Call render_snippet afterwards — $param wiring bugs are silent until instantiation. Guide: velloo://guide/snippets.',
       inputSchema: addSnippetShape,
     },
     async (args) =>
@@ -405,7 +368,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
               .join("; ");
             const at = inst.path === "" ? "the root" : `path [${inst.path.replace(/\./g, ",")}]`;
             warnings.push(
-              `param change strands the instance on "${inst.screenId}" at ${at} (${parts}) — fix its args with update_snippet_args before rendering that screen`,
+              `param change strands the instance on "${inst.screenId}" at ${at} (${parts}) — fix its args with update_snippet_instance before rendering that screen`,
             );
           }
         }
@@ -434,12 +397,16 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
   );
 
   mcp.registerTool(
-    "update_snippet_args",
+    "update_snippet_instance",
     {
       description:
-        "Patch the `args` of a snippet instance without touching the snippet body. `null` in argPatch removes a key. Pass `extraClassName` to replace the instance's per-instance className override; `null` clears it.",
-      inputSchema: updateSnippetArgsShape,
+        'Edit ONE snippet instance without touching the shared definition. `argPatch` changes what the caller passes in (null removes a key); `extraClassName` replaces its per-instance class suffix (null clears). `innerPath` + `propPatch` patch a node inside just this instance\'s body — the "this card\'s badge is red" escape hatch — where innerPath is "@id" (preferred, survives restructures), a dotted index path ("0.2"), or "" for the body root; emit_code inlines an overridden instance. Both sides compose in one call. To change every instance instead, use update_snippet\'s innerPatch. Guide: velloo://guide/snippets.',
+      inputSchema: updateSnippetInstanceShape,
     },
-    async (args) => toMcp(await updateSnippetArgs(ctx, args)),
+    async (args) => {
+      const plan = normalizeUpdateSnippetInstance(args);
+      if (!plan.ok) return errorResult(badRequest(plan.message, plan.issues));
+      return toMcp(await updateSnippetInstance(ctx, plan.args));
+    },
   );
 }

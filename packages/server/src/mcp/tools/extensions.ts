@@ -36,24 +36,8 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "add_extension",
     {
-      description: [
-        "Register a user-owned custom component into this design folder so it can appear in screen trees.",
-        "",
-        "**When to use.** A screen needs a component the active library doesn't have — your app's bespoke DataTable, a brand-specific Hero, a custom Chart. The user already implements it in their app; this tool tells Velloo about it: the canvas renders a dashed placeholder card (id + resolved props + importPath — good enough to design layout against) and `emit_code` produces a correct import.",
-        "",
-        "**Don't use it for.** Compositions of existing components (use `add_snippet` — snippets are subtrees with typed params). Swapping a whole library palette (pin the screen's `library` instead). Variations on an existing component (use props or class overrides).",
-        "",
-        "**Props schema.** Each prop entry has `name`, `type` (free-form TS-shaped string for display), `optional`, and a `control` of `boolean | number | string | color | enum | icon` (`enum` also takes `enumValues: string[]`). `defaultValue` (string) shows in the placeholder when the prop isn't set. Mirrors a library component's manifest entry — the inspector renders the same controls.",
-        "",
-        '**Live preview (`render: "live"`).** For components whose visual fidelity needs the real implementation — charts above all — pass `render: "live"`: Velloo bundles the actual component from your app (resolved from `importPath` against the host app + its `node_modules`) and client-mounts it in the canvas. The component must be browser-renderable (no server-only imports); the preview is visual-only (clicks select the node), and any bundle/render failure falls back to the placeholder. The built-in `Chart` node already previews via echarts and needs no extension; use `render:"live"` for your own chart components. In a monorepo folder (`config.hostApps` names several apps), also pass `app` so the island bundles from the right app.',
-        "",
-        '**Codegen.** `emit_code` writes `import { <id> } from "<importPath>"` exactly as supplied — use the alias your app actually uses (`@/components/data-table`).',
-        "",
-        "**Shadowing.** An extension shadows a library component with the same id (your `Button` wins over shadcn's on every screen); the response surfaces `shadowedLibraryComponent` when this happens so you can rename if unintentional.",
-        "",
-        "**Example.** Register a custom live chart:",
-        '  add_extension({ id: "PriceChart", importPath: "@/components/charts/PriceChart", render: "live", props: [{ name: "data", type: "Point[]", optional: false, control: "string" }], description: "Recharts price chart" })',
-      ].join("\n"),
+      description:
+        'Register one of the app\'s own components — a bespoke DataTable, a brand Hero, a custom Chart — so screens can use it. The canvas draws a placeholder card and `emit_code` writes a real `import` from `importPath`. Pass `render: "live"` to bundle and mount the actual component instead (charts above all). For compositions of components that already exist, use add_snippet instead. Guide: velloo://guide/extensions.',
       inputSchema: {
         id: z.string().min(1),
         importPath: z.string().min(1),

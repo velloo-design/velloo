@@ -78,11 +78,11 @@ half the deliverable). Output a `brief.md` and a `rationale.md`.
   (background, surface, ink/foreground, primary, secondary/accent, muted, line,
   destructive), each as a hex, in light + dark. Prefer a **duotone or a single
   accent + neutrals** over a rainbow — restraint reads as confidence.
-- `derive_palette_from_color` to grow a ramp from one seed; `score_theme_contrast`
+- `set_theme { from: { seedColor } }` to grow a ramp from one seed; `score_theme_contrast`
   to prove every pair passes in **both** modes (dark is where contrast breaks).
 - Type: a display face, a text/UI face, and a mono. Keep it to **two or three
   families**. If a wordmark face is involved, it can be a fourth, used only there.
-- Now — and only now — commit the winner with `set_token` / `emit_theme` and
+- Now — and only now — commit the winner with `set_theme` / `emit_theme` and
   switch the **final** boards to **semantic tokens** (`bg-background`,
   `text-foreground`, `bg-primary`) so they theme-flip light↔dark. The exploration
   and territory boards keep their explicit colors as the record of how you got here.

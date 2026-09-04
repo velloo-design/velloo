@@ -28,9 +28,9 @@ Workflow:
 4. **Verify relentlessly.** `render_snippet` after every `add_snippet`;
    `screenshot mode: "compare"` (light + dark side by side) as sections land;
    `audit` and `score_theme_contrast` before calling a screen done.
-5. **Make it distinctive.** `set_fonts` a display face before composing, real
+5. **Make it distinctive.** `set_theme { fonts }` a display face before composing, real
    art via `upload_asset`, an opinionated palette via
-   `derive_palette_from_color` — default shadcn + Inter + indigo reads as
+   `set_theme { from: { seedColor } }` — default shadcn + Inter + indigo reads as
    template.
 
 Your final message is the deliverable: what you built (screen ids + boards),

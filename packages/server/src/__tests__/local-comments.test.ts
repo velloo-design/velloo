@@ -510,39 +510,61 @@ describe("agent comment tools", () => {
     };
 
     expect(Object.keys(handlers).sort()).toEqual([
-      "delete_comment_thread",
       "get_comment_thread",
       "list_comment_threads",
-      "reopen_comment",
-      "reply_to_comment",
-      "resolve_comment",
+      "update_comment_thread",
     ]);
     const waiting = await call<{ threads: Array<{ id: string }> }>("list_comment_threads");
     expect(waiting.threads.map((thread: { id: string }) => thread.id).sort()).toEqual(
       [first.id, second.id].sort(),
     );
 
-    const replied = await call<{
-      thread: { messages: Array<{ author: { kind: string; displayName?: string } }> };
-    }>("reply_to_comment", {
+    // Reply and resolve in ONE call — the normal close-out. The reply has to
+    // land on the thread before the status moves.
+    const closed = await call<{
+      thread: {
+        status: string;
+        messages: Array<{ author: { kind: string; displayName?: string }; body: string }>;
+      };
+    }>("update_comment_thread", {
       threadId: first.id,
-      body: "Changed the label and increased contrast.",
+      reply: "Changed the label and increased contrast.",
+      status: "resolved",
     });
-    expect(replied.thread.messages.at(-1)?.author).toEqual({
+    expect(closed.thread.messages.at(-1)?.author).toEqual({
       kind: "agent",
       displayName: "Agent",
     });
+    expect(closed.thread.messages.at(-1)?.body).toBe("Changed the label and increased contrast.");
+    expect(closed.thread.status).toBe("resolved");
+
+    // Status alone reopens it.
     expect(
-      (await call<{ thread: { status: string } }>("resolve_comment", { threadId: first.id })).thread
-        .status,
-    ).toBe("resolved");
-    expect(
-      (await call<{ thread: { status: string } }>("reopen_comment", { threadId: first.id })).thread
-        .status,
+      (
+        await call<{ thread: { status: string } }>("update_comment_thread", {
+          threadId: first.id,
+          status: "open",
+        })
+      ).thread.status,
     ).toBe("open");
+
+    // Reply alone leaves the status where it was.
     expect(
-      (await call<{ removedId: string }>("delete_comment_thread", { threadId: second.id }))
-        .removedId,
+      (
+        await call<{ thread: { status: string } }>("update_comment_thread", {
+          threadId: first.id,
+          reply: "One more thing.",
+        })
+      ).thread.status,
+    ).toBe("open");
+
+    expect(
+      (
+        await call<{ removedId: string }>("update_comment_thread", {
+          threadId: second.id,
+          status: "deleted",
+        })
+      ).removedId,
     ).toBe(second.id);
   });
 });

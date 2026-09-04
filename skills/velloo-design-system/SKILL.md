@@ -39,9 +39,9 @@ Define the **whole** scale, not just brand colors:
 - **Radius** scale, **spacing** rhythm, **type** scale (sizes + weights + line
   heights), and a **mono**.
 
-`derive_palette_from_color` grows ramps from a seed; `score_theme_contrast`
+`set_theme { from: { seedColor } }` grows ramps from a seed; `score_theme_contrast`
 proves every foreground/background pair passes in **both** modes (dark breaks
-first). `set_token` makes them live — the canvas reflows so you can judge the
+first). `set_theme { tokens }` makes them live — the canvas reflows so you can judge the
 system, not a spec sheet.
 
 ## 2. Component inventory — the system's audit

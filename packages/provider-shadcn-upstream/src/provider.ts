@@ -85,6 +85,8 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
     // The base instructions are already shadcn-shaped; the one thing worth
     // framing is that components land in the USER'S APP on demand.
     mcpIntro: () => [
+      '**This folder targets shadcn/ui with Tailwind.** Components come from a pinned shadcn snapshot plus the velloo helpers (`Box` for layout, `Heading`/`Text`, `Icon`, `Image`, `Gradient`, `Layer`, `SVG`, `Divider`, `Placeholder`, `Prose`). Style through `update_props { style: "flex gap-4 p-6" }` — a Tailwind className string. Call `list_components` for the full set and per-component `example` props.',
+      "",
       "**Installing components into the app**: this folder's shadcn components render on the canvas from velloo's built-in runtime, but the user's app only contains what has been installed. When the design uses a component the app doesn't have yet (or you're about to emit code that imports one), call `install_component { componentId }` — it runs the official `npx shadcn@latest add` in the host app and reports the import path. `install_component` also answers installed-status for any component id.",
       "",
     ],

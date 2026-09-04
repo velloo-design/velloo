@@ -136,9 +136,7 @@ export {
   removeNode,
   type SetNodeIdArgs,
   type SetNodeIdResult,
-  type SetStyleArgs,
   setNodeId,
-  setStyle,
   type UpdatePropsArgs,
   type UpdatePropsBulkArgs,
   type UpdatePropsBulkResult,
@@ -165,3 +163,7 @@ export {
   type FoundNode,
   findNodes,
 } from "./find-nodes.ts";
+export {
+  type UpdateSnippetInstanceResult,
+  updateSnippetInstance,
+} from "./update-snippet-instance.ts";

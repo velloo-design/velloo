@@ -189,12 +189,30 @@ describe("batch keeps the standalone tools' tolerances", () => {
     });
   });
 
-  test("update_snippet_args defaults argPatch to {} rather than crashing", async () => {
-    const prepared = BATCH_TOOLS.update_snippet_args?.prepare({
+  test("update_snippet_instance rejects a call that names neither side", async () => {
+    const prepared = BATCH_TOOLS.update_snippet_instance?.prepare({
       screenId: "landing",
       path: [0],
     });
+    expect(prepared?.ok).toBe(false);
+  });
+
+  test("update_snippet_instance takes the arg side alone", async () => {
+    const prepared = BATCH_TOOLS.update_snippet_instance?.prepare({
+      screenId: "landing",
+      path: [0],
+      argPatch: { title: "Hi" },
+    });
     expect(prepared?.ok).toBe(true);
+  });
+
+  test("update_snippet_instance refuses a half-specified override", async () => {
+    const prepared = BATCH_TOOLS.update_snippet_instance?.prepare({
+      screenId: "landing",
+      path: [0],
+      innerPath: "@badge",
+    });
+    expect(prepared?.ok).toBe(false);
   });
 
   test("update_props accepts the bulk `patches` form", async () => {

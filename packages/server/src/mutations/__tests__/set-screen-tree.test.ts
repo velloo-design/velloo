@@ -15,7 +15,7 @@ import { removeNode, setScreenTree } from "../index.ts";
  * The rebuild-a-placeholder affordances (2026-07-11 trace findings):
  *  - remove_node with a root locator clears the root's children instead of erroring
  *  - set_screen_tree replaces the whole tree in one call, keeping screen identity
- *  - update_snippet_args is batchable and rolls back with the batch
+ *  - update_snippet_instance is batchable and rolls back with the batch
  */
 
 const provider = createShadcnProvider();
@@ -128,10 +128,10 @@ describe("set_screen_tree", () => {
 });
 
 describe("batch integration", () => {
-  test("update_snippet_args inside a batch patches instance args", async () => {
+  test("update_snippet_instance inside a batch patches instance args", async () => {
     const res = await runBatch(ctx, [
       {
-        tool: "update_snippet_args",
+        tool: "update_snippet_instance",
         args: { screenId: "landing", path: [1], argPatch: { title: "Revenue" } },
       },
     ]);
@@ -145,10 +145,10 @@ describe("batch integration", () => {
     expect(inst?.args?.title).toBe("Revenue");
   });
 
-  test("a failing batch rolls update_snippet_args back", async () => {
+  test("a failing batch rolls update_snippet_instance back", async () => {
     const res = await runBatch(ctx, [
       {
-        tool: "update_snippet_args",
+        tool: "update_snippet_instance",
         args: { screenId: "landing", path: [1], argPatch: { title: "Revenue" } },
       },
       { tool: "remove_node", args: { screenId: "landing", path: [99] } },

@@ -267,4 +267,6 @@ export const PRESETS: Record<string, Theme> = {
   },
 };
 
-export const PRESET_NAMES = Object.keys(PRESETS);
+/** Non-empty tuple typing so `z.enum(PRESET_NAMES)` needs no cast. */
+export const PRESET_NAMES = Object.keys(PRESETS) as [PresetName, ...PresetName[]];
+export type PresetName = keyof typeof PRESETS;

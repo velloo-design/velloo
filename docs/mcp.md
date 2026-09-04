@@ -8,17 +8,32 @@ A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`
 
 ## Tool surface
 
-### Progressive disclosure (opt-in)
+### The context budget
 
-**The default surface is flat — every tool advertised up front.** Progressive disclosure is opt-in via `VELLOO_MCP_PROGRESSIVE=1`: the server then advertises a lean **core** surface (the compose→verify→emit loop) and hides long-tail tool *families* until the agent asks for them, so fewer schemas sit in context and there are fewer ways to mis-select. A hidden tool is absent from `tools/list` and rejects calls.
+**The surface is flat — every tool is advertised at connect.** Progressive disclosure was tried (an env-gated `reveal_tools` that hid long-tail families) and removed: it depends on the client re-fetching on `tools/list_changed`, and major agent clients index tools once at connect and never refresh, which left revealed tools permanently uncallable (2026-07 gallery dogfood: every agent hit it). Disclosure that needs client cooperation is not a budget strategy.
 
-Flat is the default because it requires a client that re-fetches the tool list on `tools/list_changed` — and major agent clients (Claude Code among them) index tools once at connect and never refresh, which leaves revealed tools permanently uncallable (2026-07 gallery dogfood: every agent hit this). `VELLOO_MCP_FLAT=1` still force-flattens and wins if both vars are set.
+What holds the budget instead:
 
-| Tool | Args | Notes |
-|---|---|---|
-| `reveal_tools` | `area: "theme-authoring" \| "lifecycle" \| "annotations-write" \| "all"` | Progressive mode only. Unlock a hidden family. Fires `tools/list_changed` (compliant clients re-fetch the larger list automatically) and returns the now-callable tool names + that family's guidance. Idempotent |
+1. **Tool descriptions say WHAT and WHEN, in one or two sentences**, and name their guide. They do not carry manuals.
+2. **Long-form guidance is an MCP resource** — `velloo://guide/{components,snippets,theme,boards,verification,porting,capture,extensions,art,comments}` — fetched on demand, so a session that never ports an app never pays for the porting manual.
+3. **The boot instructions carry only what no tool can say**: the mental model, the three customization layers, and the efficiency contract.
 
-Hidden families (progressive mode): **theme-authoring** (`add_theme`, `apply_preset`, `score_theme_contrast`, `list_themes`), **lifecycle** (the `remove_*` for boards/frames/screens/snippets/extensions + `update_board`/`update_screen`/`update_extension`), **annotations-write** (`add_annotation`, `remove_annotation`). Everything else — including reads (`list_annotations`), node deletes (`remove_node`), frame edits (`update_frame`), `import_theme`, and `derive_palette_from_color` — stays core.
+`bun packages/server/scripts/mcp-token-budget.ts` measures the whole thing (instructions + every tool's wire schema + the resource listing) and is the number to hold the line on. Adding a paragraph to the instructions taxes every session forever — check whether it belongs in a guide or a tool description first.
+
+### Resources
+
+| URI | Carries |
+|---|---|
+| `velloo://guide/components` | Box vs Card, children arrays vs the children prop, inline runs, icons, raw CSS |
+| `velloo://guide/snippets` | Params, node slots, `$if`, structural variance, the edit recipes |
+| `velloo://guide/theme` | Tokens, presets, fonts, the type ladder, importing an app's stylesheet |
+| `velloo://guide/boards` | Frames vs viewports, sidebar groups, archived boards, board-pinned themes |
+| `velloo://guide/verification` | screenshot modes, diffing, audit, inspect |
+| `velloo://guide/porting` | Code-to-design: re-expressing an app, fidelity checking, known gaps |
+| `velloo://guide/capture` | Reaching pages behind a login |
+| `velloo://guide/extensions` | Registering the app's own components, live islands |
+| `velloo://guide/art` | Authoring assets vs paying to generate them |
+| `velloo://guide/comments` | Working the user's visual feedback threads |
 
 ### Discovery
 
@@ -44,9 +59,8 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 | Tool | Args |
 |---|---|
 | `add_node` | `screenId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
-| `update_props` | `screenId, path?, propPatch?` OR `patches: [{ path, propPatch }]` — shallow prop merge (null removes a key; className is a prop like any other). `patches` applies many nodes in one atomic write. Successful calls may carry advisory `propWarnings` |
-| `set_style` | `screenId, path, style` — style a node through the screen's framework-native **`StyleChannel`**: a Tailwind `className` string for shadcn, an `sx` object for MUI, and for no-framework either (folder's `config.styling`) — a Tailwind `className` string (`none/tailwind`) or a plain inline `style` object (`none/none`, themed via `var(--…)` tokens, no JIT). Object channels merge shallowly (inner `null` drops a key); `style: null` clears. A payload shape that doesn't fit the channel is rejected with the expected shape (how the agent discovers the channel). On a className channel, equivalent to setting `className` via `update_props` |
-| `override_snippet_props` | `screenId, path, innerPath, propPatch` — patch props on one node *inside* a snippet instance's body (path = instance locator; innerPath = `"@id"` of a body node (preferred — survives restructures), dotted index, or "" for root). Persists as `$overrides` on the instance; applied after param substitution at render; emit_code inlines overridden instances |
+| `update_props` | `screenId, path?, propPatch?, style?` OR `patches: [{ path, propPatch?, style? }]` — shallow prop merge (null removes a key), plus the framework-native **`StyleChannel`**: a Tailwind `className` string for shadcn, an `sx` object for MUI, an inline `style` object for none/none. Object channels merge shallowly (an inner `null` drops that key); `style: null` clears. Both channels can travel in one call, and a payload whose shape doesn't fit the channel rejects the whole call. `patches` applies many nodes in one atomic write |
+| `update_snippet_instance` | `screenId, path, argPatch?, extraClassName?, innerPath?, propPatch?` — edit ONE snippet instance from either side: `argPatch`/`extraClassName` change what the caller passes in, `innerPath`+`propPatch` patch a node inside just this instance's body (innerPath = `"@id"` of a body node (preferred), a dotted index path, or `""` for the body root). Both compose in one call. `emit_code` inlines an overridden instance |
 | `move_node` | `screenId, fromPath, toParent, toIndex?` |
 | `remove_node` | `screenId, path` |
 | `inspect` | `screenId, path, innerPath?` — returns SSR'd HTML, resolved className list, `$ref`, and resolved props for the node. When `path` resolves to a snippet instance the body is rendered with its args / `$overrides` / `$extraClassName` applied; `innerPath` (`"@id"`, dotted index, or "" for the body root — the same scheme as `override_snippet_props`) drills into one body node. Omitting `innerPath` on an instance inspects the body root and returns a `note` on how to drill in |
@@ -99,6 +113,7 @@ Board notes carrying markdown-lite guidance — tour steps, review remarks, hand
 
 | Tool | Args |
 |---|---|
+| `list_assets` | `unusedOnly?` — what `assets/` already holds: the `/assets/<name>` URL, size, which screens/snippets still reference it, and the originating prompt for anything `generate_asset` produced. Check here before spending on art the folder may already have |
 | `upload_asset` | `filename, data (base64), overwrite?` — writes into `assets/`, served at `/assets/<name>`; the agent authors SVG/raster art itself (max 5MB) |
 | `import_assets` | `paths: string[], baseDir?, overwrite?` — bulk-import existing image/SVG files into `assets/` BY PATH (no base64). Globs (`../gen/*.png`) expand relative to `baseDir` (default: server cwd). Max 5MB each; missing/oversized/non-image entries are reported per-entry, never failing the batch |
 | `generate_asset` | `prompt, intent, aspect?, count?, reference?, filename?` — hosted, **pay-as-you-go** generation via velloo-cloud (requires `velloo login`). `intent` says what the art is FOR and the server picks the model: `photo`, `illustration`, `graphic` (legible text), `texture`, `icon`, `vector` (true SVG), `mark` (geometric SVG, cheapest), `edit`, `cutout`, `upscale`. `count` 1–4 returns variants (**each charged**, stored as `<stem>-1`, `<stem>-2`, …). `reference` takes folder asset paths — required by `edit`/`cutout`/`upscale`, optional style guidance for the text-to-image intents. Decodes results into `assets/` (same store + naming as `upload_asset`) and returns each `/assets/<name>` URL; SVG intents also return inline markup for `<SVG content>`. The result reports the exact cost + remaining balance — relay both. Failures (logged out, out of credits, rate-limited, generation disabled) come back as clear messages naming the free local alternative |
@@ -144,20 +159,24 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, `tree`, or `innerPatch` (`{ innerPath, propPatch }` — patch one body node's props in place, the definition-level counterpart of `override_snippet_props`; shared by all instances, no full-tree resend). All screens referencing the snippet rebroadcast |
 | `remove_snippet` | `snippetId` | Refuses if any screen instantiates it; returns the referencing screenIds so the agent can clean up first |
 | `instantiate_snippet` | `screenId, parentPath, snippetId, args, id?, extraClassName?, overrides?, index?` | Adds a `$snippet` node — opaque from outside. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` (`{ "<innerSelector>": { props } }`, same field `override_snippet_props` patches) to set per-instance interior props — the active nav item, a red badge — at placement, no follow-up call |
-| `update_snippet_args` | `screenId, path, argPatch?, extraClassName?` | Patch an instance's `args` map (`null` removes a key); also patches the instance's `extraClassName` override (`null` clears) |
+
+### Visual feedback threads
+
+Persistent app state, never repo files. Every open thread is work addressed to the agent.
+
+| Tool | Args | Notes |
+|---|---|---|
+| `list_comment_threads` | `boardId?, status?, scope?` | Open threads across the folder by default. `scope` separates `local` (pinned by the user in their canvas) from `shared` (left by a reviewer on a published link) |
+| `get_comment_thread` | `threadId` | The complete conversation plus its node/board anchor. A stale anchor keeps its saved bounds + fingerprint as context — never silently re-attach it to a different node |
+| `update_comment_thread` | `threadId, reply?, status?` | Act on a thread: `reply` posts an agent message, `status` moves it to `resolved` / `open` / `deleted`. Both in one call is the normal close-out (the reply lands before the status moves). `deleted` is permanent — only on the user's explicit ask |
 
 ### Theme operations
 
 | Tool | Args | Notes |
 |---|---|---|
-| `set_token` | `path, value` or `tokens, theme?` | Mutates tokens at dot-paths (`colors.primary.DEFAULT`); bulk via `tokens: { <path>: <value> }`. The full theme is schema-validated after each patch; returns the applied paths |
+| `set_theme` | `theme?, tokens?, fonts?, typeset?, customCss?, from?` | One verb for the whole token document; pass any combination of channels. `tokens` patches dot-paths (`colors.primary.DEFAULT`); `fonts` declares roles (each becomes `--font-<role>` + a `font-<role>` utility, `google` loads the family in design mode); `typeset` sets the rhythm (`size`/`leading`/`flow` plus font roles) the whole h1–h6 ladder derives from; `customCss` replaces `theme/custom.css` wholesale (read it back from `get_theme`); `from` reseeds the palette — `{ preset }` for one of the 12 shipped presets, `{ seedColor }` for an OKLCH ramp with contrast auto-adjusted to WCAG AA — and applies BEFORE the other channels, so one call can preset-then-override. The full theme is schema-validated after each patch |
 | `add_theme` | `name, from?, overwrite?` — clone a named theme to `theme/<name>.json`; boards pin it via `update_board { patch: { theme } }`, renders/screenshots via their `theme` param |
 | `list_themes` | — | named themes + which boards use each |
-| `set_fonts` | `fonts: [{ role, family?, fallback?, google?, remove? }], theme?` — each role becomes `--font-<role>` + a `font-<role>` utility; `google` loads the family in design mode and emits an @import in globals.css. Reassigning a role drops the webfont nothing renders any more; `remove` deletes the role, and is refused while a typeset still names it |
-| `set_typeset` | `typesets: [{ name?, size?, leading?, flow?, fontBody?, fontHeading?, fontMono?, renameTo?, remove? }], theme?` | The typographic rhythm. Three controls — the h1–h6 ladder, copy sizes and heading margins all derive from them, so one call re-rhythms the whole design. `default` is the folder baseline; any other name becomes a `.typeset-<name>` preset a `Prose` region opts into. Fields merge, `null` clears one back to inherited, and a preset stores only what it authors |
-| `custom_css` | `css?` — read (omit css) or replace `theme/custom.css`; injected into every render and appended to emitted globals.css |
-| `apply_preset` | `presetName` | Switches the active theme to a named preset. Ships with `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum` |
-| `derive_palette_from_color` | `seedColor, name?` | Generates an OKLCH-based palette from a seed (`#hex`, `oklch()`, `rgb()`, …). Foreground/background contrast is auto-adjusted to WCAG AA |
 | `score_theme_contrast` | `mode?` | Score WCAG contrast ratios for the active theme's salient color pairs in both light and dark palettes (each result carries `mode`); pass `mode` to score one. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset to confirm accessibility before shipping |
 | `import_theme` | `css?` OR `cssPath?`, `theme?`, `apply?` | Code-to-design: seed the theme from a host app's stylesheet. Parses shadcn-convention `:root`/`.dark` custom props (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars (var() indirection resolved), plus `--radius` and `--font-*` roles. With a `cssPath`, also ingests the nearby tailwind.config `theme.extend` — brand `colors`→palette, named `spacing`→spacing tokens (so `w-icon-rail`/`h-header` resolve), `boxShadow`→shadows, `fontFamily`→font roles, `keyframes`+`animation`→`--animate-*`. Undeclared slots keep their current values. Dry-run by default — returns `changes: [{ token, from, to }]`; `apply: true` persists |
 
@@ -210,7 +229,7 @@ Every tree mutation also accepts a virtualized `screenId` of the form `"snippet:
 
 - `update_props({ screenId: "snippet:feature-row", path: [0], propPatch: { className: "p-6" } })` patches the snippet body's root node.
 - `add_node({ screenId: "snippet:feature-row", parentPath: [], componentRef: "Icon", props: { name: "Sparkles" }, id: "leading-icon" })` adds a child to the body's root and assigns a stable id.
-- `move_node`, `remove_node`, `set_node_id`, `instantiate_snippet`, `update_snippet_args`, and `update_props`'s bulk `patches` form all work the same way.
+- `move_node`, `remove_node`, `set_node_id`, `instantiate_snippet`, `update_snippet_instance`, and `update_props`'s bulk `patches` form all work the same way.
 
 Two things to know:
 
@@ -221,7 +240,7 @@ The canvas's snippet editor view uses exactly this surface — the Inspector tar
 
 ### Locator-aware tools
 
-`add_node`, `update_props` (single and `patches` bulk), `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_args`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.
+`add_node`, `update_props` (single and `patches` bulk), `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_instance`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.
 
 ## Advisory prop warnings
 

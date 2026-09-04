@@ -13,7 +13,7 @@ import {
   normalizeAddNode,
   normalizeUpdateFrame,
   normalizeUpdateProps,
-  OverrideSnippetPropsBody,
+  normalizeUpdateSnippetInstance,
   RemoveFrameBody,
   RemoveNodeBody,
   RemoveScreenBody,
@@ -22,8 +22,8 @@ import {
   SetScreenTreeBody,
   UpdateFrameBody,
   UpdatePropsBody,
-  UpdateSnippetArgsBody,
   UpdateSnippetBody,
+  UpdateSnippetInstanceBody,
   type WatchEvent,
 } from "@velloo/protocol";
 import type { Result } from "@velloo/result";
@@ -36,17 +36,10 @@ import { addNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
 import { addFrame, removeFrame, updateFrame, updateFrames } from "./api/frames.ts";
 import { addScreen, removeScreen, setScreenTree } from "./api/screens.ts";
-import {
-  addSnippet,
-  instantiateSnippet,
-  removeSnippet,
-  updateSnippet,
-  updateSnippetArgs,
-} from "./api/snippets.ts";
+import { addSnippet, instantiateSnippet, removeSnippet, updateSnippet } from "./api/snippets.ts";
 import {
   addNode,
   moveNode,
-  overrideSnippetProps,
   removeNode,
   setNodeId,
   updateProps,
@@ -55,6 +48,7 @@ import {
 import { type MutationContext, withBoardLock, withScreenLock, withSnippetLock } from "./context.ts";
 import { badRequest, type MutationError } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
+import { updateSnippetInstance } from "./update-snippet-instance.ts";
 
 /**
  * Transactional multi-mutation envelope.
@@ -152,12 +146,6 @@ export const BATCH_TOOLS: Record<string, BatchTool> = {
   update_props: batchTool("update_props", UpdatePropsBody, normalizeUpdateProps, (ctx, plan) =>
     plan.mode === "bulk" ? updatePropsBulk(ctx, plan.args) : updateProps(ctx, plan.args),
   ),
-  override_snippet_props: batchTool(
-    "override_snippet_props",
-    OverrideSnippetPropsBody,
-    asIs,
-    overrideSnippetProps,
-  ),
   remove_node: batchTool("remove_node", RemoveNodeBody, asIs, removeNode),
   move_node: batchTool("move_node", MoveNodeBody, asIs, moveNode),
   set_node_id: batchTool("set_node_id", SetNodeIdBody, asIs, setNodeId),
@@ -170,11 +158,11 @@ export const BATCH_TOOLS: Record<string, BatchTool> = {
     asIs,
     instantiateSnippet,
   ),
-  update_snippet_args: batchTool(
-    "update_snippet_args",
-    UpdateSnippetArgsBody,
-    asIs,
-    updateSnippetArgs,
+  update_snippet_instance: batchTool(
+    "update_snippet_instance",
+    UpdateSnippetInstanceBody,
+    normalizeUpdateSnippetInstance,
+    updateSnippetInstance,
   ),
   update_frame: batchTool("update_frame", UpdateFrameBody, normalizeUpdateFrame, (ctx, plan) =>
     plan.mode === "bulk" ? updateFrames(ctx, plan.args) : updateFrame(ctx, plan.args),
@@ -282,8 +270,7 @@ function touchedResources(
     case "move_node":
     case "set_node_id":
     case "set_screen_tree":
-    case "override_snippet_props":
-    case "update_snippet_args":
+    case "update_snippet_instance":
     case "instantiate_snippet": {
       const screenId = a.screenId as string;
       // Snippet bodies are edited through virtual `snippet:<id>` screens.

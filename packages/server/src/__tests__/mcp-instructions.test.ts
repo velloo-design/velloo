@@ -12,11 +12,12 @@ const introOf = (
 ): readonly string[] => p.mcpIntro?.(channel) ?? [];
 
 describe("buildInstructions", () => {
-  test("tells the agent archived boards exist and how to see them", () => {
+  test("points at the guides that carry the detail it deliberately omits", () => {
     const text = buildInstructions(false);
-    expect(text).toContain("include_archived");
-    // The agent must know archiving is the reversible alternative to deletion.
-    expect(text).toContain("archived: true");
+    // The brief is only useful if the agent knows where the rest lives.
+    for (const slug of ["components", "snippets", "theme", "boards", "verification", "porting"]) {
+      expect(text).toContain(`velloo://guide/${slug}`);
+    }
   });
 
   test("omits the feedback paragraph when feedback is disabled", () => {
@@ -45,91 +46,81 @@ describe("buildInstructions", () => {
     expect(buildInstructions(false)).not.toContain("give the user this URL");
   });
 
-  test("a MUI (sx) folder is framed for Material UI, not shadcn/Tailwind", () => {
-    const mui = buildInstructions(false, undefined, false, introOf(createMuiProvider(), "sx"));
+  // The base brief is framework-NEUTRAL: each adapter states its own vocabulary
+  // and style channel positively, rather than correcting a shadcn claim that the
+  // brief no longer makes. So the checks are "does the frame lead, and does it
+  // name this framework's channel" — not "does it contradict the default".
+  const leads = (text: string, marker: string): boolean =>
+    text.indexOf(marker) >= 0 &&
+    text.indexOf(marker) < text.indexOf("The design folder is tool-owned");
+
+  test("a MUI (sx) folder is framed for Material UI and leads with it", () => {
+    const mui = buildInstructions(false, undefined, introOf(createMuiProvider(), "sx"));
     expect(mui).toContain("Material UI");
-    expect(mui).toContain("Style with the `sx` object");
-    // It tells the agent the Tailwind guidance below doesn't apply here.
-    expect(mui).toContain("does NOT apply here");
-    // The MUI frame leads (before the shadcn-tuned base parts).
-    expect(mui.indexOf("Material UI")).toBeLessThan(mui.indexOf("pinned shadcn snapshot"));
+    expect(mui).toContain("Style through `sx`");
+    expect(leads(mui, "Material UI")).toBe(true);
+    // The neutral base must not assert a component library of its own.
+    expect(mui).not.toContain("pinned shadcn snapshot");
   });
 
-  test("an antd (style) folder is framed for Ant Design + inline styles, not shadcn/Tailwind", () => {
-    const antd = buildInstructions(false, undefined, false, introOf(createAntdProvider(), "style"));
+  test("an antd (style) folder is framed for Ant Design + inline styles", () => {
+    const antd = buildInstructions(false, undefined, introOf(createAntdProvider(), "style"));
     expect(antd).toContain("Ant Design");
-    expect(antd).toContain("Style with the inline `style` object");
-    // It tells the agent the Tailwind guidance below doesn't apply here.
-    expect(antd).toContain("does NOT apply here");
-    // The antd frame leads (before the shadcn-tuned base parts).
-    expect(antd.indexOf("Ant Design")).toBeLessThan(antd.indexOf("pinned shadcn snapshot"));
+    expect(antd).toContain("Style through the inline `style` object");
+    expect(leads(antd, "Ant Design")).toBe(true);
+    expect(antd).not.toContain("pinned shadcn snapshot");
   });
 
-  test("a chakra (sx) folder is framed for Chakra UI, not shadcn/Tailwind", () => {
-    const chakra = buildInstructions(
-      false,
-      undefined,
-      false,
-      introOf(createChakraProvider(), "sx"),
-    );
+  test("a chakra (sx) folder is framed for Chakra UI", () => {
+    const chakra = buildInstructions(false, undefined, introOf(createChakraProvider(), "sx"));
     expect(chakra).toContain("Chakra UI");
-    expect(chakra).toContain("Style with the `sx` object");
-    // It tells the agent the Tailwind guidance below doesn't apply here.
-    expect(chakra).toContain("does NOT apply here");
-    // The chakra frame leads (before the shadcn-tuned base parts).
-    expect(chakra.indexOf("Chakra UI")).toBeLessThan(chakra.indexOf("pinned shadcn snapshot"));
+    expect(chakra).toContain("Style through `sx`");
+    expect(leads(chakra, "Chakra UI")).toBe(true);
+    expect(chakra).not.toContain("pinned shadcn snapshot");
   });
 
-  test("a shadcn (tailwind) folder keeps the default Tailwind-shaped framing", () => {
-    // shadcn-upstream declares no mcpIntro — the default framing leads.
-    const shadcn = buildInstructions(false, undefined, false, []);
-    expect(shadcn).not.toContain("Style with the `sx` object");
-    // No framework-specific intro prepended — the default opening leads.
-    expect(shadcn).not.toContain("**no-framework** Velloo design folder");
-    expect(shadcn).toContain("pinned shadcn snapshot");
+  test("the base brief names no framework when no adapter intro is supplied", () => {
+    const bare = buildInstructions(false, undefined, []);
+    for (const claim of ["pinned shadcn snapshot", "Style through `sx`", "no CSS framework"]) {
+      expect(bare).not.toContain(claim);
+    }
+    // It still frames the folder and the neutral style channel.
+    expect(bare).toContain("Velloo design folder");
+    expect(bare).toContain("Styling is framework-native");
   });
 
-  test("a no-framework folder is framed as bare primitives, correcting the shadcn claim", () => {
+  test("a no-framework folder is framed as bare primitives", () => {
     const none = buildInstructions(
       false,
       undefined,
-      false,
       introOf(createNoneProvider(), "tailwind-classname"),
     );
-    expect(none).toContain("no-framework");
-    expect(none).toContain("NO shadcn surface");
-    // Still Tailwind-shaped (no sx), and the correction leads.
-    expect(none).not.toContain("Style with the `sx` object");
-    expect(none.indexOf("no-framework")).toBeLessThan(none.indexOf("pinned shadcn snapshot"));
+    expect(none).toContain("no component library");
+    expect(none).toContain("Tailwind classes");
+    expect(none).not.toContain("Style through `sx`");
+    expect(leads(none, "no component library")).toBe(true);
   });
 
   test("a none/none folder is framed for inline styles (channel picks the variant)", () => {
-    const inline = buildInstructions(
-      false,
-      undefined,
-      false,
-      introOf(createNoneProvider(), "style"),
-    );
+    const inline = buildInstructions(false, undefined, introOf(createNoneProvider(), "style"));
     expect(inline).toContain("no CSS framework");
-    expect(inline).toContain("Style with the `style` object");
+    expect(inline).toContain("Style through inline `style` objects");
   });
 
   test("surfaces open visual feedback as one line when the count is positive", () => {
-    const text = buildInstructions(false, undefined, false, [], 3);
+    const text = buildInstructions(false, undefined, [], 3);
     expect(text).toContain(
       "**3 open visual feedback threads are waiting on you** — read them with `list_comment_threads` and address them.",
     );
   });
 
   test("the waiting-comments line reads correctly for a single comment", () => {
-    const text = buildInstructions(false, undefined, false, [], 1);
+    const text = buildInstructions(false, undefined, [], 1);
     expect(text).toContain("**1 open visual feedback thread is waiting on you**");
   });
 
   test("omits the waiting-comments line at zero (and by default)", () => {
     expect(buildInstructions(false)).not.toContain("feedback thread is waiting");
-    expect(buildInstructions(false, undefined, false, [], 0)).not.toContain(
-      "feedback thread is waiting",
-    );
+    expect(buildInstructions(false, undefined, [], 0)).not.toContain("feedback thread is waiting");
   });
 });

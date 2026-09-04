@@ -1,14 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CommentStoreError, type LocalCommentsService } from "../../local-comments.ts";
-import { jsonResult } from "./result.ts";
+import { errorResult, jsonResult } from "./result.ts";
 
 async function result<T>(operation: () => Promise<T>) {
   try {
     return jsonResult(await operation());
   } catch (error) {
     if (error instanceof CommentStoreError) {
-      return jsonResult({ ok: false, code: error.code, message: error.message });
+      return errorResult({ kind: "CommentStore", code: error.code, message: error.message });
     }
     throw error;
   }
@@ -45,51 +45,37 @@ export function registerCommentTools(mcp: McpServer, comments: LocalCommentsServ
   );
 
   mcp.registerTool(
-    "reply_to_comment",
+    "update_comment_thread",
     {
       description:
-        "Reply to a visual feedback thread as the agent. Use resolve_comment separately once the requested change is complete.",
+        'Act on a feedback thread: `reply` posts an agent message, `status` moves it to resolved / open / deleted. Both in one call is the normal close-out — reply saying what changed, then resolve. `status: "deleted"` is permanent; only on the user\'s explicit ask. Guide: velloo://guide/comments.',
       inputSchema: {
         threadId: z.string().uuid(),
-        body: z.string().trim().min(1).max(4000),
+        reply: z.string().trim().min(1).max(4000).optional().describe("Agent message to post"),
+        status: z.enum(["resolved", "open", "deleted"]).optional(),
       },
     },
-    async ({ threadId, body }) =>
-      result(async () => ({
-        thread: await comments.reply(threadId, {
-          body,
-          author: { kind: "agent", displayName: "Agent" },
-        }),
-      })),
-  );
-
-  mcp.registerTool(
-    "resolve_comment",
-    {
-      description: "Mark an addressed feedback thread resolved and remove it from the open inbox.",
-      inputSchema: { threadId: z.string().uuid() },
+    async ({ threadId, reply, status }) => {
+      if (reply === undefined && status === undefined) {
+        return errorResult({
+          kind: "BadRequest",
+          message: "update_comment_thread: pass reply, status, or both.",
+        });
+      }
+      return result(async () => {
+        // Reply first so the closing message lands on the thread before it is
+        // resolved or removed.
+        let thread = reply
+          ? await comments.reply(threadId, {
+              body: reply,
+              author: { kind: "agent", displayName: "Agent" },
+            })
+          : undefined;
+        if (status === "deleted") return comments.delete(threadId);
+        if (status !== undefined)
+          thread = await comments.setResolved(threadId, status === "resolved");
+        return { thread: thread ?? (await comments.get(threadId)) };
+      });
     },
-    async ({ threadId }) =>
-      result(async () => ({ thread: await comments.setResolved(threadId, true) })),
-  );
-
-  mcp.registerTool(
-    "reopen_comment",
-    {
-      description: "Reopen a resolved feedback thread.",
-      inputSchema: { threadId: z.string().uuid() },
-    },
-    async ({ threadId }) =>
-      result(async () => ({ thread: await comments.setResolved(threadId, false) })),
-  );
-
-  mcp.registerTool(
-    "delete_comment_thread",
-    {
-      description:
-        "Permanently delete a local feedback thread when the user explicitly asks to remove it. Prefer resolving addressed work so the conversation remains available.",
-      inputSchema: { threadId: z.string().uuid() },
-    },
-    async ({ threadId }) => result(() => comments.delete(threadId)),
   );
 }

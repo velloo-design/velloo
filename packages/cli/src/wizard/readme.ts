@@ -91,8 +91,8 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("");
   lines.push("Velloo exposes ~55 MCP tools — discovery (`list_screens`, `list_components`,");
   lines.push("`list_snippets`, `get_theme`), tree mutations (`add_node`, `update_props`,");
-  lines.push("`set_style`, `move_node`, …), snippets, theme operations (`set_token`,");
-  lines.push("`apply_preset`, `derive_palette_from_color`), inspection");
+  lines.push("`move_node`, …), snippets, theme operations (`set_theme`,");
+  lines.push("`import_theme`, `score_theme_contrast`), inspection");
   lines.push("(`inspect`, `audit`, `screenshot`, `validate_classes`), and");
   lines.push("code emission (`emit_code`, `emit_snippet`, `emit_theme`).");
   lines.push("");

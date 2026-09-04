@@ -50,7 +50,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "start_capture_session",
     {
       description:
-        "Open a real browser window the USER drives, to reach pages you cannot: anything behind a login, a staging site, a third-party page you're taking direction from. The user logs in and navigates, and an in-page toolbar lets them capture any page — a screenshot, a structured DOM + computed-style extract, the page's CSS custom properties, and its images — all stored locally as evidence for you to work from. **Returns immediately with a sessionId; it does NOT wait for the session.** Poll `list_captures` to see captures as the user makes them. Use this when `compare_to_url` came back `unverified` with an auth wall, or when the user asks you to work from a site you can't reach. Then read the evidence with `get_capture` and verify your screen with `compare_to_url { captureId }` — a stored capture is authenticated and frozen, so it's a stable reference in a way a live auth-gated URL never is. You are NOT expected to mechanically convert the DOM into a tree: re-express the page in real components against the theme, exactly as for any code-to-design port.",
+        "Open a real browser window the USER drives, to reach a page behind a login or on staging. Returns a sessionId IMMEDIATELY — never treat it as blocking and never re-call it to check; poll list_captures instead, and tell the user to log in, hit **Capture page** per page, then **Done**. Guide: velloo://guide/capture.",
       inputSchema: {
         url: z
           .string()

@@ -26,22 +26,7 @@ export function registerGenerateTools(
     "generate_asset",
     {
       description:
-        "Generate artwork from a text prompt via velloo-cloud (hosted, PAY-AS-YOU-GO against the user's credit balance; requires `velloo login`). " +
-        "Stores each result in assets/ and returns its /assets/<name> URL for `<Image src>`, plus the pixel `width`/`height` — `<Image>` FILLS ITS PARENT, so pass a matching `aspect` (or put it in a sized box) or it renders at zero height. " +
-        "SVG intents also return inline markup for `<SVG content>`. " +
-        "Pick the intent by what the artwork is FOR — the server chooses the model: " +
-        "`photo` realistic marketing/product/hero photography · " +
-        "`illustration` stylized spot art, empty states, editorial · " +
-        "`graphic` layouts needing LEGIBLE TEXT (banners, posters, OG images) · " +
-        "`texture` abstract backgrounds, gradients, patterns · " +
-        "`icon` one UI pictogram, transparent background (raster) · " +
-        "`vector` true SVG out — illustrative logos and spot vectors · " +
-        "`mark` geometric flat SVG (simple logos, arrows, shapes) — precise and the cheapest SVG · " +
-        "`edit` a surgical change to an existing asset · " +
-        "`cutout` remove an asset's background · " +
-        "`upscale` enlarge an asset. " +
-        "Prices differ per intent and the result reports the exact cost and remaining balance — RELAY BOTH TO THE USER. " +
-        "For artwork you can author yourself (flat shapes, gradients, simple marks), prefer `upload_asset` — free and offline.",
+        "Generate image assets from a prompt and write them into assets/. **PAY-AS-YOU-GO against the user's credit balance** — author it yourself with upload_asset whenever you can, check list_assets first, iterate at `count: 1`, and ALWAYS relay the returned cost and remaining balance to the user. `intent` picks the model: photo, illustration, graphic (layouts with legible text), texture, icon, vector, mark, edit, cutout, upscale. Pass `reference` to restyle or edit an existing asset. Guide: velloo://guide/art.",
       inputSchema: {
         prompt: z
           .string()

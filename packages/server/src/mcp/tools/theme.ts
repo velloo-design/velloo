@@ -9,7 +9,6 @@ import {
   addTheme,
   applyPreset,
   derivePaletteFromColor,
-  getCustomCss,
   importThemeCss,
   listThemes,
   PRESET_NAMES,
@@ -23,7 +22,6 @@ import {
   type TokenEntry,
 } from "../../theme/index.ts";
 import { errorResult, jsonResult, toMcp } from "./result.ts";
-import { singleOrBulkError } from "./schemas.ts";
 
 const TW_CONFIG_NAMES = [
   "tailwind.config.ts",
@@ -138,69 +136,20 @@ function detectContainer(
 
 export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
   mcp.registerTool(
-    "set_token",
+    "set_theme",
     {
       description:
-        'Set theme tokens at dot-paths. Two namespaces: `colors.*` / `colorsDark.*` are the semantic slots (e.g. "colors.primary.DEFAULT", "colorsDark.background") that drive component chrome and theme-flip in dark mode; `palette.*` (e.g. "palette.ink", "palette.primary-600") is a flat passthrough of raw brand colors that does NOT flip — set `palette.ink "#1a1a1a"` and `bg-ink`/`text-ink`/`border-ink` resolve literally (the mechanism that makes a host app\'s verbatim brand classes work; `import_theme` populates it automatically). Single: path + value. Bulk: tokens: { "<path>": <value>, … } applied in order. The full theme is schema-validated after each patch. Returns the applied paths — call get_theme when you need the full tree.',
+        "Edit the theme through one verb — pass any combination of channels. `tokens` patches dot-paths (`colors.*` / `colorsDark.*` are the semantic slots that theme-flip; `palette.*` is a non-flipping passthrough for raw brand colors). `fonts` declares font roles. `typeset` sets the type rhythm the whole ladder derives from — reach for it instead of per-node `text-*`. `customCss` replaces theme/custom.css wholesale. `from` reseeds the palette from a preset or a seed color, before the other channels. Guide: velloo://guide/theme.",
       inputSchema: {
-        path: z.string().optional(),
-        value: z.union([z.string(), z.number()]).optional(),
+        theme: z.string().optional().describe('Named theme to edit; default "default"'),
         tokens: z
           .record(z.string(), z.union([z.string(), z.number()]))
           .optional()
-          .describe("Bulk mode — mutually exclusive with path/value"),
-        theme: z.string().optional().describe('Named theme to edit; default "default"'),
-      },
-    },
-    async (args) => {
-      if (args.tokens !== undefined && (args.path !== undefined || args.value !== undefined)) {
-        return errorResult({
-          kind: "BadRequest",
-          message: singleOrBulkError.both("set_token", "path+value", "tokens"),
-        });
-      }
-      const entries: TokenEntry[] = args.tokens
-        ? Object.entries(args.tokens).map(([path, value]) => ({ path, value }))
-        : args.path !== undefined && args.value !== undefined
-          ? [{ path: args.path, value: args.value }]
-          : [];
-      if (entries.length === 0) {
-        return errorResult({
-          kind: "BadRequest",
-          message: singleOrBulkError.missing("set_token", "path+value", "tokens"),
-        });
-      }
-      // One lock + one validation pass + one persist + one broadcast for the
-      // whole batch; all-or-nothing with a per-entry report on failure.
-      const r = await setTokens(ctx, entries, args.theme);
-      if (!r.ok) return errorResult(r.error);
-      const applied = r.value.applied;
-      // A palette token named after a semantic slot would emit a duplicate
-      // `--color-<name>` — the emit paths skip it, so warn at the source.
-      const warnings: string[] = [];
-      for (const path of applied) {
-        const m = /^palette(?:Dark)?\.([a-z0-9-]+)$/.exec(path);
-        const name = m?.[1];
-        if (name && SEMANTIC_SLOTS.has(name)) {
-          warnings.push(
-            `\`${path}\` shadows the semantic slot \`${name}\` and is skipped on emit and in the canvas (the semantic \`--color-${name}\` wins). Set \`colors.${name}\` / \`colorsDark.${name}\` instead, or rename the palette token (e.g. \`brand-${name}\`).`,
-          );
-        }
-      }
-      return jsonResult({
-        applied,
-        theme: args.theme ?? "default",
-        ...(warnings.length > 0 ? { warnings } : {}),
-      });
-    },
-  );
-
-  mcp.registerTool(
-    "set_fonts",
-    {
-      description:
-        'Declare font roles: role "display" → token --font-display → class font-display. `google` loads from Google Fonts (axis spec like "wght@400..900", or true). Declare a display face before composing — typography is the biggest personality lever.',
-      inputSchema: {
+          .describe('Dot-path patch, e.g. { "colors.primary.DEFAULT": "#4f46e5" }'),
+        from: z
+          .union([z.object({ preset: z.enum(PRESET_NAMES) }), z.object({ seedColor: z.string() })])
+          .optional()
+          .describe("Reseed the whole palette; applied before the other channels"),
         fonts: z
           .array(
             z.object({
@@ -222,37 +171,19 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
                 .describe("Drop this role; refused while a typeset still names it"),
             }),
           )
-          .min(1),
-        theme: z.string().optional().describe('Named theme to edit; default "default"'),
-      },
-    },
-    async (args) => {
-      const r = await setFonts(ctx, args.fonts, args.theme);
-      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
-    },
-  );
-
-  mcp.registerTool(
-    "set_typeset",
-    {
-      description:
-        'Set a typeset — the typographic rhythm. Three controls: `size` (base text size; "1em" follows the container, 15 pins it), `leading` (body line-height; the whole heading ladder derives from it), `flow` (space between blocks). Everything visible follows: h1–h6 sizes, copy sizes, heading margins. Name "default" is the folder baseline and styles every screen; any other name becomes a preset a Prose region opts into (`preset: "docs"`). Reach for this instead of setting per-node text-* classes — one call re-rhythms the whole design coherently. `fontHeading` / `fontBody` / `fontMono` take a role declared by set_fonts.',
-      inputSchema: {
-        typesets: z
+          .min(1)
+          .optional(),
+        typeset: z
           .array(
             z.object({
               name: z
                 .string()
                 .optional()
-                .describe('Typeset name; default "default" (the folder baseline)'),
-              renameTo: z
-                .string()
-                .optional()
-                .describe("Rename this preset, carrying its authored controls over"),
-              remove: z
-                .boolean()
-                .optional()
-                .describe("Delete this preset; regions still carrying its class fall back"),
+                .describe(
+                  'Typeset name; default "default" (the folder baseline). Any other name becomes a preset a Prose region opts into',
+                ),
+              renameTo: z.string().optional(),
+              remove: z.boolean().optional(),
               size: z
                 .union([z.string(), z.number(), z.null()])
                 .optional()
@@ -260,49 +191,90 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
               leading: z
                 .union([z.number(), z.null()])
                 .optional()
-                .describe(
-                  "Body line-height, unitless — e.g. 1.75. Heading leading derives from it",
-                ),
+                .describe("Body line-height, unitless. The heading ladder derives from it"),
               flow: z
                 .union([z.string(), z.number(), z.null()])
                 .optional()
                 .describe('Space between blocks — e.g. "1.25em"'),
-              fontBody: z
-                .union([z.string(), z.null()])
-                .optional()
-                .describe("A font role from set_fonts, for body copy"),
+              fontBody: z.union([z.string(), z.null()]).optional().describe("A role from `fonts`"),
               fontHeading: z
                 .union([z.string(), z.null()])
                 .optional()
-                .describe("A font role from set_fonts, for headings"),
-              fontMono: z
-                .union([z.string(), z.null()])
-                .optional()
-                .describe("A font role from set_fonts, for code"),
+                .describe("A role from `fonts`"),
+              fontMono: z.union([z.string(), z.null()]).optional().describe("A role from `fonts`"),
             }),
           )
-          .min(1),
-        theme: z.string().optional().describe('Named theme to edit; default "default"'),
+          .min(1)
+          .optional(),
+        customCss: z
+          .string()
+          .optional()
+          .describe("Replaces theme/custom.css entirely — read it first via get_theme"),
       },
     },
     async (args) => {
-      const r = await setTypeset(ctx, args.typesets, args.theme);
-      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
-    },
-  );
+      const channels = ["from", "tokens", "fonts", "typeset", "customCss"] as const;
+      if (channels.every((c) => args[c] === undefined)) {
+        return errorResult({
+          kind: "BadRequest",
+          message: `set_theme: pass at least one of ${channels.join(", ")}.`,
+        });
+      }
+      const applied: Record<string, unknown> = {};
 
-  mcp.registerTool(
-    "custom_css",
-    {
-      description:
-        "Read (omit css) or replace theme/custom.css — keyframes, grain, clip-paths, anything utilities can't express. Injected into every render and appended to emitted globals.css. Replaces the whole file: read first when editing.",
-      inputSchema: {
-        css: z.string().optional(),
-      },
-    },
-    async (args) => {
-      if (args.css === undefined) return jsonResult(getCustomCss(ctx));
-      return toMcp(await setCustomCss(ctx, args.css));
+      // `from` reseeds wholesale, so it runs first — a token patch in the same
+      // call is then an override of the new palette rather than of the old one.
+      if (args.from) {
+        const seeded =
+          "preset" in args.from
+            ? await applyPreset(ctx, args.from.preset, args.theme)
+            : await derivePaletteFromColor(ctx, args.from.seedColor, args.theme);
+        if (!seeded.ok) return errorResult(seeded.error);
+        applied.from = args.from;
+      }
+
+      if (args.tokens) {
+        const entries: TokenEntry[] = Object.entries(args.tokens).map(([path, value]) => ({
+          path,
+          value,
+        }));
+        const r = await setTokens(ctx, entries, args.theme);
+        if (!r.ok) return errorResult(r.error);
+        applied.tokens = r.value.applied;
+        // A palette token named after a semantic slot would emit a duplicate
+        // `--color-<name>` — the emit paths skip it, so warn at the source.
+        const warnings: string[] = [];
+        for (const path of r.value.applied) {
+          const m = /^palette(?:Dark)?\.([a-z0-9-]+)$/.exec(path);
+          const name = m?.[1];
+          if (name && SEMANTIC_SLOTS.has(name)) {
+            warnings.push(
+              `\`${path}\` shadows the semantic slot \`${name}\` and is skipped on emit and in the canvas (the semantic \`--color-${name}\` wins). Set \`colors.${name}\` / \`colorsDark.${name}\` instead, or rename the palette token (e.g. \`brand-${name}\`).`,
+            );
+          }
+        }
+        if (warnings.length > 0) applied.warnings = warnings;
+      }
+
+      if (args.fonts) {
+        const r = await setFonts(ctx, args.fonts, args.theme);
+        if (!r.ok) return errorResult(r.error);
+        applied.fonts = args.fonts.map((f) => f.role);
+      }
+
+      if (args.typeset) {
+        const r = await setTypeset(ctx, args.typeset, args.theme);
+        if (!r.ok) return errorResult(r.error);
+        applied.typeset = args.typeset.map((t) => t.name ?? "default");
+      }
+
+      if (args.customCss !== undefined) {
+        const r = await setCustomCss(ctx, args.customCss);
+        if (!r.ok) return errorResult(r.error);
+        applied.customCss = { bytes: r.value.bytes };
+      }
+
+      return jsonResult({ theme: args.theme ?? "default", applied });
     },
   );
 
@@ -310,7 +282,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "add_theme",
     {
       description:
-        "Create a named theme (theme/<name>.json) by cloning an existing one. Boards pick it up via update_board { patch: { theme: <name> } }; renders and screenshots accept theme: <name>. Edit it afterwards with set_token / set_fonts + their theme param.",
+        "Create a named theme (theme/<name>.json) by cloning an existing one. Boards pin it via update_board { patch: { theme } }; renders accept theme:. Edit it with set_theme's own theme param.",
       inputSchema: {
         name: z.string().describe("Lowercase kebab, not 'default'"),
         from: z.string().optional().describe("Source theme to clone; default 'default'"),
@@ -330,35 +302,10 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
   );
 
   mcp.registerTool(
-    "apply_preset",
-    {
-      description: `Replace the active theme with a named preset. Known presets: ${PRESET_NAMES.join(", ")}.`,
-      inputSchema: { presetName: z.string() },
-    },
-    async (args) => {
-      const r = await applyPreset(ctx, args.presetName);
-      return toMcp(r.ok ? { ok: true, value: { theme: r.value } } : r);
-    },
-  );
-
-  mcp.registerTool(
-    "derive_palette_from_color",
-    {
-      description:
-        "Generate a full OKLCH-based color palette from a seed color (#hex, oklch(), rgb(), etc.) and apply it as the new theme. Foreground/background contrast is auto-adjusted to WCAG AA.",
-      inputSchema: {
-        seedColor: z.string(),
-        name: z.string().optional(),
-      },
-    },
-    async (args) => toMcp(await derivePaletteFromColor(ctx, args.seedColor, args.name)),
-  );
-
-  mcp.registerTool(
     "import_theme",
     {
       description:
-        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties — `:root` / `.dark` `--background`-style vars (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars, with var() indirection resolved — plus `--radius` and `--font-*` roles. **Also captures every non-semantic color var into the theme's `palette`** — numeric scales (`--primary-600`), extra roles (`--success-500`), bare brand names (`--ink`) — so verbatim app classes like `bg-primary-600` / `bg-ink` resolve literally on the canvas instead of silently falling back; apply this BEFORE porting screens. (`palette.*` entries are raw passthroughs that don't theme-flip, unlike the semantic `colors.*` slots; tweak them with `set_token palette.<name>`.) Slots the CSS doesn't declare keep their current values. Pass `css` text directly, or `cssPath` to the app's globals.css. When given a `cssPath`, it also reads the nearby tailwind.config (or an explicit `tailwindConfigPath`) and ingests its `theme.extend` — **brand `colors` → `palette`, named `spacing` → spacing tokens (`w-icon-rail`), `boxShadow` → `shadows` (`shadow-card`), `fontFamily` → font roles, `keyframes` + `animation` → `--animate-*`** — the tokens an app keeps in JS config rather than the stylesheet; CSS-derived values win over config literals of the same name. It also applies the app's `container` config so `class=\"container\"` centers/pads/caps to match, reporting the equivalent `container.suggestedClasses` if you'd rather wrap content explicitly. Dry-run by default: returns the would-be token changes; pass apply: true to persist.",
+        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties, Tailwind v4 `@theme` vars, `--radius` and `--font-*` roles, and captures every non-semantic color var into the theme's `palette` so the app's verbatim brand classes (`bg-ink`, `bg-primary-600`) resolve literally. Given a `cssPath` it also ingests the nearby tailwind.config's `theme.extend` and `container`. **Dry-run by default** — pass `apply: true` to persist. Run this BEFORE porting screens. Guide: velloo://guide/theme.",
       inputSchema: {
         css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
         cssPath: z
@@ -460,7 +407,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "score_theme_contrast",
     {
       description:
-        'Score WCAG contrast ratios for a theme\'s salient color pairs (foreground/background, primary/primary-foreground, …) in BOTH light and dark palettes — each result carries mode: "light" | "dark". Returns ratio + tier (AAA / AA / AAlarge / Fail). Pass mode to score one palette only; pass theme to score a named theme instead of the default. Use after a derive/preset or any dark-token tuning to confirm accessibility before shipping.',
+        "Score WCAG contrast for a theme's salient color pairs in both light and dark palettes — ratio + tier (AAA / AA / AAlarge / Fail) per pair. Run it after reseeding a palette or tuning dark tokens.",
       inputSchema: {
         mode: z
           .enum(["light", "dark"])

@@ -18,13 +18,8 @@ import type { LiveBundler } from "../live/component-bundler.ts";
 import type { LocalCommentsService } from "../local-comments.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
-import {
-  applyDefaultTiers,
-  instrumentTools,
-  progressiveToolsMode,
-  registerRevealTool,
-  revealInstructions,
-} from "./tiers.ts";
+import { registerGuideResources } from "./resources.ts";
+import { enforceStrictToolInputs } from "./strict-tools.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
@@ -72,62 +67,52 @@ interface Session {
   server: McpServer;
 }
 
+/**
+ * The always-resident boot guidance.
+ *
+ * Scoped deliberately: this carries only what no single tool description can —
+ * the mental model, the three customization layers, and the efficiency contract
+ * that governs how MANY calls a session makes. Everything task-specific lives in
+ * a `velloo://guide/*` resource (see resources.ts) and is fetched on demand, so
+ * a session that never ports an app never pays for the porting manual. Adding a
+ * paragraph here taxes every session forever — check whether it belongs in a
+ * guide or a tool description first.
+ */
 const INSTRUCTION_PARTS = [
-  'You are working on a Velloo design folder. Components come from a pinned shadcn snapshot plus velloo helpers (`Box` for layout, `Heading`/`Text`, `Image`, `Gradient`, `Layer`, `SVG`, `Divider`, `Placeholder`). Designs are static — click handlers, routing, and forms are no-op. Use `Box` (a plain div) for every flex/grid wrapper — and `Box as="span"` / `"strong"` / `"a"` to render an *inline* element (inline tags get their natural inline display, so inline runs do not stack vertically); reserve `Card` for actual card surfaces (it ships card chrome; only *image* cards clip to the rounded corners, so an outside-the-box child — a `-top-3` "Most popular" badge — can overflow a bare Card).',
+  "You are working on a Velloo design folder: a code-shaped design canvas whose components are the project's real component library. Designs are static — click handlers, routing and forms are no-ops.",
   "",
-  "**The design folder is tool-owned.** Screens, boards, snippets, and the theme live as JSON files inside the design folder, but never read or edit those files by hand — every operation goes through these tools (they hold the write lock, validation, and history; direct edits can corrupt all three). The user can watch the design render live by running `velloo run` — it prints the canvas URL.",
+  "**The design folder is tool-owned.** Screens, boards, snippets and the theme live as JSON files inside it, but never read or edit those files by hand — every operation goes through these tools, which hold the write lock, validation and history. The user can watch the design render live with `velloo run`.",
   "",
-  'Before composing screens, call `list_components` (mode: "summary" first — the full schema is large; full mode includes an `example` of working props per component — copy it, then adapt) and `get_theme` for the palette and active tokens. Also `list_snippets` — reuse existing snippets before defining new ones. `list_boards` shows the boards; each board hosts frames pointing at screens. For an overview of an existing screen, use `get_screen mode: "outline"` before pulling the full JSON.',
+  '**Start by reading, once.** `list_components` (mode "summary"; full mode includes a working `example` per component — copy it, then adapt), `get_theme` for the palette and tokens, `list_snippets` to reuse before defining, `list_boards` for the boards and their frames. For an existing screen, `get_screen mode: "outline"` before pulling the full JSON.',
   "",
-  '**Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`, etc.) over raw Tailwind palette colors (`bg-zinc-900`, `text-white`, `text-emerald-400`). Semantic tokens auto-flip under `screenshot mode: "dark"` and survive theme changes; raw palette colors render identically in both modes. Use raw palette only for *intentional* accent colors that should NOT theme-flip.',
+  "**Three customization layers** stack additively:",
+  "  - **Libraries** are the baseline component palette. A folder registers N (`config.libraries`); each screen pins one via `screen.library`, and component ids resolve against that library only.",
+  "  - **Extensions** add wholly new components the library doesn't have — the app's own `DataTable`, a brand `Hero`. Register with `add_extension`; they emit a real import. Additive customization, NOT compositions.",
+  '  - **Snippets** compose existing components into named subtrees with typed params — the tool for repeated structure (FeatureCard, NavRow, PricingTier). Reference one with a `{"$snippet":"<kebab-id>"}` node, NOT `$ref` (which is only for PascalCase library components and extensions).',
   "",
-  '**An object `style` prop is supported** for CSS no utility expresses cleanly (a `radial-gradient` dot-grid, a custom `backgroundSize`, a one-off `clipPath`): `{"$ref":"Box","props":{"style":{"backgroundImage":"radial-gradient(…)","backgroundSize":"14px 14px"}}}`. It renders inline and `emit_code` writes a `style={{…}}` JSX prop. Reach for utility/arbitrary classes first where they exist (they keep theme-awareness; classes passed through snippet *string params* compile fine); reserve `style` for literal CSS.',
+  "**Styling is framework-native.** `update_props`'s `style` channel routes your payload to whatever the screen's framework uses — a Tailwind `className` string, an `sx` object, or a plain `style` object — so one verb works everywhere. Prefer theme tokens over hard-coded values in any channel; on a Tailwind folder prefer semantic tokens (`bg-background`, `text-muted-foreground`, `bg-primary`) over raw palette colors, because only semantic tokens theme-flip in dark mode.",
   "",
-  "**Native styling — `set_style`.** A folder targets a framework, and `set_style` routes your style payload to that framework's native channel: a Tailwind `className` string for shadcn (equivalent to setting `className` directly), an `sx` object for MUI, a plain `style` object for no-framework. Object channels merge shallowly (an inner `null` drops that key); `style: null` clears. A payload whose shape doesn't match the channel is rejected naming the expected shape. The token model from `get_theme` is shared across frameworks — prefer theme tokens over hard-coded values in any channel.",
+  "**EFFICIENCY — build in big strokes, read once.** A screen should take a few dozen tool calls, not hundreds; over-calling is the most common failure. (1) **`children` arrays are the default mental model** — `add_node` accepts a full subtree, so build a whole feature card in ONE call rather than node-by-node. (2) **`batch` groups a sequence of mutations into one round-trip**, atomic by default: on the first error every touched resource rolls back and the result reports `rolledBack: true` with the failing call. Use it instead of firing one tiny mutation per node. (3) **Work from memory** — do NOT re-`get_screen` or re-`list_boards` before every edit; to re-locate a node use `find_nodes`, which returns its path. (4) **Don't thrash** — plan the structure before building it, and edit a snippet through `update_snippet`'s `innerPatch` rather than redefining its body.",
   "",
-  '`audit` is a **triage signal, not a gate**. It flags every color-bearing class that won\'t theme-flip — including ones you chose intentionally (brand gradients, status pill chrome). Read the per-node `problems[]` and decide; the coverage number is a guide, not a target. Set `data-accent: "ok"` (or any string) on a deliberately non-flipping node to exempt it from the audit and the score. Pass `snippetId` instead of `screenId` to audit a snippet body at definition time.',
+  '**Think in ids, not paths.** Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), pass a stable id reference like `"@hero-cta"`. Assign ids at creation (`id: "hero-cta"`) for anything you might touch again. Number paths are positional and break when siblings move; treat them as an implementation detail you get from `find_nodes` (`set_node_id` retrofits one).',
   "",
-  "**EFFICIENCY — build in big strokes, read once.** Velloo is designed so a screen takes a few dozen tool calls, not hundreds; over-calling is the most common failure, so follow these rules. (1) **`children` arrays are the default mental model** — `add_node` accepts a full subtree (every child can have its own props + children), so build a whole feature card or nav row in *one* call rather than node-by-node. (2) **`batch` groups a sequence of mutations into one round-trip** — atomic by default: on the first error every touched resource rolls back and the result reports `rolledBack: true` with the failing call (pass `atomic: false` for run-until-error without rollback). Use it instead of firing one tiny mutation per node. (3) **Read each source file and the screen tree once, then work from memory** — do NOT re-`get_screen`, re-`list_screens`/`list_boards`, or re-read files before every edit; to re-locate a node, `find_nodes` queries a screen by $ref / $id / className substring / prop value and returns its path — use it instead of fetching and walking the whole tree again. (4) **Don't thrash:** plan the structure before you build it (never add nodes then remove them to reshape), and edit a defined snippet through `update_snippet`'s `innerPatch` rather than redefining its whole body again and again.",
+  '**Verify before declaring done.** `screenshot mode: "compare"` renders light and dark side by side; `audit` scores the screen; `validate_classes` is free and fast on arbitrary-value classes. See velloo://guide/verification.',
   "",
-  '**Think in ids, not paths.** Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), pass a stable id reference like `"@hero-cta"`. Assign ids at creation (`id: "hero-cta"` on `add_node` / `instantiate_snippet`) for every node you might touch again — sections, CTAs, anything findable. Number paths are positional and break when siblings move; treat them as an implementation detail you get from `find_nodes` when no id exists yet (`set_node_id` retrofits one).',
+  "**Make it distinctive.** Default library + Inter + one indigo reads as template. Set a display face and a typeset early via `set_theme` — one call re-proportions every screen — then reach for real art and confident color. See velloo://guide/art.",
   "",
-  "**Three customization layers** stack additively in every folder:",
-  "  - **Libraries** are the baseline component palette. A folder registers N (`config.libraries`); each screen pins one via `screen.library`. Multi-library lets marketing boards use no-lib while app boards use shadcn in the same folder. Component ids resolve against the screen's library only.",
-  '  - **Extensions** add wholly new components the active library doesn\'t have — your app\'s custom `DataTable`, a brand `Hero`, a bespoke `PriceChart`. Register one with `add_extension`: placeholder card on the canvas, real `import` from its declared `importPath` on `emit_code`, folder-global, shadows a same-id library component. Use them for *additive customization*, NOT for compositions (snippets cover that). For a component whose look needs the real implementation — charts above all — register it with `render:"live"`: Velloo bundles the actual component from your app and mounts it in the canvas (and in `screenshot`/`compare_to_url`/`render_snippet`) for a pixel-faithful preview. The built-in `Chart` node previews via echarts without an extension, but it will NOT pixel-match an app built on recharts/visx/chart.js — porting a charts-heavy app, reach for a `render:"live"` extension of the app\'s own chart component. In a monorepo folder, `config.hostApps` names each app — pass `app:"<key>"` to `add_extension` so the island bundles from the component\'s own app.',
-  '  - **Snippets** compose existing components (library + extension) into named subtrees with typed params. Use them for repeated structure (FeatureCard, NavRow, PricingTier). Reference a snippet with a `{"$snippet":"<kebab-id>"}` node or `instantiate_snippet` — NOT `$ref`, which is only for PascalCase library components / registered extensions. A PascalCase name that is actually a snippet (`$ref:"SiteHeader"` for the snippet `site-header`) is a common mix-up.',
+  "**Read the guide before doing the thing.** These resources carry the detail this brief deliberately omits — fetch the relevant one at the start of that kind of work:",
+  "  - `velloo://guide/components` — Box vs Card, children arrays vs the children prop, inline runs, icons, raw CSS.",
+  "  - `velloo://guide/snippets` — params, node slots, `$if`, and when structure that varies is still one snippet.",
+  "  - `velloo://guide/theme` — tokens, presets, fonts, the type ladder, importing an app's stylesheet.",
+  "  - `velloo://guide/boards` — frames vs viewports, sidebar groups, archived boards, board-pinned themes.",
+  "  - `velloo://guide/verification` — screenshot modes, diffing, audit, inspect.",
+  "  - `velloo://guide/porting` — code-to-design: re-expressing an existing app and verifying fidelity.",
+  "  - `velloo://guide/capture` — reaching pages behind a login.",
+  "  - `velloo://guide/extensions` — registering the app's own components, live islands.",
+  "  - `velloo://guide/art` — authoring assets vs paying to generate them.",
+  "  - `velloo://guide/comments` — working the user's visual feedback threads.",
   "",
-  "Prefer snippets for repeated structure (feature cards, list items, hero sections). Create the snippet once with `add_snippet`, then call `instantiate_snippet` per occurrence. **Design snippets for variation up-front** — params are the contract. For a true one-off ('this instance, but with a red badge'), `override_snippet_props` patches a node inside one instance's body without forking the snippet; emit_code inlines such instances. Variation axes:",
-  "",
-  '  - `{"$if": "paramName", "then": <value>, "else": <value>}` — picks a branch by truthiness of `args.paramName`. **Boolean params only** (true/false). Non-boolean truthy values "work" via JS coercion but you\'ll trip on edge cases (empty string is falsy, the string `"false"` is truthy). Declare params as `type: "boolean"`.',
-  "  - String params (`tone`, `variant`) for full-className swaps when the variation is more than two-way.",
-  '  - `type: "node"` params when the STRUCTURE varies per instance — a slot the caller fills with a subtree, `optional: true` for a slot that is sometimes absent. **Structural variance is not a reason to give up on a snippet and inline the repetition**; see `add_snippet` for the full rule.',
-  "  - `extraClassName` on `instantiate_snippet` / `update_snippet_args` — a one-off Tailwind suffix appended to the body root. Cascades through nested snippet roots (snippet-of-a-snippet still gets the override).",
-  "",
-  "**Always call `render_snippet` after `add_snippet`** to verify a new definition rendered as intended — `$param` wiring bugs (placeholder didn't expand, gradient missing, `$if` truthy-coerced wrong) are silent at definition time and only show up at instantiation. Preview before stamping. Snippets emit as real React components on `emit_code` with a typed `className?: string` prop.",
-  "",
-  "**Recipes — reach for the right tool** (this saves round-trips):",
-  '  - Tweak one node in *one* snippet instance ("this card\'s badge is red") → `override_snippet_props` { path: instance, innerPath: "@id", propPatch }.',
-  "  - Tweak one node across *all* instances of a snippet → `update_snippet` { patch: { innerPatch: { innerPath, propPatch } } } — no need to resend the body. Replace the whole body → `update_snippet` { patch: { tree } }. Change an instance's inputs (not the body) → `update_snippet_args`.",
-  '  - The `children` *array* (`node.children`) is for nodes; a bare string/number there auto-wraps into an inline `Box as="span"` (so `children:["Most popular"]` just works). For **inline rich text** — a styled span mid-sentence, like a gradient word in a headline — put an array in the `children` *prop* mixing strings and nodes: `{"$ref":"Heading","props":{"children":["You get ",{"$ref":"Text","props":{"className":"text-primary","children":"the math right"}}]}}`. Text runs keep their exact spacing; inline nodes flow inline. A plain string `children` is still the common case.',
-  "",
-  "Screens have one tree; viewport size is a property of each `frame` placement on a board, not of the screen. Different viewport renderings of the same screen → multiple frames pointing at the same screen (edits sync). Different layouts per breakpoint → separate screens with their own frames. **A frame's `w`/`h` is canvas layout only** — `screenshot` / `compare_to_url` render at their *own* viewport (explicit `w`/`h`/`viewport` arg, defaulting to the Desktop preset), and `fullPage: true` (the default) captures the screen's full natural height — so a screenshot can look complete while the board frame still clips below the fold (a frame is a fixed `w×h` window). The returned `contentHeight` + `framesShorterThanContent` are your signal that a placement needs a taller frame (`update_frame`, or `fitFrames: true` in the same call) or the screen needs splitting.",
-  "A frame's optional light/dark `scheme` is also placement-level, but only as a review affordance: it pins how that one frame renders the screen's shared tree. It does not create a dark layout variant. `scheme: null` returns the frame to the canvas default; an omitted `screenshot` mode follows an agreed hosting-frame pin and asks for an explicit mode when placements disagree.",
-  "",
-  '**Boards are filed into sidebar groups.** A group is an area of work — "Side pane", "Account page", "Brand" — holding a set of boards. `list_boards` reports each board\'s `group` by name; pass that name to `add_board`/`update_board` to file a new board alongside it, or a *new* name to create the group on the spot (`update_board { patch: { group: null } }` unfiles it). File a board you create into the group its work belongs to rather than leaving it loose — but don\'t reorganize the user\'s existing groups: renaming, recoloring and deleting them is theirs to do in the canvas.',
-  "**Archived boards are the user's filing cabinet.** `list_boards` shows live boards only; a board the user archived is hidden there, in the canvas sidebar, and in a default publish, but its frames and screens are intact and still editable. Pass `include_archived: true` to see them (they carry `archivedAt`). Don't design into an archived board unless the user names it — and prefer `update_board { patch: { archived: true } }` over `remove_board` when they want one out of the way.",
-  "**Themes attach to boards, never to screens or frames.** Named themes (`add_theme`, `list_themes`) are variants of the token tree; a board pins one via `update_board { theme }` and every frame on it renders with that palette (unpinned boards use the folder default). Screens stay theme-portable by construction — the same screen framed on two boards shows both palettes, edits syncing to both. Theme-aware tools resolve the same way: `screenshot` / `compare_to_url` default to the hosting board's pin (boards disagreeing is an error asking for an explicit `theme:`), and `get_theme` / `score_theme_contrast` / `emit_theme` / `audit` / `set_token` take `theme:` to target a named theme.",
-  "",
-  '**Make it distinctive.** Default shadcn + Inter + one indigo reads as template. The personality levers: (1) `set_fonts` — declare a display face (role: "display" → class `font-display`) before composing; Google Fonts load in design mode and emit into globals.css. (2) `set_typeset` — the typographic *rhythm*, three controls (`size`, `leading`, `flow`) that the entire type ladder derives from, plus which font role paints headings vs body. Set this once early rather than tuning `text-*` per node: one call re-proportions every screen coherently, and it is the difference between "shadcn defaults" and a designed page. (3) `custom_css` — keyframes, grain/noise textures, clip-paths, ::selection. (4) `upload_asset` — author your own SVG/raster art (hero shapes, textures, marks) and reference it as `<Image src="/assets/…">`. (5) Theme tokens are yours: `derive_palette_from_color` / `set_token` an opinionated palette instead of living with the default. Big type, real art, confident color — then verify with screenshots.\n\n**Art you cannot author by hand — `generate_asset`.** Photography, textured illustration, and true vector logos are the one place velloo spends the user\'s money: `generate_asset` is PAY-AS-YOU-GO against their credit balance (needs `velloo login`). Name an *intent* — `photo`, `illustration`, `graphic` (layouts with legible text), `texture`, `icon`, `vector`, `mark`, `edit`, `cutout`, `upscale` — and the server picks the model. Because it costs real money: reach for `upload_asset` first whenever you can author the thing yourself (flat shapes, gradients, geometric marks); iterate prompts at `count: 1` and only spend `count: 2-4` on an asset that matters; and ALWAYS relay the returned cost and remaining balance to the user. Feed an existing asset back in via `reference` to restyle it, edit it, or cut out its background.',
-  "",
-  'Text content for `Heading`, `Text`, `Button`, `Badge`, `Label` goes in the `children` prop, not a `text` prop. `Heading.level` controls only the HTML tag + the theme\'s type ladder (h1 → `text-h1`, h6 → `text-h6`); `Text.variant` picks its rung (`default`/`lead`/`small`/`muted`). Those sizes come from the active typeset, so `set_typeset` is how you re-proportion them — retune the rhythm rather than overriding node by node. To override one node anyway, pass an explicit `text-*` size in `className` (a className with only spacing/weight like `mb-1 font-semibold` leaves the ladder size in place; add `text-base` to actually shrink it).\n\n**For long-form content, wrap it in `Prose` instead of styling each block.** A `Prose` region styles the HTML inside it — headings, paragraphs, lists, quotes, code, tables — with correct vertical rhythm from the typeset, and `preset` switches to a named typeset (e.g. `preset: "docs"`) for that region only. Reach for it for articles, docs, changelogs, marketing copy, chat transcripts, and anything markdown-shaped; per-node `text-*` on a stack of paragraphs is the anti-pattern it replaces. `Icon` takes a lucide-react name as its `name` prop — PascalCase ("ArrowRight") or kebab-case ("arrow-right") both resolve; a name that matches no lucide icon renders the fallback "?" glyph and the mutation result carries an advisory warning. For placeholder imagery (avatars, hero shots) use the `Placeholder` component instead of faking with gradient divs.',
-  "",
-  '**Verification loop**: when a screen feels done, run `screenshot mode: "compare"` — returns one PNG with light + dark rendered side-by-side, the fastest signal that the design actually adapts. While iterating, `screenshot diff: true` compares against your previous capture: zero change costs no image at all, small changes return a highlight crop naming the changed nodes. Pass `scale: 0.5` when checking layout (smaller payload), and `path` to capture a single node close-up. Call `audit` to score the screen; coverage 1.0 + an empty problems list is the green light. `validate_classes` is free and fast — run it on any arbitrary-value classes (`shadow-[…]`, `grid-cols-[…]`, etc.) before relying on them. `inspect` returns SSR\'d HTML + resolved props for a specific node when you need to verify what landed.',
-  "",
-  "**Code-to-design (porting an existing app)**: *re-express — don't clone*. The loop: (1) `import_theme` with the app's globals.css (`cssPath` — absolute or relative to the host app root, since globals.css lives OUTSIDE the design folder; dry-run first, then `apply: true`) BEFORE any composition, so semantic slots, the raw `palette.*` passthrough (brand vars like `--ink`, scales like `--primary-600`), fonts, and the tailwind.config's `theme.extend`/`container` all resolve — then verbatim app classes like `bg-ink` render as-is. Tweak entries with `set_token palette.<name>`; run `validate_classes` if unsure a class resolved. (2) Read the page's source alongside `list_components`, then build INTO the route-scan's existing placeholder screen (`set_screen_tree` replaces its whole tree in one call — or `remove_node path: []` clears it; `add_screen` on a scanned route returns ScreenIdConflict). Strip handlers/state/data-fetching, inline representative copy as literals, keep Tailwind classes verbatim (shadcn apps share Velloo's component vocabulary, so most refs map 1:1). (3) Component mapping is snippet-first, extension-second: a presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real; a complex app-specific component (DataTable, charts) becomes `add_extension` with its real importPath, so capture → redesign → emit never loses component identity. (4) Verify with `compare_to_url` at the same viewport — 0.85+ similarity is a faithful structural port; the result's `topMismatches` lines rank the worst regions and name the node responsible (share of diff, rect, node ref/id/path) — fix them in order, and don't chase 1.0 (fonts and imagery legitimately differ). **If the result is `unverified`, STOP — similarity is meaningless there**: authenticate or fix the target app's dev server, and if you can't get a real capture, leave the screen flagged unverified and tell the user rather than iterating against a page you never saw. **For an auth wall, the reliable path is `start_capture_session`** — it opens a browser the USER drives, so they log in and capture the real page for you; it returns immediately, so poll `list_captures`, read the evidence with `get_capture` (page outline with repeated blocks marked, the site's custom properties as `import_theme`-ready CSS, its images), and verify with `compare_to_url { captureId }` instead of `url`. A stored capture is authenticated and frozen, so it's a stable reference across calls in a way a live gated URL never is. (`storageStatePath`/`cookies`/`localStorage` remain the manual alternative when you already hold a session.) Data-heavy pages: fixture copy — designs are static by construction. Known canvas-vs-app gaps to expect (don't chase the small similarity dip): `dark:` variant classes are inert (Velloo dark mode swaps token values, not a class — use the semantic token instead), Radix `AvatarImage` SSR-captures as its fallback (re-express avatars as `Image`), the app's vendored shadcn may predate the snapshot (re-add drifted classes explicitly), and the headless render substitutes some emoji and doesn't fetch remote images (use `upload_asset` + local `Image`/`Placeholder` for art you need pixel-faithful).",
-  "",
-  "",
-  "**Reaching a page you can't load — browser capture.** When the target is behind a login, on staging, or on a third-party site, `start_capture_session { url }` opens a real browser window the USER drives. It returns a `sessionId` IMMEDIATELY and does not wait for the session — never treat it as blocking, and never re-call it to \"check\": poll `list_captures` instead, and tell the user plainly what to do (log in, then hit **Capture page** in the velloo toolbar on each page you need, then **Done**). Read each result with `get_capture`: you get a structural `outline` with repeated blocks marked (a run of identical siblings is ONE component instantiated N times — build a snippet, not N copies), `themeCss` (the page's real custom properties, including any dark block) to feed `import_theme` BEFORE composing, `fonts`, and downloaded image `assets` for `upload_asset`. Then **re-express the page with real components — do not transcribe the DOM node-for-node**; the extract is evidence, not a tree. Verify with `compare_to_url { captureId }` rather than `url`: a stored capture is already past the login and frozen, so it can't bounce to a login page or drift between calls. Captures live outside the design folder and the user can delete them; you never see session cookies.",
-  "**Visual feedback threads** are persistent app state, not design files. **Every open thread is addressed to you** — the user leaves one expecting the design to change, so there is nothing to opt into and nothing to wait for. Call `list_comment_threads` at the start of a session and again whenever the user mentions comments, and work the open ones: read the complete conversation and its node/board anchor with `get_comment_thread`, make the requested design change, reply with `reply_to_comment`, then `resolve_comment`. Threads come in two scopes and both are yours: `local` ones the user pinned in their canvas, and `shared` ones left by a reviewer on a published link (`scope:` narrows the list when you want them apart). A stale anchor means the original node no longer exists: use its saved bounds/fingerprint as context, but don't silently attach it to a different node. Use `delete_comment_thread` only when the user explicitly asks for permanent deletion. Canvas notes are different: repo-owned board artifacts for durable design guidance, created with `add_note`.",
+  "**Visual feedback threads are addressed to you.** Call `list_comment_threads` at the start of a session and work the open ones — read with `get_comment_thread`, make the change, then `update_comment_thread` to reply and resolve.",
 ];
 
 /**
@@ -150,7 +135,6 @@ const FEEDBACK_INSTRUCTION =
 export function buildInstructions(
   feedbackEnabled: boolean,
   canvasUrl?: string,
-  tiered = false,
   intro: readonly string[] = [],
   openComments = 0,
   hostTailwindMajor: 3 | 4 | null = null,
@@ -159,7 +143,7 @@ export function buildInstructions(
   const parts = [...intro, ...INSTRUCTION_PARTS];
   if (bareFolder) {
     parts.unshift(
-      "**Bare folder.** This design has no boards yet. Setup order before composing UI: (1) style the theme with `derive_palette_from_color`, `apply_preset`, `set_token`, or `import_theme`; (2) `add_board`; (3) add screens and frames, then design. Work entirely through MCP tools — do not hand-edit JSON.",
+      "**Bare folder.** This design has no boards yet. Setup order before composing UI: (1) style the theme with `set_theme` (or `import_theme` to match an existing app); (2) `add_board`; (3) add screens and frames, then design.",
       "",
     );
   }
@@ -169,7 +153,6 @@ export function buildInstructions(
       "**The host app is on Tailwind v3** (the canvas itself always compiles v4). Prefer classes spelled the same in both majors; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container-query variants, `starting:`) — `validate_classes` warns per class and `emit_code` returns a `tailwindV3Compat` rename list (e.g. v4 `shadow-sm` ⇒ v3 `shadow`) to apply when writing app code. `emit_theme` detects the v3 target and emits `velloo-theme.css` + a `velloo.preset` instead of a v4 globals.css.",
     );
   }
-  if (tiered) parts.push("", revealInstructions());
   if (canvasUrl) {
     parts.push(
       "",
@@ -198,7 +181,6 @@ function buildMcpServer(
   cloud?: CloudAuth,
 ): McpServer {
   const feedbackEnabled = Boolean(ctx.folder.config.feedback?.enabled);
-  const tiered = progressiveToolsMode();
   // Framework framing comes from the adapter itself (its style channel picks
   // the variant for multi-channel providers) — no provider ids here.
   const channel = styleChannelOf(ctx.defaultProvider, ctx.folder.config.styling?.framework);
@@ -219,7 +201,6 @@ function buildMcpServer(
       instructions: buildInstructions(
         feedbackEnabled,
         assetOrigin?.replace(/\/+$/, ""),
-        tiered,
         intro,
         openComments,
         hostTailwindMajor,
@@ -227,13 +208,11 @@ function buildMcpServer(
       ),
     },
   );
-  // Instrument `registerTool` before any tool registers: rewrap each raw input
-  // shape as z.strictObject (so a typo'd argument fails loudly with the valid
-  // keys instead of being silently dropped) AND capture every tool's handle so
-  // the disclosure tiers can hide/reveal it. The returned registry is keyed by
-  // tool id.
-  const registry = instrumentTools(mcp);
-  // Hidden, env-gated session tape (VELLOO_TRACE). Wrap after instrumentTools
+  // Before any tool registers: rewrap each raw input shape as z.strictObject,
+  // so a typo'd argument fails loudly with the valid keys instead of being
+  // silently dropped.
+  enforceStrictToolInputs(mcp);
+  // Hidden, env-gated session tape (VELLOO_TRACE). Wrap after the strict rewrap
   // so every handler is taped; no-op when the flag is unset.
   const recorder = createTraceRecorder(ctx.folder.root);
   if (recorder) withCallRecording(mcp, recorder);
@@ -256,21 +235,9 @@ function buildMcpServer(
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
-  // Progressive disclosure is OPT-IN (VELLOO_MCP_PROGRESSIVE=1): major agent
-  // clients index tools/list once at connect and ignore list_changed, leaving
-  // revealed tools uncallable — so the default advertises everything.
-  // Disabling here is silent (the server isn't connected yet, so no
-  // list_changed fires — the first tools/list simply reflects the hidden
-  // state).
-  if (tiered) {
-    registerRevealTool(mcp, registry);
-    const { missing } = applyDefaultTiers(registry);
-    if (missing.length > 0) {
-      console.error(
-        `velloo mcp: disclosure families reference unknown tools: ${missing.join(", ")}`,
-      );
-    }
-  }
+  // Long-form guides live here rather than in tool descriptions: fetched on
+  // demand, so a session pays one listing line instead of the whole manual.
+  registerGuideResources(mcp);
   return mcp;
 }
 

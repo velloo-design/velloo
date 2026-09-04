@@ -1,6 +1,8 @@
+import { readdir, stat } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { assetReferences, readAssetsFile } from "../../assets-store.ts";
 import {
   ALLOWED_ASSET_EXTENSIONS,
   isAllowedAssetExt,
@@ -13,6 +15,47 @@ import { errorResult, jsonResult } from "./result.ts";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
+  mcp.registerTool(
+    "list_assets",
+    {
+      description:
+        "List the folder's assets/ files — the `/assets/<name>` URL for <Image src>, size, whether any screen or snippet still references it, and the originating prompt for anything `generate_asset` produced. Check here before spending on art you may already have made.",
+      inputSchema: {
+        unusedOnly: z.boolean().optional().describe("Only assets nothing references"),
+      },
+    },
+    async ({ unusedOnly }) => {
+      const dir = join(ctx.folder.root, "assets");
+      const names = await readdir(dir).catch(() => [] as string[]);
+      const provenance = await readAssetsFile(ctx.folder.root);
+      // Provenance is keyed by the stored path ("assets/<name>").
+      const assets = [];
+      for (const name of names.sort()) {
+        if (name.startsWith(".")) continue;
+        const info = await stat(join(dir, name)).catch(() => null);
+        if (!info?.isFile()) continue;
+        const usedBy = assetReferences(ctx.folder, `assets/${name}`);
+        if (unusedOnly && usedBy.length > 0) continue;
+        const gen = provenance.generated[`assets/${name}`];
+        assets.push({
+          url: `/assets/${name}`,
+          bytes: info.size,
+          usedBy,
+          ...(gen
+            ? {
+                generated: {
+                  prompt: gen.prompt,
+                  intent: gen.intent,
+                  generatedAt: gen.generatedAt,
+                },
+              }
+            : {}),
+        });
+      }
+      return jsonResult({ assets });
+    },
+  );
+
   mcp.registerTool(
     "upload_asset",
     {

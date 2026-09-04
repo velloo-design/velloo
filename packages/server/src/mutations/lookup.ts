@@ -194,7 +194,7 @@ export function getComponentNode(
     const path = r2.ok ? r2.value : [];
     return err(
       invalidPath(
-        `Node at ${JSON.stringify(path)} is not a component (got ${describe(r.value)}). For snippet instances use update_snippet_args.`,
+        `Node at ${JSON.stringify(path)} is not a component (got ${describe(r.value)}). For snippet instances use update_snippet_instance.`,
         path,
       ),
     );

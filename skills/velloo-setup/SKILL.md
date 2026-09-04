@@ -37,7 +37,7 @@ is the equivalent source.
 
 **Fonts are the highest-leverage single token.** A design in the wrong typeface
 reads as wrong no matter how correct the layout is. If `import_theme` didn't
-resolve real families, set them with `set_fonts` — read the app's font loading
+resolve real families, set them with `set_theme { fonts }` — read the app's font loading
 (next/font, a `@font-face`, a Google Fonts link) to get the actual names.
 
 Then `score_theme_contrast` to confirm the imported palette holds up in both

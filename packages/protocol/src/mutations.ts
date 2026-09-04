@@ -154,14 +154,29 @@ export function normalizeAddNode(input: AddNodeInput): Normalized<AddNodeArgs> {
  * Single-node and bulk edits share one schema because agents conflate them.
  * `path`/`propPatch` describe one node; `patches` describes many.
  */
+export const StylePayloadSchema = jsonTolerant(
+  z.union([z.string(), PatchRecordSchema, z.null()]),
+).describe(
+  "Native style channel: a className string (Tailwind), an object of properties (sx / style), or null to clear",
+);
+
 export const updatePropsShape = {
   screenId: ScreenId,
   path: LocatorSchema.optional(),
   propPatch: PatchRecordSchema.optional(),
   /** Accepted alias for `propPatch`, so the key matches add_node. */
   props: PatchRecordSchema.optional().describe("Alias for `propPatch`."),
+  style: StylePayloadSchema.optional(),
   patches: jsonTolerant(
-    z.array(z.object({ path: LocatorSchema, propPatch: PatchRecordSchema })).min(1),
+    z
+      .array(
+        z.object({
+          path: LocatorSchema,
+          propPatch: PatchRecordSchema.optional(),
+          style: StylePayloadSchema.optional(),
+        }),
+      )
+      .min(1),
   )
     .optional()
     .describe("Bulk mode — mutually exclusive with path/propPatch"),
@@ -169,15 +184,22 @@ export const updatePropsShape = {
 export const UpdatePropsBody = z.object(updatePropsShape);
 export type UpdatePropsInput = z.infer<typeof UpdatePropsBody>;
 
+export type StylePayloadInput = z.infer<typeof StylePayloadSchema>;
+
 export interface UpdatePropsSingleArgs {
   screenId: string;
   path: Locator;
-  propPatch: Record<string, unknown>;
+  propPatch?: Record<string, unknown> | undefined;
+  style?: StylePayloadInput | undefined;
 }
 
 export interface UpdatePropsBulkArgs {
   screenId: string;
-  patches: Array<{ path: Locator; propPatch: Record<string, unknown> }>;
+  patches: Array<{
+    path: Locator;
+    propPatch?: Record<string, unknown> | undefined;
+    style?: StylePayloadInput | undefined;
+  }>;
 }
 
 export type UpdatePropsPlan =
@@ -191,19 +213,26 @@ export type UpdatePropsPlan =
  */
 export function normalizeUpdateProps(input: UpdatePropsInput): Normalized<UpdatePropsPlan> {
   const propPatch = input.propPatch ?? input.props;
+  const single =
+    propPatch !== undefined || input.style !== undefined
+      ? {
+          ...(propPatch !== undefined ? { propPatch } : {}),
+          ...(input.style !== undefined ? { style: input.style } : {}),
+        }
+      : undefined;
   if (input.patches) {
     const patches =
-      input.path !== undefined && propPatch !== undefined
-        ? [{ path: input.path, propPatch }, ...input.patches]
+      input.path !== undefined && single !== undefined
+        ? [{ path: input.path, ...single }, ...input.patches]
         : input.patches;
     return { ok: true, args: { mode: "bulk", args: { screenId: input.screenId, patches } } };
   }
-  if (input.path === undefined || propPatch === undefined) {
-    return invalid("update_props: path+propPatch required (or pass patches).");
+  if (input.path === undefined || single === undefined) {
+    return invalid("update_props: path plus propPatch and/or style required (or pass patches).");
   }
   return {
     ok: true,
-    args: { mode: "single", args: { screenId: input.screenId, path: input.path, propPatch } },
+    args: { mode: "single", args: { screenId: input.screenId, path: input.path, ...single } },
   };
 }
 
@@ -213,15 +242,6 @@ export const applyClassesShape = {
   classes: z.string(),
 } satisfies z.ZodRawShape;
 export const ApplyClassesBody = z.object(applyClassesShape);
-
-export const setStyleShape = {
-  screenId: ScreenId,
-  path: LocatorSchema,
-  style: jsonTolerant(z.union([z.string(), PatchRecordSchema, z.null()])).describe(
-    "className string (Tailwind), a style object (sx / style channels), or null to clear",
-  ),
-} satisfies z.ZodRawShape;
-export const SetStyleBody = z.object(setStyleShape);
 
 export const removeNodeShape = {
   screenId: ScreenId,
@@ -243,14 +263,6 @@ export const setNodeIdShape = {
   id: NodeIdSchema.nullable(),
 } satisfies z.ZodRawShape;
 export const SetNodeIdBody = z.object(setNodeIdShape);
-
-export const overrideSnippetPropsShape = {
-  screenId: ScreenId,
-  path: LocatorSchema,
-  innerPath: InnerPathSchema,
-  propPatch: PatchRecordSchema,
-} satisfies z.ZodRawShape;
-export const OverrideSnippetPropsBody = z.object(overrideSnippetPropsShape);
 
 // ── Screens ────────────────────────────────────────────────────────────
 
@@ -439,6 +451,14 @@ export const instantiateSnippetShape = {
 } satisfies z.ZodRawShape;
 export const InstantiateSnippetBody = z.object(instantiateSnippetShape);
 
+export const overrideSnippetPropsShape = {
+  screenId: ScreenId,
+  path: LocatorSchema,
+  innerPath: InnerPathSchema,
+  propPatch: PatchRecordSchema,
+} satisfies z.ZodRawShape;
+export const OverrideSnippetPropsBody = z.object(overrideSnippetPropsShape);
+
 export const updateSnippetArgsShape = {
   screenId: ScreenId,
   path: LocatorSchema,
@@ -446,6 +466,72 @@ export const updateSnippetArgsShape = {
   extraClassName: z.string().nullable().optional(),
 } satisfies z.ZodRawShape;
 export const UpdateSnippetArgsBody = z.object(updateSnippetArgsShape);
+
+/**
+ * One instance of a snippet, edited from either side: `argPatch` /
+ * `extraClassName` change what the caller passes in, `innerPath` + `propPatch`
+ * patch a node inside that one instance's rendered body. They compose, so a
+ * single call can retune an instance's inputs and its one-off override.
+ */
+export const updateSnippetInstanceShape = {
+  screenId: ScreenId,
+  path: LocatorSchema,
+  argPatch: PatchRecordSchema.optional(),
+  extraClassName: z.string().nullable().optional(),
+  innerPath: InnerPathSchema.optional(),
+  propPatch: PatchRecordSchema.optional(),
+} satisfies z.ZodRawShape;
+export const UpdateSnippetInstanceBody = z.object(updateSnippetInstanceShape);
+export type UpdateSnippetInstanceInput = z.infer<typeof UpdateSnippetInstanceBody>;
+
+export interface UpdateSnippetInstancePlan {
+  args?:
+    | {
+        screenId: string;
+        path: Locator;
+        argPatch: Record<string, unknown>;
+        extraClassName?: string | null | undefined;
+      }
+    | undefined;
+  override?:
+    | { screenId: string; path: Locator; innerPath: string; propPatch: Record<string, unknown> }
+    | undefined;
+}
+
+/** Split one instance edit into the arg-side and override-side calls it implies. */
+export function normalizeUpdateSnippetInstance(
+  input: UpdateSnippetInstanceInput,
+): Normalized<UpdateSnippetInstancePlan> {
+  const wantsArgs = input.argPatch !== undefined || input.extraClassName !== undefined;
+  const hasInner = input.innerPath !== undefined;
+  const hasPatch = input.propPatch !== undefined;
+  if (hasInner !== hasPatch) {
+    return invalid("update_snippet_instance: innerPath and propPatch go together.");
+  }
+  if (!wantsArgs && !hasInner) {
+    return invalid(
+      "update_snippet_instance: pass argPatch, extraClassName, or innerPath+propPatch.",
+    );
+  }
+  const plan: UpdateSnippetInstancePlan = {};
+  if (wantsArgs) {
+    plan.args = {
+      screenId: input.screenId,
+      path: input.path,
+      argPatch: input.argPatch ?? {},
+      ...(input.extraClassName !== undefined ? { extraClassName: input.extraClassName } : {}),
+    };
+  }
+  if (hasInner && input.innerPath !== undefined && input.propPatch !== undefined) {
+    plan.override = {
+      screenId: input.screenId,
+      path: input.path,
+      innerPath: input.innerPath,
+      propPatch: input.propPatch,
+    };
+  }
+  return { ok: true, args: plan };
+}
 
 // ── Annotations + board notes ──────────────────────────────────────────
 
