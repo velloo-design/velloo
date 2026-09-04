@@ -31,6 +31,12 @@ export const IFRAME_RUNTIME = String.raw`
   style.textContent =
     ".__velloo-hover { box-shadow: inset 0 0 0 1px #60a5fa !important; }" +
     ".__velloo-selected { box-shadow: inset 0 0 0 2px #2563eb !important; }" +
+    // A snippet instance is a different kind of thing to select — editing it
+    // moves every other instance too — so it gets its own colour rather than
+    // looking like an ordinary node.
+    ".__velloo-selected[data-velloo-select-kind='snippet'] { box-shadow: inset 0 0 0 2px #8b5cf6 !important; }" +
+    // The rest of the screen while a snippet is being edited in place.
+    ".__velloo-dimmed { opacity: 0.28 !important; filter: saturate(0.4) !important; }" +
     // Scrollable frames need a *visible* affordance: wheel events forward to
     // the canvas (pan), so dragging a bar is the way to scroll — but macOS
     // overlay scrollbars stay hidden until scrolled, and (verified in real
@@ -134,17 +140,97 @@ export const IFRAME_RUNTIME = String.raw`
     return null;
   }
 
+  // While a snippet is focused, clicks inside its instances address the
+  // definition instead of the instance — which is what makes an edit show up
+  // in every instance at once.
+  let focusedSnippet = null;
+
+  function findSnippetPath(target) {
+    if (focusedSnippet === null) return undefined;
+    let el = target;
+    while (el && el.nodeType === 1) {
+      if (el.getAttribute && el.getAttribute('data-snippet-id') === focusedSnippet) {
+        const p = el.getAttribute('data-snippet-path');
+        return p === null ? undefined : p;
+      }
+      el = el.parentElement;
+    }
+    return undefined;
+  }
+
+  function nearestSnippetId(target) {
+    let el = target;
+    while (el && el.nodeType === 1) {
+      const id = el.getAttribute && el.getAttribute('data-snippet-id');
+      if (id) return id;
+      el = el.parentElement;
+    }
+    return undefined;
+  }
+
+  function applySnippetFocus(snippetId) {
+    focusedSnippet = snippetId || null;
+    document
+      .querySelectorAll('.__velloo-dimmed')
+      .forEach((el) => el.classList.remove('__velloo-dimmed'));
+    if (focusedSnippet === null) return;
+    // Dim by walking down from the root and stopping at the first element that
+    // either is, or contains, an instance — so the instances stay bright
+    // without needing to out-stack a full-page overlay.
+    const live = document.querySelectorAll('[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\\\"') + '"]');
+    if (live.length === 0) return;
+    const dim = (el) => {
+      for (let i = 0; i < el.children.length; i++) {
+        const child = el.children[i];
+        let isLive = false;
+        let holdsLive = false;
+        for (let j = 0; j < live.length; j++) {
+          if (child === live[j]) isLive = true;
+          else if (child.contains(live[j])) holdsLive = true;
+        }
+        if (isLive) continue;
+        if (holdsLive) dim(child);
+        else child.classList.add('__velloo-dimmed');
+      }
+    };
+    dim(document.body);
+  }
+
   function clearClass(cls) {
     document.querySelectorAll('.' + cls).forEach((el) => el.classList.remove(cls));
   }
 
-  function applyHighlight(path, cls, scroll) {
+  function applyHighlight(path, cls, scroll, kind, snippetPath) {
     clearClass(cls);
-    if (path === null || path === undefined) return;
-    const el = document.querySelector('[data-node-path="' + path.replace(/"/g, '\\"') + '"]');
-    if (!el) return;
-    el.classList.add(cls);
-    if (scroll) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    if (cls === SELECT_CLASS) {
+      document
+        .querySelectorAll('[data-velloo-select-kind]')
+        .forEach((el) => el.removeAttribute('data-velloo-select-kind'));
+    }
+    let els;
+    if (snippetPath !== undefined && snippetPath !== null && focusedSnippet !== null) {
+      // One definition path, every instance of it — the point of editing in
+      // place is seeing all of them respond.
+      els = document.querySelectorAll(
+        '[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\\\"') + '"][data-snippet-path="' + String(snippetPath).replace(/"/g, '\\\\"') + '"]',
+      );
+    } else if (path !== null && path !== undefined) {
+      els = document.querySelectorAll('[data-node-path="' + path.replace(/"/g, '\\\\"') + '"]');
+    } else {
+      return;
+    }
+    // Every element inside a snippet body reports the *instance* path, so a
+    // plain match would ring all of them. Only the outermost of each nesting
+    // chain is the thing the user picked.
+    let first = null;
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      if (el.parentElement && el.parentElement.closest('.' + cls)) continue;
+      el.classList.add(cls);
+      if (kind) el.setAttribute('data-velloo-select-kind', kind);
+      if (first === null) first = el;
+    }
+    if (scroll && first) first.scrollIntoView({ block: 'center', inline: 'nearest' });
   }
 
   function applyVelloState(path, state) {
@@ -157,27 +243,71 @@ export const IFRAME_RUNTIME = String.raw`
     if (el) el.setAttribute('data-velloo-state', state);
   }
 
+  // Rects go stale on their own: a webfont swaps and a heading grows a line,
+  // an image decodes and pushes everything down. The parent can't know, so the
+  // last requested set is re-measured whenever the layout moves and re-sent
+  // only when it actually differs — anchors and the selection handles both
+  // ride on this.
+  let lastRectPaths = [];
+  let lastRectsJson = '';
+  let observedEls = [];
+  let rectTimer = 0;
+
+  function remeasureSoon() {
+    if (rectTimer || lastRectPaths.length === 0) return;
+    rectTimer = setTimeout(() => {
+      rectTimer = 0;
+      reportRects(lastRectPaths);
+    }, 80);
+  }
+
+  const hasRO = typeof ResizeObserver === 'function';
+  // The document catches reflow from anywhere; the per-element observer catches
+  // a node that changes size without moving the page.
+  if (hasRO) new ResizeObserver(remeasureSoon).observe(document.documentElement);
+  const elObserver = hasRO ? new ResizeObserver(remeasureSoon) : null;
+
   function reportRects(paths) {
+    lastRectPaths = paths;
     const rects = [];
+    const els = [];
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i];
       const el = document.querySelector('[data-node-path="' + String(path).replace(/"/g, '\\"') + '"]');
       if (!el) continue;
+      els.push(el);
       const r = el.getBoundingClientRect();
       rects.push({ path: path, x: r.left, y: r.top, w: r.width, h: r.height });
     }
+    // Re-observe only when the element set changed, or observing would retrigger
+    // the observer forever.
+    if (elObserver && (els.length !== observedEls.length || els.some((el, i) => el !== observedEls[i]))) {
+      elObserver.disconnect();
+      for (let i = 0; i < els.length; i++) elObserver.observe(els[i]);
+      observedEls = els;
+    }
+    const json = JSON.stringify(rects);
+    if (json === lastRectsJson) return;
+    lastRectsJson = json;
     send({ type: 'nodeRects', rects: rects });
+  }
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      if (lastRectPaths.length > 0) reportRects(lastRectPaths);
+    });
   }
 
   function handleParentMessage(ev) {
     const msg = ev.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'applyHighlight') applyHighlight(msg.path, SELECT_CLASS, msg.scroll === true);
+    if (msg.type === 'applyHighlight') applyHighlight(msg.path, SELECT_CLASS, msg.scroll === true, msg.kind, msg.snippetPath);
     else if (msg.type === 'clearHighlight') clearClass(SELECT_CLASS);
-    else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS);
+    else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS, false, null, msg.snippetPath);
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
     else if (msg.type === 'applyVelloState') applyVelloState(msg.path, msg.state);
     else if (msg.type === 'requestRects') reportRects(msg.paths || []);
+    else if (msg.type === 'applySnippetFocus') applySnippetFocus(msg.snippetId);
     else if (msg.type === 'restoreScroll') window.scrollTo(msg.x || 0, msg.y || 0);
   }
 
@@ -185,26 +315,76 @@ export const IFRAME_RUNTIME = String.raw`
     if (port) port.postMessage(msg);
   }
 
+  /** In focus mode, only the focused snippet's own nodes are interactive. */
+  function outsideFocus(target) {
+    return focusedSnippet !== null && findSnippetPath(target) === undefined;
+  }
+
   document.addEventListener('click', (ev) => {
     const path = findPath(ev.target);
     ev.preventDefault();
+    // Focus mode scopes the screen to one snippet: the dimmed rest of the
+    // screen isn't editable, so clicking it deselects rather than selecting
+    // something the bar can't act on.
+    if (outsideFocus(ev.target)) {
+      send({ type: 'select', path: null });
+      return;
+    }
+    const snippetPath = findSnippetPath(ev.target);
     // null path = empty space inside the frame → parent clears selection.
-    send({ type: 'select', path: path });
+    if (snippetPath === undefined) send({ type: 'select', path: path });
+    else send({ type: 'select', path: path, snippetPath: snippetPath });
   }, true);
+
+  // Double-click is "open up what this is made of" — the parent turns it into
+  // snippet focus when the target is an instance.
+  document.addEventListener('dblclick', (ev) => {
+    ev.preventDefault();
+    // The way back out: double-clicking anything that isn't the snippet being
+    // edited — including empty space, which has no path to report.
+    if (outsideFocus(ev.target)) {
+      send({ type: 'exit' });
+      return;
+    }
+    const path = findPath(ev.target);
+    if (path === null) return;
+    const snippetId = nearestSnippetId(ev.target);
+    if (snippetId === undefined) send({ type: 'enter', path: path });
+    else send({ type: 'enter', path: path, snippetId: snippetId });
+  }, true);
+
+  // Clicking a node moves keyboard focus into this document, where the
+  // parent's window listener can't see it — so every canvas shortcut, Escape
+  // included, went dead the moment you selected something. Forward the keys
+  // the design surface has no use of and let the parent own them.
+  document.addEventListener('keydown', (ev) => {
+    const el = ev.target;
+    const tag = el && el.tagName ? el.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (el && el.isContentEditable)) {
+      return;
+    }
+    send({ type: 'key', key: ev.key, metaKey: ev.metaKey === true, ctrlKey: ev.ctrlKey === true, shiftKey: ev.shiftKey === true, altKey: ev.altKey === true });
+  });
 
   // Hover reports coalesce to one message per animation frame — sweeping the
   // cursor across a dense tree otherwise floods the parent with a store
   // update + a React render pass per crossed node.
   let hoverRaf = 0;
+  let pendingHoverSnippet;
   function flushHover() {
     hoverRaf = 0;
-    send({ type: 'hover', path: pendingHover });
+    if (pendingHoverSnippet === undefined) send({ type: 'hover', path: pendingHover });
+    else send({ type: 'hover', path: pendingHover, snippetPath: pendingHoverSnippet });
   }
 
   document.addEventListener('mouseover', (ev) => {
-    const path = findPath(ev.target);
-    if (path === pendingHover) return;
+    // Nothing outside the focused snippet is editable, so nothing outside it
+    // should light up as though it were.
+    const path = outsideFocus(ev.target) ? null : findPath(ev.target);
+    const snippetPath = findSnippetPath(ev.target);
+    if (path === pendingHover && snippetPath === pendingHoverSnippet) return;
     pendingHover = path;
+    pendingHoverSnippet = snippetPath;
     if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);
   });
 

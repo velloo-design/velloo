@@ -83,14 +83,26 @@ export const mutate = {
   reorderBoardGroups(args: { order: string[] }) {
     return postMutate<{ order: string[] }>("reorder_board_groups", args);
   },
-  updateProps(args: { screenId: string; path: number[]; propPatch: Record<string, unknown> }) {
-    const { screenId, path, propPatch } = args;
+  updateProps(args: {
+    screenId: string;
+    path: number[];
+    propPatch: Record<string, unknown>;
+    /** See the protocol's `gesture`: one drag, one undo step. */
+    gesture?: string | undefined;
+  }) {
+    const { screenId, path, propPatch, gesture } = args;
     return postMutate<{ paths: number[][] }>("update_props", {
       screenId,
       patches: [{ path, propPatch }],
+      ...(gesture ? { gesture } : {}),
     });
   },
-  applyClasses(args: { screenId: string; path: number[]; classes: string }) {
+  applyClasses(args: {
+    screenId: string;
+    path: number[];
+    classes: string;
+    gesture?: string | undefined;
+  }) {
     return postMutate<{ path: number[] }>("apply_classes", args);
   },
   setNodeId(args: {
@@ -101,7 +113,12 @@ export const mutate = {
   }) {
     return postMutate<{ path: number[]; id: string | null }>("set_node_id", args);
   },
-  updateSnippetArgs(args: { screenId: string; path: number[]; argPatch: Record<string, unknown> }) {
+  updateSnippetArgs(args: {
+    screenId: string;
+    path: number[];
+    argPatch: Record<string, unknown>;
+    gesture?: string | undefined;
+  }) {
     return postMutate<{ path: number[] }>("update_snippet_args", args);
   },
 };

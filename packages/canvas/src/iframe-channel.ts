@@ -17,8 +17,19 @@ import {
 export type { ChildMessage, NodeRect, ParentMessage };
 
 export interface ChannelHandlers {
-  onSelect?(path: string | null): void;
-  onHover?(path: string | null): void;
+  /**
+   * `snippetPath` is present only while a snippet is focused and the click
+   * landed inside one of its instances — it addresses the definition, not the
+   * instance.
+   */
+  onSelect?(path: string | null, snippetPath?: string): void;
+  onHover?(path: string | null, snippetPath?: string): void;
+  /** Double-click. `snippetId` is set when the target sits inside an instance. */
+  onEnter?(path: string, snippetId?: string): void;
+  /** Double-click outside the focused snippet — leave the mode. */
+  onExit?(): void;
+  /** A keystroke the iframe declined, so canvas shortcuts survive focus in a frame. */
+  onKey?(init: KeyboardEventInit): void;
   onReady?(): void;
   onRects?(rects: NodeRect[]): void;
   /**
@@ -134,9 +145,14 @@ export class IframeChannel {
       this.handlers.onReady?.();
       return;
     }
-    if (msg.type === "select") this.handlers.onSelect?.(msg.path);
-    else if (msg.type === "hover") this.handlers.onHover?.(msg.path);
-    else if (msg.type === "nodeRects") this.handlers.onRects?.(msg.rects);
+    if (msg.type === "select") this.handlers.onSelect?.(msg.path, msg.snippetPath);
+    else if (msg.type === "hover") this.handlers.onHover?.(msg.path, msg.snippetPath);
+    else if (msg.type === "enter") this.handlers.onEnter?.(msg.path, msg.snippetId);
+    else if (msg.type === "exit") this.handlers.onExit?.();
+    else if (msg.type === "key") {
+      const { type: _type, ...init } = msg;
+      this.handlers.onKey?.(init);
+    } else if (msg.type === "nodeRects") this.handlers.onRects?.(msg.rects);
     else if (msg.type === "parentZoom")
       this.handlers.onParentZoom?.(msg.deltaY, msg.clientX, msg.clientY);
     else if (msg.type === "parentPan") this.handlers.onParentPan?.(msg.deltaX, msg.deltaY);

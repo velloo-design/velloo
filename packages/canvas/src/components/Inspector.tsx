@@ -1,13 +1,16 @@
-import { isComponentNode, isSnippetInstance, nodeId, type Theme } from "@velloo/schema";
-import type { CatalogFont } from "@velloo/schema/fonts";
-import { useEffect, useMemo, useState } from "react";
-import { mutate, theme as theme_ } from "../api.ts";
+import { isComponentNode, isSnippetInstance, nodeId } from "@velloo/schema";
+import { useEffect, useMemo } from "react";
+import { mutate } from "../api.ts";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
+import { resolveControls } from "../hud/control-set.ts";
+import { useControlWrite } from "../hud/use-control-write.ts";
+import { applyStyleValue, classNameOf } from "../hud/values.ts";
 import { nodeRung, nodeTypography } from "../node-typography.ts";
 import { pathFromString } from "../path.ts";
 import { selectedNode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { CopyField } from "./CopyField.tsx";
+import { NodeStyleSection } from "./hud/NodeStyleSection.tsx";
 import { IdField } from "./IdField.tsx";
 import { ImagePanel } from "./ImagePanel.tsx";
 import { PropField } from "./PropField.tsx";
@@ -15,9 +18,9 @@ import { SnippetInspector } from "./SnippetInspector.tsx";
 import { SnippetSubstitutions } from "./SnippetSubstitutions.tsx";
 import { StyleObjectEditor } from "./style-editor/StyleObjectEditor.tsx";
 import { SxStyleEditor } from "./style-editor/SxStyleEditor.tsx";
-import { TailwindStyleEditor } from "./style-editor/TailwindStyleEditor.tsx";
+import { declareFace } from "./typography/declare-face.ts";
 import { FontBrowser } from "./typography/FontBrowser.tsx";
-import { assignSpec, leadFamily } from "./typography/FontsSection.tsx";
+import { leadFamily } from "./typography/FontsSection.tsx";
 import { NodeTypographyReadout } from "./typography/NodeTypography.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
@@ -33,6 +36,8 @@ export function Inspector() {
   const channelsByLibrary = useCanvas((s) => s.channelsByLibrary);
   const theme = useCanvas((s) => s.theme);
   const themeName = useCanvas((s) => s.themeName);
+  const browsingFaces = useCanvas((s) => s.browsingFaces);
+  const setBrowsingFaces = useCanvas((s) => s.setBrowsingFaces);
   const loadComponents = useCanvas((s) => s.loadComponents);
   const loadGeneratedAssets = useCanvas((s) => s.loadGeneratedAssets);
 
@@ -43,9 +48,6 @@ export function Inspector() {
   useEffect(() => {
     void loadGeneratedAssets();
   }, [loadGeneratedAssets]);
-
-  const [browsingFaces, setBrowsingFaces] = useState(false);
-  const [pendingFace, setPendingFace] = useState<string | null>(null);
 
   const node = useMemo(() => selectedNode(screens, selection), [screens, selection]);
   // The screen root, for the typeset-region ancestor walk — a typeset applies to
@@ -71,6 +73,14 @@ export function Inspector() {
         propPatch: { [p.name]: p.value === undefined ? null : p.value },
       })
       .catch((err) => toastError(err, "Could not update prop"));
+  });
+
+  // The pane's style controls are the bar's, so they commit through the same
+  // path — including the touched-slot replay that keeps fast edits from
+  // clobbering each other.
+  const commitControl = useControlWrite({
+    selection,
+    liveClasses: node ? classNameOf(node) : "",
   });
 
   if (!selection) {
@@ -104,21 +114,28 @@ export function Inspector() {
   const commitProp = (name: string, value: unknown) =>
     pushProp({ screenId: selection.screenId, path: selection.path, name, value });
 
-  // The active library's native style channel drives the editor: Tailwind
-  // classes (shadcn / no-lib) vs an `sx` / `style` object (MUI). Resolve it for
-  // the selected screen's library, falling back to the folder default.
+  // Styling for a Tailwind folder now lives in the HUD over the canvas; what
+  // stays here is the object channel (MUI `sx`, inline `style`), which the HUD
+  // doesn't speak. Resolve the channel for the selected screen's library,
+  // falling back to the folder default.
   const screenLibrary = screens[selection.screenId]?.library;
   const channel = (screenLibrary ? channelsByLibrary[screenLibrary] : undefined) ?? styleChannel;
   const channelProp = channel?.prop ?? "className";
   const isObjectChannel = channel?.kind === "sx" || channel?.kind === "style";
   // Hide the channel prop from the generic prop list — it's edited below by the
   // dedicated field (so a MUI node's `sx` doesn't also show as a raw string prop).
-  const hiddenProps = new Set([...HIDDEN_PROPS, channelProp]);
+  // Props the Style section already offers are hidden for the same reason: two
+  // fields writing one prop is a way to make an edit look like it didn't take.
+  const hiddenProps = new Set([
+    ...HIDDEN_PROPS,
+    channelProp,
+    ...resolveControls({ node, descriptor })
+      .controls.map((c) => (c.slot.via === "prop" ? c.slot.name : null))
+      .filter((n): n is string => n !== null),
+  ]);
 
   const rung = nodeRung(node);
   const selectionKey = `${selection.screenId}:${selection.path}`;
-  const initialClasses =
-    typeof node.props?.className === "string" ? (node.props.className as string) : "";
   const childrenValue =
     typeof node.props?.children === "string" ? (node.props.children as string) : "";
   const showCopy = typeof node.props?.children === "string" || descriptor === null;
@@ -132,26 +149,38 @@ export function Inspector() {
   // would keep showing the asset that was just replaced.
   const propsKey = `${selectionKey}:${imageSrc ?? ""}`;
 
+  // Opened from the HUD's Font control. Picking a family declares it as a
+  // theme face first, then points this node at that role — a node never names
+  // a family directly, so `font-<role>` stays the only thing on the element.
   if (browsingFaces && theme) {
-    // Open on the face already in play, so the list starts filtered to what
-    // this rung is for and ticks what it currently uses.
     const facts = tree ? nodeTypography(theme, tree, pathFromString(selection.path), node) : null;
-    const role =
+    const currentRole =
       facts?.overrides.family?.replace(/^font-/, "") ??
       facts?.face.role ??
       facts?.face.slot ??
       "body";
-    const stack = theme.typography.fontFamily?.[role];
+    const stack = theme.typography.fontFamily?.[currentRole];
     return (
       <div className="flex-1 min-h-0">
         <FontBrowser
-          role={role}
+          role={currentRole}
           current={stack ? leadFamily(stack) : undefined}
           onBack={() => setBrowsingFaces(false)}
           onPick={(font) => {
             setBrowsingFaces(false);
+            const target = selection;
             void declareFace(theme, themeName, font)
-              .then(setPendingFace)
+              .then((role) =>
+                mutate.applyClasses({
+                  screenId: target.screenId,
+                  path: pathFromString(target.path),
+                  classes: applyStyleValue(
+                    typeof node.props?.className === "string" ? node.props.className : "",
+                    "fontFamily",
+                    role,
+                  ),
+                }),
+              )
               .catch((err) => toastError(err, "Could not set the face"));
           }}
         />
@@ -203,6 +232,21 @@ export function Inspector() {
           />
         ) : null}
 
+        <section className="flex flex-col gap-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Style</div>
+          <NodeStyleSection
+            key={`${selectionKey}:style`}
+            node={node}
+            tree={tree}
+            path={selection.path}
+            theme={theme}
+            descriptor={descriptor}
+            snippet={null}
+            classChannel={!isObjectChannel}
+            onChange={commitControl}
+          />
+        </section>
+
         {theme && tree ? (
           <NodeTypographyReadout
             theme={theme}
@@ -232,77 +276,30 @@ export function Inspector() {
           <SnippetSubstitutions key={`${selectionKey}:subs`} selection={selection} node={node} />
         ) : null}
 
-        {isObjectChannel ? (
-          (() => {
-            const objValue =
-              node.props?.[channelProp] && typeof node.props[channelProp] === "object"
-                ? (node.props[channelProp] as Record<string, unknown>)
-                : undefined;
-            const editorProps = {
-              key: `${selectionKey}:${channelProp}`,
-              initialValue: objValue,
-              prop: channelProp,
-              screenId: selection.screenId,
-              path: selection.path,
-              debounceMs: DEBOUNCE_MS,
-            };
-            return channel?.kind === "sx" ? (
-              <SxStyleEditor {...editorProps} />
-            ) : (
-              <StyleObjectEditor {...editorProps} />
-            );
-          })()
-        ) : (
-          <TailwindStyleEditor
-            key={`${selectionKey}:className`}
-            initialValue={initialClasses}
-            screenId={selection.screenId}
-            path={selection.path}
-            debounceMs={DEBOUNCE_MS}
-            onBrowseFaces={() => setBrowsingFaces(true)}
-            pendingFace={pendingFace}
-            onFaceApplied={() => setPendingFace(null)}
-          />
-        )}
+        {isObjectChannel
+          ? (() => {
+              const objValue =
+                node.props?.[channelProp] && typeof node.props[channelProp] === "object"
+                  ? (node.props[channelProp] as Record<string, unknown>)
+                  : undefined;
+              const editorProps = {
+                key: `${selectionKey}:${channelProp}`,
+                initialValue: objValue,
+                prop: channelProp,
+                screenId: selection.screenId,
+                path: selection.path,
+                debounceMs: DEBOUNCE_MS,
+              };
+              return channel?.kind === "sx" ? (
+                <SxStyleEditor {...editorProps} />
+              ) : (
+                <StyleObjectEditor {...editorProps} />
+              );
+            })()
+          : null}
       </div>
     </div>
   );
-}
-
-/**
- * Get a theme face for a browsed family and return the role to set on the node.
- *
- * A node never names a family directly. Declaring the face on the theme first
- * is what keeps `font-<role>` meaningful: re-point the role later and every node
- * set in it follows, which is the whole reason roles exist. It also puts the
- * webfont in one place — a family named only at a node would never be requested.
- */
-async function declareFace(theme: Theme, themeName: string, font: CatalogFont): Promise<string> {
-  const faces = theme.typography.fontFamily ?? {};
-  // Reuse before declaring: picking Fraunces twice from two nodes should land
-  // on one role, not `fraunces` and `fraunces-2`.
-  const existing = Object.entries(faces).find(([, stack]) => leadFamily(stack) === font.family);
-  if (existing) return existing[0];
-  const role = freeRole(faceSlug(font.family), faces);
-  await theme_.setFonts(themeName, [assignSpec(role, font)]);
-  return role;
-}
-
-/** A family as a role name the schema accepts: `IBM Plex Sans` → `ibm-plex-sans`. */
-function faceSlug(family: string): string {
-  const slug = family
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return /^[a-z]/.test(slug) ? slug : `font-${slug}`;
-}
-
-/** Never re-point a role someone else's nodes are already using. */
-function freeRole(base: string, faces: Record<string, string>): string {
-  if (!(base in faces)) return base;
-  let n = 2;
-  while (`${base}-${n}` in faces) n++;
-  return `${base}-${n}`;
 }
 
 const STATES = ["default", "hover", "focus", "active", "disabled"] as const;

@@ -13,6 +13,8 @@ export interface UpdateSnippetArgsArgs {
   argPatch: Record<string, unknown>;
   /** Pass `null` to clear, omit to leave unchanged. */
   extraClassName?: string | null | undefined;
+  /** The drag this write belongs to, so the whole drag is one undo step. */
+  gesture?: string | undefined;
 }
 
 export interface UpdateSnippetArgsResult {
@@ -53,7 +55,7 @@ export async function updateSnippetArgs(
       }
     }
 
-    yield* $(await commitScreen(ctx.folder, args.screenId, next));
+    yield* $(await commitScreen(ctx.folder, args.screenId, next, args.gesture));
     broadcastTreeChange(ctx, args.screenId);
     return { path: resolved };
   });

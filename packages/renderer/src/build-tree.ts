@@ -118,6 +118,7 @@ export function buildTree(
   path: number[] = [],
   stack: string[] = [],
   lockedPath: number[] | null = null,
+  body: BodyPosition | null = null,
 ): ReactElement {
   if (isSnippetInstance(node)) {
     const snippets = opts.snippets;
@@ -127,8 +128,12 @@ export function buildTree(
     if (stack.includes(snippet.id)) throw new SnippetCycleError(snippet.id, stack);
     const resolved = resolveSnippetBody(node, snippet);
     // Lock the path to the snippet instance's path so every inner DOM node
-    // resolves back to the instance on click.
-    return buildTree(resolved, opts, path, [...stack, snippet.id], lockedPath ?? path);
+    // resolves back to the instance on click. The body position re-roots at
+    // the same time: a nested snippet's internals belong to *its* definition.
+    return buildTree(resolved, opts, path, [...stack, snippet.id], lockedPath ?? path, {
+      snippetId: snippet.id,
+      path: [],
+    });
   }
 
   if (isParamRef(node)) {
@@ -158,8 +163,12 @@ export function buildTree(
     // sibling elements here: a node slot accepts either one node or a list.
     children = node.children.flatMap((child, i) =>
       Array.isArray(child)
-        ? (child as Node[]).map((c, j) => buildTree(c, opts, [...path, i, j], stack, lockedPath))
-        : buildTree(child, opts, [...path, i], stack, lockedPath),
+        ? // An expanded slot has no counterpart position in the definition, so
+          // nothing inside it is addressable as snippet body.
+          (child as Node[]).map((c, j) =>
+            buildTree(c, opts, [...path, i, j], stack, lockedPath, null),
+          )
+        : buildTree(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
     );
   } else if (childrenProp !== undefined) {
     children = resolvePropChildren(childrenProp, opts, path, stack, lockedPath);
@@ -167,9 +176,29 @@ export function buildTree(
 
   return createElement(
     Component,
-    { ...restProps, "data-node-path": dataNodePath, key: dataNodePath || "root" },
+    {
+      ...restProps,
+      "data-node-path": dataNodePath,
+      // Editing a snippet in place needs the position *inside the definition*,
+      // which the instance path deliberately hides. Both travel together: the
+      // canvas picks whichever the current mode addresses.
+      ...(body === null
+        ? {}
+        : { "data-snippet-id": body.snippetId, "data-snippet-path": body.path.join(".") }),
+      key: dataNodePath || "root",
+    },
     children,
   );
+}
+
+/** Where a node sits inside the snippet definition it was materialized from. */
+interface BodyPosition {
+  snippetId: string;
+  path: number[];
+}
+
+function descend(body: BodyPosition | null, index: number): BodyPosition | null {
+  return body === null ? null : { snippetId: body.snippetId, path: [...body.path, index] };
 }
 
 /** A raw JSON value that is itself a node (component / snippet instance / param ref). */

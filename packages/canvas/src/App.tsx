@@ -151,6 +151,11 @@ export function App() {
         spaceHeldRef.current = state.cursorMode;
         state.setCursorMode("hand");
       } else if (e.key === "Escape") {
+        if (state.snippetFocus) {
+          e.preventDefault();
+          state.setSnippetFocus(null);
+          return;
+        }
         if (state.editingSnippetId) {
           e.preventDefault();
           state.closeSnippetEditor();

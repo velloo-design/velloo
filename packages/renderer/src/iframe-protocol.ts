@@ -30,8 +30,17 @@ export interface NodeRect {
 export type ChildMessage =
   /** Handshake ack. `version` is absent in pre-versioning iframe docs. */
   | { type: "ready"; version?: number }
-  | { type: "select"; path: string | null }
-  | { type: "hover"; path: string | null }
+  /**
+   * `snippetPath` is present only while the canvas has a snippet focused and
+   * the click landed inside one of its instances. It addresses the node in the
+   * *definition*, so an edit reaches every instance at once. Additive field.
+   */
+  | { type: "select"; path: string | null; snippetPath?: string }
+  | { type: "hover"; path: string | null; snippetPath?: string }
+  /** Double-click, offered as "edit what this is made of". */
+  | { type: "enter"; path: string; snippetId?: string }
+  /** Double-click outside the focused snippet — the way back out of the mode. */
+  | { type: "exit" }
   | { type: "nodeRects"; rects: NodeRect[] }
   /**
    * Cmd/Ctrl+wheel inside the iframe. clientX/Y are in the iframe
@@ -52,7 +61,21 @@ export type ChildMessage =
    * toggle, theme edit, resize commit) via `restoreScroll`. Additive
    * message — older iframe docs simply never send it, no version bump.
    */
-  | { type: "scrollPos"; x: number; y: number };
+  | { type: "scrollPos"; x: number; y: number }
+  /**
+   * A keystroke the iframe has no use for. Clicking a node puts keyboard focus
+   * inside the iframe document, where the parent's window listener never sees
+   * it — so Escape and every other canvas shortcut died the moment you selected
+   * something. Forwarded so the parent can dispatch it as its own.
+   */
+  | {
+      type: "key";
+      key: string;
+      metaKey: boolean;
+      ctrlKey: boolean;
+      shiftKey: boolean;
+      altKey: boolean;
+    };
 
 export type ParentMessage =
   /**
@@ -61,9 +84,21 @@ export type ParentMessage =
    * selection (the clicked node is visible by definition). Additive
    * field, so no PROTOCOL_VERSION bump: older docs just don't scroll.
    */
-  | { type: "applyHighlight"; path: string; scroll?: boolean }
+  /**
+   * `kind` colours the ring: a snippet instance is a different kind of thing
+   * to have selected, since editing it moves every other instance. Additive
+   * field — older docs ignore it and draw the ordinary ring.
+   */
+  | {
+      type: "applyHighlight";
+      path: string;
+      scroll?: boolean;
+      kind?: "node" | "snippet";
+      /** Highlight every instance of this definition path instead of one node. */
+      snippetPath?: string;
+    }
   | { type: "clearHighlight" }
-  | { type: "applyHover"; path: string }
+  | { type: "applyHover"; path: string; snippetPath?: string }
   | { type: "clearHover" }
   | {
       type: "applyVelloState";
@@ -71,6 +106,12 @@ export type ParentMessage =
       state: "default" | "hover" | "focus" | "active" | "disabled";
     }
   | { type: "requestRects"; paths: string[] }
+  /**
+   * Scope the screen to one snippet: everything outside its instances dims and
+   * stops taking clicks, and clicks inside report their definition path. `null`
+   * leaves the mode.
+   */
+  | { type: "applySnippetFocus"; snippetId: string | null }
   /**
    * Restore a previously reported scroll offset after a reload. Sent from
    * the parent's onReady handler unless a reveal jump is pending (the
@@ -82,10 +123,13 @@ export const CHILD_MESSAGE_TYPES = [
   "ready",
   "select",
   "hover",
+  "enter",
+  "exit",
   "nodeRects",
   "parentZoom",
   "parentPan",
   "scrollPos",
+  "key",
 ] as const;
 
 export const PARENT_MESSAGE_TYPES = [
@@ -95,6 +139,7 @@ export const PARENT_MESSAGE_TYPES = [
   "clearHover",
   "applyVelloState",
   "requestRects",
+  "applySnippetFocus",
   "restoreScroll",
 ] as const;
 

@@ -29,10 +29,11 @@ export async function persistScreen(
   folder: DesignFolder,
   screenId: string,
   screen: Screen,
+  coalesceKey?: string,
 ): Promise<Screen> {
   const validated = ScreenSchema.parse(screen);
   const prev = folder.screens.get(screenId) ?? null;
-  folder.history.push({ kind: "screen", screenId, screen: prev });
+  folder.history.push({ kind: "screen", screenId, screen: prev, coalesceKey });
   await writeJsonAtomic(join(folder.root, "screens", `${screenId}.json`), validated);
   folder.screens.set(screenId, validated);
   return validated;
@@ -42,6 +43,8 @@ export function commitScreen(
   folder: DesignFolder,
   screenId: string,
   screen: Screen,
+  /** Names the gesture this write belongs to, so a whole drag is one undo step. */
+  coalesceKey?: string,
 ): Promise<Result<Screen, MutationError>> {
   return DoAsync<Screen, MutationError>(async function* () {
     yield* $(validateScreenIds(screenId, screen));
@@ -54,10 +57,15 @@ export function commitScreen(
       if (!prev) {
         return yield* $({ ok: false, error: snippetNotFound(snippetId) });
       }
-      const updated = await persistSnippet(folder, snippetId, { ...prev, tree: screen.tree });
+      const updated = await persistSnippet(
+        folder,
+        snippetId,
+        { ...prev, tree: screen.tree },
+        coalesceKey,
+      );
       return { id: screenId, name: updated.name, tree: updated.tree };
     }
-    return await persistScreen(folder, screenId, screen);
+    return await persistScreen(folder, screenId, screen, coalesceKey);
   });
 }
 
@@ -145,10 +153,11 @@ export async function persistSnippet(
   folder: DesignFolder,
   snippetId: string,
   snippet: Snippet,
+  coalesceKey?: string,
 ): Promise<Snippet> {
   const validated = SnippetSchema.parse(snippet);
   const prev = folder.snippets.get(snippetId) ?? null;
-  folder.history.push({ kind: "snippet", snippetId, snippet: prev });
+  folder.history.push({ kind: "snippet", snippetId, snippet: prev, coalesceKey });
   await writeJsonAtomic(join(folder.root, "snippets", `${snippetId}.json`), validated);
   folder.snippets.set(snippetId, validated);
   return validated;

@@ -184,11 +184,24 @@ export const PropsPatchEntrySchema = z
  * combinations were legal, so the real contract lived in prose and a runtime
  * check rather than in the schema.
  */
+/**
+ * Names the continuous gesture a write belongs to — a pointer drag on a HUD
+ * control, say. Writes sharing one collapse into a single undo step however
+ * long the gesture lasts, so releasing the mouse leaves one thing to undo
+ * rather than one per frame of the drag. Omit it for a discrete edit.
+ */
+export const GestureSchema = z
+  .string()
+  .max(64)
+  .optional()
+  .describe("Opaque id of the drag this write belongs to; merges its undo steps into one");
+
 export const updatePropsShape = {
   screenId: ScreenId,
   patches: jsonTolerant(z.array(PropsPatchEntrySchema).min(1)).describe(
     "One entry per node; length 1 for a single edit",
   ),
+  gesture: GestureSchema,
 } satisfies z.ZodRawShape;
 export const UpdatePropsBody = z.strictObject(updatePropsShape);
 export type UpdatePropsInput = z.infer<typeof UpdatePropsBody>;
@@ -202,12 +215,14 @@ export interface UpdatePropsArgs {
     propPatch?: Record<string, unknown> | undefined;
     style?: StylePayloadInput | undefined;
   }>;
+  gesture?: string | undefined;
 }
 
 export const applyClassesShape = {
   screenId: ScreenId,
   path: LocatorOrRootSchema,
   classes: z.string(),
+  gesture: GestureSchema,
 } satisfies z.ZodRawShape;
 export const ApplyClassesBody = z.strictObject(applyClassesShape);
 
@@ -402,6 +417,7 @@ export const updateSnippetArgsShape = {
   path: LocatorSchema,
   argPatch: PatchRecordSchema.default({}),
   extraClassName: z.string().nullable().optional(),
+  gesture: GestureSchema,
 } satisfies z.ZodRawShape;
 export const UpdateSnippetArgsBody = z.strictObject(updateSnippetArgsShape);
 

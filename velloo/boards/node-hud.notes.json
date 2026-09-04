@@ -1,0 +1,58 @@
+[
+  {
+    "id": "note_nhsummary",
+    "x": 0,
+    "y": -560,
+    "width": 2960,
+    "body": "## Decisions\n\n**B wins — the contextual bar.** No modes, no tabs. Velloo knows what the node is, so the bar shows the handful of controls that apply to it and nothing else. The cost we accept: the bar's contents shift as you move around, and every component kind needs an opinion about which controls matter.\n\n**Resize both ways.** Squares on the selection box for feel, the same field in the bar for precision. They are one setting with two inputs — drag updates the field, typing moves the box.\n\n**Defaults are named and visible.** A control showing a theme value is dimmed and says where it came from (*Heading 1*). Changing it accents the field, adds a revert, and applies to that one element. Changing the default for everything is a separate, explicit act.\n\n**Snippets are the instance story.** Not similarity heuristics — the real relation we already have. Violet ring for an instance, double-click to go inside, all instances update live.\n\n**Curation is settled.** Hand-write the sets for the handful of things people actually select — headings, boxes, text, images, icons. A snippet instance already declares its `params`, so its set is free. Everything else gets one sensible fallback (size, spacing, background, corners). No per-component opinion for the long tail, and no missing-control dead end.\n\n### The rules these share\n\n- **Name outcomes, not CSS.** *Fill / Hug / Fixed*, not `width: auto`. *Inside / Between*, not `padding` / `gap`. *Corners*, not `border-radius`.\n- **No raw escape hatch.** No class chips, no `sx` JSON, no declaration table. Anything exotic is a sentence to the agent.\n- **Theme values first.** Colour is a named token; sizes land on the theme's steps. Off-scale is possible, never the default.\n- **Blue means node, violet means snippet.** One colour per kind of thing, everywhere — ring, chip, handles."
+  },
+  {
+    "id": "note_nhb",
+    "x": 0,
+    "y": 980,
+    "width": 1440,
+    "body": "### B · Contextual bar — the chosen shape\n\nThe bar carries, left to right: a chip naming what is selected and the theme style it follows, the controls that apply, then the actions. A snippet instance swaps the chip to violet and adds **Edit snippet**.\n\n**The curation problem is real and it's ours to solve.** Each component descriptor needs a short ordered list of the controls that matter for it. That list is the whole design — get it wrong and the control someone wants is missing with no way to reach it. Start it small and let the agent cover the rest.\n\n**Open:** what happens on a node with no opinion registered — a sensible generic set (size, spacing, background), or nothing at all?"
+  },
+  {
+    "id": "note_nhf",
+    "x": 1520,
+    "y": 980,
+    "width": 1440,
+    "body": "### F · Defaults and overrides\n\nThe question this answers: *is 32 the theme's size, or did someone set it here?*\n\n**The default has a name.** The ring chip and the bar chip both say **Heading 1**. That is worth more than any styling cue — the default stops being a number and becomes a thing you can point at.\n\n**Three control states.** *Follows the theme* — dimmed value, provenance underneath. *Changed here* — dot, accent border, revert arrow, and the old value in the sub-line. *No theme opinion* — plain, because spacing has no named default to fall back to and pretending otherwise would be a lie.\n\n**And the obvious next question gets an answer.** Changing a value shows *Size 36 applies to this heading only* with a second option: **Make it the Heading 1 default**. That is the honest route to changing the default, and it keeps the theme edit deliberate rather than accidental.\n\n**Substrate:** `nodeTypography()` already computes all of this — the resolved rung, the face, and the per-property overrides. It is read-only today by explicit design, on the grounds that offering an edit means writing the override. That reasoning inverts here: the override is the point, as long as it is *labelled*. The panel becomes editable and keeps its provenance rows.\n\n**Open:** revert is per-field. Is there a whole-element revert beyond the *Reset* in the bar, and does it clear only theme overrides or agent-set values too?"
+  },
+  {
+    "id": "note_nhd",
+    "x": 3040,
+    "y": 980,
+    "width": 1440,
+    "body": "### D · Resize squares + precise fields\n\nEight squares on the ring. Corners take both axes, edges take one, Shift holds proportions, Alt escapes the snap. Sizes land on the theme's spacing steps so dragging doesn't quietly scatter `w-[437px]` through the tree.\n\n**Drag and type are one setting.** The bottom-left scene is the point: the Width field is accented and focused at `472` while the box shows the same number. Dragging moves the field, typing moves the box, and either way Width flips from *Hug* to *Fixed* — visibly, so the mode change is never a surprise.\n\n**What this needs from the substrate** (none of it exists yet):\n\n- The selected node's rect in the parent canvas. The highlight is drawn *inside* the iframe today, so the parent never learns the box. The plumbing exists — `requestRects` / `nodeRects` / `iframeRectToBoard`, already used by comment pins — but selection isn't wired into it.\n- Rects that stay fresh. The runtime only answers a request; nothing re-reports on scroll or content change.\n- A frame-scoped selection. `Selection` is `{ screenId, path }` with no frame id, so a screen shown in two frames would draw two sets of squares.\n- Pointer forwarding for drags that start over iframe content.\n\n**Open:** dragging a height handle sets a fixed height, which is usually a mistake on a layout box. The chip says *Height stays Hug until you drag it* — should the vertical handles be harder to hit, or absent on auto-height nodes?"
+  },
+  {
+    "id": "note_nhi",
+    "x": 4560,
+    "y": 980,
+    "width": 1440,
+    "body": "### I · How the controls behave\n\n**Colour opens a picker, not a text field.** Named theme colours first as a swatch grid; a custom hex sits below a divider as the escape. The line underneath — *theme colours flip with dark mode, a custom one won't* — is the only place we explain that, and it belongs exactly here, at the moment someone is about to pick one.\n\n**Numbers are scrubbable.** Drag the field up or down, or press the arrow keys; typing still works. One step per theme spacing stop so a drag lands on the scale, Shift for fine steps. Same idea as the resize squares in D — a direct gesture and a precise field over one setting.\n\n**A generated image doesn't fit in a bar.** The prompt is a paragraph, so the bar shows the first few words and a expand affordance, and the real editing happens in a dialog: preview, the full prompt as a textarea, aspect and style, then Regenerate. Upload and Library sit alongside, because not every image is generated.\n\nThis is the general rule the image case exposes: **when a control needs more than a bar-width, the bar becomes the door, not the room.** Anything else that grows — a long text body, an icon browser — takes the same shape."
+  },
+  {
+    "id": "note_nhg",
+    "x": 6080,
+    "y": 980,
+    "width": 1440,
+    "body": "### G · Snippet instance selected\n\nClick a row and the ring is **violet**, not blue — a different kind of thing, so a different colour. The other five instances get a faint violet outline, so the count is visible before you change anything.\n\n**The bar edits the instance, not the snippet.** Those controls are the snippet's `params` — Customer, Plan, Status, MRR — and they belong to this row alone. The banner says so, because the outlines on the other five could easily be read as *these will change too*.\n\n**Edit snippet** is the door to H.\n\n**Substrate:** `findSnippetInstances(folder, snippetId)` already returns every location with a `hasOverride` flag, exposed at `GET /api/snippets/<id>/instances`. The count and the sibling outlines come from it. `SnippetInspector` already renders a list version of exactly this.\n\n**Open:** `$overrides` lets one instance diverge from the body. Does that show up here as a fourth control state — *changed on this instance* — reusing F's vocabulary? It probably should; it is the same idea one level down."
+  },
+  {
+    "id": "note_nhh",
+    "x": 7600,
+    "y": 980,
+    "width": 1440,
+    "body": "### H · Inside the snippet\n\nDouble-click and the page recedes to 40%: header, stats, and column labels dim, while **all six instances stay lit**. That is the whole idea in one image — the things that will change are the things you can still see.\n\nInside, nodes behave normally: the status pill takes a blue ring and blue squares, and the bar shows the usual contextual controls with F's theme/changed states intact. The violet chrome stays at the edges — the row outlines and the banner — so you always know which mode you are in.\n\n**Live, and said out loud.** *Changes apply to all 6 instances* plus a green pulse. Every keystroke lands on all six at once; there is no apply step and no per-instance confirmation. **Done** or Esc exits.\n\n**Substrate:** this is `screenId: \"snippet:<id>\"` — the virtual screen the mutation layer already understands, which is how `SnippetSubstitutions` and the instances walk work today. Editing the body is an ordinary screen mutation against that id, and the watcher's broadcast re-renders every instance. So the propagation is close to free; the mode, the dimming, and the double-click are the new work.\n\n**Open two things.** First, entering the mode from a nested selection — double-clicking a pill inside a row should probably land on the pill, not the row root. Second, what happens if you drag-resize inside the snippet: a fixed width on the body root would fight the six different contexts the instances sit in."
+  },
+  {
+    "id": "note_nhparked",
+    "x": 9120,
+    "y": 1400,
+    "width": 1440,
+    "body": "### Not taken\n\n**Today's pane** is the thing being replaced: six collapsible sections, a DevTools box model, and a raw class-chip list. Out go `display`, `flex-direction`, `justify`, `align`, `position`, the eight-input box model, and the class chips. The Tailwind parser under it (`tailwind-classes.ts`) survives untouched — it already projects a class string into a model, and only the UI above it changes.\n\n**A · tabbed bar** — predictable, but the tabs are chrome you must read before acting, and a two-property change costs a mode switch.\n\n**C · anchored panel** — fits every group at once with no modes, but the render shows the flaw: it sits on top of the Churn tile and half the table, which is exactly where you want to watch the change land.\n\nBoth are kept for the record. Neither is dead if B's curation problem turns out worse than expected — A is the fallback, since a fixed set of intents needs no per-component opinion."
+  }
+]

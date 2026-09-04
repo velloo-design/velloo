@@ -17,3 +17,6 @@ build
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Throwaway drive scripts for manual canvas verification
+.scratch/

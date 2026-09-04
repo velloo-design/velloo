@@ -1,0 +1,124 @@
+{
+  "id": "node-hud",
+  "name": "Node HUD — simplified editing",
+  "group": "canvas",
+  "frames": [
+    {
+      "id": "nh-b-1",
+      "screen": "nh-b-contextual",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "B · Contextual bar",
+      "group": "chosen"
+    },
+    {
+      "id": "nh-f-1",
+      "screen": "nh-f-defaults",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "F · Defaults and overrides",
+      "group": "chosen"
+    },
+    {
+      "id": "nh-d-1",
+      "screen": "nh-d-handles",
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "D · Resize + precise fields",
+      "group": "chosen"
+    },
+    {
+      "id": "nh-i-1",
+      "screen": "nh-i-controls",
+      "x": 4560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "I · How the controls behave",
+      "group": "chosen"
+    },
+    {
+      "id": "nh-g-1",
+      "screen": "nh-g-snippet",
+      "x": 6080,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "G · Snippet selected",
+      "group": "snippets"
+    },
+    {
+      "id": "nh-h-1",
+      "screen": "nh-h-snippet-edit",
+      "x": 7600,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "H · Inside the snippet",
+      "group": "snippets"
+    },
+    {
+      "id": "nh-today-1",
+      "screen": "baseline",
+      "x": 9120,
+      "y": 0,
+      "w": 360,
+      "h": 580,
+      "label": "Today · the node pane",
+      "group": "parked"
+    },
+    {
+      "id": "nh-today-2",
+      "screen": "tw-a1",
+      "x": 9560,
+      "y": 0,
+      "w": 360,
+      "h": 1290,
+      "label": "Today · Tailwind editor",
+      "group": "parked"
+    },
+    {
+      "id": "nh-a-1",
+      "screen": "nh-a-tabbed",
+      "x": 10000,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "A · Tabbed bar (not chosen)",
+      "group": "parked"
+    },
+    {
+      "id": "nh-c-1",
+      "screen": "nh-c-anchored",
+      "x": 11520,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "C · Anchored panel (not chosen)",
+      "group": "parked"
+    }
+  ],
+  "groups": [
+    {
+      "id": "chosen",
+      "name": "Chosen — contextual bar",
+      "color": "#8b5cf6"
+    },
+    {
+      "id": "snippets",
+      "name": "Snippets",
+      "color": "#0d9488"
+    },
+    {
+      "id": "parked",
+      "name": "Today, and what we didn't take",
+      "color": "#94a3b8"
+    }
+  ]
+}

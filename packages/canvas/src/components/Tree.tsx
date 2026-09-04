@@ -49,7 +49,12 @@ function nodeLabel(node: Node): string {
   if (isSnippetInstance(node)) return `@${node.$snippet}`;
   if (isParamRef(node)) return `\${${node.$param}}`;
   const rung = nodeRung(node);
-  return rung ? `${node.$ref} ${rung}` : node.$ref;
+  // A velloo screen is mostly `Box`, tagged by `as` — so the ref alone labels
+  // every row identically and the tree stops telling you anything. The tag is
+  // what distinguishes a heading from a cell.
+  const as = typeof node.props?.as === "string" ? node.props.as : null;
+  const base = as && as !== "div" ? `${node.$ref} ${as}` : node.$ref;
+  return rung ? `${base} ${rung}` : base;
 }
 
 function nodeChildren(node: Node): Node[] | undefined {

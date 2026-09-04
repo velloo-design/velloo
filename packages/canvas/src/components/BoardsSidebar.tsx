@@ -118,6 +118,14 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const currentScreen = useCanvas((s) =>
     currentScreenId ? (s.screens[currentScreenId] ?? null) : null,
   );
+  const snippetFocus = useCanvas((s) => s.snippetFocus);
+  const setSnippetFocus = useCanvas((s) => s.setSnippetFocus);
+  const focusedScreen = useCanvas((s) =>
+    s.snippetFocus ? (s.screens[`snippet:${s.snippetFocus}`] ?? null) : null,
+  );
+  // Editing a snippet in place scopes everything to its definition, and the
+  // tree is the one place you can reach a node the canvas doesn't show.
+  const treeScreen = focusedScreen ?? currentScreen;
   const currentBoard = useCanvas((s) =>
     currentBoardId ? (s.boards[currentBoardId] ?? null) : null,
   );
@@ -852,7 +860,21 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
               <ChevronDown size={12} strokeWidth={2.5} />
             )}
           </button>
-          {boardScreens.length > 1 ? (
+          {snippetFocus !== null ? (
+            <>
+              <span className="min-w-0 flex-1 truncate text-violet-500">
+                {focusedScreen?.name ?? snippetFocus}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSnippetFocus(null)}
+                className="shrink-0 normal-case tracking-normal hover:text-foreground"
+                title="Stop editing this snippet (Esc)"
+              >
+                Done
+              </button>
+            </>
+          ) : boardScreens.length > 1 ? (
             <Select
               value={currentScreenId ?? ""}
               onValueChange={(id) => {
@@ -885,8 +907,8 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             }
             aria-disabled={cursorMode === "hand"}
           >
-            {currentScreen ? (
-              <Tree key={currentScreen.id} screen={currentScreen} />
+            {treeScreen ? (
+              <Tree key={treeScreen.id} screen={treeScreen} />
             ) : (
               <div className="px-4 py-2 text-xs text-muted-foreground">
                 Pick a screen above to see its tree.

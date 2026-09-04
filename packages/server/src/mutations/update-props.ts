@@ -49,7 +49,7 @@ export async function updateProps(
       paths.push(resolved);
     }
 
-    yield* $(await commitScreen(ctx.folder, args.screenId, next));
+    yield* $(await commitScreen(ctx.folder, args.screenId, next, args.gesture));
     broadcastTreeChange(ctx, args.screenId);
     return { paths };
   });

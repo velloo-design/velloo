@@ -1,0 +1,109 @@
+{
+  "id": "nh-invoice-row",
+  "name": "Invoice row",
+  "params": [
+    {
+      "name": "customer",
+      "type": "string"
+    },
+    {
+      "name": "plan",
+      "type": "string"
+    },
+    {
+      "name": "status",
+      "type": "string"
+    },
+    {
+      "name": "mrr",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex items-center px-2 py-2.5 rounded-md border-b border-border"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "w-[320px]"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-sm font-medium text-foreground",
+              "children": {
+                "$param": "customer"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "w-[140px]"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-sm text-muted-foreground",
+              "children": {
+                "$param": "plan"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "w-[150px]"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "inline-flex items-center h-5 px-2 rounded-full border border-border text-[11px] font-medium bg-secondary text-secondary-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "children": {
+                    "$param": "status"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex-1 text-right"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-sm tabular-nums text-foreground",
+              "children": {
+                "$param": "mrr"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -10,11 +10,21 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
  * collapse into the first entry — so a stream of live edits (frame drag,
  * resize) becomes one undo step instead of one per pixel.
  *
+ * A write may also name the gesture it belongs to, which merges without any
+ * time limit: a scrub the user pauses mid-drag to look at is still one act,
+ * and only the client knows when the pointer went down and up.
+ *
  * One instance per design folder (carried on `DesignFolder.history`) so
  * parallel folders — and tests — never share stacks.
  */
 export type HistoryEntry =
-  | { kind: "screen"; screenId: string; screen: Screen | null; ts?: number | undefined }
+  | {
+      kind: "screen";
+      screenId: string;
+      screen: Screen | null;
+      coalesceKey?: string | undefined;
+      ts?: number | undefined;
+    }
   | { kind: "board"; boardId: string; board: Board | null; ts?: number }
   | {
       kind: "theme";
@@ -30,21 +40,31 @@ export type HistoryEntry =
       coalesceKey?: string;
       ts?: number;
     }
-  | { kind: "snippet"; snippetId: string; snippet: Snippet | null; ts?: number };
+  | {
+      kind: "snippet";
+      snippetId: string;
+      snippet: Snippet | null;
+      coalesceKey?: string | undefined;
+      ts?: number;
+    };
 
 const MAX = 50;
 const COALESCE_WINDOW_MS = 800;
 
 /** The identity two consecutive writes must share to merge. Null never merges. */
 function keyOf(e: HistoryEntry): string | null {
-  if (e.kind === "screen") return `screen:${e.screenId}`;
+  if (e.kind === "screen") return `screen:${e.screenId}${suffix(e.coalesceKey)}`;
   if (e.kind === "board") return `board:${e.boardId}`;
-  if (e.kind === "snippet") return `snippet:${e.snippetId}`;
+  if (e.kind === "snippet") return `snippet:${e.snippetId}${suffix(e.coalesceKey)}`;
   if (!e.coalesceKey) return null;
   // Scoped by name as well as control: merging two different theme files into
   // one entry would restore whichever the entry happens to name and silently
   // strand the other's edit.
   return `theme:${e.themeName}:${e.coalesceKey}`;
+}
+
+function suffix(coalesceKey: string | undefined): string {
+  return coalesceKey ? `:${coalesceKey}` : "";
 }
 
 export class HistoryManager {
@@ -56,7 +76,12 @@ export class HistoryManager {
     const stamped: HistoryEntry = { ...entry, ts: Date.now() };
     const top = this.undoStack[this.undoStack.length - 1];
     const key = keyOf(stamped);
-    if (key !== null && top?.ts && stamped.ts && stamped.ts - top.ts < COALESCE_WINDOW_MS) {
+    // A named gesture is bounded by the client's pointer, not by a clock, so
+    // it merges however long the user holds the drag still.
+    const named = entry.kind !== "board" && entry.coalesceKey !== undefined;
+    const inWindow =
+      top?.ts !== undefined && stamped.ts !== undefined && stamped.ts - top.ts < COALESCE_WINDOW_MS;
+    if (key !== null && top !== undefined && (named || inWindow)) {
       if (keyOf(top) === key) {
         top.ts = stamped.ts;
         this.redoStack.length = 0;

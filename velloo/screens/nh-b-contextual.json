@@ -1,0 +1,1372 @@
+{
+  "id": "nh-b-contextual",
+  "name": "B · Contextual bar (chosen)",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative h-[900px] overflow-hidden bg-muted/40 font-sans [background-image:radial-gradient(theme(colors.border)_1px,transparent_1px)] [background-size:22px_22px]"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "px-10 pt-9"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "block mb-1.5 text-[11px] text-muted-foreground",
+              "children": "Selected: a stat tile — the bar offers what a box can do, and nothing else"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "mx-auto w-[1080px] rounded-xl border border-border bg-background shadow-sm overflow-hidden"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center justify-between border-b border-border px-7 py-5"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-col gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": ""
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "h1",
+                              "className": "block text-xl font-semibold tracking-tight text-foreground",
+                              "children": "Billing"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "text-xs text-muted-foreground",
+                          "children": "Workspace usage and invoices"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 px-3 flex items-center rounded-md border border-input bg-background text-xs text-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "",
+                              "children": "Export"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 px-3 flex items-center rounded-md bg-primary text-xs font-medium text-primary-foreground"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "",
+                              "children": "New invoice"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "px-7 py-6 flex flex-col gap-6"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex gap-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex-1 rounded-lg border border-border bg-card px-4 py-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "block text-[11px] text-muted-foreground",
+                              "children": "Monthly revenue"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "block mt-1 text-2xl font-semibold tracking-tight text-foreground",
+                              "children": "$48,120"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "block mt-0.5 text-[11px] text-muted-foreground",
+                              "children": "+12.4% vs last month"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "relative rounded-md ring-2 ring-primary flex-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex-1 rounded-lg border border-border bg-card px-4 py-3"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block text-[11px] text-muted-foreground",
+                                  "children": "Active seats"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mt-1 text-2xl font-semibold tracking-tight text-foreground",
+                                  "children": "1,284"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mt-0.5 text-[11px] text-muted-foreground",
+                                  "children": "+38 this week"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute -top-5 left-0 h-4 px-1.5 flex items-center rounded bg-primary whitespace-nowrap"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "text-[10px] font-medium text-primary-foreground",
+                                  "children": "Stat tile"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary -top-1 -left-1"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary -top-1 left-1/2 -translate-x-1/2"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary -top-1 -right-1"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary top-1/2 -left-1 -translate-y-1/2"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary top-1/2 -right-1 -translate-y-1/2"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary -bottom-1 -left-1"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary -bottom-1 left-1/2 -translate-x-1/2"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "absolute size-2 rounded-[2px] border border-background shadow-sm bg-primary -bottom-1 -right-1"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex-1 rounded-lg border border-border bg-card px-4 py-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "block text-[11px] text-muted-foreground",
+                              "children": "Churn"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "block mt-1 text-2xl font-semibold tracking-tight text-foreground",
+                              "children": "1.9%"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "block mt-0.5 text-[11px] text-muted-foreground",
+                              "children": "−0.3% vs last month"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-col"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center px-2 pb-2.5 border-b border-border"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[320px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "text-[11px] text-muted-foreground",
+                                  "children": "Customer"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[140px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "text-[11px] text-muted-foreground",
+                                  "children": "Plan"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[150px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "text-[11px] text-muted-foreground",
+                                  "children": "Status"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex-1 text-right"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "text-[11px] text-muted-foreground",
+                                  "children": "MRR"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$snippet": "nh-invoice-row",
+                        "args": {
+                          "customer": "Northwind Traders",
+                          "plan": "Scale",
+                          "status": "Active",
+                          "mrr": "$1,200"
+                        }
+                      },
+                      {
+                        "$snippet": "nh-invoice-row",
+                        "args": {
+                          "customer": "Acme Corp",
+                          "plan": "Team",
+                          "status": "Active",
+                          "mrr": "$480"
+                        }
+                      },
+                      {
+                        "$snippet": "nh-invoice-row",
+                        "args": {
+                          "customer": "Globex",
+                          "plan": "Scale",
+                          "status": "Past due",
+                          "mrr": "$1,200"
+                        }
+                      },
+                      {
+                        "$snippet": "nh-invoice-row",
+                        "args": {
+                          "customer": "Initech",
+                          "plan": "Starter",
+                          "status": "Active",
+                          "mrr": "$120"
+                        }
+                      },
+                      {
+                        "$snippet": "nh-invoice-row",
+                        "args": {
+                          "customer": "Umbrella Co",
+                          "plan": "Team",
+                          "status": "Active",
+                          "mrr": "$480"
+                        }
+                      },
+                      {
+                        "$snippet": "nh-invoice-row",
+                        "$extraClassName": "border-b-0",
+                        "args": {
+                          "customer": "Soylent Inc",
+                          "plan": "Starter",
+                          "status": "Trialing",
+                          "mrr": "$0"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute bottom-0 left-0 right-0 flex flex-col items-center gap-4 pb-7"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-4 rounded-xl border border-border bg-card/95 px-3 py-2.5 shadow-xl backdrop-blur"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-2 shrink-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "size-7 grid place-items-center rounded-md bg-primary/10"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "frame",
+                          "size": 14,
+                          "className": "text-primary"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": ""
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block text-xs font-medium leading-tight text-foreground",
+                          "children": "Stat tile"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block text-[10px] leading-tight text-muted-foreground",
+                          "children": "selected"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Separator",
+                "props": {
+                  "className": "h-9 w-px"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-start gap-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "w-[104px] shrink-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                          "children": "Width"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-xs tabular-nums font-medium text-foreground truncate",
+                              "children": "Fill"
+                            }
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "chevrons-up-down",
+                              "size": 12,
+                              "className": "text-muted-foreground shrink-0"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "hidden"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "w-[92px] shrink-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                          "children": "Height"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-xs tabular-nums font-medium text-foreground truncate",
+                              "children": "Hug"
+                            }
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "chevrons-up-down",
+                              "size": 12,
+                              "className": "text-muted-foreground shrink-0"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "hidden"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "w-[74px] shrink-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                          "children": "Inside"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-xs tabular-nums font-medium text-foreground",
+                              "children": "16"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex flex-col -space-y-1 text-muted-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "chevron-up",
+                                  "size": 11
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "chevron-down",
+                                  "size": 11
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "hidden"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "w-[74px] shrink-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                          "children": "Between"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-xs tabular-nums font-medium text-foreground",
+                              "children": "4"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex flex-col -space-y-1 text-muted-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "chevron-up",
+                                  "size": 11
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "chevron-down",
+                                  "size": 11
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "hidden"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "w-[124px] shrink-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                          "children": "Background"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-1.5 min-w-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "size-4 rounded-[3px] border border-border shrink-0 bg-card"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "text-xs tabular-nums text-muted-foreground truncate",
+                                  "children": "Card"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "chevrons-up-down",
+                              "size": 12,
+                              "className": "text-muted-foreground shrink-0"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mt-1 text-[9px] leading-none text-muted-foreground/70",
+                          "children": "from theme"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "w-[92px] shrink-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                          "children": "Corners"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-xs tabular-nums text-muted-foreground truncate",
+                              "children": "Medium"
+                            }
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "chevrons-up-down",
+                              "size": 12,
+                              "className": "text-muted-foreground shrink-0"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "block mt-1 text-[9px] leading-none text-muted-foreground/70",
+                          "children": "from theme"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Separator",
+                "props": {
+                  "className": "h-9 w-px"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-1 shrink-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "size-7 grid place-items-center rounded-md text-muted-foreground hover:bg-muted"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "rotate-ccw",
+                          "size": 13
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "size-7 grid place-items-center rounded-md text-muted-foreground hover:bg-muted"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "x",
+                          "size": 13
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-end justify-center gap-6 pt-1"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-col items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-4 rounded-xl border border-border bg-card/95 px-3 py-2.5 shadow-xl backdrop-blur"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center gap-2 shrink-0"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "size-7 grid place-items-center rounded-md bg-primary/10"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "type",
+                                  "size": 14,
+                                  "className": "text-primary"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": ""
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block text-xs font-medium leading-tight text-foreground",
+                                  "children": "Heading"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block text-[10px] leading-tight text-muted-foreground",
+                                  "children": "Heading 1"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Separator",
+                        "props": {
+                          "className": "h-8 w-px"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-start gap-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[100px] shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                                  "children": "Font"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "text-xs tabular-nums text-muted-foreground truncate",
+                                      "children": "Inter"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "chevrons-up-down",
+                                      "size": 12,
+                                      "className": "text-muted-foreground shrink-0"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mt-1 text-[9px] leading-none text-muted-foreground/70",
+                                  "children": "Heading 1"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[80px] shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex items-center gap-1 mb-1"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "size-1.5 rounded-full bg-primary"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "text-[10px] leading-none font-medium text-foreground",
+                                      "children": "Size"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-primary/50 bg-primary/5 justify-between"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "text-xs tabular-nums font-medium text-foreground",
+                                      "children": "36"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "size-4 grid place-items-center rounded shrink-0 hover:bg-primary/10"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "props": {
+                                          "name": "rotate-ccw",
+                                          "size": 10,
+                                          "className": "text-primary"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mt-1 text-[9px] leading-none text-primary",
+                                  "children": "was 32"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[132px] shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                                  "children": "Color"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "className": "flex items-center gap-1.5 min-w-0"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "className": "size-4 rounded-[3px] border border-border shrink-0 bg-foreground"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "as": "span",
+                                          "className": "text-xs tabular-nums text-muted-foreground truncate",
+                                          "children": "Foreground"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "chevrons-up-down",
+                                      "size": 12,
+                                      "className": "text-muted-foreground shrink-0"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mt-1 text-[9px] leading-none text-muted-foreground/70",
+                                  "children": "Heading 1"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-[11px] text-muted-foreground",
+                      "children": "a heading — with one value changed"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-col items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-4 rounded-xl border border-border bg-card/95 px-3 py-2.5 shadow-xl backdrop-blur"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-center gap-2 shrink-0"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "size-7 grid place-items-center rounded-md bg-violet-500/10",
+                              "data-accent": "ok"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "component",
+                                  "size": 14,
+                                  "className": "text-violet-600 dark:text-violet-300"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": ""
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block text-xs font-medium leading-tight text-foreground",
+                                  "children": "Customer row"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "block",
+                                  "data-accent": "ok"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "text-[10px] leading-tight text-violet-600 dark:text-violet-300",
+                                      "children": "snippet · 1 of 6"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Separator",
+                        "props": {
+                          "className": "h-8 w-px"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex items-start gap-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[124px] shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                                  "children": "Customer"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "text-xs tabular-nums font-medium text-foreground truncate",
+                                      "children": "Globex"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "chevrons-up-down",
+                                      "size": 12,
+                                      "className": "text-muted-foreground shrink-0"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "hidden"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "w-[104px] shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "block mb-1 text-[10px] leading-none text-muted-foreground",
+                                  "children": "Status"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "h-8 flex items-center gap-1.5 px-2 rounded-md border border-input bg-background justify-between"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "text-xs tabular-nums font-medium text-foreground truncate",
+                                      "children": "Past due"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "chevrons-up-down",
+                                      "size": 12,
+                                      "className": "text-muted-foreground shrink-0"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "hidden"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Separator",
+                        "props": {
+                          "className": "h-8 w-px"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "h-8 px-2.5 flex items-center gap-1.5 rounded-md border border-violet-500/40 bg-violet-500/10 shrink-0",
+                          "data-accent": "ok"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "pencil",
+                              "size": 12,
+                              "className": "text-violet-600 dark:text-violet-300"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "text-[11px] font-medium text-violet-600 dark:text-violet-300",
+                              "children": "Edit snippet"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "text-[11px] text-muted-foreground",
+                      "children": "a snippet instance — violet, with a way in"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

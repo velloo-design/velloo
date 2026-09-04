@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { StyleObjectEditor } from "../StyleObjectEditor.tsx";
 import { SxStyleEditor } from "../SxStyleEditor.tsx";
-import { TailwindStyleEditor } from "../TailwindStyleEditor.tsx";
 
 const common = { screenId: "s", path: "0", debounceMs: 200 };
 
@@ -10,24 +9,11 @@ const common = { screenId: "s", path: "0", debounceMs: 200 };
  * Server-render each editor with a realistic value and assert it produces markup
  * — exercising the whole control tree (the engines, the section/field/box-model
  * primitives, lucide icons) for runtime errors that typecheck can't see.
+ *
+ * Only the object channels are here: a Tailwind folder is styled from the HUD
+ * over the canvas now, and its editor is gone.
  */
 describe("style editors render", () => {
-  test("TailwindStyleEditor", () => {
-    const html = renderToStaticMarkup(
-      <TailwindStyleEditor
-        {...common}
-        initialValue="flex items-center justify-between gap-2 p-4 bg-card rounded-lg border border-border text-sm font-medium md:flex-row shadow-sm"
-      />,
-    );
-    expect(html).toContain("Layout");
-    expect(html).toContain("Spacing");
-    expect(html).toContain("Typography");
-    expect(html).toContain("Classes");
-    // the modeled classes plus the preserved variant/extra show as chips
-    expect(html).toContain("md:flex-row");
-    expect(html).toContain("shadow-sm");
-  });
-
   test("SxStyleEditor", () => {
     const html = renderToStaticMarkup(
       <SxStyleEditor

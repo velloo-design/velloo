@@ -1,4 +1,4 @@
-import type { Frame as FrameT, ViewportPreset } from "@velloo/schema";
+import { type Frame as FrameT, isSnippetInstance, type ViewportPreset } from "@velloo/schema";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { mutate } from "../api.ts";
 import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
@@ -38,6 +38,17 @@ interface FrameProps {
 }
 
 /**
+ * A snippet instance selects as a different kind of thing than an ordinary
+ * node — editing it moves every other instance — so the ring is a different
+ * colour. Every send of `applyHighlight` for a selection must carry this;
+ * the runtime clears the attribute on each apply.
+ */
+function selectionKindOf(s: CanvasState, screenId: string): "node" | "snippet" {
+  const picked = s.selection?.screenId === screenId ? selectedNode(s.screens, s.selection) : null;
+  return picked !== null && isSnippetInstance(picked) ? "snippet" : "node";
+}
+
+/**
  * One placement on the Board: an iframe at the frame's chosen size, rendering
  * the referenced screen. Grab the header to drag; pull the edge handles to
  * resize. Resize clamps against neighboring frames so they never overlap.
@@ -69,6 +80,7 @@ export const Frame = memo(function Frame({
   const screenRev = useCanvas((s) => s.screenVersions[frame.screen] ?? 0);
   const themeVersion = useCanvas((s) => s.themeVersion);
   const selection = useCanvas((s) => s.selection);
+  const snippetFocus = useCanvas((s) => s.snippetFocus);
   const hover = useCanvas((s) => s.hover);
   const reveal = useCanvas((s) => s.reveal);
   const nodeState = useCanvas((s) => s.nodeState);
@@ -98,10 +110,19 @@ export const Frame = memo(function Frame({
   const x = draftPos?.x ?? frame.x;
   const y = draftPos?.y ?? frame.y;
   const hasScreen = Boolean(screen);
-  const anchoredPaths = useMemo(
-    () => anchoredNodePaths({ commentThreads, notes, annotations }, frame.id, frame.screen),
-    [commentThreads, notes, annotations, frame.id, frame.screen],
-  );
+  // The selected node joins the anchored set: the HUD's resize handles are
+  // parent-side chrome and need its box, which only the iframe can measure.
+  const selectedPath = selection?.screenId === frame.screen ? selection.path : null;
+  const selectionKind = useCanvas((s) => selectionKindOf(s, frame.screen));
+  const anchoredPaths = useMemo(() => {
+    const paths = anchoredNodePaths({ commentThreads, notes, annotations }, frame.id, frame.screen);
+    if (selectedPath !== null && !paths.includes(selectedPath)) paths.push(selectedPath);
+    return paths;
+  }, [commentThreads, notes, annotations, frame.id, frame.screen, selectedPath]);
+  // Scroll reports arrive on a channel built once per frame, so the handler
+  // can't close over the current paths — it reads them from here instead.
+  const anchoredPathsRef = useRef(anchoredPaths);
+  anchoredPathsRef.current = anchoredPaths;
 
   // The iframe src embeds only *committed* frame size — draft (mid-drag)
   // sizes stretch the element visually via width/height styling, so a resize
@@ -204,12 +225,22 @@ export const Frame = memo(function Frame({
     const iframe = frontRef.current;
     if (!iframe) return;
     const channel = new IframeChannel(iframe, {
-      onSelect(path) {
+      onSelect(path, snippetPath) {
         if (path === null) {
           setSelection(null);
           return;
         }
         const state = useCanvas.getState();
+        // Editing a snippet in place: the click addresses the definition, so
+        // the selection points at the synthetic `snippet:<id>` screen and every
+        // instance follows the edit.
+        if (state.snippetFocus !== null) {
+          // Only the focused snippet is editable while the mode is open;
+          // anything else is dimmed scenery, so clicking it just deselects.
+          if (snippetPath === undefined) setSelection(null);
+          else setSelection({ screenId: `snippet:${state.snippetFocus}`, path: snippetPath });
+          return;
+        }
         if (state.cursorMode === "note") {
           const node = selectedNode(state.screens, { screenId: frame.screen, path });
           if (!node) return;
@@ -246,9 +277,29 @@ export const Frame = memo(function Frame({
         }
         setSelection({ screenId: frame.screen, path });
       },
-      onHover(path) {
+      onHover(path, snippetPath) {
+        const focus = useCanvas.getState().snippetFocus;
         if (path === null) setHover(null);
-        else setHover({ screenId: frame.screen, path });
+        else if (focus !== null) {
+          // Nothing outside the focused snippet is editable, so nothing
+          // outside it lights up under the cursor either.
+          if (snippetPath === undefined) setHover(null);
+          else setHover({ screenId: `snippet:${focus}`, path: snippetPath });
+        } else setHover({ screenId: frame.screen, path });
+      },
+      // Double-click on an instance opens the snippet up for editing in place.
+      // On anything else it's a no-op — there is nothing further to open.
+      onEnter(_path, snippetId) {
+        if (snippetId === undefined) return;
+        useCanvas.getState().setSnippetFocus(snippetId);
+      },
+      onExit() {
+        useCanvas.getState().setSnippetFocus(null);
+      },
+      // Keyboard focus lives in the iframe once a node is clicked, so the
+      // canvas's own shortcuts only reach it by way of this replay.
+      onKey(init) {
+        window.dispatchEvent(new KeyboardEvent("keydown", init));
       },
       onRects(rects) {
         setNodeRects(frame.id, rects);
@@ -260,9 +311,19 @@ export const Frame = memo(function Frame({
       // re-request annotation rects so anchors track the fresh layout.
       onScrollPos(sx, sy) {
         savedScrollRef.current = { x: sx, y: sy };
+        // Rects are viewport-relative, so scrolling invalidates every anchor —
+        // pins, connectors and the selection handles alike.
+        const paths = anchoredPathsRef.current;
+        if (paths.length > 0) channel.send({ type: "requestRects", paths });
       },
       onReady() {
         const s = useCanvas.getState();
+        if (s.snippetFocus !== null) {
+          channel.send({ type: "applySnippetFocus", snippetId: s.snippetFocus });
+          if (s.selection?.screenId === `snippet:${s.snippetFocus}`) {
+            channel.send({ type: "applyHighlight", path: "", snippetPath: s.selection.path });
+          }
+        }
         // Restore the pre-reload scroll offset — unless a reveal jump is
         // pending for this screen, whose scrollIntoView must win.
         const revealPending = s.reveal?.screenId === frame.screen;
@@ -276,6 +337,7 @@ export const Frame = memo(function Frame({
           channel.send({
             type: "applyHighlight",
             path: s.selection.path,
+            kind: selectionKindOf(s, frame.screen),
             ...(scroll ? { scroll } : {}),
           });
         }
@@ -361,11 +423,20 @@ export const Frame = memo(function Frame({
     const channel = channelRef.current;
     if (!channel) return;
     if (selection?.screenId === frame.screen) {
-      channel.send({ type: "applyHighlight", path: selection.path });
+      channel.send({ type: "applyHighlight", path: selection.path, kind: selectionKind });
+    } else if (snippetFocus !== null && selection?.screenId === `snippet:${snippetFocus}`) {
+      // A definition path lights up in every instance at once.
+      channel.send({ type: "applyHighlight", path: "", snippetPath: selection.path });
     } else {
       channel.send({ type: "clearHighlight" });
     }
-  }, [selection, frame.screen]);
+  }, [selection, selectionKind, snippetFocus, frame.screen]);
+
+  // Scope the screen to one snippet — everything else dims and clicks inside
+  // instances start addressing the definition.
+  useEffect(() => {
+    channelRef.current?.send({ type: "applySnippetFocus", snippetId: snippetFocus });
+  }, [snippetFocus]);
 
   // Comment and note mode need a pick-target cursor *inside* the iframe —
   // parent CSS can't style cross-document content, so inject a style tag
@@ -465,9 +536,14 @@ export const Frame = memo(function Frame({
     if (!channel || !activityFlash || activityFlash.path === null) return;
     channel.send({ type: "applyHighlight", path: activityFlash.path });
     const timer = setTimeout(() => {
-      const sel = useCanvas.getState().selection;
+      const s = useCanvas.getState();
+      const sel = s.selection;
       if (sel?.screenId === frame.screen) {
-        channel.send({ type: "applyHighlight", path: sel.path });
+        channel.send({
+          type: "applyHighlight",
+          path: sel.path,
+          kind: selectionKindOf(s, frame.screen),
+        });
       } else {
         channel.send({ type: "clearHighlight" });
       }
@@ -501,10 +577,12 @@ export const Frame = memo(function Frame({
     if (!channel) return;
     if (hover?.screenId === frame.screen) {
       channel.send({ type: "applyHover", path: hover.path });
+    } else if (snippetFocus !== null && hover?.screenId === `snippet:${snippetFocus}`) {
+      channel.send({ type: "applyHover", path: "", snippetPath: hover.path });
     } else {
       channel.send({ type: "clearHover" });
     }
-  }, [hover, frame.screen]);
+  }, [hover, snippetFocus, frame.screen]);
 
   // Force-state preview: when a node on this screen is selected and the
   // Inspector's State dropdown is off "default", drive the iframe to pin that

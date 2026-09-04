@@ -75,10 +75,13 @@ export function connectWs(): () => void {
       } else if (payload.type === "snippet-changed") {
         void refreshDesignSummary();
         if (currentScreenId) void refreshScreen(currentScreenId);
-        // If the snippet currently open in the editor view is the one
-        // that changed, re-pull the body into its synthetic screen.
-        const editingId = useCanvas.getState().editingSnippetId;
-        if (editingId === payload.snippetId) {
+        // Re-pull the body into its synthetic screen when this snippet is the
+        // one being edited — either in the editor view, or in place on a board.
+        const state = useCanvas.getState();
+        if (
+          state.editingSnippetId === payload.snippetId ||
+          state.snippetFocus === payload.snippetId
+        ) {
           void (async () => {
             const { fetchSnippet } = await import("./api.ts");
             try {

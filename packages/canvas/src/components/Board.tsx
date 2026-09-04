@@ -4,6 +4,8 @@ import { fitToContent, wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts
 import { useCanvas } from "../store.ts";
 import { CommentPinsLayer } from "./CommentPinsLayer.tsx";
 import { Frame } from "./Frame.tsx";
+import { NodeHud } from "./hud/NodeHud.tsx";
+import { SelectionLayer } from "./hud/SelectionLayer.tsx";
 import { NotesLayer } from "./NotesLayer.tsx";
 import { PendingCommentComposer } from "./PendingCommentComposer.tsx";
 
@@ -284,7 +286,9 @@ export function Board({ board }: BoardProps) {
         <NotesLayer />
         <PendingCommentComposer />
         <CommentPinsLayer />
+        <SelectionLayer />
       </BoardWorld>
+      <NodeHud />
     </div>
   );
 }

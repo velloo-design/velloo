@@ -9,6 +9,8 @@ export interface ApplyClassesArgs {
   path: Locator;
   /** Whitespace-separated Tailwind classes; replaces existing className. */
   classes: string;
+  /** The drag this write belongs to, so the whole drag is one undo step. */
+  gesture?: string | undefined;
 }
 
 export async function applyClasses(
@@ -19,5 +21,6 @@ export async function applyClasses(
   return updateProps(ctx, {
     screenId: args.screenId,
     patches: [{ path: args.path, propPatch: { className: className === "" ? null : className } }],
+    gesture: args.gesture,
   });
 }
