@@ -3,7 +3,6 @@ import { join } from "node:path";
 import {
   type CatalogEntry,
   type FrameworkAdapter,
-  type InstallCtx,
   type Manifest,
   TAILWIND_CLASSNAME,
 } from "@velloo/provider";
@@ -13,7 +12,7 @@ import {
   registry as snapshotRegistry,
   snapshotVersion,
 } from "@velloo/shadcn-snapshot";
-import { installedAddNames, runShadcnAdd, shadcnAddName } from "./install.ts";
+import { installedAddNames, shadcnAddName } from "./install.ts";
 import { readManifest } from "./manifest.ts";
 
 /**
@@ -50,9 +49,8 @@ export interface CreateUpstreamProviderOptions {
   /** Version string for the provider's `version` field — defaults to the snapshot's date. */
   version?: string;
   /**
-   * Absolute path to the user's app — where `install_component` runs the
-   * shadcn CLI and where installed-status is read from. Absent ⇒ the catalog
-   * reports nothing installed and installs error with guidance.
+   * Absolute path to the user's app, used only to report which components are
+   * already installed there. Design composition never writes to this path.
    */
   hostAppRoot?: string;
 }
@@ -82,12 +80,8 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
     label: `shadcn (upstream @ ${version})`,
     styleChannel: TAILWIND_CLASSNAME,
     styleChannels: ["tailwind-classname"],
-    // The base instructions are already shadcn-shaped; the one thing worth
-    // framing is that components land in the USER'S APP on demand.
     mcpIntro: () => [
       '**This folder targets shadcn/ui with Tailwind.** Components come from a pinned shadcn snapshot plus the velloo helpers (`Box` for layout, `Heading`/`Text`, `Icon`, `Image`, `Gradient`, `Layer`, `SVG`, `Divider`, `Placeholder`, `Prose`). Style through `update_props { style: "flex gap-4 p-6" }` — a Tailwind className string. Call `list_components` for the full set and per-component `example` props.',
-      "",
-      "**Installing components into the app**: this folder's shadcn components render on the canvas from velloo's built-in runtime, but the user's app only contains what has been installed. When the design uses a component the app doesn't have yet (or you're about to emit code that imports one), call `install_component { componentId }` — it runs the official `npx shadcn@latest add` in the host app and reports the import path. `install_component` also answers installed-status for any component id.",
       "",
     ],
     // Real installed-status per catalog() call: a component's shadcn family
@@ -105,21 +99,6 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
           importPath: `@/components/ui/${addName}`,
         };
       });
-    },
-    installComponent: async (id: string, ctx: InstallCtx): Promise<void> => {
-      const manifest = await loadManifest();
-      const known = manifest.some((c) => c.source !== "velloo" && c.id === id);
-      if (!known) {
-        throw new Error(`"${id}" is not a shadcn component in this library's catalog.`);
-      }
-      const appRoot = ctx.hostAppRoot ?? hostAppRoot;
-      if (!appRoot || !existsSync(appRoot)) {
-        throw new Error(
-          "No host app to install into — set `hostApp.root` in .design/config.json " +
-            "(or re-run `velloo init` inside your app) so shadcn components can be added to it.",
-        );
-      }
-      await runShadcnAdd({ hostAppRoot: appRoot, addName: shadcnAddName(id) });
     },
   };
 }

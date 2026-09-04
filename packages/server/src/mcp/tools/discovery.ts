@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ComponentDescriptor, Manifest } from "@velloo/provider";
+import type { ComponentDescriptor, FrameworkAdapter, Manifest } from "@velloo/provider";
 import {
   DEFAULT_TYPESET_NAME,
   isComponentNode,
@@ -221,7 +221,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List the available components — library entries first, then registered extensions. `mode: "summary"` (default) returns id/source/category/prop-names; `"full"` returns complete descriptors with a worked example. `filter` substring-matches ids; `kind` narrows to library or extension. Extensions are the user\'s own components and shadow library entries with the same id.',
+        'List everything immediately available to design composition — library entries first, then registered extensions. `mode: "summary"` (default) returns id/source/category/prop-names; `"full"` returns complete descriptors with a worked example. `installedInApp` is host-app status only; a false value does not block design, and `emit_code.componentsToInstall` carries the later handoff plan. `filter` substring-matches ids; `kind` narrows to library or extension. Extensions shadow library entries with the same id.',
       outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
@@ -231,7 +231,20 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     },
     async ({ filter, mode, kind }) => {
       const manifest = await loadManifestForCtx(ctx);
-      const libraryEntries = manifest.map((c) => ({ ...c, kind: "library" as const }));
+      const provider = ctx.defaultProvider as FrameworkAdapter;
+      const catalog = provider.catalog ? await provider.catalog().catch(() => []) : [];
+      const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
+      const libraryEntries = manifest.map((c) => {
+        const status = catalogById.get(c.id);
+        return {
+          ...c,
+          kind: "library" as const,
+          availableInDesign: c.id in provider.registry,
+          ...(status
+            ? { installedInApp: status.installed, importPath: status.importPath }
+            : { installedInApp: true }),
+        };
+      });
       const extensions = ctx.folder.config.extensions ?? {};
       const extensionEntries = Object.entries(extensions).map(([id, ext]) => ({
         id,
@@ -241,6 +254,8 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         designModeNotes: ext.description,
         kind: "extension" as const,
         importPath: ext.importPath,
+        availableInDesign: true,
+        installedInApp: true,
       }));
       const all =
         kind === "library"
@@ -262,6 +277,8 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
               return {
                 ...summary,
                 kind: c.kind,
+                availableInDesign: c.availableInDesign,
+                installedInApp: c.installedInApp,
                 ...("importPath" in c ? { importPath: c.importPath } : {}),
               };
             });

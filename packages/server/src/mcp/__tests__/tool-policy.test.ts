@@ -12,7 +12,6 @@ import { applyToolPolicy, TOOL_ANNOTATIONS } from "../tool-policy.ts";
 import { registerAssetTools } from "../tools/assets.ts";
 import { registerBatchTool } from "../tools/batch.ts";
 import { registerCaptureTools } from "../tools/captures.ts";
-import { registerCatalogTools } from "../tools/catalog.ts";
 import { registerCommentTools } from "../tools/comments.ts";
 import { registerDiscoveryTools } from "../tools/discovery.ts";
 import { registerEmitTools } from "../tools/emit.ts";
@@ -24,7 +23,6 @@ import { registerMutationTools } from "../tools/mutations.ts";
 import { registerNoteTools } from "../tools/notes.ts";
 import { registerScreenshotTool } from "../tools/screenshot.ts";
 import { registerThemeTools } from "../tools/theme.ts";
-import { registerValidateTools } from "../tools/validate.ts";
 
 /**
  * The guard the deleted tool-family table never had. That table went on naming
@@ -53,9 +51,7 @@ const NO_INVOKE = new Set([
   "start_capture_session",
   "generate_asset",
   "send_feedback",
-  "install_component",
   "emit_theme",
-  "validate_classes",
 ]);
 
 beforeAll(async () => {
@@ -115,9 +111,7 @@ beforeAll(async () => {
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
   registerScreenshotTool(mcp, ctx, stub(), stub(), stub());
-  registerValidateTools(mcp, ctx, stub());
   registerExtensionTools(mcp, ctx);
-  registerCatalogTools(mcp, ctx);
   registerNoteTools(mcp, ctx);
   registerAssetTools(mcp, ctx);
   registerBatchTool(mcp, ctx);
@@ -144,6 +138,7 @@ describe("tool annotations", () => {
 
   test("the table names exactly the registered tools — no strays, no gaps", () => {
     expect(Object.keys(TOOL_ANNOTATIONS).sort()).toEqual(tools.map((t) => t.name).sort());
+    expect(tools.map((tool) => tool.name)).not.toContain("install_component");
   });
 
   test("read-only tools are the ones that cannot change the folder", () => {
@@ -153,7 +148,7 @@ describe("tool annotations", () => {
     const mutatingVerb =
       /^(add|update|remove|set|move|import|upload|install|reorder|instantiate|generate|send|start|batch)/;
     expect(readOnly.filter((n) => mutatingVerb.test(n))).toEqual([]);
-    expect(readOnly.length).toBeGreaterThan(20);
+    expect(readOnly.length).toBeGreaterThan(18);
   });
 
   test("a destructive tool never also claims to be read-only", () => {
@@ -172,13 +167,7 @@ describe("output schemas", () => {
       .filter((t) => t.outputSchema !== undefined)
       .map((t) => t.name)
       .sort();
-    expect(declared).toEqual([
-      "audit",
-      "compare_to_url",
-      "emit_code",
-      "find_nodes",
-      "list_components",
-    ]);
+    expect(declared).toEqual(["compare_to_url", "emit_code", "find_nodes", "list_components"]);
   });
 
   test("a declared tool returns structuredContent that validates", async () => {
@@ -190,6 +179,21 @@ describe("output schemas", () => {
     // so reaching here at all is the assertion; the shape check is the detail.
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toMatchObject({ total: expect.any(Number) });
+
+    const components = await client.callTool({
+      name: "list_components",
+      arguments: { mode: "summary" },
+    });
+    expect(components.isError).toBeUndefined();
+    expect(components.structuredContent).toMatchObject({
+      components: expect.arrayContaining([
+        expect.objectContaining({
+          id: "Box",
+          availableInDesign: true,
+          installedInApp: true,
+        }),
+      ]),
+    });
   });
 });
 

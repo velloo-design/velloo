@@ -1,14 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { themeByName } from "../../design-folder.ts";
-import {
-  auditSnippet,
-  darkModeAudit,
-  findNodes,
-  inspect,
-  type MutationContext,
-} from "../../mutations/index.ts";
-import { AuditOutput, FindNodesOutput } from "./outputs.ts";
+import { findNodes, inspect, type MutationContext } from "../../mutations/index.ts";
+import { FindNodesOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
 
@@ -55,47 +48,6 @@ export function registerInspectTool(mcp: McpServer, ctx: MutationContext): void 
     async (args) => {
       const result = await findNodes(ctx, args);
       return result.ok ? structuredResult({ ...result.value }) : errorResult(result.error);
-    },
-  );
-
-  mcp.registerTool(
-    "audit",
-    {
-      description:
-        "Dark-mode audit for a screen (screenId) or snippet body (snippetId) — exactly one. Flags color classes that won't theme-flip; structural utilities exempt; set data-accent on a node to exempt it. Pass theme to evaluate against a named theme.",
-      outputSchema: AuditOutput,
-      inputSchema: {
-        screenId: z.string().optional(),
-        snippetId: z.string().optional(),
-        theme: z.string().optional().describe("Named theme context (boards pin one)"),
-      },
-    },
-    async ({ screenId, snippetId, theme }) => {
-      if ((screenId === undefined) === (snippetId === undefined)) {
-        return errorResult({
-          kind: "BadRequest",
-          message: "audit: pass exactly one of screenId or snippetId.",
-        });
-      }
-      const result =
-        screenId !== undefined
-          ? await darkModeAudit(ctx, { screenId })
-          : await auditSnippet(ctx, { snippetId: snippetId as string });
-      if (result.ok) {
-        const resolved = themeByName(ctx.folder, theme);
-        const hasDarkVariant = resolved.colorsDark !== undefined;
-        const themeInfo = {
-          theme: theme ?? "default",
-          hasDarkVariant,
-          ...(hasDarkVariant
-            ? {}
-            : {
-                note: `theme "${theme ?? "default"}" declares no colorsDark block — semantic tokens render identically in both modes, so dark-mode coverage here is informational only`,
-              }),
-        };
-        return structuredResult({ ...result.value, themeInfo });
-      }
-      return errorResult(result.error);
     },
   );
 }

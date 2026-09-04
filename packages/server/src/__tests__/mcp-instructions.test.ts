@@ -3,6 +3,7 @@ import { createProvider as createAntdProvider } from "@velloo/provider-antd";
 import { createProvider as createChakraProvider } from "@velloo/provider-chakra";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
+import { createProvider as createShadcnProvider } from "@velloo/provider-shadcn-upstream";
 import { buildInstructions } from "../mcp/server.ts";
 
 /** Resolve an adapter's intro the way buildMcpServer does. */
@@ -12,12 +13,11 @@ const introOf = (
 ): readonly string[] => p.mcpIntro?.(channel) ?? [];
 
 describe("buildInstructions", () => {
-  test("points at the guides that carry the detail it deliberately omits", () => {
+  test("points at the advertised guide resources without duplicating their catalogue", () => {
     const text = buildInstructions(false);
-    // The brief is only useful if the agent knows where the rest lives.
-    for (const slug of ["components", "snippets", "theme", "boards", "verification", "porting"]) {
-      expect(text).toContain(`velloo://guide/${slug}`);
-    }
+    expect(text).toContain("advertised `velloo://guide/*` resources");
+    expect(text).not.toContain("velloo://guide/components");
+    expect(text).not.toContain("velloo://guide/porting");
   });
 
   test("omits the feedback paragraph when feedback is disabled", () => {
@@ -61,6 +61,17 @@ describe("buildInstructions", () => {
     expect(leads(mui, "Material UI")).toBe(true);
     // The neutral base must not assert a component library of its own.
     expect(mui).not.toContain("pinned shadcn snapshot");
+  });
+
+  test("shadcn guidance never asks the agent to mutate the host app", () => {
+    const shadcn = buildInstructions(
+      false,
+      undefined,
+      introOf(createShadcnProvider(), "tailwind-classname"),
+    );
+    expect(shadcn).toContain("pinned shadcn snapshot");
+    expect(shadcn).not.toContain("install_component");
+    expect(shadcn).not.toContain("npx shadcn");
   });
 
   test("an antd (style) folder is framed for Ant Design + inline styles", () => {
@@ -110,17 +121,18 @@ describe("buildInstructions", () => {
   test("surfaces open visual feedback as one line when the count is positive", () => {
     const text = buildInstructions(false, undefined, [], 3);
     expect(text).toContain(
-      "**3 open visual feedback threads are waiting on you** — read them with `list_comment_threads` and address them.",
+      "**3 open visual feedback threads are waiting on you.** Read them with `list_comment_threads`, make the requested changes, then reply and resolve with `update_comment_thread`.",
     );
   });
 
   test("the waiting-comments line reads correctly for a single comment", () => {
     const text = buildInstructions(false, undefined, [], 1);
-    expect(text).toContain("**1 open visual feedback thread is waiting on you**");
+    expect(text).toContain("**1 open visual feedback thread is waiting on you.**");
   });
 
   test("omits the waiting-comments line at zero (and by default)", () => {
     expect(buildInstructions(false)).not.toContain("feedback thread is waiting");
     expect(buildInstructions(false, undefined, [], 0)).not.toContain("feedback thread is waiting");
+    expect(buildInstructions(false)).not.toContain("list_comment_threads");
   });
 });

@@ -21,6 +21,7 @@ import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolve as resolveLocator } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { diagnosticsForScreen } from "../diagnostics.ts";
 import { errorResult, type McpResult } from "./result.ts";
 import { PathSchema, RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
@@ -81,7 +82,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        "Render a screen to PNG. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. The render uses its OWN viewport, not the board frame's, so `framesShorterThanContent` names placements that clip below the fold — resize them with `update_frame`. Guide: velloo://guide/verification.",
+        "Render a screen to PNG and run full class/theme diagnostics. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. The render uses its OWN viewport, not the board frame's, so `framesShorterThanContent` names placements that clip below the fold — resize them with `update_frame`. Guide: velloo://guide/verification.",
       inputSchema: {
         screenId: z.string(),
         viewport: ViewportSchema.optional().describe(
@@ -103,6 +104,11 @@ export function registerScreenshotCaptureTool(
     async ({ screenId, viewport: vp, mode, fullPage, scale, path, theme, diff, resetBaseline }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
+      const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+      const withDiagnostics = <T extends object>(value: T): T & { diagnostics?: unknown } => ({
+        ...value,
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      });
 
       const resolvedMode = resolveScreenshotMode(ctx.folder, screenId, mode);
       if (!resolvedMode.ok) return errorResult(resolvedMode.message);
@@ -175,7 +181,10 @@ export function registerScreenshotCaptureTool(
           if (!baseline || resetBaseline) {
             return {
               content: [
-                { type: "text", text: JSON.stringify({ diff: { baseline: "established" } }) },
+                {
+                  type: "text",
+                  text: JSON.stringify(withDiagnostics({ diff: { baseline: "established" } })),
+                },
                 { type: "image", data: capture.png.toString("base64"), mimeType: "image/png" },
               ],
             };
@@ -187,7 +196,7 @@ export function registerScreenshotCaptureTool(
             ...r,
             node: regionNode(r, capture.nodeRects, scaleFactor, screen),
           }));
-          const summary = {
+          const summary = withDiagnostics({
             diff: {
               changedRatio: Number(result.changedRatio.toFixed(4)),
               changedPixels: result.changedPixels,
@@ -195,14 +204,16 @@ export function registerScreenshotCaptureTool(
               regions,
               baseline: "updated",
             },
-          };
+          });
 
           if (result.changedPixels === 0) {
             return {
               content: [
                 {
                   type: "text",
-                  text: JSON.stringify({ diff: { changedRatio: 0, note: "no visual change" } }),
+                  text: JSON.stringify(
+                    withDiagnostics({ diff: { changedRatio: 0, note: "no visual change" } }),
+                  ),
                 },
               ],
             };
@@ -286,12 +297,14 @@ export function registerScreenshotCaptureTool(
             buf = capture.png;
             const contentHeight = contentHeightFromRects(capture.nodeRects);
             const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
-            contentText = JSON.stringify({
-              contentHeight,
-              theme: themeName ?? "default",
-              viewport: { w: viewport.w, h: viewport.h },
-              ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
-            });
+            contentText = JSON.stringify(
+              withDiagnostics({
+                contentHeight,
+                theme: themeName ?? "default",
+                viewport: { w: viewport.w, h: viewport.h },
+                ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+              }),
+            );
           }
         }
       } catch (err) {
@@ -304,6 +317,9 @@ export function registerScreenshotCaptureTool(
       }
       const content: McpResult["content"] = [];
       if (contentText) content.push({ type: "text", text: contentText });
+      else if (diagnostics.length > 0) {
+        content.push({ type: "text", text: JSON.stringify({ diagnostics }) });
+      }
       content.push({ type: "image", data: buf.toString("base64"), mimeType: "image/png" });
       return { content };
     },

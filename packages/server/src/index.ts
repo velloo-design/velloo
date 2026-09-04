@@ -507,9 +507,8 @@ export {
   type StdioFormatGateHandle,
 } from "./mcp/format-gate.ts";
 export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";
-// Verification cores (dark-mode audit / class validation / contrast) — the
-// same checks the MCP audit + validate_classes tools run, exported for
-// headless consumers (render, export, and publish).
+// Verification cores (dark-mode audit / class validation / contrast), exported
+// for headless consumers (render, export, and publish).
 export {
   type DarkModeAuditResult,
   darkModeAuditTree,

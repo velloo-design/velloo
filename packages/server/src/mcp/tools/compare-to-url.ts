@@ -22,6 +22,7 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { diagnosticsForScreen } from "../diagnostics.ts";
 import { CompareToUrlOutput } from "./outputs.ts";
 import { errorResult, type McpContent, structuredResult } from "./result.ts";
 import { ThemeNameSchema, ViewportSchema } from "./schemas.ts";
@@ -379,6 +380,7 @@ export function registerCompareToUrlTool(
         // overlap-only score is materially better so the agent trusts the
         // structural match (and the per-region node refs) over the headline.
         const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
+        const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
         const summary = {
           similarity,
           changedRatio: Number(result.changedRatio.toFixed(4)),
@@ -420,6 +422,7 @@ export function registerCompareToUrlTool(
             : {}),
           ...(topMismatches.length ? { topMismatches } : {}),
           regions,
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
           ...(unverified
             ? {
                 unverified: true,

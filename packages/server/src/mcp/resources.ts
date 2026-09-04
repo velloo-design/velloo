@@ -209,7 +209,7 @@ add_extension({
 
 ## The loop
 
-**1. Import the theme first.** \`import_theme\` with the app's globals.css (\`cssPath\` — absolute, or relative to the host app root, since globals.css lives OUTSIDE the design folder). Dry-run first, then \`apply: true\`. Do this BEFORE any composition, so semantic slots, the raw \`palette.*\` passthrough (brand vars like \`--ink\`, scales like \`--primary-600\`), fonts, and the tailwind.config's \`theme.extend\`/\`container\` all resolve — then verbatim app classes like \`bg-ink\` render as-is. Tweak entries with \`set_theme { tokens: { "palette.<name>": … } }\`; run \`validate_classes\` if unsure a class resolved. See the \`theme\` guide.
+**1. Import the theme first.** \`import_theme\` with the app's globals.css (\`cssPath\` — absolute, or relative to the host app root, since globals.css lives OUTSIDE the design folder). Dry-run first, then \`apply: true\`. Do this BEFORE any composition, so semantic slots, the raw \`palette.*\` passthrough (brand vars like \`--ink\`, scales like \`--primary-600\`), fonts, and the tailwind.config's \`theme.extend\`/\`container\` all resolve — then verbatim app classes like \`bg-ink\` render as-is. Tweak entries with \`set_theme { tokens: { "palette.<name>": … } }\`; mutations report unresolved classes beside their paths. See the \`theme\` guide.
 
 **2. Build into the existing screen.** Read the page's source alongside \`list_components\`, then build INTO the route-scan's placeholder screen — \`set_screen_tree\` replaces its whole tree in one call, or \`remove_node path: []\` clears it. (\`add_screen\` on a scanned route returns \`ScreenIdConflict\`.) Strip handlers, state and data-fetching; inline representative copy as literals; keep Tailwind classes verbatim, since shadcn apps share Velloo's component vocabulary and most refs map 1:1.
 
@@ -324,12 +324,12 @@ To override one node anyway, pass an explicit \`text-*\` size in \`className\`. 
 
 Named themes (\`add_theme\`, \`list_themes\`) are variants of the token tree. A board pins one via \`update_board { theme }\` and every frame on it renders with that palette; unpinned boards use the folder default. Screens stay theme-portable by construction — the same screen framed on two boards shows both palettes, edits syncing to both.
 
-Theme-aware tools resolve the same way: \`screenshot\` / \`compare_to_url\` default to the hosting board's pin (boards disagreeing is an error asking for an explicit \`theme:\`), and \`get_theme\` / \`score_theme_contrast\` / \`emit_theme\` / \`audit\` / \`set_theme\` take \`theme:\` to target a named theme.`,
+Theme-aware tools resolve the same way: \`screenshot\` / \`compare_to_url\` default to the hosting board's pin (boards disagreeing is an error asking for an explicit \`theme:\`), and \`get_theme\` / \`score_theme_contrast\` / \`emit_theme\` / \`set_theme\` take \`theme:\` to target a named theme.`,
   },
 
   verification: {
     title: "Verifying a screen",
-    blurb: "screenshot, audit, inspect, validate_classes — the check-your-work loop.",
+    blurb: "Automatic diagnostics, screenshot, and inspect — the check-your-work loop.",
     body: `# Verifying a screen
 
 ## screenshot
@@ -342,17 +342,11 @@ While iterating, \`diff: true\` compares against your previous capture: zero cha
 
 A frame's optional light/dark \`scheme\` is placement-level and only a review affordance: it pins how that one frame renders the screen's shared tree. It does not create a dark layout variant. \`scheme: null\` returns the frame to the canvas default. An omitted \`screenshot\` mode follows an agreed hosting-frame pin, and asks for an explicit mode when placements disagree.
 
-## audit
+## Automatic diagnostics
 
-\`audit\` is a **triage signal, not a gate.** It flags every color-bearing class that will not theme-flip — including ones you chose intentionally (brand gradients, status pill chrome). Read the per-node \`problems[]\` and decide; the coverage number is a guide, not a target.
+Tree mutations validate the nodes they touched and return \`diagnostics\` only when there is something to fix. Invalid Tailwind utilities, undefined CSS variables, Tailwind v3 incompatibilities, and raw colors that will not theme-flip all name the affected node path. \`screenshot\` and \`emit_code\` repeat the check over the complete screen, so verification cannot be skipped accidentally.
 
-Set \`data-accent: "ok"\` (or any string) on a deliberately non-flipping node to exempt it from the audit and the score. Pass \`snippetId\` instead of \`screenId\` to audit a snippet body at definition time.
-
-Coverage 1.0 with an empty problems list is the green light.
-
-## validate_classes
-
-Free and fast. Run it on any arbitrary-value classes (\`shadow-[…]\`, \`grid-cols-[…]\`) before relying on them.
+Diagnostics are **triage signals, not gates.** A deliberate brand gradient or status color may be correct. Set \`data-accent: "ok"\` (or any string) on a deliberately non-flipping node to exempt it from the theme warning.
 
 ## inspect
 

@@ -77,11 +77,11 @@ export const CSS_FRAMEWORK_CHANNEL: Record<CssFramework, StyleChannelKind> = {
   none: "style",
 };
 
-// --- component catalog + installed-status (so the MCP can install on demand) ---
+// --- component catalog + host-app installed-status ---
 
 export interface CatalogEntry {
   id: string;
-  /** false → not present in the project yet; the MCP can offer `install_component`. */
+  /** false → not present in the host app yet; code emission reports the install plan. */
   installed: boolean;
   /** Where codegen imports this component from. */
   importPath: string;
@@ -91,8 +91,8 @@ export interface CatalogEntry {
  * Default `catalog()`: derive one `CatalogEntry` per manifest component. The
  * shipped adapters bundle their whole component set, so every entry is
  * `installed: true` from one `importPath` (MUI: `@mui/material`). An adapter
- * whose components install incrementally (shadcn-upstream's per-component fetch)
- * overrides this to report real installed-status + offer `installComponent`.
+ * whose host components install incrementally (shadcn) overrides this to report
+ * real installed-status. Design composition never changes the host app.
  */
 export function catalogFromManifest(
   manifest: ComponentDescriptor[],
@@ -238,8 +238,6 @@ export interface FrameworkAdapter extends ComponentProvider {
   registryForChannel?(kind: StyleChannelKind): ComponentProvider["registry"];
   /** The library's full catalog with installed-status. Absent ⇒ derive from the manifest. */
   catalog?(): Promise<CatalogEntry[]>;
-  /** Install a single catalog entry (per-component for shadcn; no-op when package-level). */
-  installComponent?(id: string, ctx: InstallCtx): Promise<void>;
   /** Provision the framework for a folder (npm install / CLI / cache). */
   install?(ctx: InstallCtx): Promise<InstallResult>;
   /**

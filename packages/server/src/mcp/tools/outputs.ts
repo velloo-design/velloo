@@ -34,30 +34,6 @@ export const FindNodesOutput = z.looseObject({
   total: z.number(),
 });
 
-export const AuditOutput = z.looseObject({
-  /** 0..1 — fraction of color-bearing nodes that use semantic tokens only. */
-  coverage: z.number(),
-  problems: z.array(
-    z.looseObject({
-      path: z.array(z.number()),
-      ref: z.string(),
-      className: z.string(),
-      /** The classes that won't flip under dark mode. */
-      raw: z.array(z.string()),
-      /** Semantic-token replacement per raw class, where an obvious one exists. */
-      suggestions: z.record(z.string(), z.string()),
-    }),
-  ),
-  /** Nodes carrying at least one color-bearing class — coverage's denominator. */
-  totalColored: z.number(),
-  themeInfo: z.looseObject({
-    theme: z.string(),
-    /** False ⇒ the theme declares no colorsDark block and coverage is informational. */
-    hasDarkVariant: z.boolean(),
-    note: z.string().optional(),
-  }),
-});
-
 export const ListComponentsOutput = z.looseObject({
   /** Version of the component set these descriptors came from. */
   snapshotVersion: z.string(),
@@ -65,6 +41,10 @@ export const ListComponentsOutput = z.looseObject({
     z.looseObject({
       id: z.string(),
       kind: z.enum(["library", "extension"]),
+      /** Renderer availability; false is an adapter packaging error. */
+      availableInDesign: z.boolean(),
+      /** Host-app status only. Missing dependencies are returned by emit_code. */
+      installedInApp: z.boolean(),
       /** Present on extensions: where the real component lives in the host app. */
       importPath: z.string().optional(),
     }),

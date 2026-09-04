@@ -24,7 +24,6 @@ import { applyToolPolicy } from "./tool-policy.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
-import { registerCatalogTools } from "./tools/catalog.ts";
 import { registerCommentTools } from "./tools/comments.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
@@ -36,7 +35,6 @@ import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
 import { registerThemeTools } from "./tools/theme.ts";
-import { registerValidateTools } from "./tools/validate.ts";
 import { createTraceRecorder, withCallRecording } from "./trace.ts";
 
 export interface McpServerOptions {
@@ -97,23 +95,11 @@ const INSTRUCTION_PARTS = [
   "",
   '**Think in ids, not paths.** Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), pass a stable id reference like `"@hero-cta"`. Assign ids at creation (`id: "hero-cta"`) for anything you might touch again. Number paths are positional and break when siblings move; treat them as an implementation detail you get from `find_nodes` (`set_node_id` retrofits one).',
   "",
-  '**Verify before declaring done.** `screenshot mode: "compare"` renders light and dark side by side; `audit` scores the screen; `validate_classes` is free and fast on arbitrary-value classes. See velloo://guide/verification.',
+  '**Verify before declaring done.** Mutations return focused class and theme diagnostics; `screenshot mode: "compare"` renders light and dark side by side and returns a full-screen diagnostic pass. `emit_code` repeats that full check at the handoff boundary. See velloo://guide/verification.',
   "",
   "**Make it distinctive.** Default library + Inter + one indigo reads as template. Set a display face and a typeset early via `set_theme` — one call re-proportions every screen — then reach for real art and confident color. See velloo://guide/art.",
   "",
-  "**Read the guide before doing the thing.** These resources carry the detail this brief deliberately omits — fetch the relevant one at the start of that kind of work:",
-  "  - `velloo://guide/components` — Box vs Card, children arrays vs the children prop, inline runs, icons, raw CSS.",
-  "  - `velloo://guide/snippets` — params, node slots, `$if`, and when structure that varies is still one snippet.",
-  "  - `velloo://guide/theme` — tokens, presets, fonts, the type ladder, importing an app's stylesheet.",
-  "  - `velloo://guide/boards` — frames vs viewports, sidebar groups, archived boards, board-pinned themes.",
-  "  - `velloo://guide/verification` — screenshot modes, diffing, audit, inspect.",
-  "  - `velloo://guide/porting` — code-to-design: re-expressing an existing app and verifying fidelity.",
-  "  - `velloo://guide/capture` — reaching pages behind a login.",
-  "  - `velloo://guide/extensions` — registering the app's own components, live islands.",
-  "  - `velloo://guide/art` — authoring assets vs paying to generate them.",
-  "  - `velloo://guide/comments` — working the user's visual feedback threads.",
-  "",
-  "**Visual feedback threads are addressed to you.** Call `list_comment_threads` at the start of a session and work the open ones — read with `get_comment_thread`, make the change, then `update_comment_thread` to reply and resolve.",
+  "**Read the guide before doing the thing.** The advertised `velloo://guide/*` resources carry the detail this brief deliberately omits; fetch the relevant one before using an unfamiliar capability.",
 ];
 
 /**
@@ -151,7 +137,7 @@ export function buildInstructions(
   if (hostTailwindMajor === 3) {
     parts.push(
       "",
-      "**The host app is on Tailwind v3** (the canvas itself always compiles v4). Prefer classes spelled the same in both majors; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container-query variants, `starting:`) — `validate_classes` warns per class and `emit_code` returns a `tailwindV3Compat` rename list (e.g. v4 `shadow-sm` ⇒ v3 `shadow`) to apply when writing app code. `emit_theme` detects the v3 target and emits `velloo-theme.css` + a `velloo.preset` instead of a v4 globals.css.",
+      "**The host app is on Tailwind v3** (the canvas itself always compiles v4). Prefer classes spelled the same in both majors; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container-query variants, `starting:`). Mutations flag incompatible classes at their paths, and `emit_code` returns a `tailwindV3Compat` rename list (e.g. v4 `shadow-sm` ⇒ v3 `shadow`) to apply when writing app code. `emit_theme` detects the v3 target and emits `velloo-theme.css` + a `velloo.preset` instead of a v4 globals.css.",
     );
   }
   if (canvasUrl) {
@@ -164,8 +150,8 @@ export function buildInstructions(
     parts.push(
       "",
       openComments === 1
-        ? "**1 open visual feedback thread is waiting on you** — read it with `list_comment_threads` and address it."
-        : `**${openComments} open visual feedback threads are waiting on you** — read them with \`list_comment_threads\` and address them.`,
+        ? "**1 open visual feedback thread is waiting on you.** Read it with `list_comment_threads`, make the requested change, then reply and resolve with `update_comment_thread`."
+        : `**${openComments} open visual feedback threads are waiting on you.** Read them with \`list_comment_threads\`, make the requested changes, then reply and resolve with \`update_comment_thread\`.`,
     );
   }
   if (feedbackEnabled) parts.push("", FEEDBACK_INSTRUCTION);
@@ -218,17 +204,15 @@ function buildMcpServer(
   const recorder = createTraceRecorder(ctx.folder.root);
   if (recorder) withCallRecording(mcp, recorder);
   registerDiscoveryTools(mcp, ctx);
-  registerMutationTools(mcp, ctx);
+  registerMutationTools(mcp, ctx, jit);
   registerInspectTool(mcp, ctx);
   registerThemeTools(mcp, ctx);
-  registerEmitTools(mcp, ctx);
+  registerEmitTools(mcp, ctx, jit);
   registerScreenshotTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
-  registerValidateTools(mcp, ctx, jit);
   registerExtensionTools(mcp, ctx);
-  registerCatalogTools(mcp, ctx);
   registerNoteTools(mcp, ctx);
   registerAssetTools(mcp, ctx);
-  registerBatchTool(mcp, ctx);
+  registerBatchTool(mcp, ctx, jit);
   registerCaptureTools(mcp, ctx);
   // Opt-in, auth-gated. The credential may be absent (logged out) or go stale
   // mid-session, so the tool checks at call time and reports a kinded

@@ -20,6 +20,8 @@ import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
+import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
 import { EmitCodeOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 
@@ -72,12 +74,12 @@ function isInlineStyle(
   );
 }
 
-export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
+export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
   mcp.registerTool(
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
+        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
@@ -107,9 +109,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
               ...result.value.classesUsed,
               ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
             ]);
-      return structuredResult(
-        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : { ...result.value },
-      );
+      const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+      return structuredResult({
+        ...result.value,
+        ...(compat.length > 0 ? { tailwindV3Compat: compat } : {}),
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      });
     },
   );
 
@@ -139,9 +144,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
       if (!result.ok) return errorResult(result.error);
       const compat =
         target || inlineStyle ? [] : v3CompatFor(ctx, classNamesInJsx(result.value.jsx));
-      return structuredResult(
-        compat.length > 0 ? { ...result.value, tailwindV3Compat: compat } : { ...result.value },
-      );
+      const diagnostics = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []);
+      return structuredResult({
+        ...result.value,
+        ...(compat.length > 0 ? { tailwindV3Compat: compat } : {}),
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      });
     },
   );
 

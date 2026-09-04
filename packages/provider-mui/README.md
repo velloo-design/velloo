@@ -31,8 +31,8 @@ MUI folder.
 - **Native codegen.** `codegenModule = "@mui/material"` drives a `CodegenTarget` so
   `emit_code` emits `<Component sx={{…}} />` from `@mui/material`; `emit_theme`
   emits a `createTheme(...)` module.
-- **Catalog + canvas bundle.** `catalog()` (every component installed, from
-  `@mui/material`) backs `install_component`; `canvasBundleSpec` lets the server
+- **Catalog + canvas bundle.** `catalog()` reports every component available from
+  `@mui/material`; `canvasBundleSpec` lets the server
   bundle the host app's *exact installed* MUI from `node_modules` and client-mount
   it over the SSR (`packages/server/src/live/canvas-bundle.ts`).
 

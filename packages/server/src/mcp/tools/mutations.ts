@@ -54,6 +54,7 @@ import {
   updateSnippetInstance,
   updateViewportPresets,
 } from "../../mutations/index.ts";
+import { resolve as resolveLocator } from "../../mutations/lookup.ts";
 import {
   dynamicIconWarningsForTree,
   propWarnings,
@@ -61,6 +62,8 @@ import {
 } from "../../mutations/prop-warnings.ts";
 import { findSnippetInstances } from "../../mutations/snippet-instances.ts";
 import { pathAt } from "../../path.ts";
+import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { type DesignDiagnostic, diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
 import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
 
 /**
@@ -71,13 +74,29 @@ import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
 async function toMcpWithWarnings<T>(
   result: Result<T, MutationError>,
   warn: (value: T) => Promise<string[]>,
+  diagnose?: ((value: T) => Promise<DesignDiagnostic[]>) | undefined,
 ): Promise<McpResult> {
   if (!result.ok) return errorResult(result.error);
-  const propWarnings = await warn(result.value).catch(() => [] as string[]);
-  return jsonResult(propWarnings.length > 0 ? { ...result.value, propWarnings } : result.value);
+  const [propWarnings, diagnostics] = await Promise.all([
+    warn(result.value).catch(() => [] as string[]),
+    diagnose?.(result.value).catch(() => [] as DesignDiagnostic[]) ?? [],
+  ]);
+  return jsonResult(
+    propWarnings.length > 0 || diagnostics.length > 0
+      ? {
+          ...result.value,
+          ...(propWarnings.length > 0 ? { propWarnings } : {}),
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        }
+      : result.value,
+  );
 }
 
-export function registerMutationTools(mcp: McpServer, ctx: MutationContext): void {
+export function registerMutationTools(
+  mcp: McpServer,
+  ctx: MutationContext,
+  jit?: TailwindJit,
+): void {
   // ── Tree mutations ─────────────────────────────────────────────────────
   mcp.registerTool(
     "add_node",
@@ -92,16 +111,22 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         return errorResult(badRequest(normalized.message, normalized.issues));
       }
       const { props, children } = normalized.args;
-      return toMcpWithWarnings(await addNode(ctx, normalized.args), async () => {
-        const screen = ctx.folder.screens.get(args.screenId);
-        if (!screen) return [];
-        const inserted: Node = {
-          $ref: args.componentRef,
-          ...(props ? { props } : {}),
-          ...(children ? { children } : {}),
-        };
-        return propWarningsForTree(ctx, screen, inserted);
-      });
+      const inserted: Node = {
+        $ref: args.componentRef,
+        ...(props ? { props } : {}),
+        ...(children ? { children } : {}),
+      };
+      return toMcpWithWarnings(
+        await addNode(ctx, normalized.args),
+        async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          return screen ? propWarningsForTree(ctx, screen, inserted) : [];
+        },
+        async (value) => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          return screen ? diagnosticsForTree(ctx, jit, screen, inserted, value.path) : [];
+        },
+      );
     },
   );
 
@@ -113,19 +138,36 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: updatePropsShape,
     },
     async (args) =>
-      toMcpWithWarnings(await updateProps(ctx, args), async () => {
-        const screen = ctx.folder.screens.get(args.screenId);
-        if (!screen) return [];
-        const all: string[] = [];
-        for (const patch of args.patches) {
-          if (!Array.isArray(patch.path)) continue;
-          const node = pathAt(screen.tree, patch.path);
-          if (node && isComponentNode(node)) {
-            all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch ?? {})));
+      toMcpWithWarnings(
+        await updateProps(ctx, args),
+        async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          if (!screen) return [];
+          const all: string[] = [];
+          for (const patch of args.patches) {
+            const resolved = resolveLocator(screen.tree, patch.path, args.screenId);
+            if (!resolved.ok) continue;
+            const node = pathAt(screen.tree, resolved.value);
+            if (node && isComponentNode(node)) {
+              all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch ?? {})));
+            }
           }
-        }
-        return all;
-      }),
+          return all;
+        },
+        async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          if (!screen) return [];
+          const all: DesignDiagnostic[] = [];
+          for (const patch of args.patches) {
+            const resolved = resolveLocator(screen.tree, patch.path, args.screenId);
+            if (!resolved.ok) continue;
+            const node = pathAt(screen.tree, resolved.value);
+            if (node)
+              all.push(...(await diagnosticsForTree(ctx, jit, screen, node, resolved.value)));
+          }
+          return all;
+        },
+      ),
   );
 
   mcp.registerTool(
@@ -171,14 +213,23 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: addScreenShape,
     },
     async (args) =>
-      toMcpWithWarnings(await addScreen(ctx, args), async () => {
-        const created = args.id ?? "";
-        const screen =
-          ctx.folder.screens.get(created) ??
-          [...ctx.folder.screens.values()].find((s) => s.name === args.name);
-        if (!screen) return [];
-        return propWarningsForTree(ctx, screen, screen.tree);
-      }),
+      toMcpWithWarnings(
+        await addScreen(ctx, args),
+        async () => {
+          const created = args.id ?? "";
+          const screen =
+            ctx.folder.screens.get(created) ??
+            [...ctx.folder.screens.values()].find((s) => s.name === args.name);
+          return screen ? propWarningsForTree(ctx, screen, screen.tree) : [];
+        },
+        async () => {
+          const created = args.id ?? "";
+          const screen =
+            ctx.folder.screens.get(created) ??
+            [...ctx.folder.screens.values()].find((s) => s.name === args.name);
+          return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
+        },
+      ),
   );
 
   mcp.registerTool(
@@ -189,11 +240,17 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: setScreenTreeShape,
     },
     async (args) =>
-      toMcpWithWarnings(await setScreenTree(ctx, args), async () => {
-        const screen = ctx.folder.screens.get(args.screenId);
-        if (!screen) return [];
-        return propWarningsForTree(ctx, screen, screen.tree);
-      }),
+      toMcpWithWarnings(
+        await setScreenTree(ctx, args),
+        async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          return screen ? propWarningsForTree(ctx, screen, screen.tree) : [];
+        },
+        async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
+        },
+      ),
   );
 
   mcp.registerTool(
@@ -306,8 +363,10 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
       inputSchema: addSnippetShape,
     },
     async (args) =>
-      toMcpWithWarnings(await addSnippet(ctx, args), async (value) =>
-        dynamicIconWarningsForTree(value.snippet.tree),
+      toMcpWithWarnings(
+        await addSnippet(ctx, args),
+        async (value) => dynamicIconWarningsForTree(value.snippet.tree),
+        async (value) => diagnosticsForTree(ctx, jit, value.snippet, value.snippet.tree),
       ),
   );
 
@@ -321,31 +380,35 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) =>
       // Warn on the RESULTING tree (an update may patch the body via
       // `tree` or `innerPatch`), not just the incoming patch.
-      toMcpWithWarnings(await updateSnippet(ctx, args), async (value) => {
-        const warnings = [...(await dynamicIconWarningsForTree(value.snippet.tree))];
-        // A params change can strand existing instances (now-missing required /
-        // now-unknown args) that would otherwise only fail at render time inside
-        // screenshot/compare_to_url — surface them here, where the change was made.
-        if (args.patch.params !== undefined) {
-          const declared = new Set(value.snippet.params.map((p) => p.name));
-          for (const inst of findSnippetInstances(ctx.folder, value.snippet.id)) {
-            const { missing } = resolveSnippetArgs(value.snippet, inst.args);
-            const extras = Object.keys(inst.args).filter((k) => !declared.has(k));
-            if (missing.length === 0 && extras.length === 0) continue;
-            const parts = [
-              missing.length ? `missing required: ${missing.join(", ")}` : "",
-              extras.length ? `unknown: ${extras.join(", ")}` : "",
-            ]
-              .filter(Boolean)
-              .join("; ");
-            const at = inst.path === "" ? "the root" : `path [${inst.path.replace(/\./g, ",")}]`;
-            warnings.push(
-              `param change strands the instance on "${inst.screenId}" at ${at} (${parts}) — fix its args with update_snippet_instance before rendering that screen`,
-            );
+      toMcpWithWarnings(
+        await updateSnippet(ctx, args),
+        async (value) => {
+          const warnings = [...(await dynamicIconWarningsForTree(value.snippet.tree))];
+          // A params change can strand existing instances (now-missing required /
+          // now-unknown args) that would otherwise only fail at render time inside
+          // screenshot/compare_to_url — surface them here, where the change was made.
+          if (args.patch.params !== undefined) {
+            const declared = new Set(value.snippet.params.map((p) => p.name));
+            for (const inst of findSnippetInstances(ctx.folder, value.snippet.id)) {
+              const { missing } = resolveSnippetArgs(value.snippet, inst.args);
+              const extras = Object.keys(inst.args).filter((k) => !declared.has(k));
+              if (missing.length === 0 && extras.length === 0) continue;
+              const parts = [
+                missing.length ? `missing required: ${missing.join(", ")}` : "",
+                extras.length ? `unknown: ${extras.join(", ")}` : "",
+              ]
+                .filter(Boolean)
+                .join("; ");
+              const at = inst.path === "" ? "the root" : `path [${inst.path.replace(/\./g, ",")}]`;
+              warnings.push(
+                `param change strands the instance on "${inst.screenId}" at ${at} (${parts}) — fix its args with update_snippet_instance before rendering that screen`,
+              );
+            }
           }
-        }
-        return warnings;
-      }),
+          return warnings;
+        },
+        async (value) => diagnosticsForTree(ctx, jit, value.snippet, value.snippet.tree),
+      ),
   );
 
   mcp.registerTool(
@@ -365,7 +428,15 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
         "Add a `$snippet` instance to a screen tree under parentPath. `args` must satisfy the snippet's declared params — check `list_snippets` first; a missing required param or an undeclared key returns SnippetParamMismatch naming it. `overrides` patches interior body nodes for THIS instance only (the active nav item, a red badge) at placement, so one shared snippet can be stamped across many screens each with its own. Guide: velloo://guide/snippets.",
       inputSchema: instantiateSnippetShape,
     },
-    async (args) => toMcp(await instantiateSnippet(ctx, args)),
+    async (args) =>
+      toMcpWithWarnings(
+        await instantiateSnippet(ctx, args),
+        async () => [],
+        async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
+        },
+      ),
   );
 
   mcp.registerTool(
@@ -378,7 +449,14 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     async (args) => {
       const plan = normalizeUpdateSnippetInstance(args);
       if (!plan.ok) return errorResult(badRequest(plan.message, plan.issues));
-      return toMcp(await updateSnippetInstance(ctx, plan.args));
+      return toMcpWithWarnings(
+        await updateSnippetInstance(ctx, plan.args),
+        async () => [],
+        async () => {
+          const screen = ctx.folder.screens.get(args.screenId);
+          return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
+        },
+      );
     },
   );
 }

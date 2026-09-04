@@ -2,12 +2,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 /**
- * Real per-component install for shadcn-upstream: shell out to the framework's
- * own CLI (`npx shadcn@latest add <name>`) against the user's app, exactly the
- * command the agent handoff has always suggested — now callable through the
- * `install_component` MCP tool. Everything here is pure/deterministic except
- * the spawn itself, so the mapping + validation are unit-testable without
- * touching the network.
+ * Read-only shadcn host-app discovery. Design composition resolves against
+ * Velloo's bundled runtime; emission reports these registry names when the
+ * host app still needs a component.
  */
 
 /** PascalCase → shadcn registry name ("DropdownMenu" → "dropdown-menu"). */
@@ -80,14 +77,6 @@ export function shadcnAddName(id: string): string {
   return kebab(family ?? id);
 }
 
-/** The pinned install command, argv form — never a shell string. */
-export function buildInstallArgv(addName: string): string[] {
-  if (!/^[a-z][a-z0-9-]*$/.test(addName)) {
-    throw new Error(`shadcn install: "${addName}" is not a valid registry name`);
-  }
-  return ["npx", "shadcn@latest", "add", addName, "--yes"];
-}
-
 /**
  * Where the app's shadcn ui components live. Prefers the app's own
  * `components.json` (`aliases.ui` / `aliases.components`, `@/` mapped onto
@@ -134,29 +123,5 @@ export function installedAddNames(hostAppRoot: string): Set<string> {
     );
   } catch {
     return new Set();
-  }
-}
-
-export interface RunInstallOptions {
-  hostAppRoot: string;
-  addName: string;
-}
-
-/**
- * Spawn the pinned install command in the host app. Throws with the tail of
- * stderr on a non-zero exit; the MCP layer surfaces that as a tool error.
- */
-export async function runShadcnAdd(opts: RunInstallOptions): Promise<void> {
-  const argv = buildInstallArgv(opts.addName);
-  const proc = Bun.spawn(argv, {
-    cwd: opts.hostAppRoot,
-    stdout: "pipe",
-    stderr: "pipe",
-    stdin: "ignore",
-  });
-  const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
-  if (code !== 0) {
-    const tail = stderr.trim().split("\n").slice(-6).join("\n");
-    throw new Error(`\`${argv.join(" ")}\` exited ${code}${tail ? `:\n${tail}` : ""}`);
   }
 }

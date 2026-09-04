@@ -22,7 +22,6 @@ import { applyToolPolicy } from "../src/mcp/tool-policy.ts";
 import { registerAssetTools } from "../src/mcp/tools/assets.ts";
 import { registerBatchTool } from "../src/mcp/tools/batch.ts";
 import { registerCaptureTools } from "../src/mcp/tools/captures.ts";
-import { registerCatalogTools } from "../src/mcp/tools/catalog.ts";
 import { registerCommentTools } from "../src/mcp/tools/comments.ts";
 import { registerDiscoveryTools } from "../src/mcp/tools/discovery.ts";
 import { registerEmitTools } from "../src/mcp/tools/emit.ts";
@@ -34,7 +33,6 @@ import { registerMutationTools } from "../src/mcp/tools/mutations.ts";
 import { registerNoteTools } from "../src/mcp/tools/notes.ts";
 import { registerScreenshotTool } from "../src/mcp/tools/screenshot.ts";
 import { registerThemeTools } from "../src/mcp/tools/theme.ts";
-import { registerValidateTools } from "../src/mcp/tools/validate.ts";
 import type { MutationContext } from "../src/mutations/index.ts";
 
 const tokens = (s: string): number => Math.ceil(s.length / 4);
@@ -105,9 +103,7 @@ async function main(): Promise<void> {
     registerEmitTools(mcp, ctx);
     // Registers screenshot + compare_to_url + render_snippet.
     registerScreenshotTool(mcp, ctx, stub(), stub(), stub());
-    registerValidateTools(mcp, ctx, stub());
     registerExtensionTools(mcp, ctx);
-    registerCatalogTools(mcp, ctx);
     registerNoteTools(mcp, ctx);
     registerAssetTools(mcp, ctx);
     registerBatchTool(mcp, ctx);

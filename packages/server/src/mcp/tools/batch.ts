@@ -3,6 +3,8 @@ import { z } from "zod";
 import { collectActivity, emitGroupedActivity } from "../../activity.ts";
 import { BATCH_TOOLS, type BatchCall, runBatch } from "../../mutations/batch.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
 
 /**
  * The batchable tool set, in the schema rather than in the description.
@@ -19,7 +21,7 @@ import type { MutationContext } from "../../mutations/index.ts";
  */
 const batchableTools = Object.keys(BATCH_TOOLS) as [string, ...string[]];
 
-export function registerBatchTool(mcp: McpServer, ctx: MutationContext): void {
+export function registerBatchTool(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
   mcp.registerTool(
     "batch",
     {
@@ -48,9 +50,44 @@ export function registerBatchTool(mcp: McpServer, ctx: MutationContext): void {
       );
       if (!result.rolledBack) emitGroupedActivity(ctx, "batch", ops);
       const failed = result.results.some((r) => !r.ok);
+      const diagnostics: Record<string, unknown> = {};
+      if (!result.rolledBack && jit) {
+        const screenIds = new Set<string>();
+        const snippetIds = new Set<string>();
+        for (const call of calls) {
+          if (typeof call.args.screenId === "string") screenIds.add(call.args.screenId);
+          if (typeof call.args.snippetId === "string") snippetIds.add(call.args.snippetId);
+          if (call.tool === "add_screen" && typeof call.args.id === "string") {
+            screenIds.add(call.args.id);
+          }
+          if (call.tool === "add_snippet" && typeof call.args.id === "string") {
+            snippetIds.add(call.args.id);
+          }
+        }
+        for (const screenId of screenIds) {
+          const screen = ctx.folder.screens.get(screenId);
+          if (!screen) continue;
+          const found = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+          if (found.length > 0) diagnostics[`screen:${screenId}`] = found;
+        }
+        for (const snippetId of snippetIds) {
+          const snippet = ctx.folder.snippets.get(snippetId);
+          if (!snippet) continue;
+          const found = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []);
+          if (found.length > 0) diagnostics[`snippet:${snippetId}`] = found;
+        }
+      }
       return {
         ...(failed ? { isError: true as const } : {}),
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              ...result,
+              ...(Object.keys(diagnostics).length > 0 ? { diagnostics } : {}),
+            }),
+          },
+        ],
       };
     },
   );

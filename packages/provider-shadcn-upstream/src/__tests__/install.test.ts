@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildInstallArgv, findUiDir, installedAddNames, shadcnAddName } from "../install.ts";
+import { findUiDir, installedAddNames, shadcnAddName } from "../install.ts";
 import { createProvider } from "../provider.ts";
 
 describe("shadcnAddName", () => {
@@ -21,24 +21,6 @@ describe("shadcnAddName", () => {
   test("registry-name exceptions", () => {
     expect(shadcnAddName("Toaster")).toBe("sonner");
     expect(shadcnAddName("ScrollBar")).toBe("scroll-area");
-  });
-});
-
-describe("buildInstallArgv", () => {
-  test("emits the pinned argv form", () => {
-    expect(buildInstallArgv("alert-dialog")).toEqual([
-      "npx",
-      "shadcn@latest",
-      "add",
-      "alert-dialog",
-      "--yes",
-    ]);
-  });
-
-  test("rejects anything that isn't a bare registry name", () => {
-    expect(() => buildInstallArgv("foo; rm -rf /")).toThrow(/not a valid registry name/);
-    expect(() => buildInstallArgv("../etc")).toThrow(/not a valid registry name/);
-    expect(() => buildInstallArgv("Button")).toThrow(/not a valid registry name/);
   });
 });
 
@@ -75,7 +57,7 @@ describe("installed detection", () => {
   });
 });
 
-describe("adapter catalog + installComponent", () => {
+describe("adapter catalog", () => {
   test("catalog reports real installed status against the host app", async () => {
     const root = await fakeApp(true);
     const provider = createProvider({ hostAppRoot: root });
@@ -88,20 +70,5 @@ describe("adapter catalog + installComponent", () => {
     expect(byId.get("Tabs")?.installed).toBe(false);
     // velloo helpers are built-ins, not catalog entries.
     expect(byId.has("Icon")).toBe(false);
-  });
-
-  test("installComponent validates the id before any spawn", async () => {
-    const root = await fakeApp(true);
-    const provider = createProvider({ hostAppRoot: root });
-    expect(
-      provider.installComponent?.("NotAComponent", { folderRoot: root, target: "app" }),
-    ).rejects.toThrow(/not a shadcn component/);
-  });
-
-  test("installComponent without a host app errors with config guidance", async () => {
-    const provider = createProvider();
-    expect(
-      provider.installComponent?.("Button", { folderRoot: "/nowhere", target: "app" }),
-    ).rejects.toThrow(/hostApp\.root/);
   });
 });

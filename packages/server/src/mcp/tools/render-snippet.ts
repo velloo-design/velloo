@@ -7,6 +7,7 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { diagnosticsForTree } from "../diagnostics.ts";
 import { errorResult } from "./result.ts";
 import { RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
 import {
@@ -32,7 +33,7 @@ export function registerRenderSnippetTool(
     "render_snippet",
     {
       description:
-        "Render a snippet in isolation and return a screenshot. Useful for iterating on a snippet's styling before stamping it. viewport defaults to 480×640.",
+        "Render a snippet in isolation and return a screenshot plus any class/theme diagnostics. Useful for iterating on a snippet's styling before stamping it. viewport defaults to 480×640.",
       inputSchema: {
         snippetId: z.string(),
         args: z.record(z.string(), z.unknown()).optional(),
@@ -118,8 +119,14 @@ export function registerRenderSnippetTool(
         const msg = err instanceof Error ? err.message : String(err);
         return errorResult(`render_snippet failed: ${msg}`);
       }
+      const diagnostics = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []);
       return {
-        content: [{ type: "image", data: buf.toString("base64"), mimeType: "image/png" }],
+        content: [
+          ...(diagnostics.length > 0
+            ? [{ type: "text" as const, text: JSON.stringify({ diagnostics }) }]
+            : []),
+          { type: "image" as const, data: buf.toString("base64"), mimeType: "image/png" },
+        ],
       };
     },
   );

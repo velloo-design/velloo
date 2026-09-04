@@ -4,7 +4,7 @@ import { z } from "zod";
 /**
  * Per-tool behavioural hints (MCP `ToolAnnotations`). A host reads these to
  * decide what to auto-approve: a `readOnlyHint` tool can run without a prompt,
- * a `destructiveHint` one should always ask. Velloo advertises 71 tools, ~26 of
+ * a `destructiveHint` one should always ask. Velloo advertises many tools, and
  * them pure reads, so leaving them undeclared meant every screenshot and every
  * `list_*` looked exactly as dangerous as `remove_screen`.
  *
@@ -32,9 +32,6 @@ const set = { destructiveHint: false, idempotentHint: true, openWorldHint: false
 const destroy = { idempotentHint: true, openWorldHint: false } as const;
 /** Changes state and reaches the network. */
 const remote = { destructiveHint: false } as const;
-/** Changes state, reaches the network, and repeating it settles. */
-const remoteSet = { destructiveHint: false, idempotentHint: true } as const;
-
 /**
  * Every tool the design-mode server registers, and how it behaves. A tool
  * missing from this table (or listed here but never registered) fails
@@ -43,7 +40,6 @@ const remoteSet = { destructiveHint: false, idempotentHint: true } as const;
  */
 export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   // Discovery and inspection.
-  audit: read,
   find_nodes: read,
   get_board: read,
   get_capture: read,
@@ -63,7 +59,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_snippets: read,
   list_themes: read,
   score_theme_contrast: read,
-  validate_classes: read,
 
   // Rendering. Local: the browser loads generated HTML, never a remote page.
   screenshot: read,
@@ -132,7 +127,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 
   // Anything else that talks to the outside world.
   batch: { openWorldHint: false },
-  install_component: remoteSet,
   start_capture_session: remote,
   send_feedback: remote,
 };

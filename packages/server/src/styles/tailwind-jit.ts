@@ -142,7 +142,7 @@ export class TailwindJit {
   /**
    * The merged Tailwind entry CSS (every provider's entry + the theme's
    * `@theme` block) plus the base dir for `@import` resolution. Exposed so
-   * `validate_classes` can parse a design system from the *same* input the
+   * automatic diagnostics can parse a design system from the *same* input the
    * build compiles against — otherwise theme-injected utilities
    * (`bg-ink`, `font-display`) read as invalid. Re-read fresh, so it tracks
    * `set_token` / `set_fonts` edits.
