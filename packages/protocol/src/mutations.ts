@@ -573,3 +573,11 @@ export const updateFeedbackShape = {
   contactOk: z.boolean().optional(),
 } satisfies z.ZodRawShape;
 export const UpdateFeedbackBody = z.strictObject(updateFeedbackShape);
+
+/**
+ * The failure half of the same contract, and the node addresses its arguments
+ * are written in — re-exported so `@velloo/protocol/mutations` is the whole
+ * mutation surface rather than three imports.
+ */
+export * from "./errors.ts";
+export * from "./locator.ts";

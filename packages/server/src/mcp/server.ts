@@ -18,6 +18,7 @@ import type { LiveBundler } from "../live/component-bundler.ts";
 import type { LocalCommentsService } from "../local-comments.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
+import { MCP_SERVER_INFO } from "../version.ts";
 import { registerGuideResources } from "./resources.ts";
 import { applyToolPolicy } from "./tool-policy.ts";
 import { registerAssetTools } from "./tools/assets.ts";
@@ -198,19 +199,16 @@ function buildMcpServer(
   // a network call. Shared threads are folded into this service when synced.
   const openComments = comments.countOpenSync();
   const bareFolder = ctx.folder.boards.size === 0;
-  const mcp = new McpServer(
-    { name: "velloo", version: "0.1.0" },
-    {
-      instructions: buildInstructions(
-        feedbackEnabled,
-        assetOrigin?.replace(/\/+$/, ""),
-        intro,
-        openComments,
-        hostTailwindMajor,
-        bareFolder,
-      ),
-    },
-  );
+  const mcp = new McpServer(MCP_SERVER_INFO, {
+    instructions: buildInstructions(
+      feedbackEnabled,
+      assetOrigin?.replace(/\/+$/, ""),
+      intro,
+      openComments,
+      hostTailwindMajor,
+      bareFolder,
+    ),
+  });
   // Before any tool registers: strict input shapes (a typo'd argument fails
   // loudly with the valid keys instead of being silently dropped) and the
   // behavioural annotations a host reads to decide what to auto-approve.

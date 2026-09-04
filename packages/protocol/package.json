@@ -7,10 +7,13 @@
   "description": "The Velloo wire contract \u2014 mutation argument schemas, typed error unions, watch events, and the published-comment surface shared with velloo-cloud",
   "exports": {
     ".": "./src/index.ts",
+    "./mutations": "./src/mutations.ts",
+    "./canvas": "./src/canvas.ts",
+    "./cloud": "./src/cloud.ts",
+    "./cloud-codes": "./src/cloud-codes.ts",
     "./comments": "./src/comments.ts",
     "./publish": "./src/publish.ts",
-    "./publish-meta": "./src/publish-meta.ts",
-    "./cloud-codes": "./src/cloud-codes.ts"
+    "./publish-meta": "./src/publish-meta.ts"
   },
   "dependencies": {
     "@velloo/result": "workspace:*",

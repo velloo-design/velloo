@@ -4,11 +4,15 @@ This file orients you when you're modifying **the Velloo repo itself**. For guid
 
 ## Mental model
 
-Velloo is a local, code-shaped design canvas for solo devs. The repo is a Bun-workspaces monorepo split into thirteen packages with one-way dependencies:
+Velloo is a local, code-shaped design canvas for solo devs. The repo is a Bun-workspaces monorepo split into sixteen packages with one-way dependencies:
 
 ```
-schema → result → provider → helpers → shadcn-snapshot → provider-none, provider-mui, provider-shadcn-upstream → renderer → codegen → server → canvas → cli
+schema → result → protocol → provider → helpers → shadcn-snapshot → provider-none, provider-mui, provider-shadcn-upstream, provider-antd, provider-chakra → renderer → codegen → server → canvas → cli
 ```
+
+`protocol` is the wire contract (mutation arguments, typed errors, watch
+events, the cloud surface, the publish bundle) — imported by `server`,
+`canvas`, `cli`, and by velloo-cloud.
 
 The cleanest packages (`schema`, `result`, `provider`) have no internal runtime deps. Everything else builds on them. **Do not introduce cycles** — every cross-package import must respect this order.
 

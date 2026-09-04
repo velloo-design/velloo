@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { MCP_SERVER_INFO } from "../version.ts";
 
 /**
  * The stdio MCP session served when the design folder's on-disk format doesn't
@@ -58,10 +59,7 @@ function gateInstructions(opts: StdioFormatGateOptions): string {
 export async function runStdioFormatGate(
   opts: StdioFormatGateOptions,
 ): Promise<StdioFormatGateHandle> {
-  const mcp = new McpServer(
-    { name: "velloo", version: "0.1.0" },
-    { instructions: gateInstructions(opts) },
-  );
+  const mcp = new McpServer(MCP_SERVER_INFO, { instructions: gateInstructions(opts) });
 
   const upgrade = opts.upgrade;
   if (upgrade) {
