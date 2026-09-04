@@ -644,6 +644,48 @@ describe("CanvasNoteSchema", () => {
       false,
     );
   });
+
+  test("an attached note may omit coordinates — the canvas places it by its anchor", async () => {
+    const { CanvasNoteSchema } = await import("../annotation.ts");
+    const parsed = CanvasNoteSchema.safeParse({
+      id: "n3",
+      width: 240,
+      body: "tighten this",
+      attachment: { frameId: "fr_1", screenId: "home", locator: "@cta" },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  test("an attached note that was dragged keeps its pinned coordinates", async () => {
+    const { CanvasNoteSchema } = await import("../annotation.ts");
+    const parsed = CanvasNoteSchema.safeParse({
+      id: "n4",
+      x: 40,
+      y: 80,
+      width: 240,
+      body: "moved",
+      attachment: { frameId: "fr_1", screenId: "home", locator: [0, 2] },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.x).toBe(40);
+  });
+
+  test("rejects a free note with no coordinates — only an anchor can place one", async () => {
+    const { CanvasNoteSchema } = await import("../annotation.ts");
+    expect(CanvasNoteSchema.safeParse({ id: "n5", width: 240, body: "" }).success).toBe(false);
+  });
+
+  test("rejects an attachment whose locator is neither a path nor an @id", async () => {
+    const { CanvasNoteSchema } = await import("../annotation.ts");
+    expect(
+      CanvasNoteSchema.safeParse({
+        id: "n6",
+        width: 240,
+        body: "",
+        attachment: { frameId: "fr_1", screenId: "home", locator: "cta" },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("SnippetParamSchema refinements", () => {

@@ -1,31 +1,81 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { connectorGeometry, type PlacedAnnotation } from "../annotation-layout.ts";
 import { notes as notesApi } from "../api.ts";
+import { isStaleNote, type NoteLayoutItem, planNotes } from "../note-layout.ts";
 import { type CanvasNoteEntry, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Markdown } from "./Markdown.tsx";
 
 /**
- * Free-positioned markdown notes on a board. Each note is absolutely
- * positioned in board coords (same coord space as Frames). Click in note
- * mode to drop a new one; double-click to edit; drag to move.
+ * Markdown notes on a board, in the same coord space as Frames. A note is
+ * either free — dropped on empty board space and positioned by its own
+ * x/y — or attached to a node inside a frame, in which case it is placed
+ * beside that frame against the node's live rect and joined to it by a
+ * connector, until the user drags it and pins it down. `planNotes` owns
+ * that split; this layer renders + edits.
  *
- * The Board's onPointerDown in "note" mode handles creation; this layer
- * just renders + edits.
+ * The Board's onPointerDown (empty space) and the Frame's select channel
+ * (a node) handle creation in note mode.
  */
 export function NotesLayer() {
   const notes = useCanvas((s) => s.notes);
-  const visible = useCanvas((s) => s.annotationsVisible);
+  const visible = useCanvas((s) => s.markupVisible);
+  const currentBoardId = useCanvas((s) => s.currentBoardId);
+  const board = useCanvas((s) => (currentBoardId ? s.boards[currentBoardId] : null));
+  const nodeRects = useCanvas((s) => s.nodeRects);
+  const frameInsets = useCanvas((s) => s.frameInsets);
   if (!visible || notes.length === 0) return null;
+
+  const { free, sections } = planNotes(notes, board?.frames ?? [], nodeRects, frameInsets);
+
   return (
     <>
-      {notes.map((note) => (
-        <Note key={note.id} note={note} />
+      {free.map(({ note, card }) => (
+        <Note key={note.id} note={note} pos={card} />
+      ))}
+      {sections.map(({ frameId, placed }) => (
+        <Fragment key={frameId}>
+          <Connectors placed={placed} />
+          {placed.map((p) => (
+            <Note key={p.annotation.id} note={p.annotation.note} pos={p.card} />
+          ))}
+        </Fragment>
       ))}
     </>
   );
 }
 
-function Note({ note }: { note: CanvasNoteEntry }) {
+/** One board-spanning SVG for the whole frame group, as AnnotationsLayer does. */
+function Connectors({ placed }: { placed: PlacedAnnotation<NoteLayoutItem>[] }) {
+  const geometry = connectorGeometry(placed);
+  if (!geometry) return null;
+  const { box, lines } = geometry;
+  return (
+    <svg
+      className="absolute pointer-events-none text-amber-500/70"
+      style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+      width={box.w}
+      height={box.h}
+      aria-hidden="true"
+    >
+      <title>Note connectors</title>
+      {lines.map((line) => (
+        <g key={line.id}>
+          <path
+            d={line.path}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+          <circle cx={line.dot.x} cy={line.dot.y} r={3} fill="currentColor" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function Note({ note, pos }: { note: CanvasNoteEntry; pos: { x: number; y: number } }) {
   const editingId = useCanvas((s) => s.editingMarkupId);
   const setEditingId = useCanvas((s) => s.setEditingMarkupId);
   const boardId = useCanvas((s) => s.currentBoardId);
@@ -34,6 +84,9 @@ function Note({ note }: { note: CanvasNoteEntry }) {
   const exitingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dragRef = useRef<{ ox: number; oy: number; sx: number; sy: number } | null>(null);
+  // An anchor the screen tree no longer resolves: the note is still the
+  // author's, so it stays put and says so rather than vanishing.
+  const stale = isStaleNote(note);
 
   useEffect(() => {
     setDraft(note.body);
@@ -57,8 +110,8 @@ function Note({ note }: { note: CanvasNoteEntry }) {
     target.setPointerCapture(e.pointerId);
     const zoom = useCanvas.getState().canvasZoom || 1;
     dragRef.current = {
-      ox: note.x,
-      oy: note.y,
+      ox: pos.x,
+      oy: pos.y,
       sx: e.clientX / zoom,
       sy: e.clientY / zoom,
     };
@@ -83,6 +136,8 @@ function Note({ note }: { note: CanvasNoteEntry }) {
     const dx = e.clientX / zoom - d.sx;
     const dy = e.clientY / zoom - d.sy;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    // Dragging an attached note pins it here; the anchor (and its
+    // connector) survive, only the auto-placement is given up.
     await commit({ x: d.ox + dx, y: d.oy + dy });
   };
 
@@ -131,10 +186,13 @@ function Note({ note }: { note: CanvasNoteEntry }) {
     // biome-ignore lint/a11y/noStaticElementInteractions: canvas-positioned note — interactive div is intentional
     <div
       className={
-        "absolute select-none rounded-md px-3 py-2 bg-amber-100 border border-amber-300 shadow-sm group/note text-amber-950 dark:text-amber-950 " +
+        "absolute select-none rounded-md px-3 py-2 bg-amber-100 border shadow-sm group/note text-amber-950 dark:text-amber-950 " +
+        (stale ? "border-dashed border-amber-400 opacity-70 " : "border-amber-300 ") +
         (isEditing ? "ring-2 ring-amber-500" : "")
       }
-      style={{ left: note.x, top: note.y, width: note.width }}
+      style={{ left: pos.x, top: pos.y, width: note.width }}
+      data-note-id={note.id}
+      data-note-attached={note.attachment ? "true" : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -190,6 +248,11 @@ function Note({ note }: { note: CanvasNoteEntry }) {
           ) : (
             <span className="opacity-50">(empty note — double-click to edit)</span>
           )}
+          {stale ? (
+            <div className="mt-1 text-[11px] uppercase tracking-wide opacity-60">
+              target removed
+            </div>
+          ) : null}
         </div>
       )}
     </div>

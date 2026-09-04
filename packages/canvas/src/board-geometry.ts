@@ -17,6 +17,11 @@ interface FrameBox {
   h: number;
 }
 
+interface FrameInset {
+  x: number;
+  y: number;
+}
+
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
 
@@ -109,6 +114,25 @@ export function focusRect(
       x: Math.round(vw / 2 - cx * zoom),
       y: Math.round(vh / 2 - cy * zoom),
     },
+  };
+}
+
+/**
+ * Convert an iframe-viewport rect into board-world coordinates.
+ *
+ * Iframe rects come from `getBoundingClientRect()`, so scrolling can make
+ * their x/y negative. Clamp the target to the visible frame viewport before
+ * adding the frame and chrome offsets; camera navigation should center the
+ * place the node is visible now, not an off-screen document coordinate.
+ */
+export function iframeRectToBoard(frame: FrameBox, inset: FrameInset, rect: FrameBox): FrameBox {
+  const maxX = Math.max(0, frame.w - rect.w);
+  const maxY = Math.max(0, frame.h - rect.h);
+  return {
+    x: frame.x + inset.x + Math.max(0, Math.min(rect.x, maxX)),
+    y: frame.y + inset.y + Math.max(0, Math.min(rect.y, maxY)),
+    w: rect.w,
+    h: rect.h,
   };
 }
 

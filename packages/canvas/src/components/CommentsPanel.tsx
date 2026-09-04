@@ -1,7 +1,15 @@
 import type { CommentThreadView } from "@velloo/schema";
-import { Bot, Check, Cloud, MapPin, MessageCircle, RotateCcw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bot, Check, Cloud, Crosshair, MessageCircle, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { CloudCommentAvailability, CommentScope } from "../api.ts";
+import { commentNumbers } from "../comment-order.ts";
 import { useCanvas } from "../store.ts";
+import {
+  CommentScopeFilterToggle,
+  CommentTargetPicker,
+  cloudUnavailableHint,
+  LOCAL_COMMENT_SCOPE_HELP,
+} from "./CommentScopeControls.tsx";
 import { Button } from "./ui/button.tsx";
 import { Textarea } from "./ui/textarea.tsx";
 
@@ -13,27 +21,145 @@ function relativeTime(iso: string): string {
   return `${Math.floor(minutes / 1440)}d`;
 }
 
+type AuthorKind = CommentThreadView["messages"][number]["author"]["kind"];
+
+/** Only used when the message carries no name of its own — a folder-local one. */
+const DEFAULT_AUTHOR_NAME: Record<AuthorKind, string> = {
+  user: "You",
+  agent: "Agent",
+  reviewer: "Reviewer",
+};
+
+function AuthorIcon({ kind }: { kind: AuthorKind }) {
+  if (kind === "agent") return <Bot size={11} />;
+  if (kind === "reviewer") return <Cloud size={11} />;
+  return <MessageCircle size={11} />;
+}
+
+/**
+ * One thread's conversation. On a cloud thread the designer is reading replies
+ * from outside their machine, so a reviewer is badged; their own voice and
+ * their agent's are the expected ones here and are left plain.
+ */
+export function ThreadMessages({ messages }: { messages: CommentThreadView["messages"] }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {messages.map((message) => (
+        <div key={message.id} className="rounded-md border bg-card p-2.5">
+          <div className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <AuthorIcon kind={message.author.kind} />
+            {message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
+            {message.author.kind === "reviewer" ? (
+              <span className="rounded border px-1 text-[9px] uppercase tracking-wide">
+                Reviewer
+              </span>
+            ) : null}
+            <span className="ml-auto">{relativeTime(message.createdAt)}</span>
+          </div>
+          <p className="mt-1 whitespace-pre-wrap text-sm">{message.body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export const MOVE_TO_CLOUD_HELP =
+  "Moving a thread to the cloud republishes the conversation on the published board and removes the local copy.";
+
+export function CommentThreadListItem({
+  thread,
+  number,
+  onOpen,
+  onLocate,
+}: {
+  thread: CommentThreadView;
+  number: number;
+  onOpen(): void;
+  onLocate(): void;
+}) {
+  return (
+    <li className="relative">
+      <button
+        type="button"
+        className={`w-full px-3 py-3 text-left hover:bg-muted/40 ${thread.anchor ? "pr-11" : ""}`}
+        onClick={onOpen}
+      >
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="font-medium tabular-nums">#{number}</span>
+          {thread.scope === "shared" ? <Cloud size={11} /> : <MessageCircle size={11} />}
+          <span>{thread.scope === "shared" ? "Cloud" : "Local"}</span>
+          <span>
+            {!thread.anchor
+              ? "Board-wide"
+              : thread.anchor.kind === "node"
+                ? "Pinned comment"
+                : "Board pin"}
+          </span>
+          {thread.anchorState.status === "stale" ? (
+            <span className="text-destructive">target changed</span>
+          ) : null}
+          <span className="ml-auto">{relativeTime(thread.updatedAt)}</span>
+        </div>
+        <p className="mt-1 line-clamp-3 text-sm">{thread.messages[0]?.body}</p>
+        {thread.messages.length > 1 ? (
+          <span className="mt-1 block text-[11px] text-muted-foreground">
+            {thread.messages.length} messages
+          </span>
+        ) : null}
+      </button>
+      {thread.anchor ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="absolute right-2 top-1/2 -translate-y-1/2"
+          aria-label={`Go to comment ${number}`}
+          title="Go to comment on canvas"
+          onClick={onLocate}
+        >
+          <Crosshair />
+        </Button>
+      ) : null}
+    </li>
+  );
+}
+
 export function CommentsPanel() {
   const boardId = useCanvas((state) => state.currentBoardId);
   const threads = useCanvas((state) => state.commentThreads);
   const status = useCanvas((state) => state.commentStatus);
+  const scope = useCanvas((state) => state.commentScope);
+  const cloud = useCanvas((state) => state.cloudComments);
   const activeId = useCanvas((state) => state.activeCommentId);
   const refresh = useCanvas((state) => state.refreshComments);
+  const refreshCloud = useCanvas((state) => state.refreshCloudComments);
   const setStatus = useCanvas((state) => state.setCommentStatus);
+  const setScope = useCanvas((state) => state.setCommentScope);
   const setActive = useCanvas((state) => state.setActiveComment);
+  const locateComment = useCanvas((state) => state.locateComment);
   const createBoardComment = useCanvas((state) => state.createBoardComment);
   const reply = useCanvas((state) => state.replyToComment);
   const setResolved = useCanvas((state) => state.setCommentResolved);
-  const setAgentRequested = useCanvas((state) => state.setCommentAgentRequested);
+  const moveToCloud = useCanvas((state) => state.moveCommentToCloud);
   const deleteComment = useCanvas((state) => state.deleteComment);
   const enterCommentMode = useCanvas((state) => state.enterCommentMode);
+  const publishBoardNow = useCanvas((state) => state.publishBoardNow);
+  const board = useCanvas((state) =>
+    state.currentBoardId ? state.boards[state.currentBoardId] : undefined,
+  );
   const [boardDraft, setBoardDraft] = useState("");
+  const [boardScope, setBoardScope] = useState<CommentScope>("local");
   const [replyDraft, setReplyDraft] = useState("");
   const active = threads.find((thread) => thread.id === activeId) ?? null;
+  const numbers = useMemo(() => commentNumbers(threads), [threads]);
+  const publishBoard = () => board && publishBoardNow({ id: board.id, name: board.name }, "public");
 
   useEffect(() => {
     if (boardId) void refresh();
   }, [boardId, refresh]);
+
+  useEffect(() => {
+    void refreshCloud();
+  }, [refreshCloud]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the active thread id is intentionally the reset trigger
   useEffect(() => {
@@ -42,21 +168,30 @@ export function CommentsPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-velloo-comments-panel>
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <select
-          aria-label="Comment status"
-          className="h-7 rounded border bg-background px-2 text-xs"
-          value={status}
-          onChange={(event) => setStatus(event.target.value as typeof status)}
-        >
-          <option value="open">Open</option>
-          <option value="resolved">Resolved</option>
-          <option value="all">All</option>
-        </select>
-        <span className="text-xs text-muted-foreground">{threads.length}</span>
-        <Button variant="outline" size="sm" className="ml-auto" onClick={enterCommentMode}>
-          <MapPin /> Add pin
-        </Button>
+      <div className="space-y-2 border-b px-3 py-2">
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Comment status"
+            className="h-7 rounded border bg-background px-2 text-xs"
+            value={status}
+            onChange={(event) => setStatus(event.target.value as typeof status)}
+          >
+            <option value="open">Open</option>
+            <option value="resolved">Resolved</option>
+            <option value="all">All</option>
+          </select>
+          <span className="text-xs text-muted-foreground">{threads.length}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            title="Pin a new comment on the canvas"
+            onClick={enterCommentMode}
+          >
+            <Plus /> Add
+          </Button>
+        </div>
+        <CommentScopeFilterToggle scope={scope} onChange={setScope} />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -68,46 +203,21 @@ export function CommentsPanel() {
             onBack={() => setActive(null)}
             onReply={() => void reply(active.id, replyDraft).then(() => setReplyDraft(""))}
             onResolve={() => void setResolved(active.id, active.status === "open")}
-            onAskAgent={() => void setAgentRequested(active.id, !active.agentRequestedAt)}
+            cloud={cloud}
+            onMoveToCloud={() => void moveToCloud(active.id)}
+            onPublish={publishBoard}
             onDelete={() => void deleteComment(active.id)}
           />
         ) : threads.length > 0 ? (
           <ul className="divide-y">
             {threads.map((thread) => (
-              <li key={thread.id}>
-                <button
-                  type="button"
-                  className="w-full px-3 py-3 text-left hover:bg-muted/40"
-                  onClick={() => setActive(thread.id)}
-                >
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    {thread.scope === "shared" ? <Cloud size={11} /> : <MessageCircle size={11} />}
-                    <span>{thread.scope === "shared" ? "Shared" : "Local"}</span>
-                    <span>
-                      {!thread.anchor
-                        ? "Board-wide"
-                        : thread.anchor.kind === "node"
-                          ? "Pinned element"
-                          : "Board pin"}
-                    </span>
-                    {thread.anchorState.status === "stale" ? (
-                      <span className="text-destructive">target changed</span>
-                    ) : null}
-                    {thread.agentRequestedAt ? (
-                      <Bot className="ml-auto text-primary" size={12} />
-                    ) : null}
-                    <span className={thread.agentRequestedAt ? "" : "ml-auto"}>
-                      {relativeTime(thread.updatedAt)}
-                    </span>
-                  </div>
-                  <p className="mt-1 line-clamp-3 text-sm">{thread.messages[0]?.body}</p>
-                  {thread.messages.length > 1 ? (
-                    <span className="mt-1 block text-[11px] text-muted-foreground">
-                      {thread.messages.length} messages
-                    </span>
-                  ) : null}
-                </button>
-              </li>
+              <CommentThreadListItem
+                key={thread.id}
+                thread={thread}
+                number={numbers.get(thread.id) ?? 0}
+                onOpen={() => setActive(thread.id)}
+                onLocate={() => locateComment(thread.id)}
+              />
             ))}
           </ul>
         ) : (
@@ -131,20 +241,30 @@ export function CommentsPanel() {
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                 event.preventDefault();
-                void createBoardComment(boardDraft).then(() => setBoardDraft(""));
+                void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""));
               }
             }}
           />
-          <Button
-            size="sm"
-            className="mt-2 w-full"
-            disabled={!boardDraft.trim()}
-            onClick={() => void createBoardComment(boardDraft).then(() => setBoardDraft(""))}
-          >
-            Start thread
-          </Button>
+          <div className="mt-2 flex items-center gap-2">
+            <CommentTargetPicker
+              scope={boardScope}
+              onChange={setBoardScope}
+              cloud={cloud}
+              onPublish={publishBoard}
+            />
+            <Button
+              size="sm"
+              className="ml-auto"
+              disabled={!boardDraft.trim()}
+              onClick={() =>
+                void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""))
+              }
+            >
+              Start thread
+            </Button>
+          </div>
           <p className="mt-1.5 text-[11px] text-muted-foreground">
-            Board-wide threads have no canvas pin.
+            Board-wide threads have no canvas pin. {LOCAL_COMMENT_SCOPE_HELP}
           </p>
         </div>
       ) : null}
@@ -159,7 +279,9 @@ function ThreadDetail({
   onBack,
   onReply,
   onResolve,
-  onAskAgent,
+  cloud,
+  onMoveToCloud,
+  onPublish,
   onDelete,
 }: {
   thread: CommentThreadView;
@@ -168,35 +290,31 @@ function ThreadDetail({
   onBack(): void;
   onReply(): void;
   onResolve(): void;
-  onAskAgent(): void;
+  cloud: CloudCommentAvailability | undefined;
+  onMoveToCloud(): void;
+  onPublish(): void;
   onDelete(): void;
 }) {
+  const blocked = cloud?.available === false ? cloud.reason : null;
   return (
     <div className="flex min-h-full flex-col p-3" data-active-comment={thread.id}>
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="sm" onClick={onBack}>
           ← Threads
         </Button>
-        <span className="ml-auto text-[11px] text-muted-foreground">
-          {thread.anchorState.status === "stale"
-            ? "Target changed"
-            : thread.anchor
-              ? "Pinned"
-              : "Board-wide"}
+        <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
+          {thread.scope === "shared" ? <Cloud size={11} /> : <MessageCircle size={11} />}
+          {thread.scope === "shared" ? "Cloud" : "Local"}
+          <span>
+            {thread.anchorState.status === "stale"
+              ? "Target changed"
+              : thread.anchor
+                ? "Pinned"
+                : "Board-wide"}
+          </span>
         </span>
       </div>
-      <div className="mt-2 space-y-2">
-        {thread.messages.map((message) => (
-          <div key={message.id} className="rounded-md border bg-card p-2.5">
-            <div className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-              {message.author.kind === "agent" ? <Bot size={11} /> : <MessageCircle size={11} />}
-              {message.author.displayName ?? (message.author.kind === "agent" ? "Agent" : "You")}
-              <span className="ml-auto">{relativeTime(message.createdAt)}</span>
-            </div>
-            <p className="mt-1 whitespace-pre-wrap text-sm">{message.body}</p>
-          </div>
-        ))}
-      </div>
+      <ThreadMessages messages={thread.messages} />
       {thread.status === "open" ? (
         <div className="mt-3">
           <Textarea
@@ -212,26 +330,29 @@ function ThreadDetail({
         </div>
       ) : null}
       <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
-        {thread.status === "open" && thread.scope === "shared" ? (
-          <Button variant="outline" size="sm" disabled>
-            <Bot /> Agent aware
-          </Button>
-        ) : thread.status === "open" ? (
-          <Button
-            variant={thread.agentRequestedAt ? "default" : "outline"}
-            size="sm"
-            onClick={onAskAgent}
-          >
-            <Bot /> {thread.agentRequestedAt ? "Queued" : "Ask agent"}
+        {thread.status === "open" ? (
+          <Button variant="outline" size="sm" onClick={onResolve}>
+            <Check /> Resolve
           </Button>
         ) : (
           <Button variant="outline" size="sm" onClick={onResolve}>
             <RotateCcw /> Reopen
           </Button>
         )}
-        {thread.status === "open" ? (
-          <Button variant="outline" size="sm" onClick={onResolve}>
-            <Check /> Resolve
+        {thread.scope === "local" ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={cloud === undefined || Boolean(blocked)}
+            title={blocked ? cloudUnavailableHint(blocked) : MOVE_TO_CLOUD_HELP}
+            onClick={onMoveToCloud}
+          >
+            <Cloud /> Move to cloud
+          </Button>
+        ) : null}
+        {thread.scope === "local" && blocked === "unpublished" ? (
+          <Button variant="ghost" size="sm" className="col-span-2" onClick={onPublish}>
+            Publish this board to move the thread to the cloud
           </Button>
         ) : null}
         {thread.scope === "local" ? (

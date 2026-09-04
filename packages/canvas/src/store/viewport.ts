@@ -2,6 +2,7 @@ import type { StateCreator } from "zustand";
 import {
   focusFrame,
   focusRect,
+  iframeRectToBoard,
   MAX_ZOOM,
   MIN_ZOOM,
   type PanZoom,
@@ -107,6 +108,8 @@ export interface ViewportSlice {
   centerOnFrame(frameId: string): void;
   /** Animated centerOnFrame — the camera glides instead of jumping. */
   flyToFrame(frameId: string): void;
+  /** Glide to an exact board-world rect (comment board pins / historical anchors). */
+  flyToBoardRect(rect: { x: number; y: number; w: number; h: number }): void;
   /**
    * Navigate straight to a node: select + reveal it, then glide the camera to
    * center the node itself (zooming toward 1:1), falling back to the hosting
@@ -114,7 +117,11 @@ export interface ViewportSlice {
    * when the screen lives elsewhere; `hostBoards` (e.g. an activity event's
    * server-enriched board list) covers screens on boards not loaded yet.
    */
-  locateNode(screenId: string, path: string, opts?: { hostBoards?: string[] }): Promise<void>;
+  locateNode(
+    screenId: string,
+    path: string,
+    opts?: { hostBoards?: string[]; frameId?: string; preserveTab?: boolean },
+  ): Promise<void>;
   setNodeRects(
     frameId: string,
     rects: { path: string; x: number; y: number; w: number; h: number }[],
@@ -240,6 +247,14 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
     animateCamera(set, { zoom: s.canvasZoom, pan: s.pan }, view);
   },
 
+  flyToBoardRect(rect) {
+    const wrapper = boardWrapper();
+    if (!wrapper) return;
+    const s = get();
+    const view = focusRect(rect, wrapper.clientWidth, wrapper.clientHeight);
+    if (view) animateCamera(set, { zoom: s.canvasZoom, pan: s.pan }, view);
+  },
+
   async locateNode(screenId, path, opts = {}) {
     const s = get();
     // Host board: stay put when the current board shows the screen, else any
@@ -256,18 +271,32 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
           hinted.find((id) => s.design?.boards.some((b) => b.id === id)) ??
           null);
     if (hostBoard && hostBoard !== s.currentBoardId) await s.selectBoard(hostBoard);
-    get().revealSelection({ screenId, path });
+    get().revealSelection({ screenId, path }, opts.preserveTab ? { preserveTab: true } : undefined);
+    // Store-only tests and non-browser embeddings can still select/reveal; the
+    // camera portion simply has no DOM viewport to target.
+    if (typeof document === "undefined") return;
     const boardId = get().currentBoardId;
     const board = boardId ? get().boards[boardId] : null;
-    const frame = board?.frames.find((f) => f.screen === screenId);
+    const frame = opts.frameId
+      ? board?.frames.find((f) => f.id === opts.frameId && f.screen === screenId)
+      : board?.frames.find((f) => f.screen === screenId);
     if (!frame) return;
 
     // Probe the node's rect in the hosting frame; fall back to framing the
     // whole frame if the geometry doesn't come back in time (iframe still
     // booting, node gone).
-    set((prev) => ({
-      rectProbe: { frameId: frame.id, path, nonce: (prev.rectProbe?.nonce ?? 0) + 1 },
-    }));
+    set((prev) => {
+      // Never accept a rect measured before revealSelection scrolled the
+      // iframe. A cached rect was the source of tree/comment Go to flights
+      // centering the right node from the wrong scroll position.
+      const frameRects = prev.nodeRects[frame.id];
+      const nextFrameRects = frameRects ? { ...frameRects } : undefined;
+      if (nextFrameRects) delete nextFrameRects[path];
+      return {
+        rectProbe: { frameId: frame.id, path, nonce: (prev.rectProbe?.nonce ?? 0) + 1 },
+        ...(nextFrameRects ? { nodeRects: { ...prev.nodeRects, [frame.id]: nextFrameRects } } : {}),
+      };
+    });
     const rect = await new Promise<{ x: number; y: number; w: number; h: number } | null>(
       (resolve) => {
         const deadline = Date.now() + 700;
@@ -286,12 +315,8 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
     const from = { zoom: get().canvasZoom, pan: get().pan };
     if (rect) {
       const inset = get().frameInsets[frame.id] ?? { x: 0, y: 0, chromeH: 0 };
-      // Rects are iframe-viewport-relative; clamp inside the frame so a node
-      // outside the fold still targets a visible point of the frame.
-      const nx = frame.x + inset.x + Math.max(0, Math.min(rect.x, frame.w - rect.w));
-      const ny = frame.y + inset.y + Math.max(0, Math.min(rect.y, frame.h - rect.h));
       const view = focusRect(
-        { x: nx, y: ny, w: rect.w, h: rect.h },
+        iframeRectToBoard(frame, inset, rect),
         wrapper.clientWidth,
         wrapper.clientHeight,
       );

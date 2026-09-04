@@ -17,6 +17,7 @@ export function RightPanel({ screenId }: Props) {
   const rightTab = useCanvas((s) => s.rightTab);
   const setRightTab = useCanvas((s) => s.setRightTab);
   const selection = useCanvas((s) => s.selection);
+  const selectionIntent = useCanvas((s) => s.selectionIntent);
   const pendingCommentAnchor = useCanvas((s) => s.pendingCommentAnchor);
   const activeCommentId = useCanvas((s) => s.activeCommentId);
   const theme = useCanvas((s) => s.theme);
@@ -29,10 +30,16 @@ export function RightPanel({ screenId }: Props) {
   const setWidth = useCanvas((s) => s.setRightPaneWidth);
 
   useEffect(() => {
-    if (selection && !pendingCommentAnchor && !activeCommentId && cursorMode !== "comment") {
+    if (
+      selection &&
+      selectionIntent === "inspect" &&
+      !pendingCommentAnchor &&
+      !activeCommentId &&
+      cursorMode !== "comment"
+    ) {
       setRightTab("node");
     }
-  }, [selection, pendingCommentAnchor, activeCommentId, cursorMode, setRightTab]);
+  }, [selection, selectionIntent, pendingCommentAnchor, activeCommentId, cursorMode, setRightTab]);
 
   const handMode = cursorMode === "hand";
 

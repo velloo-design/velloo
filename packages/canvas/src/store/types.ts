@@ -24,12 +24,22 @@ export interface AnnotationEntry {
   resolved: number[] | null;
 }
 
+export interface NoteAttachment {
+  frameId: string;
+  screenId: string;
+  locator: number[] | string;
+}
+
 export interface CanvasNoteEntry {
   id: string;
-  x: number;
-  y: number;
+  /** Absent on an attached note until the user drags it off its anchor. */
+  x?: number | undefined;
+  y?: number | undefined;
   width: number;
   body: string;
+  attachment?: NoteAttachment | undefined;
+  /** Resolved node path for an attached note; null once the node is gone. */
+  resolved?: number[] | null | undefined;
 }
 
 export interface Selection {

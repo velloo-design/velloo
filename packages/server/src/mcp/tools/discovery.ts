@@ -344,7 +344,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_notes",
     {
       description:
-        "List free-positioned markdown notes on one board — board-level commentary beside the frames (tour steps, review remarks, handoff context). Writable via add_note / update_note / remove_note.",
+        "List markdown notes on one board — commentary beside the frames or attached to a node (tour steps, review remarks, handoff context). An attached note carries `attachment` naming the frame, screen and node it anchors to. Writable via add_note / update_note / remove_note.",
       inputSchema: { boardId: z.string() },
     },
     async ({ boardId }) => {

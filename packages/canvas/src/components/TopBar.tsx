@@ -185,7 +185,7 @@ export function TopBar() {
             ))}
           </ToggleGroup>
 
-          <AnnotationsToggle />
+          <MarkupToggle />
 
           <div className="flex items-center gap-1 ml-2">
             <HotkeyTip
@@ -289,11 +289,11 @@ function SearchButton() {
   );
 }
 
-function AnnotationsToggle() {
-  const visible = useCanvas((s) => s.annotationsVisible);
-  const setVisible = useCanvas((s) => s.setAnnotationsVisible);
+function MarkupToggle() {
+  const visible = useCanvas((s) => s.markupVisible);
+  const setVisible = useCanvas((s) => s.setMarkupVisible);
   return (
-    <HotkeyTip label={visible ? "Hide annotations + notes" : "Show annotations + notes"}>
+    <HotkeyTip label={visible ? "Hide notes + comments" : "Show notes + comments"}>
       <Button variant="outline" size="icon-sm" onClick={() => setVisible(!visible)}>
         {visible ? <Eye /> : <EyeOff />}
       </Button>

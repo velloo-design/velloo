@@ -37,7 +37,7 @@ const BODY_MAX_HEIGHT_PX = 160;
  * into `frameInsets`, so anchors stay locked through chrome edits.
  */
 export function AnnotationsLayer() {
-  const visible = useCanvas((s) => s.annotationsVisible);
+  const visible = useCanvas((s) => s.markupVisible);
   const annotations = useCanvas((s) => s.annotations);
   const currentBoardId = useCanvas((s) => s.currentBoardId);
   const board = useCanvas((s) => (currentBoardId ? s.boards[currentBoardId] : null));

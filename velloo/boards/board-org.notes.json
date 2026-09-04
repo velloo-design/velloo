@@ -54,5 +54,37 @@
     "y": 950,
     "width": 1180,
     "body": "**G — Groups of boards (the pick, 2026-08-25)**\n\nA's data model with E's visual language. A group is an *area of work* — \"Side pane\", \"Account page\", \"Navigation\", \"Brand\" — holding a set of boards; each board stays exactly what it is today, with its own frames and screens.\n\n- **Schema** — `config.boardGroups: [{ id, name, color? }]` plus `group?: string` on the board file (mirroring how a frame carries its `BoardGroup` id — same shape, one level up). `boardOrder` keeps ordering *within* a group; a board with no `group` falls into the implicit Ungrouped section. Absent field = today's sidebar, so no migration.\n- **MCP** — no group CRUD tools. `add_board` and `update_board` take an optional `group`; naming a group that doesn't exist creates it (colour auto-assigned from the palette). `list_boards` returns each board's group. That's the whole agent surface — an agent can file a board it just made, and can't otherwise reorganise the folder.\n- **Canvas owns grouping.** Create / rename / recolour / reorder / collapse and delete-group-keep-boards all live in the sidebar. Board ⋯ → \"Move to group ▸\" with the colour chips, drag a row into a group, drop-target highlight on the group header. The group is a coloured chip in the top-bar crumb, matching E's region colours.\n- **Why not D** — deriving groups from a name prefix looked free but makes renaming load-bearing and surprising: rename a board and it silently refiles itself. Rejected 2026-08-25.\n- **Why not B** — projects are answered one level up, by multiple design folders in `velloo.json` (frames F1/F2).\n- **Pairs with E**, which is the same idea inside a board: regions group frames, groups group boards, both coloured, both derived-geometry-free. Ship G first (it's the list that hurts), E after."
+  },
+  {
+    "id": "note_f2b31d21",
+    "width": 240,
+    "body": "Here is the note. It's **Attached!!!**",
+    "attachment": {
+      "frameId": "bo-g-groups-1",
+      "screenId": "bo-g-groups",
+      "locator": [
+        2,
+        1
+      ]
+    }
+  },
+  {
+    "id": "note_5cf46c90",
+    "width": 240,
+    "body": "And another one, now on top of the other frame. \n# Let's make it big!\n~~or not~~\n**LLLOOOLLL**",
+    "attachment": {
+      "frameId": "bo-e-regions-1",
+      "screenId": "bo-e-regions",
+      "locator": [
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
   }
 ]

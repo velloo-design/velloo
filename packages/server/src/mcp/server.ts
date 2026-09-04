@@ -127,7 +127,7 @@ const INSTRUCTION_PARTS = [
   "",
   "",
   "**Reaching a page you can't load — browser capture.** When the target is behind a login, on staging, or on a third-party site, `start_capture_session { url }` opens a real browser window the USER drives. It returns a `sessionId` IMMEDIATELY and does not wait for the session — never treat it as blocking, and never re-call it to \"check\": poll `list_captures` instead, and tell the user plainly what to do (log in, then hit **Capture page** in the velloo toolbar on each page you need, then **Done**). Read each result with `get_capture`: you get a structural `outline` with repeated blocks marked (a run of identical siblings is ONE component instantiated N times — build a snippet, not N copies), `themeCss` (the page's real custom properties, including any dark block) to feed `import_theme` BEFORE composing, `fonts`, and downloaded image `assets` for `upload_asset`. Then **re-express the page with real components — do not transcribe the DOM node-for-node**; the extract is evidence, not a tree. Verify with `compare_to_url { captureId }` rather than `url`: a stored capture is already past the login and frozen, so it can't bounce to a login page or drift between calls. Captures live outside the design folder and the user can delete them; you never see session cookies.",
-  "**Visual feedback threads** are persistent app state, not design files. Start by calling `list_comment_threads` when the instructions report open feedback; `requestedOnly: true` is the explicit agent inbox. Read the complete conversation and its node/board anchor with `get_comment_thread`, make the requested design change, reply with `reply_to_comment`, then `resolve_comment`. A stale anchor means the original node no longer exists: use its saved bounds/fingerprint as context, but don't silently attach it to a different node. Use `delete_comment_thread` only when the user explicitly asks for permanent deletion. Canvas notes are different: repo-owned board artifacts for durable design guidance, created with `add_note`.",
+  "**Visual feedback threads** are persistent app state, not design files. **Every open thread is addressed to you** — the user leaves one expecting the design to change, so there is nothing to opt into and nothing to wait for. Call `list_comment_threads` at the start of a session and again whenever the user mentions comments, and work the open ones: read the complete conversation and its node/board anchor with `get_comment_thread`, make the requested design change, reply with `reply_to_comment`, then `resolve_comment`. Threads come in two scopes and both are yours: `local` ones the user pinned in their canvas, and `shared` ones left by a reviewer on a published link (`scope:` narrows the list when you want them apart). A stale anchor means the original node no longer exists: use its saved bounds/fingerprint as context, but don't silently attach it to a different node. Use `delete_comment_thread` only when the user explicitly asks for permanent deletion. Canvas notes are different: repo-owned board artifacts for durable design guidance, created with `add_note`.",
 ];
 
 /**
@@ -145,7 +145,7 @@ const FEEDBACK_INSTRUCTION =
  * predict. The feedback paragraph is appended only when opted in. `intro` is the
  * adapter-supplied framework framing (`FrameworkAdapter.mcpIntro`, resolved for
  * the folder's style channel; empty ⇒ the default shadcn framing). `openComments`
- * adds one agent-inbox line when greater than zero.
+ * adds one waiting-feedback line when greater than zero.
  */
 export function buildInstructions(
   feedbackEnabled: boolean,
@@ -180,8 +180,8 @@ export function buildInstructions(
     parts.push(
       "",
       openComments === 1
-        ? "**1 open visual feedback thread is waiting** — read it with `list_comment_threads`."
-        : `**${openComments} open visual feedback threads are waiting** — read them with \`list_comment_threads\`.`,
+        ? "**1 open visual feedback thread is waiting on you** — read it with `list_comment_threads` and address it."
+        : `**${openComments} open visual feedback threads are waiting on you** — read them with \`list_comment_threads\` and address them.`,
     );
   }
   if (feedbackEnabled) parts.push("", FEEDBACK_INSTRUCTION);

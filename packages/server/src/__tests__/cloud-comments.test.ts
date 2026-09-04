@@ -52,15 +52,46 @@ function startServer() {
       if (request.method === "GET" && url.pathname === "/v1/comment-threads") {
         return Response.json({ threads: [shared], links: { "review-link": "ok" }, now });
       }
+      if (request.method === "POST" && url.pathname === "/v1/links/review-link/comment-threads") {
+        const body = (await request.json()) as {
+          versionId: string;
+          boardId: string;
+          body: string;
+          authorKind: "user" | "agent";
+        };
+        if (body.versionId !== versionId) {
+          return Response.json(
+            { error: "not_found", message: "that published version does not belong to this link" },
+            { status: 404 },
+          );
+        }
+        return Response.json(
+          {
+            thread: {
+              ...resetThread(),
+              id: "44444444-4444-4444-8444-444444444444",
+              messages: [
+                {
+                  id: crypto.randomUUID(),
+                  author: { kind: body.authorKind, displayName: "Owner" },
+                  body: body.body,
+                  createdAt: now,
+                },
+              ],
+            },
+          },
+          { status: 201 },
+        );
+      }
       if (request.method === "POST" && url.pathname.endsWith(`/${threadId}/messages`)) {
-        const body = (await request.json()) as { body: string };
+        const body = (await request.json()) as { body: string; authorKind: "user" | "agent" };
         shared = {
           ...shared,
           messages: [
             ...shared.messages,
             {
               id: crypto.randomUUID(),
-              author: { kind: "agent", displayName: "Agent" },
+              author: { kind: body.authorKind, displayName: "Owner" },
               body: body.body,
               createdAt: "2026-08-28T10:01:00.000Z",
             },
@@ -121,19 +152,48 @@ describe("shared comment projection", () => {
     expect(client().cachedSync()).toEqual([shared]);
   });
 
-  test("routes agent replies and lifecycle changes back to the cloud thread", async () => {
+  test("declares which owner-side voice replied rather than letting the cloud guess", async () => {
     calls = [];
     const c = client();
-    const replied = await c.reply(threadId, "Updated the action hierarchy");
-    expect(replied.messages.at(-1)).toMatchObject({
+    const agent = await c.reply(threadId, "Updated the action hierarchy", "agent");
+    expect(agent.messages.at(-1)).toMatchObject({
       author: { kind: "agent" },
       body: "Updated the action hierarchy",
+    });
+    const person = await c.reply(threadId, "Thanks, that reads much better", "user");
+    expect(person.messages.at(-1)).toMatchObject({
+      author: { kind: "user" },
+      body: "Thanks, that reads much better",
     });
     const resolved = await c.setResolved(threadId, true);
     expect(resolved.status).toBe("resolved");
     expect(calls.map((call) => call.method)).toContain("POST");
     expect(calls.map((call) => call.method)).toContain("PATCH");
     expect(c.cachedSync()[0]?.status).toBe("resolved");
+  });
+
+  test("authors a thread on the published link and relays the cloud's refusal", async () => {
+    const c = client();
+    const created = await c.create("review-link", {
+      versionId,
+      boardId: "main",
+      body: "Reviewers should see this",
+      authorKind: "user",
+    });
+    expect(created.scope).toBe("shared");
+    expect(created.messages[0]).toMatchObject({
+      author: { kind: "user" },
+      body: "Reviewers should see this",
+    });
+
+    await expect(
+      c.create("review-link", {
+        versionId: threadId,
+        boardId: "main",
+        body: "Stale version",
+        authorKind: "user",
+      }),
+    ).rejects.toThrow("that published version does not belong to this link (not_found)");
   });
 
   test("serves the durable projection when logged out or offline", async () => {

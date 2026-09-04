@@ -4,9 +4,9 @@ import { ResourceIdSchema } from "./ids.ts";
 /**
  * Two annotation primitives, deliberately split:
  *
- *  - **CanvasNote**: free-positioned markdown in board coordinate space.
- *    Pure designer scratchpad. Lives per board in `boards/<id>.notes.json`.
- *    Not exposed to the agent.
+ *  - **CanvasNote**: markdown board markup, either free-positioned in board
+ *    coordinate space or attached to a node inside a frame. Lives per board
+ *    in `boards/<id>.notes.json`.
  *
  *  - **Annotation**: tied to a specific node in a Screen via `locator`.
  *    The screen id is implied by the sidecar filename
@@ -77,16 +77,44 @@ export const AnnotationSchema = z.object({
 });
 export type Annotation = z.infer<typeof AnnotationSchema>;
 
-export const CanvasNoteSchema = z.object({
-  id: ResourceIdSchema,
-  x: z.number(),
-  y: z.number(),
-  /**
-   * User-resizable width. Height is always derived from content (notes
-   * never scroll; the box expands downward).
-   */
-  width: z.number().positive(),
-  /** Markdown body. */
-  body: z.string(),
+/**
+ * Anchors a note to a node inside a frame. The frame is named explicitly
+ * (a screen can be framed more than once on a board, and the note belongs
+ * to the one the author clicked) with `screenId` alongside it so the
+ * locator can be resolved without walking the board first.
+ */
+export const CanvasNoteAttachmentSchema = z.object({
+  frameId: ResourceIdSchema,
+  screenId: ResourceIdSchema,
+  locator: AnnotationLocatorSchema,
 });
+export type CanvasNoteAttachment = z.infer<typeof CanvasNoteAttachmentSchema>;
+
+export const CanvasNoteSchema = z
+  .object({
+    id: ResourceIdSchema,
+    /**
+     * Board-space placement. Required for a free note. An attached note
+     * omits it until the user drags the card, which pins it here — the same
+     * "auto until moved" rule as `Annotation.position`.
+     */
+    x: z.number().optional(),
+    y: z.number().optional(),
+    /**
+     * User-resizable width. Height is always derived from content (notes
+     * never scroll; the box expands downward).
+     */
+    width: z.number().positive(),
+    /** Markdown body. */
+    body: z.string(),
+    /** Present when the note is about a specific node rather than the board. */
+    attachment: CanvasNoteAttachmentSchema.optional(),
+  })
+  .refine(
+    (note) => note.attachment !== undefined || (note.x !== undefined && note.y !== undefined),
+    {
+      message: "A note without an attachment needs x and y",
+      path: ["x"],
+    },
+  );
 export type CanvasNote = z.infer<typeof CanvasNoteSchema>;

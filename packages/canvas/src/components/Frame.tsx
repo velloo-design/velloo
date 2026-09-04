@@ -6,7 +6,7 @@ import { fontDraftCss, fontDraftUrl } from "../font-draft.ts";
 import { frameRenderSrc } from "../frame-render-src.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { selectedNode } from "../store/selection.ts";
-import { useCanvas } from "../store.ts";
+import { type CanvasState, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { typesetDraftCss } from "../typeset-draft.ts";
 import { FrameHeader } from "./Frame/FrameHeader.tsx";
@@ -81,6 +81,8 @@ export const Frame = memo(function Frame({
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
   const setFrameInset = useCanvas((s) => s.setFrameInset);
   const commentThreads = useCanvas((s) => s.commentThreads);
+  const notes = useCanvas((s) => s.notes);
+  const annotations = useCanvas((s) => s.annotations);
   const activityFlash = useCanvas((s) => s.activityFlash[frame.screen]);
   const glowNonce = useCanvas((s) => s.frameGlow[frame.id]);
   const [glowing, setGlowing] = useState(false);
@@ -96,19 +98,9 @@ export const Frame = memo(function Frame({
   const x = draftPos?.x ?? frame.x;
   const y = draftPos?.y ?? frame.y;
   const hasScreen = Boolean(screen);
-  const commentPaths = useMemo(
-    () =>
-      commentThreads
-        .filter(
-          (thread) =>
-            thread.anchor?.kind === "node" &&
-            thread.anchor.frameId === frame.id &&
-            thread.anchorState.status === "attached",
-        )
-        .map((thread) =>
-          thread.anchorState.status === "attached" ? thread.anchorState.resolvedPath.join(".") : "",
-        ),
-    [commentThreads, frame.id],
+  const anchoredPaths = useMemo(
+    () => anchoredNodePaths({ commentThreads, notes, annotations }, frame.id, frame.screen),
+    [commentThreads, notes, annotations, frame.id, frame.screen],
   );
 
   // The iframe src embeds only *committed* frame size — draft (mid-drag)
@@ -218,6 +210,18 @@ export const Frame = memo(function Frame({
           return;
         }
         const state = useCanvas.getState();
+        if (state.cursorMode === "note") {
+          const node = selectedNode(state.screens, { screenId: frame.screen, path });
+          if (!node) return;
+          void state.createNote({
+            attachment: {
+              frameId: frame.id,
+              screenId: frame.screen,
+              locator: nodeLocator(node, path),
+            },
+          });
+          return;
+        }
         if (state.cursorMode === "comment") {
           const selection = { screenId: frame.screen, path };
           const node = selectedNode(state.screens, selection);
@@ -226,12 +230,7 @@ export const Frame = memo(function Frame({
           ).find((candidate) => candidate.dataset.nodePath === path);
           if (!node || !element) return;
           const rect = element.getBoundingClientRect();
-          const locator =
-            "$id" in node && node.$id
-              ? (`@${node.$id}` as const)
-              : path === ""
-                ? []
-                : path.split(".").map(Number);
+          const locator = nodeLocator(node, path);
           const ref = "$ref" in node ? node.$ref : "$snippet" in node ? node.$snippet : undefined;
           const text = element.textContent?.trim().replace(/\s+/g, " ").slice(0, 500);
           state.beginComment({
@@ -286,18 +285,7 @@ export const Frame = memo(function Frame({
         if (s.nodeState !== "default" && s.selection?.screenId === frame.screen) {
           channel.send({ type: "applyVelloState", path: s.selection.path, state: s.nodeState });
         }
-        const anchored = s.commentThreads
-          .filter(
-            (thread) =>
-              thread.anchor?.kind === "node" &&
-              thread.anchor.frameId === frame.id &&
-              thread.anchorState.status === "attached",
-          )
-          .map((thread) =>
-            thread.anchorState.status === "attached"
-              ? thread.anchorState.resolvedPath.join(".")
-              : "",
-          );
+        const anchored = anchoredNodePaths(s, frame.id, frame.screen);
         if (anchored.length > 0) {
           channel.send({ type: "requestRects", paths: anchored });
         }
@@ -379,8 +367,9 @@ export const Frame = memo(function Frame({
     }
   }, [selection, frame.screen]);
 
-  // Comment mode needs a pick-target cursor *inside* the iframe — parent CSS
-  // can't style cross-document content, so inject a style tag into the doc.
+  // Comment and note mode need a pick-target cursor *inside* the iframe —
+  // parent CSS can't style cross-document content, so inject a style tag
+  // into the doc.
   // biome-ignore lint/correctness/useExhaustiveDependencies: front/screenRev/hasScreen re-apply the style after iframe swaps/reloads
   useEffect(() => {
     const apply = (iframe: HTMLIFrameElement | null) => {
@@ -388,13 +377,16 @@ export const Frame = memo(function Frame({
       if (!doc?.head) return;
       const id = "__velloo-comment-cursor";
       let el = doc.getElementById(id);
-      if (cursorMode === "comment") {
+      // Match the parent-document cursor for each mode so the reticle
+      // doesn't change as the pointer crosses into a frame.
+      const cursor = cursorMode === "comment" ? "cell" : cursorMode === "note" ? "crosshair" : null;
+      if (cursor) {
         if (!el) {
           el = doc.createElement("style");
           el.id = id;
           doc.head.appendChild(el);
         }
-        el.textContent = "*, *::before, *::after { cursor: cell !important; }";
+        el.textContent = `*, *::before, *::after { cursor: ${cursor} !important; }`;
       } else if (el) {
         el.remove();
       }
@@ -500,9 +492,9 @@ export const Frame = memo(function Frame({
     if (!channel || !rectProbe || rectProbe.frameId !== frame.id) return;
     channel.send({
       type: "requestRects",
-      paths: [...new Set([rectProbe.path, ...commentPaths])],
+      paths: [...new Set([rectProbe.path, ...anchoredPaths])],
     });
-  }, [rectProbe, frame.id, commentPaths]);
+  }, [rectProbe, frame.id, anchoredPaths]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -534,12 +526,12 @@ export const Frame = memo(function Frame({
     void screenVersion;
     const channel = channelRef.current;
     if (!channel) return;
-    if (commentPaths.length === 0) {
+    if (anchoredPaths.length === 0) {
       clearNodeRects(frame.id);
       return;
     }
-    channel.send({ type: "requestRects", paths: commentPaths });
-  }, [commentPaths, frame.id, screenVersion, clearNodeRects]);
+    channel.send({ type: "requestRects", paths: anchoredPaths });
+  }, [anchoredPaths, frame.id, screenVersion, clearNodeRects]);
 
   const onPickPreset = (preset: ViewportPreset) => {
     if (preset.w === frame.w && preset.h === frame.h) return;
@@ -599,7 +591,7 @@ export const Frame = memo(function Frame({
       .catch((err) => toastError(err, "Could not add frame"));
   };
 
-  const passThrough = cursorMode === "hand" || cursorMode === "note";
+  const passThrough = cursorMode === "hand";
 
   return (
     <div
@@ -743,6 +735,45 @@ export const Frame = memo(function Frame({
     </div>
   );
 });
+
+/**
+ * Every node in a frame that something is pinned to. The iframe reports
+ * these rects on request and comment pins, attached notes and annotation
+ * connectors all anchor off the one registry, so they have to be asked
+ * for together — a path missing here renders its markup unanchored.
+ */
+function anchoredNodePaths(
+  s: Pick<CanvasState, "commentThreads" | "notes" | "annotations">,
+  frameId: string,
+  screenId: string,
+): string[] {
+  const paths = new Set<string>();
+  for (const thread of s.commentThreads) {
+    if (thread.anchor?.kind !== "node" || thread.anchor.frameId !== frameId) continue;
+    if (thread.anchorState.status === "attached") {
+      paths.add(thread.anchorState.resolvedPath.join("."));
+    }
+  }
+  for (const note of s.notes) {
+    if (note.attachment?.frameId === frameId && note.resolved) paths.add(note.resolved.join("."));
+  }
+  for (const annotation of s.annotations) {
+    if (annotation.screenId === screenId && annotation.resolved) {
+      paths.add(annotation.resolved.join("."));
+    }
+  }
+  return [...paths];
+}
+
+/**
+ * Address a picked node the way markup should store it: by `@id` when the
+ * node has one, since a numeric path goes stale as soon as a sibling is
+ * added or moved.
+ */
+function nodeLocator(node: object, path: string): number[] | string {
+  if ("$id" in node && node.$id) return `@${String(node.$id)}`;
+  return path === "" ? [] : path.split(".").map(Number);
+}
 
 /**
  * Add, update or drop one identified element in an iframe's `<head>`.

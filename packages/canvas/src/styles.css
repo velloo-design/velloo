@@ -203,11 +203,9 @@ body {
   -webkit-user-select: none;
 }
 
-/* Note mode: crosshair cursor; iframes don't intercept so a pointerdown
- * over the workspace drops a sticky note anywhere. */
-.velloo-note .velloo-frame-iframe {
-  pointer-events: none;
-}
+/* Note mode: crosshair cursor. Iframe pointer events stay live, like
+ * comment mode — clicking a node attaches the note to it, clicking empty
+ * board space drops a free one. */
 .velloo-note,
 .velloo-note * {
   cursor: crosshair !important;

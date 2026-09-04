@@ -13,24 +13,31 @@ import { errorResult, toMcp } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
 
 /**
- * Canvas sticky notes — board-level free-floating commentary in board
- * coordinates. The agent uses them for guidance that belongs *next to*
- * frames rather than inside a screen: tour steps, review remarks,
- * handoff context. (Node-anchored annotations stay designer-authored;
- * the agent reads those via list_annotations.)
+ * Canvas sticky notes — board commentary, either free-floating in board
+ * coordinates or attached to a node inside a frame. The agent uses them
+ * for guidance that belongs beside or on the design rather than inside a
+ * screen tree: tour steps, review remarks, handoff context.
  */
 export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
   mcp.registerTool(
     "add_note",
     {
       description:
-        "Add a sticky note at board coordinates (same space as frame x/y; place beside frames, not on them). body is markdown-lite.",
+        "Add a sticky note to a board. Either free-floating at board coordinates (same space as frame x/y; place beside frames, not on them) or attached to a node — pass `attachment` and the canvas anchors the note to that node with a connector, auto-placing it beside the frame. body is markdown-lite.",
       inputSchema: {
         boardId: z.string(),
-        x: z.number(),
-        y: z.number(),
+        x: z.number().optional().describe("Board x; required unless `attachment` is given"),
+        y: z.number().optional().describe("Board y; required unless `attachment` is given"),
         width: z.number().positive().optional().describe("Pixel width; default 240"),
         body: z.string(),
+        attachment: z
+          .object({
+            frameId: z.string().describe("Frame on this board that shows the screen"),
+            screenId: z.string(),
+            locator: PathSchema,
+          })
+          .optional()
+          .describe("Anchor the note to a node instead of free board space"),
       },
     },
     async (args) => toMcp(await addNote(ctx, args)),

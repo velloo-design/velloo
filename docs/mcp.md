@@ -34,7 +34,7 @@ Hidden families (progressive mode): **theme-authoring** (`add_theme`, `apply_pre
 | `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
 | `get_theme` | — | full token tree |
 | `list_annotations` | `screenId` | Designer-authored markdown annotations on a screen. Each carries a `target: { locator }` and a `resolved` path (null when the targeted node has been removed — treat as low-priority). Read-only: agents can act on annotations but not create or edit them |
-| `list_notes` | `boardId` | Board-level free-positioned markdown notes. Writable via `add_note` / `update_note` / `remove_note` |
+| `list_notes` | `boardId` | Board markdown notes, free-positioned or attached to a node (`attachment`). Writable via `add_note` / `update_note` / `remove_note` |
 | `find_nodes` | `screenId, ref?, snippetId?, id?, classContains?, prop?, propValue?, limit?` | Query a screen tree for matching nodes (filters AND together). Returns `{ matches: [{ path, kind, ref, id?, className?, textPreview?, childCount }], total }` — locate targets for path-accepting tools without fetching and walking the whole tree |
 
 ### Tree mutations
@@ -85,11 +85,11 @@ Fields in `.design/config.json`. Only the viewport presets have an MCP tool — 
 
 ### Canvas notes
 
-Board-level sticky notes in board coordinates (the same space as frame `x`/`y`). The agent uses them for guidance that belongs next to frames — tour steps, review remarks, handoff context. Node-anchored *annotations* remain designer-authored; the agent reads those via `list_annotations`.
+Board notes carrying markdown-lite guidance — tour steps, review remarks, handoff context. A note is either **free**, positioned in board coordinates (the same space as frame `x`/`y`), or **attached** to a node inside a frame, which the canvas anchors with a connector and auto-places beside the frame until the author drags it. Node-anchored *annotations* remain designer-authored; the agent reads those via `list_annotations`.
 
 | Tool | Args |
 |---|---|
-| `add_note` | `boardId, x, y, width?, body` — markdown-lite body |
+| `add_note` | `boardId, x?, y?, width?, body, attachment?: { frameId, screenId, locator }` — `x`/`y` required unless an `attachment` is given |
 | `update_note` | `boardId, noteId, patch: { x?, y?, width?, body? }` |
 | `remove_note` | `boardId, noteId` |
 | `add_annotation` | `screenId, path, body, collapsed?` — pin agent-authored markdown to a node (author: "agent") |

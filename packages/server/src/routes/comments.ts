@@ -8,6 +8,7 @@ const CreateBody = z.object({
   body: z.string().min(1).max(4000),
   anchor: CommentAnchorSchema.optional(),
   author: CommentAuthorSchema.optional(),
+  scope: z.enum(["local", "shared"]).optional(),
 });
 
 const ReplyBody = z.object({
@@ -16,8 +17,8 @@ const ReplyBody = z.object({
 });
 
 const UpdateBody = z
-  .object({ resolved: z.boolean().optional(), agentRequested: z.boolean().optional() })
-  .refine((value) => value.resolved !== undefined || value.agentRequested !== undefined);
+  .object({ resolved: z.boolean().optional(), scope: z.literal("shared").optional() })
+  .refine((value) => value.resolved !== undefined || value.scope !== undefined);
 
 export function createCommentsRouter(service: LocalCommentsService): Hono {
   const r = new Hono();
@@ -43,8 +44,13 @@ export function createCommentsRouter(service: LocalCommentsService): Hono {
     const boardId = c.req.query("boardId") ?? "";
     const statusParam = c.req.query("status") ?? "open";
     const status = statusParam === "resolved" || statusParam === "all" ? statusParam : "open";
-    return respond(c, async () => ({ threads: await service.list(boardId, status) }));
+    const scopeParam = c.req.query("scope") ?? "all";
+    const scope = scopeParam === "local" || scopeParam === "shared" ? scopeParam : "all";
+    return respond(c, async () => ({ threads: await service.list(boardId, status, scope) }));
   });
+
+  // Registered ahead of `/:id` so the literal wins the match.
+  r.get("/cloud", (c) => respond(c, () => service.cloudAvailability(c.req.query("boardId") ?? "")));
 
   r.get("/:id", (c) => respond(c, async () => ({ thread: await service.get(c.req.param("id")) })));
 
@@ -76,8 +82,8 @@ export function createCommentsRouter(service: LocalCommentsService): Hono {
       if (parsed.data.resolved !== undefined) {
         thread = await service.setResolved(thread.id, parsed.data.resolved);
       }
-      if (parsed.data.agentRequested !== undefined) {
-        thread = await service.setAgentRequested(thread.id, parsed.data.agentRequested);
+      if (parsed.data.scope === "shared" && thread.scope === "local") {
+        thread = await service.promoteToShared(thread.id);
       }
       return { thread };
     });

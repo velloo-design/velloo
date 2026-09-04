@@ -1,8 +1,10 @@
-import { Bot, Cloud, MessageCircle } from "lucide-react";
+import { Cloud, MessageCircle } from "lucide-react";
+import { useMemo } from "react";
+import { commentNumbers } from "../comment-order.ts";
 import { useCanvas } from "../store.ts";
 
 export function CommentPinsLayer() {
-  const visible = useCanvas((state) => state.commentsVisible);
+  const visible = useCanvas((state) => state.markupVisible);
   const threads = useCanvas((state) => state.commentThreads);
   const activeId = useCanvas((state) => state.activeCommentId);
   const currentBoardId = useCanvas((state) => state.currentBoardId);
@@ -12,12 +14,13 @@ export function CommentPinsLayer() {
   const nodeRects = useCanvas((state) => state.nodeRects);
   const frameInsets = useCanvas((state) => state.frameInsets);
   const setActive = useCanvas((state) => state.setActiveComment);
+  const numbers = useMemo(() => commentNumbers(threads), [threads]);
 
   if (!visible || !board || !currentBoardId) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0" data-velloo-comment-pins>
-      {threads.map((thread, index) => {
+      {threads.map((thread) => {
         const anchor = thread.anchor;
         if (!anchor) return null;
         let x: number;
@@ -62,14 +65,8 @@ export function CommentPinsLayer() {
             }}
           >
             <span className="flex items-center gap-0.5">
-              {thread.agentRequestedAt ? (
-                <Bot size={11} />
-              ) : thread.scope === "shared" ? (
-                <Cloud size={10} />
-              ) : (
-                <MessageCircle size={10} />
-              )}
-              {index + 1}
+              {thread.scope === "shared" ? <Cloud size={10} /> : <MessageCircle size={10} />}
+              {numbers.get(thread.id)}
             </span>
           </button>
         );

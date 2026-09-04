@@ -74,13 +74,32 @@ export const PublishedCommentAnchorSchema = z.discriminatedUnion("kind", [
 ]);
 export type PublishedCommentAnchor = z.infer<typeof PublishedCommentAnchorSchema>;
 
-/** Who wrote a published message. Never a folder-local `user`. */
+/**
+ * Who wrote a published message. Three parties reach one thread and the
+ * reader has to be able to tell them apart:
+ *
+ *  - `reviewer` — someone commenting through the share link;
+ *  - `user` — the designer who owns the link, writing from their canvas;
+ *  - `agent` — an agent writing through that designer's daemon.
+ *
+ * The last two authenticate identically (both are the owner's account), so
+ * the distinction can only come from the caller declaring it — see
+ * `authorKind` on the write bodies below.
+ */
 export const PublishedCommentAuthorSchema = z.object({
-  kind: z.enum(["reviewer", "agent"]),
+  kind: z.enum(["reviewer", "user", "agent"]),
   displayName: z.string().min(1).max(200),
   accountId: z.string().min(1).max(200).optional(),
 });
 export type PublishedCommentAuthor = z.infer<typeof PublishedCommentAuthorSchema>;
+
+/**
+ * Which of the two owner-side voices is writing. Only the account that
+ * manages the link may claim either; a reviewer's messages are stamped
+ * `reviewer` by the endpoint and never by the body.
+ */
+export const OwnerAuthorKindSchema = z.enum(["user", "agent"]);
+export type OwnerAuthorKind = z.infer<typeof OwnerAuthorKindSchema>;
 
 export const PublishedCommentMessageSchema = z.object({
   id: z.uuid(),
@@ -130,6 +149,7 @@ export const CreateCommentThreadBodySchema = z
     boardId: PublishedId,
     anchor: PublishedCommentAnchorSchema.optional(),
     body: z.string().trim().min(1).max(4000),
+    authorKind: OwnerAuthorKindSchema.optional(),
   })
   .refine((value) => !value.anchor || value.anchor.boardId === value.boardId, {
     message: "the anchor belongs to a different board",
@@ -138,6 +158,7 @@ export type CreateCommentThreadBody = z.infer<typeof CreateCommentThreadBodySche
 
 export const ReplyCommentBodySchema = z.object({
   body: z.string().trim().min(1).max(4000),
+  authorKind: OwnerAuthorKindSchema.optional(),
 });
 export type ReplyCommentBody = z.infer<typeof ReplyCommentBodySchema>;
 

@@ -1,6 +1,8 @@
 import type { StateCreator } from "zustand";
+import { notes as notesApi } from "../api.ts";
+import { toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
-import type { AnnotationEntry, CanvasNoteEntry } from "./types.ts";
+import type { AnnotationEntry, CanvasNoteEntry, NoteAttachment } from "./types.ts";
 
 /**
  * End the edit session when the edited markup no longer exists (agent removed
@@ -14,18 +16,30 @@ function clearVanishedEdit(get: () => CanvasState): void {
   if (!live) get().setEditingMarkupId(null);
 }
 
-/** Legacy repo annotations plus board sticky notes. New feedback uses comments. */
+/** Legacy repo annotations plus board notes. New feedback uses comments. */
 export interface AnnotationsSlice {
   annotations: AnnotationEntry[];
   notes: CanvasNoteEntry[];
-  annotationsVisible: boolean;
+  /**
+   * One switch for everything drawn *over* the design — notes, annotations
+   * and comment pins. The top bar's eye drives it; comment flows force it
+   * back on, since acting on a thread has to reveal its pin.
+   */
+  markupVisible: boolean;
   editingMarkupId: string | null;
 
   refreshAnnotations(): Promise<void>;
   refreshNotes(): Promise<void>;
-  setAnnotationsVisible(b: boolean): void;
+  /**
+   * Drop a note and open its editor. Either free at board coordinates or
+   * attached to a node, which the server auto-places beside the frame.
+   */
+  createNote(placement: NotePlacement): Promise<void>;
+  setMarkupVisible(b: boolean): void;
   setEditingMarkupId(id: string | null): void;
 }
+
+export type NotePlacement = { x: number; y: number } | { attachment: NoteAttachment };
 
 export const createAnnotationsSlice: StateCreator<CanvasState, [], [], AnnotationsSlice> = (
   set,
@@ -33,7 +47,7 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
 ) => ({
   annotations: [],
   notes: [],
-  annotationsVisible: true,
+  markupVisible: true,
   editingMarkupId: null,
 
   async refreshAnnotations() {
@@ -73,11 +87,30 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
     }
   },
 
-  setAnnotationsVisible(annotationsVisible) {
+  async createNote(placement) {
+    const boardId = get().currentBoardId;
+    if (!boardId) return;
+    // Leave note mode first: the round-trip below is long enough for a second
+    // click to land and spawn a note nobody asked for.
+    get().setCursorMode("select");
+    try {
+      const { note } = await notesApi.add({ boardId, body: "", ...placement });
+      // Insert optimistically so the editor opens now — the ws notes-changed
+      // refresh confirms it. Setting the editing id before the note exists in
+      // the store would race the vanished-edit sweep.
+      set((s) => ({ notes: s.notes.some((n) => n.id === note.id) ? s.notes : [...s.notes, note] }));
+      get().setMarkupVisible(true);
+      get().setEditingMarkupId(note.id);
+    } catch (err) {
+      toastError(err, "Could not add note");
+    }
+  },
+
+  setMarkupVisible(markupVisible) {
     // Hiding the markup layer unmounts an in-progress editor without a blur —
     // end the session so the camera restores and the edit isn't stranded.
-    if (!annotationsVisible) get().setEditingMarkupId(null);
-    set({ annotationsVisible });
+    if (!markupVisible) get().setEditingMarkupId(null);
+    set({ markupVisible });
   },
 
   setEditingMarkupId(editingMarkupId) {

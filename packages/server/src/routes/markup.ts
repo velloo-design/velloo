@@ -61,7 +61,8 @@ export function createAnnotationsRouter(ctxFor: () => MutationContext): Hono {
 }
 
 /**
- * Canvas-facing CRUD for free-positioned per-board notes.
+ * Canvas-facing CRUD for per-board notes, free-positioned or attached to a
+ * node inside a frame.
  *
  * Also exposed to agents via the MCP note tools (add_note / list_notes /
  * update_note / remove_note). Each board has its own notes file at
@@ -71,11 +72,20 @@ export function createNotesRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  // GET /api/notes/:boardId — list notes for a specific board.
+  // GET /api/notes/:boardId — list notes for a specific board. Attached notes
+  // carry their resolved node path (null when the target is gone), so the
+  // canvas can anchor them without re-walking the screen tree.
   r.get("/:boardId", (c) => {
+    const ctx = ctxFor();
     const boardId = c.req.param("boardId");
-    const notes = ctxFor().folder.notes.get(boardId) ?? [];
-    return c.json({ notes });
+    const notes = ctx.folder.notes.get(boardId) ?? [];
+    const list = notes.map((note) => {
+      if (!note.attachment) return note;
+      const screen = ctx.folder.screens.get(note.attachment.screenId);
+      const resolved = screen ? resolveLocator(screen.tree, note.attachment.locator) : null;
+      return { ...note, resolved };
+    });
+    return c.json({ notes: list });
   });
 
   r.post(

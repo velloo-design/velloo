@@ -20,23 +20,18 @@ export function registerCommentTools(mcp: McpServer, comments: LocalCommentsServ
     "list_comment_threads",
     {
       description:
-        "List visual feedback threads. By default this returns every open thread across the folder; pass boardId to narrow it. requestedOnly is the explicit agent inbox. Anchors report attached paths or stale when their original node no longer exists.",
+        "List visual feedback threads. Every open thread is work waiting on you — there is no separate inbox to opt into. By default this returns every open thread across the folder; pass boardId to narrow it, or scope to separate local threads from cloud ones left on a published link. Anchors report attached paths or stale when their original node no longer exists.",
       inputSchema: {
         boardId: z.string().optional(),
         status: z.enum(["open", "resolved", "all"]).optional(),
-        requestedOnly: z.boolean().optional(),
+        scope: z.enum(["local", "shared", "all"]).optional(),
       },
     },
-    async ({ boardId, status = "open", requestedOnly = false }) =>
+    async ({ boardId, status = "open", scope = "all" }) =>
       result(async () => ({
         threads: boardId
-          ? (await comments.list(boardId, status)).filter(
-              (thread) =>
-                !requestedOnly ||
-                thread.scope === "shared" ||
-                thread.agentRequestedAt !== undefined,
-            )
-          : await comments.listAll(status, requestedOnly),
+          ? await comments.list(boardId, status, scope)
+          : await comments.listAll(status, scope),
       })),
   );
 

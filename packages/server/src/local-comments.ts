@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { OwnerAuthorKind } from "@velloo/protocol/comments";
 import {
   type CommentAnchor,
   CommentAnchorSchema,
@@ -13,7 +14,7 @@ import {
   type CommentThreadView,
 } from "@velloo/schema";
 import { z } from "zod";
-import type { CloudAuth } from "./cloud.ts";
+import type { CanvasPublishSlot, CloudAuth } from "./cloud.ts";
 import { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import type { MutationContext } from "./mutations/index.ts";
@@ -41,6 +42,8 @@ export interface CreateLocalCommentInput {
   body: string;
   anchor?: CommentAnchor | undefined;
   author?: CommentAuthor | undefined;
+  /** `shared` authors the thread on the board's published link instead of on disk. */
+  scope?: CommentScope | undefined;
 }
 
 export interface ReplyToCommentInput {
@@ -48,7 +51,50 @@ export interface ReplyToCommentInput {
   author?: CommentAuthor | undefined;
 }
 
+export type CommentScope = "local" | "shared";
+export type CommentScopeFilter = CommentScope | "all";
+
+/**
+ * Just enough of the publish runner to find the share link a cloud comment
+ * belongs to. Kept structural so the comment store stays testable without a
+ * publisher, and so it never learns how publishing actually works.
+ */
+export interface CloudCommentTargets {
+  ready(): Promise<boolean>;
+  destinations(): Promise<{ slots: CanvasPublishSlot[] }>;
+}
+
+export type CloudCommentAvailability =
+  | { available: true; slug: string; url: string }
+  | { available: false; reason: "signed-out" | "unpublished" | "unsupported" };
+
+/**
+ * The newest published link carrying this board. A board can sit in several
+ * links; the most recent publish is the one a reviewer is looking at.
+ */
+export function newestPublishedSlot(
+  slots: CanvasPublishSlot[],
+  boardId: string,
+): CanvasPublishSlot | undefined {
+  return slots
+    .filter((slot) => slot.latestVersionId !== null && slot.context.boardIds.includes(boardId))
+    .sort((left, right) => {
+      const leftAt = left.lastPublishedAt ? Date.parse(left.lastPublishedAt) : 0;
+      const rightAt = right.lastPublishedAt ? Date.parse(right.lastPublishedAt) : 0;
+      return rightAt - leftAt || left.slug.localeCompare(right.slug);
+    })[0];
+}
+
 const defaultAuthor = (): CommentAuthor => ({ kind: "user" });
+
+/**
+ * How a folder-side author presents on a published thread. Only the agent and
+ * the person at the canvas can write from here — a `reviewer` reaches a thread
+ * through the share link, never through this service.
+ */
+function ownerAuthorKind(author: CommentAuthor | undefined): OwnerAuthorKind {
+  return author?.kind === "agent" ? "agent" : "user";
+}
 
 function folderIdentity(ctx: MutationContext): string {
   return ctx.folder.config.folderId ?? Bun.CryptoHasher.hash("sha256", ctx.folder.root, "hex");
@@ -82,6 +128,7 @@ export class LocalCommentsService {
     private readonly ctxFor: () => MutationContext,
     private readonly storePath?: string,
     cloud?: CloudAuth,
+    private readonly publish?: CloudCommentTargets,
   ) {
     if (cloud) {
       this.shared = new SharedCommentsClient(
@@ -90,6 +137,42 @@ export class LocalCommentsService {
         () => `${this.path()}.shared`,
       );
     }
+  }
+
+  /**
+   * Whether this board can take a cloud thread right now, and why not when it
+   * can't — the canvas turns each refusal into the matching disabled hint.
+   */
+  async cloudAvailability(boardId: string): Promise<CloudCommentAvailability> {
+    if (!this.shared || !this.publish) return { available: false, reason: "unsupported" };
+    if (!(await this.publish.ready().catch(() => false))) {
+      return { available: false, reason: "signed-out" };
+    }
+    const slots = await this.publish
+      .destinations()
+      .then((value) => value.slots)
+      .catch(() => []);
+    const slot = newestPublishedSlot(slots, boardId);
+    if (!slot) return { available: false, reason: "unpublished" };
+    return { available: true, slug: slot.slug, url: slot.url };
+  }
+
+  private async cloudTarget(boardId: string): Promise<{ slug: string; versionId: string }> {
+    if (!this.shared || !this.publish) {
+      throw new CommentStoreError("invalid", "This canvas cannot write cloud comments.");
+    }
+    if (!(await this.publish.ready().catch(() => false))) {
+      throw new CommentStoreError("invalid", "Sign in to velloo cloud to write cloud comments.");
+    }
+    const slots = await this.publish
+      .destinations()
+      .then((value) => value.slots)
+      .catch(() => []);
+    const slot = newestPublishedSlot(slots, boardId);
+    if (!slot?.latestVersionId) {
+      throw new CommentStoreError("invalid", "Publish this board before commenting on the cloud.");
+    }
+    return { slug: slot.slug, versionId: slot.latestVersionId };
   }
 
   private path(): string {
@@ -174,6 +257,7 @@ export class LocalCommentsService {
   async list(
     boardId: string,
     status: "open" | "resolved" | "all" = "open",
+    scope: CommentScopeFilter = "all",
   ): Promise<CommentThreadView[]> {
     if (!this.ctxFor().folder.boards.has(boardId)) {
       throw new CommentStoreError("invalid", `No board named ${boardId}.`);
@@ -181,7 +265,10 @@ export class LocalCommentsService {
     const [file, shared] = await Promise.all([this.read(), this.sharedThreads()]);
     return [...file.threads, ...shared]
       .filter(
-        (thread) => thread.boardId === boardId && (status === "all" || thread.status === status),
+        (thread) =>
+          thread.boardId === boardId &&
+          (status === "all" || thread.status === status) &&
+          (scope === "all" || thread.scope === scope),
       )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((thread) => this.view(thread));
@@ -189,14 +276,14 @@ export class LocalCommentsService {
 
   async listAll(
     status: "open" | "resolved" | "all" = "open",
-    requestedOnly = false,
+    scope: CommentScopeFilter = "all",
   ): Promise<CommentThreadView[]> {
     const [file, shared] = await Promise.all([this.read(), this.sharedThreads()]);
     return [...file.threads, ...shared]
       .filter(
         (thread) =>
           (status === "all" || thread.status === status) &&
-          (!requestedOnly || thread.scope === "shared" || thread.agentRequestedAt !== undefined),
+          (scope === "all" || thread.scope === scope),
       )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((thread) => this.view(thread));
@@ -231,6 +318,11 @@ export class LocalCommentsService {
       const body = input.body.trim();
       if (!body) throw new CommentStoreError("invalid", "Comment body is required.");
       const author = CommentAuthorSchema.parse(input.author ?? defaultAuthor());
+      if (input.scope === "shared") {
+        return this.view(
+          await this.createShared(input.boardId, body, input.anchor, ownerAuthorKind(author)),
+        );
+      }
       const now = new Date().toISOString();
       const file = await this.read();
       const thread = CommentThreadSchema.parse({
@@ -265,7 +357,7 @@ export class LocalCommentsService {
       if (index < 0) {
         if (!this.shared) throw new CommentStoreError("not-found", "No such comment thread.");
         try {
-          const next = await this.shared.reply(id, body);
+          const next = await this.shared.reply(id, body, ownerAuthorKind(input.author));
           this.ctxFor().broadcast({
             type: "comments-changed",
             boardId: next.boardId,
@@ -320,9 +412,7 @@ export class LocalCommentsService {
         ...current,
         status: resolved ? "resolved" : "open",
         updatedAt: now,
-        ...(resolved
-          ? { resolvedAt: now, agentRequestedAt: undefined }
-          : { resolvedAt: undefined }),
+        ...(resolved ? { resolvedAt: now } : { resolvedAt: undefined }),
       });
       file.threads[index] = next;
       await this.write(file);
@@ -331,33 +421,89 @@ export class LocalCommentsService {
     });
   }
 
-  setAgentRequested(id: string, requested: boolean): Promise<CommentThreadView> {
+  private async createShared(
+    boardId: string,
+    body: string,
+    anchor: CommentAnchor | undefined,
+    authorKind: OwnerAuthorKind,
+  ): Promise<CommentThread> {
+    const shared = this.shared;
+    if (!shared) throw new CommentStoreError("invalid", "This canvas cannot write cloud comments.");
+    const target = await this.cloudTarget(boardId);
+    const thread = await shared
+      .create(target.slug, {
+        versionId: target.versionId,
+        boardId,
+        ...(anchor ? { anchor } : {}),
+        body,
+        authorKind,
+      })
+      .catch((error: unknown) => {
+        throw new CommentStoreError(
+          "invalid",
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    this.ctxFor().broadcast({ type: "comments-changed", boardId, scope: "shared" });
+    return thread;
+  }
+
+  /**
+   * Move a local thread onto the board's published link. The conversation is
+   * replayed message by message so nothing is lost, then the local copy goes:
+   * a thread lives in exactly one place. Each replayed message keeps its own
+   * voice, so an exchange between the designer and their agent still reads as
+   * one on the other side. What it cannot keep is when each was written —
+   * replay stamps the cloud's clock.
+   */
+  promoteToShared(id: string): Promise<CommentThreadView> {
     return this.serialized(async () => {
+      const shared = this.shared;
+      if (!shared) {
+        throw new CommentStoreError("invalid", "This canvas cannot write cloud comments.");
+      }
       const file = await this.read();
       const index = file.threads.findIndex((candidate) => candidate.id === id);
       if (index < 0) {
-        const shared = await this.shared?.get(id);
-        if (shared) return this.view(shared);
+        if (await this.shared?.get(id)) {
+          throw new CommentStoreError("invalid", "This thread is already a cloud thread.");
+        }
         throw new CommentStoreError("not-found", "No such comment thread.");
       }
-      const current = file.threads[index] as CommentThread;
-      if (current.status === "resolved" && requested) {
-        throw new CommentStoreError("invalid", "Reopen the thread before asking the agent.");
+      const local = file.threads[index] as CommentThread;
+      const [first, ...rest] = local.messages;
+      if (!first) throw new CommentStoreError("invalid", "That thread has no messages to move.");
+      let promoted = await this.createShared(
+        local.boardId,
+        first.body,
+        local.anchor,
+        ownerAuthorKind(first.author),
+      );
+      try {
+        for (const message of rest) {
+          promoted = await shared.reply(promoted.id, message.body, ownerAuthorKind(message.author));
+        }
+        if (local.status === "resolved") {
+          promoted = await shared.setResolved(promoted.id, true);
+        }
+      } catch (error) {
+        throw new CommentStoreError(
+          "invalid",
+          `The thread moved to the cloud but its replies did not: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
       }
-      const now = new Date().toISOString();
-      const next = CommentThreadSchema.parse({
-        ...current,
-        agentRequestedAt: requested ? now : undefined,
-        updatedAt: now,
-      });
-      file.threads[index] = next;
-      await this.write(file);
+      // Re-read: the cloud round-trips above ran outside this file's snapshot.
+      const latest = await this.read();
+      latest.threads = latest.threads.filter((candidate) => candidate.id !== id);
+      await this.write(latest);
       this.ctxFor().broadcast({
         type: "comments-changed",
-        boardId: next.boardId,
+        boardId: local.boardId,
         scope: "local",
       });
-      return this.view(next);
+      return this.view(promoted);
     });
   }
 

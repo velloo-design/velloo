@@ -117,13 +117,13 @@ describe("buildInstructions", () => {
   test("surfaces open visual feedback as one line when the count is positive", () => {
     const text = buildInstructions(false, undefined, false, [], 3);
     expect(text).toContain(
-      "**3 open visual feedback threads are waiting** — read them with `list_comment_threads`.",
+      "**3 open visual feedback threads are waiting on you** — read them with `list_comment_threads` and address them.",
     );
   });
 
   test("the waiting-comments line reads correctly for a single comment", () => {
     const text = buildInstructions(false, undefined, false, [], 1);
-    expect(text).toContain("**1 open visual feedback thread is waiting**");
+    expect(text).toContain("**1 open visual feedback thread is waiting on you**");
   });
 
   test("omits the waiting-comments line at zero (and by default)", () => {

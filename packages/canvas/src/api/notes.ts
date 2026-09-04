@@ -1,8 +1,15 @@
-import type { CanvasNoteEntry } from "../store.ts";
+import type { CanvasNoteEntry, NoteAttachment } from "../store.ts";
 import { postJson } from "./http.ts";
 
 export const notes = {
-  add(args: { boardId: string; x: number; y: number; width?: number; body: string }) {
+  add(args: {
+    boardId: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    body: string;
+    attachment?: NoteAttachment;
+  }) {
     return postJson<{ note: CanvasNoteEntry }>("/api/notes/add", args);
   },
   update(args: {

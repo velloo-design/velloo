@@ -4,6 +4,8 @@ export {
   type AnnotationTarget,
   AnnotationTargetSchema,
   type CanvasNote,
+  type CanvasNoteAttachment,
+  CanvasNoteAttachmentSchema,
   CanvasNoteSchema,
 } from "./annotation.ts";
 export {

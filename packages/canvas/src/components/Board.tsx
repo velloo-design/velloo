@@ -1,9 +1,7 @@
 import type { Board as BoardT, ViewportPreset } from "@velloo/schema";
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { notes as notesApi } from "../api.ts";
 import { fitToContent, wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { useCanvas } from "../store.ts";
-import { toastError } from "../toast.ts";
 import { CommentPinsLayer } from "./CommentPinsLayer.tsx";
 import { Frame } from "./Frame.tsx";
 import { NotesLayer } from "./NotesLayer.tsx";
@@ -176,43 +174,27 @@ export function Board({ board }: BoardProps) {
       setPanning(true);
       return;
     }
-    if (cursorMode === "note") {
-      // Place a note at the click location, in board coords.
+    // Note and comment mode both split the same way: a click that lands on
+    // board chrome is about the board, and one that lands inside a frame is
+    // about a node — the latter arrives via the iframe's select channel, not
+    // here, so this branch only ever handles the free-placement half.
+    const onBoardChrome =
+      e.target === e.currentTarget || Boolean((e.target as HTMLElement).dataset?.vellooBoardWorld);
+    if (cursorMode === "note" && onBoardChrome) {
       const where = clientToBoard(e.clientX, e.clientY);
-      const boardId = useCanvas.getState().currentBoardId;
-      if (!boardId) return;
       e.preventDefault();
-      void notesApi
-        .add({ boardId, x: where.x, y: where.y, body: "" })
-        .then((r) => {
-          // Insert optimistically so the editor opens now — the ws
-          // notes-changed refresh confirms it. Setting the editing id before
-          // the note exists in the store would race the vanished-edit sweep.
-          useCanvas.setState((s) => ({
-            notes: s.notes.some((n) => n.id === r.note.id) ? s.notes : [...s.notes, r.note],
-          }));
-          useCanvas.getState().setEditingMarkupId(r.note.id);
-        })
-        .catch((err) => toastError(err, "Could not add note"));
-      // Return to select mode after dropping the note so the next click
-      // doesn't spawn another.
-      useCanvas.getState().setCursorMode("select");
+      void useCanvas.getState().createNote(where);
       return;
     }
-    if (
-      cursorMode === "comment" &&
-      (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.vellooBoardWorld)
-    ) {
+    if (cursorMode === "comment" && onBoardChrome) {
       const where = clientToBoard(e.clientX, e.clientY);
       e.preventDefault();
       useCanvas.getState().beginComment({ kind: "board", boardId: board.id, ...where });
       return;
     }
-    // Select / comment: clicking the board chrome (not a frame/note/card)
-    // clears the current node selection.
-    if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.vellooBoardWorld) {
-      useCanvas.getState().setSelection(null);
-    }
+    // Select: clicking the board chrome (not a frame/note/card) clears the
+    // current node selection.
+    if (onBoardChrome) useCanvas.getState().setSelection(null);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {

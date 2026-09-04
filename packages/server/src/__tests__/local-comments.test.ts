@@ -3,8 +3,10 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CommentThread } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { Hono } from "hono";
+import type { CanvasPublishSlot } from "../cloud.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
 import { LocalCommentsService } from "../local-comments.ts";
 import { registerCommentTools } from "../mcp/tools/comments.ts";
@@ -15,6 +17,7 @@ import type { WatchEvent } from "../watcher.ts";
 
 const provider = createShadcnProvider();
 const writeJson = (path: string, value: unknown) => writeFile(path, JSON.stringify(value));
+const iso = () => new Date().toISOString();
 
 let tmp: string;
 let root: string;
@@ -238,8 +241,201 @@ describe("local comment persistence", () => {
   });
 });
 
+describe("cloud comment scope", () => {
+  const versionId = "55555555-5555-4555-8555-555555555555";
+  let cloud: ReturnType<typeof Bun.serve>;
+  let cloudThreads: Map<string, CommentThread>;
+
+  const slot = (boardIds: string[]): CanvasPublishSlot => ({
+    slug: "review-link",
+    url: "https://review.velloo.dev/s/review-link/",
+    title: "Review",
+    teamId: null,
+    latestVersionId: versionId,
+    lastPublishedAt: "2026-08-28T09:00:00.000Z",
+    context: { boardIds, contextKnown: true, repo: null, branch: null },
+  });
+
+  const targets = (
+    slots: CanvasPublishSlot[],
+    ready = true,
+  ): { ready(): Promise<boolean>; destinations(): Promise<{ slots: CanvasPublishSlot[] }> } => ({
+    ready: async () => ready,
+    destinations: async () => ({ slots }),
+  });
+
+  const withCloud = (publish?: ReturnType<typeof targets>) =>
+    new LocalCommentsService(
+      () => ({
+        folder,
+        providers: { default: provider },
+        defaultProvider: provider,
+        broadcast: (event) => events.push(event as WatchEvent),
+      }),
+      storePath,
+      { url: `http://127.0.0.1:${cloud.port}`, token: "vlk_test" },
+      publish,
+    );
+
+  beforeEach(() => {
+    cloudThreads = new Map();
+    cloud = Bun.serve({
+      port: 0,
+      fetch: async (request) => {
+        const url = new URL(request.url);
+        if (request.method === "GET" && url.pathname === "/v1/comment-threads") {
+          return Response.json({ threads: [...cloudThreads.values()], links: {}, now: iso() });
+        }
+        if (request.method === "POST" && url.pathname === "/v1/links/review-link/comment-threads") {
+          const body = (await request.json()) as {
+            versionId: string;
+            boardId: string;
+            body: string;
+            authorKind: "user" | "agent";
+          };
+          const thread: CommentThread = {
+            id: crypto.randomUUID(),
+            scope: "shared",
+            folderId: "folder-comments-test",
+            boardId: body.boardId,
+            origin: { kind: "published", slug: "review-link", versionId: body.versionId },
+            status: "open",
+            messages: [
+              {
+                id: crypto.randomUUID(),
+                author: { kind: body.authorKind, displayName: "Owner" },
+                body: body.body,
+                createdAt: iso(),
+              },
+            ],
+            createdAt: iso(),
+            updatedAt: iso(),
+          };
+          cloudThreads.set(thread.id, thread);
+          return Response.json({ thread }, { status: 201 });
+        }
+        const reply = url.pathname.match(/^\/v1\/comment-threads\/([^/]+)\/messages$/);
+        if (request.method === "POST" && reply?.[1]) {
+          const existing = cloudThreads.get(reply[1]);
+          if (!existing) return new Response("not found", { status: 404 });
+          const body = (await request.json()) as { body: string; authorKind: "user" | "agent" };
+          const next: CommentThread = {
+            ...existing,
+            messages: [
+              ...existing.messages,
+              {
+                id: crypto.randomUUID(),
+                author: { kind: body.authorKind, displayName: "Owner" },
+                body: body.body,
+                createdAt: iso(),
+              },
+            ],
+            updatedAt: iso(),
+          };
+          cloudThreads.set(next.id, next);
+          return Response.json({ thread: next });
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+  });
+
+  afterEach(() => cloud.stop(true));
+
+  test("reports why a board cannot take a cloud thread", async () => {
+    expect(await service.cloudAvailability("main")).toEqual({
+      available: false,
+      reason: "unsupported",
+    });
+    expect(await withCloud(targets([], false)).cloudAvailability("main")).toEqual({
+      available: false,
+      reason: "signed-out",
+    });
+    expect(await withCloud(targets([slot(["other"])])).cloudAvailability("main")).toEqual({
+      available: false,
+      reason: "unpublished",
+    });
+    expect(await withCloud(targets([slot(["main"])])).cloudAvailability("main")).toEqual({
+      available: true,
+      slug: "review-link",
+      url: "https://review.velloo.dev/s/review-link/",
+    });
+  });
+
+  test("creating with scope shared authors the thread on the published link", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    const thread = await shared.create({
+      boardId: "main",
+      body: "Reviewers should see this",
+      scope: "shared",
+    });
+    expect(thread.scope).toBe("shared");
+    expect(thread.origin).toEqual({ kind: "published", slug: "review-link", versionId });
+    // The person at the canvas is not their own agent.
+    expect(thread.messages[0]?.author.kind).toBe("user");
+    expect(cloudThreads.size).toBe(1);
+    // Nothing landed in the machine-local store.
+    expect(await shared.list("main", "all", "local")).toHaveLength(0);
+  });
+
+  test("an unpublished board refuses a cloud thread instead of writing it locally", async () => {
+    const shared = withCloud(targets([slot(["other"])]));
+    await expect(
+      shared.create({ boardId: "main", body: "Nowhere to put this", scope: "shared" }),
+    ).rejects.toThrow("Publish this board");
+    expect(await shared.list("main", "all")).toHaveLength(0);
+  });
+
+  test("promoting a local thread replays it to the cloud and drops the local copy", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    const local = await shared.create({ boardId: "main", body: "Make the CTA clearer" });
+    await shared.reply(local.id, {
+      body: "Tightened the copy.",
+      author: { kind: "agent", displayName: "Agent" },
+    });
+
+    const promoted = await shared.promoteToShared(local.id);
+    expect(promoted.scope).toBe("shared");
+    expect(promoted.messages.map((message) => message.body)).toEqual([
+      "Make the CTA clearer",
+      "Tightened the copy.",
+    ]);
+    // An exchange between the designer and their agent still reads as one
+    // after the move: each message keeps the voice that wrote it.
+    expect(promoted.messages.map((message) => message.author.kind)).toEqual(["user", "agent"]);
+    expect(await shared.list("main", "all", "local")).toHaveLength(0);
+    await expect(shared.get(local.id)).rejects.toThrow("No such comment thread");
+  });
+
+  test("an agent replying to a cloud thread is not mistaken for the designer", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    const thread = await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+    const replied = await shared.reply(thread.id, {
+      body: "Done — the hierarchy is fixed.",
+      author: { kind: "agent", displayName: "Agent" },
+    });
+    expect(replied.messages.map((message) => message.author.kind)).toEqual(["user", "agent"]);
+
+    const person = await shared.reply(thread.id, { body: "Confirmed, thanks." });
+    expect(person.messages.at(-1)?.author.kind).toBe("user");
+  });
+
+  test("separates the scopes when listing a board", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.create({ boardId: "main", body: "Local note" });
+    await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+
+    expect((await shared.list("main", "all")).map((thread) => thread.scope).sort()).toEqual([
+      "local",
+      "shared",
+    ]);
+    expect(await shared.list("main", "all", "local")).toHaveLength(1);
+    expect((await shared.list("main", "all", "shared"))[0]?.messages[0]?.body).toBe("Cloud note");
+  });
+});
+
 describe("agent comment tools", () => {
-  test("treats every shared thread as agent-visible without an explicit queue flag", async () => {
+  test("lists shared threads alongside local ones with no queue to opt into", async () => {
     const handlers: Record<string, (args: Record<string, unknown>) => Promise<McpResult>> = {};
     const mcp = {
       registerTool(
@@ -279,7 +475,7 @@ describe("agent comment tools", () => {
     } as unknown as LocalCommentsService);
     const response = await handlers.list_comment_threads?.({
       boardId: "main",
-      requestedOnly: true,
+      scope: "shared",
     });
     const content = response?.content[0];
     if (content?.type !== "text") throw new Error("expected comment tool JSON");
@@ -288,10 +484,9 @@ describe("agent comment tools", () => {
     );
   });
 
-  test("exposes the requested inbox, replies as agent, resolves, reopens, and deletes", async () => {
+  test("lists every open thread, replies as agent, resolves, reopens, and deletes", async () => {
     const first = await service.create({ boardId: "main", body: "Make the button clearer" });
     const second = await service.create({ boardId: "other", body: "Remove this draft" });
-    await service.setAgentRequested(first.id, true);
 
     const handlers: Record<string, (args: Record<string, unknown>) => Promise<McpResult>> = {};
     const mcp = {
@@ -322,10 +517,10 @@ describe("agent comment tools", () => {
       "reply_to_comment",
       "resolve_comment",
     ]);
-    const inbox = await call<{ threads: Array<{ id: string }> }>("list_comment_threads", {
-      requestedOnly: true,
-    });
-    expect(inbox.threads.map((thread: { id: string }) => thread.id)).toEqual([first.id]);
+    const waiting = await call<{ threads: Array<{ id: string }> }>("list_comment_threads");
+    expect(waiting.threads.map((thread: { id: string }) => thread.id).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
 
     const replied = await call<{
       thread: { messages: Array<{ author: { kind: string; displayName?: string } }> };

@@ -29,12 +29,12 @@ my-product/
         ├── marketing.json     # frames (placements of screens) + groups
         ├── app.json
         ├── playground.json
-        └── marketing.notes.json   # sidecar: free-positioned markdown notes for this board
+        └── marketing.notes.json   # sidecar: markdown notes for this board
 ```
 
 **Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Pulse sample ships three boards: Marketing, App, Playground.
 
-**Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Free-positioned markdown notes are board-scoped at `boards/<boardId>.notes.json`. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
+**Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Markdown notes are board-scoped at `boards/<boardId>.notes.json` — free-positioned by default, or carrying an `attachment` naming the frame, screen and node they anchor to. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
 
 ## JSON schema (sketch)
 

@@ -84,8 +84,6 @@ export const CommentThreadSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   resolvedAt: z.iso.datetime().optional(),
-  /** Set by an explicit canvas action; agents use it as their feedback inbox. */
-  agentRequestedAt: z.iso.datetime().optional(),
 });
 export type CommentThread = z.infer<typeof CommentThreadSchema>;
 

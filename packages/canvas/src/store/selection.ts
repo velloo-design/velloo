@@ -15,11 +15,13 @@ export interface SelectionSlice {
    * same node. Cleared by the next plain selection change.
    */
   reveal: (Selection & { nonce: number }) | null;
+  /** Whether the latest selection is meant to inspect a node or only locate it. */
+  selectionIntent: "inspect" | "preserve-tab";
 
   setSelection(s: Selection | null): void;
   setHover(h: Selection | null): void;
   /** setSelection + a reveal request — the search dialog's "jump to node". */
-  revealSelection(s: Selection): void;
+  revealSelection(s: Selection, options?: { preserveTab?: boolean }): void;
 }
 
 export function selectedNode(screens: Record<string, Screen>, sel: Selection | null): Node | null {
@@ -44,6 +46,7 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
   selection: null,
   hover: null,
   reveal: null,
+  selectionIntent: "inspect",
 
   setSelection(selection) {
     if (get().reveal) set({ reveal: null });
@@ -57,7 +60,8 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
         selection !== null &&
         prev.screenId === selection.screenId &&
         prev.path === selection.path);
-    if (!same) set({ selection });
+    if (!same) set({ selection, selectionIntent: "inspect" });
+    else if (selection && get().selectionIntent !== "inspect") set({ selectionIntent: "inspect" });
     // If the selected node lives on a screen other than the currently
     // open one, follow it — otherwise the sidebar Tree shows a tree
     // unrelated to what's selected in the canvas. Annotations follow
@@ -73,9 +77,12 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
     }
   },
 
-  revealSelection(sel) {
+  revealSelection(sel, options = {}) {
     get().setSelection(sel);
-    set((s) => ({ reveal: { ...sel, nonce: (s.reveal?.nonce ?? 0) + 1 } }));
+    set((s) => ({
+      reveal: { ...sel, nonce: (s.reveal?.nonce ?? 0) + 1 },
+      selectionIntent: options.preserveTab ? "preserve-tab" : "inspect",
+    }));
   },
 
   setHover(hover) {

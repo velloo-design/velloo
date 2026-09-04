@@ -21,7 +21,13 @@ export {
   type LoginState,
   loginAttemptSucceeded,
 } from "./api/auth.ts";
-export { type CommentStatusFilter, comments } from "./api/comments.ts";
+export {
+  type CloudCommentAvailability,
+  type CommentScope,
+  type CommentScopeFilter,
+  type CommentStatusFilter,
+  comments,
+} from "./api/comments.ts";
 export { config, type FolderConfig, fetchConfig } from "./api/config.ts";
 export {
   type BoardGroupMeta,

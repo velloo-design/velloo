@@ -5,6 +5,9 @@ import { useCanvas } from "../store.ts";
 const realFetch = globalThis.fetch;
 const now = "2026-08-28T10:00:00.000Z";
 const threadId = "11111111-1111-4111-8111-111111111111";
+const promotedId = "44444444-4444-4444-8444-444444444444";
+const realLocateNode = useCanvas.getState().locateNode;
+const realFlyToBoardRect = useCanvas.getState().flyToBoardRect;
 const anchor: CommentAnchor = {
   kind: "node",
   boardId: "main",
@@ -57,13 +60,22 @@ beforeEach(() => {
       if (body.resolved !== undefined) {
         thread = { ...thread, status: body.resolved ? "resolved" : "open" };
       }
-      if (body.agentRequested !== undefined) {
-        thread = {
-          ...thread,
-          ...(body.agentRequested ? { agentRequestedAt: now } : { agentRequestedAt: undefined }),
-        };
+      if (body.scope === "shared") {
+        // Promotion recreates the conversation on the cloud, so it comes back
+        // under a new id — the same thing the daemon does.
+        return response({
+          thread: {
+            ...thread,
+            id: promotedId,
+            scope: "shared",
+            origin: { kind: "published", slug: "review", versionId: "v1" },
+          },
+        });
       }
       return response({ thread });
+    }
+    if (path.startsWith("/api/comments/cloud")) {
+      return response({ available: true, slug: "review", url: "https://review.velloo.dev/" });
     }
     if (path.includes("/messages")) {
       thread = {
@@ -98,9 +110,18 @@ beforeEach(() => {
     screens: { home: { id: "home", name: "Home", tree: { $ref: "Button", $id: "cta" } } },
     commentThreads: [],
     commentStatus: "open",
+    commentScope: "all",
+    cloudComments: undefined,
     activeCommentId: null,
     pendingCommentAnchor: null,
     cursorMode: "select",
+    rightTab: "node",
+    rightPaneCollapsed: false,
+    selection: null,
+    reveal: null,
+    selectionIntent: "inspect",
+    locateNode: realLocateNode,
+    flyToBoardRect: realFlyToBoardRect,
   });
 });
 
@@ -109,7 +130,7 @@ afterEach(() => {
 });
 
 describe("comment canvas store", () => {
-  test("creates a pinned thread, replies, queues the agent, resolves, and filters it", async () => {
+  test("creates a pinned thread, replies, resolves, and filters it", async () => {
     useCanvas.getState().enterCommentMode();
     expect(useCanvas.getState().cursorMode).toBe("comment");
     useCanvas.getState().beginComment(anchor);
@@ -121,8 +142,6 @@ describe("comment canvas store", () => {
 
     await useCanvas.getState().replyToComment(threadId, "More direct, please");
     expect(useCanvas.getState().commentThreads[0]?.messages).toHaveLength(2);
-    await useCanvas.getState().setCommentAgentRequested(threadId, true);
-    expect(useCanvas.getState().commentThreads[0]?.agentRequestedAt).toBe(now);
     await useCanvas.getState().setCommentResolved(threadId, true);
     expect(useCanvas.getState().commentThreads).toEqual([]);
 
@@ -130,16 +149,110 @@ describe("comment canvas store", () => {
       "POST /api/comments",
       `POST /api/comments/${threadId}/messages`,
       `PATCH /api/comments/${threadId}`,
-      `PATCH /api/comments/${threadId}`,
     ]);
+  });
+
+  test("pins a cloud thread when the composer targets the cloud", async () => {
+    useCanvas.getState().beginComment(anchor);
+    await useCanvas.getState().createPendingComment("Reviewers should see this", "shared");
+    expect(requests[0]?.body).toEqual({
+      boardId: "main",
+      body: "Reviewers should see this",
+      anchor,
+      scope: "shared",
+    });
+  });
+
+  test("reads the board's cloud availability", async () => {
+    await useCanvas.getState().refreshCloudComments();
+    expect(useCanvas.getState().cloudComments).toEqual({
+      available: true,
+      slug: "review",
+      url: "https://review.velloo.dev/",
+    });
+    expect(requests[0]?.path).toContain("/api/comments/cloud?boardId=main");
+  });
+
+  test("moving a thread to the cloud replaces it with the promoted thread", async () => {
+    await useCanvas.getState().refreshComments();
+    useCanvas.getState().setActiveComment(threadId);
+    await useCanvas.getState().moveCommentToCloud(threadId);
+
+    const threads = useCanvas.getState().commentThreads;
+    expect(threads).toHaveLength(1);
+    expect(threads[0]?.id).toBe(promotedId);
+    expect(threads[0]?.scope).toBe("shared");
+    expect(useCanvas.getState().activeCommentId).toBe(promotedId);
+    expect(requests.at(-1)).toEqual({
+      method: "PATCH",
+      path: `/api/comments/${threadId}`,
+      body: { scope: "shared" },
+    });
+  });
+
+  test("a promoted thread leaves the list while the filter is local-only", async () => {
+    useCanvas.setState({ commentScope: "local", commentThreads: [thread] });
+    await useCanvas.getState().moveCommentToCloud(threadId);
+    expect(useCanvas.getState().commentThreads).toEqual([]);
+    expect(useCanvas.getState().activeCommentId).toBeNull();
   });
 
   test("refreshes threads and reveals an attached node when its pin opens", async () => {
     await useCanvas.getState().refreshComments();
     useCanvas.getState().setActiveComment(threadId);
     expect(useCanvas.getState().selection).toEqual({ screenId: "home", path: "0" });
+    expect(useCanvas.getState().selectionIntent).toBe("preserve-tab");
     expect(useCanvas.getState().rightTab).toBe("comments");
-    expect(requests[0]?.path).toContain("/api/comments?boardId=main&status=open");
+    expect(requests[0]?.path).toContain("/api/comments?boardId=main&status=open&scope=all");
+  });
+
+  test("returns to the thread list and resolves without switching to the node tab", async () => {
+    await useCanvas.getState().refreshComments();
+    useCanvas.getState().setActiveComment(threadId);
+    useCanvas.getState().setActiveComment(null);
+    expect(useCanvas.getState().selection).toBeNull();
+    expect(useCanvas.getState().rightTab).toBe("comments");
+
+    useCanvas.getState().setActiveComment(threadId);
+    await useCanvas.getState().setCommentResolved(threadId, true);
+    expect(useCanvas.getState().activeCommentId).toBeNull();
+    expect(useCanvas.getState().selection).toBeNull();
+    expect(useCanvas.getState().rightTab).toBe("comments");
+
+    useCanvas.setState({
+      commentStatus: "resolved",
+      commentThreads: [thread],
+      activeCommentId: threadId,
+      selection: { screenId: "home", path: "0" },
+      rightTab: "comments",
+    });
+    await useCanvas.getState().setCommentResolved(threadId, false);
+    expect(useCanvas.getState().activeCommentId).toBeNull();
+    expect(useCanvas.getState().selection).toBeNull();
+    expect(useCanvas.getState().rightTab).toBe("comments");
+  });
+
+  test("locates an attached comment in its exact anchored frame", async () => {
+    let call:
+      | {
+          screenId: string;
+          path: string;
+          options?: { hostBoards?: string[]; frameId?: string; preserveTab?: boolean };
+        }
+      | undefined;
+    useCanvas.setState({
+      commentThreads: [thread],
+      locateNode: async (screenId, path, options) => {
+        call = { screenId, path, ...(options ? { options } : {}) };
+      },
+    });
+
+    useCanvas.getState().locateComment(threadId);
+    expect(call).toEqual({
+      screenId: "home",
+      path: "0",
+      options: { frameId: "home-frame", preserveTab: true },
+    });
   });
 
   test("creates a board-wide thread without an anchor or canvas pin", async () => {
@@ -149,7 +262,7 @@ describe("comment canvas store", () => {
     expect(requests[0]).toEqual({
       method: "POST",
       path: "/api/comments",
-      body: { boardId: "main", body: "Review the hierarchy across the board" },
+      body: { boardId: "main", body: "Review the hierarchy across the board", scope: "local" },
     });
     expect(useCanvas.getState().commentThreads[0]?.anchor).toBeUndefined();
     expect(useCanvas.getState().rightTab).toBe("comments");

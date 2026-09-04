@@ -318,7 +318,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         snapshotCss: () => jit.build(),
       }))
     : undefined;
-  const comments = new LocalCommentsService(() => ctx, undefined, opts.cloud);
+  const comments = new LocalCommentsService(() => ctx, undefined, opts.cloud, publishRunner);
   const app = createApp(
     () => ctx,
     jit,

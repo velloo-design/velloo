@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { $, DoAsync, err, type Result } from "@velloo/result";
-import type { CanvasNote } from "@velloo/schema";
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
+import type { Board, CanvasNote, CanvasNoteAttachment } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
-import { canvasNoteNotFound, type MutationError } from "./errors.ts";
-import { getBoard } from "./lookup.ts";
+import { canvasNoteNotFound, frameNotFound, invalidPath, type MutationError } from "./errors.ts";
+import { getBoard, getScreen, resolve } from "./lookup.ts";
 import { persistCanvasNotes } from "./persist.ts";
 
 function newNoteId(): string {
@@ -12,12 +12,39 @@ function newNoteId(): string {
 
 const DEFAULT_NOTE_WIDTH = 240;
 
+/**
+ * An attachment names a frame on this board, the screen that frame shows,
+ * and a node in it. Validating all three at write time keeps a stale
+ * anchor out of the file — a node that disappears *later* is handled at
+ * read time, where the note renders as stale rather than vanishing.
+ */
+function checkAttachment(
+  ctx: MutationContext,
+  board: Board,
+  attachment: CanvasNoteAttachment,
+): Result<void, MutationError> {
+  const frame = board.frames.find((f) => f.id === attachment.frameId);
+  if (!frame) return err(frameNotFound(board.id, attachment.frameId));
+  if (frame.screen !== attachment.screenId) {
+    return err(
+      invalidPath(
+        `Frame "${attachment.frameId}" shows screen "${frame.screen}", not "${attachment.screenId}"`,
+      ),
+    );
+  }
+  const screen = getScreen(ctx, attachment.screenId);
+  if (!screen.ok) return screen;
+  const resolved = resolve(screen.value.tree, attachment.locator, attachment.screenId);
+  return resolved.ok ? ok(undefined) : resolved;
+}
+
 export interface AddNoteArgs {
   boardId: string;
-  x: number;
-  y: number;
+  x?: number | undefined;
+  y?: number | undefined;
   width?: number | undefined;
   body: string;
+  attachment?: CanvasNoteAttachment | undefined;
 }
 
 export interface NoteResult {
@@ -29,13 +56,19 @@ export async function addNote(
   args: AddNoteArgs,
 ): Promise<Result<NoteResult, MutationError>> {
   return DoAsync<NoteResult, MutationError>(async function* () {
-    yield* $(getBoard(ctx, args.boardId));
+    const board = yield* $(getBoard(ctx, args.boardId));
+    if (args.attachment) {
+      yield* $(checkAttachment(ctx, board, args.attachment));
+    } else if (args.x === undefined || args.y === undefined) {
+      return yield* $(err(invalidPath("A note without an attachment needs x and y")));
+    }
     const note: CanvasNote = {
       id: newNoteId(),
-      x: args.x,
-      y: args.y,
+      ...(args.x !== undefined ? { x: args.x } : {}),
+      ...(args.y !== undefined ? { y: args.y } : {}),
       width: args.width ?? DEFAULT_NOTE_WIDTH,
       body: args.body,
+      ...(args.attachment ? { attachment: args.attachment } : {}),
     };
     const existing = ctx.folder.notes.get(args.boardId) ?? [];
     await persistCanvasNotes(ctx.folder, args.boardId, [...existing, note]);

@@ -15,6 +15,7 @@ export type {
   LibraryItemKind,
   LibraryItemRef,
   NodeState,
+  NoteAttachment,
   RightTab,
   Selection,
   ViewMode,

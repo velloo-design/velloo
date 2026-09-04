@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { isCloudErrorCode } from "@velloo/protocol/cloud-codes";
+import type { OwnerAuthorKind } from "@velloo/protocol/comments";
+import type { CommentAnchor } from "@velloo/schema";
 import { type CommentThread, CommentThreadSchema } from "@velloo/schema";
 import { z } from "zod";
 import { type CloudAuth, currentToken } from "./cloud.ts";
@@ -27,6 +30,18 @@ export interface SharedRefreshResult {
 }
 
 const FETCH_TIMEOUT_MS = 10_000;
+
+/** The cloud explains its refusals; pass that through rather than a bare status. */
+async function cloudFailure(response: Response): Promise<string> {
+  const body: unknown = await response.json().catch(() => undefined);
+  if (body && typeof body === "object" && "message" in body) {
+    const { message, error } = body as { message?: unknown; error?: unknown };
+    if (typeof message === "string" && message) {
+      return isCloudErrorCode(error) ? `${message} (${error})` : message;
+    }
+  }
+  return `Cloud comment request failed (${response.status}).`;
+}
 
 function signature(threads: CommentThread[]): string {
   return threads
@@ -118,7 +133,7 @@ export class SharedCommentsClient {
 
   private async mutate(path: string, init: RequestInit): Promise<CommentThread> {
     const token = await currentToken(this.cloud);
-    if (!token) throw new Error("Sign in to reply to shared comments.");
+    if (!token) throw new Error("Sign in to write shared comments.");
     const response = await fetch(`${this.cloud.url}${path}`, {
       ...init,
       headers: {
@@ -128,16 +143,41 @@ export class SharedCommentsClient {
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (!response.ok) throw new Error(`Cloud comment update failed (${response.status}).`);
+    if (!response.ok) throw new Error(await cloudFailure(response));
     const parsed = z.object({ thread: CommentThreadSchema }).parse(await response.json());
     await this.refresh();
     return parsed.thread;
   }
 
-  reply(id: string, body: string): Promise<CommentThread> {
+  /**
+   * Author a thread on a published link as the account that owns it. The
+   * version is the link's latest: a cloud thread hangs off the published
+   * design a reviewer would see, not the working folder state.
+   *
+   * `authorKind` says which owner-side voice wrote it. The cloud cannot infer
+   * it — the designer and their agent share one account — so a reviewer who
+   * sees the reply depends on us declaring it honestly.
+   */
+  create(
+    slug: string,
+    input: {
+      versionId: string;
+      boardId: string;
+      anchor?: CommentAnchor;
+      body: string;
+      authorKind: OwnerAuthorKind;
+    },
+  ): Promise<CommentThread> {
+    return this.mutate(`/v1/links/${encodeURIComponent(slug)}/comment-threads`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  reply(id: string, body: string, authorKind: OwnerAuthorKind): Promise<CommentThread> {
     return this.mutate(`/v1/comment-threads/${encodeURIComponent(id)}/messages`, {
       method: "POST",
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, authorKind }),
     });
   }
 

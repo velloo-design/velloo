@@ -475,14 +475,28 @@ export const removeAnnotationShape = {
 } satisfies z.ZodRawShape;
 export const RemoveAnnotationBody = z.object(removeAnnotationShape);
 
+/** Node a note is about. `frameId` picks which frame of the screen hosts it. */
+export const NoteAttachmentSchema = z.object({
+  frameId: FrameId,
+  screenId: ScreenId,
+  locator: LocatorSchema,
+});
+
 export const addNoteShape = {
   boardId: BoardId,
-  x: z.number(),
-  y: z.number(),
+  /** Required for a free note; an attached note is auto-placed until dragged. */
+  x: z.number().optional(),
+  y: z.number().optional(),
   width: z.number().positive().optional(),
   body: z.string(),
+  attachment: NoteAttachmentSchema.optional(),
 } satisfies z.ZodRawShape;
-export const AddNoteBody = z.object(addNoteShape);
+export const AddNoteBody = z
+  .object(addNoteShape)
+  .refine((a) => a.attachment !== undefined || (a.x !== undefined && a.y !== undefined), {
+    message: "A note without an attachment needs x and y",
+    path: ["x"],
+  });
 
 export const updateNoteShape = {
   boardId: BoardId,

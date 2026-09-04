@@ -16,6 +16,7 @@
     "lint:dead": "knip",
     "format": "biome format --write .",
     "test": "bun test",
+    "test:e2e": "VELLOO_E2E=1 bun test",
     "fonts:build": "bun packages/schema/scripts/build-font-catalog.ts",
     "fonts:check": "bun packages/schema/scripts/build-font-catalog.ts --check",
     "velloo": "bun packages/cli/src/cli.ts",
