@@ -31,7 +31,7 @@ export function registerCatalogTools(mcp: McpServer, ctx: MutationContext): void
     "install_component",
     {
       description:
-        "Ensure a library component is available to the active framework (the existing flow's 'MCP knows all components + which aren't installed'). Returns `installed: true` + its import path when it's already present (every shipped library bundles its full set, so this is the common case — just reference the id via $ref); installs it via the adapter when it has a per-component installer; errors with the catalog for an unknown id. `screenId` picks the library (a screen's `library`); omitted ⇒ the folder default.",
+        "Ensure a library component is available to the active framework, and answer installed-status for any component id. Every shipped library bundles its full set, so the usual answer is `installed: true` plus its import path — just reference the id via `$ref`. Adapters with a per-component installer run it. `screenId` picks the library; omitted ⇒ the folder default.",
       inputSchema: {
         componentId: z.string(),
         screenId: z.string().optional(),

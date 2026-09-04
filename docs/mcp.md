@@ -14,7 +14,7 @@ A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`
 
 What holds the budget instead:
 
-1. **Tool descriptions say WHAT and WHEN, in one or two sentences**, and name their guide. They do not carry manuals.
+1. **Tool descriptions say WHAT and WHEN, in one or two sentences**, and name their guide. They do not carry manuals, and they do not restate what a field's own `.describe()`, an enum, or a guide already says. The check that keeps them honest: cut a sentence and ask what call an agent would now get wrong.
 2. **Long-form guidance is an MCP resource** — `velloo://guide/{components,snippets,theme,boards,verification,porting,capture,extensions,art,comments}` — fetched on demand, so a session that never ports an app never pays for the porting manual.
 3. **The boot instructions carry only what no tool can say**: the mental model, the three customization layers, and the efficiency contract.
 

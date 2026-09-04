@@ -81,7 +81,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        "Render a screen to PNG. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture: no change returns text only, a small change returns a highlight crop naming the changed nodes. `scale` (0.25–1) shrinks the payload for layout checks; `path` captures one element. The render uses its OWN viewport, not the board frame's — the result's `contentHeight` and `framesShorterThanContent` name placements that clip below the fold — resize them with `update_frame`. Guide: velloo://guide/verification.",
+        "Render a screen to PNG. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. The render uses its OWN viewport, not the board frame's, so `framesShorterThanContent` names placements that clip below the fold — resize them with `update_frame`. Guide: velloo://guide/verification.",
       inputSchema: {
         screenId: z.string(),
         viewport: ViewportSchema.optional().describe(

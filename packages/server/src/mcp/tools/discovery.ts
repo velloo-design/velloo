@@ -175,7 +175,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_screen",
     {
       description:
-        'Return the JSON for a single screen. mode: "full" (default) returns the complete tree. mode: "outline" returns a stripped tree per node: {ref|snippet, $id?, classSnippet (≤40 chars), children}. Use outline for an overview of a large screen before drilling in with inspect or @id locators.',
+        'Return one screen\'s JSON. `mode: "full"` (default) returns the complete tree; `"outline"` returns a stripped tree per node — {ref|snippet, $id?, classSnippet, children} — for an overview of a large screen before drilling in.',
       inputSchema: {
         screenId: z.string(),
         mode: z.enum(["full", "outline"]).optional(),
@@ -193,7 +193,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_boards",
     {
       description:
-        "List the design folder's live boards, in sidebar order. Each board has its own collection of frames; `group` names the sidebar group it's filed under (absent ⇒ ungrouped) — pass that name to add_board/update_board to file another board alongside it. Pass `includeFrames: true` to embed the full frame list for each board, or `includeArchived: true` to also list boards the user has archived (those carry `archivedAt`).",
+        "List the folder's live boards in sidebar order, each with its own frames. `group` names the sidebar group a board is filed under (absent ⇒ ungrouped). `includeFrames: true` embeds each board's frame list; `includeArchived: true` also lists archived boards, which carry `archivedAt`.",
       inputSchema: {
         includeFrames: z.boolean().optional(),
         includeArchived: z.boolean().optional(),
@@ -221,7 +221,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List the available components — library entries first, then registered extensions. Default `mode: "summary"` returns id/source/category/prop-names; `mode: "full"` returns the complete descriptors. `filter` substring-matches ids (case-insensitive). `kind: "library"` or `kind: "extension"` narrows the result; extensions are user-declared custom components (DataTable, BrandHero, …) that shadow library entries with the same id.',
+        'List the available components — library entries first, then registered extensions. `mode: "summary"` (default) returns id/source/category/prop-names; `"full"` returns complete descriptors with a worked example. `filter` substring-matches ids; `kind` narrows to library or extension. Extensions are the user\'s own components and shadow library entries with the same id.',
       outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
@@ -273,7 +273,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_theme",
     {
       description:
-        "Return a theme token tree — the default, or a named theme via `theme` (see list_themes) — plus the folder's `customCss`. `typography.typesets` holds the rhythm controls; `typeScale` shows what those controls compute to per role (h1–h6, body, lead, small, caption). Adjust via set_theme, not by setting sizes per node.",
+        "Return a theme token tree — the default, or a named one via `theme` — plus the folder's `customCss`. `typography.typesets` holds the rhythm controls and `typeScale` shows what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
       inputSchema: {
         theme: z.string().optional().describe('Named theme to read; default "default"'),
       },
@@ -298,7 +298,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_snippets",
     {
       description:
-        "List every snippet defined in the folder's snippets/. Returns { id, name, params } per entry; each param reports `name`, `type`, and `required` (true when it has no default and isn't optional). Read these before instantiate_snippet — passing the wrong set returns SnippetParamMismatch.",
+        "List every snippet in the folder: `{ id, name, params }`, where each param reports `name`, `type` and `required`. Read these before `instantiate_snippet` — the wrong set returns SnippetParamMismatch.",
       inputSchema: {},
     },
     async () => {
@@ -329,7 +329,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_annotations",
     {
       description:
-        "List the annotations on a screen — designer-authored guidance plus any you pinned yourself. Each annotation is anchored to a specific node via a locator and carries an `author`; `resolved` is the resolved path (or null if the targeted node has since vanished — treat dangling annotations as low-priority). User-authored annotations are read-only to you; pin/remove your own with add_annotation / remove_annotation. The `body` field is markdown.",
+        "List a screen's annotations — designer-authored guidance plus any you pinned. Each is anchored to a node and carries an `author`; `resolved` is the live path, or null when the targeted node has vanished (treat those as low-priority). User-authored ones are read-only to you. Bodies are markdown.",
       inputSchema: { screenId: z.string() },
     },
     async ({ screenId }) => {
@@ -347,7 +347,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_notes",
     {
       description:
-        "List markdown notes on one board — commentary beside the frames or attached to a node (tour steps, review remarks, handoff context). An attached note carries `attachment` naming the frame, screen and node it anchors to. Writable via add_note / update_note / remove_note.",
+        "List the markdown notes on one board — commentary beside the frames or attached to a node (tour steps, review remarks, handoff context). An attached note carries `attachment` naming the frame, screen and node it anchors to.",
       inputSchema: { boardId: z.string() },
     },
     async ({ boardId }) => {

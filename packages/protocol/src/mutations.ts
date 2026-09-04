@@ -380,7 +380,10 @@ export const instantiateSnippetShape = {
   snippetId: SnippetId,
   id: NodeIdSchema.optional(),
   args: PatchRecordSchema.optional(),
-  extraClassName: z.string().optional(),
+  extraClassName: z
+    .string()
+    .optional()
+    .describe("One-off classes layered onto the snippet body's root, for this instance"),
   overrides: z.record(z.string(), z.object({ props: PatchRecordSchema })).optional(),
   index: z.number().int().nonnegative().optional(),
 } satisfies z.ZodRawShape;

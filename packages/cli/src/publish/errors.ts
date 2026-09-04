@@ -17,6 +17,11 @@ export type PublishError =
   | { kind: "NoScreens"; root: string }
   /** The chosen boards place no screens between them. */
   | { kind: "NoBoardScreens" }
+  /**
+   * The bundle this velloo built does not match `DesignBundleSchema` — a
+   * velloo bug, caught before it reaches the cloud rather than after.
+   */
+  | { kind: "BundleInvalid"; detail: string }
   /** `--team` matched no team, or more than one. */
   | { kind: "TeamNotFound"; requested: string }
   | { kind: "TeamAmbiguous"; requested: string };
@@ -31,6 +36,10 @@ export const noScreens = (root: string): ErrorOf<PublishError, "NoScreens"> => (
 });
 export const noBoardScreens = (): ErrorOf<PublishError, "NoBoardScreens"> => ({
   kind: "NoBoardScreens",
+});
+export const bundleInvalid = (detail: string): ErrorOf<PublishError, "BundleInvalid"> => ({
+  kind: "BundleInvalid",
+  detail,
 });
 export const teamNotFound = (requested: string): ErrorOf<PublishError, "TeamNotFound"> => ({
   kind: "TeamNotFound",
@@ -50,6 +59,8 @@ export function describePublishError(error: PublishError): string {
       return `no screens found in ${error.root} — is this a velloo design folder?`;
     case "NoBoardScreens":
       return "the selected boards have no screens.";
+    case "BundleInvalid":
+      return `velloo built an invalid design bundle and did not upload it: ${error.detail}. This is a bug — please report it.`;
     case "TeamNotFound":
       return `no team named or identified by '${error.requested}'`;
     case "TeamAmbiguous":

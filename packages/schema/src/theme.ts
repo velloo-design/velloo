@@ -6,7 +6,12 @@ const NumOrCssLen = z.union([z.number(), z.string().min(1)]);
 const LooseTokenGroupSchema: z.ZodType<LooseTokenGroup> = z.lazy(() =>
   z.record(z.string(), z.union([z.string(), z.number(), LooseTokenGroupSchema])),
 );
-type LooseTokenGroup = { [key: string]: string | number | LooseTokenGroup };
+/**
+ * Exported only so declaration emit can name it: a downstream schema built on
+ * `ThemeSchema` (`@velloo/protocol/publish`) inlines this type into its own
+ * `.d.ts`, which `tsc` refuses to do for a module-private name.
+ */
+export type LooseTokenGroup = { [key: string]: string | number | LooseTokenGroup };
 
 /**
  * A color slot is either a single CSS color or a pair { DEFAULT, foreground }.

@@ -24,7 +24,7 @@ export function registerBatchTool(mcp: McpServer, ctx: MutationContext): void {
     "batch",
     {
       description:
-        "Run a sequence of mutation calls in one round-trip. Each entry is { tool, args } with that tool's own arguments, unchanged. Atomic by default: on the first error every touched resource rolls back to its pre-batch state, created screens/boards/snippets are deleted, and undo history is unwound — the result reports rolledBack: true with the failing call. Pass atomic: false for run-until-error without rollback.",
+        "Run a sequence of mutation calls in one round-trip; each entry is `{ tool, args }` with that tool's own arguments. Atomic by default — the first error rolls every touched resource back to its pre-batch state and reports `rolledBack: true` with the failing call. `atomic: false` runs until error and keeps completed work.",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       inputSchema: {
         calls: z

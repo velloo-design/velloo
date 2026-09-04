@@ -146,7 +146,7 @@ export function registerCompareToUrlTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. Returns similarity (1 = identical), `topMismatches` ranking the worst regions and naming the node responsible, and a side-by-side PNG. 0.85+ is a faithful structural port; fix topMismatches in order and don't chase 1.0. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Guide: velloo://guide/porting.",
+        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. 0.85+ is a faithful structural port; fix `topMismatches` in order and don't chase 1.0. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Guide: velloo://guide/porting.",
       inputSchema: {
         screenId: z.string(),
         source: z

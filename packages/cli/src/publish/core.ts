@@ -1,6 +1,11 @@
 import { type ExecFileSyncOptionsWithStringEncoding, execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  DESIGN_BUNDLE_FORMAT,
+  type DesignBundle,
+  DesignBundleSchema,
+} from "@velloo/protocol/publish";
 import type { ComponentProvider } from "@velloo/provider";
 import { captureScreenshot, renderScreen } from "@velloo/renderer";
 import { err, ok, type Result } from "@velloo/result";
@@ -15,12 +20,14 @@ import {
   renderPassForScreen,
   writeJsonAtomic,
 } from "@velloo/server";
+import { z } from "zod";
 import { withAssetServer } from "../asset-server.ts";
 import { checkCloudHealth } from "../cloud.ts";
 import { type CloudError, httpFailureFrom, unreachable } from "../cloud-errors.ts";
 import { type CloudPublishSlot, uploadLinkBundle } from "../cloud-upload.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
 import {
+  bundleInvalid,
   cloudUnhealthy,
   noBoardScreens,
   noScreens,
@@ -545,8 +552,8 @@ export async function publishDesign(
   // The design model the cloud renders from: raw screen trees + boards + theme
   // + snippets + annotations/notes + the slice of config needed to rebuild the
   // component registry. No HTML and no gallery — the cloud owns the frame.
-  const designDoc = {
-    version: 1 as const,
+  const designDoc: DesignBundle = {
+    formatVersion: DESIGN_BUNDLE_FORMAT,
     title,
     viewport,
     defaultLibrary: config.defaultLibrary,
@@ -566,6 +573,11 @@ export async function publishDesign(
     ...(live ? { bundlePath: "bundle.js" } : {}),
     ...(shots ? { screenshots: shots.manifest } : {}),
   };
+  // Validated, not normalized: the parse would strip any key the schema does
+  // not know, and silently shipping a lesser bundle is the failure mode this
+  // check exists to prevent. So the literal is what travels.
+  const validated = DesignBundleSchema.safeParse(designDoc);
+  if (!validated.success) return err(bundleInvalid(z.prettifyError(validated.error)));
   addFile("design.json", JSON.stringify(designDoc), "application/json");
   // A folder with no CSS framework (styling.framework "none") compiles to no
   // stylesheet at all. The doc still names snapshot.css, so send a real —

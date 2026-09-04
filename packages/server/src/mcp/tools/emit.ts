@@ -77,7 +77,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen: the JSX body (library identifiers + the screen framework's native styling — Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components / icons / snippets / classes used. **Not** a paste-ready file — no imports, no prettier pass. The agent reads this and writes the real code in the user's app conventions (for MUI, components import from `@mui/material`). On a Tailwind v3 host, apply the `tailwindV3Compat` renames while writing the file.",
+        "Return agent-consumed IR for a screen: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
@@ -149,7 +149,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext): void {
     "emit_theme",
     {
       description:
-        "Generate the active framework's theme artifact plus framework-neutral DTCG `tokens.json` from the active theme. shadcn ⇒ Tailwind v4 globals.css (+ optional tailwind.config.ts) at `<outputDir>/<cssPath>` (cssPath default `app/globals.css`; pass `globals.css`/`src/index.css` for Vite/Astro). A target app detected as **Tailwind v3** instead gets `velloo-theme.css` (HSL variables, written next to the globals path — never into it) + a `velloo.preset.{ts,cjs}`; the result's `notes` carry the one-time wiring steps (an `@import` line + `presets: [...]`). Native frameworks emit their adapter theme module. Defaults to dry-run; these are direct artifacts (no agent translation needed).",
+        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z

@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./comments": "./src/comments.ts",
+    "./publish": "./src/publish.ts",
+    "./publish-meta": "./src/publish-meta.ts",
     "./cloud-codes": "./src/cloud-codes.ts"
   },
   "dependencies": {

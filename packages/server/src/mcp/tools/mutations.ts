@@ -83,7 +83,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_node",
     {
       description:
-        'Insert a node under parentPath ("@id" or path array). `componentRef` is required — this roots the new node at a library/extension component (its `children` may themselves include `{$snippet}` instances). To append a *snippet instance* directly under an existing parent (no wrapper component), use `instantiate_snippet` instead — it takes the same parentPath and is batchable, so stamp many in one `batch`. Pass `id` for a stable anchor. children carries full subtrees — build a whole card in one call.',
+        "Insert a node under parentPath. `componentRef` is required — it roots the new node at a library or extension component, whose `children` may themselves include `{$snippet}` instances. To append a snippet instance with no wrapper component, use `instantiate_snippet` instead. Pass `id` for a stable anchor. `children` carries full subtrees, so build a whole card in one call.",
       inputSchema: addNodeShape,
     },
     async (args) => {
@@ -109,7 +109,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_props",
     {
       description:
-        "Patch nodes on a screen: one entry per node in `patches`, applied in one atomic write (one lock, one broadcast) — use length 1 for a single edit. `propPatch` shallow-merges props (null removes a key); `style` restyles through the screen's *native* channel, which the framework adapter routes to a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object. Object channels merge shallowly (an inner null drops that key); `style: null` clears. An entry may carry either or both. This patches plain screen nodes; to patch a node *inside a snippet* use update_snippet_instance (one instance) or update_snippet's innerPatch (the definition, all instances).",
+        "Patch nodes on a screen: one entry per node in `patches`, applied in one atomic write — length 1 for a single edit. `propPatch` shallow-merges props (null removes a key). `style` restyles through the screen's *native* channel, which the framework adapter routes to a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object; object channels merge shallowly and `style: null` clears. An entry may carry either or both. This patches plain screen nodes — for one inside a snippet, see velloo://guide/snippets.",
       inputSchema: updatePropsShape,
     },
     async (args) =>
@@ -167,7 +167,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_screen",
     {
       description:
-        "Create a NEW screen. Does not place it on any board — call add_frame separately to surface it on the canvas. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one. Note: a route-scan already scaffolds one placeholder screen per detected route (id = route slug) — don't add_screen for those (it returns ScreenIdConflict); rebuild the existing screen with set_screen_tree (replaces the whole tree in one call), or build into it with add_node/instantiate_snippet. Omit `id` to auto-suffix a unique id.",
+        "Create a NEW screen. It is not placed on any board — call `add_frame` to surface it. Pass `fromScreenId` to clone an existing tree, or `tree` to supply one; omit `id` to auto-suffix a unique one. A route scan already scaffolds one placeholder screen per detected route (id = route slug), so don't add_screen for those — it returns ScreenIdConflict. Rebuild the existing screen with `set_screen_tree` instead.",
       inputSchema: addScreenShape,
     },
     async (args) =>
@@ -221,7 +221,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_board",
     {
       description:
-        'Create a new empty board. A board is one infinite canvas of frames; a design folder can have many. `group` files it under a sidebar group — pass an existing group\'s name (or id), or a new name to create that group. Groups are areas of work ("Side pane", "Account page"); everything ungrouped shows under Ungrouped.',
+        "Create a new empty board — one infinite canvas of frames, and a folder can have many. `group` files it under a sidebar group: an existing group's name or id, or a new name to create that group. Guide: velloo://guide/boards.",
       inputSchema: addBoardShape,
     },
     async (args) => toMcp(await addBoard(ctx, args)),
@@ -231,7 +231,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_board",
     {
       description:
-        "Update a board's metadata. patch.theme names a theme (stem of theme/<name>.json) the board's frames render with — the per-board look; null clears back to the folder default. patch.archived: true files the board away (hidden from the sidebar, list_boards, and a default publish, but kept on disk and still editable); false restores it. patch.group moves the board to a sidebar group — an existing group's name or id, a new name (which creates the group), or null for Ungrouped.",
+        "Update a board's metadata. `theme` names a theme its frames render with — the per-board look; null clears back to the folder default. `archived: true` files the board away (hidden from the sidebar, list_boards and a default publish, but kept and still editable). `group` moves it to a sidebar group by existing name or id, a new name (which creates one), or null for Ungrouped. Guide: velloo://guide/boards.",
       inputSchema: updateBoardShape,
     },
     async (args) => toMcp(await updateBoard(ctx, args)),
@@ -251,7 +251,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "reorder_boards",
     {
       description:
-        "Set the left-sidebar display order of boards. `order` is the list of board ids in the desired order; unknown ids are ignored and any omitted boards keep their current slots. Persisted to config.json (config.boardOrder).",
+        "Set the left-sidebar display order of boards. `order` lists board ids in the desired order; unknown ids are ignored and omitted boards keep their current slots.",
       inputSchema: reorderBoardsShape,
     },
     async (args) => toMcp(await reorderBoards(ctx, args)),
@@ -261,7 +261,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_viewport_presets",
     {
       description:
-        "Replace the folder's viewport presets (config.viewportPresets) \u2014 the sizes offered when adding a frame. Send the complete list in display order; names must be distinct and at least one preset is required. Frames store their own w/h, so editing presets never resizes an existing frame.",
+        "Replace the folder's viewport presets — the sizes offered when adding a frame. Send the complete list in display order; names must be distinct and at least one is required. Frames store their own w/h, so this never resizes an existing frame.",
       inputSchema: updateViewportPresetsShape,
     },
     async (args) => toMcp(await updateViewportPresets(ctx, args)),
@@ -282,7 +282,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_frame",
     {
       description:
-        'Move/resize/relabel/regroup frames on a board: one entry per frame in `patches`, applied in one atomic write (single persist, broadcast and undo entry) — use length 1 for a single frame. `label: null`, `group: null` or `scheme: null` clears that field; omitting a field leaves it unchanged. `scheme: "light" | "dark"` pins that frame\'s render scheme — a review affordance over the screen\'s one shared tree, not a separate design variant.',
+        "Move, resize, relabel or regroup frames on a board: one entry per frame in `patches`, applied in one atomic write — length 1 for a single frame. `label`, `group` and `scheme` accept null to clear; an omitted field is unchanged. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
       inputSchema: updateFrameShape,
     },
     async (args) => toMcp(await updateFrames(ctx, args)),
@@ -302,7 +302,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "add_snippet",
     {
       description:
-        'Create a reusable subtree with typed `params`; placeholders in the body are `{ "$param": "name" }`. A `node` param fills a child slot, a scalar param fills a prop value — a scalar $param in a `children` array renders as nothing. **Structure that varies between instances is still ONE snippet: declare a `node` param** rather than inlining the repetition, which is the most expensive mistake here. Call render_snippet afterwards — $param wiring bugs are silent until instantiation. Guide: velloo://guide/snippets.',
+        'Create a reusable subtree with typed `params`; placeholders in the body are `{ "$param": "name" }`. **Structure that varies between instances is still ONE snippet: declare a `node` param** rather than inlining the repetition — the most expensive mistake here. Call `render_snippet` afterwards; $param wiring bugs are silent until instantiation. Guide: velloo://guide/snippets.',
       inputSchema: addSnippetShape,
     },
     async (args) =>
@@ -315,7 +315,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet",
     {
       description:
-        "Update a snippet's metadata or body. Sparse patch — pass only the fields to change. Every screen using the snippet is re-broadcast. To tweak ONE node's props inside the body without resending the whole tree, pass `innerPatch` — the definition-level member of the prop-patch trio: update_props (a plain screen node), update_snippet_instance (one instance's body), update_snippet innerPatch (this — the shared definition, every instance at once). Pass `tree` only for a full body replacement.",
+        "Update a snippet's metadata or body; sparse patch, and every screen using it is re-broadcast. `innerPatch` retargets one node inside the body across every instance without resending the tree; pass `tree` only for a full body replacement. Guide: velloo://guide/snippets.",
       inputSchema: updateSnippetShape,
     },
     async (args) =>
@@ -362,7 +362,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "instantiate_snippet",
     {
       description:
-        "Add a `$snippet` instance to a screen tree under parentPath. `args` must satisfy the snippet's declared params — pass every required param (check `list_snippets`/`get_snippet` first: each param reports name, type, and `required`). Omitting a required param or passing an undeclared key returns SnippetParamMismatch listing the offending names. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` to patch interior body nodes for THIS instance only (the active nav item, a red badge) at placement — no follow-up `update_snippet_instance` needed. Stamp a shared snippet on many screens, each with its own `overrides`.",
+        "Add a `$snippet` instance to a screen tree under parentPath. `args` must satisfy the snippet's declared params — check `list_snippets` first; a missing required param or an undeclared key returns SnippetParamMismatch naming it. `overrides` patches interior body nodes for THIS instance only (the active nav item, a red badge) at placement, so one shared snippet can be stamped across many screens each with its own. Guide: velloo://guide/snippets.",
       inputSchema: instantiateSnippetShape,
     },
     async (args) => toMcp(await instantiateSnippet(ctx, args)),
@@ -372,7 +372,7 @@ export function registerMutationTools(mcp: McpServer, ctx: MutationContext): voi
     "update_snippet_instance",
     {
       description:
-        'Edit ONE snippet instance without touching the shared definition. `argPatch` changes what the caller passes in (null removes a key); `extraClassName` replaces its per-instance class suffix (null clears). `innerPath` + `propPatch` patch a node inside just this instance\'s body — the "this card\'s badge is red" escape hatch — where innerPath is "@id" (preferred, survives restructures), a dotted index path ("0.2"), or "" for the body root; emit_code inlines an overridden instance. Both sides compose in one call. To change every instance instead, use update_snippet\'s innerPatch. Guide: velloo://guide/snippets.',
+        "Edit ONE snippet instance without touching the shared definition. `argPatch` changes what the caller passes in; `extraClassName` replaces its per-instance class suffix; `innerPath` + `propPatch` patch a node inside just this instance's body — the \"this card's badge is red\" escape hatch. They compose in one call. To change every instance instead, use `update_snippet`'s innerPatch. Guide: velloo://guide/snippets.",
       inputSchema: updateSnippetInstanceShape,
     },
     async (args) => {

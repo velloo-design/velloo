@@ -26,7 +26,7 @@ export function registerGenerateTools(
     "generate_asset",
     {
       description:
-        "Generate image assets from a prompt and write them into assets/. **PAY-AS-YOU-GO against the user's credit balance** — author it yourself with upload_asset whenever you can, check list_assets first, iterate at `count: 1`, and ALWAYS relay the returned cost and remaining balance to the user. `intent` picks the model: photo, illustration, graphic (layouts with legible text), texture, icon, vector, mark, edit, cutout, upscale. Pass `reference` to restyle or edit an existing asset. Guide: velloo://guide/art.",
+        "Generate image assets from a prompt into assets/. **PAY-AS-YOU-GO against the user's credit balance** — author it yourself with `upload_asset` when you can, check `list_assets` first, iterate at `count: 1`, and ALWAYS relay the returned cost and remaining balance to the user. `intent` picks the model; `reference` restyles or edits an existing asset. Guide: velloo://guide/art.",
       inputSchema: {
         prompt: z
           .string()

@@ -19,7 +19,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     "list_assets",
     {
       description:
-        "List the folder's assets/ files — the `/assets/<name>` URL for <Image src>, size, whether any screen or snippet still references it, and the originating prompt for anything `generate_asset` produced. Check here before spending on art you may already have made.",
+        "List the folder's assets/ files — the `/assets/<name>` URL for <Image src>, size, whether any screen or snippet still references it, and the originating prompt for anything `generate_asset` produced. Check here before spending on art you may already have.",
       inputSchema: {
         unusedOnly: z.boolean().optional().describe("Only assets nothing references"),
       },
@@ -60,7 +60,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     "upload_asset",
     {
       description:
-        "Write base64 data into assets/ and get the /assets/<name> URL for <Image src>. Author SVG art directly and upload it — never fall back to stock placeholders for intentional imagery. Max 5MB. For files already on disk (e.g. generated images), prefer `import_assets` — it reads them by path and avoids base64.",
+        "Write base64 data into assets/ and get the `/assets/<name>` URL for <Image src>. Author SVG art directly and upload it — never fall back to stock placeholders for intentional imagery. Max 5MB. For files already on disk, prefer `import_assets`.",
       inputSchema: {
         filename: z.string().describe('e.g. "hero-grain.svg", "cover.png"'),
         data: z.string().describe("base64-encoded file contents"),
@@ -98,7 +98,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     "import_assets",
     {
       description:
-        "Bulk-import existing image/SVG files into assets/ BY PATH — no base64. Reads each file from disk and copies it into the design folder's assets/, returning the /assets/<name> URL per file. Globs (containing *) are expanded relative to `baseDir` (default: the server's working dir). Ideal for pulling in many generated images at once — e.g. paths: ['../explore/*.png']. Max 5MB each; non-image extensions and oversized/missing files are reported per-entry, never throwing the whole batch.",
+        "Bulk-import image/SVG files into assets/ BY PATH — no base64 — returning the `/assets/<name>` URL per file. Globs are expanded relative to `baseDir` (default: the server's working dir), so `paths: ['../explore/*.png']` pulls in a whole batch. Max 5MB each; bad or missing files are reported per entry rather than failing the call.",
       inputSchema: {
         paths: z
           .array(z.string())

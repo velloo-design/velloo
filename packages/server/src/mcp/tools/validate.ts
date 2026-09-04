@@ -16,7 +16,7 @@ export function registerValidateTools(
     "validate_classes",
     {
       description:
-        "Check whether each Tailwind class compiles under the active JIT — theme-aware: it knows the folder's palette/font tokens (`bg-ink`, `text-bone`, `font-display`) and classes defined in `custom_css`, not just stock Tailwind. Useful before relying on arbitrary-value forms like `shadow-[0_2px_8px_rgba(0,0,0,0.1)]` or `bg-[#fa00ff]`. Returns one report per input class with valid: true/false and a short reason on failure. When the host app is on Tailwind v3, classes that need a different v3 spelling (or have none) additionally carry a warning.",
+        "Check whether each Tailwind class compiles under the active JIT — theme-aware, so it knows the folder's palette and font tokens (`bg-ink`, `font-display`) and any `customCss` classes, not just stock Tailwind. Reach for it before relying on arbitrary-value forms like `bg-[#fa00ff]`. Returns valid + a reason per class.",
       inputSchema: {
         classes: z.array(z.string()).min(1),
       },

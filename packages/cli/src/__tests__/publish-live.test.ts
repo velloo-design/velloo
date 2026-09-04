@@ -2,7 +2,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { DesignBundleSchema } from "@velloo/protocol/publish";
+import { DesignBundleMetaSchema } from "@velloo/protocol/publish-meta";
 import type { Server } from "bun";
+import { z } from "zod";
 
 type StubServer = Server<undefined>;
 
@@ -231,6 +234,16 @@ test("publish ships the live bundle and flags it in the design", async () => {
   expect(captured.design?.bundlePath).toBe("bundle.js");
   expect(captured.design?.extensions).toHaveProperty("Sparkline");
   expect(captured.design?.screens?.some((s) => s.id === "home")).toBe(true);
+
+  // The uploaded bundle is the declared one, not merely something shaped like
+  // it: the real CLI's real output, checked against the schema both the cloud
+  // and the share viewer read it through. Strict, so a field the CLI adds
+  // without declaring fails here rather than at the far end.
+  const parsed = DesignBundleSchema.safeParse(captured.design);
+  expect(parsed.success ? null : z.prettifyError(parsed.error)).toBe(null);
+  // And it satisfies the projection the cloud ingests, at runtime as well as
+  // at the type level.
+  expect(DesignBundleMetaSchema.safeParse(captured.design).success).toBe(true);
 });
 
 test("publish never uploads machine-local comment storage", async () => {

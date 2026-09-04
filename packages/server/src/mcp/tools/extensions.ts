@@ -37,7 +37,7 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
     "add_extension",
     {
       description:
-        'Register one of the app\'s own components — a bespoke DataTable, a brand Hero, a custom Chart — so screens can use it. The canvas draws a placeholder card and `emit_code` writes a real `import` from `importPath`. Pass `render: "live"` to bundle and mount the actual component instead (charts above all). For compositions of components that already exist, use add_snippet instead. Guide: velloo://guide/extensions.',
+        'Register one of the app\'s own components — a bespoke DataTable, a brand Hero, a custom Chart — so screens can use it. The canvas draws a placeholder and `emit_code` writes a real import from `importPath`; `render: "live"` bundles and mounts the actual component instead (charts above all). For compositions of components that already exist, use `add_snippet`. Guide: velloo://guide/extensions.',
       inputSchema: {
         id: z.string().min(1),
         importPath: z.string().min(1),
@@ -71,13 +71,8 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "update_extension",
     {
-      description: [
-        "Patch an existing extension. Use to add or remove props (a new column in a DataTable), change the importPath after a refactor, or update the description.",
-        "",
-        "**To rename an extension**, call `remove_extension` and `add_extension` instead — renaming would break every existing tree reference. Velloo refuses removal when references exist, so a rename naturally surfaces them.",
-        "",
-        "Pass only the fields you want to change in `patch`. Other fields keep their current values.",
-      ].join("\n"),
+      description:
+        "Patch an existing extension — add or remove props, fix `importPath` after a refactor, update the description. Sparse: unlisted fields keep their values. **To rename**, remove and re-add instead; renaming would break every existing tree reference.",
       inputSchema: {
         id: z.string().min(1),
         patch: z.object({
@@ -97,14 +92,8 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "remove_extension",
     {
-      description: [
-        "Remove an extension from the folder. Refuses if any screen or snippet tree still references the extension — returns the list of offending nodes so the agent can remove or replace them first.",
-        "",
-        "Typical sequence to unregister a now-unused custom component:",
-        "  1. call this tool; if it returns ExtensionInUse, the response carries the references",
-        "  2. walk the references and `remove_node` (or `update_props` to swap the $ref) for each",
-        "  3. call this tool again",
-      ].join("\n"),
+      description:
+        "Unregister an extension. Refuses while any screen or snippet tree still references it, returning the offending nodes so you can remove them or swap their `$ref` first, then call again.",
       inputSchema: { id: z.string().min(1) },
     },
     async (args) => toMcp(await removeExtension(ctx, args)),

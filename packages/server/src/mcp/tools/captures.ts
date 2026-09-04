@@ -105,7 +105,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "list_captures",
     {
       description:
-        "Stored browser captures for this folder, newest first. Each entry's `captureId` can be read with `get_capture` and diffed against a screen with `compare_to_url { source: { captureId } }`. Captures come from `start_capture_session` or the user running `velloo capture`.",
+        "Stored browser captures for this folder, newest first. Each `captureId` reads with `get_capture` and diffs against a screen with `compare_to_url { source: { captureId } }`. Captures come from `start_capture_session` or `velloo capture`.",
       inputSchema: {},
     },
     async () => {
@@ -134,7 +134,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "get_capture",
     {
       description:
-        "Read one stored capture: a structural outline of the page (with repeated blocks marked — those are your component candidates), the page's CSS custom properties as `import_theme`-ready CSS, and the list of downloaded image assets. Pass `full: true` for the complete node list with computed styles when the outline isn't enough. Use the theme CSS with `import_theme` BEFORE composing, so the page's real tokens resolve; then re-express the page with real components — do not transcribe the DOM node-for-node.",
+        "Read one stored capture: a structural outline of the page with repeated blocks marked (your component candidates), its CSS custom properties as `import_theme`-ready CSS, and the downloaded image assets. `full: true` returns every node with computed styles. Feed the theme CSS to `import_theme` BEFORE composing. Guide: velloo://guide/capture.",
       inputSchema: {
         captureId: z.string(),
         full: z

@@ -118,6 +118,7 @@ export {
   type Colors,
   type ColorsOverride,
   ColorsSchema,
+  type LooseTokenGroup,
   resolveColors,
   type Theme,
   ThemeSchema,

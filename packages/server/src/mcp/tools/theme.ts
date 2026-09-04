@@ -141,7 +141,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "set_theme",
     {
       description:
-        "Edit the theme through one verb — pass any combination of channels. `tokens` patches dot-paths (`colors.*` / `colorsDark.*` are the semantic slots that theme-flip; `palette.*` is a non-flipping passthrough for raw brand colors). `fonts` declares font roles. `typeset` sets the type rhythm the whole ladder derives from — reach for it instead of per-node `text-*`. `customCss` replaces theme/custom.css wholesale. `from` reseeds the palette from a preset or a seed color, before the other channels. Guide: velloo://guide/theme.",
+        "Edit the theme through one verb — pass any combination of channels. `tokens` patches dot-paths (`colors.*` / `colorsDark.*` are the semantic slots that theme-flip; `palette.*` is a non-flipping passthrough for raw brand colors). `fonts` declares font roles. `typeset` sets the type rhythm the whole ladder derives from — reach for it instead of per-node `text-*`. `customCss` replaces theme/custom.css. `from` reseeds from a preset or seed color before the other channels apply. Guide: velloo://guide/theme.",
       inputSchema: {
         theme: z.string().optional().describe('Named theme to edit; default "default"'),
         tokens: z
@@ -330,7 +330,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "import_theme",
     {
       description:
-        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand. Parses shadcn-convention custom properties, Tailwind v4 `@theme` vars, `--radius` and `--font-*` roles, and captures every non-semantic color var into the theme's `palette` so the app's verbatim brand classes (`bg-ink`, `bg-primary-600`) resolve literally. Given a `cssPath` it also ingests the nearby tailwind.config's `theme.extend` and `container`. **Dry-run by default** — pass `apply: true` to persist. Run this BEFORE porting screens. Guide: velloo://guide/theme.",
+        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand — semantic slots, the raw `palette.*` passthrough for brand vars, fonts, radius, and the nearby tailwind.config's `theme.extend`. Dry-run by default; pass `apply: true` to persist. Run this BEFORE porting screens. Guide: velloo://guide/theme.",
       inputSchema: {
         css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
         cssPath: z
@@ -432,7 +432,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "score_theme_contrast",
     {
       description:
-        "Score WCAG contrast for a theme's salient color pairs in both light and dark palettes — ratio + tier (AAA / AA / AAlarge / Fail) per pair. Run it after reseeding a palette or tuning dark tokens.",
+        "Score WCAG contrast for a theme's salient color pairs in both palettes — ratio + tier (AAA / AA / AAlarge / Fail) per pair. Run it after reseeding a palette or tuning dark tokens.",
       inputSchema: {
         mode: z
           .enum(["light", "dark"])
