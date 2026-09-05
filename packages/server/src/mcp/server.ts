@@ -20,6 +20,13 @@ import type { MutationContext } from "../mutations/index.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { MCP_SERVER_INFO } from "../version.ts";
 import { registerGuideResources } from "./resources.ts";
+import {
+  applyMcpToolSurface,
+  DEFAULT_MCP_SURFACE,
+  MCP_PROFILE_RECIPES,
+  type McpSurfaceSelection,
+  parseMcpSurfaceUrl,
+} from "./surface.ts";
 import { applyToolPolicy } from "./tool-policy.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
@@ -103,6 +110,16 @@ const INSTRUCTION_PARTS = [
   "**Read the guide before doing the thing.** The advertised `velloo://guide/*` resources carry the detail this brief deliberately omits; fetch the relevant one before using an unfamiliar capability.",
 ];
 
+const GUIDED_INSTRUCTION_PARTS = [
+  "You are working on a Velloo design folder: a code-shaped design canvas backed by the project's real component library.",
+  "",
+  "**The design folder is tool-owned.** Never read or edit its JSON files by hand. Use `operation_schema` before an unfamiliar operation, `call_velloo` for one native operation, and `run_velloo_plan` for up to eight related calls.",
+  "",
+  "Build in large strokes with `compose` and `batch`, keep stable node ids, prefer theme tokens, and avoid repeatedly re-reading unchanged state. Verify design work with `screenshot`; use `compare_to_url` for code-to-design fidelity and `emit_code` at implementation handoff.",
+  "",
+  "The allowed operation enum is the catalogue available to this session. Failed façade calls include the exact native operation schema needed to correct them.",
+];
+
 /**
  * Appended only when this folder opted into feedback (so the agent never sees
  * the tool, or guidance for it, otherwise). Mirrors the consent rules baked
@@ -127,8 +144,18 @@ export function buildInstructions(
   openComments = 0,
   hostTailwindMajor: 3 | 4 | null = null,
   bareFolder = false,
+  surface: McpSurfaceSelection = { mode: "full" },
 ): string {
-  const parts = [...intro, ...INSTRUCTION_PARTS];
+  const parts = [
+    ...intro,
+    ...(surface.mode === "guided" ? GUIDED_INSTRUCTION_PARTS : INSTRUCTION_PARTS),
+  ];
+  if (surface.profile) {
+    parts.push(
+      "",
+      `**Selected workflow profile — ${surface.profile}.** ${MCP_PROFILE_RECIPES[surface.profile]}`,
+    );
+  }
   if (bareFolder) {
     parts.unshift(
       "**Bare folder.** This design has no boards yet. Setup order before composing UI: (1) style the theme with `set_theme` (or `import_theme` to match an existing app); (2) `add_board`; (3) add screens and frames, then design.",
@@ -167,6 +194,7 @@ function buildMcpServer(
   comments: LocalCommentsService,
   assetOrigin?: string,
   cloud?: CloudAuth,
+  surface: McpSurfaceSelection = DEFAULT_MCP_SURFACE,
 ): McpServer {
   // Opt-in AND reachable: with no cloud configured the tool could never do
   // anything, so neither it nor its instruction paragraph is worth a session's
@@ -194,8 +222,12 @@ function buildMcpServer(
       openComments,
       hostTailwindMajor,
       bareFolder,
+      surface,
     ),
   });
+  // Installed before policy and tracing: native registrations flow through all
+  // wrappers, then the selected surface disables or replaces their public view.
+  const toolSurface = applyMcpToolSurface(mcp, surface);
   // Before any tool registers: strict input shapes (a typo'd argument fails
   // loudly with the valid keys instead of being silently dropped) and the
   // behavioural annotations a host reads to decide what to auto-approve.
@@ -223,6 +255,7 @@ function buildMcpServer(
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
+  toolSurface.finish();
   // Long-form guides live here rather than in tool descriptions: fetched on
   // demand, so a session pays one listing line instead of the whole manual.
   registerGuideResources(mcp);
@@ -290,6 +323,11 @@ export async function createMcpServer(
               sessions.set(id, { transport, server });
             },
           });
+          const parsedSurface = parseMcpSurfaceUrl(req.url);
+          if (!parsedSurface.ok) {
+            sendJson(res, 400, { error: parsedSurface.error });
+            return;
+          }
           const server = buildMcpServer(
             ctx,
             opts.jit,
@@ -298,6 +336,7 @@ export async function createMcpServer(
             opts.comments,
             opts.assetOrigin,
             opts.cloud,
+            parsedSurface.selection,
           );
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
@@ -382,6 +421,7 @@ export interface StdioMcpServerOptions {
   /** Canvas-server origin, used as <base href> in screenshot renders so /assets/* resolve. */
   assetOrigin?: string | undefined;
   cloud?: CloudAuth | undefined;
+  surface?: McpSurfaceSelection | undefined;
 }
 
 export interface StdioMcpServerHandle {
@@ -406,6 +446,7 @@ export async function createStdioMcpServer(
     opts.comments,
     opts.assetOrigin,
     opts.cloud,
+    opts.surface ?? DEFAULT_MCP_SURFACE,
   );
   const transport = new StdioServerTransport();
   await server.connect(transport);

@@ -9,7 +9,7 @@ const main = defineCommand({
     name: "velloo",
     version: TOOL_VERSION,
     description:
-      "Local, agent-driven canvas for designing React apps, verifying the implementation, and sharing the result with a team or external reviewers.",
+      "Local, agent-driven canvas for redesigning an existing React screen against the running app, then sharing the result with a team or external reviewer.",
   },
   subCommands: COMMANDS,
 });

@@ -507,6 +507,19 @@ export {
   type StdioFormatGateHandle,
 } from "./mcp/format-gate.ts";
 export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";
+export {
+  DEFAULT_MCP_SURFACE,
+  MCP_PROFILE_IDS,
+  MCP_PROFILE_RECIPES,
+  MCP_PROFILES,
+  MCP_SURFACE_MODES,
+  type McpProfileId,
+  type McpSurfaceMode,
+  type McpSurfaceSelection,
+  parseMcpSurfaceSelection,
+  parseMcpSurfaceUrl,
+  withMcpSurfaceUrl,
+} from "./mcp/surface.ts";
 // Verification cores (dark-mode audit / class validation / contrast), exported
 // for headless consumers (render, export, and publish).
 export {

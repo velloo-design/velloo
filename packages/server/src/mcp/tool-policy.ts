@@ -128,6 +128,14 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   send_feedback: remote,
 };
 
+/** The compact façade has its own public names; native drift checks stay exact. */
+export const FACADE_TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+  // These can dispatch writes, including destructive native operations.
+  call_velloo: { openWorldHint: false },
+  run_velloo_plan: { openWorldHint: false },
+  operation_schema: read,
+};
+
 /**
  * Apply the two invariants every registered tool must satisfy, by patching
  * `registerTool` once before any tool registers:
@@ -151,7 +159,9 @@ export function applyToolPolicy(mcp: McpServer): void {
       typeof input === "object" &&
       typeof (input as { safeParse?: unknown }).safeParse !== "function";
     const annotations =
-      (config as { annotations?: ToolAnnotations }).annotations ?? TOOL_ANNOTATIONS[name];
+      (config as { annotations?: ToolAnnotations }).annotations ??
+      TOOL_ANNOTATIONS[name] ??
+      FACADE_TOOL_ANNOTATIONS[name];
     // Unavoidable cast: swapping a raw shape for its z.strictObject changes the
     // SDK's inferred config generic, which no non-generic rewrap can satisfy.
     const finalConfig = {

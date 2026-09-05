@@ -10,15 +10,23 @@ A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`
 
 ### The context budget
 
-**The surface is flat — every tool is advertised at connect.** Progressive disclosure was tried (an env-gated `reveal_tools` that hid long-tail families) and removed: it depends on the client re-fetching on `tools/list_changed`, and major agent clients index tools once at connect and never refresh, which left revealed tools permanently uncallable (2026-07 gallery dogfood: every agent hit it). Disclosure that needs client cooperation is not a budget strategy.
+Velloo uses **server-selected progressive disclosure at initialization**. It does not use a `reveal_tools` tool or `tools/list_changed`: major agent clients index tools once at connect, so disclosure that needs the model or client to refresh the list is unreliable.
 
-What holds the budget instead:
+The session selects one immutable surface before the MCP handshake:
+
+- **`guided` (default):** three stable tools — `call_velloo`, `run_velloo_plan`, and `operation_schema`. Their operation enum is narrowed by an optional workflow profile. Calls dispatch to the exact native handler and schema; a validation or native failure returns the correction schema inline.
+- **`profile`:** the workflow's native tools are advertised directly. This is the no-reveal option for clients/models that perform better with conventional function schemas.
+- **`full`:** every native tool is advertised for compatibility and as the quality-control baseline.
+
+Profiles are `code-to-design`, `three-variants`, `local-comments`, and `design-to-code`. Select them with `velloo mcp --profile <id>` (guided) or `velloo mcp --surface profile --profile <id>`. `--surface full` restores the legacy flat surface. HTTP sessions carry the same selection in the MCP URL query; stdio also accepts `VELLOO_MCP_SURFACE` and `VELLOO_MCP_PROFILE`.
+
+What holds the remaining budget:
 
 1. **Tool descriptions say WHAT and WHEN, in one or two sentences**, and name their guide. They do not carry manuals, and they do not restate what a field's own `.describe()`, an enum, or a guide already says. The check that keeps them honest: cut a sentence and ask what call an agent would now get wrong.
 2. **Long-form guidance is an MCP resource** — `velloo://guide/{components,snippets,theme,boards,verification,porting,capture,extensions,art,comments}` — fetched on demand, so a session that never ports an app never pays for the porting manual.
-3. **The boot instructions carry only what no tool can say**: the mental model, the three customization layers, and the efficiency contract.
+3. **The guided boot instructions carry only the dispatch contract and selected recipe.** Full sessions retain the complete mental model for compatibility.
 
-`bun packages/server/scripts/mcp-token-budget.ts` measures the whole thing (instructions + every tool's wire schema + the resource listing) and is the number to hold the line on. Adding a paragraph to the instructions taxes every session forever — check whether it belongs in a guide or a tool description first.
+`bun packages/server/scripts/mcp-token-budget.ts` measures guided and full (instructions + wire schemas + the resource listing) and checks both budgets. Adding a paragraph to the instructions taxes every session forever — check whether it belongs in a guide or a tool description first.
 
 ### Shape rules
 
@@ -303,7 +311,9 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 
 ## Initialize handshake
 
-Server returns the standard MCP `initialize` response with concrete agent nudges in `instructions`. The shipped text lives in `packages/server/src/mcp/server.ts` (search for `INSTRUCTIONS`); summarized:
+Server returns the standard MCP `initialize` response with surface-specific `instructions`. The shipped text lives in `packages/server/src/mcp/server.ts`.
+
+Guided sessions receive the compact dispatch contract, the selected profile recipe, and the rule to request one exact schema only when needed. Profile and full sessions receive the complete native-tool guidance, summarized below:
 
 - **What Velloo is.** A pinned shadcn snapshot embedded in the binary; the design folder ships pure data. Designs are static — click handlers, routing, and forms are no-op.
 - **First-pass discovery.** Before composing screens, call `list_components` (use `mode: "summary"` first — the full schema is large), `get_theme`, `list_snippets`, and `list_boards`. For an overview of an existing screen, use `get_screen mode: "outline"` (compact `ref + $id + classSnippet` tree) before pulling the full JSON.

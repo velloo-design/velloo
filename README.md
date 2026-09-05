@@ -14,7 +14,7 @@ Design and code, finally the same shape.
 
 ---
 
-Velloo is a **local, agent-driven canvas for designing React apps**. Your AI coding agent creates real screens, explores alternatives, and checks the result visually against the implementation. You direct the work on the canvas, then carry the chosen direction back into your application in its own conventions.
+Velloo is a **local, agent-driven canvas for redesigning an existing React screen**. Your AI coding agent creates real screens, explores alternatives, and checks the result visually against the running app. You direct the work on the canvas, then carry the chosen direction back into your application in its own conventions.
 
 Designs stay beside your code as readable JSON. The local workflow needs no account; when a review benefits from other people, publish a board into a lightweight team workspace or send an external share link. Teammates and outside reviewers can comment on the result, and those comments return to the local canvas for the agent to resolve.
 
@@ -59,6 +59,35 @@ Two files define the model: a repo-root **`velloo.json`** names each design fold
 
 - **Canvas:** http://localhost:7300
 - **MCP server (for your AI agent):** http://localhost:7301/mcp
+
+### MCP context surfaces
+
+Velloo defaults to a compact progressive-disclosure surface: the agent sees
+`call_velloo`, `run_velloo_plan`, and `operation_schema`, plus an enum naming the
+available native operations. It pays for one native schema only when it needs
+that schema; failed calls include the exact correction schema automatically.
+
+Select a workflow before the MCP session when you know it—the model never has
+to reveal or choose its own tools:
+
+```bash
+velloo mcp --profile code-to-design
+velloo mcp --profile three-variants
+velloo mcp --profile local-comments
+velloo mcp --profile design-to-code
+```
+
+The same profiles can expose their native tools directly, or restore the full
+legacy surface for clients that require it:
+
+```bash
+velloo mcp --surface profile --profile design-to-code
+velloo mcp --surface full
+```
+
+HTTP clients use the printed query-bearing URL. MCP configuration can also set
+`VELLOO_MCP_SURFACE` and `VELLOO_MCP_PROFILE`. The shared canvas daemon remains
+one writer; each MCP session independently selects its public tool surface.
 
 `Ctrl-C` stops the server. Velloo periodically checks for a newer release without delaying commands and prints a small notice when one is available. Run `velloo upgrade` to update through the channel that installed it (npm-global or standalone). To migrate an older design-folder format, pass the folder explicitly: `velloo upgrade <folder>`.
 

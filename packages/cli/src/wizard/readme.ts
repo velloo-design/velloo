@@ -89,12 +89,17 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
 
   lines.push("## What the AI agent sees");
   lines.push("");
-  lines.push("Velloo exposes MCP tools for discovery (`list_screens`, `list_components`,");
-  lines.push("`get_theme`), restricted-JSX composition (`compose`), focused edits");
-  lines.push("(`update_props`, `move_node`, …), theme operations (`set_theme`,");
-  lines.push("`import_theme`, `score_theme_contrast`), inspection");
-  lines.push("(`inspect`, `screenshot`, plus automatic diagnostics), and");
-  lines.push("code emission (`emit_code`, `emit_snippet`, `emit_theme`).");
+  lines.push("Velloo's default MCP surface is three compact tools: `call_velloo`,");
+  lines.push("`run_velloo_plan`, and `operation_schema`. Their operation catalogue");
+  lines.push("covers discovery (`list_screens`, `list_components`, `get_theme`),");
+  lines.push("restricted-JSX composition (`compose`), focused edits (`update_props`,");
+  lines.push("`move_node`, …), themes, inspection, screenshots, and code emission.");
+  lines.push("A failed call returns the exact native schema needed to correct it.");
+  lines.push("");
+  lines.push("When the workflow is known before the session, start `velloo mcp` with");
+  lines.push("`--profile code-to-design`, `three-variants`, `local-comments`, or");
+  lines.push("`design-to-code`. Use `--surface profile --profile <name>` for direct");
+  lines.push("native schemas, or `--surface full` for compatibility.");
   lines.push("");
   lines.push("Designs are static by construction — click handlers, routing, and forms");
   lines.push("are no-ops in the canvas. The agent reads the design and writes real");

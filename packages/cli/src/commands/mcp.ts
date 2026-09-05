@@ -1,5 +1,12 @@
 import { join } from "node:path";
-import { runStdioFormatGate, runStdioMcpProxy } from "@velloo/server";
+import {
+  MCP_PROFILE_IDS,
+  MCP_SURFACE_MODES,
+  parseMcpSurfaceSelection,
+  runStdioFormatGate,
+  runStdioMcpProxy,
+  withMcpSurfaceUrl,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import {
   DesignFolderFormatError,
@@ -77,10 +84,24 @@ export default defineCommand({
       type: "string",
       description: "Bind hostname (default 127.0.0.1)",
     },
+    surface: {
+      type: "string",
+      description: `Tool surface: ${MCP_SURFACE_MODES.join(", ")} (default guided; env VELLOO_MCP_SURFACE)`,
+    },
+    profile: {
+      type: "string",
+      description: `Optional workflow profile: ${MCP_PROFILE_IDS.join(", ")} (env VELLOO_MCP_PROFILE)`,
+    },
   },
   async run({ args }) {
     const folder = await resolveDesignFolder(args.folder, "mcp");
     const preferredPort = args.port ? Number(args.port) : undefined;
+    const parsedSurface = parseMcpSurfaceSelection(
+      args.surface ?? process.env.VELLOO_MCP_SURFACE,
+      args.profile ?? process.env.VELLOO_MCP_PROFILE,
+    );
+    if (!parsedSurface.ok) throw new Error(`velloo mcp: ${parsedSurface.error}`);
+    const surface = parsedSurface.selection;
 
     // Every `velloo mcp` (and `velloo run`) for a folder converges on one
     // persistent canvas daemon — one writer, one canvas URL shared by all
@@ -112,8 +133,9 @@ export default defineCommand({
     }
 
     if (args.http) {
+      const selectedUrl = withMcpSurfaceUrl(rec.mcpUrl, surface);
       console.log(`velloo: canvas at ${rec.canvasUrl}`);
-      console.log(`velloo: MCP server at ${rec.mcpUrl} (point your AI agent here)`);
+      console.log(`velloo: MCP server at ${selectedUrl} (point your AI agent here)`);
       console.log("velloo: it keeps running in the background — `velloo stop` to stop it.");
       return;
     }
@@ -129,14 +151,14 @@ export default defineCommand({
       await close?.();
       process.exit(0);
     };
-    const proxy = await runStdioMcpProxy(rec.mcpUrl, {
+    const proxy = await runStdioMcpProxy(withMcpSurfaceUrl(rec.mcpUrl, surface), {
       onExit: () => void shutdown(),
       // A crashed daemon respawns on new ephemeral ports; re-run the ensure
       // flow (lockfile → health check → spawn if dead) to find or revive it.
       rediscover: async () => {
         try {
           const fresh = await ensureDaemon(folder, { preferredPort, host: args.host });
-          return fresh.mcpUrl;
+          return withMcpSurfaceUrl(fresh.mcpUrl, surface);
         } catch {
           return null;
         }
