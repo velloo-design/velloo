@@ -86,6 +86,10 @@ fast inner loop), `bun run test:order` (`--randomize`, catches tests that only p
 in declaration order), and `bun run test:e2e` (`VELLOO_E2E=1`, adds the Playwright
 suites — CI does not run these).
 
+Prefer `bun run test` over a bare `bun test`: the canvas DOM suites need one
+global per file, so they skip themselves unless `--parallel` is on. Running a
+single DOM file serially wants `VELLOO_DOM_TESTS=1`.
+
 The CLI test (`packages/cli/src/__tests__/init.test.ts`) spawns `velloo init` as a subprocess — it's the only test that exercises the full surface and the canary for onboarding breakage.
 
 ## Where to read more

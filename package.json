@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "Velloo \u2014 code-shaped design tool for developers",
+  "description": "Velloo — code-shaped design tool for developers",
   "workspaces": [
     "packages/*"
   ],
@@ -38,6 +38,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.4",
+    "@happy-dom/global-registrator": "20.13.1",
     "@types/bun": "latest",
     "knip": "6.24.0",
     "typescript": "7.0.2"
