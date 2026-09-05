@@ -60,27 +60,32 @@ function textOf(result: Awaited<ReturnType<Client["callTool"]>>): string {
 }
 
 describe("MCP surface selection", () => {
-  test("guided is the default and selection rejects invalid combinations", () => {
+  test("guided is the default and an unknown surface is rejected", () => {
     expect(parseMcpSurfaceSelection()).toEqual({ ok: true, selection: { mode: "guided" } });
-    expect(parseMcpSurfaceSelection("profile", "three-variants")).toEqual({
-      ok: true,
-      selection: { mode: "profile", profile: "three-variants" },
-    });
-    expect(parseMcpSurfaceSelection("profile")).toMatchObject({ ok: false });
-    expect(parseMcpSurfaceSelection("full", "local-comments")).toMatchObject({ ok: false });
+    expect(parseMcpSurfaceSelection("full")).toEqual({ ok: true, selection: { mode: "full" } });
     expect(parseMcpSurfaceSelection("unknown")).toMatchObject({ ok: false });
   });
 
   test("URL helpers preserve the selection used by a shared daemon session", () => {
-    const url = withMcpSurfaceUrl("http://127.0.0.1:7301/mcp", {
-      mode: "guided",
-      profile: "design-to-code",
-    });
-    expect(url).toBe("http://127.0.0.1:7301/mcp?surface=guided&profile=design-to-code");
+    const url = withMcpSurfaceUrl("http://127.0.0.1:7301/mcp", { mode: "guided" });
+    expect(url).toBe("http://127.0.0.1:7301/mcp?surface=guided");
     expect(parseMcpSurfaceUrl(new URL(url).pathname + new URL(url).search)).toEqual({
       ok: true,
-      selection: { mode: "guided", profile: "design-to-code" },
+      selection: { mode: "guided" },
     });
+  });
+
+  test("a client config holding a removed profile selection still connects", () => {
+    // The removed `profile` mode meant "native schemas, no façade" — that is
+    // `full`. A stale URL must not fail the handshake.
+    expect(parseMcpSurfaceSelection("profile")).toEqual({ ok: true, selection: { mode: "full" } });
+    expect(parseMcpSurfaceUrl("/mcp?surface=guided&profile=three-variants")).toEqual({
+      ok: true,
+      selection: { mode: "guided" },
+    });
+    expect(
+      withMcpSurfaceUrl("http://127.0.0.1:7301/mcp?profile=design-to-code", { mode: "full" }),
+    ).toBe("http://127.0.0.1:7301/mcp?surface=full");
   });
 });
 
@@ -153,7 +158,7 @@ describe("guided façade", () => {
   });
 });
 
-describe("native compatibility and profiles", () => {
+describe("native compatibility", () => {
   test("full keeps every native tool with no façade names", async () => {
     const f = await fixture({ mode: "full" });
     try {
@@ -167,28 +172,18 @@ describe("native compatibility and profiles", () => {
     }
   });
 
-  test("a native profile exposes only its preselected exact schemas", async () => {
-    const f = await fixture({ mode: "profile", profile: "three-variants" });
+  test("the guided enum is the whole catalogue, and there is no reveal tool", async () => {
+    const f = await fixture({ mode: "guided" });
     try {
-      expect((await f.client.listTools()).tools.map((tool) => tool.name).sort()).toEqual([
+      const tools = (await f.client.listTools()).tools;
+      const call = tools.find((tool) => tool.name === "call_velloo");
+      const operation = (call?.inputSchema.properties?.operation ?? {}) as { enum?: string[] };
+      expect(operation.enum?.slice().sort()).toEqual([
         "add_screen",
         "list_screens",
+        "remove_screen",
       ]);
-    } finally {
-      await f.close();
-    }
-  });
-
-  test("a guided profile narrows the operation enum without a reveal tool", async () => {
-    const f = await fixture({ mode: "guided", profile: "three-variants" });
-    try {
-      const call = (await f.client.listTools()).tools.find((tool) => tool.name === "call_velloo");
-      const operation = (call?.inputSchema.properties?.operation ?? {}) as { enum?: string[] };
-      expect(operation.enum).toContain("add_screen");
-      expect(operation.enum).not.toContain("remove_screen");
-      expect((await f.client.listTools()).tools.map((tool) => tool.name)).not.toContain(
-        "reveal_tools",
-      );
+      expect(tools.map((tool) => tool.name)).not.toContain("reveal_tools");
     } finally {
       await f.close();
     }

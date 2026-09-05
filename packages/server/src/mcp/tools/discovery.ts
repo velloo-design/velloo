@@ -314,7 +314,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "component_status",
     {
       description:
-        "Compile-check named components for the browser canvas and report each as exact repo source, canvas-adapted, fallback, or unavailable. Use during velloo-setup before claiming the canvas renders an app component exactly.",
+        'Compile-check components for the browser canvas and report each as exact repo source, canvas-adapted, fallback, or unavailable. Pass the component ids as `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. Use before claiming the canvas renders an app component exactly.',
       inputSchema: {
         ids: z.array(z.string().min(1)).min(1),
         library: z.string().min(1).optional(),
@@ -329,23 +329,44 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           message: `Unknown library ${JSON.stringify(libraryId)}.`,
         });
       }
+      // Split unknown ids off FIRST, whatever the provider can do. An id that
+      // isn't in the library at all otherwise reads identically to a real
+      // component the canvas can't mount — so a model asking about a component
+      // the app calls by its own name (sample app's Panel / StatusChip) would be
+      // told the canvas is broken rather than that the id is wrong.
+      const manifest = await provider.loadManifest().catch(() => []);
+      const known = new Set(manifest.map((entry) => entry.id));
+      const unknownDiagnostics = ids
+        .filter((id) => !known.has(id))
+        .map((id) => ({
+          id,
+          status: "unknown" as const,
+          note: "Not a component in this library — call list_components for the ids it accepts. An app component under its own name is not one of them; design with the library's components and match the app's styling.",
+        }));
+      const recognized = ids.filter((id) => known.has(id));
+
       if (!provider.canvasBundleSpec || !ctx.canvasBundler) {
         return jsonResult({
           library: libraryId,
           usable: false,
-          diagnostics: ids.map((id) => ({
-            id,
-            status: "fallback",
-            note: "This provider renders through its bundled SSR adapter; repo-backed canvas mounting is unavailable.",
-          })),
+          diagnostics: [
+            ...recognized.map((id) => ({
+              id,
+              status: "fallback",
+              note: "This provider renders through its bundled SSR adapter; repo-backed canvas mounting is unavailable.",
+            })),
+            ...unknownDiagnostics,
+          ],
           errors: [],
         });
       }
-      const result = await ctx.canvasBundler.build(libraryId, ids);
+      const result = recognized.length
+        ? await ctx.canvasBundler.build(libraryId, recognized)
+        : { usable: false, diagnostics: [], errors: [] };
       return jsonResult({
         library: libraryId,
         usable: result.usable,
-        diagnostics: result.diagnostics,
+        diagnostics: [...result.diagnostics, ...unknownDiagnostics],
         errors: result.errors,
       });
     },

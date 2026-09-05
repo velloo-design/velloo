@@ -515,11 +515,7 @@ export {
 export { runStdioMcpProxy, type StdioMcpProxyHandle } from "./mcp/proxy.ts";
 export {
   DEFAULT_MCP_SURFACE,
-  MCP_PROFILE_IDS,
-  MCP_PROFILE_RECIPES,
-  MCP_PROFILES,
   MCP_SURFACE_MODES,
-  type McpProfileId,
   type McpSurfaceMode,
   type McpSurfaceSelection,
   parseMcpSurfaceSelection,

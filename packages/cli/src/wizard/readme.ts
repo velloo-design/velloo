@@ -96,10 +96,8 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("`move_node`, …), themes, inspection, screenshots, and code emission.");
   lines.push("A failed call returns the exact native schema needed to correct it.");
   lines.push("");
-  lines.push("When the workflow is known before the session, start `velloo mcp` with");
-  lines.push("`--profile code-to-design`, `three-variants`, `local-comments`, or");
-  lines.push("`design-to-code`. Use `--surface profile --profile <name>` for direct");
-  lines.push("native schemas, or `--surface full` for compatibility.");
+  lines.push("Clients that prefer conventional function schemas can advertise every");
+  lines.push("native tool directly with `velloo mcp --surface full`.");
   lines.push("");
   lines.push("Designs are static by construction — click handlers, routing, and forms");
   lines.push("are no-ops in the canvas. The agent reads the design and writes real");

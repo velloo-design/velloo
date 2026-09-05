@@ -122,9 +122,18 @@ describe("buildInstructions", () => {
 
   test("surfaces open visual feedback as one line when the count is positive", () => {
     const text = buildInstructions(false, undefined, [], 3);
-    expect(text).toContain(
-      "**3 open visual feedback threads are waiting on you.** Read them with `list_comment_threads`, make the requested changes, then reply and resolve with `update_comment_thread`.",
-    );
+    expect(text).toContain("**3 open visual feedback threads are waiting on you.**");
+    expect(text).toContain("Read them with the `list_comment_threads` operation");
+    expect(text).toContain("`update_comment_thread`");
+    // Named as an operation, not a tool: on the guided surface both are
+    // reachable only through the façade.
+    expect(text).not.toContain("Read them with `list_comment_threads`");
+    expect(text).toContain("velloo://guide/comments");
+  });
+
+  test("the guided surface points at the guide resources", () => {
+    const guided = buildInstructions(false, undefined, [], 0, null, false, { mode: "guided" });
+    expect(guided).toContain("velloo://guide/*");
   });
 
   test("the waiting-comments line reads correctly for a single comment", () => {

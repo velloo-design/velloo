@@ -23,7 +23,6 @@ import { registerGuideResources } from "./resources.ts";
 import {
   applyMcpToolSurface,
   DEFAULT_MCP_SURFACE,
-  MCP_PROFILE_RECIPES,
   type McpSurfaceSelection,
   parseMcpSurfaceUrl,
 } from "./surface.ts";
@@ -117,7 +116,9 @@ const GUIDED_INSTRUCTION_PARTS = [
   "",
   "Build in large strokes with `compose` and `batch`, keep stable node ids, prefer theme tokens, and avoid repeatedly re-reading unchanged state. Use `component_status` before claiming an app component renders exactly. Verify design work with `screenshot`; use `compare_to_url` for code-to-design fidelity and `emit_code` at implementation handoff.",
   "",
-  "The allowed operation enum is the catalogue available to this session. Failed façade calls include the exact native operation schema needed to correct them.",
+  "The operation enum is the whole catalogue available to this session. Failed façade calls include the exact native operation schema needed to correct them.",
+  "",
+  "**Read the guide before doing the thing.** The `velloo://guide/*` resources carry the detail this brief omits — verification, theming, porting, art direction, comment threads. Fetch the relevant one before using an unfamiliar capability.",
 ];
 
 /**
@@ -150,12 +151,6 @@ export function buildInstructions(
     ...intro,
     ...(surface.mode === "guided" ? GUIDED_INSTRUCTION_PARTS : INSTRUCTION_PARTS),
   ];
-  if (surface.profile) {
-    parts.push(
-      "",
-      `**Selected workflow profile — ${surface.profile}.** ${MCP_PROFILE_RECIPES[surface.profile]}`,
-    );
-  }
   if (bareFolder) {
     parts.unshift(
       "**Bare folder.** This design has no boards yet. Setup order before composing UI: (1) style the theme with `set_theme` (or `import_theme` to match an existing app); (2) `add_board`; (3) add screens and frames, then design.",
@@ -175,11 +170,17 @@ export function buildInstructions(
     );
   }
   if (openComments > 0) {
+    // Named as operations rather than tools: on the guided surface they are
+    // reachable only through the façade, and this line used to spell them as
+    // bare tool names the agent could not find in its tool list.
+    const one = openComments === 1;
     parts.push(
       "",
-      openComments === 1
-        ? "**1 open visual feedback thread is waiting on you.** Read it with `list_comment_threads`, make the requested change, then reply and resolve with `update_comment_thread`."
-        : `**${openComments} open visual feedback threads are waiting on you.** Read them with \`list_comment_threads\`, make the requested changes, then reply and resolve with \`update_comment_thread\`.`,
+      `**${one ? "1 open visual feedback thread is" : `${openComments} open visual feedback threads are`} waiting on you.** ${
+        one ? "It is a change" : "Each one is a change"
+      } the user is expecting. Read ${one ? "it" : "them"} with the \`list_comment_threads\` operation, make the requested ${
+        one ? "change" : "changes"
+      }, then reply and resolve with \`update_comment_thread\`. The full loop is velloo://guide/comments.`,
     );
   }
   if (feedbackEnabled) parts.push("", FEEDBACK_INSTRUCTION);

@@ -67,27 +67,22 @@ Velloo defaults to a compact progressive-disclosure surface: the agent sees
 available native operations. It pays for one native schema only when it needs
 that schema; failed calls include the exact correction schema automatically.
 
-Select a workflow before the MCP session when you know it—the model never has
-to reveal or choose its own tools:
+Clients that do better with conventional function schemas can advertise every
+native tool directly instead:
 
 ```bash
-velloo mcp --profile code-to-design
-velloo mcp --profile three-variants
-velloo mcp --profile local-comments
-velloo mcp --profile design-to-code
-```
-
-The same profiles can expose their native tools directly, or restore the full
-legacy surface for clients that require it:
-
-```bash
-velloo mcp --surface profile --profile design-to-code
 velloo mcp --surface full
 ```
 
+Both surfaces carry the whole operation catalogue. Steering an agent toward a
+particular workflow is the job of a skill or a `velloo://guide/*` resource, not
+of a narrowed tool set — an allow-list chosen before the session can't know that
+the code-to-design run will end on a comment thread, and the surface is fixed
+once the session starts.
+
 HTTP clients use the printed query-bearing URL. MCP configuration can also set
-`VELLOO_MCP_SURFACE` and `VELLOO_MCP_PROFILE`. The shared canvas daemon remains
-one writer; each MCP session independently selects its public tool surface.
+`VELLOO_MCP_SURFACE`. The shared canvas daemon remains one writer; each MCP
+session independently selects its public tool surface.
 
 `Ctrl-C` stops the server. Velloo periodically checks for a newer release without delaying commands and prints a small notice when one is available. Run `velloo upgrade` to update through the channel that installed it (npm-global or standalone). To migrate an older design-folder format, pass the folder explicitly: `velloo upgrade <folder>`.
 

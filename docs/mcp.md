@@ -14,11 +14,12 @@ Velloo uses **server-selected progressive disclosure at initialization**. It doe
 
 The session selects one immutable surface before the MCP handshake:
 
-- **`guided` (default):** three stable tools — `call_velloo`, `run_velloo_plan`, and `operation_schema`. Their operation enum is narrowed by an optional workflow profile. Calls dispatch to the exact native handler and schema; a validation or native failure returns the correction schema inline.
-- **`profile`:** the workflow's native tools are advertised directly. This is the no-reveal option for clients/models that perform better with conventional function schemas.
-- **`full`:** every native tool is advertised for compatibility and as the quality-control baseline.
+- **`guided` (default):** three stable tools — `call_velloo`, `run_velloo_plan`, and `operation_schema`. Calls dispatch to the exact native handler and schema; a validation or native failure returns the correction schema inline.
+- **`full`:** every native tool is advertised directly, for clients and models that do better with conventional function schemas, and as the quality-control baseline.
 
-Profiles are `code-to-design`, `three-variants`, `local-comments`, and `design-to-code`. Select them with `velloo mcp --profile <id>` (guided) or `velloo mcp --surface profile --profile <id>`. `--surface full` restores the legacy flat surface. HTTP sessions carry the same selection in the MCP URL query; stdio also accepts `VELLOO_MCP_SURFACE` and `VELLOO_MCP_PROFILE`.
+Select with `velloo mcp --surface <mode>`. HTTP sessions carry the selection in the MCP URL query; stdio also accepts `VELLOO_MCP_SURFACE`.
+
+**Both surfaces carry the whole catalogue, and that is deliberate.** An earlier iteration added four workflow profiles (`code-to-design`, `three-variants`, `local-comments`, `design-to-code`) that narrowed the operation set before the handshake. They were removed: a pre-session allow-list is a guess about which verbs a workflow needs, and three of the four guessed wrong against their own recipes — `code-to-design` forbade the `add_board` the bare-folder setup order calls for, `design-to-code` forbade the `compare_to_url` its recipe ended on, `local-comments` could not `remove_node` to honour "delete this button". Because the surface is immutable for the session, a blocked agent had no way back, and the open-comment-thread notice pointed at tools three of the four profiles had removed. Workflow steering belongs in a skill or a `velloo://guide/*` resource, where it can shape behaviour without amputating capability. A stale `surface=profile` URL or `profile=` query param still parses (mapped to `full`, and ignored, respectively) rather than failing the handshake.
 
 What holds the remaining budget:
 
@@ -313,7 +314,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 
 Server returns the standard MCP `initialize` response with surface-specific `instructions`. The shipped text lives in `packages/server/src/mcp/server.ts`.
 
-Guided sessions receive the compact dispatch contract, the selected profile recipe, and the rule to request one exact schema only when needed. Profile and full sessions receive the complete native-tool guidance, summarized below:
+Guided sessions receive the compact dispatch contract, the rule to request one exact schema only when needed, and the pointer to the `velloo://guide/*` resources. Full sessions receive the complete native-tool guidance, summarized below:
 
 - **What Velloo is.** A pinned shadcn snapshot embedded in the binary; the design folder ships pure data. Designs are static — click handlers, routing, and forms are no-op.
 - **First-pass discovery.** Before composing screens, call `list_components` (use `mode: "summary"` first — the full schema is large), `get_theme`, `list_snippets`, and `list_boards`. For an overview of an existing screen, use `get_screen mode: "outline"` (compact `ref + $id + classSnippet` tree) before pulling the full JSON.

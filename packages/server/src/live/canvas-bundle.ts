@@ -89,7 +89,7 @@ export async function buildCanvasBundle(
       diagnostics.push({
         id,
         status: "unavailable",
-        note: "No browser-canvas source is registered; an explicit placeholder is rendered.",
+        note: "No browser-canvas source is registered for this ref, so the screen keeps its server render instead of client-mounting.",
       });
       continue;
     }

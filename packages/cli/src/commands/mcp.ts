@@ -1,6 +1,5 @@
 import { join } from "node:path";
 import {
-  MCP_PROFILE_IDS,
   MCP_SURFACE_MODES,
   parseMcpSurfaceSelection,
   runStdioFormatGate,
@@ -88,18 +87,11 @@ export default defineCommand({
       type: "string",
       description: `Tool surface: ${MCP_SURFACE_MODES.join(", ")} (default guided; env VELLOO_MCP_SURFACE)`,
     },
-    profile: {
-      type: "string",
-      description: `Optional workflow profile: ${MCP_PROFILE_IDS.join(", ")} (env VELLOO_MCP_PROFILE)`,
-    },
   },
   async run({ args }) {
     const folder = await resolveDesignFolder(args.folder, "mcp");
     const preferredPort = args.port ? Number(args.port) : undefined;
-    const parsedSurface = parseMcpSurfaceSelection(
-      args.surface ?? process.env.VELLOO_MCP_SURFACE,
-      args.profile ?? process.env.VELLOO_MCP_PROFILE,
-    );
+    const parsedSurface = parseMcpSurfaceSelection(args.surface ?? process.env.VELLOO_MCP_SURFACE);
     if (!parsedSurface.ok) throw new Error(`velloo mcp: ${parsedSurface.error}`);
     const surface = parsedSurface.selection;
 
