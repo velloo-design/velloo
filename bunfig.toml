@@ -1,5 +1,3 @@
 [install]
 exact = true
 
-[test]
-coverage = false

@@ -28,12 +28,30 @@ export interface FormatResult {
  * @biomejs/biome. Unpinned, an end-user install (where biome is not a velloo
  * dependency — a ~25MB-per-platform native binary isn't worth shipping for a
  * CSS formatting pass) would have bunx fetch *latest*, so emitted formatting
- * could drift between machines. Pinned, bunx resolves the local install when
- * present and caches the download otherwise. */
+ * could drift between machines. */
 const BIOME_PIN = "@biomejs/biome@2.5.4";
 
+/** The installed biome's launcher script, when @biomejs/biome resolves from
+ * here — spawning it directly skips `bun x`'s registry-resolution round trip,
+ * which costs ~1s *per call* and dominates every emit. `bun x` stays the
+ * fallback for installs that don't carry biome. */
+let localBiome: string | null | undefined;
+function resolveLocalBiome(): string | null {
+  if (localBiome !== undefined) return localBiome;
+  try {
+    const pkg = Bun.resolveSync("@biomejs/biome/package.json", here);
+    const bin = join(dirname(pkg), "bin", "biome");
+    localBiome = existsSync(bin) ? bin : null;
+  } catch {
+    localBiome = null;
+  }
+  return localBiome;
+}
+
 async function runBiome(args: string[]): Promise<{ exitCode: number; stderr: string }> {
-  const proc = Bun.spawn([process.execPath, "x", BIOME_PIN, ...args], {
+  const bin = resolveLocalBiome();
+  const cmd = bin ? [process.execPath, bin, ...args] : [process.execPath, "x", BIOME_PIN, ...args];
+  const proc = Bun.spawn(cmd, {
     stdout: "pipe",
     stderr: "pipe",
   });

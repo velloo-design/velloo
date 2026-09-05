@@ -51,7 +51,7 @@ jobs:
         run: |
           bun run typecheck
           bun run lint
-          bun test
+          bun test --parallel
 
       - name: Tag matches package version
         run: |

@@ -78,8 +78,13 @@ Before considering anything done:
 ```bash
 bun run typecheck    # tsc -b across the workspace
 bun run lint         # biome check .
-bun test             # ~130 tests, ~1s
+bun test             # ~1780 tests across ~200 files, ~10s (--parallel)
 ```
+
+Other test entry points: `bun run test:changed` (only what your diff touches — the
+fast inner loop), `bun run test:order` (`--randomize`, catches tests that only pass
+in declaration order), and `bun run test:e2e` (`VELLOO_E2E=1`, adds the Playwright
+suites — CI does not run these).
 
 The CLI test (`packages/cli/src/__tests__/init.test.ts`) spawns `velloo init` as a subprocess — it's the only test that exercises the full surface and the canary for onboarding breakage.
 

@@ -40,7 +40,7 @@ jobs:
         run: bun run lint
 
       - name: Test
-        run: bun test
+        run: bun test --parallel
 
   # Separate job because it is the one check that needs the network: a Google
   # outage should read as "the font check is red", not fail the suite that was
