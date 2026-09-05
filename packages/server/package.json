@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Velloo HTTP backend (canvas + MCP)",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/design-folder.ts"
   },
   "dependencies": {
     "@cloudflare/blindrsa-ts": "0.4.6",

@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emitCode } from "@velloo/codegen";
 import { unwrap } from "@velloo/result";
-import type { Theme } from "@velloo/schema";
 import { isComponentNode } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
+import { designConfig, designTheme } from "../../testing/design-folder.ts";
+
 import type { WatchEvent } from "../../watcher.ts";
 import { addNode, applyClasses, type MutationContext } from "../index.ts";
 
@@ -19,34 +20,11 @@ import { addNode, applyClasses, type MutationContext } from "../index.ts";
  * substrate that every other mutation builds on.
  */
 
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream",
-      version: "test",
-      source: "binary",
-      componentsPath: "binary",
-    },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
+const sampleConfig = designConfig();
 
 const provider = createShadcnProvider();
 
-const sampleTheme: Theme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+const sampleTheme = designTheme();
 
 const sampleScreen = {
   id: "landing",

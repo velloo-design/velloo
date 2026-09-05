@@ -3,10 +3,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
-import type { Screen, Theme } from "@velloo/schema";
+import type { Screen } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
+import { designTheme } from "../../testing/design-folder.ts";
 import type { WatchEvent } from "../../watcher.ts";
 import { type MutationContext, updateProps } from "../index.ts";
 
@@ -20,17 +21,13 @@ import { type MutationContext, updateProps } from "../index.ts";
  * and style together (see the last test).
  */
 
-const sampleTheme: Theme = {
-  name: "default",
+const sampleTheme = designTheme({
   colors: {
     background: "#fff",
     foreground: "#111",
     primary: { DEFAULT: "#4f46e5", foreground: "#fff" },
   },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+});
 
 const config = {
   schemaVersion: 3,

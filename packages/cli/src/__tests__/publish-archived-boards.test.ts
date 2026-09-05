@@ -3,6 +3,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type DesignFolder, loadDesignFolder } from "@velloo/server";
+import { designConfig, designTheme } from "@velloo/server/testing";
+
 import { pickBoards } from "../folder.ts";
 import { selectBoards } from "../publish/core.ts";
 
@@ -12,27 +14,9 @@ import { selectBoards } from "../publish/core.ts";
  * picker (`pickBoards`) and the loaded-folder selector (`selectBoards`).
  */
 
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: { id: "shadcn-upstream", version: "test", source: "binary", componentsPath: "binary" },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
+const sampleConfig = designConfig();
 
-const sampleTheme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+const sampleTheme = designTheme();
 
 let tmp: string;
 let folder: DesignFolder;

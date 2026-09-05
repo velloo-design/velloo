@@ -22,6 +22,7 @@ import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { PublishRunner } from "../publish-run.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
+import { designConfig, designTheme } from "../testing/design-folder.ts";
 
 /**
  * The canvas's cloud surface: /api/auth (account state + in-canvas sign-in) and
@@ -35,32 +36,9 @@ import { TailwindJit } from "../styles/tailwind-jit.ts";
 
 const provider = createShadcnProvider();
 
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream" as const,
-      version: "test",
-      source: "binary",
-      componentsPath: "binary",
-    },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
+const sampleConfig = designConfig();
 
-const sampleTheme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+const sampleTheme = designTheme();
 
 let tmp: string;
 let folder: DesignFolder;

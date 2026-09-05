@@ -128,8 +128,13 @@
       }
     },
     {
-      // The sanctioned exceptions to the rule above.
-      "includes": ["packages/server/src/providers.ts", "packages/server/src/**/__tests__/**"],
+      // The sanctioned exceptions to the rule above: the provider factory, the
+      // tests, and the shared test fixtures the tests build folders with.
+      "includes": [
+        "packages/server/src/providers.ts",
+        "packages/server/src/**/__tests__/**",
+        "packages/server/src/testing/**"
+      ],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     }
   ]

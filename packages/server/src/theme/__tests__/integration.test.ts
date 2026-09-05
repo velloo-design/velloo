@@ -8,6 +8,8 @@ import { unwrap } from "@velloo/result";
 import { type Theme, typesetScale } from "@velloo/schema";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
+import { designConfig, designTheme } from "../../testing/design-folder.ts";
+
 import type { WatchEvent } from "../../watcher.ts";
 import {
   applyPreset,
@@ -20,31 +22,13 @@ import {
   withThemeLock,
 } from "../index.ts";
 
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream" as const,
-      version: "test",
-      source: "binary",
-      componentsPath: "components/ui",
-    },
-  },
-  defaultLibrary: "default",
+const sampleConfig = designConfig({
+  library: { componentsPath: "components/ui" },
   viewportPresets: [{ name: "Mobile", w: 390, h: 844 }],
-};
-const sampleTheme: Theme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.205 0 0)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+});
+const sampleTheme = designTheme({
+  colors: { primary: { DEFAULT: "oklch(0.205 0 0)", foreground: "oklch(0.985 0 0)" } },
+});
 const sampleScreen = {
   id: "onboarding",
   name: "Onboarding",

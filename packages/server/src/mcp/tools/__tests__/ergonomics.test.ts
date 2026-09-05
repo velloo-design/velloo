@@ -3,7 +3,6 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { ActivityEvent } from "../../../activity.ts";
@@ -17,6 +16,8 @@ import {
   unknownComponent,
 } from "../../../mutations/errors.ts";
 import type { MutationContext } from "../../../mutations/index.ts";
+import { designConfig, designTheme } from "../../../testing/design-folder.ts";
+
 import type { WatchEvent } from "../../../watcher.ts";
 import { registerDiscoveryTools } from "../discovery.ts";
 import { registerMutationTools } from "../mutations.ts";
@@ -29,31 +30,14 @@ import { jsonTolerant } from "../schemas.ts";
  */
 
 const provider = createShadcnProvider();
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream",
-      version: "test",
-      source: "binary",
-      componentsPath: "binary",
-    },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
-const sampleTheme: Theme = {
-  name: "default",
+const sampleConfig = designConfig();
+const sampleTheme = designTheme({
   colors: {
     background: "#fff",
     foreground: "#000",
     primary: { DEFAULT: "#000", foreground: "#fff" },
   },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+});
 
 let tmp: string;
 let folder: DesignFolder;

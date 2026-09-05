@@ -3,12 +3,13 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unwrap } from "@velloo/result";
-import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import { listBoardsPayload } from "../../mcp/tools/discovery.ts";
 import { createDesignRouter } from "../../routes/design.ts";
+import { designConfig, designTheme } from "../../testing/design-folder.ts";
+
 import type { WatchEvent } from "../../watcher.ts";
 import {
   addBoard,
@@ -20,29 +21,11 @@ import {
   updateBoardGroup,
 } from "../index.ts";
 
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: { id: "shadcn-upstream", version: "test", source: "binary", componentsPath: "binary" },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
+const sampleConfig = designConfig();
 
 const provider = createShadcnProvider();
 
-const sampleTheme: Theme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+const sampleTheme = designTheme();
 
 let tmp: string;
 let folder: DesignFolder;

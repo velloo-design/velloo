@@ -60,6 +60,8 @@ The cleanest packages (`schema`, `result`, `provider`) have no internal runtime 
 - **TS strict.** No `any`. Use `unknown` at trust boundaries (JSON.parse, postMessage, DOM events).
 - **Biome** for lint+format. Run `bun run lint:fix` before committing.
 - **Tests with `bun test`.** Tests live alongside source in `__tests__/`. Schema package tests run fast; theme integration tests scaffold a tmp folder. Don't mock the filesystem — use `tmpdir()`.
+- **Scaffold design folders through `@velloo/server/testing`** (`packages/server/src/testing/design-folder.ts`) — `designConfig` / `designTheme` for the literals, `scaffoldDesignFolder` / `testContext` for a folder on disk plus a `MutationContext` that records broadcasts. Don't hand-roll another config literal; the point is that a schema change lands in one place.
+- **Canvas component tests that need a DOM** import `./dom.ts` (`packages/canvas/src/__tests__/dom.ts`) and wrap their suites in `domSuite`. Load the component under test with `await import()` after that — react-dom binds the DOM globals at module init, and a static import gets sorted above the registration.
 - **No `console.log` in shipped code.** The CLI prints user-facing output; the server uses `console.error` for unexpected failures. Anything else is debugging cruft.
 - **Comments document the non-obvious only.** WHY, not WHAT. No comments on well-named identifiers, no PR-reference comments, no "added for X" notes.
 

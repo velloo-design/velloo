@@ -3,40 +3,20 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { type DesignFolder, loadDesignFolder } from "../../../design-folder.ts";
 import type { MutationContext } from "../../../mutations/index.ts";
 import { TailwindJit } from "../../../styles/tailwind-jit.ts";
+import { designConfig, designTheme } from "../../../testing/design-folder.ts";
+
 import type { DesignDiagnostic } from "../../diagnostics.ts";
 import { registerComposeTool } from "../compose.ts";
 
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream",
-      version: "test",
-      source: "binary",
-      componentsPath: "binary",
-    },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
+const sampleConfig = designConfig();
 
-const sampleTheme: Theme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.205 0 0)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+const sampleTheme = designTheme({
+  colors: { primary: { DEFAULT: "oklch(0.205 0 0)", foreground: "oklch(0.985 0 0)" } },
+});
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<{
   content: { type: "text"; text: string }[];

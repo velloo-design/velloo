@@ -3,7 +3,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
 import { renderScreen, UnknownComponentError } from "@velloo/renderer";
-import { ScreenSchema, type Theme } from "@velloo/schema";
+import { ScreenSchema } from "@velloo/schema";
+import { designTheme } from "../testing/design-folder.ts";
 
 /**
  * Sanity: every Pulse screen renders without throwing against
@@ -20,17 +21,7 @@ import { ScreenSchema, type Theme } from "@velloo/schema";
 
 const pulseRoot = resolve(import.meta.dir, "../../../cli/src/scaffold/pulse");
 
-const sampleTheme: Theme = {
-  name: "pulse-test",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+const sampleTheme = designTheme({ name: "pulse-test" });
 
 async function loadSnippets(): Promise<Map<string, import("@velloo/schema").Snippet>> {
   const snippetsDir = resolve(pulseRoot, "snippets");

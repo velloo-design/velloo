@@ -1,17 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
-import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import { LocalCommentsService } from "../local-comments.ts";
 import { createMcpServer, type McpServerHandle } from "../mcp/server.ts";
-import type { MutationContext } from "../mutations/index.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
+import { testContext } from "../testing/design-folder.ts";
 
 /**
  * The one test that boots the REAL MCP server and talks to it as an agent
@@ -26,39 +22,7 @@ import { TailwindJit } from "../styles/tailwind-jit.ts";
  * disk. Those are the failure shapes that would take a session down cold.
  */
 
-const provider = createShadcnProvider();
-
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream" as const,
-      version: "test",
-      source: "binary",
-      componentsPath: "binary",
-    },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
-
-const sampleTheme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-    border: "oklch(0.922 0 0)",
-    ring: "oklch(0.708 0 0)",
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
-
-let tmp: string;
-let folder: DesignFolder;
+let folder: Awaited<ReturnType<typeof testContext>>;
 let handle: McpServerHandle;
 
 async function connect(surface?: "guided" | "full"): Promise<Client> {
@@ -84,47 +48,29 @@ function payload(result: unknown): Record<string, unknown> {
 }
 
 beforeAll(async () => {
-  tmp = join(tmpdir(), `velloo-mcp-wiring-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(join(tmp, ".design"), { recursive: true });
-  await mkdir(join(tmp, "theme"), { recursive: true });
-  await mkdir(join(tmp, "screens"), { recursive: true });
-  await mkdir(join(tmp, "snippets"), { recursive: true });
-  await writeFile(join(tmp, ".design/config.json"), JSON.stringify(sampleConfig), "utf8");
-  await writeFile(join(tmp, "theme/default.json"), JSON.stringify(sampleTheme), "utf8");
-  folder = await loadDesignFolder(tmp);
-
-  const ctx: MutationContext = {
-    folder,
-    providers: { default: provider },
-    defaultProvider: provider,
-    broadcast: () => undefined,
-  };
-  const jit = new TailwindJit(provider, join(folder.root, "screens"));
-  const bundler = new LiveBundler(
-    folder.root,
-    () => folder.config,
-    () => liveExtensions(folder.config.extensions),
-  );
-  const canvasBundler = new CanvasBundler(
-    folder.root,
-    () => folder.config.hostApp,
-    () => undefined,
-  );
-  const comments = new LocalCommentsService(() => ctx, join(tmp, "comments.json"));
-
+  folder = await testContext({ label: "mcp-wiring" });
+  const { ctx, root } = folder;
   handle = await createMcpServer(ctx, {
     port: 0,
     host: "127.0.0.1",
-    jit,
-    bundler,
-    canvasBundler,
-    comments,
+    jit: new TailwindJit(ctx.defaultProvider, join(root, "screens")),
+    bundler: new LiveBundler(
+      root,
+      () => ctx.folder.config,
+      () => liveExtensions(ctx.folder.config.extensions),
+    ),
+    canvasBundler: new CanvasBundler(
+      root,
+      () => ctx.folder.config.hostApp,
+      () => undefined,
+    ),
+    comments: new LocalCommentsService(() => ctx, join(root, "comments.json")),
   });
 });
 
 afterAll(async () => {
   await handle.close();
-  await rm(tmp, { recursive: true, force: true });
+  await folder.cleanup();
 });
 
 describe("the shipped MCP catalogue", () => {
@@ -230,7 +176,7 @@ describe("the guided façade", () => {
       expect(added.screenId).toBe("pricing");
 
       // It really landed on disk, not just in the response.
-      const onDisk = await Bun.file(join(tmp, "screens", "pricing.json")).json();
+      const onDisk = await Bun.file(join(folder.root, "screens", "pricing.json")).json();
       expect(onDisk.name).toBe("Pricing");
 
       const listed = payload(
@@ -315,7 +261,7 @@ describe("the guided façade", () => {
       expect(text).toContain("plan-one");
       expect(text).toContain("InvalidOperationArguments");
       expect(text).not.toContain("plan-three");
-      expect(await Bun.file(join(tmp, "screens", "plan-three.json")).exists()).toBe(false);
+      expect(await Bun.file(join(folder.root, "screens", "plan-three.json")).exists()).toBe(false);
     } finally {
       await client.close();
     }

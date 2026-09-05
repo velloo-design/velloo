@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isComponentNode, type Theme } from "@velloo/schema";
+import { isComponentNode } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
+import { designConfig, designTheme } from "../../testing/design-folder.ts";
+
 import type { WatchEvent } from "../../watcher.ts";
 import { BATCH_TOOLS, runBatch } from "../batch.ts";
 import type { MutationContext } from "../index.ts";
@@ -25,32 +27,15 @@ import type { MutationContext } from "../index.ts";
 
 const provider = createShadcnProvider();
 
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream",
-      version: "test",
-      source: "binary",
-      componentsPath: "binary",
-    },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
+const sampleConfig = designConfig();
 
-const sampleTheme: Theme = {
-  name: "default",
+const sampleTheme = designTheme({
   colors: {
     background: "#fff",
     foreground: "#000",
     primary: { DEFAULT: "#000", foreground: "#fff" },
   },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+});
 
 let tmp: string;
 let folder: DesignFolder;

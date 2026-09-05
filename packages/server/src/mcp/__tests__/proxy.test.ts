@@ -1,17 +1,13 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
-import { loadDesignFolder } from "../../design-folder.ts";
 import { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import { LocalCommentsService } from "../../local-comments.ts";
-import type { MutationContext } from "../../mutations/index.ts";
 import { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { testContext } from "../../testing/design-folder.ts";
 import { runStdioMcpProxy } from "../proxy.ts";
 import { createMcpServer, type McpServerHandle } from "../server.ts";
 
@@ -27,38 +23,7 @@ import { createMcpServer, type McpServerHandle } from "../server.ts";
  * agent side on an in-memory transport instead of a subprocess's stdin.
  */
 
-const provider = createShadcnProvider();
-
-const sampleConfig = {
-  schemaVersion: 3,
-  toolVersion: "0.1.0",
-  libraries: {
-    default: {
-      id: "shadcn-upstream" as const,
-      version: "test",
-      source: "binary",
-      componentsPath: "binary",
-    },
-  },
-  defaultLibrary: "default",
-  viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
-};
-
-const sampleTheme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-    border: "oklch(0.922 0 0)",
-    ring: "oklch(0.708 0 0)",
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
-
-let tmp: string;
+let folder: Awaited<ReturnType<typeof testContext>>;
 const daemons: McpServerHandle[] = [];
 let logged: string[] = [];
 
@@ -76,28 +41,22 @@ afterAll(() => {
 
 /** Boot a real MCP daemon on an ephemeral port over the shared design folder. */
 async function startDaemon(): Promise<McpServerHandle> {
-  const folder = await loadDesignFolder(tmp);
-  const ctx: MutationContext = {
-    folder,
-    providers: { default: provider },
-    defaultProvider: provider,
-    broadcast: () => undefined,
-  };
+  const { ctx, root } = folder;
   const handle = await createMcpServer(ctx, {
     port: 0,
     host: "127.0.0.1",
-    jit: new TailwindJit(provider, join(folder.root, "screens")),
+    jit: new TailwindJit(ctx.defaultProvider, join(root, "screens")),
     bundler: new LiveBundler(
-      folder.root,
-      () => folder.config,
-      () => liveExtensions(folder.config.extensions),
+      root,
+      () => ctx.folder.config,
+      () => liveExtensions(ctx.folder.config.extensions),
     ),
     canvasBundler: new CanvasBundler(
-      folder.root,
-      () => folder.config.hostApp,
+      root,
+      () => ctx.folder.config.hostApp,
       () => undefined,
     ),
-    comments: new LocalCommentsService(() => ctx, join(tmp, "comments.json")),
+    comments: new LocalCommentsService(() => ctx, join(root, "comments.json")),
   });
   daemons.push(handle);
   return handle;
@@ -123,17 +82,12 @@ async function agentThrough(
 
 beforeEach(async () => {
   logged = [];
-  tmp = join(tmpdir(), `velloo-mcp-proxy-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(join(tmp, ".design"), { recursive: true });
-  await mkdir(join(tmp, "theme"), { recursive: true });
-  await mkdir(join(tmp, "screens"), { recursive: true });
-  await writeFile(join(tmp, ".design/config.json"), JSON.stringify(sampleConfig), "utf8");
-  await writeFile(join(tmp, "theme/default.json"), JSON.stringify(sampleTheme), "utf8");
+  folder = await testContext({ label: "mcp-proxy" });
 });
 
 afterEach(async () => {
   for (const daemon of daemons.splice(0)) await daemon.close().catch(() => undefined);
-  await rm(tmp, { recursive: true, force: true });
+  await folder.cleanup();
 });
 
 describe("relaying to a live daemon", () => {
@@ -145,7 +99,7 @@ describe("relaying to a live daemon", () => {
       expect(names).toContain("add_screen");
 
       await agent.client.callTool({ name: "add_screen", arguments: { name: "Relayed" } });
-      expect(await Bun.file(join(tmp, "screens", "relayed.json")).exists()).toBe(true);
+      expect(await Bun.file(join(folder.root, "screens", "relayed.json")).exists()).toBe(true);
     } finally {
       await agent.close();
     }
@@ -211,7 +165,7 @@ describe("surviving a daemon respawn", () => {
       // again — the swap has to stick.
       await agent.client.callTool({ name: "add_screen", arguments: { name: "Two" } });
       expect(second.sessions()).toBe(1);
-      expect(await Bun.file(join(tmp, "screens", "two.json")).exists()).toBe(true);
+      expect(await Bun.file(join(folder.root, "screens", "two.json")).exists()).toBe(true);
     } finally {
       await agent.close();
     }

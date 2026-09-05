@@ -3,11 +3,13 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createProvider as createNoLibProvider } from "@velloo/provider-none";
-import type { Extension, Screen, Theme } from "@velloo/schema";
+import type { Extension, Screen } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { ActivityEvent } from "../../activity.ts";
 import { type DesignFolder, loadDesignFolder } from "../../design-folder.ts";
 import { registryForScreen } from "../../extensions/registry.ts";
+import { designTheme } from "../../testing/design-folder.ts";
+
 import type { WatchEvent } from "../../watcher.ts";
 import type { MutationContext } from "../index.ts";
 import { addNode } from "../index.ts";
@@ -20,17 +22,7 @@ import { providerForScreen } from "../lookup.ts";
  * and an extension placeholder threads through registryForScreen.
  */
 
-const sampleTheme: Theme = {
-  name: "default",
-  colors: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
-  },
-  typography: {},
-  spacing: {},
-  radius: {},
-};
+const sampleTheme = designTheme();
 
 const multiLibraryConfig = {
   schemaVersion: 3,
