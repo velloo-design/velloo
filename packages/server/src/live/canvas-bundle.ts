@@ -72,6 +72,7 @@ export async function buildCanvasBundle(
     aliasPlugin(hostRoot, aliases),
     hostRuntimePlugin(hostRoot),
     vellooSourcePlugin(),
+    ...(radixShimPlugin(hostRoot) ?? []),
   ];
 
   for (const id of requested) {
@@ -313,6 +314,85 @@ function vellooSourcePlugin(): BunPlugin {
       }));
     },
   };
+}
+
+/**
+ * The namespaces the bundled shadcn snapshot imports from the unified
+ * `radix-ui` package. Each mirrors a scoped `@radix-ui/react-<kebab>` package.
+ */
+const RADIX_NAMESPACES = [
+  "Accordion",
+  "AlertDialog",
+  "Avatar",
+  "Checkbox",
+  "Collapsible",
+  "Dialog",
+  "DropdownMenu",
+  "Label",
+  "Popover",
+  "Progress",
+  "RadioGroup",
+  "ScrollArea",
+  "Select",
+  "Separator",
+  "Slider",
+  "Slot",
+  "Switch",
+  "Tabs",
+  "Toggle",
+  "ToggleGroup",
+  "Tooltip",
+];
+
+/**
+ * Stand in for the unified `radix-ui` package when the host app doesn't have it.
+ *
+ * The snapshot's components import `{ Dialog as DialogPrimitive } from "radix-ui"`,
+ * but that consolidated package is new — the overwhelming majority of shadcn apps
+ * depend on the scoped `@radix-ui/react-*` packages and never pull the barrel.
+ * Without this, every fallback-rendered component fails to compile from the
+ * installed binary (which has no node_modules of its own to walk up into) and the
+ * client mount silently never engages on an ordinary app. None of the eval
+ * fixtures — sample restaurant app, sample app, shadcn-admin — carry `radix-ui`.
+ *
+ * The unified package is itself only a re-export barrel, so synthesize that shape
+ * from whichever scoped packages the host actually has.
+ */
+function radixShimPlugin(hostRoot: string): BunPlugin[] | null {
+  try {
+    Bun.resolveSync("radix-ui", hostRoot);
+    return null; // The host has the real thing.
+  } catch {
+    // Fall through and synthesize it.
+  }
+  const lines: string[] = [];
+  for (const name of RADIX_NAMESPACES) {
+    const kebab = name.replace(/(?!^)([A-Z])/g, "-$1").toLowerCase();
+    try {
+      const path = Bun.resolveSync(`@radix-ui/react-${kebab}`, hostRoot);
+      lines.push(`export * as ${name} from ${JSON.stringify(path)};`);
+    } catch {
+      // The app doesn't use this primitive. A component needing it fails to
+      // compile and takes its own named fallback — the correct outcome.
+    }
+  }
+  if (lines.length === 0) return null;
+  const contents = lines.join("\n");
+  return [
+    {
+      name: "velloo-radix-shim",
+      setup(build) {
+        build.onResolve({ filter: /^radix-ui$/ }, () => ({
+          path: "radix-ui",
+          namespace: "velloo-radix",
+        }));
+        build.onLoad({ filter: /.*/, namespace: "velloo-radix" }, () => ({
+          contents,
+          loader: "js" as const,
+        }));
+      },
+    },
+  ];
 }
 
 function messageOf(error: unknown): string {

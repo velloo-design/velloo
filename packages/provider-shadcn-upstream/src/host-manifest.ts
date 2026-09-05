@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Manifest, PropDescriptor } from "@velloo/provider";
+import { exportsName } from "./host-source.ts";
 import { shadcnAddName } from "./install.ts";
 
 /**
@@ -29,7 +30,11 @@ export function enrichManifestFromHost(manifest: Manifest, uiDir: string | null)
   return manifest.map((descriptor) => {
     if (descriptor.source === "velloo") return descriptor;
     const source = read(shadcnAddName(descriptor.id));
-    if (!source) return descriptor;
+    // Only describe a component the file actually exports. A fork that renames
+    // the primitive (card.tsx → Panel, badge.tsx → StatusChip) would otherwise
+    // graft ITS variants onto the snapshot descriptor of a component the app
+    // does not have, and the inspector would offer props that do not exist.
+    if (!source || !exportsName(source, descriptor.id)) return descriptor;
     const additions = [
       ...variantPropsFor(source, descriptor.id),
       ...declaredPropsFor(source, descriptor.id),

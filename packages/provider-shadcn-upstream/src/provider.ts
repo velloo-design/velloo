@@ -15,6 +15,7 @@ import {
   snapshotVersion,
 } from "@velloo/shadcn-snapshot";
 import { enrichManifestFromHost } from "./host-manifest.ts";
+import { hostComponentFile } from "./host-source.ts";
 import { findUiDir, installedAddNames, shadcnAddName } from "./install.ts";
 import { readManifest } from "./manifest.ts";
 
@@ -145,7 +146,7 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
               },
             ];
           }
-          const hostPath = uiDir ? componentFile(uiDir, addName) : null;
+          const hostPath = uiDir ? hostComponentFile(uiDir, addName, id) : null;
           return [
             {
               id,
@@ -167,7 +168,7 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
                   fidelity: "fallback" as const,
                   note: hostPath
                     ? "The app source did not compile for the browser canvas; using the bundled canvas fallback."
-                    : "The component is not installed in the app; using the bundled canvas fallback.",
+                    : "The app does not install this component under this name (it may be renamed in its own file); using the bundled canvas fallback.",
                 },
               ],
             },
@@ -199,11 +200,3 @@ const CANVAS_ADAPTED_FAMILIES = new Set([
   "sonner",
   "tooltip",
 ]);
-
-function componentFile(uiDir: string, addName: string): string | null {
-  for (const extension of ["tsx", "ts", "jsx", "js"]) {
-    const path = join(uiDir, `${addName}.${extension}`);
-    if (existsSync(path)) return path;
-  }
-  return null;
-}
