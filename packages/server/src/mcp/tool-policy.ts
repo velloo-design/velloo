@@ -56,7 +56,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_components: read,
   list_notes: read,
   list_screens: read,
-  list_snippets: read,
   list_themes: read,
   score_theme_contrast: read,
 
@@ -72,12 +71,11 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   emit_theme: { idempotentHint: true, openWorldHint: false },
 
   // Tree.
-  add_node: create,
+  compose: { openWorldHint: false },
   update_props: set,
   move_node: set,
   set_node_id: set,
   remove_node: destroy,
-  set_screen_tree: destroy,
 
   // Screens and boards.
   add_screen: create,
@@ -96,7 +94,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   add_snippet: create,
   update_snippet: set,
   remove_snippet: destroy,
-  instantiate_snippet: create,
   update_snippet_instance: set,
 
   // Theme.

@@ -22,6 +22,7 @@ import {
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolveLocator } from "../../path.ts";
+import { snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 
@@ -221,12 +222,12 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List everything immediately available to design composition — library entries first, then registered extensions. `mode: "summary"` (default) returns id/source/category/prop-names; `"full"` returns complete descriptors with a worked example. `installedInApp` is host-app status only; a false value does not block design, and `emit_code.componentsToInstall` carries the later handoff plan. `filter` substring-matches ids; `kind` narrows to library or extension. Extensions shadow library entries with the same id.',
+        'List the unified `compose` tag namespace: library components, extensions, and snippets. `mode: "summary"` (default) returns tag/source/category/prop-names; `"full"` returns full descriptors. Snippet entries carry `snippetId`; their `id` is the PascalCase JSX tag. `installedInApp` is host-app status only; false does not block design, and `emit_code.componentsToInstall` carries the handoff plan. `filter` substring-matches tags; `kind` narrows the result.',
       outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
         mode: z.enum(["summary", "full"]).optional(),
-        kind: z.enum(["library", "extension"]).optional(),
+        kind: z.enum(["library", "extension", "snippet"]).optional(),
       },
     },
     async ({ filter, mode, kind }) => {
@@ -257,20 +258,42 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         availableInDesign: true,
         installedInApp: true,
       }));
+      const snippetEntries = [...ctx.folder.snippets.values()].map((snippet) => ({
+        id: snippetJsxTags(snippet)[0] ?? snippet.id,
+        snippetId: snippet.id,
+        category: "composition",
+        source: "snippet",
+        props: snippet.params.map(withRequiredFlag),
+        designModeNotes: `Reusable snippet: ${snippet.name}`,
+        kind: "snippet" as const,
+        availableInDesign: true,
+        installedInApp: true,
+      }));
       const all =
         kind === "library"
           ? libraryEntries
           : kind === "extension"
             ? extensionEntries
-            : [...libraryEntries, ...extensionEntries];
+            : kind === "snippet"
+              ? snippetEntries
+              : [...libraryEntries, ...extensionEntries, ...snippetEntries];
       const filtered = filter
         ? all.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()))
         : all;
       const out =
         (mode ?? "summary") === "full"
-          ? filtered.map(trimLargeEnums)
+          ? filtered.map((entry) => (entry.kind === "snippet" ? entry : trimLargeEnums(entry)))
           : filtered.map((c) => {
-              const summary = toSummary(c);
+              const summary =
+                c.kind === "snippet"
+                  ? {
+                      id: c.id,
+                      category: c.category,
+                      source: c.source,
+                      props: c.props.map((prop) => prop.name),
+                      designModeNotes: c.designModeNotes,
+                    }
+                  : toSummary(c);
               // Carry the kind + importPath through the summary view so the
               // agent can decide between two same-named components without
               // re-fetching the full descriptor.
@@ -279,6 +302,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
                 kind: c.kind,
                 availableInDesign: c.availableInDesign,
                 installedInApp: c.installedInApp,
+                ...(c.kind === "snippet" ? { snippetId: c.snippetId } : {}),
                 ...("importPath" in c ? { importPath: c.importPath } : {}),
               };
             });
@@ -308,23 +332,6 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         }),
         customCss: ctx.folder.customCss,
       });
-    },
-  );
-
-  mcp.registerTool(
-    "list_snippets",
-    {
-      description:
-        "List every snippet in the folder: `{ id, name, params }`, where each param reports `name`, `type` and `required`. Read these before `instantiate_snippet` — the wrong set returns SnippetParamMismatch.",
-      inputSchema: {},
-    },
-    async () => {
-      const snippets = [...ctx.folder.snippets.entries()].map(([id, snippet]) => ({
-        id,
-        name: snippet.name,
-        params: snippet.params.map(withRequiredFlag),
-      }));
-      return jsonResult({ snippets });
     },
   );
 

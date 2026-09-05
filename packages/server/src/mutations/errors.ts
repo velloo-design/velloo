@@ -73,8 +73,8 @@ export const screenIdConflict = (screenId: string): ErrorOf<MutationError, "Scre
   screenId,
   hint:
     `Screen "${screenId}" already exists (a route-scan may have scaffolded it as a placeholder). ` +
-    `Build into it instead: add_node / instantiate_snippet with screenId "${screenId}" (clear the ` +
-    `placeholder first with remove_node if needed). To replace it, remove_screen then add_screen. ` +
+    `Build into it instead with compose { screenId: "${screenId}", mode: "replace", jsx: … }. ` +
+    `To replace the screen resource itself, remove_screen then add_screen. ` +
     `To create a separate screen, omit \`id\` (add_screen auto-suffixes a unique one).`,
 });
 export const screenIdExhausted = (base: string): ErrorOf<MutationError, "ScreenIdExhausted"> => ({

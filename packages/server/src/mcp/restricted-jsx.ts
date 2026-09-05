@@ -1,0 +1,522 @@
+import type { ComponentProvider } from "@velloo/provider";
+import type { ComponentNode, Node, Screen, Snippet, SnippetInstance } from "@velloo/schema";
+import type { MutationContext } from "../mutations/context.ts";
+import { nearestRefs, normalizeRef } from "../mutations/errors.ts";
+import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
+
+export interface JsxIssue {
+  message: string;
+  offset: number;
+  line: number;
+  column: number;
+}
+
+export type CompileJsxResult = { ok: true; node: Node } | { ok: false; issues: JsxIssue[] };
+
+interface Attribute {
+  name: string;
+  value: unknown;
+  offset: number;
+}
+
+interface Element {
+  tag: string | null;
+  attributes: Attribute[];
+  children: Array<Element | TextNode>;
+  offset: number;
+}
+
+interface TextNode {
+  text: string;
+  offset: number;
+}
+
+class ParseFailure extends Error {
+  constructor(
+    message: string,
+    readonly offset: number,
+  ) {
+    super(message);
+  }
+}
+
+class Parser {
+  private pos = 0;
+
+  constructor(private readonly source: string) {}
+
+  parse(): Element {
+    this.skipWhitespace();
+    if (this.pos >= this.source.length) throw new ParseFailure("JSX is empty", this.pos);
+    const root = this.element();
+    this.skipWhitespace();
+    if (this.pos !== this.source.length) {
+      throw new ParseFailure("Expected a single root element", this.pos);
+    }
+    return root;
+  }
+
+  private element(): Element {
+    const offset = this.pos;
+    this.expect("<");
+    if (this.peek("/")) throw new ParseFailure("Unexpected closing tag", this.pos);
+    const fragment = this.peek(">");
+    const tag = fragment ? null : this.name("tag name");
+    const attributes: Attribute[] = [];
+
+    if (fragment) {
+      this.pos += 1;
+    } else {
+      while (true) {
+        this.skipWhitespace();
+        if (this.peek("/>")) {
+          this.pos += 2;
+          return { tag, attributes, children: [], offset };
+        }
+        if (this.peek(">")) {
+          this.pos += 1;
+          break;
+        }
+        if (this.peek("{")) {
+          throw new ParseFailure(
+            "Spread attributes and JSX expressions are not supported",
+            this.pos,
+          );
+        }
+        const attrOffset = this.pos;
+        const name = this.name("attribute name");
+        this.skipWhitespace();
+        let value: unknown = true;
+        if (this.peek("=")) {
+          this.pos += 1;
+          this.skipWhitespace();
+          value = this.attributeValue();
+        }
+        attributes.push({ name, value, offset: attrOffset });
+      }
+    }
+
+    const children: Array<Element | TextNode> = [];
+    while (true) {
+      if (this.pos >= this.source.length) {
+        throw new ParseFailure(`Unclosed ${tag ? `<${tag}>` : "fragment"}`, offset);
+      }
+      if (this.peek("</")) {
+        this.pos += 2;
+        if (tag === null) {
+          this.expect(">");
+        } else {
+          const close = this.name("closing tag");
+          if (close !== tag) {
+            throw new ParseFailure(
+              `Expected </${tag}> but found </${close}>`,
+              this.pos - close.length,
+            );
+          }
+          this.skipWhitespace();
+          this.expect(">");
+        }
+        return { tag, attributes, children, offset };
+      }
+      if (this.peek("<")) {
+        children.push(this.element());
+        continue;
+      }
+      const textOffset = this.pos;
+      const next = this.source.indexOf("<", this.pos);
+      const end = next === -1 ? this.source.length : next;
+      const text = this.source.slice(this.pos, end);
+      const expression = text.indexOf("{");
+      if (expression !== -1) {
+        throw new ParseFailure(
+          "JSX child expressions are not supported; use literal text or a JSON-valued prop",
+          textOffset + expression,
+        );
+      }
+      this.pos = end;
+      children.push({ text, offset: textOffset });
+    }
+  }
+
+  private attributeValue(): unknown {
+    const quote = this.source[this.pos];
+    if (quote === '"' || quote === "'") {
+      const start = this.pos;
+      this.pos += 1;
+      let out = "";
+      while (this.pos < this.source.length) {
+        const char = this.source[this.pos];
+        if (char === quote) {
+          this.pos += 1;
+          return out;
+        }
+        if (char === "\\") {
+          const next = this.source[this.pos + 1];
+          if (next === undefined) break;
+          out += next === "n" ? "\n" : next === "t" ? "\t" : next;
+          this.pos += 2;
+        } else {
+          out += char;
+          this.pos += 1;
+        }
+      }
+      throw new ParseFailure("Unclosed quoted attribute", start);
+    }
+    if (!this.peek("{")) {
+      throw new ParseFailure(
+        "Attribute values must be quoted strings or JSON literals in braces",
+        this.pos,
+      );
+    }
+    const start = this.pos;
+    this.pos += 1;
+    const contentStart = this.pos;
+    let depth = 1;
+    let quoteChar: string | null = null;
+    let escaped = false;
+    while (this.pos < this.source.length) {
+      const char = this.source[this.pos] as string;
+      if (quoteChar !== null) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quoteChar) quoteChar = null;
+      } else if (char === '"') {
+        quoteChar = char;
+      } else if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          const raw = this.source.slice(contentStart, this.pos).trim();
+          this.pos += 1;
+          if (!raw) throw new ParseFailure("Empty JSX expression", start);
+          try {
+            return JSON.parse(raw) as unknown;
+          } catch {
+            throw new ParseFailure(
+              "Brace values must be JSON literals; identifiers, calls, template strings, and functions are not executed",
+              contentStart,
+            );
+          }
+        }
+      }
+      this.pos += 1;
+    }
+    throw new ParseFailure("Unclosed brace attribute", start);
+  }
+
+  private name(label: string): string {
+    const start = this.pos;
+    const first = this.source[this.pos];
+    if (!first || !/[A-Za-z_$]/.test(first)) {
+      throw new ParseFailure(`Expected ${label}`, this.pos);
+    }
+    this.pos += 1;
+    while (this.pos < this.source.length && /[A-Za-z0-9_$-]/.test(this.source[this.pos] ?? "")) {
+      this.pos += 1;
+    }
+    return this.source.slice(start, this.pos);
+  }
+
+  private skipWhitespace(): void {
+    while (/\s/.test(this.source[this.pos] ?? "")) this.pos += 1;
+  }
+
+  private peek(value: string): boolean {
+    return this.source.startsWith(value, this.pos);
+  }
+
+  private expect(value: string): void {
+    if (!this.peek(value)) throw new ParseFailure(`Expected ${value}`, this.pos);
+    this.pos += value.length;
+  }
+}
+
+function issueAt(source: string, offset: number, message: string): JsxIssue {
+  const before = source.slice(0, offset);
+  const lines = before.split("\n");
+  return {
+    message,
+    offset,
+    line: lines.length,
+    column: (lines.at(-1)?.length ?? 0) + 1,
+  };
+}
+
+function textValue(children: Array<Element | TextNode>): { text?: string; elements: Element[] } {
+  const elements = children.filter((child): child is Element => "tag" in child);
+  const text = children
+    .filter((child): child is TextNode => "text" in child)
+    .map((child) => child.text)
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { ...(text ? { text } : {}), elements };
+}
+
+export function snippetJsxTags(snippet: Snippet): string[] {
+  const pascal = (value: string): string =>
+    value
+      .split(/[^A-Za-z0-9]+/)
+      .filter(Boolean)
+      .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+      .join("");
+  return [...new Set([snippet.id, snippet.name].map(pascal).filter(Boolean))];
+}
+
+interface CompileContext {
+  source: string;
+  components: Set<string>;
+  catalog: Set<string>;
+  snippets: Map<string, Snippet[]>;
+}
+
+function compileElement(element: Element, ctx: CompileContext): CompileJsxResult {
+  if (element.tag === null) {
+    const meaningful = element.children.filter(
+      (child) => "tag" in child || child.text.trim().length > 0,
+    );
+    if (meaningful.length !== 1 || !("tag" in (meaningful[0] ?? {}))) {
+      return {
+        ok: false,
+        issues: [
+          issueAt(ctx.source, element.offset, "A fragment must contain exactly one root element"),
+        ],
+      };
+    }
+    return compileElement(meaningful[0] as Element, ctx);
+  }
+
+  const attrs = new Map<string, Attribute>();
+  for (const attr of element.attributes) {
+    if (attrs.has(attr.name)) {
+      return {
+        ok: false,
+        issues: [issueAt(ctx.source, attr.offset, `Duplicate attribute "${attr.name}"`)],
+      };
+    }
+    if (
+      /^on[A-Z]/.test(attr.name) ||
+      ["dangerouslySetInnerHTML", "ref", "key"].includes(attr.name)
+    ) {
+      return {
+        ok: false,
+        issues: [
+          issueAt(
+            ctx.source,
+            attr.offset,
+            `Executable React attribute "${attr.name}" is not allowed in static design JSX`,
+          ),
+        ],
+      };
+    }
+    attrs.set(attr.name, attr);
+  }
+  const stableId = attrs.get("vellooId")?.value;
+  if (stableId !== undefined && typeof stableId !== "string") {
+    return {
+      ok: false,
+      issues: [
+        issueAt(
+          ctx.source,
+          attrs.get("vellooId")?.offset ?? element.offset,
+          "vellooId must be a string",
+        ),
+      ],
+    };
+  }
+  attrs.delete("vellooId");
+
+  const snippetMatches = ctx.snippets.get(element.tag) ?? [];
+  const isComponent = ctx.components.has(element.tag);
+  if (isComponent && snippetMatches.length > 0) {
+    return {
+      ok: false,
+      issues: [
+        issueAt(
+          ctx.source,
+          element.offset,
+          `"${element.tag}" is ambiguous: both a component and a snippet use this tag`,
+        ),
+      ],
+    };
+  }
+
+  const { text, elements } = textValue(element.children);
+  if (text && elements.length > 0) {
+    return {
+      ok: false,
+      issues: [
+        issueAt(
+          ctx.source,
+          element.offset,
+          "Mixed text and element children are not supported; wrap the text in a Text or Box element",
+        ),
+      ],
+    };
+  }
+
+  if (isComponent) {
+    const props = Object.fromEntries([...attrs].map(([name, attr]) => [name, attr.value]));
+    if (text) {
+      if ("children" in props) {
+        return {
+          ok: false,
+          issues: [
+            issueAt(ctx.source, element.offset, "Specify children as text or a prop, not both"),
+          ],
+        };
+      }
+      props.children = text;
+    }
+    const children: Node[] = [];
+    for (const child of elements) {
+      const compiled = compileElement(child, ctx);
+      if (!compiled.ok) return compiled;
+      children.push(compiled.node);
+    }
+    const node: ComponentNode = {
+      $ref: element.tag,
+      ...(stableId ? { $id: stableId } : {}),
+      ...(Object.keys(props).length > 0 ? { props } : {}),
+      ...(children.length > 0 ? { children } : {}),
+    };
+    return { ok: true, node };
+  }
+
+  if (snippetMatches.length === 1) {
+    const snippet = snippetMatches[0] as Snippet;
+    const params = new Map(snippet.params.map((param) => [param.name, param]));
+    const args: Record<string, unknown> = {};
+    let extraClassName: string | undefined;
+    for (const [name, attr] of attrs) {
+      if (name === "className" && !params.has(name)) {
+        if (typeof attr.value !== "string") {
+          return {
+            ok: false,
+            issues: [issueAt(ctx.source, attr.offset, "A snippet className must be a string")],
+          };
+        }
+        extraClassName = attr.value;
+      } else if (!params.has(name)) {
+        return {
+          ok: false,
+          issues: [
+            issueAt(ctx.source, attr.offset, `Unknown prop "${name}" for snippet ${element.tag}`),
+          ],
+        };
+      } else {
+        args[name] = attr.value;
+      }
+    }
+    if (text || elements.length > 0) {
+      const childParam = params.get("children");
+      if (!childParam) {
+        return {
+          ok: false,
+          issues: [
+            issueAt(
+              ctx.source,
+              element.offset,
+              `Snippet ${element.tag} declares no children param`,
+            ),
+          ],
+        };
+      }
+      if (text) args.children = text;
+      else {
+        if (childParam.type !== "node" || elements.length !== 1) {
+          return {
+            ok: false,
+            issues: [
+              issueAt(
+                ctx.source,
+                element.offset,
+                `Snippet ${element.tag} needs one node child for its children param`,
+              ),
+            ],
+          };
+        }
+        const compiled = compileElement(elements[0] as Element, ctx);
+        if (!compiled.ok) return compiled;
+        args.children = compiled.node;
+      }
+    }
+    const missing = snippet.params
+      .filter((param) => !param.optional && param.default === undefined && !(param.name in args))
+      .map((param) => param.name);
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        issues: [
+          issueAt(
+            ctx.source,
+            element.offset,
+            `Snippet ${element.tag} is missing required props: ${missing.join(", ")}`,
+          ),
+        ],
+      };
+    }
+    const node: SnippetInstance = {
+      $snippet: snippet.id,
+      ...(stableId ? { $id: stableId } : {}),
+      ...(extraClassName ? { $extraClassName: extraClassName } : {}),
+      ...(Object.keys(args).length > 0 ? { args } : {}),
+    };
+    return { ok: true, node };
+  }
+
+  const allNames = [...ctx.components, ...ctx.snippets.keys()];
+  const suggestions = nearestRefs(element.tag, allNames);
+  const catalogOnly = ctx.catalog.has(element.tag);
+  return {
+    ok: false,
+    issues: [
+      issueAt(
+        ctx.source,
+        element.offset,
+        catalogOnly
+          ? `Component "${element.tag}" is known to the library but unavailable in its design renderer; refresh the provider snapshot`
+          : `Unknown component or snippet "${element.tag}"${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""}`,
+      ),
+    ],
+  };
+}
+
+/** Parse and compile non-executing JSX against one screen's live namespace. */
+export async function compileRestrictedJsx(
+  ctx: MutationContext,
+  screen: Screen,
+  source: string,
+): Promise<CompileJsxResult> {
+  let root: Element;
+  try {
+    root = new Parser(source).parse();
+  } catch (error) {
+    if (error instanceof ParseFailure) {
+      return { ok: false, issues: [issueAt(source, error.offset, error.message)] };
+    }
+    throw error;
+  }
+
+  const registry = registryForScreen(ctx, screen);
+  const provider = providerForScreen(ctx, screen) as ComponentProvider;
+  const manifest = await provider.loadManifest().catch(() => []);
+  const snippets = new Map<string, Snippet[]>();
+  for (const snippet of ctx.folder.snippets.values()) {
+    for (const tag of snippetJsxTags(snippet)) {
+      const values = snippets.get(tag) ?? [];
+      values.push(snippet);
+      snippets.set(tag, values);
+    }
+  }
+  return compileElement(root, {
+    source,
+    components: new Set(Object.keys(registry)),
+    catalog: new Set(manifest.map((descriptor) => descriptor.id)),
+    snippets,
+  });
+}
+
+/** Separator-insensitive tag lookup is only for suggestions, never resolution. */
+export const normalizeJsxTag = normalizeRef;

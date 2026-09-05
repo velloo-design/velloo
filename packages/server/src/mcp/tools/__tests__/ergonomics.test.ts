@@ -140,19 +140,6 @@ describe("error hints + fuzzy matching", () => {
     expect(e.kind).toBe("InvalidPath");
     expect(String(e.hint)).toContain("find_nodes");
   });
-
-  test("a $ref that is actually a snippet points at instantiate_snippet/$snippet", async () => {
-    const r = await callTool("add_node", {
-      screenId: "landing",
-      parentPath: [],
-      componentRef: "SiteHeader",
-    });
-    expect(r.isError).toBe(true);
-    const e = parse(r);
-    expect(e.kind).toBe("UnknownComponent");
-    expect(String(e.hint)).toContain("site-header");
-    expect(String(e.hint)).toContain("$snippet");
-  });
 });
 
 describe("input tolerance + auto-merge", () => {
@@ -215,15 +202,18 @@ describe("batch index-path footgun guard", () => {
 });
 
 describe("snippet param contract", () => {
-  test("list_snippets reports a derived required flag", async () => {
-    const r = await callTool("list_snippets", {});
+  test("list_components includes snippets with derived required flags", async () => {
+    const r = await callTool("list_components", { kind: "snippet", mode: "full" });
     const data = parse(r) as {
-      snippets: { id: string; params: { name: string; required: boolean }[] }[];
+      components: {
+        snippetId: string;
+        props: { name: string; required: boolean }[];
+      }[];
     };
-    const sh = data.snippets.find((s) => s.id === "site-header");
+    const sh = data.components.find((s) => s.snippetId === "site-header");
     expect(sh).toBeDefined();
-    const title = sh?.params.find((p) => p.name === "title");
-    const subtitle = sh?.params.find((p) => p.name === "subtitle");
+    const title = sh?.props.find((p) => p.name === "title");
+    const subtitle = sh?.props.find((p) => p.name === "subtitle");
     expect(title?.required).toBe(true);
     expect(subtitle?.required).toBe(false);
   });

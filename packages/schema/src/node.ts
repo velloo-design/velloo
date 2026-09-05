@@ -56,7 +56,7 @@ export type SnippetInstance = {
    * Extra Tailwind classes merged into the snippet body's root element at
    * render time. Lets one-off instances tweak styling (e.g. wider, accent
    * border) without forking the snippet definition. Pass it via
-   * `instantiate_snippet({extraClassName})` or `update_snippet_instance`.
+   * a snippet tag's `className` in `compose`, or `update_snippet_instance`.
    */
   $extraClassName?: string | undefined;
   args?: Record<string, unknown> | undefined;

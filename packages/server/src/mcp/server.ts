@@ -25,6 +25,7 @@ import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
 import { registerCommentTools } from "./tools/comments.ts";
+import { registerComposeTool } from "./tools/compose.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
@@ -82,16 +83,16 @@ const INSTRUCTION_PARTS = [
   "",
   "**The design folder is tool-owned.** Screens, boards, snippets and the theme live as JSON files inside it, but never read or edit those files by hand — every operation goes through these tools, which hold the write lock, validation and history. The user can watch the design render live with `velloo run`.",
   "",
-  '**Start by reading, once.** `list_components` (mode "summary"; full mode includes a working `example` per component — copy it, then adapt), `get_theme` for the palette and tokens, `list_snippets` to reuse before defining, `list_boards` for the boards and their frames. For an existing screen, `get_screen mode: "outline"` before pulling the full JSON.',
+  '**Start by reading, once.** `list_components` (one namespace for components, extensions, and snippets; full mode includes examples/params), `get_theme` for the palette and tokens, `list_boards` for boards and frames. For an existing screen, `get_screen mode: "outline"` before pulling the full JSON.',
   "",
   "**Three customization layers** stack additively:",
   "  - **Libraries** are the baseline component palette. A folder registers N (`config.libraries`); each screen pins one via `screen.library`, and component ids resolve against that library only.",
   "  - **Extensions** add wholly new components the library doesn't have — the app's own `DataTable`, a brand `Hero`. Register with `add_extension`; they emit a real import. Additive customization, NOT compositions.",
-  '  - **Snippets** compose existing components into named subtrees with typed params — the tool for repeated structure (FeatureCard, NavRow, PricingTier). Reference one with a `{"$snippet":"<kebab-id>"}` node, NOT `$ref` (which is only for PascalCase library components and extensions).',
+  "  - **Snippets** compose existing components into named subtrees with typed params — the tool for repeated structure (FeatureCard, NavRow, PricingTier). `compose` resolves their PascalCase names in the same JSX tag namespace as components and extensions.",
   "",
   "**Styling is framework-native.** `update_props`'s `style` channel routes your payload to whatever the screen's framework uses — a Tailwind `className` string, an `sx` object, or a plain `style` object — so one verb works everywhere. Prefer theme tokens over hard-coded values in any channel; on a Tailwind folder prefer semantic tokens (`bg-background`, `text-muted-foreground`, `bg-primary`) over raw palette colors, because only semantic tokens theme-flip in dark mode.",
   "",
-  "**EFFICIENCY — build in big strokes, read once.** A screen should take a few dozen tool calls, not hundreds; over-calling is the most common failure. (1) **`children` arrays are the default mental model** — `add_node` accepts a full subtree, so build a whole feature card in ONE call rather than node-by-node. (2) **`batch` groups a sequence of mutations into one round-trip**, atomic by default: on the first error every touched resource rolls back and the result reports `rolledBack: true` with the failing call. Use it instead of firing one tiny mutation per node. (3) **Work from memory** — do NOT re-`get_screen` or re-`list_boards` before every edit; to re-locate a node use `find_nodes`, which returns its path. (4) **Don't thrash** — plan the structure before building it, and edit a snippet through `update_snippet`'s `innerPatch` rather than redefining its body.",
+  "**EFFICIENCY — build in big strokes, read once.** A screen should take a few dozen tool calls, not hundreds; over-calling is the most common failure. (1) **Compose whole subtrees** — `compose` accepts familiar nested JSX, so build a whole feature card in ONE call rather than node-by-node. (2) **`batch` groups a sequence of metadata/property mutations into one round-trip**, atomic by default: on the first error every touched resource rolls back and the result reports `rolledBack: true` with the failing call. (3) **Work from memory** — do NOT re-`get_screen` or re-`list_boards` before every edit; to re-locate a node use `find_nodes`, which returns its path. (4) **Don't thrash** — plan the structure before building it, and edit a snippet through `update_snippet`'s `innerPatch` rather than redefining its body.",
   "",
   '**Think in ids, not paths.** Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), pass a stable id reference like `"@hero-cta"`. Assign ids at creation (`id: "hero-cta"`) for anything you might touch again. Number paths are positional and break when siblings move; treat them as an implementation detail you get from `find_nodes` (`set_node_id` retrofits one).',
   "",
@@ -204,6 +205,7 @@ function buildMcpServer(
   const recorder = createTraceRecorder(ctx.folder.root);
   if (recorder) withCallRecording(mcp, recorder);
   registerDiscoveryTools(mcp, ctx);
+  registerComposeTool(mcp, ctx, jit);
   registerMutationTools(mcp, ctx, jit);
   registerInspectTool(mcp, ctx);
   registerThemeTools(mcp, ctx);

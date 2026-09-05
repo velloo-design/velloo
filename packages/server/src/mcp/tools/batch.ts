@@ -19,7 +19,13 @@ import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
  * carries the one thing prose was carrying badly — the set of legal `tool`
  * values — and the argument shapes stay where they are already advertised.
  */
-const batchableTools = Object.keys(BATCH_TOOLS) as [string, ...string[]];
+// These lower-level tree encodings remain available to the canvas/internal
+// mutation API, but the MCP surface composes trees through restricted JSX.
+const hiddenTreeTools = new Set(["add_node", "set_screen_tree", "instantiate_snippet"]);
+const batchableTools = Object.keys(BATCH_TOOLS).filter((name) => !hiddenTreeTools.has(name)) as [
+  string,
+  ...string[],
+];
 
 export function registerBatchTool(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
   mcp.registerTool(

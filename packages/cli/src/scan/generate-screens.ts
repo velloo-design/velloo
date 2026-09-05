@@ -42,7 +42,7 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
             props: {
               variant: "lead",
               className: "max-w-xl",
-              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
             },
           },
           {
@@ -101,7 +101,7 @@ function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
               variant: "body1",
               color: "text.secondary",
               sx: { maxWidth: 520 },
-              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
             },
           },
           {
@@ -166,7 +166,7 @@ function buildAntdPlaceholderTree(route: ScannedRoute): Screen["tree"] {
         props: {
           type: "secondary",
           style: { maxWidth: 520 },
-          children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+          children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
         },
       },
       {
@@ -207,7 +207,7 @@ function buildChakraPlaceholderTree(route: ScannedRoute): Screen["tree"] {
             $ref: "Text",
             props: {
               sx: { maxW: "xl", color: "chakra-subtle-text" },
-              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so build into it with add_node / instantiate_snippet (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
             },
           },
           {

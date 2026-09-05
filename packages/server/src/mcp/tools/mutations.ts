@@ -2,12 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   addBoardShape,
   addFrameShape,
-  addNodeShape,
   addScreenShape,
   addSnippetShape,
-  instantiateSnippetShape,
   moveNodeShape,
-  normalizeAddNode,
   normalizeUpdateSnippetInstance,
   removeBoardShape,
   removeFrameShape,
@@ -16,7 +13,6 @@ import {
   removeSnippetShape,
   reorderBoardsShape,
   setNodeIdShape,
-  setScreenTreeShape,
   updateBoardShape,
   updateFrameShape,
   updatePropsShape,
@@ -26,15 +22,13 @@ import {
   updateViewportPresetsShape,
 } from "@velloo/protocol";
 import type { Result } from "@velloo/result";
-import { isComponentNode, type Node, resolveSnippetArgs } from "@velloo/schema";
+import { isComponentNode, resolveSnippetArgs } from "@velloo/schema";
 import { badRequest } from "../../mutations/errors.ts";
 import {
   addBoard,
   addFrame,
-  addNode,
   addScreen,
   addSnippet,
-  instantiateSnippet,
   type MutationContext,
   type MutationError,
   moveNode,
@@ -45,7 +39,6 @@ import {
   removeSnippet,
   reorderBoards,
   setNodeId,
-  setScreenTree,
   updateBoard,
   updateFrames,
   updateProps,
@@ -99,38 +92,6 @@ export function registerMutationTools(
 ): void {
   // ── Tree mutations ─────────────────────────────────────────────────────
   mcp.registerTool(
-    "add_node",
-    {
-      description:
-        "Insert a node under parentPath. `componentRef` is required — it roots the new node at a library or extension component, whose `children` may themselves include `{$snippet}` instances. To append a snippet instance with no wrapper component, use `instantiate_snippet` instead. Pass `id` for a stable anchor. `children` carries full subtrees, so build a whole card in one call.",
-      inputSchema: addNodeShape,
-    },
-    async (args) => {
-      const normalized = normalizeAddNode(args);
-      if (!normalized.ok) {
-        return errorResult(badRequest(normalized.message, normalized.issues));
-      }
-      const { props, children } = normalized.args;
-      const inserted: Node = {
-        $ref: args.componentRef,
-        ...(props ? { props } : {}),
-        ...(children ? { children } : {}),
-      };
-      return toMcpWithWarnings(
-        await addNode(ctx, normalized.args),
-        async () => {
-          const screen = ctx.folder.screens.get(args.screenId);
-          return screen ? propWarningsForTree(ctx, screen, inserted) : [];
-        },
-        async (value) => {
-          const screen = ctx.folder.screens.get(args.screenId);
-          return screen ? diagnosticsForTree(ctx, jit, screen, inserted, value.path) : [];
-        },
-      );
-    },
-  );
-
-  mcp.registerTool(
     "update_props",
     {
       description:
@@ -174,7 +135,7 @@ export function registerMutationTools(
     "remove_node",
     {
       description:
-        'Remove the node at path. A root locator ([] or "@root") clears ALL the root\'s children in one call — the fast way to empty a placeholder screen before rebuilding (or use set_screen_tree to replace the whole tree at once).',
+        'Remove the node at path. A root locator ([] or "@root") clears all root children; use `compose` mode "replace" when rebuilding the complete screen.',
       inputSchema: removeNodeShape,
     },
     async (args) => toMcp(await removeNode(ctx, args)),
@@ -209,7 +170,7 @@ export function registerMutationTools(
     "add_screen",
     {
       description:
-        "Create a NEW screen. It is not placed on any board — call `add_frame` to surface it. Pass `fromScreenId` to clone an existing tree, or `tree` to supply one; omit `id` to auto-suffix a unique one. A route scan already scaffolds one placeholder screen per detected route (id = route slug), so don't add_screen for those — it returns ScreenIdConflict. Rebuild the existing screen with `set_screen_tree` instead.",
+        'Create a NEW screen. It is not placed on any board — call `add_frame` to surface it. Pass `fromScreenId` to clone an existing tree, or `tree` to supply one; omit `id` to auto-suffix a unique one. A route scan already scaffolds one placeholder screen per detected route (id = route slug), so don\'t add_screen for those — rebuild the existing screen with `compose` mode "replace".',
       inputSchema: addScreenShape,
     },
     async (args) =>
@@ -227,27 +188,6 @@ export function registerMutationTools(
           const screen =
             ctx.folder.screens.get(created) ??
             [...ctx.folder.screens.values()].find((s) => s.name === args.name);
-          return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
-        },
-      ),
-  );
-
-  mcp.registerTool(
-    "set_screen_tree",
-    {
-      description:
-        "Replace a screen's ENTIRE tree in one call — the right tool for rebuilding a route-scan placeholder from scratch (no need to remove old nodes first, and no stale-index churn). The screen keeps its id, name, frames, and annotations; only the tree changes. Undoable like any mutation. Batchable.",
-      inputSchema: setScreenTreeShape,
-    },
-    async (args) =>
-      toMcpWithWarnings(
-        await setScreenTree(ctx, args),
-        async () => {
-          const screen = ctx.folder.screens.get(args.screenId);
-          return screen ? propWarningsForTree(ctx, screen, screen.tree) : [];
-        },
-        async () => {
-          const screen = ctx.folder.screens.get(args.screenId);
           return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
         },
       ),
@@ -419,24 +359,6 @@ export function registerMutationTools(
       inputSchema: removeSnippetShape,
     },
     async (args) => toMcp(await removeSnippet(ctx, args)),
-  );
-
-  mcp.registerTool(
-    "instantiate_snippet",
-    {
-      description:
-        "Add a `$snippet` instance to a screen tree under parentPath. `args` must satisfy the snippet's declared params — check `list_snippets` first; a missing required param or an undeclared key returns SnippetParamMismatch naming it. `overrides` patches interior body nodes for THIS instance only (the active nav item, a red badge) at placement, so one shared snippet can be stamped across many screens each with its own. Guide: velloo://guide/snippets.",
-      inputSchema: instantiateSnippetShape,
-    },
-    async (args) =>
-      toMcpWithWarnings(
-        await instantiateSnippet(ctx, args),
-        async () => [],
-        async () => {
-          const screen = ctx.folder.screens.get(args.screenId);
-          return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
-        },
-      ),
   );
 
   mcp.registerTool(

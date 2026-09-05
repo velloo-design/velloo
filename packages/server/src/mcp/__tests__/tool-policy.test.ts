@@ -13,6 +13,7 @@ import { registerAssetTools } from "../tools/assets.ts";
 import { registerBatchTool } from "../tools/batch.ts";
 import { registerCaptureTools } from "../tools/captures.ts";
 import { registerCommentTools } from "../tools/comments.ts";
+import { registerComposeTool } from "../tools/compose.ts";
 import { registerDiscoveryTools } from "../tools/discovery.ts";
 import { registerEmitTools } from "../tools/emit.ts";
 import { registerExtensionTools } from "../tools/extensions.ts";
@@ -106,6 +107,7 @@ beforeAll(async () => {
   // No handler under test needs these; the sweep skips the tools that do.
   const stub = <T>(): T => ({}) as T;
   registerDiscoveryTools(mcp, ctx);
+  registerComposeTool(mcp, ctx);
   registerMutationTools(mcp, ctx);
   registerInspectTool(mcp, ctx);
   registerThemeTools(mcp, ctx);

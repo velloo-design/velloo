@@ -304,7 +304,7 @@ export function ensureKnownComponent(
       unknownComponent(
         ref,
         [],
-        `"${ref}" is a snippet, not a library component. Place it with instantiate_snippet, or use a {"$snippet":"${snippetMatch}"} node — "$ref" is only for library components and registered extensions.`,
+        `"${ref}" is a snippet, not a library component. In MCP use compose with its PascalCase tag; lower-level callers must use a {"$snippet":"${snippetMatch}"} node. "$ref" is only for library components and registered extensions.`,
       ),
     );
   }

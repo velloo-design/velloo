@@ -89,11 +89,11 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
 
   lines.push("## What the AI agent sees");
   lines.push("");
-  lines.push("Velloo exposes ~55 MCP tools — discovery (`list_screens`, `list_components`,");
-  lines.push("`list_snippets`, `get_theme`), tree mutations (`add_node`, `update_props`,");
-  lines.push("`move_node`, …), snippets, theme operations (`set_theme`,");
+  lines.push("Velloo exposes MCP tools for discovery (`list_screens`, `list_components`,");
+  lines.push("`get_theme`), restricted-JSX composition (`compose`), focused edits");
+  lines.push("(`update_props`, `move_node`, …), theme operations (`set_theme`,");
   lines.push("`import_theme`, `score_theme_contrast`), inspection");
-  lines.push("(`inspect`, `audit`, `screenshot`, `validate_classes`), and");
+  lines.push("(`inspect`, `screenshot`, plus automatic diagnostics), and");
   lines.push("code emission (`emit_code`, `emit_snippet`, `emit_theme`).");
   lines.push("");
   lines.push("Designs are static by construction — click handlers, routing, and forms");

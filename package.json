@@ -20,6 +20,7 @@
     "test:e2e": "VELLOO_E2E=1 bun test",
     "fonts:build": "bun packages/schema/scripts/build-font-catalog.ts",
     "fonts:check": "bun packages/schema/scripts/build-font-catalog.ts --check",
+    "mcp:budget": "bun packages/server/scripts/mcp-token-budget.ts --check",
     "velloo": "bun packages/cli/src/cli.ts",
     "cli:build": "bun packages/cli/build.ts",
     "direct:build": "bun scripts/build-direct-artifact.ts",

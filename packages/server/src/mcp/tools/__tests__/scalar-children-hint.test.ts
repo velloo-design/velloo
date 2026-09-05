@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AddNodeBody, normalizeAddNode } from "@velloo/protocol";
 import type { Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
@@ -12,12 +11,11 @@ import { runBatch } from "../../../mutations/batch.ts";
 import { badRequest, scalarChildrenHint } from "../../../mutations/errors.ts";
 import type { MutationContext } from "../../../mutations/index.ts";
 import type { WatchEvent } from "../../../watcher.ts";
-import { registerMutationTools } from "../mutations.ts";
 
 /**
  * Guards the "did you mean props.children?" nudge for the scalar-as-children
  * footgun across every surface that can hit it: the detector itself, the
- * standalone `add_node` MCP tool, `batch`, and the shared body + normalization
+ * `batch` and the shared body + normalization
  * both of them now run. The scalar reaches a handler on purpose — the schema
  * admits it so the answer can be this nudge rather than an opaque
  * "expected array".
@@ -87,29 +85,6 @@ afterEach(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
-type McpToolResult = { isError?: true; content: { type: string; text: string }[] };
-type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<McpToolResult>;
-
-/**
- * Reach the registered tool's handler and invoke it directly. This skips the
- * SDK's own arg validation, which is fine here: the scalar-`children` nudge is
- * the *handler's* job (the input schema is deliberately permissive enough to
- * let the scalar through to it).
- */
-function callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
-  const mcp = new McpServer({ name: "test", version: "0.0.0" });
-  registerMutationTools(mcp, ctx);
-  const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
-    ._registeredTools;
-  const tool = tools[name];
-  if (!tool) throw new Error(`tool ${name} not registered`);
-  return tool.handler(args, {});
-}
-
-function parseError(result: { content: { text: string }[] }): Record<string, unknown> {
-  return JSON.parse(result.content[0]?.text ?? "{}");
-}
-
 describe("scalarChildrenHint detector", () => {
   test("matches an invalid_type expected-array issue at a children path", () => {
     const hint = scalarChildrenHint([
@@ -152,53 +127,6 @@ describe("scalarChildrenHint detector", () => {
       // No-hint case must serialize without a `hint` key.
       expect(JSON.parse(JSON.stringify(e))).not.toHaveProperty("hint");
     }
-  });
-});
-
-describe("add_node MCP tool", () => {
-  test('children: "Save" returns a BadRequest whose hint mentions props.children', async () => {
-    const result = await callTool("add_node", {
-      screenId: "landing",
-      parentPath: [],
-      componentRef: "Button",
-      children: "Save",
-    });
-    expect(result.isError).toBe(true);
-    const error = parseError(result);
-    expect(error.kind).toBe("BadRequest");
-    expect(error.hint).toContain("props.children");
-  });
-
-  test("a valid children: [...] array succeeds", async () => {
-    const result = await callTool("add_node", {
-      screenId: "landing",
-      parentPath: [],
-      componentRef: "Card",
-      children: [{ $ref: "Button", props: { children: "Save" } }],
-    });
-    expect(result.isError).toBeUndefined();
-  });
-
-  test("a valid props.children scalar succeeds", async () => {
-    const result = await callTool("add_node", {
-      screenId: "landing",
-      parentPath: [],
-      componentRef: "Button",
-      props: { children: "Save" },
-    });
-    expect(result.isError).toBeUndefined();
-  });
-
-  test("an unrelated error (unknown component) gets no children hint", async () => {
-    const result = await callTool("add_node", {
-      screenId: "landing",
-      parentPath: [],
-      componentRef: "Definitely-Not-Real",
-    });
-    expect(result.isError).toBe(true);
-    const error = parseError(result);
-    expect(error.kind).toBe("UnknownComponent");
-    expect(error.hint).toBeUndefined();
   });
 });
 

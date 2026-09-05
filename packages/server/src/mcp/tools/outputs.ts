@@ -40,11 +40,13 @@ export const ListComponentsOutput = z.looseObject({
   components: z.array(
     z.looseObject({
       id: z.string(),
-      kind: z.enum(["library", "extension"]),
+      kind: z.enum(["library", "extension", "snippet"]),
       /** Renderer availability; false is an adapter packaging error. */
       availableInDesign: z.boolean(),
       /** Host-app status only. Missing dependencies are returned by emit_code. */
       installedInApp: z.boolean(),
+      /** Present for snippet tags: the persisted kebab-case definition id. */
+      snippetId: z.string().optional(),
       /** Present on extensions: where the real component lives in the host app. */
       importPath: z.string().optional(),
     }),

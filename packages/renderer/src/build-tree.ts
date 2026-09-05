@@ -19,7 +19,7 @@ export class UnknownComponentError extends Error {
   constructor(public readonly ref: string) {
     super(
       `Unknown component $ref="${ref}". Not in the active component provider's registry. ` +
-        `("$ref" is a library component or registered extension; for a snippet use a {"$snippet":"<id>"} node or instantiate_snippet.)`,
+        `("$ref" is a library component or registered extension; the MCP compose tool resolves snippet tags to $snippet nodes.)`,
     );
     this.name = "UnknownComponentError";
   }

@@ -9,7 +9,7 @@ import { type DesignFolder, loadDesignFolder } from "../../../design-folder.ts";
 import type { MutationContext } from "../../../mutations/index.ts";
 import { TailwindJit } from "../../../styles/tailwind-jit.ts";
 import type { DesignDiagnostic } from "../../diagnostics.ts";
-import { registerMutationTools } from "../mutations.ts";
+import { registerComposeTool } from "../compose.ts";
 
 const sampleConfig = {
   schemaVersion: 3,
@@ -42,15 +42,15 @@ type ToolHandler = (args: Record<string, unknown>) => Promise<{
   content: { type: "text"; text: string }[];
 }>;
 
-function captureMutationTool(ctx: MutationContext, jit: TailwindJit, wanted: string): ToolHandler {
+function captureComposeTool(ctx: MutationContext, jit: TailwindJit): ToolHandler {
   let handler: ToolHandler | undefined;
   const stub = {
     registerTool: (name: string, _config: unknown, cb: ToolHandler) => {
-      if (name === wanted) handler = cb;
+      if (name === "compose") handler = cb;
     },
   } as unknown as McpServer;
-  registerMutationTools(stub, ctx, jit);
-  if (!handler) throw new Error(`${wanted} was not registered`);
+  registerComposeTool(stub, ctx, jit);
+  if (!handler) throw new Error("compose was not registered");
   return handler;
 }
 
@@ -99,13 +99,12 @@ afterEach(async () => {
 });
 
 describe("automatic mutation diagnostics", () => {
-  test("add_node returns path-located class and theme warnings", async () => {
-    const addNode = captureMutationTool(ctx, jit, "add_node");
-    const result = await addNode({
+  test("compose returns path-located class and theme warnings", async () => {
+    const compose = captureComposeTool(ctx, jit);
+    const result = await compose({
       screenId: "landing",
-      parentPath: [],
-      componentRef: "Box",
-      props: { className: "not-a-tailwind-utility bg-red-500" },
+      mode: "append",
+      jsx: '<Box className="not-a-tailwind-utility bg-red-500" />',
     });
     const value = JSON.parse(result.content[0]?.text ?? "{}") as {
       diagnostics?: DesignDiagnostic[];
@@ -119,12 +118,11 @@ describe("automatic mutation diagnostics", () => {
   });
 
   test("clean semantic utilities omit diagnostics", async () => {
-    const addNode = captureMutationTool(ctx, jit, "add_node");
-    const result = await addNode({
+    const compose = captureComposeTool(ctx, jit);
+    const result = await compose({
       screenId: "landing",
-      parentPath: [],
-      componentRef: "Box",
-      props: { className: "bg-background text-foreground p-4" },
+      mode: "append",
+      jsx: '<Box className="bg-background text-foreground p-4" />',
     });
     const value = JSON.parse(result.content[0]?.text ?? "{}") as {
       diagnostics?: DesignDiagnostic[];
@@ -133,12 +131,11 @@ describe("automatic mutation diagnostics", () => {
   });
 
   test("undefined CSS variables remain valid but return a warning", async () => {
-    const addNode = captureMutationTool(ctx, jit, "add_node");
-    const result = await addNode({
+    const compose = captureComposeTool(ctx, jit);
+    const result = await compose({
       screenId: "landing",
-      parentPath: [],
-      componentRef: "Box",
-      props: { className: "bg-[var(--missing-brand)]" },
+      mode: "append",
+      jsx: '<Box className="bg-[var(--missing-brand)]" />',
     });
     const value = JSON.parse(result.content[0]?.text ?? "{}") as {
       diagnostics?: DesignDiagnostic[];

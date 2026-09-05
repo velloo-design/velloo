@@ -7,6 +7,7 @@
  *
  *   bun packages/server/scripts/mcp-token-budget.ts
  *   bun packages/server/scripts/mcp-token-budget.ts --json   # machine-readable
+ *   bun packages/server/scripts/mcp-token-budget.ts --check  # CI regression guard
  */
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -23,6 +24,7 @@ import { registerAssetTools } from "../src/mcp/tools/assets.ts";
 import { registerBatchTool } from "../src/mcp/tools/batch.ts";
 import { registerCaptureTools } from "../src/mcp/tools/captures.ts";
 import { registerCommentTools } from "../src/mcp/tools/comments.ts";
+import { registerComposeTool } from "../src/mcp/tools/compose.ts";
 import { registerDiscoveryTools } from "../src/mcp/tools/discovery.ts";
 import { registerEmitTools } from "../src/mcp/tools/emit.ts";
 import { registerExtensionTools } from "../src/mcp/tools/extensions.ts";
@@ -37,6 +39,10 @@ import type { MutationContext } from "../src/mutations/index.ts";
 
 const tokens = (s: string): number => Math.ceil(s.length / 4);
 const asJson = process.argv.includes("--json");
+const check = process.argv.includes("--check");
+/** Measured before the compact-surface work; kept here so savings stay visible. */
+const LEGACY_BOOT_TOKENS = 19_610;
+const BOOT_BUDGET_TOKENS = 18_500;
 
 async function scaffoldFolder(): Promise<string> {
   const tmp = join(tmpdir(), `velloo-budget-${Date.now()}`);
@@ -97,6 +103,7 @@ async function main(): Promise<void> {
     // dependencies of the IO-bound tools can be inert stubs.
     const stub = <T>(): T => ({}) as T;
     registerDiscoveryTools(mcp, ctx);
+    registerComposeTool(mcp, ctx);
     registerMutationTools(mcp, ctx);
     registerInspectTool(mcp, ctx);
     registerThemeTools(mcp, ctx);
@@ -131,6 +138,7 @@ async function main(): Promise<void> {
     const instructions = buildInstructions(false);
     const instrTokens = tokens(instructions);
     const boot = instrTokens + toolTotal + resourceTotal;
+    const savings = LEGACY_BOOT_TOKENS - boot;
 
     if (asJson) {
       console.log(
@@ -142,6 +150,11 @@ async function main(): Promise<void> {
             resources: resourceTotal,
             resourceCount: resources.length,
             boot,
+            legacyBoot: LEGACY_BOOT_TOKENS,
+            savings,
+            savingsPercent: Number(((savings / LEGACY_BOOT_TOKENS) * 100).toFixed(1)),
+            budget: BOOT_BUDGET_TOKENS,
+            headroom: BOOT_BUDGET_TOKENS - boot,
             perTool,
           },
           null,
@@ -156,6 +169,13 @@ async function main(): Promise<void> {
       console.log(`resource listing:  ~${resourceTotal} tokens (${resources.length})`);
       console.log(`─────────────────────────────────`);
       console.log(`boot context:      ~${boot} tokens`);
+      console.log(
+        `legacy baseline:   ~${LEGACY_BOOT_TOKENS} tokens (saved ~${savings}, ${((savings / LEGACY_BOOT_TOKENS) * 100).toFixed(1)}%)`,
+      );
+      console.log(`budget:            ~${BOOT_BUDGET_TOKENS} tokens`);
+    }
+    if (check && boot > BOOT_BUDGET_TOKENS) {
+      throw new Error(`MCP boot context ~${boot} exceeds the ~${BOOT_BUDGET_TOKENS} token budget`);
     }
     await client.close();
   } finally {

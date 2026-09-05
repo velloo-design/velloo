@@ -30,7 +30,7 @@ export const GUIDES: Record<string, Guide> = {
     blurb: "Params, node slots, $if branching, and when to reuse vs inline.",
     body: `# Snippets
 
-A snippet is a named, reusable subtree with typed params. Create it once with \`add_snippet\`, then \`instantiate_snippet\` per occurrence. Snippets emit as real React components on \`emit_code\`, with a typed \`className?: string\` prop.
+A snippet is a named, reusable subtree with typed params. Create it once with \`add_snippet\`, then place its PascalCase name with \`compose\` like any other JSX tag. Snippets emit as real React components on \`emit_code\`, with a typed \`className?: string\` prop.
 
 ## Param placement
 
@@ -57,7 +57,7 @@ Inlining repeated structure instead of parameterizing it is the most common and 
 - \`{"$if": "paramName", "then": <value>, "else": <value>}\` — picks a branch by truthiness of \`args.paramName\`. **Boolean params only.** Non-boolean truthy values "work" via JS coercion but you will trip on edge cases (empty string is falsy, the string \`"false"\` is truthy). Declare these params as \`type: "boolean"\`.
 - String params (\`tone\`, \`variant\`) for full-className swaps when the variation is more than two-way.
 - \`type: "node"\` params when the structure varies per instance.
-- \`extraClassName\` on \`instantiate_snippet\` / \`update_snippet_instance\` — a one-off Tailwind suffix appended to the body root. Cascades through nested snippet roots.
+- \`className\` on a snippet tag (or \`update_snippet_instance\`) — a one-off Tailwind suffix appended to the body root. Cascades through nested snippet roots.
 
 ## Verify every new definition
 
@@ -70,7 +70,7 @@ Inlining repeated structure instead of parameterizing it is the most common and 
 - Replace the whole body → \`update_snippet { patch: { tree } }\`.
 - Change one instance's inputs → \`update_snippet_instance { path, argPatch }\`.
 
-Reference a snippet with a \`{"$snippet":"<kebab-id>"}\` node — NOT \`$ref\`, which is only for PascalCase library components and registered extensions. A PascalCase name that is actually a snippet (\`$ref:"SiteHeader"\` for the snippet \`site-header\`) is a common mix-up.`,
+Reference a snippet by its PascalCase tag from \`list_components\`: \`<SiteHeader title="…" />\`. The restricted JSX compiler resolves the persisted kebab id automatically and validates its params before writing.`,
   },
 
   components: {
@@ -211,7 +211,7 @@ add_extension({
 
 **1. Import the theme first.** \`import_theme\` with the app's globals.css (\`cssPath\` — absolute, or relative to the host app root, since globals.css lives OUTSIDE the design folder). Dry-run first, then \`apply: true\`. Do this BEFORE any composition, so semantic slots, the raw \`palette.*\` passthrough (brand vars like \`--ink\`, scales like \`--primary-600\`), fonts, and the tailwind.config's \`theme.extend\`/\`container\` all resolve — then verbatim app classes like \`bg-ink\` render as-is. Tweak entries with \`set_theme { tokens: { "palette.<name>": … } }\`; mutations report unresolved classes beside their paths. See the \`theme\` guide.
 
-**2. Build into the existing screen.** Read the page's source alongside \`list_components\`, then build INTO the route-scan's placeholder screen — \`set_screen_tree\` replaces its whole tree in one call, or \`remove_node path: []\` clears it. (\`add_screen\` on a scanned route returns \`ScreenIdConflict\`.) Strip handlers, state and data-fetching; inline representative copy as literals; keep Tailwind classes verbatim, since shadcn apps share Velloo's component vocabulary and most refs map 1:1.
+**2. Build into the existing screen.** Read the page's source alongside \`list_components\`, then call \`compose { mode: "replace", jsx: … }\` on the route-scan's placeholder screen. (\`add_screen\` on a scanned route returns \`ScreenIdConflict\`.) Strip handlers, state and data-fetching; inline representative copy as literals; keep Tailwind classes verbatim, since shadcn apps share Velloo's component vocabulary and most tags map 1:1.
 
 **3. Map components snippet-first, extension-second.** A presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real. A complex app-specific component (DataTable, charts) becomes \`add_extension\` with its real importPath, so capture → redesign → emit never loses component identity.
 
