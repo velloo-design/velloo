@@ -55,7 +55,14 @@ type RegisteredNative = RegisteredTool & { handler: CallableHandler };
 function schemaJson(tool: RegisteredNative): Record<string, unknown> {
   if (!tool.inputSchema) return { type: "object", properties: {}, additionalProperties: false };
   try {
-    return z.toJSONSchema(tool.inputSchema as z.ZodType) as Record<string, unknown>;
+    // `io: "input"` because this schema tells the agent what to *send*. Without
+    // it every jsonTolerant() argument (a string-or-object union carrying a
+    // transform) throws "Transforms cannot be represented in JSON Schema", and
+    // the tree-taking operations — add_screen among them — answer
+    // operation_schema and their own correction hint with nothing.
+    return z.toJSONSchema(tool.inputSchema as z.ZodType, {
+      io: "input",
+    }) as Record<string, unknown>;
   } catch {
     return { type: "object", description: "Schema is not representable as JSON Schema" };
   }

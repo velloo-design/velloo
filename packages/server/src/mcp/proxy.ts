@@ -1,5 +1,6 @@
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type {
   JSONRPCError,
   JSONRPCMessage,
@@ -20,6 +21,12 @@ export interface StdioMcpProxyOptions {
   rediscover?: (() => Promise<string | null>) | undefined;
   /** Fires when either side closes (agent disconnects, daemon drops). */
   onExit?: (() => void) | undefined;
+  /**
+   * The agent-facing transport. Defaults to real stdio, which is what `velloo
+   * mcp` runs on; tests substitute an in-memory pair so the reconnect path can
+   * be driven without a subprocess.
+   */
+  agentTransport?: Transport | undefined;
 }
 
 /**
@@ -51,7 +58,7 @@ export async function runStdioMcpProxy(
   httpMcpUrl: string,
   opts: StdioMcpProxyOptions = {},
 ): Promise<StdioMcpProxyHandle> {
-  const stdio = new StdioServerTransport();
+  const stdio = opts.agentTransport ?? new StdioServerTransport();
 
   let closing = false;
   // The agent's initialize request, replayed onto a fresh daemon on reconnect.
@@ -161,7 +168,7 @@ export async function runStdioMcpProxy(
     }
   };
 
-  stdio.onmessage = (msg) => {
+  stdio.onmessage = (msg: JSONRPCMessage) => {
     if (isJSONRPCRequest(msg) && msg.method === "initialize") initRequest = msg;
     void forward(msg);
   };
