@@ -147,14 +147,27 @@ describe("typesetVars / typesetCss", () => {
 
   test("element rules are fully :where()-wrapped so utilities win", () => {
     const css = typesetCss({ [DEFAULT_TYPESET_NAME]: {}, docs: { size: 15 } });
+    // Selectors, not lines: a long selector list is wrapped across lines, so a
+    // per-line check would read its continuations as bare `.typeset p` rules.
+    const selectors = [...css.matchAll(/(^|[};])\s*([^{};]+?)\s*\{/g)]
+      .map((m) => (m[2] ?? "").replace(/\s+/g, " ").trim())
+      .filter((sel) => sel.includes(".typeset"));
+
     // A bare `.typeset <element>` selector would carry class specificity and
-    // beat an authored utility. Only the custom-property blocks (`.typeset {`,
-    // `.typeset-docs {`) may target the class directly.
-    const bare = css.split("\n").filter((l) => /^\s*\.typeset[\w-]*\s+[^{\s]/.test(l));
+    // beat an authored utility. Every element rule must therefore be
+    // `:where()`-wrapped; only the custom-property blocks (`.typeset {`,
+    // `.typeset-docs {`) may name the class directly, and they target nothing
+    // inside it.
+    const propertyBlock = /^\.typeset[\w-]*(\s*,\s*\.typeset[\w-]*)*$/;
+    const bare = selectors.filter((sel) => !sel.startsWith(":where(") && !propertyBlock.test(sel));
     expect(bare).toEqual([]);
 
-    const wrapped = css.split("\n").filter((l) => l.startsWith(":where(.typeset"));
+    const wrapped = selectors.filter((sel) => sel.startsWith(":where("));
     expect(wrapped.length).toBeGreaterThan(10);
+    // The wrapped flow list keeps every element it covers.
+    expect(
+      wrapped.some((sel) => sel.includes(".typeset p,") && sel.includes(".typeset figure")),
+    ).toBe(true);
     expect(css).toContain(":where(.typeset) {");
     expect(css).toContain(":where(.typeset h1) {");
   });

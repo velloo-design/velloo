@@ -297,8 +297,8 @@ cpSync(join(repoRoot, "plugins"), join(distDir, "plugins"), { recursive: true })
 
 // 4c. Ship the on-disk runtime assets that bundled @velloo/* packages read
 //     relative to their source — the Tailwind entry CSS + component sources the
-//     JIT scans, the snapshot manifest, and codegen's biome config. Each
-//     package's path module resolves `<dist>/pkgs/<name>` when bundled.
+//     JIT scans, plus the snapshot manifest. Each package's path module
+//     resolves `<dist>/pkgs/<name>` when bundled.
 step("copying package assets → dist/pkgs");
 // The snapshot manifest is a build product, not checked in — a fresh clone or
 // worktree hasn't generated it yet. Build it on demand (same treatment as the
@@ -319,7 +319,6 @@ const PKG_ASSETS: { pkg: string; paths: string[] }[] = [
   { pkg: "provider-mui", paths: ["src"] },
   { pkg: "provider-antd", paths: ["src"] },
   { pkg: "provider-chakra", paths: ["src"] },
-  { pkg: "codegen", paths: ["biome.codegen.json"] },
 ];
 // Don't ship test files — they'd be discovered by `bun test` from the copy
 // and run from the wrong location (and they aren't runtime assets).

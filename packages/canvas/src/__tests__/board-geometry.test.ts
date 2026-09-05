@@ -173,28 +173,31 @@ describe("wheelZoomFactor", () => {
     expect(wheelZoomFactor(-120)).toBeGreaterThan(1);
   });
 
-  // The two factors are not reciprocal (0.95 * 1.05 = 0.9975), so a tick and
-  // its opposite lose 0.25% of the zoom every round trip — 200 of them walk a
-  // board from 1.0 down to ~0.61 with no way to wheel back to exactly 1.0.
-  // Pinned as current behavior; making them reciprocal is a product decision.
-  test("a wheel tick and its opposite do not cancel — zoom ratchets down", () => {
-    expect(wheelZoomFactor(120) * wheelZoomFactor(-120)).toBeCloseTo(0.9975, 6);
-
-    let view = { pan: { x: 0, y: 0 }, zoom: 1 };
-    for (let i = 0; i < 200; i++) {
-      view = zoomAtPoint(400, 300, wheelZoomFactor(120), view);
-      view = zoomAtPoint(400, 300, wheelZoomFactor(-120), view);
-    }
-    expect(view.zoom).toBeCloseTo(0.606, 2);
+  test("a wheel tick and its opposite cancel exactly", () => {
+    // Not 0.95/1.05: those multiply to 0.9975, so rocking the wheel back and
+    // forth ratcheted the board down with no way back to exactly 1.0.
+    expect(wheelZoomFactor(120) * wheelZoomFactor(-120)).toBe(1);
   });
 
-  test("pan drift from rounding stays bounded across the same oscillation", () => {
+  test("zoom comes home after a long oscillation instead of drifting", () => {
     let view = { pan: { x: 0, y: 0 }, zoom: 1 };
     for (let i = 0; i < 200; i++) {
       view = zoomAtPoint(400, 300, wheelZoomFactor(120), view);
       view = zoomAtPoint(400, 300, wheelZoomFactor(-120), view);
     }
-    expect(Math.abs(view.pan.x)).toBeLessThan(64);
-    expect(Math.abs(view.pan.y)).toBeLessThan(64);
+    expect(view.zoom).toBeCloseTo(1, 10);
+  });
+
+  test("pan comes home too — rounding must not accumulate", () => {
+    // Every step rounds the pan to whole pixels. That is fine as long as the
+    // error cancels; if it accumulates, the board slides away under a wheel
+    // the user is only rocking back and forth.
+    let view = { pan: { x: 120, y: -40 }, zoom: 1 };
+    for (let i = 0; i < 200; i++) {
+      view = zoomAtPoint(517, 293, wheelZoomFactor(120), view);
+      view = zoomAtPoint(517, 293, wheelZoomFactor(-120), view);
+    }
+    expect(Math.abs(view.pan.x - 120)).toBeLessThanOrEqual(1);
+    expect(Math.abs(view.pan.y + 40)).toBeLessThanOrEqual(1);
   });
 });

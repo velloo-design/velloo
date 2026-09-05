@@ -12,7 +12,6 @@ import {
   typesetV3FontSize,
 } from "@velloo/schema";
 import { diffFile } from "../diff.ts";
-import { formatCss } from "../format.ts";
 import { emitDtcgFile } from "./dtcg.ts";
 import {
   COLOR_SLOTS,
@@ -336,41 +335,32 @@ export async function emitThemeV3(
   const cssRaw = emitGlobalsCssV3(theme, vars, {
     ...(options.customCss !== undefined ? { customCss: options.customCss } : {}),
   });
-  const cssFormatted = await formatCss(cssPath, cssRaw);
-  const cssDiff = await diffFile(cssPath, cssFormatted.output);
+  const cssDiff = await diffFile(cssPath, cssRaw);
   let cssApplied = false;
   if (options.apply && !cssDiff.identical) {
     await mkdir(dirname(cssPath), { recursive: true });
-    await writeFile(cssPath, cssFormatted.output, "utf8");
+    await writeFile(cssPath, cssRaw, "utf8");
     cssApplied = true;
   }
-  files.push({
-    path: cssPath,
-    contents: cssFormatted.output,
-    diff: cssDiff,
-    applied: cssApplied,
-    errors: cssFormatted.errors,
-  });
+  files.push({ path: cssPath, contents: cssRaw, diff: cssDiff, applied: cssApplied });
 
   // The typeset sheet, alongside velloo-theme.css. Same generator as v4 and as
   // the canvas — only the wiring differs (a preset instead of `@theme`).
   const typesetRel = join(dirname(cssRel), TYPESET_CSS_V3_FILENAME);
   const typesetPath = join(options.outputDir, typesetRel);
   const typesetRaw = emitTypesetCss(theme);
-  const typesetFormatted = await formatCss(typesetPath, typesetRaw);
-  const typesetDiff = await diffFile(typesetPath, typesetFormatted.output);
+  const typesetDiff = await diffFile(typesetPath, typesetRaw);
   let typesetApplied = false;
   if (options.apply && !typesetDiff.identical) {
     await mkdir(dirname(typesetPath), { recursive: true });
-    await writeFile(typesetPath, typesetFormatted.output, "utf8");
+    await writeFile(typesetPath, typesetRaw, "utf8");
     typesetApplied = true;
   }
   files.push({
     path: typesetPath,
-    contents: typesetFormatted.output,
+    contents: typesetRaw,
     diff: typesetDiff,
     applied: typesetApplied,
-    errors: typesetFormatted.errors,
   });
 
   const moduleKind = presetModuleKind(options.outputDir);
@@ -390,7 +380,6 @@ export async function emitThemeV3(
       contents: presetRaw,
       diff: presetDiff,
       applied: presetApplied,
-      errors: [],
     });
   }
 

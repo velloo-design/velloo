@@ -20,7 +20,6 @@ export {
 } from "./emit-theme/index.ts";
 export { type EmitNativeThemeOptions, emitNativeTheme } from "./emit-theme/native-theme.ts";
 export type { CodegenError } from "./errors.ts";
-export type { FormatError, FormatResult } from "./format.ts";
 export {
   type ParsedThemeCss,
   paletteName,

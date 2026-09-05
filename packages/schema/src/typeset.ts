@@ -469,7 +469,17 @@ function typesetElementRules(): string[] {
   }
 
   rules.push(
-    ":where(.typeset p, .typeset ul, .typeset ol, .typeset blockquote, .typeset pre, .typeset table, .typeset figure) {",
+    // One selector per line: the flow list is long enough that a single line
+    // runs off the side of an editor, and this sheet is meant to be read.
+    ":where(",
+    "  .typeset p,",
+    "  .typeset ul,",
+    "  .typeset ol,",
+    "  .typeset blockquote,",
+    "  .typeset pre,",
+    "  .typeset table,",
+    "  .typeset figure",
+    ") {",
     `  margin-block-start: ${flow};`,
     "  margin-block-end: 0;",
     "}",

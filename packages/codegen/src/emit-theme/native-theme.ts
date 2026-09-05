@@ -59,7 +59,7 @@ ${darkBlock}`;
     await writeFile(themePath, contents, "utf8");
     applied = true;
   }
-  const files: EmitThemeFile[] = [{ path: themePath, contents, diff, applied, errors: [] }];
+  const files: EmitThemeFile[] = [{ path: themePath, contents, diff, applied }];
   const warnings: string[] = [];
   if (options.sourceTheme) {
     const dtcg = await emitDtcgFile(options.sourceTheme, options);

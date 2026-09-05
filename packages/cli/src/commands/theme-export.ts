@@ -135,12 +135,6 @@ export default defineCommand({
     }
 
     for (const file of result.files) {
-      if (file.errors.length > 0) {
-        // CSS formatter warnings are non-fatal; surface them but keep going.
-        for (const e of file.errors) {
-          console.error(`velloo theme:export: [${file.path}][${e.stage}] ${e.message}`);
-        }
-      }
       if (file.diff.identical) {
         console.log(`velloo theme:export: ${file.path} is already up to date.`);
         continue;

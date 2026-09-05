@@ -2,7 +2,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Theme } from "@velloo/schema";
 import { diffFile, type FileDiff } from "../diff.ts";
-import { type FormatError, formatCss } from "../format.ts";
 import { emitDtcgFile } from "./dtcg.ts";
 import {
   emitGlobalsCss,
@@ -49,7 +48,6 @@ export interface EmitThemeFile {
   contents: string;
   diff: FileDiff;
   applied: boolean;
-  errors: FormatError[];
 }
 
 export interface EmitThemeResult {
@@ -75,41 +73,30 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
 
   const cssPath = join(options.outputDir, options.cssPath ?? "app/globals.css");
   const cssRaw = emitGlobalsCss(theme, { customCss: options.customCss });
-  // Biome's CSS parser doesn't recognize @theme; format errors are warnings.
-  // Keep the raw if formatting fails — the output is still valid Tailwind v4.
-  const cssFormatted = await formatCss(cssPath, cssRaw);
-  const cssDiff = await diffFile(cssPath, cssFormatted.output);
+  const cssDiff = await diffFile(cssPath, cssRaw);
   let cssApplied = false;
   if (options.apply && !cssDiff.identical) {
     await mkdir(dirname(cssPath), { recursive: true });
-    await writeFile(cssPath, cssFormatted.output, "utf8");
+    await writeFile(cssPath, cssRaw, "utf8");
     cssApplied = true;
   }
-  files.push({
-    path: cssPath,
-    contents: cssFormatted.output,
-    diff: cssDiff,
-    applied: cssApplied,
-    errors: cssFormatted.errors,
-  });
+  files.push({ path: cssPath, contents: cssRaw, diff: cssDiff, applied: cssApplied });
 
   // The typeset sheet, a sibling of globals.css (which @imports it).
   const typesetPath = join(dirname(cssPath), TYPESET_CSS_FILENAME);
   const typesetRaw = emitTypesetCss(theme);
-  const typesetFormatted = await formatCss(typesetPath, typesetRaw);
-  const typesetDiff = await diffFile(typesetPath, typesetFormatted.output);
+  const typesetDiff = await diffFile(typesetPath, typesetRaw);
   let typesetApplied = false;
   if (options.apply && !typesetDiff.identical) {
     await mkdir(dirname(typesetPath), { recursive: true });
-    await writeFile(typesetPath, typesetFormatted.output, "utf8");
+    await writeFile(typesetPath, typesetRaw, "utf8");
     typesetApplied = true;
   }
   files.push({
     path: typesetPath,
-    contents: typesetFormatted.output,
+    contents: typesetRaw,
     diff: typesetDiff,
     applied: typesetApplied,
-    errors: typesetFormatted.errors,
   });
 
   if (!options.cssOnly) {
@@ -127,7 +114,6 @@ export async function emitTheme(theme: Theme, options: EmitThemeOptions): Promis
       contents: tsRaw,
       diff: tsDiff,
       applied: tsApplied,
-      errors: [],
     });
   }
 

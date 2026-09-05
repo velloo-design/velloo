@@ -217,5 +217,5 @@ export async function emitDtcgFile(
     await writeFile(path, contents, "utf8");
     applied = true;
   }
-  return { file: { path, contents, diff, applied, errors: [] }, warnings };
+  return { file: { path, contents, diff, applied }, warnings };
 }

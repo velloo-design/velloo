@@ -25,9 +25,19 @@ interface FrameInset {
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
 
-/** Wheel-step factor shared by every zoom gesture route (board + iframes). */
+/** One wheel notch, as a zoom multiplier. */
+const WHEEL_STEP = 1.05;
+
+/**
+ * Wheel-step factor shared by every zoom gesture route (board + iframes).
+ *
+ * Out is the reciprocal of in, not `1 - step`: paired factors have to cancel
+ * or a wheel rocked back and forth ratchets the board somewhere it can't
+ * return from. (0.95 × 1.05 = 0.9975 — 200 round trips walked 1.0 down to
+ * ~0.61 with no way back to exactly 1.0.)
+ */
 export function wheelZoomFactor(deltaY: number): number {
-  return deltaY > 0 ? 0.95 : 1.05;
+  return deltaY > 0 ? 1 / WHEEL_STEP : WHEEL_STEP;
 }
 
 /**
