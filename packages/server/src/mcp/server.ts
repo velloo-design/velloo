@@ -90,7 +90,7 @@ const INSTRUCTION_PARTS = [
   "",
   "**The design folder is tool-owned.** Screens, boards, snippets and the theme live as JSON files inside it, but never read or edit those files by hand — every operation goes through these tools, which hold the write lock, validation and history. The user can watch the design render live with `velloo run`.",
   "",
-  '**Start by reading, once.** `list_components` (one namespace for components, extensions, and snippets; full mode includes examples/params), `get_theme` for the palette and tokens, `list_boards` for boards and frames. For an existing screen, `get_screen mode: "outline"` before pulling the full JSON.',
+  '**Start by reading, once.** `list_components` (one namespace for components, extensions, and snippets; full mode includes examples/params), `component_status` for exact/adapted/fallback canvas fidelity when it matters, `get_theme` for the palette and tokens, `list_boards` for boards and frames. For an existing screen, `get_screen mode: "outline"` before pulling the full JSON.',
   "",
   "**Three customization layers** stack additively:",
   "  - **Libraries** are the baseline component palette. A folder registers N (`config.libraries`); each screen pins one via `screen.library`, and component ids resolve against that library only.",
@@ -115,7 +115,7 @@ const GUIDED_INSTRUCTION_PARTS = [
   "",
   "**The design folder is tool-owned.** Never read or edit its JSON files by hand. Use `operation_schema` before an unfamiliar operation, `call_velloo` for one native operation, and `run_velloo_plan` for up to eight related calls.",
   "",
-  "Build in large strokes with `compose` and `batch`, keep stable node ids, prefer theme tokens, and avoid repeatedly re-reading unchanged state. Verify design work with `screenshot`; use `compare_to_url` for code-to-design fidelity and `emit_code` at implementation handoff.",
+  "Build in large strokes with `compose` and `batch`, keep stable node ids, prefer theme tokens, and avoid repeatedly re-reading unchanged state. Use `component_status` before claiming an app component renders exactly. Verify design work with `screenshot`; use `compare_to_url` for code-to-design fidelity and `emit_code` at implementation handoff.",
   "",
   "The allowed operation enum is the catalogue available to this session. Failed façade calls include the exact native operation schema needed to correct them.",
 ];

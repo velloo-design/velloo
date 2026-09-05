@@ -51,7 +51,7 @@ describe.skipIf(!RUN)("canvas mount (Playwright)", () => {
     const mui = createProvider();
     const spec = mui.canvasBundleSpec;
     if (!spec) throw new Error("MUI adapter has no canvasBundleSpec");
-    const { code, errors } = await buildCanvasBundle(HOST, spec);
+    const { code, errors } = await buildCanvasBundle(HOST, spec, ["Card", "Typography", "Button"]);
     if (errors.length) throw new Error(`bundle errors: ${JSON.stringify(errors)}`);
     const { html } = await renderScreen(screen, theme, {
       viewport: { w: 800, h: 600 },
@@ -60,15 +60,8 @@ describe.skipIf(!RUN)("canvas mount (Playwright)", () => {
       renderPass: mui.renderPass?.(theme),
       canvasBundle: { url: "/bundle.js", themeOptions: mui.themeToNative?.(theme, false) },
     });
-    server = Bun.serve({
-      port: 0,
-      fetch(req) {
-        return new URL(req.url).pathname === "/bundle.js"
-          ? new Response(code, { headers: { "Content-Type": "text/javascript" } })
-          : new Response(html, { headers: { "Content-Type": "text/html" } });
-      },
-    });
-    base = `http://localhost:${server.port}/`;
+    server = startServer(html, code);
+    base = `http://127.0.0.1:${server.port}/`;
   });
 
   afterAll(() => server?.stop(true));
@@ -99,3 +92,23 @@ describe.skipIf(!RUN)("canvas mount (Playwright)", () => {
     }
   }, 30_000);
 });
+
+function startServer(html: string, bundle: string): ReturnType<typeof Bun.serve> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      return Bun.serve({
+        port: 28_000 + Math.floor(Math.random() * 10_000),
+        hostname: "127.0.0.1",
+        fetch(request) {
+          return new URL(request.url).pathname === "/bundle.js"
+            ? new Response(bundle, { headers: { "Content-Type": "text/javascript" } })
+            : new Response(html, { headers: { "Content-Type": "text/html" } });
+        },
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}

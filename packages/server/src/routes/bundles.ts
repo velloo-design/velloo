@@ -65,14 +65,26 @@ export function createCanvasRouter(bundler: CanvasBundler, defaultLibraryId: () 
 
   r.get("/bundle.js", async (c) => {
     const lib = c.req.query("lib") || defaultLibraryId();
-    const { code, errors } = await bundler.build(lib);
+    const refs = (c.req.query("refs") ?? "").split(",").filter(Boolean);
+    const { code, errors } = await bundler.build(lib, refs);
     const body = errors.length
-      ? `${code}\nexport const __velloo_canvas_error = ${JSON.stringify(errors)};\n`
+      ? `${code}\nexport const __velloo_canvas_build_errors = ${JSON.stringify(errors)};\n`
       : code;
     return c.body(body, 200, {
       "Content-Type": "text/javascript; charset=utf-8",
       "Cache-Control": "no-store",
       "Access-Control-Allow-Origin": "*",
+    });
+  });
+
+  r.get("/status", async (c) => {
+    const lib = c.req.query("lib") || defaultLibraryId();
+    const refs = (c.req.query("refs") ?? "").split(",").filter(Boolean);
+    const result = await bundler.build(lib, refs);
+    return c.json({
+      usable: result.usable,
+      diagnostics: result.diagnostics,
+      errors: result.errors,
     });
   });
 

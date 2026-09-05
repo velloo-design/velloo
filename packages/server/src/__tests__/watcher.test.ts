@@ -3,7 +3,13 @@ import { writeFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { classifyWatchPath, type WatchEvent, type Watcher, watchDesignFolder } from "../watcher.ts";
+import {
+  classifyWatchPath,
+  type WatchEvent,
+  type Watcher,
+  watchDesignFolder,
+  watchSourcePaths,
+} from "../watcher.ts";
 
 describe("classifyWatchPath", () => {
   test("maps each watched subdir to its event", () => {
@@ -39,6 +45,55 @@ describe("classifyWatchPath", () => {
     expect(classifyWatchPath("assets/logo.svg")).toBeNull();
     expect(classifyWatchPath(null)).toBeNull();
     expect(classifyWatchPath("screens")).toBeNull();
+  });
+});
+
+describe("watchSourcePaths", () => {
+  test("watches a planned component directory before it exists", async () => {
+    const tmp = join(
+      tmpdir(),
+      `velloo-source-watch-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    const target = join(tmp, "src/components/ui");
+    await mkdir(tmp, { recursive: true });
+    let changes = 0;
+    const watcher = watchSourcePaths([target], () => changes++, 30);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await mkdir(target, { recursive: true });
+      await writeFile(join(target, "button.tsx"), "export const Button = 1", "utf8");
+      const started = Date.now();
+      while (changes === 0 && Date.now() - started < 2_000) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(changes).toBeGreaterThan(0);
+    } finally {
+      watcher.close();
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // The nearest existing parent of a planned `components/ui` is the whole app,
+  // so arming a recursive watch there would cover node_modules and build output.
+  test("ignores unrelated writes under the target's not-yet-existing ancestors", async () => {
+    const tmp = join(
+      tmpdir(),
+      `velloo-source-scope-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    const target = join(tmp, "src/components/ui");
+    await mkdir(join(tmp, "node_modules/some-pkg"), { recursive: true });
+    let changes = 0;
+    const watcher = watchSourcePaths([target], () => changes++, 30);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await writeFile(join(tmp, "node_modules/some-pkg/index.js"), "module.exports={}", "utf8");
+      await writeFile(join(tmp, "package.json"), "{}", "utf8");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(changes).toBe(0);
+    } finally {
+      watcher.close();
+      await rm(tmp, { recursive: true, force: true });
+    }
   });
 });
 

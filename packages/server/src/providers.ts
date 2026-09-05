@@ -71,10 +71,10 @@ function resolveUpstreamCacheDir(library: Library, folderRoot: string | undefine
     const abs = resolve(home, path.slice(2));
     return existsSync(abs) ? abs : null;
   }
-  if (isAbsolute(path)) return existsSync(path) ? path : null;
+  if (isAbsolute(path)) return library.source === "in-repo" || existsSync(path) ? path : null;
   if (!folderRoot) return null;
   const abs = resolve(folderRoot, path);
-  return existsSync(abs) ? abs : null;
+  return library.source === "in-repo" || existsSync(abs) ? abs : null;
 }
 
 /**

@@ -1,6 +1,8 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { helperSourcePath } from "@velloo/helpers/paths";
 import {
+  type CanvasComponentSpec,
   catalogFromManifest,
   type FrameworkAdapter,
   type Manifest,
@@ -35,6 +37,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = resolveProviderSrcDir(here, "provider-mui", process.env.VELLOO_MUI_SRC);
 
 export function createProvider(): FrameworkAdapter {
+  const overlayIds = ["Dialog", "Menu", "Popover", "Drawer", "Snackbar"];
   return {
     id: "mui",
     version: MUI_VERSION,
@@ -64,12 +67,45 @@ export function createProvider(): FrameworkAdapter {
       defaultPath: "theme.ts",
     },
     canvasBundleSpec: {
-      moduleBase: "@mui/material",
-      // Only the MUI-source components bundle from `@mui/material`; the reused
-      // velloo helpers (Icon, …) aren't subpaths of it. They render in SSR; the
-      // exact-installed client mount is the MUI surface.
-      componentIds: MUI_MANIFEST.filter((c) => c.source === "mui").map((c) => c.id),
-      overlayIds: ["Dialog", "Menu", "Popover", "Drawer", "Snackbar"],
+      components: (ids) =>
+        ids.flatMap((id): CanvasComponentSpec[] => {
+          const descriptor = MUI_MANIFEST.find((entry) => entry.id === id);
+          if (!descriptor) return [];
+          if (descriptor.source === "velloo") {
+            const path = helperSourcePath(id);
+            return path
+              ? [
+                  {
+                    id,
+                    sources: [
+                      {
+                        importPath: path,
+                        exportName: id,
+                        fidelity: "fallback" as const,
+                        note: "Velloo helper used alongside the host framework.",
+                      },
+                    ],
+                  },
+                ]
+              : [];
+          }
+          return [
+            {
+              id,
+              sources: [
+                {
+                  importPath: `@mui/material/${id}`,
+                  exportName: id,
+                  fidelity: overlayIds.includes(id) ? ("adapted" as const) : ("exact" as const),
+                  ...(overlayIds.includes(id)
+                    ? { note: "Real MUI surface rendered through an inline canvas overlay shim." }
+                    : {}),
+                },
+              ],
+            },
+          ];
+        }),
+      overlayIds,
       styleRuntime: { kind: "emotion", cacheKey: "vmui", stylesModule: "@mui/material/styles" },
     },
   };

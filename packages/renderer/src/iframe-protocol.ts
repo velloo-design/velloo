@@ -16,8 +16,58 @@
  */
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * The selection ring's colours, drawn inside the iframe.
+ *
+ * The parent draws the resize grips on top of a ring it doesn't own, so the two
+ * have to agree on a colour. They used to disagree quietly — the grips reached
+ * for the canvas app's `--color-primary`, which is velloo's orange, and landed
+ * orange on a blue ring. Both sides read these instead.
+ */
+export const SELECT_RING = "#2563eb";
+/** A snippet instance selects as a different kind of thing, so a different colour. */
+export const SELECT_RING_SNIPPET = "#8b5cf6";
+/** Hover is the same blue, one step lighter and one pixel thinner. */
+export const HOVER_RING = "#60a5fa";
+
 /** `window.postMessage` envelope that carries the MessageChannel port. */
 export const INIT_MESSAGE_TYPE = "__velloo_init";
+
+/**
+ * Resolved CSS for one node, as `getComputedStyle` reports it.
+ *
+ * The HUD shows what a slot the node says nothing about actually resolves to —
+ * the browser's 16px, the component's own padding — instead of a dash. Only
+ * the iframe can answer that, since only it has the rendered element.
+ */
+export interface NodeComputed {
+  path: string;
+  values: Record<string, string>;
+}
+
+/** The properties the runtime reports for {@link NodeComputed}. */
+export const COMPUTED_PROPS = [
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "lineHeight",
+  "letterSpacing",
+  "textAlign",
+  "color",
+  "backgroundColor",
+  "borderTopWidth",
+  "borderTopColor",
+  "borderTopLeftRadius",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "marginTop",
+  "marginRight",
+  "marginBottom",
+  "marginLeft",
+  "columnGap",
+] as const;
 
 export interface NodeRect {
   path: string;
@@ -42,6 +92,11 @@ export type ChildMessage =
   /** Double-click outside the focused snippet — the way back out of the mode. */
   | { type: "exit" }
   | { type: "nodeRects"; rects: NodeRect[] }
+  /**
+   * Answer to `requestComputed`. Additive message — an older iframe doc simply
+   * never sends it and the HUD falls back to showing nothing.
+   */
+  | { type: "nodeComputed"; computed: NodeComputed }
   /**
    * Cmd/Ctrl+wheel inside the iframe. clientX/Y are in the iframe
    * document coordinates — the parent translates them into board
@@ -106,6 +161,15 @@ export type ParentMessage =
       state: "default" | "hover" | "focus" | "active" | "disabled";
     }
   | { type: "requestRects"; paths: string[] }
+  /** Ask for one node's resolved CSS — what the HUD shows in place of a dash. */
+  | { type: "requestComputed"; path: string }
+  /**
+   * The board's zoom, so selection chrome stays a constant thickness on screen.
+   * The ring is drawn in iframe pixels and the iframe is scaled by the board,
+   * so at 500% a 2px ring became a 10px slab that swallowed the parent's resize
+   * grips — which are zoom-constant. Additive; older docs keep the fixed ring.
+   */
+  | { type: "setChromeScale"; scale: number }
   /**
    * Scope the screen to one snippet: everything outside its instances dims and
    * stops taking clicks, and clicks inside report their definition path. `null`
@@ -126,6 +190,7 @@ export const CHILD_MESSAGE_TYPES = [
   "enter",
   "exit",
   "nodeRects",
+  "nodeComputed",
   "parentZoom",
   "parentPan",
   "scrollPos",
@@ -139,6 +204,8 @@ export const PARENT_MESSAGE_TYPES = [
   "clearHover",
   "applyVelloState",
   "requestRects",
+  "requestComputed",
+  "setChromeScale",
   "applySnippetFocus",
   "restoreScroll",
 ] as const;

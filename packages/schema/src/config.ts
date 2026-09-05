@@ -17,11 +17,11 @@ export type ViewportPreset = z.infer<typeof ViewportPresetSchema>;
  * design folder is built against (see `@velloo/provider`). `source`
  * tells the loader where the components live for that provider:
  *
- *   "binary"   — components ship with the velloo binary (the canvas
- *                runtime for shadcn-upstream, and all of none/mui).
+ *   "binary"   — components ship with the velloo binary.
  *   "cache"    — components live under `~/.velloo/…`.
  *   "in-repo"  — components live inside the user's app folder.
- *                `componentsPath` is the resolved location.
+ *                `componentsPath` is the resolved location; the shadcn
+ *                canvas imports supported files from here directly.
  */
 export const LibrarySchema = z.object({
   /**

@@ -10,7 +10,7 @@ export function frameRenderSrc(opts: {
 }): string {
   const { frame, canvasDefault, boardTheme, screenRevision, themeVersion } = opts;
   const scheme = resolveFrameScheme(frame, canvasDefault);
-  return `${renderUrl(frame.screen, frame.w, frame.h, boardTheme)}&mode=${scheme}&v=${screenRevision}.${themeVersion}`;
+  return `${renderUrl(frame.screen, frame.w, frame.h, boardTheme)}&mode=${scheme}&canvas=1&v=${screenRevision}.${themeVersion}`;
 }
 
 export function previewRenderSrc(opts: {

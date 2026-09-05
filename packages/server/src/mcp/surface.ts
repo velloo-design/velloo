@@ -22,6 +22,7 @@ export const DEFAULT_MCP_SURFACE: McpSurfaceSelection = { mode: "guided" };
 
 const COMMON = [
   "list_components",
+  "component_status",
   "list_screens",
   "list_boards",
   "get_board",

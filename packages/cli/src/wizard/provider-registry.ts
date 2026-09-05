@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 // Version-only subpath imports: pulling these from the provider indexes would
 // drag every framework registry into the CLI's eager bundle graph — the whole
 // point of the lazy provider chunks (see packages/server/src/providers.ts).
@@ -114,18 +114,20 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     asksComponentsSubfolder: true,
     scanScreenOpts: { hasBadge: true },
     planInstall(answers) {
+      const targetDir = resolve(answers.appRoot, answers.componentsRelative);
       const library: Library = {
         id: "shadcn-upstream",
         version: snapshotVersion,
-        source: "binary",
-        componentsPath: "binary",
+        source: "in-repo",
+        // The provider expects a root containing `ui/`; store it relative to
+        // the design folder so a cloned repo remains portable.
+        componentsPath: relative(answers.folder, dirname(targetDir)) || ".",
       };
-      const targetDir = resolve(answers.appRoot, answers.componentsRelative);
       return {
         library,
         summary: {
           name: "shadcn (upstream)",
-          location: `canvas uses the bundled snapshot; real components added to ${answers.componentsRelative} on setup`,
+          location: `canvas reads client-safe components from ${answers.componentsRelative}; canvas-safe fallbacks cover missing or unsupported files`,
         },
         pendingUpstream: { targetDir, relative: answers.componentsRelative },
       };
@@ -141,11 +143,12 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
         ? [
             "## Bringing shadcn into your app",
             "",
-            "Init did not write anything into your app. The canvas renders against",
-            "the bundled shadcn snapshot; when you're ready to land real vanilla",
-            `shadcn into your app at \`${plan.pendingUpstream.relative}\`, ask your AI`,
+            "Init did not write anything into your app. To add shadcn at",
+            `\`${plan.pendingUpstream.relative}\`, ask your AI`,
             "agent (it was wired up during init) to finish setup — or run",
-            "`npx shadcn@latest add <component>` yourself. Then",
+            "`npx shadcn@latest add <component>` yourself. Client-safe files render",
+            "directly from the repo; overlays use labeled canvas adaptations and",
+            "broken or missing files visibly fall back to Velloo's snapshot. Then",
             "`velloo theme:export <app>` aligns the theme.",
             "",
           ]
@@ -366,11 +369,10 @@ export function interactiveLibraryChoices(): { value: LibraryId; label: string; 
 /**
  * Resolve the wizard's answers into a library declaration. Init is
  * **non-destructive**: it writes nothing into the user's app and copies no
- * components to disk. Every fresh folder renders from the snapshot baked
- * into the binary (`source: "binary"`); for shadcn-upstream the intended
- * in-app component location is recorded as `pendingUpstream` and the actual
- * fetch is left to the post-init agent step. Canvas-fork files never leave
- * the velloo package.
+ * components to disk. shadcn records the intended in-repo location immediately
+ * so the canvas can start rendering those files as soon as the agent or user
+ * installs them; the snapshot remains a labeled fallback. Canvas-fork files
+ * never leave the velloo package.
  */
 export function planInstall(answers: WizardAnswers): InstallPlan {
   return WIZARD_PROVIDERS[answers.library].planInstall(answers);

@@ -219,10 +219,13 @@ async function writeScaffold(
   // The stack prompt's one output: emit_code mentions imports under the
   // alias the user's app actually resolves.
   const stack = stackById(answers.stack);
+  const hostAliases = componentAliases(stack?.alias, answers.componentsRelative);
   const config = buildDefaultConfig({
     library: plan.library,
     defaultScreen: defaultScreenForScaffold(scaffold),
-    ...(hostAppRoot ? { hostApp: { root: hostAppRoot } } : {}),
+    ...(hostAppRoot
+      ? { hostApp: { root: hostAppRoot, ...(hostAliases ? { aliases: hostAliases } : {}) } }
+      : {}),
     ...(hostApps ? { hostApps } : {}),
 
     ...(styling ? { styling } : {}),
@@ -273,6 +276,20 @@ async function writeScaffold(
     writes.push(writeJsonAtomic(`${folder}/snippets/${s.id}.json`, s));
   }
   await Promise.all(writes);
+}
+
+function componentAliases(
+  componentsAlias: string | undefined,
+  componentsRelative: string,
+): Record<string, string> | undefined {
+  const alias = componentsAlias ?? "@/components/ui";
+  const marker = "/components/ui";
+  const aliasAt = alias.lastIndexOf(marker);
+  const pathAt = componentsRelative.replaceAll("\\", "/").lastIndexOf(marker.slice(1));
+  if (aliasAt < 0 || pathAt < 0) return undefined;
+  const from = `${alias.slice(0, aliasAt).replace(/\/$/, "")}/*`;
+  const base = componentsRelative.replaceAll("\\", "/").slice(0, pathAt).replace(/\/$/, "");
+  return { [from]: base ? `${base}/*` : "*" };
 }
 
 function printSummary(

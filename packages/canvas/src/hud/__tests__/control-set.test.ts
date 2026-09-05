@@ -66,8 +66,8 @@ describe("resolveControls", () => {
   test("a box's bar is spacing, colour and border — its size lives in the pane", () => {
     const { controls } = resolveControls({ node: box({ className: "p-4" }, [box()]) });
     expect(barControls(controls).map((c) => c.label)).toEqual([
-      "Outside",
-      "Inside",
+      "Margin",
+      "Padding",
       "Text",
       "Background",
       "Border",
@@ -75,7 +75,7 @@ describe("resolveControls", () => {
     ]);
     // Width and height are on the resize handles; the exact number is a pane away.
     const paned = controls.filter((c) => c.tier === "pane").map((c) => c.label);
-    expect(paned).toEqual(["Width", "Height", "Between", "Corners", "Align"]);
+    expect(paned).toEqual(["Width", "Height", "Gap", "Corners", "Align"]);
   });
 
   test("every control is reachable — the bar is a subset, never a filter", () => {

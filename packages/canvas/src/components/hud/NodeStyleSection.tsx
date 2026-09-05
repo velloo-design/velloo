@@ -37,6 +37,10 @@ interface Props {
   snippet: SnippetParams | null;
   /** Style controls write classes; a folder on `sx` or inline `style` keeps its own editor. */
   classChannel: boolean;
+  /** Resolved CSS keyed by control id — what an unset field shows instead of a dash. */
+  computed: Readonly<Record<string, string | number>>;
+  /** The node's rendered box, so Fill/Hug still show the number they came out at. */
+  measured: { w: number; h: number } | null;
   onChange(spec: ControlSpec, next: ControlInput, ctx?: WriteContext): void;
 }
 
@@ -48,6 +52,8 @@ export function NodeStyleSection({
   descriptor,
   snippet,
   classChannel,
+  computed,
+  measured,
   onChange,
 }: Props) {
   const iconNames = useIconNames();
@@ -82,6 +88,7 @@ export function NodeStyleSection({
             node,
             themeValues: readout.values,
             themeSource: readout.source,
+            computed,
           });
           // Colour and size want the row to themselves — a swatch plus a label,
           // or a mode plus a number, is already two controls wide.
@@ -104,7 +111,11 @@ export function NodeStyleSection({
                   resolveColor={resolveColor}
                   fonts={fonts}
                   iconNames={iconNames}
-                  measured={null}
+                  measured={
+                    spec.slot.via === "style" && spec.slot.key === "height"
+                      ? (measured?.h ?? null)
+                      : (measured?.w ?? null)
+                  }
                   onOpenPrompt={() => undefined}
                   onChange={(next, ctx) => onChange(spec, next, ctx)}
                 />

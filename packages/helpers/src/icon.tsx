@@ -5,7 +5,7 @@
 // set, and codegen lowers <Icon name="X"/> to `<X />` from "lucide-react" so the
 // emitted code has zero Velloo runtime dependencies.
 
-import { pascalizeIconName } from "@velloo/schema";
+import { pascalizeIconName } from "@velloo/schema/icon-name";
 import * as React from "react";
 import { cn } from "./cn.ts";
 import { ICON_ALIASES, ICON_NODES, type IconNode, LUCIDE_SVG_ATTRIBUTES } from "./icon-data.ts";

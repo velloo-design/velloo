@@ -12,5 +12,9 @@
     "types": ["bun", "react"]
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../provider" }, { "path": "../shadcn-snapshot" }]
+  "references": [
+    { "path": "../helpers" },
+    { "path": "../provider" },
+    { "path": "../shadcn-snapshot" }
+  ]
 }

@@ -191,23 +191,58 @@ export interface RenderPass {
  * (adding a framework with a new runtime = a new union member + a builder
  * branch — see docs/providers.md).
  */
-export type CanvasStyleRuntime = {
-  kind: "emotion";
-  /** emotion cache key prefix (MUI uses `vmui`). */
-  cacheKey: string;
-  /** Module exporting `ThemeProvider` + `createTheme`, e.g. `@mui/material/styles`. */
-  stylesModule: string;
-};
+export type CanvasStyleRuntime =
+  | {
+      /** Tailwind / plain React: the document already carries the required CSS. */
+      kind: "none";
+    }
+  | {
+      kind: "emotion";
+      /** emotion cache key prefix (MUI uses `vmui`). */
+      cacheKey: string;
+      /** Module exporting `ThemeProvider` + `createTheme`, e.g. `@mui/material/styles`. */
+      stylesModule: string;
+    };
+
+export type CanvasComponentFidelity = "exact" | "adapted" | "fallback";
+
+/** One ordered import candidate for a component in the browser canvas bundle. */
+export interface CanvasComponentSource {
+  /** Module specifier or absolute source path, resolved from the host app. */
+  importPath: string;
+  /** Named export to read; defaults to the component id, then the module default. */
+  exportName?: string;
+  /** What successfully using this source means to the user. */
+  fidelity: CanvasComponentFidelity;
+  /**
+   * Compile this source in isolation before admitting it to the shared screen
+   * bundle. Use for host source whose transitive graph may be temporarily
+   * broken; trusted package/snapshot fallbacks normally omit it.
+   */
+  preflight?: boolean;
+  /** Human-readable explanation surfaced by component diagnostics. */
+  note?: string;
+}
+
+/** Ordered sources for one component ref used by a screen. */
+export interface CanvasComponentSpec {
+  id: string;
+  sources: CanvasComponentSource[];
+}
 
 export interface CanvasBundleSpec {
-  /** Bare module the components import from, e.g. `@mui/material`. */
-  moduleBase: string;
-  /** Component ids imported as `<moduleBase>/<id>` (default export each). */
-  componentIds: string[];
-  /** Overlay ids the bundle renders via inline canvas-safe shims (Dialog/Menu/…). */
-  overlayIds: string[];
+  /**
+   * Resolve only the refs a screen actually uses. Ordered sources let a real
+   * repo component fall back to a canvas-safe implementation without making
+   * the entire screen abandon the client mount.
+   */
+  components(ids: readonly string[]): Promise<CanvasComponentSpec[]> | CanvasComponentSpec[];
+  /** MUI-shaped overlay ids rendered by the built-in inline shims. */
+  overlayIds?: string[];
   /** The style runtime the bundle wires up around the mounted tree. */
   styleRuntime: CanvasStyleRuntime;
+  /** Host source directories to watch and include in Tailwind candidate scans. */
+  sourceDirs?(): string[];
 }
 
 // --- the adapter ---
@@ -279,9 +314,11 @@ export interface FrameworkAdapter extends ComponentProvider {
    */
   mcpIntro?(channel: StyleChannelKind): string[] | undefined;
   /**
-   * How to bundle this framework's installed components for the canvas (#18).
-   * Present ⇒ the server can build a `mountScreen` bundle from the host's
-   * `node_modules` for an exact-installed-version client render; absent ⇒ SSR.
+   * Ordered browser sources for the framework's canvas components. A provider
+   * may mix exact host files, explicit canvas-safe adaptations, and fallbacks
+   * in one screen. Present ⇒ the server builds a per-screen `mountScreen`
+   * bundle and reports the selected fidelity for every referenced component;
+   * absent ⇒ the provider's SSR registry remains authoritative.
    */
   canvasBundleSpec?: CanvasBundleSpec;
 }

@@ -63,22 +63,46 @@ framework-native provider typically implements all of these:
   installed-status, and the per-component installer when components land in the user's
   app (shadcn-upstream shells out to the framework's own CLI; fully-bundled frameworks
   omit `installComponent` and report everything installed).
-- **`canvasBundleSpec`** — how to bundle the host app's *actually installed* components
-  for an exact-version client mount. `styleRuntime` is a discriminated union; `emotion`
-  is implemented today — a new runtime kind means a new union member in
-  `packages/provider/src/adapter.ts` plus a branch in the server's entry builder
-  (`packages/server/src/live/canvas-bundle.ts`). Bundles are per-library: non-default
-  screens mount their own.
+- **`canvasBundleSpec`** — ordered browser sources for the components referenced by one
+  screen. Each source declares `exact`, `adapted`, or `fallback` fidelity; the server
+  resolves and optionally preflight-compiles them independently, then builds one mixed
+  registry. A broken host file therefore falls back without discarding exact neighbors.
+  `styleRuntime` is a discriminated union (`none` and `emotion` today), and `sourceDirs()`
+  names host directories that should invalidate the bundle and feed the Tailwind scan.
+  Bundles are per-library and per referenced-component set: non-default screens mount
+  their own without shipping an unused whole library.
 - **`mcpIntro(channel)`** — the framing prepended to the MCP instructions. The base
   instruction text is shadcn/Tailwind-tuned; your intro tells the agent what's different
   (see `provider-mui/src/intro.ts` and `provider-none/src/intro.ts`).
 
-## Host components are not providers
+## The canvas fidelity ladder
+
+`component_status` exposes the result for named components. Treat these statuses as a
+public contract, not an internal implementation detail:
+
+1. **Exact** — the selected module is the app's component source (or the exact installed
+   package export for package-based adapters) and passed browser preflight.
+2. **Adapted** — a named canvas-safe implementation preserves the component vocabulary
+   while changing interaction mechanics that conflict with a static selectable canvas,
+   such as portals and menus that must remain open inline.
+3. **Fallback** — a provider-owned source or Velloo helper is rendering because the app
+   file is absent or failed preflight. The diagnostic carries the chosen source and error.
+4. **Unavailable** — no registered source can render; the mount emits an explicit labelled
+   placeholder instead of silently inventing DOM.
+
+Shadcn uses all four outcomes. Ordinary client-safe `components/ui` files are exact,
+compound children are preserved by the whole-screen interpreter, portal/state-heavy
+families are adapted, and the embedded snapshot is a fail-safe fallback. MUI exact-mounts
+installed package exports and keeps its existing canvas-safe overlay shims.
+
+## App-specific components are not providers
 
 A component that exists only in the user's app is expressed with `$emitAs` on a
 `ComponentNode` (`packages/schema/src/node.ts`): the canvas renders the primitive
 approximation, codegen emits `<RealName />` with the recorded import path. Don't build a
-provider for a single app's component set.
+provider for a single app's component set. Prefer a snippet when the canvas needs an
+editable compound approximation; reserve a `render:"live"` extension for dynamic leaf
+content such as a chart. Live islands are not the library component runtime.
 
 ## What to test
 

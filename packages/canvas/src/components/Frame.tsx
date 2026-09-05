@@ -89,7 +89,9 @@ export const Frame = memo(function Frame({
   const wsConnected = useCanvas((s) => s.wsConnected);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
+  const canvasZoom = useCanvas((s) => s.canvasZoom);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
+  const setSelectionComputed = useCanvas((s) => s.setSelectionComputed);
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
   const setFrameInset = useCanvas((s) => s.setFrameInset);
   const commentThreads = useCanvas((s) => s.commentThreads);
@@ -304,6 +306,9 @@ export const Frame = memo(function Frame({
       onRects(rects) {
         setNodeRects(frame.id, rects);
       },
+      onComputed(path, values) {
+        setSelectionComputed(path, values);
+      },
       // A reloaded iframe (screenVersion bump after an edit, HMR) comes up
       // with a blank document while the store still holds selection/hover —
       // and the effects below are keyed on those values, so nothing re-sends
@@ -347,9 +352,17 @@ export const Frame = memo(function Frame({
         if (s.nodeState !== "default" && s.selection?.screenId === frame.screen) {
           channel.send({ type: "applyVelloState", path: s.selection.path, state: s.nodeState });
         }
-        const anchored = anchoredNodePaths(s, frame.id, frame.screen);
+        // The selection's path has to be in here: a rects response replaces
+        // this frame's whole registry, so asking for the anchored set alone
+        // drops the selection's box and the resize grips vanish on every
+        // reload — which a live resize causes several times a second.
+        const anchored = anchoredPathsRef.current;
         if (anchored.length > 0) {
           channel.send({ type: "requestRects", paths: anchored });
+        }
+        channel.send({ type: "setChromeScale", scale: useCanvas.getState().canvasZoom });
+        if (s.selection?.screenId === frame.screen) {
+          channel.send({ type: "requestComputed", path: s.selection.path });
         }
       },
       // Cmd/Ctrl + wheel inside the iframe → zoom the board. Same
@@ -416,6 +429,7 @@ export const Frame = memo(function Frame({
     setSelection,
     setHover,
     setNodeRects,
+    setSelectionComputed,
     clearNodeRects,
   ]);
 
@@ -610,6 +624,22 @@ export const Frame = memo(function Frame({
     }
     channel.send({ type: "requestRects", paths: anchoredPaths });
   }, [anchoredPaths, frame.id, screenVersion, clearNodeRects]);
+
+  // The selection ring is drawn in iframe pixels and the iframe is scaled by
+  // the board, so without this a 2px ring becomes a 10px slab at 500% and
+  // swallows the parent's zoom-constant resize grips.
+  useEffect(() => {
+    channelRef.current?.send({ type: "setChromeScale", scale: canvasZoom });
+  }, [canvasZoom]);
+
+  // What the selected node's unset slots actually resolve to. Re-asked on every
+  // screen version because an edit is exactly what changes the answer.
+  useEffect(() => {
+    void screenVersion;
+    const channel = channelRef.current;
+    if (!channel || selection?.screenId !== frame.screen) return;
+    channel.send({ type: "requestComputed", path: selection.path });
+  }, [selection, frame.screen, screenVersion]);
 
   const onPickPreset = (preset: ViewportPreset) => {
     if (preset.w === frame.w && preset.h === frame.h) return;

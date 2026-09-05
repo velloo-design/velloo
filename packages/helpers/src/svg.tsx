@@ -7,7 +7,7 @@
 // Codegen emits this as `<svg dangerouslySetInnerHTML={{ __html: ... }}>`
 // when `content` is set, or a regular `<svg>{children}</svg>` otherwise.
 
-import { sanitizeSvgMarkup } from "@velloo/schema";
+import { sanitizeSvgMarkup } from "@velloo/schema/svg-sanitize";
 import type * as React from "react";
 import { cn } from "./cn.ts";
 

@@ -32,6 +32,8 @@ export interface ChannelHandlers {
   onKey?(init: KeyboardEventInit): void;
   onReady?(): void;
   onRects?(rects: NodeRect[]): void;
+  /** The selected node's resolved CSS — what the HUD shows for an unset slot. */
+  onComputed?(path: string, values: Record<string, string>): void;
   /**
    * Cmd/Ctrl + wheel forwarded from the iframe (pinch-zoom).
    * clientX/Y are coordinates inside the iframe document; the
@@ -153,6 +155,8 @@ export class IframeChannel {
       const { type: _type, ...init } = msg;
       this.handlers.onKey?.(init);
     } else if (msg.type === "nodeRects") this.handlers.onRects?.(msg.rects);
+    else if (msg.type === "nodeComputed")
+      this.handlers.onComputed?.(msg.computed.path, msg.computed.values);
     else if (msg.type === "parentZoom")
       this.handlers.onParentZoom?.(msg.deltaY, msg.clientX, msg.clientY);
     else if (msg.type === "parentPan") this.handlers.onParentPan?.(msg.deltaX, msg.deltaY);

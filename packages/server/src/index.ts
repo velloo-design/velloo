@@ -40,7 +40,7 @@ import { PublishRunner } from "./publish-run.ts";
 import { requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
-import { type WatchEvent, type Watcher, watchDesignFolder } from "./watcher.ts";
+import { type WatchEvent, type Watcher, watchDesignFolder, watchSourcePaths } from "./watcher.ts";
 
 /**
  * How (and whether) to attach an MCP server. Omit for a canvas-only server
@@ -283,7 +283,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     join(folder.root, "screens"),
     undefined,
     () => extraThemeBlock(folder),
-    () => bundler.hostSourceDirs(),
+    () => [...bundler.hostSourceDirs(), ...canvasBundler.sourceDirs(Object.keys(providers))],
     () => findHostTailwindConfig(folder.root, folder.config.hostApp),
     folder.config.styling?.framework,
   );
@@ -306,6 +306,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     folder,
     providers,
     defaultProvider,
+    canvasBundler,
     broadcast,
   };
   // Publishing borrows the daemon's warm pipeline — same folder, same resolved
@@ -331,6 +332,10 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   );
 
   let watcher: Watcher | null = null;
+  const sourceWatcher = watchSourcePaths(
+    [...bundler.hostSourceDirs(), ...canvasBundler.sourceDirs(Object.keys(providers))],
+    () => broadcast({ type: "folder-reloaded" }),
+  );
   watcher = watchDesignFolder(folder.root, async (event) => {
     try {
       if (event.type === "screen-changed") {
@@ -449,6 +454,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     async close() {
       if (commentTimer) clearInterval(commentTimer);
       watcher?.close();
+      sourceWatcher.close();
       await httpMcp?.close();
       await stdioMcp?.close();
       server.stop(true);

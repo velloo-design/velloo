@@ -1,5 +1,8 @@
 export {
   type CanvasBundleSpec,
+  type CanvasComponentFidelity,
+  type CanvasComponentSource,
+  type CanvasComponentSpec,
   type CanvasStyleRuntime,
   type CatalogEntry,
   CSS_FRAMEWORK_CHANNEL,

@@ -8,6 +8,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./fonts": "./src/fonts.ts",
+    "./icon-name": "./src/icon-name.ts",
+    "./paths": "./src/paths.ts",
+    "./svg-sanitize": "./src/svg-sanitize.ts",
     "./typeset": "./src/typeset.ts"
   },
   "dependencies": {

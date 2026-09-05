@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { createProvider as createShadcnProvider } from "@velloo/provider-shadcn-upstream";
 import { buildCanvasBundle, type CanvasBundleSpec } from "../live/canvas-bundle.ts";
 
 /**
@@ -13,10 +14,15 @@ import { buildCanvasBundle, type CanvasBundleSpec } from "../live/canvas-bundle.
 // A dir that resolves @mui/material + @emotion + react like a real MUI app —
 // provider-mui depends on exactly those. (server's __tests__ → ../../../provider-mui)
 const HOST_ROOT = resolve(import.meta.dir, "../../../provider-mui");
+const SHADCN_APP = resolve(import.meta.dir, "../../../provider-mui");
+const SHADCN_FIXTURE = join(import.meta.dir, "fixtures/shadcn-host");
 
 const MUI_SPEC: CanvasBundleSpec = {
-  moduleBase: "@mui/material",
-  componentIds: ["Box", "Paper", "Card", "CardContent", "Button", "Typography", "DialogTitle"],
+  components: (ids) =>
+    ids.map((id) => ({
+      id,
+      sources: [{ importPath: `@mui/material/${id}`, exportName: id, fidelity: "exact" }],
+    })),
   overlayIds: ["Dialog", "Menu", "Popover", "Drawer", "Snackbar"],
   styleRuntime: { kind: "emotion", cacheKey: "vmui", stylesModule: "@mui/material/styles" },
 };
@@ -32,7 +38,8 @@ describe("buildCanvasBundle", () => {
   test.skipIf(process.env.VELLOO_E2E === "1")(
     "bundles the host's real MUI + emotion into a mountScreen module",
     async () => {
-      const { code, errors } = await buildCanvasBundle(HOST_ROOT, MUI_SPEC);
+      const ids = ["Box", "Paper", "Card", "CardContent", "Button", "Typography", "DialogTitle"];
+      const { code, errors } = await buildCanvasBundle(HOST_ROOT, MUI_SPEC, ids);
       expect(errors).toEqual([]);
       // A real, non-trivial browser bundle (not the empty fallback stub).
       expect(code).toContain("mountScreen");
@@ -44,10 +51,90 @@ describe("buildCanvasBundle", () => {
   );
 
   test("missing host framework ⇒ empty module + structured errors, never throws", async () => {
-    const bogus: CanvasBundleSpec = { ...MUI_SPEC, moduleBase: "@no-such/ui-kit-xyz" };
-    const { code, errors } = await buildCanvasBundle(HOST_ROOT, bogus);
-    // React/emotion still resolve, but no components do → empty stub + errors.
-    expect(code).toContain("mountScreen() {}");
-    expect(errors.length).toBeGreaterThan(0);
+    const bogus: CanvasBundleSpec = {
+      ...MUI_SPEC,
+      components: (ids) =>
+        ids.map((id) => ({
+          id,
+          sources: [{ importPath: `@no-such/ui-kit-xyz/${id}`, fidelity: "exact" }],
+        })),
+    };
+    const result = await buildCanvasBundle(HOST_ROOT, bogus, ["Button"]);
+    // A ref with no usable source is NOT mounted: client-rendering a placeholder
+    // would also hide the SSR body that rendered it correctly. The caller keeps
+    // SSR and the reason is reported per component.
+    expect(result.usable).toBe(false);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ id: "Button", status: "unavailable" }),
+    ]);
+    expect(result.errors.length).toBeGreaterThan(0);
+  }, 30_000);
+
+  test("a ref the provider knows nothing about keeps the screen on SSR", async () => {
+    const provider = createShadcnProvider({
+      hostAppRoot: SHADCN_APP,
+      cacheDir: join(SHADCN_FIXTURE, "src/components"),
+    });
+    const spec = provider.canvasBundleSpec;
+    if (!spec) throw new Error("shadcn provider has no canvas bundle spec");
+    const result = await buildCanvasBundle(
+      SHADCN_APP,
+      spec,
+      ["Button", "NotAComponent"],
+      [{ from: "@/", to: "../server/src/__tests__/fixtures/shadcn-host/src/" }],
+    );
+    expect(result.usable).toBe(false);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "NotAComponent", status: "unavailable" }),
+      ]),
+    );
+  }, 30_000);
+
+  test("an empty ref set is not a usable mount", async () => {
+    const result = await buildCanvasBundle(HOST_ROOT, MUI_SPEC, []);
+    expect(result.usable).toBe(false);
+  }, 30_000);
+
+  test("a provider whose components() rejects returns errors instead of throwing", async () => {
+    const exploding: CanvasBundleSpec = {
+      ...MUI_SPEC,
+      components: () => Promise.reject(new Error("corrupt manifest.json")),
+    };
+    const result = await buildCanvasBundle(HOST_ROOT, exploding, ["Button"]);
+    expect(result.usable).toBe(false);
+    expect(result.errors).toEqual([
+      expect.objectContaining({ message: expect.stringContaining("corrupt manifest.json") }),
+    ]);
+  }, 30_000);
+
+  test("mixes exact repo source, adapted overlays, helpers, and a broken-file fallback", async () => {
+    const provider = createShadcnProvider({
+      hostAppRoot: SHADCN_APP,
+      cacheDir: join(SHADCN_FIXTURE, "src/components"),
+    });
+    const spec = provider.canvasBundleSpec;
+    if (!spec) throw new Error("shadcn provider has no canvas bundle spec");
+    const result = await buildCanvasBundle(
+      SHADCN_APP,
+      spec,
+      ["Button", "Card", "CardHeader", "CardTitle", "CardContent", "Badge", "Dialog", "Heading"],
+      [{ from: "@/", to: "../server/src/__tests__/fixtures/shadcn-host/src/" }],
+    );
+    expect(result.usable).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "Button", status: "exact" }),
+        expect.objectContaining({ id: "CardContent", status: "exact" }),
+        expect.objectContaining({ id: "Badge", status: "fallback" }),
+        expect.objectContaining({ id: "Dialog", status: "adapted" }),
+        expect.objectContaining({ id: "Heading", status: "fallback" }),
+      ]),
+    );
+    expect(
+      result.diagnostics.find((entry) => entry.id === "Badge")?.errors?.length,
+    ).toBeGreaterThan(0);
+    expect(result.code.length).toBeGreaterThan(50_000);
   }, 30_000);
 });

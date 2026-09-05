@@ -24,6 +24,20 @@ export interface SerializeOptions {
   snippets?: Map<string, Snippet> | undefined;
 }
 
+/** Distinct component refs in a serialized tree, stable in first-use order. */
+export function collectSerializedRefs(tree: SerializedNode | null): string[] {
+  if (!tree) return [];
+  const seen = new Set<string>();
+  const visit = (node: SerializedNode): void => {
+    seen.add(node.ref);
+    for (const child of node.children ?? []) {
+      if (typeof child === "object") visit(child);
+    }
+  };
+  visit(tree);
+  return [...seen];
+}
+
 type Child = SerializedNode | string | number;
 
 /**

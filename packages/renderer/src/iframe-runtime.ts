@@ -1,4 +1,10 @@
-import { PROTOCOL_VERSION } from "./iframe-protocol.ts";
+import {
+  COMPUTED_PROPS,
+  HOVER_RING,
+  PROTOCOL_VERSION,
+  SELECT_RING,
+  SELECT_RING_SNIPPET,
+} from "./iframe-protocol.ts";
 
 /**
  * Inlined into every rendered design HTML doc. Establishes a Storybook-style
@@ -29,12 +35,16 @@ export const IFRAME_RUNTIME = String.raw`
   // and is always fully visible regardless of position.
   const style = document.createElement('style');
   style.textContent =
-    ".__velloo-hover { box-shadow: inset 0 0 0 1px #60a5fa !important; }" +
-    ".__velloo-selected { box-shadow: inset 0 0 0 2px #2563eb !important; }" +
+    // Widths come from custom properties the parent drives with the board
+    // zoom via setChromeScale: the iframe is scaled, so a fixed 2px ring grows
+    // into a slab that swallows the parent's zoom-constant resize grips.
+    ":root { --velloo-ring: 2px; --velloo-ring-hover: 1px; }" +
+    ".__velloo-hover { box-shadow: inset 0 0 0 var(--velloo-ring-hover) ${HOVER_RING} !important; }" +
+    ".__velloo-selected { box-shadow: inset 0 0 0 var(--velloo-ring) ${SELECT_RING} !important; }" +
     // A snippet instance is a different kind of thing to select — editing it
     // moves every other instance too — so it gets its own colour rather than
     // looking like an ordinary node.
-    ".__velloo-selected[data-velloo-select-kind='snippet'] { box-shadow: inset 0 0 0 2px #8b5cf6 !important; }" +
+    ".__velloo-selected[data-velloo-select-kind='snippet'] { box-shadow: inset 0 0 0 var(--velloo-ring) ${SELECT_RING_SNIPPET} !important; }" +
     // The rest of the screen while a snippet is being edited in place.
     ".__velloo-dimmed { opacity: 0.28 !important; filter: saturate(0.4) !important; }" +
     // Scrollable frames need a *visible* affordance: wheel events forward to
@@ -292,6 +302,28 @@ export const IFRAME_RUNTIME = String.raw`
     send({ type: 'nodeRects', rects: rects });
   }
 
+  var COMPUTED_PROPS = ${JSON.stringify(COMPUTED_PROPS)};
+
+  // What a slot the node says nothing about actually resolves to. The parent
+  // shows it greyed, so the field reads "16" rather than a dash.
+  function reportComputed(path) {
+    const el = document.querySelector('[data-node-path="' + String(path).replace(/"/g, '\\"') + '"]');
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    const values = {};
+    for (let i = 0; i < COMPUTED_PROPS.length; i++) {
+      values[COMPUTED_PROPS[i]] = cs[COMPUTED_PROPS[i]];
+    }
+    send({ type: 'nodeComputed', computed: { path: path, values: values } });
+  }
+
+  // The board's zoom, turned into ring widths that stay constant on screen.
+  function setChromeScale(scale) {
+    const s = typeof scale === 'number' && scale > 0 ? scale : 1;
+    document.documentElement.style.setProperty('--velloo-ring', (2 / s) + 'px');
+    document.documentElement.style.setProperty('--velloo-ring-hover', (1 / s) + 'px');
+  }
+
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => {
       if (lastRectPaths.length > 0) reportRects(lastRectPaths);
@@ -307,6 +339,8 @@ export const IFRAME_RUNTIME = String.raw`
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
     else if (msg.type === 'applyVelloState') applyVelloState(msg.path, msg.state);
     else if (msg.type === 'requestRects') reportRects(msg.paths || []);
+    else if (msg.type === 'requestComputed') reportComputed(msg.path);
+    else if (msg.type === 'setChromeScale') setChromeScale(msg.scale);
     else if (msg.type === 'applySnippetFocus') applySnippetFocus(msg.snippetId);
     else if (msg.type === 'restoreScroll') window.scrollTo(msg.x || 0, msg.y || 0);
   }

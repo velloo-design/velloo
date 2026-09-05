@@ -311,6 +311,47 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   );
 
   mcp.registerTool(
+    "component_status",
+    {
+      description:
+        "Compile-check named components for the browser canvas and report each as exact repo source, canvas-adapted, fallback, or unavailable. Use during velloo-setup before claiming the canvas renders an app component exactly.",
+      inputSchema: {
+        ids: z.array(z.string().min(1)).min(1),
+        library: z.string().min(1).optional(),
+      },
+    },
+    async ({ ids, library }) => {
+      const libraryId = library ?? ctx.folder.config.defaultLibrary;
+      const provider = ctx.providers[libraryId] as FrameworkAdapter | undefined;
+      if (!provider) {
+        return errorResult({
+          kind: "BadRequest",
+          message: `Unknown library ${JSON.stringify(libraryId)}.`,
+        });
+      }
+      if (!provider.canvasBundleSpec || !ctx.canvasBundler) {
+        return jsonResult({
+          library: libraryId,
+          usable: false,
+          diagnostics: ids.map((id) => ({
+            id,
+            status: "fallback",
+            note: "This provider renders through its bundled SSR adapter; repo-backed canvas mounting is unavailable.",
+          })),
+          errors: [],
+        });
+      }
+      const result = await ctx.canvasBundler.build(libraryId, ids);
+      return jsonResult({
+        library: libraryId,
+        usable: result.usable,
+        diagnostics: result.diagnostics,
+        errors: result.errors,
+      });
+    },
+  );
+
+  mcp.registerTool(
     "get_theme",
     {
       description:

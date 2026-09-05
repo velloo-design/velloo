@@ -26,8 +26,18 @@ export interface SelectionSlice {
    * snippet editor.
    */
   snippetFocus: string | null;
+  /**
+   * The selected node's resolved CSS, straight from `getComputedStyle` in the
+   * iframe. It's what the HUD shows for a slot the node says nothing about —
+   * the browser's 16px, the component's own padding — instead of a dash.
+   * Cleared when the selection moves, so a field never shows the last node's
+   * numbers while the new node's report is in flight.
+   */
+  selectionComputed: Record<string, string> | null;
 
   setSelection(s: Selection | null): void;
+  /** Ignored unless `path` still matches the selection the report was asked for. */
+  setSelectionComputed(path: string, values: Record<string, string>): void;
   setHover(h: Selection | null): void;
   setSnippetFocus(snippetId: string | null): void;
   /** setSelection + a reveal request — the search dialog's "jump to node". */
@@ -58,6 +68,12 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
   reveal: null,
   selectionIntent: "inspect",
   snippetFocus: null,
+  selectionComputed: null,
+
+  setSelectionComputed(path, values) {
+    if (get().selection?.path !== path) return;
+    set({ selectionComputed: values });
+  },
 
   setSnippetFocus(snippetFocus) {
     if (get().snippetFocus === snippetFocus) return;
@@ -101,7 +117,7 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
         selection !== null &&
         prev.screenId === selection.screenId &&
         prev.path === selection.path);
-    if (!same) set({ selection, selectionIntent: "inspect" });
+    if (!same) set({ selection, selectionIntent: "inspect", selectionComputed: null });
     else if (selection && get().selectionIntent !== "inspect") set({ selectionIntent: "inspect" });
     // If the selected node lives on a screen other than the currently
     // open one, follow it — otherwise the sidebar Tree shows a tree

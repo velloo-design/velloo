@@ -3,6 +3,7 @@ import { theme as themeApi } from "../api.ts";
 import { normalizeToOklch, parseTriplet } from "../color.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { ColorWheel, type Hsv, hexToHsv, hsvToHex } from "./color-picker.tsx";
 import { Input } from "./ui/input.tsx";
 import { Label } from "./ui/label.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
@@ -16,10 +17,10 @@ interface Props {
 const DEBOUNCE_MS = 250;
 
 /**
- * Click the swatch to open a small color editor with a native picker
- * plus synced HEX / OKLCH / HSL fields. Everything is converted via
- * culori; we always store OKLCH on disk so the theme JSON stays in one
- * canonical form.
+ * Click the swatch to open the colour wheel plus synced HEX / OKLCH / HSL
+ * fields — the same wheel the node HUD opens, so picking a colour is one
+ * gesture wherever you do it. Everything is converted via culori; we always
+ * store OKLCH on disk so the theme JSON stays in one canonical form.
  */
 export function ColorSwatch({ label, tokenPath, value }: Props) {
   const [draft, setDraft] = useState(value);
@@ -83,6 +84,16 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
   );
 }
 
+/**
+ * The wheel, plus the three text forms the theme actually stores in.
+ *
+ * The native `<input type="color">` this replaced opened the OS picker — a
+ * different UI on every platform, none of them the one the HUD uses. The wheel
+ * is the same component the node's colour field opens, so picking a colour
+ * feels like one thing wherever you do it. HEX / OKLCH / HSL stay because a
+ * theme token is a value someone pastes in and reads back, not only one they
+ * point at.
+ */
 function ColorEditor({
   currentValue,
   onCommit,
@@ -98,8 +109,9 @@ function ColorEditor({
   const [hex, setHex] = useState(initial.hex);
   const [oklch, setOklch] = useState(initial.oklch);
   const [hsl, setHsl] = useState(initial.hsl);
+  const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(initial.hex) ?? { h: 0, s: 0, v: 0 });
 
-  const sync = (next: string, source: "hex" | "oklch" | "hsl") => {
+  const sync = (next: string, source: "hex" | "oklch" | "hsl" | "wheel") => {
     const trip = parseTriplet(next);
     if (!trip) {
       if (source === "hex") setHex(next);
@@ -110,33 +122,32 @@ function ColorEditor({
     setHex(trip.hex);
     setOklch(trip.oklch);
     setHsl(trip.hsl);
+    // Re-deriving HSV from the wheel's own output would fight the drag: the
+    // round trip through hex quantises, and the hue of a grey is undefined.
+    if (source !== "wheel") {
+      const asHsv = hexToHsv(trip.hex);
+      if (asHsv) setHsv(asHsv);
+    }
     onCommit(trip.oklch);
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          aria-label="Color picker"
-          value={parseTriplet(hex)?.hex ?? "#000000"}
-          onChange={(e) => sync(e.target.value, "hex")}
-          className="h-9 w-9 rounded-md border border-input cursor-pointer"
-        />
-        <div
-          className="flex-1 h-9 rounded-md border"
-          style={{ background: oklch || hex }}
-          title="Preview"
-        />
-      </div>
-      <ColorField label="HEX" value={hex} onChange={(v) => sync(v, "hex")} />
-      <ColorField label="OKLCH" value={oklch} onChange={(v) => sync(v, "oklch")} />
-      <ColorField label="HSL" value={hsl} onChange={(v) => sync(v, "hsl")} />
+    <div className="flex flex-col gap-3">
+      <ColorWheel
+        value={hsv}
+        onChange={(next) => {
+          setHsv(next);
+          sync(hsvToHex(next), "wheel");
+        }}
+      />
+      <ColorTextField label="HEX" value={hex} onChange={(v) => sync(v, "hex")} />
+      <ColorTextField label="OKLCH" value={oklch} onChange={(v) => sync(v, "oklch")} />
+      <ColorTextField label="HSL" value={hsl} onChange={(v) => sync(v, "hsl")} />
     </div>
   );
 }
 
-function ColorField({
+function ColorTextField({
   label,
   value,
   onChange,

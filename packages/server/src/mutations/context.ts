@@ -1,6 +1,7 @@
 import type { ComponentProvider } from "@velloo/provider";
 import type { ActivityEvent } from "../activity.ts";
 import type { DesignFolder } from "../design-folder.ts";
+import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import { createLockMap } from "../locks.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
@@ -21,6 +22,8 @@ export interface MutationContext {
   providers: Record<string, ComponentProvider>;
   /** Provider used when a screen / snippet doesn't declare a `library`. */
   defaultProvider: ComponentProvider;
+  /** Repo-backed component bundle + fidelity diagnostics for MCP/setup flows. */
+  canvasBundler?: CanvasBundler;
   /** WatchEvents drive refresh; activity events are presentation metadata. */
   broadcast: (e: WatchEvent | ActivityEvent) => void;
 }

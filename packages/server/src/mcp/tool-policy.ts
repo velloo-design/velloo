@@ -54,6 +54,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_captures: read,
   list_comment_threads: read,
   list_components: read,
+  component_status: read,
   list_notes: read,
   list_screens: read,
   list_themes: read,

@@ -2,9 +2,11 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import {
   type CaptureNodeRect,
   CHROMIUM_INSTALL_CMD,
+  collectSerializedRefs,
   type DiffRegion,
   isCaptureTimeout,
   renderScreen,
+  serializeTree,
 } from "@velloo/renderer";
 import {
   isArchived,
@@ -86,7 +88,7 @@ export function makeLiveUrl(ctx: MutationContext, bundler: LiveBundler): () => s
 }
 
 export type CanvasBundleFor = (
-  screen: Pick<Screen, "library">,
+  screen: Screen,
   theme: Theme,
   dark: boolean,
 ) => Promise<{ url: string; themeOptions: unknown } | undefined>;
@@ -106,13 +108,23 @@ export function makeCanvasBundle(
 ): CanvasBundleFor {
   return async (screen, theme, dark) => {
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-    if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
+    if (!provider.canvasBundleSpec) return undefined;
+    const refs = collectSerializedRefs(
+      serializeTree(screen.tree, { snippets: ctx.folder.snippets }),
+    );
+    if (refs.length === 0) return undefined;
+    // See routes/render.ts: an extension ref has no browser-bundle source, so
+    // the screen keeps its SSR render (plus any live-island mounts).
+    const extensionIds = new Set(Object.keys(ctx.folder.config.extensions ?? {}));
+    if (refs.some((ref) => extensionIds.has(ref))) return undefined;
     const libraryId = libraryIdForScreen(ctx, screen);
-    const { errors } = await canvasBundler.build(libraryId);
-    if (errors.length > 0) return undefined;
+    const bundle = await canvasBundler.build(libraryId, refs);
+    if (!bundle.usable) return undefined;
     return {
-      url: `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}`,
-      themeOptions: provider.themeToNative(theme, dark),
+      url:
+        `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}` +
+        `&refs=${encodeURIComponent(refs.join(","))}`,
+      themeOptions: provider.themeToNative?.(theme, dark) ?? null,
     };
   };
 }

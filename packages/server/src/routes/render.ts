@@ -1,5 +1,11 @@
 import type { FrameworkAdapter } from "@velloo/provider";
-import { renderScreen, resolveSnippetBodyForEdit, UnknownComponentError } from "@velloo/renderer";
+import {
+  collectSerializedRefs,
+  renderScreen,
+  resolveSnippetBodyForEdit,
+  serializeTree,
+  UnknownComponentError,
+} from "@velloo/renderer";
 import type { Node, Screen, Snippet, Theme, Viewport } from "@velloo/schema";
 import { type Context, Hono } from "hono";
 import { themeByName } from "../design-folder.ts";
@@ -50,18 +56,29 @@ export function createRenderRouter(
    */
   const canvasBundleFor = async (
     ctx: MutationContext,
-    screen: Pick<Screen, "library">,
+    screen: Screen,
     theme: Theme,
     dark: boolean,
   ): Promise<{ url: string; themeOptions: unknown } | undefined> => {
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-    if (!provider.canvasBundleSpec || !provider.themeToNative) return undefined;
+    if (!provider.canvasBundleSpec) return undefined;
+    const tree = serializeTree(screen.tree, { snippets: ctx.folder.snippets });
+    const refs = collectSerializedRefs(tree);
+    if (refs.length === 0) return undefined;
+    // Extensions are not in any library registry, so the browser bundle has no
+    // source for them. A live island additionally owns its SSR marker subtree,
+    // which replacing the document would erase. Either way a screen that uses
+    // one stays on SSR rather than client-mounting a hole where it rendered.
+    const extensionIds = new Set(Object.keys(ctx.folder.config.extensions ?? {}));
+    if (refs.some((ref) => extensionIds.has(ref))) return undefined;
     const libraryId = libraryIdForScreen(ctx, screen);
-    const { errors } = await canvasBundler.build(libraryId);
-    if (errors.length > 0) return undefined;
+    const bundle = await canvasBundler.build(libraryId, refs);
+    if (!bundle.usable) return undefined;
     return {
-      url: `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}`,
-      themeOptions: provider.themeToNative(theme, dark),
+      url:
+        `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}` +
+        `&refs=${encodeURIComponent(refs.join(","))}`,
+      themeOptions: provider.themeToNative?.(theme, dark) ?? null,
     };
   };
 

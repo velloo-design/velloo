@@ -58,4 +58,25 @@ describe("createProvider", () => {
     expect(manifest.length).toBe(1);
     expect(manifest[0]?.id).toBe("CustomThing");
   });
+
+  test("loadManifest enriches custom CVA variants and explicit host props", async () => {
+    await mkdir(join(tmp, "ui"), { recursive: true });
+    await writeFile(
+      join(tmp, "ui/button.tsx"),
+      `const buttonVariants = { variants: { variant: { default: "x", launch: "y" }, size: { default: "x", compact: "y" } }, defaultVariants: { variant: "default", size: "default" } };
+export interface ButtonProps { busy?: boolean; tone?: "quiet" | "loud" }
+export function Button(_props: ButtonProps) { return null }
+void buttonVariants;`,
+    );
+    const provider = createProvider({ cacheDir: tmp });
+    const manifest = await provider.loadManifest();
+    const button = manifest.find((entry) => entry.id === "Button");
+    expect(button?.props.find((prop) => prop.name === "variant")?.enumValues).toContain("launch");
+    expect(button?.props.find((prop) => prop.name === "size")?.enumValues).toContain("compact");
+    expect(button?.props.find((prop) => prop.name === "busy")?.control).toBe("boolean");
+    expect(button?.props.find((prop) => prop.name === "tone")?.enumValues).toEqual([
+      "quiet",
+      "loud",
+    ]);
+  });
 });

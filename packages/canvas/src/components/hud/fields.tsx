@@ -1,20 +1,22 @@
 /**
  * The HUD's control widgets.
  *
- * Two rules run through all of them. First, the vocabulary is outcomes, not
- * CSS: *Fill*, *Hug*, *Fixed*, *Inside*, *Between*. Second, every field wears
- * its provenance — a value inherited from the theme reads muted, a value
+ * Two rules run through all of them. First, the vocabulary names the outcome
+ * wherever that beats the property — *Fill*, *Hug*, *Fixed*, *Corners*. Second,
+ * every field wears its provenance — a value the node doesn't own reads muted
+ * whether it comes from the theme or is just the browser default, and a value
  * changed here gets a dot and a way back. Without that second half the bar is
  * just a smaller devtools.
  */
 
 import { RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { parseTriplet } from "../../color.ts";
 import type { Choice } from "../../hud/control-set.ts";
 import type { WriteContext } from "../../hud/use-control-write.ts";
 import type { Origin } from "../../hud/values.ts";
+import { ColorWheel, HexInput, type Hsv, hexToHsv, hsvToHex } from "../color-picker.tsx";
 import { IconGrid, LUCIDE } from "../IconPicker.tsx";
-import { Input } from "../ui/input.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip.tsx";
@@ -104,12 +106,17 @@ export function HudField({
 
 const CONTROL = "h-7 w-full rounded-md border bg-background text-xs";
 
+/** What a field shows when nothing — not the node, not the theme — has a value. */
+const EMPTY = "—";
+
 // ------------------------------------------------------------ scrub numbers
 
 interface NumberProps {
   value: number | null;
   /** Shown greyed when there's no value of our own — the measured or inherited number. */
   ghost?: number | string | null | undefined;
+  /** The number on show isn't the node's own — dim it so it doesn't read as an edit. */
+  muted?: boolean | undefined;
   onChange(next: number, ctx?: WriteContext): void;
   min?: number | undefined;
   max?: number | undefined;
@@ -127,6 +134,7 @@ interface NumberProps {
 export function NumberField({
   value,
   ghost,
+  muted = false,
   onChange,
   min,
   max,
@@ -162,8 +170,10 @@ export function NumberField({
         type="text"
         inputMode="decimal"
         value={shown}
-        placeholder={ghost === null || ghost === undefined ? "" : String(ghost)}
-        className="min-w-0 flex-1 bg-transparent px-2 tabular-nums outline-none placeholder:text-muted-foreground/60"
+        placeholder={ghost === null || ghost === undefined ? EMPTY : String(ghost)}
+        className={`min-w-0 flex-1 bg-transparent px-2 tabular-nums outline-none placeholder:text-muted-foreground/60 ${
+          muted ? "text-muted-foreground" : ""
+        }`}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={(e) => commit(e.target.value)}
         onKeyDown={(e) => {
@@ -222,18 +232,29 @@ export function NumberField({
 interface ChoiceProps {
   value: string | null;
   ghost?: string | null | undefined;
+  /** The option on show isn't the node's own — dim it. */
+  muted?: boolean | undefined;
   choices: readonly Choice[];
   onChange(next: string): void;
   placeholder?: string;
 }
 
-export function ChoiceField({ value, ghost, choices, onChange, placeholder }: ChoiceProps) {
+export function ChoiceField({
+  value,
+  ghost,
+  muted = false,
+  choices,
+  onChange,
+  placeholder,
+}: ChoiceProps) {
   return (
     <Select value={value ?? ""} onValueChange={onChange}>
       <SelectTrigger
-        className={`${CONTROL} min-h-0 px-2 [&>span]:truncate ${value === null ? "text-muted-foreground" : ""}`}
+        className={`${CONTROL} min-h-0 px-2 [&>span]:truncate ${
+          muted || value === null ? "text-muted-foreground" : ""
+        }`}
       >
-        <SelectValue placeholder={ghost ? labelFor(choices, ghost) : (placeholder ?? "—")} />
+        <SelectValue placeholder={ghost ? labelFor(choices, ghost) : (placeholder ?? EMPTY)} />
       </SelectTrigger>
       <SelectContent>
         {choices.map((c) => (
@@ -247,7 +268,7 @@ export function ChoiceField({ value, ghost, choices, onChange, placeholder }: Ch
 }
 
 function labelFor(choices: readonly Choice[], value: string | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return EMPTY;
   return choices.find((c) => c.value === value)?.label ?? value;
 }
 
@@ -258,6 +279,8 @@ interface SizeProps {
   px: number | null;
   /** What the element actually measures right now, so Fill/Hug still show a number. */
   measured?: number | null | undefined;
+  /** The node sets no size of its own — what's shown is measured, not chosen. */
+  muted?: boolean | undefined;
   choices: readonly Choice[];
   onMode(next: string): void;
   onPx(next: number, ctx?: WriteContext): void;
@@ -268,11 +291,17 @@ interface SizeProps {
  * shows the measured px greyed out — typing over it is what makes the size
  * fixed, which is the same gesture as dragging a resize handle.
  */
-export function SizeField({ mode, px, measured, choices, onMode, onPx }: SizeProps) {
+export function SizeField({ mode, px, measured, muted = false, choices, onMode, onPx }: SizeProps) {
   return (
     <div className="flex items-stretch gap-1">
       <div className="w-[70px] shrink-0">
-        <ChoiceField value={mode} choices={choices} onChange={onMode} placeholder="Auto" />
+        <ChoiceField
+          value={mode}
+          muted={muted}
+          choices={choices}
+          onChange={onMode}
+          placeholder="Auto"
+        />
       </div>
       <div className="min-w-0 flex-1">
         <NumberField
@@ -292,11 +321,14 @@ export function SizeField({ mode, px, measured, choices, onMode, onPx }: SizePro
 export function AlignField({
   value,
   ghost,
+  muted = false,
   choices,
   onChange,
 }: {
   value: string | null;
   ghost?: string | null | undefined;
+  /** The active option isn't the node's own — show it held, not chosen. */
+  muted?: boolean | undefined;
   choices: readonly Choice[];
   onChange(next: string): void;
 }) {
@@ -313,7 +345,7 @@ export function AlignField({
             aria-pressed={on}
             className={`flex-1 rounded-sm text-[10px] ${
               on
-                ? value === null
+                ? muted || value === null
                   ? "bg-muted text-muted-foreground"
                   : "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-accent/50"
@@ -333,73 +365,132 @@ export function AlignField({
 interface ColorProps {
   value: string | null;
   ghost?: string | null | undefined;
+  /** The colour on show isn't the node's own — dim the label. */
+  muted?: boolean | undefined;
   choices: readonly Choice[];
   /** Paints a token the design theme's way — the canvas's own CSS vars are a different theme. */
   resolve(token: string | null): string | null;
-  onChange(next: string): void;
+  onChange(next: string, ctx?: WriteContext): void;
 }
 
+const CUSTOM_FALLBACK = "#7c3aed";
+
 /**
- * Theme tokens first, arbitrary colour second. Reaching for a hex is allowed —
- * it's a design canvas — but it shouldn't be the path of least resistance, so
- * it lives under the swatches rather than beside them.
+ * Named theme tokens first, a wheel second.
+ *
+ * The tokens are a list, not a grid of dots: a theme routinely has four tokens
+ * that paint the same near-white, and without the name and the resolved value
+ * beside each one they are unpickable. Reaching for a raw colour is allowed —
+ * it's a design canvas — but it lives behind a tab, so a token stays the path
+ * of least resistance.
  */
-export function ColorField({ value, ghost, choices, resolve, onChange }: ColorProps) {
+export function ColorField({
+  value,
+  ghost,
+  muted = false,
+  choices,
+  resolve,
+  onChange,
+}: ColorProps) {
   const [open, setOpen] = useState(false);
   const shown = value ?? ghost ?? null;
-  const [custom, setCustom] = useState("");
+  const isCustom = shown?.startsWith("[") === true;
+  const [tab, setTab] = useState<"theme" | "custom">("theme");
+  const [hsv, setHsv] = useState<Hsv>({ h: 265, s: 0.75, v: 0.9 });
+  // Dragging on the wheel writes on every move. One id per opening of the
+  // popover makes the whole hunt for a colour a single thing to undo.
+  const gesture = useRef("");
 
   useEffect(() => {
-    if (open) setCustom(shown?.startsWith("[") ? shown.slice(1, -1) : "");
-  }, [open, shown]);
+    if (!open) return;
+    gesture.current = `color-${Date.now()}`;
+    setTab(isCustom ? "custom" : "theme");
+    const current = hexToHsv(resolve(shown) ?? CUSTOM_FALLBACK);
+    if (current) setHsv(current);
+  }, [open, isCustom, shown, resolve]);
+
+  const custom = (next: Hsv) => {
+    setHsv(next);
+    onChange(`[${hsvToHex(next)}]`, { gesture: gesture.current });
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className={`${CONTROL} flex items-center gap-1.5 px-1.5 hover:bg-accent/50 ${
-          value === null ? "text-muted-foreground" : ""
+          muted || value === null ? "text-muted-foreground" : ""
         }`}
       >
         <Swatch css={resolve(shown)} unset={shown === null} />
-        <span className="truncate">{shown ? labelFor(choices, shown) : "—"}</span>
+        <span className="truncate">{shown ? labelFor(choices, shown) : EMPTY}</span>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-60 p-2">
-        <div className="grid grid-cols-6 gap-1">
-          {choices.map((c) => (
+      <PopoverContent align="start" className="w-64 p-0">
+        <div className="flex gap-1 border-b p-1.5">
+          {(["theme", "custom"] as const).map((t) => (
             <button
-              key={c.value}
+              key={t}
               type="button"
-              title={c.label}
-              className={`grid size-8 place-items-center rounded-md border hover:ring-1 hover:ring-ring ${
-                shown === c.value ? "ring-2 ring-primary" : ""
+              className={`flex-1 rounded-sm py-1 text-xs capitalize ${
+                tab === t
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/50"
               }`}
-              onClick={() => {
-                onChange(c.value);
-                setOpen(false);
-              }}
+              onClick={() => setTab(t)}
             >
-              <Swatch css={c.swatch ?? resolve(c.value)} />
+              {t}
             </button>
           ))}
         </div>
-        <div className="mt-2 flex items-center gap-1.5 border-t pt-2">
-          <Input
-            value={custom}
-            placeholder="#7c3aed"
-            className="h-7 text-xs"
-            onChange={(e) => setCustom(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              const raw = custom.trim();
-              if (!raw) return;
-              onChange(`[${raw}]`);
-              setOpen(false);
-            }}
-          />
-        </div>
+
+        {tab === "theme" ? (
+          <div className="max-h-64 overflow-y-auto p-1">
+            {choices.length === 0 ? (
+              <p className="p-3 text-xs text-muted-foreground">This theme declares no colours.</p>
+            ) : null}
+            {choices.map((c) => {
+              const css = c.swatch ?? resolve(c.value);
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  className={`flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-left text-xs hover:bg-accent/50 ${
+                    shown === c.value ? "bg-accent text-accent-foreground" : ""
+                  }`}
+                  onClick={() => {
+                    onChange(c.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Swatch css={css} />
+                  <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    {hexOf(css)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 p-3">
+            <ColorWheel value={hsv} onChange={custom} />
+            <HexInput
+              hex={hsvToHex(hsv)}
+              onChange={(next) => {
+                const parsed = hexToHsv(next);
+                if (parsed) custom(parsed);
+              }}
+            />
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
+}
+
+/** The hex a resolved token paints, for the readout beside its name. */
+function hexOf(css: string | null): string {
+  if (!css) return "";
+  return parseTriplet(css)?.hex.toUpperCase() ?? "";
 }
 
 /**

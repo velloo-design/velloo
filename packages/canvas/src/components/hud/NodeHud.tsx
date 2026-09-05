@@ -13,6 +13,7 @@ import { Component, Image as ImageIcon, PenLine, Shapes, Square, Type } from "lu
 import { useCallback, useMemo, useState } from "react";
 import { useIconNames } from "../../hooks/useIconNames.ts";
 import { useSelectionRects } from "../../hooks/useSelectionRects.ts";
+import { computedValues } from "../../hud/computed.ts";
 import {
   barControls,
   type Choice,
@@ -118,6 +119,9 @@ export function NodeHud() {
     return themeReadout({ theme, tree, path: pathFromString(selection.path), node });
   }, [theme, tree, selection, node]);
 
+  const selectionComputed = useCanvas((s) => s.selectionComputed);
+  const computed = useMemo(() => computedValues(selectionComputed), [selectionComputed]);
+
   const colors = useMemo(() => colorChoices(theme), [theme]);
   const resolveColor = useCallback(
     (token: string | null) => resolveColorToken(theme, token),
@@ -133,7 +137,7 @@ export function NodeHud() {
 
   // --------------------------------------------------------------- commits
 
-  const commit = useControlWrite({ selection, liveClasses: node ? classNameOf(node) : "" });
+  const commit = useControlWrite({ selection, node, liveClasses: node ? classNameOf(node) : "" });
 
   const write = useCallback(
     (spec: ControlSpec, value: string | number | boolean | null, ctx?: WriteContext) => {
@@ -249,6 +253,7 @@ export function NodeHud() {
                 node,
                 themeValues: readout.values,
                 themeSource: readout.source,
+                computed,
               });
               return (
                 <HudField
@@ -377,15 +382,23 @@ export function Control({
 }: ControlProps) {
   const asString = value.value === null ? null : String(value.value);
   const asNumber = typeof value.value === "number" ? value.value : null;
-  const themeString =
-    value.themeValue === null || value.themeValue === undefined ? null : String(value.themeValue);
+  // What to show when the node names nothing: the theme's value if it has an
+  // opinion, else what the slot actually resolves to in the browser. Both ride
+  // the `ghost` channel, which every field already renders greyed.
+  const ghost = value.themeValue ?? value.computed ?? null;
+  const ghostString = ghost === null ? null : String(ghost);
+  // Nothing the node itself says reads as an edit — a theme default and a
+  // resolved default both show dimmed, so the field says "this is what it is"
+  // rather than "this is what you chose".
+  const muted = !value.authored;
 
   switch (spec.kind) {
     case "number":
       return (
         <NumberField
           value={asNumber}
-          ghost={value.themeValue ?? null}
+          ghost={ghost}
+          muted={muted}
           onChange={onChange}
           min={spec.min}
           max={spec.max}
@@ -396,7 +409,8 @@ export function Control({
       return (
         <NumberField
           value={asNumber}
-          ghost={value.themeValue ?? null}
+          ghost={ghost}
+          muted={muted}
           onChange={onChange}
           min={spec.min}
           max={spec.max}
@@ -412,6 +426,7 @@ export function Control({
           mode={mode}
           px={sizeFixedPx(asString ?? undefined)}
           measured={measured === null ? null : Math.round(measured)}
+          muted={muted}
           choices={spec.choices ?? []}
           onMode={(next) =>
             onChange(next === "fixed" ? `[${Math.round(measured ?? 100)}px]` : next)
@@ -424,7 +439,8 @@ export function Control({
       return (
         <ChoiceField
           value={asString}
-          ghost={themeString}
+          ghost={ghostString}
+          muted={muted}
           choices={spec.choices ?? []}
           onChange={onChange}
         />
@@ -433,7 +449,8 @@ export function Control({
       return (
         <AlignField
           value={asString}
-          ghost={themeString}
+          ghost={ghostString}
+          muted={muted}
           choices={spec.choices ?? []}
           onChange={onChange}
         />
@@ -442,7 +459,8 @@ export function Control({
       return (
         <ColorField
           value={asString}
-          ghost={themeString}
+          ghost={ghostString}
+          muted={muted}
           choices={colors}
           resolve={resolveColor}
           onChange={onChange}
@@ -450,7 +468,13 @@ export function Control({
       );
     case "font":
       return (
-        <ChoiceField value={asString} ghost={themeString} choices={fonts} onChange={onChange} />
+        <ChoiceField
+          value={asString}
+          ghost={ghostString}
+          muted={muted}
+          choices={fonts}
+          onChange={onChange}
+        />
       );
     case "icon":
       return <IconField value={asString ?? ""} options={iconNames} onChange={onChange} />;

@@ -63,13 +63,15 @@ describe("buildInstructions", () => {
     expect(mui).not.toContain("pinned shadcn snapshot");
   });
 
-  test("shadcn guidance never asks the agent to mutate the host app", () => {
+  test("shadcn guidance reports repo-backed fidelity without asking for host mutation", () => {
     const shadcn = buildInstructions(
       false,
       undefined,
       introOf(createShadcnProvider(), "tailwind-classname"),
     );
-    expect(shadcn).toContain("pinned shadcn snapshot");
+    expect(shadcn).toContain("imports client-safe components directly from the app");
+    expect(shadcn).toContain("component_status");
+    expect(shadcn).toContain("falls back per component");
     expect(shadcn).not.toContain("install_component");
     expect(shadcn).not.toContain("npx shadcn");
   });

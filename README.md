@@ -108,7 +108,7 @@ If a screenshot fails, run exactly that command, then retry. Ports busy? Pass `-
 - **Current React adapters.** shadcn + Tailwind, Material UI, Ant Design, Chakra UI, and no-library React folders each render and emit through their implemented adapter.
 - **Visual verification.** The agent can inspect rendered nodes, take screenshots, compare with a live URL or authenticated capture, and resolve visible differences instead of guessing from code.
 - **MCP surface for agents.** Discovery, focused tree mutations, themes, screenshots, comparison, comments, and agent-consumed implementation IR.
-- **Components come from a `ComponentProvider`.** The design folder is pure data (no `components/*.tsx`); customization happens through snippets.
+- **Components come from a `ComponentProvider`.** The design folder stays pure data. For shadcn, client-safe files in the app are mounted directly in the canvas; portal/state-heavy families are explicitly adapted, and compile failures fall back per component with diagnostics. Snippets remain the editable composition layer for app-specific patterns.
 - **Optional collaboration.** Create an organization/team, invite a teammate, publish a board into that team, share externally, and bring review comments back to the local canvas.
 
 ## Local-first by default
@@ -126,7 +126,7 @@ You choose when — and whether — to make any of them.
 ## Repo layout
 
 - `packages/schema` — Zod schemas + TS types for the design folder format
-- `packages/shadcn-snapshot` — pinned shadcn components, embedded in the binary
+- `packages/shadcn-snapshot` — pinned shadcn SSR fallback + canvas-safe adaptations, embedded in the binary
 - `packages/renderer` — design JSON → HTML (and PNG via Playwright)
 - `packages/codegen` — agent-consumed IR + theme emitters
 - `packages/server` — HTTP + MCP + mutations + theme + watcher

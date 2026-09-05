@@ -1,8 +1,8 @@
 # @velloo/provider-shadcn-upstream
 
-Velloo provider that fetches shadcn components from the official
-upstream registry at a pinned version and exposes them as a
-`ComponentProvider`.
+Velloo's shadcn framework adapter. It discovers vanilla shadcn files in the
+host app, exposes their manifest to the inspector, and supplies an embedded
+snapshot for offline SSR and bounded canvas fallbacks.
 
 The user-visible win: components installed into the user's app are
 **byte-identical to vanilla shadcn** (no Velloo modifications) so
@@ -21,20 +21,22 @@ the user's repo doesn't carry a Velloo-flavored fork of shadcn.
   shape as the legacy `@velloo/shadcn-snapshot`.
 - A `createProvider()` factory that returns a `ComponentProvider`
   with `id: "shadcn-upstream"`.
+- A per-screen canvas bundle that imports client-safe component files directly
+  from the app, keeps compound children intact, and mixes them with Velloo
+  helpers and explicit canvas-safe overlay adaptations.
+- Per-component `exact`, `adapted`, `fallback`, or `unavailable` diagnostics.
+  One broken host file falls back without discarding exact neighboring files.
+- Host-source manifest enrichment for common CVA variants and explicit props,
+  plus source watching so ordinary component edits refresh the canvas.
 
 ## Scope notes
 
-The canvas's runtime registry currently reuses
-`@velloo/shadcn-snapshot`'s components. The snapshot's overlays
-already implement the canvas-safe adapter contract; the rest are
-near-byte-identical to upstream. Reusing the snapshot's registry
-avoids bundling 25+ `@radix-ui/*` sub-packages into the velloo
-binary.
-
-The runtime registry can later swap to dynamically-imported
-upstream code if a real cost surfaces from the snapshot/upstream drift.
-The infrastructure for that swap (adaptation map in
-`@velloo/shadcn-adapter`, fetcher/cache here) is already in place.
+The embedded `@velloo/shadcn-snapshot` is still the fail-safe SSR registry and
+the source of canvas-safe portal/state adaptations. It is not the first choice
+for ordinary installed components: the browser bundle preflights and selects
+the app file first. Arbitrary app code is intentionally not guaranteed. A file
+that cannot compile for the browser canvas uses its named fallback and reports
+why through `component_status` and `/api/canvas/status`.
 
 The user-facing wins:
 

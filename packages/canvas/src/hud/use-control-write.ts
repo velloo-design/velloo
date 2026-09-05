@@ -6,6 +6,7 @@
  * a second copy would drift.
  */
 
+import type { Node } from "@velloo/schema";
 import { useCallback, useRef } from "react";
 import { mutate } from "../api.ts";
 import { useEditCommit } from "../hooks/useEditCommit.ts";
@@ -13,7 +14,7 @@ import { pathFromString } from "../path.ts";
 import type { Selection } from "../store/types.ts";
 import { toastError } from "../toast.ts";
 import type { ControlSpec, StyleKey } from "./control-set.ts";
-import { applyStyleValue } from "./values.ts";
+import { applyStyleValue, blockifyForAlign } from "./values.ts";
 
 const DEBOUNCE_MS = 200;
 
@@ -23,6 +24,8 @@ export interface WriteOptions {
   selection: Selection | null;
   /** The node's current class string, straight from the store. */
   liveClasses: string;
+  /** The selected node — some slots need the element, not just its classes. */
+  node: Node | null;
 }
 
 /**
@@ -36,7 +39,7 @@ export interface WriteContext {
   gesture?: string | undefined;
 }
 
-export function useControlWrite({ selection, liveClasses }: WriteOptions) {
+export function useControlWrite({ selection, liveClasses, node }: WriteOptions) {
   const selectionKey = selection ? `${selection.screenId}:${selection.path}` : "";
   // Edits outrun the round trip — a scrub fires dozens of times inside one
   // debounce window, and the debounce only carries the last payload. So the
@@ -119,8 +122,9 @@ export function useControlWrite({ selection, liveClasses }: WriteOptions) {
       for (const [k, v] of slots) {
         classes = applyStyleValue(classes, k, typeof v === "boolean" ? String(v) : v);
       }
+      if (key === "textAlign" && value !== null && node) classes = blockifyForAlign(classes, node);
       pushClasses({ screenId, path, classes, gesture }, live);
     },
-    [selection, selectionKey, liveClasses, pushClasses, pushProps, pushArgs],
+    [selection, selectionKey, liveClasses, node, pushClasses, pushProps, pushArgs],
   );
 }

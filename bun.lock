@@ -211,6 +211,7 @@
       "name": "@velloo/provider-shadcn-upstream",
       "version": "0.1.0",
       "dependencies": {
+        "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
         "@velloo/shadcn-snapshot": "workspace:*",
       },

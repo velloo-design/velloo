@@ -119,5 +119,10 @@ export {
   sideBySidePng,
   unionRegion,
 } from "./screenshot-diff.ts";
-export { type SerializedNode, type SerializeOptions, serializeTree } from "./serialize-tree.ts";
+export {
+  collectSerializedRefs,
+  type SerializedNode,
+  type SerializeOptions,
+  serializeTree,
+} from "./serialize-tree.ts";
 export { themeToCss } from "./theme-to-css.ts";

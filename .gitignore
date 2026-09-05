@@ -20,3 +20,6 @@ build
 
 # Throwaway drive scripts for manual canvas verification
 .scratch/
+
+# Local agent worktree checkouts — nested repos, never part of a commit
+.claude/worktrees/

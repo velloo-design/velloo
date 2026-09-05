@@ -1,250 +1,418 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CanvasBundleSpec } from "@velloo/provider";
-import type { BundleError, BundleResult } from "./bundle-core.ts";
+import { helpersComponentsDir } from "@velloo/helpers/paths";
+import type {
+  CanvasBundleSpec,
+  CanvasComponentFidelity,
+  CanvasComponentSource,
+  CanvasComponentSpec,
+  CanvasStyleRuntime,
+} from "@velloo/provider";
+import { schemaSrcDir } from "@velloo/schema/paths";
+import type { BunPlugin } from "bun";
+import { aliasPlugin, type BundleError, type BundleResult, resolveImport } from "./bundle-core.ts";
 
 export type { CanvasBundleSpec };
 
-/**
- * The framework-native canvas bundle (#18 — render the project's *actually
- * installed* components). Where `bundleComponents` bundles opt-in `render:"live"`
- * extensions, this bundles a whole framework's component set from the host app's
- * `node_modules` into one self-contained browser ESM exporting `mountScreen` —
- * so the canvas can client-render a screen against the user's EXACT installed
- * version, not velloo's pre-bundled copy.
- *
- * Self-contained on purpose: the generated entry imports ONLY host packages
- * (the framework + React + emotion) and inlines its own tiny tree interpreter +
- * overlay shims. It links no velloo package, so it builds the same whether
- * velloo runs from source or the installed binary (which can't resolve
- * `@velloo/*` for a runtime `Bun.build`). The render path falls back to
- * in-process SSR whenever the host package isn't installed or the build fails.
- */
-
-/** Resolve a specifier from the host app, or record a structured error. */
-function tryResolve(spec: string, hostRoot: string): { path?: string; error?: BundleError } {
-  try {
-    return { path: Bun.resolveSync(spec, hostRoot) };
-  } catch (err) {
-    return {
-      error: { importPath: spec, message: err instanceof Error ? err.message : String(err) },
-    };
-  }
+export interface CanvasComponentDiagnostic {
+  id: string;
+  status: CanvasComponentFidelity | "unavailable";
+  importPath?: string;
+  note?: string;
+  errors?: string[];
 }
 
-/**
- * Build the canvas bundle for `spec` against the host app at `hostRoot`. Returns
- * the empty module + structured errors (never throws) when the framework, React,
- * or emotion can't be resolved — the caller then keeps the SSR output.
- */
+export interface CanvasBundleResult extends BundleResult {
+  usable: boolean;
+  diagnostics: CanvasComponentDiagnostic[];
+}
+
+interface ResolvedComponent {
+  id: string;
+  path: string;
+  exportName: string;
+}
+
+const EMPTY = "export function mountScreen() {}\n";
+
+/** Build the browser registry for only the component refs used by one screen. */
 export async function buildCanvasBundle(
   hostRoot: string,
   spec: CanvasBundleSpec,
+  componentIds: readonly string[],
+  aliases: { from: string; to: string }[] = [],
   minify = false,
-): Promise<BundleResult> {
+): Promise<CanvasBundleResult> {
   const errors: BundleError[] = [];
-  const need = (s: string): string | undefined => {
-    const r = tryResolve(s, hostRoot);
-    if (r.error) errors.push(r.error);
-    return r.path;
-  };
+  const runtimePaths = resolveRuntime(hostRoot, spec.styleRuntime, errors);
+  if (!runtimePaths) return { code: EMPTY, errors, usable: false, diagnostics: [] };
 
-  // Only the "emotion" style runtime is implemented today; a new framework
-  // with a different runtime adds a union member + a branch here.
-  const runtime = spec.styleRuntime;
-  const reactPath = need("react");
-  const reactDomClientPath = need("react-dom/client");
-  const emotionCachePath = need("@emotion/cache");
-  const emotionReactPath = need("@emotion/react");
-  const stylesPath = need(runtime.stylesModule);
-  if (!reactPath || !reactDomClientPath || !emotionCachePath || !emotionReactPath || !stylesPath) {
-    return { code: "export function mountScreen() {}\n", errors };
+  const overlayIds = new Set(spec.overlayIds ?? []);
+  const requested = new Set(componentIds);
+  if ([...overlayIds].some((id) => requested.has(id))) {
+    requested.add("Paper");
+    requested.add("Box");
+  }
+  let declared: CanvasComponentSpec[];
+  try {
+    declared = await spec.components([...requested]);
+  } catch (error) {
+    // `components()` reads the provider's manifest, which can fail on a corrupt
+    // host `manifest.json`. The never-throws contract keeps the caller on SSR
+    // instead of 500ing the frame render.
+    errors.push({ message: messageOf(error) });
+    return { code: EMPTY, errors, usable: false, diagnostics: [] };
+  }
+  const byId = new Map(declared.map((entry) => [entry.id, entry]));
+  const diagnostics: CanvasComponentDiagnostic[] = [];
+  const resolved: ResolvedComponent[] = [];
+  const preflight = new Map<string, Promise<string[]>>();
+  const plugins = [
+    aliasPlugin(hostRoot, aliases),
+    hostRuntimePlugin(hostRoot),
+    vellooSourcePlugin(),
+  ];
+
+  for (const id of requested) {
+    // Overlay ids never read the registry — `build()` routes them to the inline
+    // canvas-safe shims — so resolving (and bundling) the real portal-heavy
+    // module is dead weight, and a resolve failure must not fail the screen.
+    if (overlayIds.has(id)) {
+      const note = byId.get(id)?.sources[0]?.note;
+      diagnostics.push({ id, status: "adapted", ...(note ? { note } : {}) });
+      continue;
+    }
+    const component = byId.get(id);
+    if (!component || component.sources.length === 0) {
+      diagnostics.push({
+        id,
+        status: "unavailable",
+        note: "No browser-canvas source is registered; an explicit placeholder is rendered.",
+      });
+      continue;
+    }
+    const failures: string[] = [];
+    let chosen: { source: CanvasComponentSource; path: string } | undefined;
+    for (const source of component.sources) {
+      let path: string;
+      try {
+        path = resolveImport(source.importPath, hostRoot, aliases);
+      } catch (error) {
+        failures.push(`${source.importPath}: ${messageOf(error)}`);
+        continue;
+      }
+      if (source.preflight) {
+        let check = preflight.get(path);
+        if (!check) {
+          check = preflightSource(path, plugins);
+          preflight.set(path, check);
+        }
+        const compileErrors = await check;
+        if (compileErrors.length > 0) {
+          failures.push(...compileErrors.map((error) => `${source.importPath}: ${error}`));
+          continue;
+        }
+      }
+      chosen = { source, path };
+      break;
+    }
+    if (!chosen) {
+      const note = component.sources.at(-1)?.note;
+      diagnostics.push({
+        id,
+        status: "unavailable",
+        ...(note ? { note } : {}),
+        ...(failures.length > 0 ? { errors: failures } : {}),
+      });
+      continue;
+    }
+    resolved.push({ id, path: chosen.path, exportName: chosen.source.exportName ?? id });
+    diagnostics.push({
+      id,
+      status: chosen.source.fidelity,
+      importPath: chosen.source.importPath,
+      ...(chosen.source.note ? { note: chosen.source.note } : {}),
+      ...(failures.length > 0 ? { errors: failures } : {}),
+    });
   }
 
-  // Standard components resolve to `<moduleBase>/<id>`; overlays are inline shims.
-  const real = spec.componentIds.filter((id) => !spec.overlayIds.includes(id));
-  const resolved: { id: string; path: string }[] = [];
-  for (const id of real) {
-    const r = tryResolve(`${spec.moduleBase}/${id}`, hostRoot);
-    if (r.path) resolved.push({ id, path: r.path });
-    else if (r.error) errors.push(r.error);
+  // A ref the bundle cannot render at all (every source failed, or the ref is
+  // an extension the provider knows nothing about) would client-mount as a
+  // placeholder box AND hide the SSR body that rendered it correctly. Partial
+  // fidelity is fine — `adapted`/`fallback` still render the component — but a
+  // hole is strictly worse than staying on SSR, so refuse the whole mount.
+  const unavailable = diagnostics.filter((entry) => entry.status === "unavailable");
+  if (unavailable.length > 0 || resolved.length === 0) {
+    for (const entry of unavailable) {
+      errors.push({ message: `${entry.id}: ${entry.errors?.join("; ") ?? "no browser source"}` });
+    }
+    return { code: EMPTY, errors, usable: false, diagnostics };
   }
-  if (resolved.length === 0) return { code: "export function mountScreen() {}\n", errors };
 
   const entrySource = buildCanvasEntry({
-    reactPath,
-    reactDomClientPath,
-    emotionCachePath,
-    emotionReactPath,
-    stylesPath,
-    emotionKey: runtime.cacheKey,
+    ...runtimePaths,
+    styleRuntime: spec.styleRuntime,
     components: resolved,
-    overlayIds: spec.overlayIds,
+    overlayIds: spec.overlayIds ?? [],
+    diagnostics,
   });
+  const key = Bun.hash(
+    `${hostRoot}:${JSON.stringify(resolved.map((entry) => [entry.id, entry.path, entry.exportName]))}:${JSON.stringify(spec.styleRuntime)}`,
+  ).toString(16);
 
-  const key = Bun.hash(`${hostRoot}:${spec.moduleBase}`).toString(16);
-  const dir = join(tmpdir(), "velloo-canvas", key);
-  await mkdir(dir, { recursive: true });
-  const entryPath = join(dir, "entry.tsx");
-  await writeFile(entryPath, entrySource, "utf8");
-
-  let result: Awaited<ReturnType<typeof Bun.build>>;
   try {
-    result = await Bun.build({
+    const dir = join(tmpdir(), "velloo-canvas", key);
+    await mkdir(dir, { recursive: true });
+    const entryPath = join(dir, "entry.tsx");
+    await writeFile(entryPath, entrySource, "utf8");
+    const result = await Bun.build({
       entrypoints: [entryPath],
       target: "browser",
       format: "esm",
       minify,
       sourcemap: "none",
       define: { "process.env.NODE_ENV": '"production"' },
+      plugins,
     });
-  } catch (err) {
-    // Bun ≥1.2 throws an AggregateError instead of returning success: false —
-    // map it into structured errors so the never-throws contract (and the
-    // caller's SSR fallback) holds.
-    for (const e of err instanceof AggregateError ? err.errors : [err]) {
-      errors.push({ message: e instanceof Error ? e.message : String(e) });
+    if (!result.success) {
+      for (const log of result.logs) errors.push({ message: log.message });
+      return { code: EMPTY, errors, usable: false, diagnostics };
     }
-    return { code: "export function mountScreen() {}\n", errors };
+    const output = result.outputs[0];
+    if (!output) {
+      errors.push({ message: "Bun.build produced no canvas-bundle artifact." });
+      return { code: EMPTY, errors, usable: false, diagnostics };
+    }
+    return { code: await output.text(), errors, usable: true, diagnostics };
+  } catch (error) {
+    for (const item of error instanceof AggregateError ? error.errors : [error]) {
+      errors.push({ message: messageOf(item) });
+    }
+    return { code: EMPTY, errors, usable: false, diagnostics };
   }
-  if (!result.success) {
-    for (const log of result.logs)
-      errors.push({ message: typeof log === "string" ? log : log.message });
-    return { code: "export function mountScreen() {}\n", errors };
+}
+
+function resolveRuntime(
+  hostRoot: string,
+  runtime: CanvasStyleRuntime,
+  errors: BundleError[],
+):
+  | {
+      reactPath: string;
+      reactDomClientPath: string;
+      emotionCachePath?: string;
+      emotionReactPath?: string;
+      stylesPath?: string;
+    }
+  | undefined {
+  const need = (specifier: string): string | undefined => {
+    try {
+      return Bun.resolveSync(specifier, hostRoot);
+    } catch (error) {
+      errors.push({ importPath: specifier, message: messageOf(error) });
+      return undefined;
+    }
+  };
+  const reactPath = need("react");
+  const reactDomClientPath = need("react-dom/client");
+  if (!reactPath || !reactDomClientPath) return undefined;
+  if (runtime.kind === "none") return { reactPath, reactDomClientPath };
+  const emotionCachePath = need("@emotion/cache");
+  const emotionReactPath = need("@emotion/react");
+  const stylesPath = need(runtime.stylesModule);
+  if (!emotionCachePath || !emotionReactPath || !stylesPath) return undefined;
+  return { reactPath, reactDomClientPath, emotionCachePath, emotionReactPath, stylesPath };
+}
+
+async function preflightSource(path: string, plugins: BunPlugin[]): Promise<string[]> {
+  try {
+    const result = await Bun.build({
+      entrypoints: [path],
+      target: "browser",
+      format: "esm",
+      sourcemap: "none",
+      define: { "process.env.NODE_ENV": '"production"' },
+      plugins,
+    });
+    return result.success ? [] : result.logs.map((log) => log.message);
+  } catch (error) {
+    return (error instanceof AggregateError ? error.errors : [error]).map(messageOf);
   }
-  const output = result.outputs[0];
-  if (!output) {
-    errors.push({ message: "Bun.build produced no canvas-bundle artifact." });
-    return { code: "export function mountScreen() {}\n", errors };
-  }
-  return { code: await output.text(), errors };
 }
 
 /**
- * The self-contained entry: import the host React + emotion + framework
- * components, define inline canvas-safe overlays + a tree interpreter that turns
- * a resolved screen JSON (snippets/params already inlined server-side) into a
- * React tree, and export `mountScreen({ tree, themeOptions, el })`.
+ * Bare packages the bundle resolves from the HOST app rather than from the
+ * importing file. React is mandatory (one copy, the host's — the whole reason
+ * this bundles client-side at all). The rest are the peer deps velloo-owned
+ * browser sources carry: the shadcn snapshot's components import `radix-ui`,
+ * `lucide-react` and `class-variance-authority`, and the helpers' `cn` imports
+ * `clsx` + `tailwind-merge`. Those sit in the monorepo's node_modules from
+ * source, but the installed binary inlines them into `cli.js` and ships only
+ * the bare .tsx under `dist/pkgs/*` — where the importer-relative walk finds
+ * nothing. A shadcn host app has all of them, so resolve there.
  */
+const HOST_PACKAGES = [
+  "react",
+  "react-dom",
+  "radix-ui",
+  "@radix-ui",
+  "lucide-react",
+  "class-variance-authority",
+  "clsx",
+  "tailwind-merge",
+];
+
+function hostRuntimePlugin(hostRoot: string): BunPlugin {
+  // Narrow the filter to packages the host actually has. A matched-but-undefined
+  // onResolve is the hazard called out in packages/cli/build.ts — it defeats
+  // Bun's importer-relative resolution — so never match what we can't answer.
+  const available = HOST_PACKAGES.filter((name) => {
+    try {
+      Bun.resolveSync(name === "@radix-ui" ? "@radix-ui/react-slot" : name, hostRoot);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  return {
+    name: "velloo-host-packages",
+    setup(build) {
+      if (available.length === 0) return;
+      const filter = new RegExp(
+        `^(${available.map((name) => name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")).join("|")})(?:/.*)?$`,
+      );
+      build.onResolve({ filter }, (args) => ({ path: Bun.resolveSync(args.path, hostRoot) }));
+    },
+  };
+}
+
+/**
+ * Resolve the `@velloo/*` specifiers that velloo-owned browser sources import.
+ * The shadcn snapshot's `lib/utils` re-exports `cn` from `@velloo/helpers`, and
+ * the helpers import zero-dependency leaves from `@velloo/schema/*`. Both are
+ * plain source on disk, but the installed binary inlines every `@velloo/*`
+ * package into `cli.js` and ships only the bare `.tsx` under `dist/pkgs` — so
+ * the importer-relative walk finds no node_modules and the whole screen bundle
+ * fails. Mapping them to the shipped source keeps the client mount working from
+ * the binary exactly as it does from the monorepo.
+ *
+ * Only the leaf subpaths are mapped: `@velloo/schema` proper pulls the zod
+ * graph, which has no business in a browser bundle. An import of the bare index
+ * fails loudly here and the caller cleanly stays on SSR.
+ */
+function vellooSourcePlugin(): BunPlugin {
+  return {
+    name: "velloo-owned-source",
+    setup(build) {
+      build.onResolve({ filter: /^@velloo\/helpers$/ }, () => ({
+        path: join(helpersComponentsDir, "index.ts"),
+      }));
+      build.onResolve({ filter: /^@velloo\/schema\/[a-z-]+$/ }, (args) => ({
+        path: join(schemaSrcDir, `${args.path.slice("@velloo/schema/".length)}.ts`),
+      }));
+    },
+  };
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function buildCanvasEntry(opts: {
   reactPath: string;
   reactDomClientPath: string;
-  emotionCachePath: string;
-  emotionReactPath: string;
-  stylesPath: string;
-  emotionKey: string;
-  components: { id: string; path: string }[];
+  emotionCachePath?: string;
+  emotionReactPath?: string;
+  stylesPath?: string;
+  styleRuntime: CanvasStyleRuntime;
+  components: ResolvedComponent[];
   overlayIds: string[];
+  diagnostics: CanvasComponentDiagnostic[];
 }): string {
-  // Namespace-import + `pick`: a MUI subpath's component is its *default* export,
-  // but CJS/ESM interop can wrap it as `{ default: Comp }` — a plain default
-  // import then yields the wrapper object, which React rejects (error #130). pick
-  // unwraps it (mirrors bundle-core).
   const imports = opts.components
-    .map((c, i) => `import * as __m${i} from ${JSON.stringify(c.path)};`)
+    .map((component, index) => `import * as __m${index} from ${JSON.stringify(component.path)};`)
     .join("\n");
   const registry = opts.components
-    .map((c, i) => `  ${JSON.stringify(c.id)}: pick(__m${i}, ${JSON.stringify(c.id)}),`)
+    .map(
+      (component, index) =>
+        `  ${JSON.stringify(component.id)}: pick(__m${index}, ${JSON.stringify(component.exportName)}),`,
+    )
     .join("\n");
+  const emotionImports =
+    opts.styleRuntime.kind === "emotion"
+      ? `import createCache from ${JSON.stringify(opts.emotionCachePath)};\nimport { CacheProvider } from ${JSON.stringify(opts.emotionReactPath)};\nimport { ThemeProvider, createTheme } from ${JSON.stringify(opts.stylesPath)};`
+      : "";
+  const renderBody =
+    opts.styleRuntime.kind === "emotion"
+      ? `var cache = createCache({ key: ${JSON.stringify(opts.styleRuntime.cacheKey)}, prepend: true });
+  var theme = createTheme(opts.themeOptions || {});
+  root.render(React.createElement(ErrorBoundary, { onError: opts.onError },
+    React.createElement(CacheProvider, { value: cache },
+      React.createElement(ThemeProvider, { theme: theme },
+        React.createElement(React.Fragment, null, build(opts.tree), React.createElement(Ready, { onReady: opts.onReady }))))));`
+      : `root.render(React.createElement(ErrorBoundary, { onError: opts.onError },
+    React.createElement(React.Fragment, null, build(opts.tree), React.createElement(Ready, { onReady: opts.onReady }))));`;
+
   return `import * as React from ${JSON.stringify(opts.reactPath)};
 import { createRoot } from ${JSON.stringify(opts.reactDomClientPath)};
-import createCache from ${JSON.stringify(opts.emotionCachePath)};
-import { CacheProvider } from ${JSON.stringify(opts.emotionReactPath)};
-import { ThemeProvider, createTheme } from ${JSON.stringify(opts.stylesPath)};
+${emotionImports}
 ${imports}
 
-// Drill through CJS/ESM interop layers to the component: a MUI subpath can
-// double-wrap (\`import * as m\` → m.default is the whole module.exports, whose
-// own .default is the component). Stop at a function or a forwardRef/memo object.
 function pick(mod, id) {
-  var v = mod;
+  var direct = mod && mod[id];
+  if (typeof direct === "function" || (direct && direct.$$typeof)) return direct;
+  var value = mod;
   for (var i = 0; i < 4; i++) {
-    if (typeof v === "function" || (v && v.$$typeof)) return v;
-    if (v && typeof v === "object" && v[id] && (typeof v[id] === "function" || v[id].$$typeof)) return v[id];
-    if (v && typeof v === "object" && v.default !== undefined) { v = v.default; continue; }
+    if (typeof value === "function" || (value && value.$$typeof)) return value;
+    if (value && typeof value === "object" && value.default !== undefined) { value = value.default; continue; }
     break;
   }
-  return v;
+  return value;
 }
 var registry = {
 ${registry}
 };
+export const __velloo_canvas_diagnostics = ${JSON.stringify(opts.diagnostics)};
 
-function chrome(p) {
-  return { className: typeof p.className === "string" ? p.className : undefined, "data-node-path": p["data-node-path"] };
-}
-function msx(base, sx) {
-  return sx && typeof sx === "object" && !Array.isArray(sx) ? Object.assign({}, base, sx) : base;
-}
-function el(Comp, props, kids) {
-  return React.createElement.apply(React, [Comp, props].concat(kids));
-}
-// Canvas-safe overlay shims (rendered open + inline; no portal/backdrop).
-var Paper = registry.Paper, Box = registry.Box;
-var DW = { xs: 360, sm: 480, md: 600, lg: 800, xl: 960 };
+function chrome(props) { return { className: typeof props.className === "string" ? props.className : undefined, "data-node-path": props["data-node-path"] }; }
+function mergeSx(base, sx) { return sx && typeof sx === "object" && !Array.isArray(sx) ? Object.assign({}, base, sx) : base; }
+function element(Component, props, children) { return React.createElement.apply(React, [Component, props].concat(children)); }
+var Paper = registry.Paper, MuiBox = registry.Box;
+var widths = { xs: 360, sm: 480, md: 600, lg: 800, xl: 960 };
 var overlays = {
-  Dialog: function (p) {
-    var w = (typeof p.maxWidth === "string" && DW[p.maxWidth]) || 600;
-    return el(Paper, Object.assign({ elevation: 8 }, chrome(p), { sx: msx({ width: "100%", maxWidth: w, mx: "auto", my: 2, borderRadius: 2, overflow: "hidden" }, p.sx) }), p.__kids || []);
-  },
-  Menu: function (p) {
-    return el(Paper, Object.assign({ elevation: 3 }, chrome(p), { sx: msx({ display: "inline-block", minWidth: 180, py: 1, borderRadius: 1.5 }, p.sx) }), p.__kids || []);
-  },
-  Popover: function (p) {
-    return el(Paper, Object.assign({ elevation: 3 }, chrome(p), { sx: msx({ display: "inline-block", p: 2, borderRadius: 1.5 }, p.sx) }), p.__kids || []);
-  },
-  Drawer: function (p) {
-    return el(Paper, Object.assign({ elevation: 2, square: true }, chrome(p), { sx: msx({ width: 280, height: "100%", p: 2 }, p.sx) }), p.__kids || []);
-  },
-  Snackbar: function (p) {
-    var body = p.message !== undefined ? p.message : p.__kids;
-    return el(Box, Object.assign({}, chrome(p), { sx: msx({ display: "inline-flex", alignItems: "center", px: 2, py: 1.25, bgcolor: "grey.900", color: "common.white", borderRadius: 1, fontSize: 14 }, p.sx) }), body || []);
-  },
+  Dialog: function (p) { return element(Paper || "div", Object.assign({ elevation: 8 }, chrome(p), { sx: mergeSx({ width: "100%", maxWidth: widths[p.maxWidth] || 600, mx: "auto", my: 2, borderRadius: 2, overflow: "hidden" }, p.sx) }), p.__kids || []); },
+  Menu: function (p) { return element(Paper || "div", Object.assign({ elevation: 3 }, chrome(p), { sx: mergeSx({ display: "inline-block", minWidth: 180, py: 1, borderRadius: 1.5 }, p.sx) }), p.__kids || []); },
+  Popover: function (p) { return element(Paper || "div", Object.assign({ elevation: 3 }, chrome(p), { sx: mergeSx({ display: "inline-block", p: 2, borderRadius: 1.5 }, p.sx) }), p.__kids || []); },
+  Drawer: function (p) { return element(Paper || "div", Object.assign({ elevation: 2, square: true }, chrome(p), { sx: mergeSx({ width: 280, height: "100%", p: 2 }, p.sx) }), p.__kids || []); },
+  Snackbar: function (p) { return element(MuiBox || "div", Object.assign({}, chrome(p), { sx: mergeSx({ display: "inline-flex", alignItems: "center", px: 2, py: 1.25, bgcolor: "grey.900", color: "common.white", borderRadius: 1, fontSize: 14 }, p.sx) }), p.message !== undefined ? [p.message] : (p.__kids || [])); },
 };
-
-// Tree interpreter: a resolved node is { ref, props, children } (snippets/params
-// already inlined server-side); a string/number is text content.
+var overlayIds = new Set(${JSON.stringify(opts.overlayIds)});
+function Missing(props) {
+  // NB: never name this prop \`ref\` — React <=18 strips it into element.ref and a
+  // string ref with no owner throws during reconciliation, taking down the mount.
+  return React.createElement("div", { "data-velloo-component-fallback": props.componentId, "data-node-path": props["data-node-path"], style: { border: "1px dashed currentColor", borderRadius: 6, padding: 12, opacity: .7, font: "12px ui-monospace, monospace" } }, props.children && props.children.length ? props.children : "Unavailable component: " + props.componentId);
+}
 function build(node) {
   if (node == null) return null;
   if (typeof node === "string" || typeof node === "number") return node;
   var ref = node.ref;
   var props = Object.assign({}, node.props);
-  var kids = (node.children || []).map(build);
-  var overlay = overlays[ref];
-  if (overlay) {
-    props.__kids = kids;
-    return React.createElement(overlay, props);
-  }
-  var Comp = registry[ref] || ref;
-  return el(Comp, props, kids);
+  var children = (node.children || []).map(build);
+  if (overlayIds.has(ref) && overlays[ref]) { props.__kids = children; return React.createElement(overlays[ref], props); }
+  var Component = registry[ref];
+  return Component ? element(Component, props, children) : React.createElement(Missing, Object.assign({}, props, { componentId: ref, children: children }));
 }
-
-// On a render error anywhere in the tree, signal the host so it restores the SSR
-// content — a broken installed-component mount is never worse than today's SSR.
 class ErrorBoundary extends React.Component {
-  constructor(p) { super(p); this.state = { failed: false }; }
+  constructor(props) { super(props); this.state = { failed: false }; }
   static getDerivedStateFromError() { return { failed: true }; }
-  componentDidCatch(e) { if (this.props.onError) this.props.onError(e); }
+  componentDidCatch(error) { if (this.props.onError) this.props.onError(error); }
   render() { return this.state.failed ? null : this.props.children; }
 }
-function Ready(props) {
-  React.useEffect(function () { if (props.onReady) props.onReady(); }, []);
-  return null;
-}
-
+function Ready(props) { React.useEffect(function () { if (props.onReady) props.onReady(); }, []); return null; }
 export function mountScreen(opts) {
-  var cache = createCache({ key: ${JSON.stringify(opts.emotionKey)}, prepend: true });
-  var theme = createTheme(opts.themeOptions || {});
   var root = createRoot(opts.el);
-  root.render(
-    React.createElement(ErrorBoundary, { onError: opts.onError },
-      React.createElement(CacheProvider, { value: cache },
-        React.createElement(ThemeProvider, { theme: theme },
-          React.createElement(React.Fragment, null,
-            build(opts.tree),
-            React.createElement(Ready, { onReady: opts.onReady }))))),
-  );
+  ${renderBody}
   return root;
 }
 export { React };

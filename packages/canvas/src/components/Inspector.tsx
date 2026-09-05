@@ -2,6 +2,8 @@ import { isComponentNode, isSnippetInstance, nodeId } from "@velloo/schema";
 import { useEffect, useMemo } from "react";
 import { mutate } from "../api.ts";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
+import { useSelectionRects } from "../hooks/useSelectionRects.ts";
+import { computedValues } from "../hud/computed.ts";
 import { resolveControls } from "../hud/control-set.ts";
 import { useControlWrite } from "../hud/use-control-write.ts";
 import { applyStyleValue, classNameOf } from "../hud/values.ts";
@@ -30,6 +32,8 @@ const HIDDEN_PROPS = new Set(["className", "asChild", "children"]);
 
 export function Inspector() {
   const selection = useCanvas((s) => s.selection);
+  const selectionComputed = useCanvas((s) => s.selectionComputed);
+  const selectionRects = useSelectionRects();
   const components = useCanvas((s) => s.components);
   const screens = useCanvas((s) => s.screens);
   const styleChannel = useCanvas((s) => s.styleChannel);
@@ -80,8 +84,14 @@ export function Inspector() {
   // clobbering each other.
   const commitControl = useControlWrite({
     selection,
+    node,
     liveClasses: node ? classNameOf(node) : "",
   });
+
+  // What the node's untouched slots actually resolve to — the pane shows those
+  // greyed rather than a dash, same as the bar.
+  const computed = computedValues(selectionComputed);
+  const measuredRect = selectionRects[0] ?? null;
 
   if (!selection) {
     return (
@@ -243,6 +253,8 @@ export function Inspector() {
             descriptor={descriptor}
             snippet={null}
             classChannel={!isObjectChannel}
+            computed={computed}
+            measured={measuredRect}
             onChange={commitControl}
           />
         </section>

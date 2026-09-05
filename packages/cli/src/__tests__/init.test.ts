@@ -130,15 +130,15 @@ describe("velloo init", () => {
     expect(stderr).toContain("not empty");
   }, 30_000);
 
-  test("writes a README and the binary source vocabulary", async () => {
+  test("writes a README and records the planned in-repo component source", async () => {
     const { exitCode } = await runInit(tmp);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
     const config = ConfigSchema.parse(
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
-    expect(config.libraries.default?.source).toBe("binary");
-    expect(config.libraries.default?.componentsPath).toBe("binary");
+    expect(config.libraries.default?.source).toBe("in-repo");
+    expect(config.libraries.default?.componentsPath).toBe("../src/components");
 
     const readme = await readFile(join(design, "README.md"), "utf8");
     expect(readme).toContain("Velloo design folder");
@@ -154,6 +154,7 @@ describe("velloo init", () => {
     // Design folder is <appRoot>/velloo, so the host app root is one level up;
     // the live-island bundler resolves this against the design folder root.
     expect(config.hostApp?.root).toBe("..");
+    expect(config.hostApp?.aliases).toEqual({ "@/*": "src/*" });
   }, 30_000);
 
   test("blank initial content produces zero boards, zero screens, and a neutral theme", async () => {
@@ -223,7 +224,7 @@ describe("velloo init", () => {
       JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
     );
     expect(config.libraries.default?.id).toBe("shadcn-upstream");
-    expect(config.libraries.default?.source).toBe("binary");
+    expect(config.libraries.default?.source).toBe("in-repo");
 
     const readme = await readFile(join(design, "README.md"), "utf8");
     expect(readme).toContain("Bringing shadcn into your app");
@@ -347,7 +348,7 @@ describe("velloo init", () => {
       JSON.parse(await readFile(join(designDir(tmp), ".design/config.json"), "utf8")),
     );
     expect(config.libraries.default?.id).toBe("shadcn-upstream");
-    expect(config.libraries.default?.source).toBe("binary");
+    expect(config.libraries.default?.source).toBe("in-repo");
   }, 30_000);
 
   test("--start=scan generates one screen per Next.js app-router route", async () => {

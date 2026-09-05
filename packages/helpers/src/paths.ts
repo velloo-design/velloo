@@ -25,3 +25,23 @@ function resolveDir(): string {
 }
 
 export const helpersComponentsDir: string = resolveDir();
+
+const HELPER_SOURCE_FILES: Record<string, string> = {
+  Box: "box.tsx",
+  Divider: "divider.tsx",
+  Gradient: "gradient.tsx",
+  Heading: "heading.tsx",
+  Icon: "icon.tsx",
+  Image: "image.tsx",
+  Layer: "layer.tsx",
+  Placeholder: "placeholder.tsx",
+  Prose: "prose.tsx",
+  SVG: "svg.tsx",
+  Text: "text.tsx",
+};
+
+/** Absolute source module for a framework-neutral helper, or undefined. */
+export function helperSourcePath(id: string): string | undefined {
+  const file = HELPER_SOURCE_FILES[id];
+  return file ? join(helpersComponentsDir, file) : undefined;
+}

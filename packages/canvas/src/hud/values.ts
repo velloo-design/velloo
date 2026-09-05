@@ -37,8 +37,20 @@ export interface ControlValue {
   /** Display value: px number, ratio, token name, or choice value. */
   readonly value: string | number | boolean | null;
   readonly origin: Origin;
+  /**
+   * Whether the node itself carries this value. False means whatever the field
+   * shows is a default someone else decided — the theme, or the browser — so
+   * the widget renders it muted rather than passing it off as an edit.
+   */
+  readonly authored: boolean;
   /** What the theme says, when the node overrides it — shown as "was 32". */
   readonly themeValue?: string | number | null;
+  /**
+   * What the slot resolves to when nobody named it — the browser's 16px, the
+   * component's own padding. Shown greyed in place of a dash, so an untouched
+   * field still answers "what size is this".
+   */
+  readonly computed?: string | number | null;
   /** The theme style the value is inherited from, e.g. "Heading 1". */
   readonly source?: string | undefined;
 }
@@ -223,6 +235,8 @@ export interface ReadContext {
   readonly themeValues?: Readonly<Record<string, string | number | null>>;
   /** The theme style in effect, e.g. "Heading 1". */
   readonly themeSource?: string | undefined;
+  /** Resolved CSS keyed by control id — see `computedValues`. */
+  readonly computed?: Readonly<Record<string, string | number>> | undefined;
 }
 
 /** Slots the theme has an opinion about — everything else reads as `plain`. */
@@ -241,16 +255,18 @@ const THEMED_SLOTS = new Set<StyleKey>([
 /** The value and provenance the HUD should show for one control. */
 export function readControl(spec: ControlSpec, ctx: ReadContext): ControlValue {
   const { node, themeValues, themeSource } = ctx;
+  const computed = ctx.computed?.[spec.id] ?? null;
 
   if (spec.slot.via === "arg") {
     const args = isSnippetInstance(node) ? node.args : undefined;
-    const raw = args?.[spec.slot.name];
-    return { value: normaliseScalar(raw), origin: "plain" };
+    const value = normaliseScalar(args?.[spec.slot.name]);
+    return { value, origin: "plain", authored: value !== null };
   }
 
   if (spec.slot.via === "prop") {
     const props = isComponentNode(node) ? node.props : undefined;
-    return { value: normaliseScalar(props?.[spec.slot.name]), origin: "plain" };
+    const value = normaliseScalar(props?.[spec.slot.name]);
+    return { value, origin: "plain", authored: value !== null };
   }
 
   const key = spec.slot.key;
@@ -262,19 +278,33 @@ export function readControl(spec: ControlSpec, ctx: ReadContext): ControlValue {
     // The node says something. It's an override only when the theme also has an
     // opinion and the two disagree.
     if (themed !== null && themed !== own) {
-      return { value: own, origin: "changed", themeValue: themed, source: themeSource };
+      return {
+        value: own,
+        origin: "changed",
+        authored: true,
+        themeValue: themed,
+        source: themeSource,
+      };
     }
     return {
       value: own,
       origin: themed !== null ? "theme" : "plain",
+      authored: true,
       ...(themed !== null && themeSource !== undefined ? { source: themeSource } : {}),
     };
   }
 
   if (themed !== null) {
-    return { value: themed, origin: "theme", source: themeSource };
+    return { value: themed, origin: "theme", authored: false, source: themeSource };
   }
-  return { value: null, origin: THEMED_SLOTS.has(key) ? "theme" : "plain" };
+  // Nobody named this slot. The field still answers "what is it" — the
+  // resolved value rides the same greyed channel a theme value would.
+  return {
+    value: null,
+    origin: THEMED_SLOTS.has(key) ? "theme" : "plain",
+    authored: false,
+    computed,
+  };
 }
 
 function normaliseScalar(raw: unknown): string | number | boolean | null {
@@ -295,4 +325,48 @@ export function applyStyleValue(
 ): string {
   const parsed: ParsedClasses = parseClasses(className);
   return serializeClasses({ model: writeStyleSlot(parsed.model, key, value), extra: parsed.extra });
+}
+
+/** HTML tags a `Box` can wear that lay out as inline-level runs. */
+const INLINE_TAGS = new Set([
+  "span",
+  "a",
+  "em",
+  "strong",
+  "b",
+  "i",
+  "u",
+  "s",
+  "small",
+  "code",
+  "kbd",
+  "samp",
+  "var",
+  "abbr",
+  "cite",
+  "mark",
+  "q",
+  "sub",
+  "sup",
+  "time",
+  "label",
+]);
+
+/**
+ * Align, made to bite on an inline run.
+ *
+ * `text-align` is a property of a block container, so `text-center` on a
+ * `<span>` moves nothing — the control was there, it wrote the class, and the
+ * canvas looked identical. Aligning a text run is a real intent, so give it the
+ * box it needs: an inline node with no display of its own becomes `block`,
+ * which is what it would have to be for the alignment to mean anything. A node
+ * that already declares a display is left alone — that display was a choice.
+ */
+export function blockifyForAlign(className: string, node: Node): string {
+  if (!isComponentNode(node)) return className;
+  const as = typeof node.props?.as === "string" ? node.props.as : undefined;
+  if (as === undefined || !INLINE_TAGS.has(as)) return className;
+  const parsed: ParsedClasses = parseClasses(className);
+  if (parsed.model.display !== undefined && parsed.model.display !== "inline") return className;
+  return serializeClasses({ model: { ...parsed.model, display: "block" }, extra: parsed.extra });
 }

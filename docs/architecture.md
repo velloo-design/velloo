@@ -198,7 +198,7 @@ The `libraries` map declares every library this folder uses; each screen pins on
 
 The `extensions` map holds user-declared custom components — agent-registered via the `add_extension` MCP tool. Each entry records the bare `importPath` codegen emits, a hand-authored prop schema, and an `origin` tag (`"agent"` or `"manual"`). Extensions are folder-global: every screen in every library sees them. Extension ids shadow library components with the same name.
 
-`source` is an enum answering "where do the components live" — `"binary"` (shipped with the velloo binary: the shadcn-upstream canvas runtime, all of none/mui), `"cache"` (`~/.velloo/…`), or `"in-repo"` (the user's app folder).
+`source` is an enum answering "where do the components live" — `"binary"` (shipped with the velloo binary), `"cache"` (`~/.velloo/…`), or `"in-repo"` (the user's app folder). New shadcn folders are `in-repo`: `componentsPath` points at the parent of `ui/`, and the browser canvas consumes supported files there directly. The embedded snapshot remains the SSR and per-component fallback source, not the configured library location.
 
 `folderId` (optional) is the folder's stable cloud identity (a UUID) — published share links carry it so any clone of the folder finds its links and comments. Meaningless until the folder first touches velloo-cloud.
 
@@ -271,7 +271,7 @@ interface FrameworkAdapter extends ComponentProvider {
   codegenModule?                    // bare module emitted imports come from ("@mui/material")
   themeToNative?(theme, dark)       // velloo tokens → the framework's theme options POJO
   themeModule?                      // module shape for the native theme artifact (imports + factory)
-  canvasBundleSpec?                 // client-mount bundle of the host app's installed components
+  canvasBundleSpec?                 // per-screen exact/adapted/fallback browser sources
   mcpIntro?(channel)                // framework framing prepended to the MCP instructions
 }
 ```
@@ -287,7 +287,11 @@ Components are not put on disk in the design folder: two `button.tsx` files in t
 
 ### The shadcn provider
 
-**`shadcn-upstream` is the shadcn provider** — the default for new folders, and (since design-folder format v2) the only user-facing shadcn library id; the config shim migrates older `shadcn-react` folders to it. It's a pragmatic hybrid: the **canvas runtime reuses `@velloo/shadcn-snapshot`** — the internal, hand-vendored canvas-safe snapshot (avoiding a 25+ `@radix-ui/*` bundle) — while a real vanilla-shadcn install in the user's app is delegated to `npx shadcn@latest add <component>` at agent handoff. It reads a per-cache `manifest.json` when present, else the snapshot's generated manifest. The snapshot package is not a user-facing provider; its internal `id: "shadcn-react"` is a self-identity string only.
+**`shadcn-upstream` is the shadcn provider** — the default for new folders, and (since design-folder format v2) the only user-facing shadcn library id; the config shim migrates older `shadcn-react` folders to it. It is a fail-safe hybrid with a real-source first path. Server SSR uses `@velloo/shadcn-snapshot` so every folder can open offline. The browser canvas then collects only the screen's referenced ids and builds a mixed registry: client-safe host `components/ui` files are compile-checked and selected as `exact`; portal/state-heavy families use explicit `adapted` snapshot sources; missing or broken files use `fallback` sources independently. Velloo helpers participate in the same registry, compound children survive because the entire serialized tree is mounted once, and aliases resolve against `config.hostApp`. Source-directory changes invalidate the bundle and Tailwind JIT. A bounded host-manifest pass adds common CVA variants and explicit props to discovery. `component_status` and `/api/canvas/status` report the chosen fidelity and preflight errors rather than treating a visible fallback as exact. The snapshot package remains internal; its `id: "shadcn-react"` is a self-identity string only.
+
+The whole-screen mount deliberately yields to `render:"live"` extension screens, because a
+live island owns its SSR marker. Live islands remain the opt-in path for dynamic leaf
+components such as charts; they are not how ordinary shadcn library components render.
 
 The registry ships ~35 shadcn primitives (Accordion, Alert, AlertDialog, Avatar, Badge, Breadcrumb, Button, Calendar, Card+parts, Carousel, Chart, Checkbox, Collapsible, Dialog, DropdownMenu, Input, Label, Pagination, Popover, Progress, RadioGroup, ScrollArea, Select, Separator, Sheet, Skeleton, Slider, Sonner Toaster, Switch, Table+parts, Tabs, Textarea, Toggle, ToggleGroup, Tooltip) plus the 11 framework-neutral Velloo helpers from `@velloo/helpers` (`<Box>`, `<Divider>`, `<Gradient>`, `<Heading>`, `<Icon>`, `<Image>`, `<Layer>`, `<Placeholder>`, `<Prose>`, `<SVG>`, `<Text>`) — the helpers every other provider also reuses.
 

@@ -11,8 +11,11 @@
  *
  * Deliberately absent: `display`, `position`, `flex-direction`, `justify`,
  * `align-items`, `overflow`, `z-index`, and the raw class string. Those are the
- * agent's job. The vocabulary here names outcomes — *Fill / Hug / Fixed*,
- * *Inside*, *Between*, *Corners* — not CSS properties.
+ * agent's job. The vocabulary names outcomes where an outcome name is clearer
+ * than the property — *Fill / Hug / Fixed*, *Corners* — and the property where
+ * it isn't: *Padding*, *Margin* and *Gap* are what every design tool calls the
+ * three spacings, and the invented *Inside / Outside / Between* only made the
+ * reader translate.
  */
 
 import type { ComponentDescriptor } from "@velloo/provider";
@@ -223,8 +226,10 @@ export function resolveColorToken(
   token: string | null | undefined,
 ): string | null {
   if (!token) return null;
-  // An arbitrary value — `[#7c3aed]` — is already a colour.
+  // An arbitrary value — `[#7c3aed]` — is already a colour, and so is the bare
+  // hex a computed default arrives as.
   if (token.startsWith("[")) return token.slice(1, -1);
+  if (token.startsWith("#")) return token;
   if (!theme) return null;
   // `primary/10` is the token at an opacity; the opacity isn't part of the name.
   const bare = token.split("/")[0] ?? token;
@@ -391,7 +396,7 @@ const TYPOGRAPHY: readonly ControlSpec[] = [
   { ...HEIGHT },
   {
     id: "padding",
-    label: "Inside",
+    label: "Padding",
     kind: "number",
     slot: style("padding"),
     tier: "pane",
@@ -410,7 +415,7 @@ const TYPOGRAPHY: readonly ControlSpec[] = [
 const BOX_CONTROLS: readonly ControlSpec[] = [
   {
     id: "margin",
-    label: "Outside",
+    label: "Margin",
     kind: "number",
     slot: style("margin"),
     tier: "bar",
@@ -420,7 +425,7 @@ const BOX_CONTROLS: readonly ControlSpec[] = [
   },
   {
     id: "padding",
-    label: "Inside",
+    label: "Padding",
     kind: "number",
     slot: style("padding"),
     tier: "bar",
@@ -435,7 +440,7 @@ const BOX_CONTROLS: readonly ControlSpec[] = [
   { ...HEIGHT },
   {
     id: "gap",
-    label: "Between",
+    label: "Gap",
     kind: "number",
     slot: style("gap"),
     tier: "pane",

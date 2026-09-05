@@ -11,11 +11,13 @@ description: >-
 
 # Calibrating Velloo to an existing app
 
-The canvas does not read the user's component files. It renders Velloo's own
-component library, themed by the design folder's tokens. For a stock app that
-looks close enough; for an app with a custom Button, a real typeface, and a
-tighter spacing scale, an uncalibrated canvas produces designs the user will
-reject on sight — and they'll blame the design, not the setup.
+For shadcn folders, the canvas can import client-safe components directly from
+the app's configured `components/ui` directory. That is a bounded capability,
+not a promise that arbitrary application React can run inside a design iframe:
+portal/state-heavy families use named canvas-safe adaptations, and a missing or
+unbuildable file falls back independently. Other providers follow their own
+adapter contract. The fidelity is observable through `component_status`; never
+infer it from `installedInApp` or from a component merely appearing on screen.
 
 Your job here is to close that gap **before** you start designing, and to say
 honestly what's left open. Do this once per design folder. Skip it only for a
@@ -72,17 +74,40 @@ Recreate one representative screen — or use whatever init scaffolded — and r
 0.85+ similarity is a faithful structural port. Don't chase 1.0 — fonts and
 live data legitimately differ.
 
-## 3. Match the components that actually matter
+## 3. Establish component fidelity before adapting anything
 
-Only after theme parity, and only for components that appear in the screens
-you're about to design. Read the app's real component source, then pick the
-cheapest mechanism that makes the preview honest:
+Only after theme parity, and only for components used by the screens you're
+about to design, call `component_status { ids: [...] }`. Treat its statuses as
+part of the design brief:
+
+- **`exact`** — Velloo compile-checked and selected the app's source file for
+  the whole-screen canvas mount. Custom CVA variants and ordinary explicit
+  props are also reflected into discovery when their syntax is recognizable.
+- **`adapted`** — the real family depends on portals, runtime state, browser
+  layout, or another interaction that conflicts with a static selectable
+  canvas. Velloo deliberately renders a canvas-safe counterpart. Preserve the
+  component identity and props, but do not claim pixel-identical behavior.
+- **`fallback`** — the app file is absent or failed the browser preflight, so a
+  bundled provider component or Velloo helper is rendering. Read the returned
+  note/errors before deciding whether the visual difference matters.
+- **`unavailable`** — there is no usable canvas source. The canvas renders an
+  explicit labelled placeholder rather than silently inventing the component.
+
+Host-source edits invalidate the canvas bundle automatically. After changing a
+component, wait for the frame to reload and call `component_status` again; do
+not restart the daemon merely to pick up a normal source edit.
+
+## 4. Close only the important remaining gaps
+
+If an on-screen component is not `exact` and the difference is load-bearing,
+read its source and choose the smallest honest adaptation:
 
 - **A snippet** (`add_snippet`) that composes library primitives to match the
-  custom component's appearance. This is the default answer. It stays editable
-  on the canvas, costs nothing at render time, and is the only option that
-  handles a compound component with children and slots. `render_snippet` right
-  after defining it.
+  component's appearance. It stays editable on the canvas and is the preferred
+  answer for a bespoke compound component that is outside the shadcn library.
+  Library compound components whose files are `exact` already preserve their
+  children in the whole-screen mount and do not need a snippet. `render_snippet`
+  immediately after defining one.
 - **`$emitAs { name, importPath }`** on the node when the preview can be an
   approximation but the generated code must import the real component. Design
   with primitives, emit `<DataTable />`. Use this for anything whose appearance
@@ -92,19 +117,23 @@ cheapest mechanism that makes the preview honest:
   and client-mounts it, so it is the one path that renders the user's actual
   code. Know its limits before reaching for it: children are stripped, the
   mount is visual-only, and it breaks whenever the host file doesn't compile.
-  Never the default for library components.
+  Never the default for library components, and never use it to work around a
+  compound component with children.
 
-Don't adopt the whole component directory. Adopt what's on screen, when its
-custom appearance is load-bearing, and stop.
+Do not replace an `adapted` overlay merely because its status is not `exact`;
+the adaptation is what keeps dialogs, menus, popovers, and similar components
+visible and selectable on a static canvas. Adapt only when the visual contract
+the user cares about is materially different.
 
-## 4. Leave a record
+## 5. Leave a record
 
 Write what you found as a note on the main board (`add_note`) so the next
 session — and the user — knows where things stand. Three headings, honest:
 
-- **Matched** — theme imported from `<path>`, fonts, the components adopted and
-  how (snippet / `$emitAs` / live).
-- **Approximated** — where the canvas is close but not the app's real code.
+- **Exact** — theme imported from `<path>`, fonts, and the components reported
+  `exact` by `component_status`.
+- **Adapted / fallback** — the status, reason, and any snippet / `$emitAs` / live
+  decision made to close a load-bearing difference.
 - **Unverified** — screens behind auth you couldn't reach, pages whose dev
   server wouldn't start, tokens the stylesheet didn't declare.
 

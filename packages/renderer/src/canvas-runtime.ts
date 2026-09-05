@@ -41,11 +41,36 @@ export const CANVAS_RUNTIME = `
     window.__velloo_canvas_ready = true;
   }
 
+  function exposeDiagnostics(items) {
+    var diagnostics = Array.isArray(items) ? items : [];
+    window.__velloo_canvas_diagnostics = diagnostics;
+    var counts = { adapted: 0, fallback: 0, unavailable: 0 };
+    diagnostics.forEach(function (item) {
+      if (Object.prototype.hasOwnProperty.call(counts, item.status)) counts[item.status] += 1;
+    });
+    var degraded = Object.keys(counts).filter(function (key) { return counts[key] > 0; });
+    document.documentElement.dataset.vellooCanvasFidelity = degraded.length ? degraded.join(",") : "exact";
+    if (!degraded.length || new URLSearchParams(location.search).get("canvas") !== "1") return;
+    var badge = document.createElement("div");
+    badge.setAttribute("data-velloo-canvas-status", degraded.join(","));
+    badge.setAttribute("aria-label", "Canvas component fidelity");
+    badge.textContent = "Canvas: " + degraded.map(function (key) { return counts[key] + " " + key; }).join(" · ");
+    badge.title = diagnostics.filter(function (item) { return item.status !== "exact"; }).map(function (item) {
+      return item.id + ": " + item.status + (item.note ? " — " + item.note : "");
+    }).join("\\n");
+    badge.style.cssText = "position:fixed;right:8px;bottom:8px;z-index:2147483647;pointer-events:none;padding:5px 8px;border:1px solid rgba(120,90,20,.45);border-radius:999px;background:rgba(255,248,220,.94);color:#4a3700;font:600 10px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 2px 8px rgba(0,0,0,.12)";
+    document.body.appendChild(badge);
+  }
+
   import(BUNDLE_URL).then(function (mod) {
-    if (!mod || typeof mod.mountScreen !== "function" || mod.__velloo_canvas_error) {
+    // The stub served on a build failure still exports a no-op mountScreen, so
+    // checking the export alone is not enough: calling it would settle neither
+    // onReady nor onError and __velloo_canvas_ready would never flip.
+    if (!mod || typeof mod.mountScreen !== "function" || mod.__velloo_canvas_build_errors) {
       settleOnSsr();
       return;
     }
+    exposeDiagnostics(mod.__velloo_canvas_diagnostics);
     document.body.appendChild(root);
     try {
       mod.mountScreen({

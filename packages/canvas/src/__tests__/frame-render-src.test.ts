@@ -12,7 +12,7 @@ describe("frameRenderSrc", () => {
         screenRevision: 2,
         themeVersion: 3,
       }),
-    ).toContain("&mode=dark&v=2.3");
+    ).toContain("&mode=dark&canvas=1&v=2.3");
   });
 
   test("light and dark frame pins resolve independently and produce distinct sources", () => {

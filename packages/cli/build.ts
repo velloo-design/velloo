@@ -310,6 +310,10 @@ if (!existsSync(join(snapshotPkg, "dist", "manifest.json"))) {
 }
 const PKG_ASSETS: { pkg: string; paths: string[] }[] = [
   { pkg: "helpers", paths: ["src"] },
+  // The canvas bundler compiles the helper + snapshot .tsx for the browser at
+  // runtime; those import zero-dependency leaves from `@velloo/schema/*`, which
+  // must therefore exist on disk next to them (see live/canvas-bundle.ts).
+  { pkg: "schema", paths: ["src"] },
   { pkg: "shadcn-snapshot", paths: ["src", join("dist", "manifest.json")] },
   { pkg: "provider-none", paths: ["src"] },
   { pkg: "provider-mui", paths: ["src"] },

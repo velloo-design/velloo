@@ -3,6 +3,7 @@ import type { Node } from "@velloo/schema";
 import type { ControlSpec } from "../control-set.ts";
 import {
   applyStyleValue,
+  blockifyForAlign,
   classNameOf,
   fontArgToPx,
   leadingToRatio,
@@ -107,6 +108,21 @@ describe("readControl", () => {
     expect(v).toMatchObject({ value: 32, origin: "theme" });
   });
 
+  test("authored says whether the node itself carries the value", () => {
+    const own = readControl(spec("size", "fontSize"), {
+      node: node("text-2xl"),
+      themeValues: { size: 24 },
+    });
+    const inherited = readControl(spec("size", "fontSize"), {
+      node: node(""),
+      themeValues: { size: 24 },
+    });
+    const nothing = readControl(spec("padding", "padding"), { node: node("") });
+    expect(own.authored).toBe(true);
+    expect(inherited.authored).toBe(false);
+    expect(nothing.authored).toBe(false);
+  });
+
   test("snippet args read straight off the instance", () => {
     const argSpec = {
       id: "arg:customer",
@@ -157,5 +173,27 @@ describe("classNameOf", () => {
 
   test("is empty for a param ref", () => {
     expect(classNameOf({ $param: "x" })).toBe("");
+  });
+});
+
+describe("blockifyForAlign", () => {
+  const span = (className: string): Node => ({ $ref: "Box", props: { as: "span", className } });
+
+  test("an inline run gets the block box its alignment needs", () => {
+    expect(blockifyForAlign("text-sm text-center", span("text-sm text-center"))).toBe(
+      "block text-sm text-center",
+    );
+  });
+
+  test("a display the node already chose is left alone", () => {
+    expect(blockifyForAlign("inline-flex text-center", span("inline-flex text-center"))).toBe(
+      "inline-flex text-center",
+    );
+  });
+
+  test("a block tag needs nothing — text-align already bites", () => {
+    const p: Node = { $ref: "Box", props: { as: "p", className: "text-center" } };
+    expect(blockifyForAlign("text-center", p)).toBe("text-center");
+    expect(blockifyForAlign("text-center", node("text-center"))).toBe("text-center");
   });
 });

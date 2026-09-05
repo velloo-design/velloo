@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*"
   },
