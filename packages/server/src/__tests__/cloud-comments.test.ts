@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -137,6 +137,15 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+// The stub cloud, the on-disk projection and `calls` are all shared mutable
+// state, so without this reset the suite only passes in declaration order
+// (`bun test --randomize` catches that).
+beforeEach(async () => {
+  shared = resetThread();
+  calls = [];
+  await rm(cachePath, { force: true });
+});
+
 describe("shared comment projection", () => {
   test("fetches a folder-scoped conversation and persists it outside the repo", async () => {
     calls = [];
@@ -197,14 +206,24 @@ describe("shared comment projection", () => {
   });
 
   test("serves the durable projection when logged out or offline", async () => {
+    // Own the projection this test reads back rather than inheriting whatever
+    // an earlier test happened to leave in the cache.
+    await client().setResolved(threadId, true);
+    expect((await client().refresh()).threads[0]?.status).toBe("resolved");
+
     const loggedOut = await client("").refresh();
     expect(loggedOut.status).toBe("logged-out");
     expect(loggedOut.threads[0]?.id).toBe(threadId);
 
     server.stop(true);
-    const offline = await client().refresh();
-    expect(offline.status).toBe("offline");
-    expect(offline.threads[0]?.status).toBe("resolved");
-    server = startServer();
+    try {
+      const offline = await client().refresh();
+      expect(offline.status).toBe("offline");
+      expect(offline.threads[0]?.status).toBe("resolved");
+    } finally {
+      // A stopped server reports port 0, which would send every later test at
+      // an unroutable URL — restart even if the assertions above threw.
+      server = startServer();
+    }
   });
 });

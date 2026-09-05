@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,6 +9,11 @@ import {
   type PublishEvent,
   reportProvenance,
 } from "../publish/core.ts";
+
+// Each case scaffolds a real git repo with a chain of synchronous `git`
+// subprocesses. Under `bun test --parallel` those queue behind every other
+// worker's, and the 5s default starts tripping.
+setDefaultTimeout(30_000);
 
 const messages = (git: { repo: string | null; branch: string | null }): string[] => {
   const events: PublishEvent[] = [];

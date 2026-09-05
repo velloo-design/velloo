@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,6 +21,11 @@ import {
  * theme/config change → all screens, snippet change → screens using it
  * (transitively), asset change → screens referencing it.
  */
+
+// Every test scaffolds a real git repo (init + add + commit) and most spawn
+// several more git processes. Under `bun test --parallel` those subprocesses
+// queue behind every other worker's, and the 5s default starts tripping.
+setDefaultTimeout(30_000);
 
 let tmp: string;
 let repo: string;

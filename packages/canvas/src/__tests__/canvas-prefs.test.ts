@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 /**
  * Canvas-scope preferences. The one that actually regressed before:
@@ -22,27 +22,40 @@ class MemoryStorage {
   removeItem(key: string): void {
     this.data.delete(key);
   }
+  clear(): void {
+    this.data.clear();
+  }
   has(key: string): boolean {
     return this.data.has(key);
   }
 }
 
 const storage = new MemoryStorage();
-// Seeded as if the user last left the canvas in dark with panels collapsed.
-storage.setItem("velloo:designMode", "dark");
-storage.setItem("velloo:appTheme", "dark");
-storage.setItem("velloo:leftPanels", JSON.stringify({ boards: true, tree: false }));
-storage.setItem("velloo:panes", JSON.stringify({ left: true, right: false }));
-// The right width is out of range on purpose — bounds can move between releases.
-storage.setItem("velloo:paneWidths", JSON.stringify({ left: 420, right: 9999 }));
+
+/** State as if the user last left the canvas in dark with panels collapsed. */
+function seed(): void {
+  storage.clear();
+  storage.setItem("velloo:designMode", "dark");
+  storage.setItem("velloo:appTheme", "dark");
+  storage.setItem("velloo:leftPanels", JSON.stringify({ boards: true, tree: false }));
+  storage.setItem("velloo:panes", JSON.stringify({ left: true, right: false }));
+  // The right width is out of range on purpose — bounds can move between releases.
+  storage.setItem("velloo:paneWidths", JSON.stringify({ left: 420, right: 9999 }));
+}
+
+seed();
 (globalThis as { localStorage?: unknown }).localStorage = storage;
 
 const { useCanvas } = await import("../store.ts");
 const { readCanvasPrefs } = await import("../store/modes.ts");
 
-// The store may already have been created by another test file in this
-// process, before the stub existed — re-seed it from what's stored now.
-useCanvas.setState(readCanvasPrefs());
+// Every test here reads or writes the same storage stub, and the store is a
+// module singleton — without a per-test reset the suite only passes in
+// declaration order (`bun test --randomize` catches that).
+beforeEach(() => {
+  seed();
+  useCanvas.setState(readCanvasPrefs());
+});
 
 describe("canvas preferences at boot", () => {
   test("restores the design preset, app theme, and panel collapse", () => {

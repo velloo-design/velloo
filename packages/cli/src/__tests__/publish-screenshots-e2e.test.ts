@@ -1,10 +1,15 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromiumExecutable } from "@velloo/renderer";
 import type { Server } from "bun";
+
+// Scaffolds a real git repo and drives a headless browser. Under
+// `bun test --parallel` both queue behind every other worker, and the 5s
+// default starts tripping.
+setDefaultTimeout(60_000);
 
 type StubServer = Server<undefined>;
 
