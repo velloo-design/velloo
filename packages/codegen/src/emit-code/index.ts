@@ -10,9 +10,11 @@
  *
  * What `emit_code` no longer does:
  *   - generate `import { ... } from "..."` blocks (the agent picks paths)
- *   - run biome / prettier (the agent runs the user's formatter)
  *   - write to a file (the agent writes; emit_code is pure)
  *   - diff against an existing file (no target file exists yet)
+ *
+ * Formatting is a package-wide non-goal, not an emit_code one — see the
+ * package README. Nothing in @velloo/codegen runs a formatter.
  *
  * What `emit_code` still does:
  *   - serialize the screen tree to a JSX string using library identifiers

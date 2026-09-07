@@ -193,5 +193,7 @@ describe("CanvasBundler cache", () => {
     // an unbounded map would accrete a Bun.build output per design edit.
     for (let i = 0; i < 200; i++) await bundler.build("shadcn", [`Comp${i}`]);
     expect(bundler.size).toBeLessThanOrEqual(48);
-  });
+    // 200 real Bun.build passes: comfortably under a second alone, but this
+    // queues behind every other worker's under `bun test --parallel`.
+  }, 30_000);
 });

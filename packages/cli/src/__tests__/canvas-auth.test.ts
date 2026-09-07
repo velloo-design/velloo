@@ -167,13 +167,17 @@ describe("createCanvasAuth device login", () => {
     expect(await loadCredential(CLOUD)).toEqual({ token: "vlk_expired", email: "old@b.dev" });
 
     flow.approve({ token: "vlk_new", email: "new@b.dev" });
-    await waitFor(async () => (await loadCredential(CLOUD))?.token === "vlk_new");
+    // Wait on the state machine, not the credential file: the token lands on
+    // disk a tick before `login` falls back to idle, so watching the file left
+    // a window where the login still read as pending.
+    await waitFor(async () => (await auth.status()).login.state === "idle");
 
     const approved = await auth.status();
     expect(approved.loggedIn).toBe(true);
     expect(approved.verified).toBe(true);
     expect(approved.login).toEqual({ state: "idle" });
     expect(approved.account?.email).toBe("new@b.dev");
+    expect(await loadCredential(CLOUD)).toMatchObject({ token: "vlk_new" });
   });
 
   test("denial does not persist a credential", async () => {

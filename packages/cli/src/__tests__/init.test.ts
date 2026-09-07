@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -20,14 +20,25 @@ import {
 
 const cliPath = resolve(import.meta.dir, "../cli.ts");
 
-let tmp: string;
+/**
+ * These run concurrently — each case is a full `velloo init` subprocess, and
+ * 21 of them in sequence was the slowest file in the suite by a wide margin.
+ * That means no shared scaffold: every test owns an app root nobody else can
+ * see, and teardown waits until they have all finished.
+ */
+const roots: string[] = [];
 
-beforeEach(() => {
-  tmp = join(tmpdir(), `velloo-init-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-});
+function appRoot(): string {
+  const root = join(
+    tmpdir(),
+    `velloo-init-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  roots.push(root);
+  return root;
+}
 
-afterEach(async () => {
-  await rm(tmp, { recursive: true, force: true });
+afterAll(async () => {
+  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
 });
 
 /** Where the design folder lands for an app root + optional --design-folder. */
@@ -56,7 +67,8 @@ async function jsonFiles(dir: string): Promise<string[]> {
 }
 
 describe("velloo init", () => {
-  test("scaffolds a folder whose contents parse against every schema", async () => {
+  test.concurrent("scaffolds a folder whose contents parse against every schema", async () => {
+    const tmp = appRoot();
     const { exitCode, stdout, stderr } = await runInit(tmp);
     if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
     expect(stdout).toContain("scaffolded");
@@ -99,13 +111,15 @@ describe("velloo init", () => {
     expect(await Bun.file(join(design, ".design/cache/.gitkeep")).exists()).toBe(false);
   }, 30_000);
 
-  test("--design-folder controls where the design lands under the app root", async () => {
+  test.concurrent("--design-folder controls where the design lands under the app root", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--design-folder=design", "--initial-content=blank"]);
     expect(exitCode).toBe(0);
     expect(await Bun.file(join(tmp, "design", ".design/config.json")).exists()).toBe(true);
   }, 30_000);
 
-  test("registers the folder in the repo's velloo.json and merges a second project", async () => {
+  test.concurrent("registers the folder in the repo's velloo.json and merges a second project", async () => {
+    const tmp = appRoot();
     const first = await runInit(tmp, ["--initial-content=blank"]);
     expect(first.exitCode).toBe(0);
     const manifestPath = join(tmp, "velloo.json");
@@ -123,14 +137,16 @@ describe("velloo init", () => {
     expect(Object.keys(merged.projects)).toHaveLength(2);
   }, 60_000);
 
-  test("refuses to scaffold over a non-empty design folder without --force", async () => {
+  test.concurrent("refuses to scaffold over a non-empty design folder without --force", async () => {
+    const tmp = appRoot();
     await Bun.write(join(designDir(tmp), "marker.txt"), "stay");
     const { exitCode, stderr } = await runInit(tmp);
     expect(exitCode).not.toBe(0);
     expect(stderr).toContain("not empty");
   }, 30_000);
 
-  test("writes a README and records the planned in-repo component source", async () => {
+  test.concurrent("writes a README and records the planned in-repo component source", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -145,7 +161,8 @@ describe("velloo init", () => {
     expect(readme).toContain("shadcn");
   }, 30_000);
 
-  test("persists hostApp.root pointing from the design folder to the app root", async () => {
+  test.concurrent("persists hostApp.root pointing from the design folder to the app root", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--initial-content=blank"]);
     expect(exitCode).toBe(0);
     const config = ConfigSchema.parse(
@@ -157,7 +174,8 @@ describe("velloo init", () => {
     expect(config.hostApp?.aliases).toEqual({ "@/*": "src/*" });
   }, 30_000);
 
-  test("blank initial content produces zero boards, zero screens, and a neutral theme", async () => {
+  test.concurrent("blank initial content produces zero boards, zero screens, and a neutral theme", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--initial-content=blank"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -174,7 +192,8 @@ describe("velloo init", () => {
     expect(JSON.stringify(theme.colors.primary)).not.toContain("5e6ad2");
   }, 30_000);
 
-  test("theme preset is reflected in the generated theme", async () => {
+  test.concurrent("theme preset is reflected in the generated theme", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--theme-preset=violet", "--initial-content=blank"]);
     expect(exitCode).toBe(0);
     const theme = ThemeSchema.parse(
@@ -184,7 +203,8 @@ describe("velloo init", () => {
     expect(JSON.stringify(theme.colors.primary)).not.toContain("5e6ad2");
   }, 30_000);
 
-  test("--stack sets the codegen alias; the sample always ships whole", async () => {
+  test.concurrent("--stack sets the codegen alias; the sample always ships whole", async () => {
+    const tmp = appRoot();
     const { exitCode, stderr } = await runInit(tmp, ["--theme-preset=rose", "--stack=remix"]);
     if (exitCode !== 0) throw new Error(stderr);
     const design = designDir(tmp);
@@ -208,7 +228,8 @@ describe("velloo init", () => {
     expect(JSON.stringify(theme.colors.primary)).not.toContain("5e6ad2");
   }, 30_000);
 
-  test("upstream never writes into the app during init (deferred)", async () => {
+  test.concurrent("upstream never writes into the app during init (deferred)", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, [
       "--library=shadcn-upstream",
       "--components-dir=src/components/ui",
@@ -230,7 +251,8 @@ describe("velloo init", () => {
     expect(readme).toContain("Bringing shadcn into your app");
   }, 30_000);
 
-  test("--library=mui scaffolds a MUI folder with a two-screen sx sample", async () => {
+  test.concurrent("--library=mui scaffolds a MUI folder with a two-screen sx sample", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--library=mui"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -257,7 +279,8 @@ describe("velloo init", () => {
     expect(readme).toContain("npm install @mui/material @emotion/react @emotion/styled");
   }, 30_000);
 
-  test("--library=antd scaffolds an antd folder with a two-screen inline-style sample", async () => {
+  test.concurrent("--library=antd scaffolds an antd folder with a two-screen inline-style sample", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--library=antd"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -288,7 +311,8 @@ describe("velloo init", () => {
     expect(readme).toContain("npm install antd");
   }, 30_000);
 
-  test("--library=chakra scaffolds a chakra folder with a two-screen sx sample", async () => {
+  test.concurrent("--library=chakra scaffolds a chakra folder with a two-screen sx sample", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--library=chakra"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -319,7 +343,8 @@ describe("velloo init", () => {
     expect(readme).toContain("npm install @chakra-ui/react@2 @emotion/react @emotion/styled");
   }, 30_000);
 
-  test("--library=none ships bare primitives with a two-screen sample", async () => {
+  test.concurrent("--library=none ships bare primitives with a two-screen sample", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, ["--library=none"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -338,7 +363,8 @@ describe("velloo init", () => {
     expect(readme.toLowerCase()).toContain("no-library");
   }, 30_000);
 
-  test("--library=shadcn-upstream works offline with a blank folder", async () => {
+  test.concurrent("--library=shadcn-upstream works offline with a blank folder", async () => {
+    const tmp = appRoot();
     const { exitCode } = await runInit(tmp, [
       "--library=shadcn-upstream",
       "--initial-content=blank",
@@ -351,7 +377,8 @@ describe("velloo init", () => {
     expect(config.libraries.default?.source).toBe("in-repo");
   }, 30_000);
 
-  test("--start=scan generates one screen per Next.js app-router route", async () => {
+  test.concurrent("--start=scan generates one screen per Next.js app-router route", async () => {
+    const tmp = appRoot();
     const app = join(tmp, "next-app");
     await mkdir(join(app, "app", "dashboard"), { recursive: true });
     await mkdir(join(app, "app", "settings", "account"), { recursive: true });
@@ -380,7 +407,8 @@ describe("velloo init", () => {
     expect(JSON.stringify(dashboard)).toContain("/dashboard");
   }, 30_000);
 
-  test("--start=scan picks up Vite-style src/routes/ files", async () => {
+  test.concurrent("--start=scan picks up Vite-style src/routes/ files", async () => {
+    const tmp = appRoot();
     const app = join(tmp, "vite-app");
     await mkdir(join(app, "src", "routes", "settings"), { recursive: true });
     await writeFile(
@@ -408,7 +436,8 @@ describe("velloo init", () => {
     expect(screenFiles).toContain("settings-profile.json");
   }, 30_000);
 
-  test("--start=scan degrades to a true blank when no routes are detectable", async () => {
+  test.concurrent("--start=scan degrades to a true blank when no routes are detectable", async () => {
+    const tmp = appRoot();
     const app = join(tmp, "empty-app");
     await mkdir(app, { recursive: true });
     await writeFile(
@@ -423,7 +452,8 @@ describe("velloo init", () => {
     expect((await jsonFiles(join(designDir(app), "boards"))).length).toBe(0);
   }, 30_000);
 
-  test("--start=scan imports the host theme from globals.css", async () => {
+  test.concurrent("--start=scan imports the host theme from globals.css", async () => {
+    const tmp = appRoot();
     const app = join(tmp, "themed-app");
     await mkdir(join(app, "app"), { recursive: true });
     await writeFile(
@@ -447,7 +477,8 @@ describe("velloo init", () => {
     expect(theme.radius.md).toBe("0.75rem");
   }, 30_000);
 
-  test("--start=redesign-screen scaffolds one named screen with desktop+mobile frames", async () => {
+  test.concurrent("--start=redesign-screen scaffolds one named screen with desktop+mobile frames", async () => {
+    const tmp = appRoot();
     const { exitCode, stdout } = await runInit(tmp, [
       "--start=redesign-screen",
       "--screen-name=Pricing",
@@ -465,7 +496,8 @@ describe("velloo init", () => {
     expect(stdout.toLowerCase()).toContain("explore alternatives");
   }, 30_000);
 
-  test("--start=custom scaffolds an empty Main board and embeds the request", async () => {
+  test.concurrent("--start=custom scaffolds an empty Main board and embeds the request", async () => {
+    const tmp = appRoot();
     const { exitCode, stdout } = await runInit(tmp, [
       "--start=custom",
       "--request=a settings page with dark mode",
