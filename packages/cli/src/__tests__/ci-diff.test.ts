@@ -39,13 +39,7 @@ process.env.GIT_TERMINAL_PROMPT = "0";
 // those queue behind every other worker's, and the 5s default starts tripping.
 setDefaultTimeout(30_000);
 
-/**
- * One parent dir for the whole file, removed in `afterAll` rather than per
- * test. A per-test `afterEach` reads whichever path a shared binding holds
- * *when it runs*; if a test trips the timeout, that hook can fire once the
- * next test has already rebound it, deleting a live repo and turning one slow
- * test into a file-wide cascade.
- */
+/** One parent dir for the whole file, removed in `afterAll` rather than per test. */
 let root: string;
 /** The committed base repo every test starts from — built once, copied per test. */
 let fixture: string;

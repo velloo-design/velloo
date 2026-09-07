@@ -118,7 +118,9 @@ jobs:
             const path = await chromiumExecutable();
             if (!path) { console.error("no Chromium found — the e2e suites would all skip"); process.exit(1); }
             console.log("chromium:", path);
-            const { chromium } = await import("playwright-core");
+            // Resolved from the renderer package, not the repo root: playwright-core
+            // is its devDep, and a bare specifier here resolves against the cwd.
+            const { chromium } = await import(Bun.resolveSync("playwright-core", `${process.cwd()}/packages/renderer`));
             const browser = await chromium.launch({ headless: false });
             console.log("headed:", browser.version());
             await browser.close();

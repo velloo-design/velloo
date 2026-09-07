@@ -59,8 +59,14 @@ describe("reportProvenance", () => {
 });
 
 describe("gitContext", () => {
+  // Pipe both ways rather than inheriting the runner's streams: git's own
+  // diagnostics are this test's business, not the reporter's, and a closed
+  // stdin can't leave a subprocess blocked on a prompt nobody will answer.
   const git = (cwd: string, args: string[]) =>
-    execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+    execFileSync("git", ["-C", cwd, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
 
   test("reports a branch with no repo when the repository has no remote", () => {
     const dir = mkdtempSync(join(tmpdir(), "velloo-prov-"));
