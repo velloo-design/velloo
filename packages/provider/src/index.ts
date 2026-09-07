@@ -28,11 +28,15 @@ export {
   createProviderLoader,
   type ProviderFactory,
 } from "./loader.ts";
-export type {
-  ComponentDescriptor,
-  ControlType,
-  Manifest,
-  PropDescriptor,
+export {
+  COMPONENT_GROUPS,
+  type ComponentDescriptor,
+  type ComponentGroup,
+  type ControlType,
+  groupLabel,
+  type Manifest,
+  type PropDescriptor,
+  UNGROUPED_LABEL,
 } from "./manifest.ts";
 // NOTE: resolveProviderSrcDir intentionally does NOT re-export here — it
 // touches node:fs/node:path, and this index must stay browser-safe (the

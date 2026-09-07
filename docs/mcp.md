@@ -71,7 +71,7 @@ Every registered tool carries MCP behavioural annotations, classified in one tab
 | `get_screen` | `screenId, mode?: "full" \| "outline"` | full screen JSON, or a stripped `{ref/snippet, $id, classSnippet (≤40 chars), children}` tree when `mode: "outline"` for scanning long screens |
 | `list_boards` | `includeFrames?, includeArchived?` | `{ boards: [{ id, name, frameCount, group?, frames?, groups?, archivedAt? }] }` — `group` names the sidebar group the board is filed under (absent ⇒ ungrouped); `includeFrames` embeds each board's full frame list, `includeArchived` also lists boards the user archived |
 | `get_board` | `boardId` | `{ id, name, frames: [...], groups: [...] }` — frame placement on the named board |
-| `list_components` | `filter?, mode?: "summary" \| "full", kind?` | `{ snapshotVersion, components: [...] }` — summary mode returns `{ id, props (names only), category, source, kind }` to avoid blowing the token cap on first call; `kind` narrows to library or extension |
+| `list_components` | `filter?, mode?: "index" \| "summary" \| "full", kind?` | Index mode (default) returns `{ snapshotVersion, groups: [{ group, label, families: [{ id, pieces?, designModeNotes? }] }], totals, unavailableInDesign?, notInstalledInApp? }`; summary and full modes return `{ snapshotVersion, components: [...] }`, summary carrying prop names only. `kind` narrows to library, extension or snippet |
 | `install_component` | `componentId, screenId?` | The existing-project flow's "is this component available + install it if not." Resolves the active library's catalog: an already-present component (every shipped library bundles its whole set, so the common case) returns `{ installed: true, importPath }` — just `$ref` it; an uninstalled one routes to the adapter's installer (shadcn-upstream's per-component fetch); an unknown id errors with the catalog. `screenId` picks the library; omitted ⇒ folder default |
 | `list_snippets` | — | `[{ id, name, params }]` |
 | `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
@@ -317,7 +317,33 @@ Server returns the standard MCP `initialize` response with surface-specific `ins
 Guided sessions receive the compact dispatch contract, the rule to request one exact schema only when needed, and the pointer to the `velloo://guide/*` resources. Full sessions receive the complete native-tool guidance, summarized below:
 
 - **What Velloo is.** A pinned shadcn snapshot embedded in the binary; the design folder ships pure data. Designs are static — click handlers, routing, and forms are no-op.
-- **First-pass discovery.** Before composing screens, call `list_components` (use `mode: "summary"` first — the full schema is large), `get_theme`, `list_snippets`, and `list_boards`. For an overview of an existing screen, use `get_screen mode: "outline"` (compact `ref + $id + classSnippet` tree) before pulling the full JSON.
+- **First-pass discovery.** Before composing screens, call `list_components` (the default index groups 292 components into ~66 families and costs about a fifth of a per-component list; `filter` to a family for its prop names), `get_theme`, `list_snippets`, and `list_boards`. For an overview of an existing screen, use `get_screen mode: "outline"` (compact `ref + $id + classSnippet` tree) before pulling the full JSON.
+
+### Grouping a library too large to read linearly
+
+At 292 components a flat listing is both expensive and unhelpful: most of it is
+sub-pieces (`FieldLabel`, `TabsList`) presented as peers of their own root, and
+~two thirds of the bytes restate `source`/`category`/availability that are
+identical for all but a handful. Descriptors therefore carry two browsing
+fields, both generated rather than hand-listed:
+
+- **`group`** — the shelf (`forms`, `overlays`, `chat`, …), from
+  `COMPONENT_GROUPS` in `@velloo/provider`. The shadcn snapshot maps
+  file → group in `src/groups.ts`; other providers may leave it unset, and
+  anything unset lands in a visible catch-all bucket.
+- **`family`** — the compound root (`FieldLabel` ⇒ `Field`), derived from the
+  vendored file so a new family needs no second list.
+
+The same two fields drive the canvas Library panel. That panel used to keep its
+own hand-written id list, which is how the 2026.09 refresh left 20 new families
+unbrowsable with nothing failing; the snapshot's manifest test now asserts every
+vendored family is deliberately grouped.
+
+Usage notes (`designModeNotes`) exist for the same reason and are scoped to one
+job: naming the component that replaces a hand-rolled `Box` stack. Prop names
+already say what `Field` accepts; only a note says that a label + control +
+help-text stack is what it is *for* — which matters most for the families that
+postdate most models' training data.
 - **Velloo is the design source; you are the bridge to code.** When asked to implement, call `emit_code` (per screen) or `emit_snippet` and write the real file in the user's stack — Velloo's output is IR, not finished JSX.
 - **Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`) over raw Tailwind palette colors so designs auto-flip under `screenshot mode: "dark"` and survive theme changes. Use raw palette only for *intentional* accent colors that should not theme-flip — and mark those nodes with `data-accent: "ok"` so `inspect_dark_diff` exempts them.
 - **`inspect_dark_diff` is a triage signal, not a gate.** Read the per-node `problems[]` and decide; the coverage number is a guide, not a target.

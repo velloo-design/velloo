@@ -10,6 +10,7 @@ import {
 import { renderToString } from "react-dom/server";
 import { buildRoot } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
+import { type RenderFailure, renderGuarded } from "./render-guard.ts";
 import { serializeTree } from "./serialize-tree.ts";
 import { themeToCss } from "./theme-to-css.ts";
 
@@ -21,6 +22,11 @@ export interface RenderResult {
   html: string;
   bodyHtml: string;
   themeCss: string;
+  /**
+   * Components that threw and were replaced by a stand-in. Empty on a clean
+   * render; the screen still rendered either way.
+   */
+  failures: RenderFailure[];
 }
 
 /**
@@ -34,7 +40,9 @@ export function renderBody(
   snippets?: Map<string, Snippet>,
 ): string {
   ScreenSchema.parse(screen);
-  return renderToString(buildRoot(screen.tree, { registry, snippets }));
+  return renderGuarded(registry, (active) =>
+    renderToString(buildRoot(screen.tree, { registry: active, snippets })),
+  ).html;
 }
 
 export interface RenderOptions {
@@ -94,12 +102,11 @@ export async function renderScreen(
   ScreenSchema.parse(screen);
   ThemeSchema.parse(theme);
 
-  const element = buildRoot(screen.tree, {
-    registry: options.registry,
-    snippets: options.snippets,
-  });
   const pass = options.renderPass;
-  const bodyHtml = renderToString(pass ? pass.wrap(element) : element);
+  const { html: bodyHtml, failures } = renderGuarded(options.registry, (active) => {
+    const element = buildRoot(screen.tree, { registry: active, snippets: options.snippets });
+    return renderToString(pass ? pass.wrap(element) : element);
+  });
   // css() runs AFTER renderToString and is handed the body so emotion can extract
   // exactly the rules the rendered markup references.
   const adapterCss = pass ? pass.css(bodyHtml) : undefined;
@@ -132,5 +139,5 @@ export async function renderScreen(
     ...(options.includeRuntime !== undefined ? { includeRuntime: options.includeRuntime } : {}),
   });
 
-  return { html, bodyHtml, themeCss };
+  return { html, bodyHtml, themeCss, failures };
 }

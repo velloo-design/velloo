@@ -84,6 +84,20 @@ framework-native provider typically implements all of these:
   instruction text is shadcn/Tailwind-tuned; your intro tells the agent what's different
   (see `provider-mui/src/intro.ts` and `provider-none/src/intro.ts`).
 
+Descriptor metadata worth populating even though it's optional:
+
+- **`group`** (a `COMPONENT_GROUPS` id) and **`family`** (the compound root, so
+  `FieldLabel` ⇒ `Field`) are what make a large library browsable — they drive
+  both the canvas Library shelves and `list_components`' default index. Omit
+  them and your components still appear, in one undifferentiated bucket, which
+  is fine for a curated few dozen and not for hundreds. Derive them from
+  something structural (the shadcn snapshot keys off the vendored filename)
+  rather than hand-listing ids: a hand-kept list is how 20 families once became
+  unbrowsable without any test failing.
+- **`designModeNotes`** should say when to reach for the component instead of
+  building it from `Box` and `Text`. Skip it where the name is the whole story;
+  spend it on anything compositional or newer than the models using it.
+
 ## The canvas fidelity ladder
 
 `component_status` exposes the result for named components. Treat these statuses as a

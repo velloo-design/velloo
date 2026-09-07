@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { SnippetMeta } from "../api.ts";
-import { LIBRARY_CATEGORIES } from "../library-categories.ts";
+import { libraryCategories } from "../library-categories.ts";
 import { type LibraryItemRef, useCanvas } from "../store.ts";
 import { Input } from "./ui/input.tsx";
 import { Separator } from "./ui/separator.tsx";
@@ -74,17 +74,12 @@ export function LibraryHome({ snippets }: Props) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
-  const availableComponentIds = useMemo(() => {
-    const set = new Set<string>();
-    if (components) for (const c of components) set.add(c.id);
-    return set;
-  }, [components]);
+  const categories = useMemo(() => libraryCategories(components), [components]);
 
   const allTiles: Tile[] = useMemo(() => {
     const out: Tile[] = [];
-    for (const cat of LIBRARY_CATEGORIES) {
+    for (const cat of categories) {
       for (const id of cat.components) {
-        if (availableComponentIds.size > 0 && !availableComponentIds.has(id)) continue;
         out.push({
           ref: { kind: "component", id },
           label: id,
@@ -104,7 +99,7 @@ export function LibraryHome({ snippets }: Props) {
       });
     }
     return out;
-  }, [availableComponentIds, snippets]);
+  }, [categories, snippets]);
 
   const componentCount = allTiles.filter((t) => !t.isSnippet).length;
   const snippetCount = allTiles.filter((t) => t.isSnippet).length;
@@ -176,7 +171,7 @@ export function LibraryHome({ snippets }: Props) {
               label={`All ${allTiles.length}`}
               prominent
             />
-            {LIBRARY_CATEGORIES.map((cat) => {
+            {categories.map((cat) => {
               const count = allTiles.filter((t) => t.category === cat.label).length;
               if (count === 0) return null;
               return (

@@ -185,6 +185,62 @@ describe("batch index-path footgun guard", () => {
   });
 });
 
+/**
+ * The default `list_components` view, through the real tool. The unit tests
+ * cover the projection; this covers the wiring — that the index is what an
+ * agent gets without asking, that it reads the manifest's own grouping, and
+ * that the folder's own layers get shelves of their own.
+ */
+describe("list_components index", () => {
+  test("defaults to the grouped family index, not a per-component list", async () => {
+    const data = parse(await callTool("list_components", {})) as {
+      groups: { group: string; label: string; families: { id: string; pieces?: string[] }[] }[];
+      totals: { components: number; families: number };
+      components?: unknown;
+    };
+    expect(data.components).toBeUndefined();
+    expect(data.groups.map((g) => g.group)).toContain("forms");
+    // Folded, so families are far fewer than components.
+    expect(data.totals.families).toBeLessThan(data.totals.components / 2);
+
+    const forms = data.groups.find((g) => g.group === "forms");
+    expect(forms?.label).toBe("Forms & Inputs");
+    const field = forms?.families.find((f) => f.id === "Field");
+    expect(field?.pieces).toContain("FieldLabel");
+    expect(field?.pieces).toContain("FieldError");
+    // A piece is never listed as a family of its own.
+    expect(forms?.families.some((f) => f.id === "FieldLabel")).toBe(false);
+  });
+
+  test("carries the usage notes that steer away from a hand-rolled Box stack", async () => {
+    const data = parse(await callTool("list_components", {})) as {
+      groups: { families: { id: string; designModeNotes?: string }[] }[];
+    };
+    const families = data.groups.flatMap((g) => g.families);
+    for (const id of ["Field", "InputGroup", "Item", "Empty", "ButtonGroup"]) {
+      expect(families.find((f) => f.id === id)?.designModeNotes ?? "").not.toBe("");
+    }
+  });
+
+  test("gives snippets their own shelf", async () => {
+    const data = parse(await callTool("list_components", {})) as {
+      groups: { group: string; families: { id: string }[] }[];
+    };
+    const snippets = data.groups.find((g) => g.group === "snippets");
+    expect(snippets?.families.map((f) => f.id)).toContain("SiteHeader");
+  });
+
+  test("summary mode still returns prop names per component", async () => {
+    // The index trades prop names for size; this is where they still live, and
+    // the instructions send the agent here once it has picked a family.
+    const data = parse(await callTool("list_components", { filter: "Field", mode: "summary" })) as {
+      components: { id: string; props: string[] }[];
+    };
+    const field = data.components.find((c) => c.id === "Field");
+    expect(field?.props).toContain("orientation");
+  });
+});
+
 describe("snippet param contract", () => {
   test("list_components includes snippets with derived required flags", async () => {
     const r = await callTool("list_components", { kind: "snippet", mode: "full" });

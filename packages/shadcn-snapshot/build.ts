@@ -10,7 +10,7 @@
  * `snapshotVersion` field; bump it when re-syncing from upstream.
  */
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HELPER_DESCRIPTORS, ICON_ALIASES } from "@velloo/helpers";
 import {
@@ -23,7 +23,9 @@ import {
   SyntaxKind,
 } from "ts-morph";
 import { COMPONENT_EXAMPLES } from "./src/examples.ts";
+import { FAMILY_GROUPS } from "./src/groups.ts";
 import type { ComponentDescriptor, ControlType, Manifest, PropDescriptor } from "./src/manifest.ts";
+import { COMPONENT_NOTES } from "./src/notes.ts";
 import { registry } from "./src/registry.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -241,6 +243,44 @@ interface ExportedComponent {
  * clean upstream vendor work: shadcn declares components unexported and lists
  * them in a trailing `export { Button, buttonVariants }` block.
  */
+/** `.../ui/alert-dialog.tsx` ⇒ `alert-dialog`. */
+function familyOf(sourceFile: SourceFile): string {
+  return basename(sourceFile.getFilePath(), ".tsx");
+}
+
+/**
+ * Each family's root export, keyed by file: `alert-dialog` ⇒ `AlertDialog`.
+ * The pascalized filename is the answer for every family but the two upstream
+ * names after neither their component nor their export — `sonner.tsx` exports
+ * `Toaster`, `direction.tsx` exports `DirectionProvider` — where the shortest
+ * export is right. Guessing from the name alone would file every Toaster piece
+ * under a `Sonner` root that does not exist.
+ */
+function indexFamilyRoots(
+  ids: readonly string[],
+  exportsById: Map<string, ExportedComponent>,
+): Map<string, string> {
+  const byFamily = new Map<string, string[]>();
+  for (const id of ids) {
+    const file = exportsById.get(id)?.sourceFile;
+    if (!file) continue;
+    const family = familyOf(file);
+    byFamily.set(family, [...(byFamily.get(family) ?? []), id]);
+  }
+  const roots = new Map<string, string>();
+  for (const [family, members] of byFamily) {
+    const pascal = family
+      .split("-")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join("");
+    const root = members.includes(pascal)
+      ? pascal
+      : [...members].sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+    if (root) roots.set(family, root);
+  }
+  return roots;
+}
+
 function indexExports(project: Project): Map<string, ExportedComponent> {
   const index = new Map<string, ExportedComponent>();
   for (const sourceFile of project.getSourceFiles()) {
@@ -264,6 +304,7 @@ async function buildManifest(): Promise<void> {
   const helperById = new Map(HELPER_DESCRIPTORS.map((d) => [d.id, d]));
   const components: ComponentDescriptor[] = [];
   const exportsById = indexExports(project);
+  const familyRoots = indexFamilyRoots(Object.keys(registry), exportsById);
 
   for (const id of Object.keys(registry).sort()) {
     // The velloo helpers live in `@velloo/helpers` (outside this package's
@@ -319,11 +360,22 @@ async function buildManifest(): Promise<void> {
     }
 
     const example = COMPONENT_EXAMPLES[id];
+    const notes = COMPONENT_NOTES[id];
+    // The file a component is vendored from *is* its family: upstream ships
+    // one file per compound (`field.tsx` exports Field + its nine pieces), so
+    // both the browsing shelf and the root/piece relationship come from the
+    // path already resolved above — no second list to keep in sync.
+    const family = familyOf(srcFile);
+    const group = FAMILY_GROUPS[family];
+    const root = familyRoots.get(family);
     components.push({
       id,
       category,
       source,
+      ...(group ? { group } : {}),
+      ...(root ? { family: root } : {}),
       props,
+      ...(notes ? { designModeNotes: notes } : {}),
       ...(example ? { example } : {}),
     });
   }

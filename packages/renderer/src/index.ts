@@ -73,6 +73,7 @@ export {
   PROTOCOL_VERSION,
 } from "./iframe-protocol.ts";
 export { LIVE_RUNTIME } from "./live-runtime.ts";
+export { type RenderFailure, renderGuarded } from "./render-guard.ts";
 export {
   type RenderPass,
   type RenderResult,

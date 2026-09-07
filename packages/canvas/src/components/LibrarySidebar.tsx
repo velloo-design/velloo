@@ -1,7 +1,8 @@
+import type { ComponentDescriptor } from "@velloo/provider";
 import { Component as ComponentIcon, Package, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { SnippetMeta } from "../api.ts";
-import { LIBRARY_CATEGORIES } from "../library-categories.ts";
+import { libraryCategories } from "../library-categories.ts";
 import { useCanvas } from "../store.ts";
 import { Input } from "./ui/input.tsx";
 
@@ -15,26 +16,23 @@ export function LibrarySidebar({ snippets }: Props) {
   const openLibrary = useCanvas((s) => s.openLibrary);
   const [query, setQuery] = useState("");
 
-  const { libraryComponentIds, extensions } = useMemo(() => {
+  const { categories, extensions } = useMemo(() => {
     if (!components) {
-      return {
-        libraryComponentIds: new Set<string>(),
-        extensions: [] as { id: string; label: string }[],
-      };
+      return { categories: [], extensions: [] as { id: string; label: string }[] };
     }
     // /api/components returns library entries + extensions,
     // each tagged with `kind`. Older builds omit `kind`; treat those as library.
-    const ids = new Set<string>();
+    const library: ComponentDescriptor[] = [];
     const exts: { id: string; label: string }[] = [];
     for (const c of components as Array<(typeof components)[number] & { kind?: string }>) {
       if (c.kind === "extension") {
         exts.push({ id: c.id, label: c.id });
       } else {
-        ids.add(c.id);
+        library.push(c);
       }
     }
     exts.sort((a, b) => a.id.localeCompare(b.id));
-    return { libraryComponentIds: ids, extensions: exts };
+    return { categories: libraryCategories(library), extensions: exts };
   }, [components]);
 
   const q = query.trim().toLowerCase();
@@ -145,11 +143,8 @@ export function LibrarySidebar({ snippets }: Props) {
 
         <div className="h-px bg-border mx-2 my-3" />
 
-        {LIBRARY_CATEGORIES.map((cat) => {
-          const items = cat.components.filter(
-            (id) => libraryComponentIds.size === 0 || libraryComponentIds.has(id),
-          );
-          const filtered = items.filter(matches);
+        {categories.map((cat) => {
+          const filtered = cat.components.filter(matches);
           if (filtered.length === 0) return null;
           return (
             <section key={cat.id} className="pb-2">

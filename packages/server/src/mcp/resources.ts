@@ -75,8 +75,41 @@ Reference a snippet by its PascalCase tag from \`list_components\`: \`<SiteHeade
 
   components: {
     title: "Component vocabulary",
-    blurb: "Box vs Card, children, inline runs, icons, placeholders, raw CSS.",
+    blurb: "Shelves, reaching for a family vs a Box stack, children, icons, raw CSS.",
     body: `# Component vocabulary
+
+## Reading the catalog
+
+\`list_components\` returns *families* on shelves, not a flat list of names. Each shelf says what its components are for; each family lists the \`pieces\` you compose inside it.
+
+| Shelf | What lives there |
+| --- | --- |
+| Actions | Button, ButtonGroup, Toggle |
+| Forms & Inputs | Input, Field, InputGroup, Select, NativeSelect, Combobox, Checkbox, Switch, Slider, Calendar |
+| Display | Card, Item, Table, Avatar, Badge, Skeleton, Kbd |
+| Feedback | Alert, Empty, Progress, Spinner, Toaster |
+| Navigation | Tabs, Breadcrumb, Pagination, Accordion, NavigationMenu, Menubar |
+| Overlays | Dialog, Sheet, Drawer, Popover, DropdownMenu, ContextMenu, HoverCard, Tooltip |
+| Layout | ScrollArea, Separator, AspectRatio, Carousel |
+| Typography | Heading, Text, Prose |
+| Visuals | Icon, Image, Gradient, SVG, Chart, Placeholder |
+| Chat & AI | Message, Bubble, Attachment, Marker |
+
+## Reach for the family, not a Box stack
+
+The most common waste is rebuilding something the library already has. Check the shelf first:
+
+| If you're about to build… | Use |
+| --- | --- |
+| Label + input + help text + error | \`Field\` (+ \`FieldGroup\`, \`FieldSet\`) |
+| An input with an icon or unit inside its border | \`InputGroup\` |
+| A settings row, file row, notification row | \`Item\` (+ \`ItemGroup\`) |
+| A "no results yet" panel | \`Empty\` |
+| Buttons welded into a segmented control | \`ButtonGroup\` |
+| A keyboard shortcut hint | \`Kbd\` |
+| A plain option list | \`NativeSelect\` (\`Select\` is for rich rows) |
+
+A hand-built version loses the library's spacing, focus and disabled states, and dark-mode behavior — and \`emit_code\` then hands the developer a div stack instead of the component their app already imports. \`Box\` is still right for the *page* scaffolding around these.
 
 ## Layout
 

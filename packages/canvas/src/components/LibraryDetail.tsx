@@ -45,7 +45,7 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
     return components.find((c) => c.id === item.id) ?? null;
   }, [components, item.id]);
 
-  const category = categoryForComponent(item.id) ?? "Components";
+  const category = categoryForComponent(components, item.id) ?? "Components";
   const dark = designMode === "dark";
   const previewModeQs = dark ? "&mode=dark" : "";
 

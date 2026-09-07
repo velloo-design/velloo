@@ -12,6 +12,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Box",
     category: "ui",
+    group: "layout",
+    family: "Box",
     source: "velloo",
     props: [],
     example: { className: "flex flex-col gap-6 px-8 py-12" },
@@ -19,6 +21,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Divider",
     category: "ui",
+    group: "layout",
+    family: "Divider",
     source: "velloo",
     props: [
       {
@@ -49,6 +53,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Gradient",
     category: "ui",
+    group: "visuals",
+    family: "Gradient",
     source: "velloo",
     props: [
       {
@@ -75,6 +81,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Heading",
     category: "typography",
+    group: "typography",
+    family: "Heading",
     source: "velloo",
     props: [
       {
@@ -90,6 +98,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Icon",
     category: "ui",
+    group: "visuals",
+    family: "Icon",
     source: "velloo",
     props: [
       // `enumValues` (the lucide icon name list) is injected at snapshot build
@@ -107,6 +117,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Image",
     category: "ui",
+    group: "visuals",
+    family: "Image",
     source: "velloo",
     props: [
       { name: "src", type: "string", optional: false, control: "string" },
@@ -143,6 +155,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Layer",
     category: "ui",
+    group: "layout",
+    family: "Layer",
     source: "velloo",
     props: [
       { name: "top", type: "string | number | undefined", optional: true, control: "string" },
@@ -157,6 +171,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Placeholder",
     category: "ui",
+    group: "visuals",
+    family: "Placeholder",
     source: "velloo",
     props: [
       {
@@ -187,6 +203,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Prose",
     category: "typography",
+    group: "typography",
+    family: "Prose",
     source: "velloo",
     props: [
       {
@@ -202,6 +220,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "SVG",
     category: "ui",
+    group: "visuals",
+    family: "SVG",
     source: "velloo",
     props: [
       { name: "content", type: "string | undefined", optional: true, control: "string" },
@@ -218,6 +238,8 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
   {
     id: "Text",
     category: "typography",
+    group: "typography",
+    family: "Text",
     source: "velloo",
     props: [
       {

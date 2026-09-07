@@ -299,6 +299,8 @@ The registry ships 54 shadcn families — every `registry:ui` entry upstream pub
 
 The snapshot's `snapshotVersion` (`2026.09.03`) records the upstream shadcn pull the vendored components mirror, and `shadcnStyle` / `shadcnCliVersion` record the registry style (`radix-nova`) and CLI release it came from. The upstream provider's `version` reflects the date its cache was fetched (defaulting to the snapshot's date).
 
+At that size the catalog needs structure to be usable, so `build.ts` also derives two browsing fields per descriptor from the vendored file: `group`, the shelf (`src/groups.ts` maps file → one of `@velloo/provider`'s `COMPONENT_GROUPS`), and `family`, the compound root — `FieldLabel`'s is `Field`, which is what tells a reader the two are not peers. Both the canvas Library shelves and `list_components`' default index are projections of those fields, so neither keeps its own list of ids; the manifest test fails if a vendored family is neither grouped nor explicitly listed as ungrouped. `src/notes.ts` adds the usage notes that name a component in place of a hand-rolled `Box` stack, which is the difference between shipping a `Field` and shipping a div that looks like one.
+
 ### Tailwind is a canvas concern, not a provider concern
 
 **Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the shared `@velloo/helpers` sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.

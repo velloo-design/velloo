@@ -1,7 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ComponentDescriptor, FrameworkAdapter, Manifest } from "@velloo/provider";
+import {
+  COMPONENT_GROUPS,
+  type ComponentDescriptor,
+  type FrameworkAdapter,
+  type Manifest,
+  UNGROUPED_LABEL,
+} from "@velloo/provider";
 import {
   DEFAULT_TYPESET_NAME,
   isComponentNode,
@@ -132,6 +138,96 @@ function toSummary(c: ComponentDescriptor): ComponentSummary {
   return out;
 }
 
+/** The two shelves that aren't the library's: what this folder added itself. */
+const EXTENSION_SHELF = { id: "extensions", label: "Extensions (this app's own)" } as const;
+const SNIPPET_SHELF = { id: "snippets", label: "Snippets (your compositions)" } as const;
+
+interface FamilyIndexEntry {
+  id: string;
+  /** Sub-components of this family, omitted when it is a lone component. */
+  pieces?: string[];
+  designModeNotes?: string;
+}
+
+interface ComponentIndex {
+  groups: { group: string; label: string; families: FamilyIndexEntry[] }[];
+  totals: { components: number; families: number };
+  /** Only the exceptions — everything unlisted renders and is installed. */
+  unavailableInDesign?: string[];
+  notInstalledInApp?: string[];
+}
+
+interface IndexInput {
+  id: string;
+  group?: string | undefined;
+  family?: string | undefined;
+  designModeNotes?: string | undefined;
+  availableInDesign: boolean;
+  installedInApp: boolean;
+}
+
+/**
+ * The browsing view: families on shelves, sub-pieces folded into their root.
+ *
+ * A per-entry list of 292 components spends ~27 of its 43 KB restating
+ * `source`/`category`/`availableInDesign`/`installedInApp` that are identical
+ * for all but a handful, and spends the rest on sub-piece names presented as
+ * peers of their own root. This states the constants once, reports only the
+ * exceptions, and lets the family shape carry the composition — so the default
+ * first call costs roughly a fifth as much while saying more. Prop names come
+ * from `mode: "summary"`/`"full"`, which are unchanged.
+ */
+export function componentIndex(
+  entries: readonly IndexInput[],
+  groupOrder: readonly { id: string; label: string }[],
+  labelFor: (group: string | undefined) => string,
+): ComponentIndex {
+  const byGroup = new Map<string, Map<string, FamilyIndexEntry>>();
+  for (const entry of entries) {
+    // Ungrouped and family-less entries (a provider that sets neither, an
+    // extension) still have to appear, so both fall back rather than drop.
+    const group = entry.group ?? "";
+    const familyId = entry.family ?? entry.id;
+    const families = byGroup.get(group) ?? new Map<string, FamilyIndexEntry>();
+    const family = families.get(familyId) ?? { id: familyId };
+    if (entry.id !== familyId) family.pieces = [...(family.pieces ?? []), entry.id];
+    // A note on the root describes the family; one on a piece (FieldError's
+    // `errors` shape) would be lost here, so it is appended to the root's.
+    if (entry.designModeNotes) {
+      family.designModeNotes =
+        entry.id === familyId
+          ? [entry.designModeNotes, family.designModeNotes].filter(Boolean).join(" ")
+          : [family.designModeNotes, `${entry.id}: ${entry.designModeNotes}`]
+              .filter(Boolean)
+              .join(" ");
+    }
+    families.set(familyId, family);
+    byGroup.set(group, families);
+  }
+  const order = [...groupOrder.map((g) => g.id), ""];
+  const groups = [...byGroup.entries()]
+    .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+    .map(([group, families]) => ({
+      group: group === "" ? "other" : group,
+      label: labelFor(group === "" ? undefined : group),
+      families: [...families.values()]
+        .map((family) => (family.pieces ? { ...family, pieces: family.pieces.sort() } : family))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    }));
+  const index: ComponentIndex = {
+    groups,
+    totals: {
+      components: entries.length,
+      families: groups.reduce((sum, g) => sum + g.families.length, 0),
+    },
+  };
+  const unavailable = entries.filter((e) => !e.availableInDesign).map((e) => e.id);
+  const uninstalled = entries.filter((e) => !e.installedInApp).map((e) => e.id);
+  if (unavailable.length > 0) index.unavailableInDesign = unavailable;
+  if (uninstalled.length > 0) index.notInstalledInApp = uninstalled;
+  return index;
+}
+
 /**
  * `list_boards`' payload, extracted so the selection rule is testable without
  * standing up an MCP session. Honors config.boardOrder so the agent sees the
@@ -222,11 +318,11 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List the unified `compose` tag namespace: library components, extensions, and snippets. `mode: "summary"` (default) returns tag/source/category/prop-names; `"full"` returns full descriptors. Snippet entries carry `snippetId`; their `id` is the PascalCase JSX tag. `installedInApp` is host-app status only; false does not block design, and `emit_code.componentsToInstall` carries the handoff plan. `filter` substring-matches tags; `kind` narrows the result.',
+        'List the unified `compose` tag namespace: library components, extensions, and snippets. `mode: "index"` (default) groups families onto shelves with their sub-pieces folded in and carries per-family usage notes — read this first, then `filter` to the handful you will actually use. `"summary"` adds prop names per component; `"full"` returns whole descriptors with examples. A family entry means you compose its `pieces` inside it (`Field` ⇒ `FieldLabel`/`FieldDescription`/`FieldError`) — prefer a real family over rebuilding one from `Box` and `Text`. Snippet entries carry `snippetId`; their `id` is the PascalCase JSX tag. `installedInApp` is host-app status only; false does not block design, and `emit_code.componentsToInstall` carries the handoff plan. `filter` substring-matches tags; `kind` narrows the result.',
       outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
-        mode: z.enum(["summary", "full"]).optional(),
+        mode: z.enum(["index", "summary", "full"]).optional(),
         kind: z.enum(["library", "extension", "snippet"]).optional(),
       },
     },
@@ -280,8 +376,36 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       const filtered = filter
         ? all.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()))
         : all;
+      if ((mode ?? "index") === "index") {
+        // Extensions and snippets get shelves of their own: they are the two
+        // layers the agent adds, so burying them among 66 library families
+        // would hide exactly the components this folder chose to have.
+        const order = [...COMPONENT_GROUPS, EXTENSION_SHELF, SNIPPET_SHELF];
+        const shelfOf = (group: string | undefined): string =>
+          order.find((g) => g.id === group)?.label ?? UNGROUPED_LABEL;
+        const index = componentIndex(
+          filtered.map((c) => ({
+            id: c.id,
+            group:
+              c.kind === "extension"
+                ? EXTENSION_SHELF.id
+                : c.kind === "snippet"
+                  ? SNIPPET_SHELF.id
+                  : "group" in c
+                    ? c.group
+                    : undefined,
+            family: "family" in c ? c.family : undefined,
+            designModeNotes: c.designModeNotes,
+            availableInDesign: c.availableInDesign,
+            installedInApp: c.installedInApp,
+          })),
+          order,
+          shelfOf,
+        );
+        return structuredResult({ snapshotVersion: ctx.defaultProvider.version, ...index });
+      }
       const out =
-        (mode ?? "summary") === "full"
+        mode === "full"
           ? filtered.map((entry) => (entry.kind === "snippet" ? entry : trimLargeEnums(entry)))
           : filtered.map((c) => {
               const summary =

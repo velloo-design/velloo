@@ -20,6 +20,23 @@ describe("buildInstructions", () => {
     expect(text).not.toContain("velloo://guide/porting");
   });
 
+  /**
+   * A 292-component library is only useful if the agent reaches into it. Left
+   * to itself a model builds a labelled input out of Box + Label + Text —
+   * plausible markup that loses the library's states and dark-mode behavior,
+   * and hands the developer a div stack at `emit_code`. The brief has to name
+   * the substitution, not just say "components are available".
+   */
+  test("steers toward a real component family over a hand-rolled Box stack", () => {
+    const text = buildInstructions(false);
+    expect(text).toContain("Use the library's own components");
+    for (const family of ["Field", "InputGroup", "Item", "Empty", "ButtonGroup"]) {
+      expect(text).toContain(family);
+    }
+    // And says how to read the catalog it is pointing at.
+    expect(text).toContain("pieces");
+  });
+
   test("omits the feedback paragraph when feedback is disabled", () => {
     const text = buildInstructions(false);
     expect(text).not.toContain("send_feedback");
