@@ -1,6 +1,14 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Screen, ScreenSchema, type Snippet, SnippetSchema } from "@velloo/schema";
@@ -22,21 +30,47 @@ import {
  * (transitively), asset change → screens referencing it.
  */
 
-// Every test scaffolds a real git repo (init + add + commit) and most spawn
-// several more git processes. Under `bun test --parallel` those subprocesses
-// queue behind every other worker's, and the 5s default starts tripping.
+/**
+ * The developer's own git setup must not reach these repos. A global
+ * `core.hooksPath` runs that machine's pre-commit hook on every fixture
+ * commit, LFS filters spawn a helper per `git add`, and a credential helper
+ * can block on a prompt that never comes — none of which this test is about,
+ * and any of which can wedge a subprocess past the timeout. Set on the
+ * process, not just the helper below, because `resolveGitContext` and
+ * `materializeRef` spawn their own git.
+ */
+process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+process.env.GIT_CONFIG_SYSTEM = "/dev/null";
+process.env.GIT_TERMINAL_PROMPT = "0";
+
+// The git plumbing tests spawn real subprocesses. Under `bun test --parallel`
+// those queue behind every other worker's, and the 5s default starts tripping.
 setDefaultTimeout(30_000);
 
-let tmp: string;
+/**
+ * One parent dir for the whole file, removed in `afterAll` rather than per
+ * test. A per-test `afterEach` reads whichever path the shared `repo` binding
+ * holds *when it runs*; if a test trips the timeout, that hook can fire once
+ * the next test's `beforeEach` has already rebound it, deleting a live repo
+ * and turning one slow test into a file-wide cascade.
+ */
+let root: string;
+/** The committed base repo every test starts from — built once, copied per test. */
+let fixture: string;
 let repo: string;
 let design: string;
+let caseNo = 0;
 
-function git(args: string[]): string {
+function gitIn(cwd: string, args: string[]): string {
   return execFileSync(
     "git",
-    ["-C", repo, "-c", "user.email=ci@test", "-c", "user.name=ci", ...args],
+    ["-C", cwd, "-c", "user.email=ci@test", "-c", "user.name=ci", ...args],
     { encoding: "utf8" },
   );
+}
+
+function git(args: string[]): string {
+  return gitIn(repo, args);
 }
 
 const screenJson = (id: string, className: string, children: unknown[] = []): string =>
@@ -47,35 +81,45 @@ const screenJson = (id: string, className: string, children: unknown[] = []): st
     tree: { $ref: "Box", props: { className }, children },
   });
 
-async function scaffold(): Promise<void> {
-  await mkdir(join(design, ".design"), { recursive: true });
-  await mkdir(join(design, "theme"), { recursive: true });
-  await mkdir(join(design, "screens"), { recursive: true });
-  await mkdir(join(design, "snippets"), { recursive: true });
-  await mkdir(join(design, "assets"), { recursive: true });
-  await writeFile(join(design, ".design", "config.json"), JSON.stringify({ schemaVersion: 3 }));
-  await writeFile(join(design, "theme", "default.json"), JSON.stringify({ name: "default" }));
-  await writeFile(join(design, "screens", "home.json"), screenJson("home", "bg-background"));
-  await writeFile(join(design, "screens", "about.json"), screenJson("about", "p-4"));
+async function scaffold(at: string): Promise<void> {
+  const dir = join(at, "velloo");
+  await mkdir(join(dir, ".design"), { recursive: true });
+  await mkdir(join(dir, "theme"), { recursive: true });
+  await mkdir(join(dir, "screens"), { recursive: true });
+  await mkdir(join(dir, "snippets"), { recursive: true });
+  await mkdir(join(dir, "assets"), { recursive: true });
+  await writeFile(join(dir, ".design", "config.json"), JSON.stringify({ schemaVersion: 3 }));
+  await writeFile(join(dir, "theme", "default.json"), JSON.stringify({ name: "default" }));
+  await writeFile(join(dir, "screens", "home.json"), screenJson("home", "bg-background"));
+  await writeFile(join(dir, "screens", "about.json"), screenJson("about", "p-4"));
   await writeFile(
-    join(design, "snippets", "card.json"),
+    join(dir, "snippets", "card.json"),
     JSON.stringify({ id: "card", name: "Card", params: [], tree: { $ref: "Box" } }),
   );
-  await writeFile(join(design, "assets", "logo.png"), "png-bytes");
-  git(["init", "-q"]);
-  git(["add", "-A"]);
-  git(["commit", "-qm", "base"]);
+  await writeFile(join(dir, "assets", "logo.png"), "png-bytes");
+  gitIn(at, ["init", "-q"]);
+  gitIn(at, ["add", "-A"]);
+  gitIn(at, ["commit", "-qm", "base"]);
 }
 
-beforeEach(async () => {
-  tmp = join(tmpdir(), `velloo-ci-diff-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  repo = tmp;
-  design = join(repo, "velloo");
-  await scaffold();
+beforeAll(async () => {
+  root = await mkdtemp(join(tmpdir(), "velloo-ci-diff-"));
+  fixture = join(root, "fixture");
+  await mkdir(fixture, { recursive: true });
+  await scaffold(fixture);
 });
 
-afterEach(async () => {
-  await rm(tmp, { recursive: true, force: true });
+afterAll(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
+// A copy of the committed fixture, not a fresh `init`/`add`/`commit`: three
+// fewer subprocesses per test, and the base commit stays identical across them.
+beforeEach(async () => {
+  caseNo += 1;
+  repo = join(root, `case-${caseNo}`);
+  design = join(repo, "velloo");
+  await cp(fixture, repo, { recursive: true });
 });
 
 describe("git plumbing", () => {

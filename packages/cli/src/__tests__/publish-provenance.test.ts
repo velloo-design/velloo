@@ -10,6 +10,16 @@ import {
   reportProvenance,
 } from "../publish/core.ts";
 
+/**
+ * Keep the developer's own git setup out of these throwaway repos: a global
+ * `core.hooksPath` would run that machine's pre-commit hook on the fixture
+ * commit below, and a credential helper can block on a prompt that never
+ * comes. Set on the process because `gitContext` spawns its own git.
+ */
+process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+process.env.GIT_CONFIG_SYSTEM = "/dev/null";
+process.env.GIT_TERMINAL_PROMPT = "0";
+
 // Each case scaffolds a real git repo with a chain of synchronous `git`
 // subprocesses. Under `bun test --parallel` those queue behind every other
 // worker's, and the 5s default starts tripping.

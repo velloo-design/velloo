@@ -39,7 +39,8 @@ export default defineCommand({
     },
     port: {
       type: "string",
-      description: "Preferred canvas port when starting fresh (default 7300, else a free port)",
+      description:
+        "Preferred canvas port when starting fresh (default: the port this folder ran on last, else 7300)",
     },
     host: {
       type: "string",
@@ -79,7 +80,7 @@ export default defineCommand({
         if (targets.length > 1) progress.step(`starting ${label(target)}`);
         const rec = await ensureDaemon(target.folder, {
           // An explicit --port belongs to the first canvas; the rest take
-          // free ports rather than fighting over one number.
+          // their own ports rather than fighting over one number.
           ...(preferredPort !== undefined && index === 0 ? { preferredPort } : {}),
           host: args.host,
           onSpawn: () => {

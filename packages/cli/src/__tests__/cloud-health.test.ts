@@ -133,7 +133,11 @@ test("version upload retries one transient 5xx and succeeds", async () => {
 
 test("version upload times out, retries once, and reports an actionable failure", async () => {
   let attempts = 0;
-  const url = serveCloud(async (req) => {
+  let retryArrived!: () => void;
+  const retried = new Promise<void>((resolve) => {
+    retryArrived = resolve;
+  });
+  const url = serveCloud((req) => {
     const { pathname } = new URL(req.url);
     if (req.method === "POST" && pathname === "/v1/links") {
       return Response.json(
@@ -143,8 +147,11 @@ test("version upload times out, retries once, and reports an actionable failure"
     }
     if (req.method === "POST" && pathname.endsWith("/versions")) {
       attempts += 1;
-      await Bun.sleep(50);
-      return Response.json({ files: 1, bytes: 2, url: "/s/slow/" }, { status: 201 });
+      if (attempts === 2) retryArrived();
+      // Never answer: the client's own timeout is what has to end this. A
+      // fixed sleep instead races the timeout, and under a loaded parallel
+      // run the second abort can beat the handler that counts it.
+      return new Promise<Response>(() => {});
     }
     return new Response("not found", { status: 404 });
   });
@@ -155,7 +162,7 @@ test("version upload times out, retries once, and reports an actionable failure"
     token: "t",
     link: { title: "x", visibility: "public", publishMode: "new" },
     form,
-    uploadTimeoutMs: 5,
+    uploadTimeoutMs: 100,
   });
   expect(timedOut.ok).toBe(false);
   if (timedOut.ok) return;
@@ -163,6 +170,7 @@ test("version upload times out, retries once, and reports an actionable failure"
   expect(describeCloudError(timedOut.error)).toMatch(
     /timed out.*2 attempts.*check your connection/i,
   );
+  await retried;
   expect(attempts).toBe(2);
 });
 

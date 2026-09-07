@@ -13,8 +13,11 @@ import { createCanvasPublish } from "../daemon/canvas-publish.ts";
 import {
   type DaemonRecord,
   daemonRoot,
+  portCandidates,
+  readRememberedPort,
   registryRemove,
   registryUpsert,
+  rememberPort,
   removeLock,
   writeLock,
 } from "../daemon/runtime.ts";
@@ -70,9 +73,15 @@ export default defineCommand({
     // account menu and the publish dialog must never disagree about it.
     const publish: CanvasPublish = createCanvasPublish(cloudUrl, auth);
 
-    // Prefer the requested port (7300 by default), fall back to a free one.
-    const preferred = args.port ? Number(args.port) : 7300;
-    const canvasPort = portFree(preferred, host) ? preferred : 0;
+    // Probe this folder's ports in order (see portCandidates), fall back to a
+    // free one. Whatever it lands on is remembered below, so the next start
+    // asks for it first and a canvas tab left open on it reconnects.
+    const candidates = portCandidates({
+      explicit: args.port ? Number(args.port) : undefined,
+      remembered: await readRememberedPort(root),
+      root,
+    });
+    const canvasPort = candidates.find((port) => portFree(port, host)) ?? 0;
     let handle: ServerHandle;
     try {
       handle = await createServer({
@@ -111,6 +120,8 @@ export default defineCommand({
     };
     await writeLock(rec);
     await registryUpsert(rec);
+    // Best effort: an unwritten memo costs this folder its port next time, nothing more.
+    await rememberPort(root, handle.port).catch(() => undefined);
     console.error(
       `velloo: canvas daemon up at ${handle.url} (mcp ${handle.mcpUrl}), pid ${process.pid}`,
     );

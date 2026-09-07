@@ -6,13 +6,18 @@ import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import {
   assertFolderFormatCurrent,
   type DaemonRecord,
+  DEFAULT_CANVAS_PORT,
   DesignFolderFormatError,
   daemonMatchesRuntime,
   daemonRoot,
+  derivedPort,
   ensureDaemon,
+  portCandidates,
   readLock,
+  readRememberedPort,
   registryRemove,
   registryUpsert,
+  rememberPort,
   removeLock,
   writeLock,
 } from "../daemon/runtime.ts";
@@ -94,6 +99,77 @@ describe("daemon runtime", () => {
     const legacy = { ...current } as Partial<DaemonRecord>;
     delete legacy.cloudUrl;
     expect(daemonMatchesRuntime(legacy as DaemonRecord, "http://localhost:7400")).toBe(false);
+  });
+});
+
+/**
+ * A canvas tab points at a port, not at a folder, so a folder that comes back
+ * on a different port strands every tab left open on it — and takes the
+ * per-origin canvas prefs (last board, per-board zoom) with it.
+ */
+describe("port stickiness", () => {
+  test("the port memo round-trips and outlives the lockfile", async () => {
+    await rememberPort(root, 7318);
+    await writeLock(rec({ canvasPort: 7318 }));
+    // Stopping clears "running"; it must not clear "where this folder runs".
+    removeLock(root);
+    expect(await readRememberedPort(root)).toBe(7318);
+  });
+
+  test("a missing or corrupt memo reads as no memory", async () => {
+    expect(await readRememberedPort(root)).toBeNull();
+    await mkdir(join(root, ".design", "cache"), { recursive: true });
+    await writeFile(join(root, ".design", "cache", "port.json"), "{ not json");
+    expect(await readRememberedPort(root)).toBeNull();
+    await writeFile(join(root, ".design", "cache", "port.json"), JSON.stringify({ canvasPort: 0 }));
+    expect(await readRememberedPort(root)).toBeNull();
+  });
+
+  // 7305 rather than a port inside the derived band: `root` is a random temp
+  // path, so any in-band literal is one hash away from being this folder's own
+  // derived port, and the candidate list would dedupe it back out.
+  test("a remembered port is asked for before the default", () => {
+    expect(portCandidates({ remembered: 7305, root })).toEqual([
+      7305,
+      DEFAULT_CANVAS_PORT,
+      derivedPort(root),
+    ]);
+  });
+
+  test("with no memory, the default comes first and the derived port backs it up", () => {
+    expect(portCandidates({ root })).toEqual([DEFAULT_CANVAS_PORT, derivedPort(root)]);
+  });
+
+  test("a folder remembered on the default port doesn't ask for it twice", () => {
+    expect(portCandidates({ remembered: DEFAULT_CANVAS_PORT, root })).toEqual([
+      DEFAULT_CANVAS_PORT,
+      derivedPort(root),
+    ]);
+  });
+
+  test("--port stands alone: an explicit port is an instruction, not a preference", () => {
+    expect(portCandidates({ explicit: 7399, remembered: 7318, root })).toEqual([7399]);
+  });
+
+  test("the derived port is stable per folder and off 7300/7301", () => {
+    for (const path of [root, join(tmp, "other"), "/a", "/b/c", tmpdir()]) {
+      const port = derivedPort(path);
+      expect(derivedPort(path)).toBe(port);
+      expect(port).toBeGreaterThan(DEFAULT_CANVAS_PORT + 1);
+      expect(port).toBeLessThan(7400);
+    }
+  });
+
+  /**
+   * Two folders landing on the same port is not a bug — the band holds 90 of
+   * them, so any given pair collides about 1% of the time, and the daemon just
+   * moves to the next candidate. What has to hold is that the derivation
+   * actually spreads folders out. Fixed paths, so the count can't drift with a
+   * temp directory's name.
+   */
+  test("folders spread across the band rather than piling onto one port", () => {
+    const ports = new Set(Array.from({ length: 50 }, (_, i) => derivedPort(`/velloo/folder-${i}`)));
+    expect(ports.size).toBeGreaterThan(25);
   });
 });
 

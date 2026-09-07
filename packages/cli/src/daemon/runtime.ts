@@ -66,6 +66,9 @@ const cacheDir = (root: string) => join(root, ".design", "cache");
 const lockPath = (root: string) => join(cacheDir(root), "runtime.json");
 const mutexPath = (root: string) => join(cacheDir(root), "runtime.lock");
 const logPath = (root: string) => join(cacheDir(root), "daemon.log");
+// Outlives the lockfile on purpose: the lockfile means "running", this means
+// "where this folder runs".
+const portMemoPath = (root: string) => join(cacheDir(root), "port.json");
 
 const registryPath = () =>
   process.env.VELLOO_DAEMONS_PATH ?? join(homedir(), ".velloo", "daemons.json");
@@ -133,6 +136,62 @@ export function removeLock(root: string): void {
   } catch {
     // already gone
   }
+}
+
+/** The port a folder that has never run asks for first. */
+export const DEFAULT_CANVAS_PORT = 7300;
+
+/**
+ * Where a folder falls back when 7300 is taken. Adjacent to velloo's own
+ * default so a stray listener is recognizable, and clear of 7301 (the canvas
+ * dev server, and the MCP URL the docs quote). Deliberately *not* the OS
+ * ephemeral range: a port the kernel hands out to `port: 0` is one it may lend
+ * to something else while the daemon is down — precisely when a port has to
+ * still be there.
+ */
+const DERIVED_BAND = { start: 7310, size: 90 } as const;
+
+const PortMemoSchema = z.object({ canvasPort: z.number().int().min(1).max(65535) });
+
+/**
+ * The port this folder's canvas bound last time. A browser tab points at a
+ * port, not at a folder, so reusing it is the whole reason a tab left open
+ * over a restart reconnects instead of hanging on a dead origin.
+ */
+export async function readRememberedPort(root: string): Promise<number | null> {
+  try {
+    const parsed = PortMemoSchema.safeParse(JSON.parse(await readFile(portMemoPath(root), "utf8")));
+    return parsed.success ? parsed.data.canvasPort : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function rememberPort(root: string, canvasPort: number): Promise<void> {
+  await writeJsonAtomic(portMemoPath(root), { canvasPort });
+}
+
+/** A folder's own port, derived from the path the daemon identifies it by. */
+export function derivedPort(root: string): number {
+  const digest = Bun.CryptoHasher.hash("sha256", root, "hex");
+  return DERIVED_BAND.start + (Number.parseInt(digest.slice(0, 8), 16) % DERIVED_BAND.size);
+}
+
+/**
+ * The ports to try, in order, before settling for whatever the OS hands out.
+ * `--port` is an instruction, so it stands alone. Otherwise a folder asks for
+ * where it ran last — that, not the default, is what an open tab is pointing
+ * at — then the default, then its derived port, which keeps folders off each
+ * other's toes on a first run or after `.design/cache` is wiped.
+ */
+export function portCandidates(opts: {
+  explicit?: number | undefined;
+  remembered?: number | null;
+  root: string;
+}): number[] {
+  if (opts.explicit !== undefined) return [opts.explicit];
+  const wanted = [opts.remembered, DEFAULT_CANVAS_PORT, derivedPort(opts.root)];
+  return [...new Set(wanted.filter((p): p is number => typeof p === "number"))];
 }
 
 /** What `/api/health` answers; anything else is not our daemon. */
