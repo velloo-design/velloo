@@ -1,18 +1,25 @@
-import { ChevronRight, MoreHorizontal } from "lucide-react";
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/breadcrumb).
+// Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
+// Regenerate with `bun run vendor`; do not hand-edit.
+
+import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
 import { Slot } from "radix-ui";
 import type * as React from "react";
+
 import { cn } from "@/lib/utils";
 
-export function Breadcrumb({ ...props }: React.ComponentProps<"nav">) {
-  return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />;
+function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
+  return (
+    <nav aria-label="breadcrumb" data-slot="breadcrumb" className={cn(className)} {...props} />
+  );
 }
 
-export function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
+function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
   return (
     <ol
       data-slot="breadcrumb-list"
       className={cn(
-        "flex flex-wrap items-center gap-1.5 text-sm break-words text-muted-foreground sm:gap-2.5",
+        "flex flex-wrap items-center gap-1.5 text-sm wrap-break-word text-muted-foreground",
         className,
       )}
       {...props}
@@ -20,22 +27,25 @@ export function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol
   );
 }
 
-export function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
+function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
   return (
     <li
       data-slot="breadcrumb-item"
-      className={cn("inline-flex items-center gap-1.5", className)}
+      className={cn("inline-flex items-center gap-1", className)}
       {...props}
     />
   );
 }
 
-export function BreadcrumbLink({
+function BreadcrumbLink({
   asChild,
   className,
   ...props
-}: React.ComponentProps<"a"> & { asChild?: boolean }) {
+}: React.ComponentProps<"a"> & {
+  asChild?: boolean;
+}) {
   const Comp = asChild ? Slot.Root : "a";
+
   return (
     <Comp
       data-slot="breadcrumb-link"
@@ -45,10 +55,8 @@ export function BreadcrumbLink({
   );
 }
 
-export function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
+function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
   return (
-    // biome-ignore lint/a11y/useFocusableInteractive: shadcn-canonical breadcrumb page is intentionally non-interactive; role="link" + aria-current is the documented pattern
-    // biome-ignore lint/a11y/useSemanticElements: span is correct here — the current page is not a real link, just labeled as one for AT
     <span
       data-slot="breadcrumb-page"
       role="link"
@@ -60,7 +68,7 @@ export function BreadcrumbPage({ className, ...props }: React.ComponentProps<"sp
   );
 }
 
-export function BreadcrumbSeparator({ children, className, ...props }: React.ComponentProps<"li">) {
+function BreadcrumbSeparator({ children, className, ...props }: React.ComponentProps<"li">) {
   return (
     <li
       data-slot="breadcrumb-separator"
@@ -69,22 +77,32 @@ export function BreadcrumbSeparator({ children, className, ...props }: React.Com
       className={cn("[&>svg]:size-3.5", className)}
       {...props}
     >
-      {children ?? <ChevronRight />}
+      {children ?? <ChevronRightIcon className="cn-rtl-flip" />}
     </li>
   );
 }
 
-export function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span">) {
+function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="breadcrumb-ellipsis"
       role="presentation"
       aria-hidden="true"
-      className={cn("flex size-9 items-center justify-center", className)}
+      className={cn("flex size-5 items-center justify-center [&>svg]:size-4", className)}
       {...props}
     >
-      <MoreHorizontal className="size-4" />
+      <MoreHorizontalIcon />
       <span className="sr-only">More</span>
     </span>
   );
 }
+
+export {
+  Breadcrumb,
+  BreadcrumbEllipsis,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+};

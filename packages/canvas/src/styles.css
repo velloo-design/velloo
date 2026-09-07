@@ -1,5 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Upstream's own sheet: the `data-open` / `data-closed` / `data-checked`
+ * variants the vendored components are written against (they normalize Radix's
+ * `data-state` into something a utility can target) plus the accordion
+ * keyframes. Without it every overlay's open/closed styling silently no-ops. */
+@import "./shadcn-tailwind.css";
 
 /* Brand wordmark face — bundled locally so the lockup renders in Poppins
  * offline (no Google Fonts call). Only the 700 weight the lockup needs. */
@@ -105,6 +110,44 @@
   --brand-amber: #ffab1f;
   --brand-coral: #ff6f4d;
   color-scheme: dark;
+}
+
+/*
+ * Classes the vendored components *emit* but upstream does not *distribute*:
+ * they live in the shadcn.com app's own globals.css, so a registry pull
+ * references them without ever defining them (the same leak that puts
+ * `IconPlaceholder` in the source — see vendor.ts). Defined here to upstream's
+ * intent so the components referencing them aren't silently inert; the
+ * stylesheet test asserts every `cn-*` a component uses is one of these.
+ */
+@utility cn-menu-translucent {
+  /* Menu and popover surfaces read as frosted glass over the canvas, with the
+   * component's own solid `bg-popover` as the no-backdrop-filter fallback.
+   * Doubled selector on purpose: `bg-popover` sits on the same element and is
+   * emitted after this, so at one class the blur would apply over an opaque
+   * background and show nothing. */
+  @supports (backdrop-filter: blur(1px)) {
+    &.cn-menu-translucent {
+      background-color: color-mix(in oklch, var(--color-popover) 85%, transparent);
+      backdrop-filter: blur(12px) saturate(1.6);
+    }
+  }
+}
+
+@utility cn-menu-target {
+  /* Marks the element a menu's popup anchors to; layout-neutral on its own. */
+  position: relative;
+}
+
+@utility cn-font-heading {
+  font-family: var(--font-heading, var(--font-sans));
+}
+
+@utility cn-rtl-flip {
+  /* Directional glyphs (chevrons in breadcrumb, accordion, menus). */
+  &:where([dir="rtl"], [dir="rtl"] *) {
+    transform: scaleX(-1);
+  }
 }
 
 html,

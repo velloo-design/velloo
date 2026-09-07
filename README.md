@@ -134,6 +134,7 @@ You choose when — and whether — to make any of them.
 bun install
 bun --cwd packages/shadcn-snapshot run vendor   # re-pull shadcn from upstream (rare)
 bun --cwd packages/shadcn-snapshot run build    # build dist/manifest.json
+bun --cwd packages/canvas run vendor            # re-pull the IDE chrome's copy — same pull
 bun --cwd packages/canvas run build             # build canvas SPA
 bun run typecheck
 bun run velloo init /tmp/velloo-smoke

@@ -86,9 +86,12 @@
       // next pull is a copy rather than a merge (CLAUDE.md, "two copies of
       // shadcn, one upstream pull"). These findings are upstream's house style
       // — fixing them here would be reverted by `bun run vendor`, and the same
-      // reasoning already exempts this directory in knip.jsonc. The canvas's
-      // copy predates the automated pull and carries its own suppressions.
-      "includes": ["packages/shadcn-snapshot/src/components/ui/**"],
+      // reasoning already exempts these directories in knip.jsonc. Both copies
+      // are on the same pull and both are generated, so both are exempt.
+      "includes": [
+        "packages/shadcn-snapshot/src/components/ui/**",
+        "packages/canvas/src/components/ui/**"
+      ],
       "linter": {
         "rules": {
           "a11y": {

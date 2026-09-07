@@ -102,6 +102,42 @@
   position: relative;
 }
 
+@utility cn-menu-translucent {
+  /* Menu and popover surfaces read as frosted glass, with the component's own
+   * solid `bg-popover` as the no-backdrop-filter fallback. Doubled selector on
+   * purpose: `bg-popover` sits on the same element and is emitted after this,
+   * so at one class the blur would apply over an opaque background and show
+   * nothing. */
+  @supports (backdrop-filter: blur(1px)) {
+    &.cn-menu-translucent {
+      background-color: color-mix(in oklch, var(--color-popover) 85%, transparent);
+      backdrop-filter: blur(12px) saturate(1.6);
+    }
+  }
+}
+
+@utility cn-calendar-dropdown-root {
+  /* The month/year <select> is overlaid at `opacity-0`, so its focus ring has
+   * to be mirrored onto this wrapper or keyboard navigation is invisible. */
+  &:hover {
+    background-color: var(--color-accent);
+  }
+  &:has(> select:focus-visible) {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+@utility cn-calendar-caption {
+  /* Static month label: matches the inline padding of the dropdown variant so
+   * switching `captionLayout` doesn't shift the header. */
+  padding-inline: 0.5rem;
+}
+
+@utility cn-calendar-caption-label {
+  padding-inline: 0.5rem;
+}
+
 /* Make the body inherit theme defaults so a bare <body> looks themed. */
 html, body {
   background: var(--color-background);
