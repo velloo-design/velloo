@@ -43,6 +43,142 @@ describe("registry", () => {
       expect(ids).toContain(id);
     }
   });
+
+  test("has the layout and chat families added in the 2026.09 pull", () => {
+    const ids = Object.keys(registry);
+    for (const id of [
+      "AspectRatio",
+      "Bubble",
+      "ButtonGroup",
+      "Combobox",
+      "ContextMenu",
+      "Drawer",
+      "Empty",
+      "Field",
+      "HoverCard",
+      "InputGroup",
+      "Item",
+      "Kbd",
+      "Menubar",
+      "Message",
+      "NativeSelect",
+      "NavigationMenu",
+      "Spinner",
+    ]) {
+      expect(ids).toContain(id);
+    }
+  });
+});
+
+describe("server rendering", () => {
+  /**
+   * The canvas renders designs through `react-dom/server`, so a component that
+   * only paints after a browser measures it is worse than useless — it leaves a
+   * blank hole in the design and in every screenshot. Roots have to produce
+   * markup on their own; parts that legitimately need a parent's context (a
+   * TabsTrigger outside Tabs) are exercised through their root instead.
+   */
+  test("every root component produces markup with no props", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+
+    const roots = [
+      "Accordion",
+      "Alert",
+      "AspectRatio",
+      "Avatar",
+      "Badge",
+      "Breadcrumb",
+      "Bubble",
+      "Button",
+      "ButtonGroup",
+      "Card",
+      "Chart",
+      "Checkbox",
+      "Combobox",
+      "Drawer",
+      "Empty",
+      "Field",
+      "Input",
+      "InputGroup",
+      "Item",
+      "Kbd",
+      "Message",
+      "NativeSelect",
+      "Pagination",
+      "Progress",
+      "Separator",
+      "Skeleton",
+      "Spinner",
+      "Table",
+      "Tabs",
+      "Textarea",
+    ];
+
+    const blank: string[] = [];
+    for (const id of roots) {
+      const Component = registry[id];
+      expect(Component, `${id} missing from registry`).toBeDefined();
+      if (!Component) continue;
+      const html = renderToStaticMarkup(createElement(Component));
+      if (html.trim() === "") blank.push(id);
+    }
+    expect(blank).toEqual([]);
+  });
+
+  /**
+   * The canvas-safe contract (see components/canvas-portal.tsx): overlay
+   * content renders inline and always-open, so the design surface shows the
+   * styled state. A re-vendor that restored upstream's Portal would compile and
+   * pass every other test while silently emptying every modal on the canvas.
+   */
+  test("overlay content renders inline, open, and outside its root", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+
+    for (const id of [
+      "DialogContent",
+      "AlertDialogContent",
+      "SheetContent",
+      "PopoverContent",
+      "DropdownMenuContent",
+      "ContextMenuContent",
+      "MenubarContent",
+      "SelectContent",
+      "TooltipContent",
+      "HoverCardContent",
+      "DrawerContent",
+      "ComboboxContent",
+    ]) {
+      const Component = registry[id];
+      expect(Component, `${id} missing from registry`).toBeDefined();
+      if (!Component) continue;
+      const html = renderToStaticMarkup(createElement(Component, {}, "body"));
+      expect(html, `${id} rendered nothing`).toContain("body");
+      expect(html, `${id} is not pinned open`).toContain('data-state="open"');
+    }
+  });
+
+  /**
+   * Select bypasses Radix entirely below the root — Content, Item and Value are
+   * inline elements — so no part of it may reach for the root's context. Radix's
+   * own trigger *throws* when that context is missing, and a design is free to
+   * place a trigger on its own: two screens in this repo's design folder do. One
+   * throwing node fails the whole SSR, so restoring `SelectPrimitive.Trigger`
+   * here turns every screen that holds a bare trigger into a blank frame.
+   */
+  test("select parts render on their own, with no Select ancestor", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+
+    for (const id of ["SelectTrigger", "SelectValue", "SelectItem", "SelectGroup"]) {
+      const Component = registry[id];
+      expect(Component, `${id} missing from registry`).toBeDefined();
+      if (!Component) continue;
+      const html = renderToStaticMarkup(createElement(Component, {}, "body"));
+      expect(html, `${id} rendered nothing`).toContain("body");
+    }
+  });
 });
 
 describe("snapshot artifacts", () => {

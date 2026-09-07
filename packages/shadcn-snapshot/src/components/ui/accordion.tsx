@@ -1,39 +1,58 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/accordion).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/accordion).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
+// Canvas-safe: an accordion with no `value`/`defaultValue` opens itself, so a
+// design that never receives a click still shows its content styling. Designs
+// that set either prop keep their explicit state.
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Accordion as AccordionPrimitive } from "radix-ui";
 import type * as React from "react";
+import { Children, isValidElement, type ReactNode } from "react";
+
 import { cn } from "../../lib/utils.ts";
 
+function itemValues(children: ReactNode): string[] {
+  const values: string[] = [];
+  for (const child of Children.toArray(children)) {
+    if (!isValidElement<{ value?: unknown }>(child)) continue;
+    const { value } = child.props;
+    if (typeof value === "string") values.push(value);
+  }
+  return values;
+}
+
 /**
- * Canvas-safe contract: when no `value`/`defaultValue` is set, the
- * accordion shows everything open in design mode so designers see the
- * styling without clicking each item. Real apps that pass either prop
- * keep their explicit state.
- *
- * Radix's discriminated `type: "single" | "multiple"` makes the props
- * union strict (different `value` shape). The Velloo wrapper relaxes
- * the contract to a single `any`-shaped passthrough so users don't
- * have to thread the right value shape through MCP — design-mode
- * Accordion just needs to render.
+ * Radix's `type: "single" | "multiple"` discriminates the whole props union —
+ * `value` changes shape with it — which is user-hostile to thread through MCP.
+ * The wrapper takes a permissive passthrough instead: a design-mode accordion
+ * only has to render.
  */
 // biome-ignore lint/suspicious/noExplicitAny: discriminated radix props are user-hostile in design mode
-export function Accordion({ type, ...props }: any) {
-  if (type === "multiple") {
-    const defaultOpen = !props.value && !props.defaultValue;
-    return (
-      <AccordionPrimitive.Root
-        type="multiple"
-        data-slot="accordion"
-        {...props}
-        {...(defaultOpen ? { defaultValue: ["__all__"] } : {})}
-      />
-    );
-  }
+export function Accordion({ className, type, ...props }: any) {
+  const classes = cn("flex w-full flex-col", className);
+  const resolvedType = type === "multiple" ? "multiple" : "single";
+
+  // Nothing on the canvas is clickable, so an accordion left in its initial
+  // state would show every item collapsed and none of the content styling. Open
+  // what the type allows — every item when multiple, the first when single.
+  const values = props.value || props.defaultValue ? undefined : itemValues(props.children);
+  const defaultValue =
+    values === undefined || values.length === 0
+      ? undefined
+      : resolvedType === "multiple"
+        ? values
+        : values[0];
+
   return (
-    <AccordionPrimitive.Root type={type ?? "single"} collapsible data-slot="accordion" {...props} />
+    <AccordionPrimitive.Root
+      type={resolvedType}
+      {...(resolvedType === "single" ? { collapsible: true } : {})}
+      data-slot="accordion"
+      className={classes}
+      {...props}
+      {...(defaultValue === undefined ? {} : { defaultValue })}
+    />
   );
 }
 
@@ -44,7 +63,7 @@ export function AccordionItem({
   return (
     <AccordionPrimitive.Item
       data-slot="accordion-item"
-      className={cn("border-b last:border-b-0", className)}
+      className={cn("not-last:border-b", className)}
       {...props}
     />
   );
@@ -60,13 +79,20 @@ export function AccordionTrigger({
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          "focus-visible:border-ring focus-visible:ring-ring/50 flex flex-1 items-start justify-between gap-4 rounded-md py-4 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&[data-state=open]>svg]:rotate-180",
+          "group/accordion-trigger relative flex flex-1 items-start justify-between rounded-lg border border-transparent py-2.5 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:after:border-ring disabled:pointer-events-none disabled:opacity-50 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 **:data-[slot=accordion-trigger-icon]:text-muted-foreground",
           className,
         )}
         {...props}
       >
         {children}
-        <ChevronDown className="text-muted-foreground pointer-events-none size-4 shrink-0 translate-y-0.5 transition-transform duration-200" />
+        <ChevronDownIcon
+          data-slot="accordion-trigger-icon"
+          className="pointer-events-none shrink-0 group-aria-expanded/accordion-trigger:hidden"
+        />
+        <ChevronUpIcon
+          data-slot="accordion-trigger-icon"
+          className="pointer-events-none hidden shrink-0 group-aria-expanded/accordion-trigger:inline"
+        />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   );
@@ -80,10 +106,17 @@ export function AccordionContent({
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden text-sm"
+      className="overflow-hidden text-sm data-open:animate-accordion-down data-closed:animate-accordion-up"
       {...props}
     >
-      <div className={cn("pt-0 pb-4", className)}>{children}</div>
+      <div
+        className={cn(
+          "h-(--radix-accordion-content-height) pt-0 pb-2.5 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+          className,
+        )}
+      >
+        {children}
+      </div>
     </AccordionPrimitive.Content>
   );
 }

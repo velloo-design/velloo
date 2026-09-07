@@ -34,6 +34,17 @@
     "packages/provider-none": {
       "entry": ["src/registry.ts"]
     },
+    // A provider's Tailwind entry is a runtime asset the JIT reads by path
+    // (`styleEntryPath`), never an import — so nothing in the graph reaches it.
+    "packages/provider-mui": {
+      "entry": ["src/tailwind-entry.css"]
+    },
+    "packages/provider-antd": {
+      "entry": ["src/tailwind-entry.css"]
+    },
+    "packages/provider-chakra": {
+      "entry": ["src/tailwind-entry.css"]
+    },
     "packages/shadcn-snapshot": {
       "entry": ["src/registry.ts"]
     },
@@ -54,7 +65,6 @@
     }
   },
   "ignore": [
-    "**/*.css",
     // Vendored upstream shadcn, kept whole so the next re-vendor is a clean
     // copy rather than a merge — see CLAUDE.md, "two copies of shadcn, one
     // upstream pull". Their unused exports are upstream's, not ours.

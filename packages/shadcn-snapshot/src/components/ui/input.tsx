@@ -1,18 +1,19 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/input).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/input).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
+// Canvas-safe: a design ships `<Input value="Rod">` to show a populated state,
+// with no handler because nothing on the canvas is interactive. React reads
+// that as a controlled input it can never update and warns on every render, so
+// `value` without `onChange` opts into `readOnly` instead. Password managers
+// also decorate any input they find, which would land their UI in screenshots.
 import type * as React from "react";
+
 import { cn } from "../../lib/utils.ts";
 
 /**
  * The data-*-ignore attributes defeat LastPass / 1Password / Bitwarden so they
- * don't decorate Velloo design inputs with their UI. `autoComplete="off"` is the
- * standard browser hint. All can be overridden by passing the prop explicitly.
- *
- * Canvas-safe contract: designs ship JSON like `<Input value="Rod">` to show
- * a populated state. Without an `onChange` handler React renders a read-only
- * input and warns at runtime. Auto-injecting `readOnly` when `value` is set
- * but no handler is bound suppresses the warning and matches the design-mode
- * static contract. Pass `onChange` to opt into controlled mode.
+ * don't decorate Velloo design inputs with their UI. `autoComplete="off"` is
+ * the standard browser hint. All can be overridden by passing the prop
+ * explicitly, as can `readOnly` — pass `onChange` to opt into controlled mode.
  */
 export function Input({
   className,

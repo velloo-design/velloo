@@ -107,6 +107,56 @@ function findVariantPropsConstName(propsInterface: InterfaceDeclaration): string
   return null;
 }
 
+const VARIANT_PROPS_RE = /^VariantProps<typeof(\w+)>$/;
+
+/**
+ * Props from an upstream-shaped component, which annotates its parameter
+ * inline rather than declaring a `<Name>Props` interface:
+ *
+ *   function Button({ … }: React.ComponentProps<"button"> &
+ *     VariantProps<typeof buttonVariants> & { asChild?: boolean }) {}
+ *
+ * Only the two authored parts are interesting: the `VariantProps` reference
+ * (expanded from the cva table) and any inline object members. The
+ * `ComponentProps<…>` arm is the whole DOM/Radix surface, which the manifest
+ * has never enumerated — the inspector shows authored props, not every
+ * attribute React would accept.
+ */
+function extractInlinePropTypes(typeNode: Node, sourceFile: SourceFile): PropDescriptor[] {
+  const arms = Node.isIntersectionTypeNode(typeNode) ? typeNode.getTypeNodes() : [typeNode];
+  const props: PropDescriptor[] = [];
+  const seen = new Set<string>();
+
+  const push = (descriptor: PropDescriptor): void => {
+    if (seen.has(descriptor.name)) return;
+    seen.add(descriptor.name);
+    props.push(descriptor);
+  };
+
+  for (const arm of arms) {
+    if (Node.isTypeLiteral(arm)) {
+      for (const member of arm.getProperties()) push(describeProp(member));
+      continue;
+    }
+    const variantConst = arm.getText().replace(/\s+/g, "").match(VARIANT_PROPS_RE)?.[1];
+    if (variantConst) {
+      for (const cvaProp of extractCvaVariantProps(sourceFile, variantConst)) push(cvaProp);
+    }
+  }
+
+  return props;
+}
+
+/**
+ * The parameter type node of a component declaration, whether it was written
+ * as `function X(props: T)` or `const X = (props: T) => …`.
+ */
+function propsTypeNode(decl: Node): Node | undefined {
+  const fn = Node.isVariableDeclaration(decl) ? decl.getInitializer() : decl;
+  if (!fn || !(Node.isFunctionDeclaration(fn) || Node.isArrowFunction(fn))) return undefined;
+  return fn.getParameters()[0]?.getTypeNode();
+}
+
 /**
  * Given a const initialized to `cva("...", { variants: {...}, defaultVariants: {...} })`,
  * extract one PropDescriptor per variant key. Each descriptor's enumValues are
@@ -180,6 +230,29 @@ function collectKeys(obj: ObjectLiteralExpression): string[] {
   return out;
 }
 
+interface ExportedComponent {
+  sourceFile: SourceFile;
+  declaration: Node;
+}
+
+/**
+ * Map every exported component name to its declaration. Resolving through the
+ * type system rather than grepping for `export function X` is what lets a
+ * clean upstream vendor work: shadcn declares components unexported and lists
+ * them in a trailing `export { Button, buttonVariants }` block.
+ */
+function indexExports(project: Project): Map<string, ExportedComponent> {
+  const index = new Map<string, ExportedComponent>();
+  for (const sourceFile of project.getSourceFiles()) {
+    for (const [name, declarations] of sourceFile.getExportedDeclarations()) {
+      const declaration = declarations[0];
+      if (!declaration || index.has(name)) continue;
+      index.set(name, { sourceFile, declaration });
+    }
+  }
+  return index;
+}
+
 async function buildManifest(): Promise<void> {
   const project = new Project({
     tsConfigFilePath: join(here, "tsconfig.json"),
@@ -190,6 +263,7 @@ async function buildManifest(): Promise<void> {
   const lucideNames = loadLucideIconNames();
   const helperById = new Map(HELPER_DESCRIPTORS.map((d) => [d.id, d]));
   const components: ComponentDescriptor[] = [];
+  const exportsById = indexExports(project);
 
   for (const id of Object.keys(registry).sort()) {
     // The velloo helpers live in `@velloo/helpers` (outside this package's
@@ -209,14 +283,12 @@ async function buildManifest(): Promise<void> {
       continue;
     }
 
-    // Word-bounded match so e.g. "Text" doesn't accidentally hit
-    // "Textarea" in another file. Anchor on the identifier boundary.
-    const identifierRe = new RegExp(`export\\s+(?:const|function)\\s+${id}\\b`);
-    const srcFile = project.getSourceFiles().find((f) => identifierRe.test(f.getFullText()));
-    if (!srcFile) {
+    const exported = exportsById.get(id);
+    if (!exported) {
       console.warn(`! manifest: no source file found for ${id}, skipping`);
       continue;
     }
+    const { sourceFile: srcFile, declaration } = exported;
 
     const source = "shadcn" as const;
     const category = "ui" as const;
@@ -237,11 +309,12 @@ async function buildManifest(): Promise<void> {
       }
     } else {
       const propsAlias = srcFile.getTypeAlias(`${id}Props`);
-      if (propsAlias) {
-        const literal = propsAlias.getDescendantsOfKind(SyntaxKind.TypeLiteral)[0];
-        if (literal) {
-          props = literal.getProperties().map(describeProp);
-        }
+      const literal = propsAlias?.getDescendantsOfKind(SyntaxKind.TypeLiteral)[0];
+      if (literal) {
+        props = literal.getProperties().map(describeProp);
+      } else {
+        const typeNode = propsTypeNode(declaration);
+        if (typeNode) props = extractInlinePropTypes(typeNode, srcFile);
       }
     }
 

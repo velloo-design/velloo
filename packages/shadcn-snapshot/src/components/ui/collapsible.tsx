@@ -1,14 +1,13 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/collapsible).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/collapsible).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
+// Canvas-safe: nothing on the canvas is clickable, so a collapsible left at its
+// default would render as an unopenable header. With neither `open` nor
+// `defaultOpen` set, the content starts open so the design is previewable.
 "use client";
 
 import { Collapsible as CollapsiblePrimitive } from "radix-ui";
 import type * as React from "react";
 
-/**
- * Canvas-safe: when neither `open` nor `defaultOpen` is passed,
- * forcibly render the content open so designs are previewable.
- */
 export function Collapsible({ ...props }: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {
   const designOpen = props.open === undefined && props.defaultOpen === undefined;
   return (

@@ -1,26 +1,28 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radio-group).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/radio-group).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
+// Regenerate with `bun run vendor` — do not hand-edit unless you are adding a
+// canvas adaptation, in which case add the id to vendor.ts's ADAPTED set.
 "use client";
 
-import { Circle } from "lucide-react";
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui";
 import type * as React from "react";
+
 import { cn } from "../../lib/utils.ts";
 
-export function RadioGroup({
+function RadioGroup({
   className,
   ...props
 }: React.ComponentProps<typeof RadioGroupPrimitive.Root>) {
   return (
     <RadioGroupPrimitive.Root
       data-slot="radio-group"
-      className={cn("grid gap-2", className)}
+      className={cn("grid w-full gap-2", className)}
       {...props}
     />
   );
 }
 
-export function RadioGroupItem({
+function RadioGroupItem({
   className,
   ...props
 }: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
@@ -28,17 +30,19 @@ export function RadioGroupItem({
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"
       className={cn(
-        "aspect-square size-4 shrink-0 rounded-full border border-input text-primary shadow-xs outline-none transition-shadow focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+        "group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-full border border-input outline-none group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:not-data-checked:border-input after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-[:focus-visible]/field-label:data-checked:border-primary dark:data-checked:bg-primary",
         className,
       )}
       {...props}
     >
       <RadioGroupPrimitive.Indicator
         data-slot="radio-group-indicator"
-        className="flex items-center justify-center"
+        className="flex size-4 items-center justify-center"
       >
-        <Circle className="size-2 fill-primary text-primary" />
+        <span className="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-foreground" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );
 }
+
+export { RadioGroup, RadioGroupItem };

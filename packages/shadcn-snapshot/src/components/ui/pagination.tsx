@@ -1,12 +1,18 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/pagination).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/pagination).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
-import type * as React from "react";
-import { cn } from "../../lib/utils.ts";
+// Regenerate with `bun run vendor` — do not hand-edit unless you are adding a
+// canvas adaptation, in which case add the id to vendor.ts's ADAPTED set.
 
-export function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
+import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
+import type * as React from "react";
+
+import { cn } from "../../lib/utils.ts";
+import { Button } from "./button.tsx";
+
+function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
     <nav
+      role="navigation"
       aria-label="pagination"
       data-slot="pagination"
       className={cn("mx-auto flex w-full justify-center", className)}
@@ -15,93 +21,97 @@ export function Pagination({ className, ...props }: React.ComponentProps<"nav">)
   );
 }
 
-export function PaginationContent({ className, ...props }: React.ComponentProps<"ul">) {
+function PaginationContent({ className, ...props }: React.ComponentProps<"ul">) {
   return (
     <ul
       data-slot="pagination-content"
-      className={cn("flex flex-row items-center gap-1", className)}
+      className={cn("flex items-center gap-0.5", className)}
       {...props}
     />
   );
 }
 
-export function PaginationItem({ ...props }: React.ComponentProps<"li">) {
+function PaginationItem({ ...props }: React.ComponentProps<"li">) {
   return <li data-slot="pagination-item" {...props} />;
 }
 
-interface PaginationLinkProps extends React.ComponentProps<"a"> {
+type PaginationLinkProps = {
   isActive?: boolean;
-  size?: "default" | "sm" | "lg" | "icon";
-}
+} & Pick<React.ComponentProps<typeof Button>, "size"> &
+  React.ComponentProps<"a">;
 
-export function PaginationLink({
-  className,
-  isActive,
-  size = "icon",
-  ...props
-}: PaginationLinkProps) {
+function PaginationLink({ className, isActive, size = "icon", ...props }: PaginationLinkProps) {
   return (
-    <a
-      aria-current={isActive ? "page" : undefined}
-      data-slot="pagination-link"
-      data-active={isActive}
-      className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50",
-        size === "icon" ? "size-9" : "h-9 px-3",
-        isActive
-          ? "border border-input bg-background shadow-xs"
-          : "hover:bg-accent hover:text-accent-foreground",
-        className,
-      )}
-      {...props}
-    />
+    <Button asChild variant={isActive ? "outline" : "ghost"} size={size} className={cn(className)}>
+      <a
+        aria-current={isActive ? "page" : undefined}
+        data-slot="pagination-link"
+        data-active={isActive}
+        {...props}
+      />
+    </Button>
   );
 }
 
-export function PaginationPrevious({
+function PaginationPrevious({
   className,
+  text = "Previous",
   ...props
-}: React.ComponentProps<typeof PaginationLink>) {
+}: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
     <PaginationLink
       aria-label="Go to previous page"
       size="default"
-      className={cn("gap-1 px-2.5 sm:pl-2.5", className)}
+      className={cn("pl-1.5!", className)}
       {...props}
     >
-      <ChevronLeft className="size-4" />
-      <span className="hidden sm:block">Previous</span>
+      <ChevronLeftIcon data-icon="inline-start" className="cn-rtl-flip" />
+      <span className="hidden sm:block">{text}</span>
     </PaginationLink>
   );
 }
 
-export function PaginationNext({
+function PaginationNext({
   className,
+  text = "Next",
   ...props
-}: React.ComponentProps<typeof PaginationLink>) {
+}: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
     <PaginationLink
       aria-label="Go to next page"
       size="default"
-      className={cn("gap-1 px-2.5 sm:pr-2.5", className)}
+      className={cn("pr-1.5!", className)}
       {...props}
     >
-      <span className="hidden sm:block">Next</span>
-      <ChevronRight className="size-4" />
+      <span className="hidden sm:block">{text}</span>
+      <ChevronRightIcon data-icon="inline-end" className="cn-rtl-flip" />
     </PaginationLink>
   );
 }
 
-export function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span">) {
+function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       aria-hidden
       data-slot="pagination-ellipsis"
-      className={cn("flex size-9 items-center justify-center", className)}
+      className={cn(
+        "flex size-8 items-center justify-center [&_svg:not([class*='size-'])]:size-4",
+        className,
+      )}
       {...props}
     >
-      <MoreHorizontal className="size-4" />
+      <MoreHorizontalIcon />
       <span className="sr-only">More pages</span>
     </span>
   );
 }
+
+export {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+};

@@ -1,4 +1,4 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/popover).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/popover).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
 // Canvas-safe: see ../canvas-portal.tsx.
 "use client";
@@ -25,22 +25,41 @@ export function PopoverAnchor({ ...props }: React.ComponentProps<typeof PopoverP
 export function PopoverContent({
   className,
   align: _align,
-  side: _side,
   sideOffset: _sideOffset,
   ...props
-}: React.ComponentProps<"div"> & {
-  align?: "start" | "center" | "end";
-  side?: "top" | "right" | "bottom" | "left";
-  sideOffset?: number;
-}) {
+}: React.ComponentProps<"div"> & { align?: string; sideOffset?: number }) {
   return (
     <div
       data-slot="popover-content"
       {...inlineOpenAttrs()}
       className={cn(
-        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none",
+        "z-50 flex w-72 flex-col gap-2.5 rounded-lg bg-popover p-2.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden",
         className,
       )}
+      {...props}
+    />
+  );
+}
+
+export function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="popover-header"
+      className={cn("flex flex-col gap-0.5 text-sm", className)}
+      {...props}
+    />
+  );
+}
+
+export function PopoverTitle({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="popover-title" className={cn("font-medium", className)} {...props} />;
+}
+
+export function PopoverDescription({ className, ...props }: React.ComponentProps<"p">) {
+  return (
+    <p
+      data-slot="popover-description"
+      className={cn("text-muted-foreground", className)}
       {...props}
     />
   );

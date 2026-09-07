@@ -132,6 +132,7 @@ You choose when — and whether — to make any of them.
 
 ```bash
 bun install
+bun --cwd packages/shadcn-snapshot run vendor   # re-pull shadcn from upstream (rare)
 bun --cwd packages/shadcn-snapshot run build    # build dist/manifest.json
 bun --cwd packages/canvas run build             # build canvas SPA
 bun run typecheck

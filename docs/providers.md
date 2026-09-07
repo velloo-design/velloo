@@ -26,6 +26,15 @@ abstraction worth filing.
    framework from the host's dependencies, move it from `detectUnsupportedUi` to the
    `uiLibrary` inference in `packages/cli/src/scan/detect.ts` and map it in the wizard
    entry's `scanMatch`.
+6. **Your entry CSS's own dependencies** — anything your `tailwind-entry.css`
+   `@import`s by bare specifier must be a dependency of *your* package. The JIT
+   resolves it from node_modules at runtime, out of the shipped
+   `dist/pkgs/<you>/src`, so a package that is merely present in the workspace
+   works from source and fails once installed — and because the compile is
+   all-or-nothing, the symptom is every screen on the canvas rendering as a
+   white box. The bundle derives its runtime dependencies from the stylesheets
+   it copies (`packages/cli/src/css-imports.ts`), which is what keeps this from
+   being something you have to remember.
 
 ## The adapter capabilities
 

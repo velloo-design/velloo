@@ -1,8 +1,12 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/button).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/button).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
+// Regenerate with `bun run vendor` — do not hand-edit unless you are adding a
+// canvas adaptation, in which case add the id to vendor.ts's ADAPTED set.
+
 import { cva, type VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
 import type * as React from "react";
+
 import { cn } from "../../lib/utils.ts";
 
 const buttonVariants = cva(
@@ -10,11 +14,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
@@ -42,20 +46,18 @@ const buttonVariants = cva(
   },
 );
 
-export interface ButtonProps
-  extends React.ComponentProps<"button">,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
-}
-
-export function Button({
+function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
   ...props
-}: ButtonProps) {
+}: React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean;
+  }) {
   const Comp = asChild ? Slot.Root : "button";
+
   return (
     <Comp
       data-slot="button"
@@ -67,4 +69,4 @@ export function Button({
   );
 }
 
-export { buttonVariants };
+export { Button, buttonVariants };

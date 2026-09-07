@@ -37,10 +37,10 @@
     "cli:release:dev": "bun scripts/publish-cli.ts dev"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.4",
-    "@happy-dom/global-registrator": "20.13.1",
-    "@types/bun": "latest",
-    "knip": "6.24.0",
+    "@biomejs/biome": "2.5.12",
+    "@happy-dom/global-registrator": "20.13.2",
+    "@types/bun": "1.4.0",
+    "knip": "6.34.0",
     "typescript": "7.0.2"
   },
   "engines": {

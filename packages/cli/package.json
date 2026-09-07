@@ -33,6 +33,6 @@
     "@velloo/shadcn-snapshot": "workspace:*",
     "citty": "0.2.2",
     "picocolors": "1.1.1",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   }
 }

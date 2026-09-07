@@ -1,4 +1,15 @@
 @import "tailwindcss";
+/*
+ * Upstream's own stylesheet layer, vendored by `bun run vendor`:
+ *   - shadcn-tailwind.css: the `data-open` / `data-closed` / `data-checked`
+ *     custom variants the registry's components are written against, plus the
+ *     accordion keyframes. Upstream distributes it in the `shadcn` CLI package
+ *     and tells apps to `@import "shadcn/tailwind.css"`.
+ *   - tw-animate-css: `animate-in`, `fade-in-0`, `zoom-in-95`, … Overlays lean
+ *     on these heavily; without it every enter/exit class is a silent no-op.
+ */
+@import "./shadcn-tailwind.css";
+@import "tw-animate-css";
 
 @source "./components/**/*.tsx";
 
@@ -51,6 +62,44 @@
 
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, monospace;
+}
+
+/*
+ * Token bridge. Tailwind's `@theme` publishes the palette as `--color-*`, and
+ * the utility classes upstream emits (`bg-primary`) resolve through that. But
+ * a handful of upstream classes reach for the *bare* shadcn token names inside
+ * arbitrary values — `hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]`
+ * on secondary buttons, for one — which Tailwind never defines. Alias them so
+ * those land on the same theme the rest of the component does.
+ */
+:root {
+  --foreground: var(--color-foreground);
+  --muted: var(--color-muted);
+  --primary: var(--color-primary);
+  --secondary: var(--color-secondary);
+}
+
+/*
+ * Classes upstream *emits* but does not *distribute*: they live in the
+ * shadcn.com app's own globals.css, so a registry pull references them without
+ * ever defining them (the same leak that puts `IconPlaceholder` in the source
+ * — see vendor.ts). Defined here to upstream's intent so the components that
+ * reference them aren't silently inert.
+ */
+@utility cn-rtl-flip {
+  /* Directional glyphs (chevrons in pagination, breadcrumb, carousel). */
+  &:where([dir="rtl"], [dir="rtl"] *) {
+    transform: scaleX(-1);
+  }
+}
+
+@utility cn-font-heading {
+  font-family: var(--font-heading, var(--font-sans));
+}
+
+@utility cn-menu-target {
+  /* Marks the element a menu's popup anchors to; layout-neutral on its own. */
+  position: relative;
 }
 
 /* Make the body inherit theme defaults so a bare <body> looks themed. */

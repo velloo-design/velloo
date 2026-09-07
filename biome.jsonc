@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -14,6 +14,10 @@
       "!**/.design",
       "!velloo",
       "!**/tailwind-entry.css",
+      // Vendored verbatim from the shadcn package; its @custom-variant blocks
+      // use Tailwind-only syntax the CSS parser rejects, and reformatting a
+      // file `bun run vendor` overwrites would only churn.
+      "!**/shadcn-tailwind.css",
       "!**/canvas/src/styles.css",
       "!**/*.svg"
     ]
@@ -72,9 +76,33 @@
         "**/scripts/**",
         ".github/**",
         "**/build.ts",
+        "**/vendor.ts",
         "**/__tests__/**"
       ],
       "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      // Vendored upstream shadcn, kept as a clean copy of the registry so the
+      // next pull is a copy rather than a merge (CLAUDE.md, "two copies of
+      // shadcn, one upstream pull"). These findings are upstream's house style
+      // — fixing them here would be reverted by `bun run vendor`, and the same
+      // reasoning already exempts this directory in knip.jsonc. The canvas's
+      // copy predates the automated pull and carries its own suppressions.
+      "includes": ["packages/shadcn-snapshot/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noRedundantRoles": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off",
+            "useSemanticElements": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off",
+            "noDoubleEquals": "off"
+          }
+        }
+      }
     },
     {
       // The layers that owe a Result<T, E>. See .biome/no-throw-in-result-layer.grit.

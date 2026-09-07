@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist",
     "noEmit": false,
     "declaration": true,
@@ -11,7 +11,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["bun", "react", "react-dom"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "package.json"],
   "references": [
     { "path": "../schema" },
     { "path": "../provider" },

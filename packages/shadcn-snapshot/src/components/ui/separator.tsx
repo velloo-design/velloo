@@ -1,12 +1,15 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/separator).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/separator).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
+// Regenerate with `bun run vendor` — do not hand-edit unless you are adding a
+// canvas adaptation, in which case add the id to vendor.ts's ADAPTED set.
 "use client";
 
 import { Separator as SeparatorPrimitive } from "radix-ui";
 import type * as React from "react";
+
 import { cn } from "../../lib/utils.ts";
 
-export function Separator({
+function Separator({
   className,
   orientation = "horizontal",
   decorative = true,
@@ -25,3 +28,5 @@ export function Separator({
     />
   );
 }
+
+export { Separator };

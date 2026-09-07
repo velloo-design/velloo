@@ -1,11 +1,6 @@
-// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/tooltip).
+// Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/tooltip).
 // Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
-//
-// Canvas note: in design mode the tooltip never opens (no hover/focus
-// gestures route through the static iframe). We expose Provider + Trigger
-// for completeness so emitted code matches, but TooltipContent renders
-// inline so designers can see its styling. The agent's emitted code keeps
-// the proper Radix portal behavior at runtime.
+// Canvas-safe: see ../canvas-portal.tsx.
 "use client";
 
 import { Tooltip as TooltipPrimitive } from "radix-ui";
@@ -14,24 +9,15 @@ import { cn } from "../../lib/utils.ts";
 import { inlineOpenAttrs, pinOpenInDesignMode } from "../canvas-portal.tsx";
 
 export function TooltipProvider({
-  children,
-  delayDuration = 0,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-  return (
-    <TooltipPrimitive.Provider delayDuration={delayDuration} {...props}>
-      {children}
-    </TooltipPrimitive.Provider>
-  );
+  return <TooltipPrimitive.Provider data-slot="tooltip-provider" {...props} />;
 }
 
-export function Tooltip({
-  children,
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
+export function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
   return (
-    <TooltipPrimitive.Provider delayDuration={0}>
-      <TooltipPrimitive.Root {...pinOpenInDesignMode(props)}>{children}</TooltipPrimitive.Root>
+    <TooltipPrimitive.Provider>
+      <TooltipPrimitive.Root data-slot="tooltip" {...pinOpenInDesignMode(props)} />
     </TooltipPrimitive.Provider>
   );
 }
@@ -42,30 +28,20 @@ export function TooltipTrigger({
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
 }
 
-/**
- * Canvas-safe TooltipContent: renders inline (not via portal) so the
- * static design surface can preview it. Real apps using the agent's
- * emitted code still get the portal behavior because the agent reads
- * radix-ui's Tooltip.Content directly — they bypass this helper.
- */
 export function TooltipContent({
   className,
-  sideOffset = 4,
-  children,
+  sideOffset: _sideOffset,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<"div"> & { sideOffset?: number }) {
   return (
     <div
       data-slot="tooltip-content"
-      data-side-offset={sideOffset}
       {...inlineOpenAttrs()}
       className={cn(
-        "z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95",
+        "z-50 inline-flex w-fit max-w-xs items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs text-background has-data-[slot=kbd]:pr-1.5 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm",
         className,
       )}
-      {...(props as React.HTMLAttributes<HTMLDivElement>)}
-    >
-      {children}
-    </div>
+      {...props}
+    />
   );
 }

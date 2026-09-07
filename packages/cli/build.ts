@@ -38,6 +38,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUN_VERSION, RUNTIME_TARGETS } from "../../scripts/distribution/targets.ts";
+import { cssImportedPackagesIn } from "./src/css-imports.ts";
 
 const cliRoot = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(cliRoot, "..", "..");
@@ -343,12 +344,19 @@ for (const doc of ["README.md", "LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md", "
 
 // 5. Generate the publishable manifest, pinned to exact installed versions.
 step("writing dist/package.json");
-// Nothing imports the `tailwindcss` package directly (it would land in
-// `externals` if it did) — but the JIT resolves `@import "tailwindcss"` from
-// the shipped entry-CSS assets under dist/pkgs, and only a DIRECT dependency
-// is guaranteed to sit where that walk-up finds it (a transitive install of
-// @tailwindcss/node's copy may be nested under non-hoisting installers).
-externals.add("tailwindcss");
+// The stylesheets shipped above reach for packages by bare specifier
+// (`@import "tailwindcss"`, `@import "tw-animate-css"`). No JS imports them, so
+// the bundler never saw them — but the JIT resolves them from node_modules at
+// runtime, and only a DIRECT dependency is guaranteed to sit where that walk-up
+// finds it (a transitive copy may be nested under non-hoisting installers).
+// Derived from what actually shipped, because a missing one fails the entire
+// CSS compile and renders every screen as a white box — a break that no test
+// against the source tree can see, since there the packages are always present.
+const cssPackages = cssImportedPackagesIn(join(distDir, "pkgs"));
+if (cssPackages.size === 0) {
+  throw new Error("no @import found in any shipped stylesheet — the asset copy or the scan broke");
+}
+for (const pkg of cssPackages) externals.add(pkg);
 
 const dependencies: Record<string, string> = {};
 const optionalDependencies: Record<string, string> = Object.fromEntries(

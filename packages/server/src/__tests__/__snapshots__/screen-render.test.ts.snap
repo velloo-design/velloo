@@ -1,0 +1,11 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`/api/render/:screenId renders a stable element structure 1`] = `
+"<div data-slot="card" data-size="default" data-node-path="">
+<h1 data-node-path="0">Reports</h1>
+<span data-slot="badge" data-variant="secondary" data-node-path="1">Beta</span>
+<button data-slot="button" data-variant="outline" data-size="sm" data-node-path="2">Export</button>
+<input autoComplete="off" data-slot="input" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" data-node-path="3" readOnly="" value="acme.com"/>
+<div data-slot="tooltip-content" data-state="open" data-velloo-inline="true" data-node-path="4.0">Download a CSV</div>
+</div>"
+`;

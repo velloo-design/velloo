@@ -29,4 +29,8 @@ export const COMPONENT_EXAMPLES: Record<string, Record<string, unknown>> = {
   Badge: { variant: "secondary", children: "Label" },
   Progress: { value: 64, className: "h-2" },
   Avatar: { className: "size-9" },
+  // `ratio` is width/height as a number, not the "16:9" string it reads as.
+  AspectRatio: { ratio: 16 / 9 },
+  // Renders a list, so it takes objects rather than the string it looks like.
+  FieldError: { errors: [{ message: "Enter a valid email address." }] },
 };

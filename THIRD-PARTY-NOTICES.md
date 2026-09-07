@@ -37,6 +37,9 @@ The most directly redistributed surfaces are:
 | Chakra UI v2 | MIT | © 2019 Segun Adebayo | https://github.com/chakra-ui/chakra-ui |
 | Framer Motion | MIT | © 2018 Framer B.V. | https://github.com/motiondivision/motion |
 | Apache ECharts | Apache-2.0 | © The Apache Software Foundation | https://github.com/apache/echarts |
+| React DayPicker (`react-day-picker`) | MIT | © Giampaolo Bellavite | https://github.com/gpbl/react-day-picker |
+| Embla Carousel (`embla-carousel`, `embla-carousel-react`) | MIT | © David Jerleke | https://github.com/davidjerleke/embla-carousel |
+| tw-animate-css | MIT | © Luca Bosin | https://github.com/Wombosvideo/tw-animate-css |
 | Zod | MIT | © 2020 Colin McDonnell | https://github.com/colinhacks/zod |
 | Hono | MIT | © 2021-present Yusuke Wada | https://github.com/honojs/hono |
 | MCP TypeScript SDK | MIT | © 2024 Anthropic, PBC | https://github.com/modelcontextprotocol/typescript-sdk |

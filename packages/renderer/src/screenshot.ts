@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Viewport } from "@velloo/schema";
 import type { Browser, BrowserContext, Frame, Page } from "playwright-core";
+import pkg from "../package.json" with { type: "json" };
 
 /** Flags the injected live/canvas runtimes set on the rendered page's window. */
 type VellooReadyFlags = {
@@ -73,17 +74,21 @@ async function settleForCapture(
 }
 
 /**
- * The command that installs the headless browser screenshots need. Pinned to
- * the same version as the `playwright` / `playwright-core` devDeps in this
- * package's package.json: an unpinned Playwright install resolves the
- * latest CLI and downloads a Chromium revision that the pinned runtime then
- * refuses to launch. Bump both together.
+ * The command that installs the headless browser screenshots need. Read from
+ * the declared `playwright-core` version rather than written out, because the
+ * two have to agree and a hand-kept copy silently stops agreeing the next time
+ * the dependency is bumped: the install resolves one Chromium revision and the
+ * runtime then refuses to launch anything else, so captures fail with "browser
+ * missing" no matter how many times you install it.
  *
  * `--only-shell` fetches just the chromium-headless-shell build (~110MB
  * download) instead of shell + full Chrome for Testing (~300MB) — velloo only
  * ever launches headless, and playwright's headless launches use the shell.
  */
-const PLAYWRIGHT_PIN = "playwright@1.61.1";
+export const PLAYWRIGHT_VERSION: string = (
+  pkg as { devDependencies: { "playwright-core": string } }
+).devDependencies["playwright-core"];
+const PLAYWRIGHT_PIN = `playwright@${PLAYWRIGHT_VERSION}`;
 export const CHROMIUM_INSTALL_ARGV = [
   process.execPath,
   "x",
