@@ -56,7 +56,12 @@ import {
 import { findSnippetInstances } from "../../mutations/snippet-instances.ts";
 import { pathAt } from "../../path.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
-import { type DesignDiagnostic, diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
+import {
+  type DesignDiagnostic,
+  diagnosticsForScreen,
+  diagnosticsForTree,
+  renderDiagnostics,
+} from "../diagnostics.ts";
 import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
 
 /**
@@ -118,7 +123,9 @@ export function registerMutationTools(
         async () => {
           const screen = ctx.folder.screens.get(args.screenId);
           if (!screen) return [];
-          const all: DesignDiagnostic[] = [];
+          // The static checks read only the patched subtrees; the render check
+          // needs the screen whole, and once for all the patches.
+          const all: DesignDiagnostic[] = renderDiagnostics(ctx, screen);
           for (const patch of args.patches) {
             const resolved = resolveLocator(screen.tree, patch.path, args.screenId);
             if (!resolved.ok) continue;

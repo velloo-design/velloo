@@ -1,10 +1,11 @@
 import { detectTailwindMajor, v3ClassIssues } from "@velloo/codegen";
 import { styleChannelOf } from "@velloo/provider";
+import { type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
 import { isComponentNode, type Node, type Screen, type Snippet } from "@velloo/schema";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { darkModeAuditTree } from "../mutations/dark-mode-audit.ts";
-import { providerForScreen } from "../mutations/lookup.ts";
+import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
 import { validateClassNames } from "../styles/class-validation.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
@@ -14,8 +15,13 @@ import type { TailwindJit } from "../styles/tailwind-jit.ts";
  * omitted from the MCP result entirely.
  */
 export interface DesignDiagnostic {
-  severity: "warning";
-  code: "tailwind/invalid-class" | "tailwind/undefined-var" | "tailwind/v3" | "theme/raw-color";
+  severity: "warning" | "error";
+  code:
+    | "tailwind/invalid-class"
+    | "tailwind/undefined-var"
+    | "tailwind/v3"
+    | "theme/raw-color"
+    | "render/component-threw";
   path: number[];
   message: string;
   suggestion?: string | undefined;
@@ -128,10 +134,70 @@ export async function diagnosticsForTree(
   return diagnostics;
 }
 
-export function diagnosticsForScreen(
+/** Every path in the tree holding a node that renders `ref`. */
+function pathsUsing(root: Node, ref: string): number[][] {
+  const out: number[][] = [];
+  const walk = (node: Node, path: number[]): void => {
+    if (!isComponentNode(node)) return;
+    if (node.$ref === ref) out.push(path);
+    for (let i = 0; i < (node.children?.length ?? 0); i++) {
+      const child = node.children?.[i];
+      if (child) walk(child, [...path, i]);
+    }
+  };
+  walk(root, []);
+  return out;
+}
+
+/**
+ * Which components on the screen threw while rendering.
+ *
+ * The checks above read the tree; this one renders it, because a component
+ * that throws is invisible to every check that does not — a Select part with
+ * no Select above it, a prop the component dereferences. The canvas shows a
+ * stand-in and a screenshot shows the box, but an agent composing a screen
+ * only sees the mutation result, and a clean result says nothing is wrong.
+ *
+ * The whole screen renders, never the changed subtree on its own: out of
+ * context any component reading a parent's context throws, and that failure
+ * would be an artifact of the isolation rather than a fact about the design.
+ */
+export function renderDiagnostics(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
+  let failures: RenderFailure[];
+  try {
+    failures = renderBodyGuarded(
+      screen,
+      registryForScreen(ctx, screen),
+      ctx.folder.snippets,
+    ).failures;
+  } catch {
+    // An unknown $ref, or a throw the guard could not pin on one component.
+    // Both surface elsewhere, and the other diagnostics are still worth having.
+    return [];
+  }
+
+  return failures.flatMap((failure) => {
+    const paths = pathsUsing(screen.tree, failure.componentId);
+    // A component reached only through a snippet body has no path on the
+    // screen; report it at the root rather than dropping it.
+    return (paths.length > 0 ? paths : [[]]).map(
+      (path): DesignDiagnostic => ({
+        severity: "error",
+        code: "render/component-threw",
+        path,
+        message: `\`${failure.componentId}\` failed to render and was replaced with a placeholder: ${failure.reason}`,
+      }),
+    );
+  });
+}
+
+export async function diagnosticsForScreen(
   ctx: MutationContext,
   jit: TailwindJit | undefined,
   screen: Screen,
 ): Promise<DesignDiagnostic[]> {
-  return diagnosticsForTree(ctx, jit, screen, screen.tree);
+  return [
+    ...renderDiagnostics(ctx, screen),
+    ...(await diagnosticsForTree(ctx, jit, screen, screen.tree)),
+  ];
 }

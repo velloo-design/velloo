@@ -381,9 +381,11 @@ Tree mutations validate the nodes they touched and return \`diagnostics\` only w
 
 Diagnostics are **triage signals, not gates.** A deliberate brand gradient or status color may be correct. Set \`data-accent: "ok"\` (or any string) on a deliberately non-flipping node to exempt it from the theme warning.
 
+One exception is a gate: \`render/component-threw\` (severity \`error\`) means the component at that path threw while rendering, so the canvas shows a diagnostic placeholder where your component should be. A single broken node no longer takes the whole screen down, which is exactly why the diagnostic matters — the screen still renders and still looks built. The message is the component's own, and usually names a parent it has to sit inside: composite families such as Select, Tabs, and Dialog give their parts a context, so \`SelectItem\` needs a \`Select\` above it, not just a \`Box\`.
+
 ## inspect
 
-Returns SSR'd HTML plus resolved props for a specific node, when you need to verify what actually landed.`,
+Returns SSR'd HTML plus resolved props for a specific node, when you need to verify what actually landed. The node is rendered where it sits, with its real ancestors around it, so a part that needs its parent inspects correctly.`,
   },
 
   art: {

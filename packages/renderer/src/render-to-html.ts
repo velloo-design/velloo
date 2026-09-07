@@ -10,7 +10,7 @@ import {
 import { renderToString } from "react-dom/server";
 import { buildRoot } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
-import { type RenderFailure, renderGuarded } from "./render-guard.ts";
+import { type GuardedRender, type RenderFailure, renderGuarded } from "./render-guard.ts";
 import { serializeTree } from "./serialize-tree.ts";
 import { themeToCss } from "./theme-to-css.ts";
 
@@ -39,10 +39,24 @@ export function renderBody(
   registry: ComponentRegistry,
   snippets?: Map<string, Snippet>,
 ): string {
+  return renderBodyGuarded(screen, registry, snippets).html;
+}
+
+/**
+ * As `renderBody`, but reporting which components had to be stood in for.
+ * A caller that renders a node out of its usual surroundings needs to know a
+ * stand-in appeared, because out there it may mean nothing worse than "this
+ * one needs its parent".
+ */
+export function renderBodyGuarded(
+  screen: Screen,
+  registry: ComponentRegistry,
+  snippets?: Map<string, Snippet>,
+): GuardedRender {
   ScreenSchema.parse(screen);
   return renderGuarded(registry, (active) =>
     renderToString(buildRoot(screen.tree, { registry: active, snippets })),
-  ).html;
+  );
 }
 
 export interface RenderOptions {

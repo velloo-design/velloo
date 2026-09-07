@@ -104,7 +104,7 @@ const INSTRUCTION_PARTS = [
   "",
   '**Think in ids, not paths.** Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), pass a stable id reference like `"@hero-cta"`. Assign ids at creation (`id: "hero-cta"`) for anything you might touch again. Number paths are positional and break when siblings move; treat them as an implementation detail you get from `find_nodes` (`set_node_id` retrofits one).',
   "",
-  '**Verify before declaring done.** Mutations return focused class and theme diagnostics; `screenshot mode: "compare"` renders light and dark side by side and returns a full-screen diagnostic pass. `emit_code` repeats that full check at the handoff boundary. See velloo://guide/verification.',
+  '**Verify before declaring done.** Mutations return focused class, theme, and render diagnostics — a `render/component-threw` diagnostic at some path means the canvas shows a placeholder there instead of the component you asked for, and the message names what it needs (usually a parent it must sit inside); `screenshot mode: "compare"` renders light and dark side by side and returns a full-screen diagnostic pass. `emit_code` repeats that full check at the handoff boundary. See velloo://guide/verification.',
   "",
   "**Make it distinctive.** Default library + Inter + one indigo reads as template. Set a display face and a typeset early via `set_theme` — one call re-proportions every screen — then reach for real art and confident color. See velloo://guide/art.",
   "",

@@ -93,6 +93,45 @@ describe("inspect", () => {
     expect(r.note).toBeUndefined();
   });
 
+  /**
+   * A node whose component reads a context its parent provides renders fine on
+   * the canvas and throws on its own. Inspecting it used to virtualize it as a
+   * one-node screen, so it came back as a render-error stand-in — a confident
+   * wrong answer about healthy markup, and one an agent would act on.
+   */
+  test("a node that needs its parent is inspected where it sits, not alone", async () => {
+    const { ctx, screen } = ctxOf();
+    screen.tree = {
+      $ref: "Tabs",
+      props: { defaultValue: "overview" },
+      children: [
+        {
+          $ref: "TabsList",
+          children: [{ $ref: "TabsTrigger", props: { value: "overview", children: "Overview" } }],
+        },
+      ],
+    };
+    const r = unwrap(await inspect(ctx, { screenId: "home", path: [0, 0] }));
+    expect(r.ref).toBe("TabsTrigger");
+    expect(r.bodyHtml).toContain("Overview");
+    expect(r.bodyHtml).not.toContain("data-velloo-render-error");
+    // Its own markup, lifted back out — not the whole Tabs it was rendered in.
+    expect(r.bodyHtml).not.toContain('data-slot="tabs-list"');
+  });
+
+  test("a node that is genuinely broken still reports the stand-in", async () => {
+    const { ctx, screen } = ctxOf();
+    // No Tabs anywhere above it: this one really cannot render, and inspect
+    // should say so rather than quietly returning empty markup.
+    screen.tree = {
+      $ref: "Card",
+      children: [{ $ref: "TabsTrigger", props: { value: "x", children: "Orphan" } }],
+    };
+    const r = unwrap(await inspect(ctx, { screenId: "home", path: [0] }));
+    expect(r.ref).toBe("TabsTrigger");
+    expect(r.bodyHtml).toContain('data-velloo-render-error="TabsTrigger"');
+  });
+
   test("inspecting a snippet instance with no innerPath returns the body root + hint", async () => {
     const { ctx } = ctxOf();
     const r = unwrap(await inspect(ctx, { screenId: "home", path: "@tip-1" }));
