@@ -11,12 +11,8 @@ export type {
   AppTheme,
   CanvasNoteEntry,
   CursorMode,
-  DesignMode,
-  LibraryItemKind,
   LibraryItemRef,
-  NodeState,
   NoteAttachment,
-  RightTab,
   Selection,
   ViewMode,
 } from "./store/types.ts";

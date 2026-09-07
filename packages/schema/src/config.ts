@@ -37,7 +37,7 @@ export const LibrarySchema = z.object({
 
 export type Library = z.infer<typeof LibrarySchema>;
 
-export const CodegenConfigSchema = z.object({
+const CodegenConfigSchema = z.object({
   /** Import prefix for emitted shadcn imports. Defaults to "@/components/ui". */
   componentsAlias: z.string().min(1).optional(),
   /**

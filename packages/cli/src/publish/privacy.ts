@@ -1,6 +1,6 @@
 import { select } from "@clack/prompts";
 
-export type PublishPrivacyMode = "public" | "private" | "password";
+type PublishPrivacyMode = "public" | "private" | "password";
 
 export interface PublishPrivacyChoice {
   visibility: "public" | "private";

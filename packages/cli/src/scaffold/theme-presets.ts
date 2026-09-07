@@ -18,7 +18,7 @@ export interface ThemePreset {
   seed: string;
 }
 
-export const THEME_PRESETS: ThemePreset[] = [
+const THEME_PRESETS: ThemePreset[] = [
   { id: "indigo", label: "Indigo", seed: "#5e6ad2" },
   { id: "violet", label: "Violet", seed: "#7c3aed" },
   { id: "blue", label: "Blue", seed: "#2563eb" },

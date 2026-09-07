@@ -13,7 +13,6 @@ export {
   AddBoardBody,
   AddBoardGroupBody,
   AddFrameBody,
-  AddNodeBody,
   AddNoteBody,
   ApplyClassesBody,
   RemoveAnnotationBody,

@@ -4,7 +4,7 @@ import { join } from "node:path";
 /** Where the recorder writes tapes, relative to a design folder root. */
 export const TRACE_SUBDIR = join(".velloo", "trace");
 
-export function isTapeDir(dir: string): boolean {
+function isTapeDir(dir: string): boolean {
   return existsSync(join(dir, "tape.jsonl"));
 }
 

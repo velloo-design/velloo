@@ -39,7 +39,7 @@ export interface AnnotationsSlice {
   setEditingMarkupId(id: string | null): void;
 }
 
-export type NotePlacement = { x: number; y: number } | { attachment: NoteAttachment };
+type NotePlacement = { x: number; y: number } | { attachment: NoteAttachment };
 
 export const createAnnotationsSlice: StateCreator<CanvasState, [], [], AnnotationsSlice> = (
   set,

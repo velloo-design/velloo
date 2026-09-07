@@ -22,7 +22,7 @@ export function defaultCloudUrl(): string {
 const CONFIG_TIMEOUT_MS = 5000;
 
 /** Origin of a cloud API URL — the home when the cloud doesn't advertise one. */
-export function cloudOrigin(baseUrl: string): string {
+function cloudOrigin(baseUrl: string): string {
   return new URL(baseUrl).origin;
 }
 

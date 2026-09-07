@@ -147,7 +147,7 @@ function rungOf(node: ComponentNode): { role: TypesetRole; via: string } | null 
 }
 
 /** The node and every ancestor above it, nearest first. */
-export function ancestorChain(tree: Node, path: readonly number[]): Node[] {
+function ancestorChain(tree: Node, path: readonly number[]): Node[] {
   const chain: Node[] = [tree];
   let node: Node | undefined = tree;
   for (const index of path) {

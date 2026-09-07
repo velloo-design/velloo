@@ -14,7 +14,7 @@ import { z } from "zod";
  * compatible: extension props feed into the same inspector affordances
  * the manifest-derived ones use.
  */
-export const PropControlSchema = z.enum(["boolean", "number", "string", "color", "enum", "icon"]);
+const PropControlSchema = z.enum(["boolean", "number", "string", "color", "enum", "icon"]);
 
 export const ExtensionPropDescriptorSchema = z
   .object({

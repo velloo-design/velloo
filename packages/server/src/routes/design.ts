@@ -223,7 +223,7 @@ async function loadManifestForCtx(ctx: MutationContext): Promise<Manifest> {
   }
 }
 
-export interface ComponentsResponse {
+interface ComponentsResponse {
   manifest: Manifest;
   /** The default library's native style channel — drives the inspector's editor. */
   styleChannel: StyleChannel;

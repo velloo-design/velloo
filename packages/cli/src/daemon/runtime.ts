@@ -32,7 +32,7 @@ import { TOOL_VERSION } from "../version.ts";
  * record read as a good one sends a publish at a stale cloud, or has `stop`
  * signal a pid that now belongs to something else.
  */
-export const DaemonRecordSchema = z.object({
+const DaemonRecordSchema = z.object({
   /** realpath of the design folder — the daemon's identity. */
   root: z.string().min(1),
   pid: z.number().int().positive(),

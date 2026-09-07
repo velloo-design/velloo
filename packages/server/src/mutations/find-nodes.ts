@@ -28,7 +28,7 @@ export interface FindNodesArgs {
   limit?: number | undefined;
 }
 
-export interface FoundNode {
+interface FoundNode {
   path: number[];
   kind: "component" | "snippet" | "param";
   /** `$ref` for components, `$snippet` for snippet instances. */

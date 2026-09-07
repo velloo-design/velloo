@@ -157,7 +157,7 @@ export const TypographySchema = z
  * Structured radius slots. `md` is what emit_theme picks up as `--radius`.
  * Additional named sizes go into the record without losing the named ones.
  */
-export const RadiusSchema = z
+const RadiusSchema = z
   .object({
     none: NumOrCssLen.optional(),
     sm: NumOrCssLen.optional(),
@@ -177,7 +177,7 @@ export const RadiusSchema = z
  * a code-to-design port's gutters drift until these are honored. Emitted as a
  * `.container` override (render) / `@utility container` (codegen).
  */
-export const ContainerSchema = z.object({
+const ContainerSchema = z.object({
   center: z.boolean().optional(),
   /** Horizontal padding, e.g. "1.5rem". */
   padding: z.string().min(1).optional(),

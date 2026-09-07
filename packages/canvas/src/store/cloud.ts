@@ -35,7 +35,7 @@ export interface CloudSlice {
   publishBoardNow(board: { id: string; name: string }, mode: PublishAccessMode): void;
 }
 
-export type PublishAccessMode = "public" | "private" | "password";
+type PublishAccessMode = "public" | "private" | "password";
 
 export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (set, get) => ({
   authStatus: null,

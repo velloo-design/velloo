@@ -62,7 +62,7 @@ export function isValidLibraryId(v: string): v is LibraryId {
   return (LIBRARY_IDS as string[]).includes(v);
 }
 
-export function isValidContent(v: string): v is InitialContent {
+function isValidContent(v: string): v is InitialContent {
   return (
     v === "sample" ||
     v === "blank" ||
@@ -73,7 +73,7 @@ export function isValidContent(v: string): v is InitialContent {
   );
 }
 
-export function isValidStart(v: string): boolean {
+function isValidStart(v: string): boolean {
   return v in START_TO_CONTENT;
 }
 

@@ -109,7 +109,7 @@ function detectUnsupportedUi(deps: Record<string, unknown>): string | undefined 
 }
 
 /** Best-effort location of the host's global stylesheet (the theme source). */
-export function findGlobalsCss(
+function findGlobalsCss(
   appRoot: string,
   componentsJson: Record<string, unknown> | null,
 ): string | undefined {

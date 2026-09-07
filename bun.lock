@@ -77,7 +77,6 @@
         "@velloo/schema": "workspace:*",
         "culori": "4.0.2",
         "diff": "9.0.0",
-        "tailwind-merge": "3.6.0",
       },
       "devDependencies": {
         "@types/culori": "4.0.1",
@@ -293,14 +292,12 @@
         "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
         "class-variance-authority": "0.7.1",
-        "clsx": "2.1.1",
         "echarts": "6.1.0",
         "lucide-react": "1.25.0",
         "radix-ui": "1.6.2",
         "react": "19.2.7",
         "react-dom": "19.2.7",
         "sonner": "2.0.7",
-        "tailwind-merge": "3.6.0",
         "tailwindcss": "4.3.0",
       },
       "devDependencies": {

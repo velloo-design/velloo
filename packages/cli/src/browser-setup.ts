@@ -16,7 +16,7 @@ export const BROWSER_PROMPT_DETAIL = pc.dim(
 
 export const BROWSER_PROMPT_SIZE = "(~110MB, one-time)";
 
-export interface ChromiumInstallResult {
+interface ChromiumInstallResult {
   ok: boolean;
   /**
    * Linux: the download finished but playwright's host validation reported
@@ -32,7 +32,7 @@ export interface ChromiumInstallResult {
  * for the host-validation warning. Callers must treat `missingSystemLibs` as
  * not-installed for readiness purposes.
  */
-export async function runChromiumInstall(): Promise<ChromiumInstallResult> {
+async function runChromiumInstall(): Promise<ChromiumInstallResult> {
   const proc = Bun.spawn([...CHROMIUM_INSTALL_ARGV], {
     stdout: "pipe",
     stderr: "pipe",

@@ -22,15 +22,8 @@ import { resolveProjectRoot } from "./project-root.ts";
 import { installSkills, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 
-export {
-  AGENT_IDS,
-  AGENTS,
-  detectInstalledAgents,
-  GLOBAL_AGENT_IDS,
-  PROJECT_AGENT_IDS,
-} from "./agents.ts";
-export { type RefreshResult, refreshAgentArtifacts } from "./refresh.ts";
-export type { WriteResult } from "./write-config.ts";
+export { AGENT_IDS, PROJECT_AGENT_IDS } from "./agents.ts";
+export { refreshAgentArtifacts } from "./refresh.ts";
 
 /** Default velloo MCP endpoint for `--http` connections — matches `velloo mcp --http`. */
 export const DEFAULT_MCP_URL = "http://127.0.0.1:7301/mcp";
@@ -204,7 +197,7 @@ export async function askAgentWiring(opts?: {
  * this machine (falling back to the global claude+cursor pair when none
  * are). Returns the chosen ids, or null on cancel.
  */
-export async function pickAgents(opts?: {
+async function pickAgents(opts?: {
   exclude?: string[];
   initial?: string[];
   /** Agents already carrying a velloo entry — shown as such in the list. */

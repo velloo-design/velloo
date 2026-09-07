@@ -6,7 +6,7 @@
  * NOTE: the recorder reads this same var in the *daemon* process, so the value
  * must be present when the daemon is spawned — see `velloo run`/`velloo mcp`.
  */
-export const TRACE_ENV = "VELLOO_TRACE";
+const TRACE_ENV = "VELLOO_TRACE";
 
 export function traceEnabled(): boolean {
   const v = process.env[TRACE_ENV];

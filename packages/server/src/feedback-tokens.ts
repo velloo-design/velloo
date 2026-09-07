@@ -55,7 +55,7 @@ interface StoreEntry {
 
 type Store = Record<string, StoreEntry>;
 
-export const defaultTokenStorePath = () => join(homedir(), ".velloo", "feedback-tokens.json");
+const defaultTokenStorePath = () => join(homedir(), ".velloo", "feedback-tokens.json");
 
 async function loadStore(path: string): Promise<Store> {
   try {

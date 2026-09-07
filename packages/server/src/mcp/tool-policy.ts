@@ -130,7 +130,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 };
 
 /** The compact façade has its own public names; native drift checks stay exact. */
-export const FACADE_TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+const FACADE_TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   // These can dispatch writes, including destructive native operations.
   call_velloo: { openWorldHint: false },
   run_velloo_plan: { openWorldHint: false },

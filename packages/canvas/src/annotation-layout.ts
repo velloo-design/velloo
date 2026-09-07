@@ -14,7 +14,7 @@ export const FALLBACK_INSET = { x: 0, y: 20 };
 export const CARD_GUTTER = 24;
 /** Annotation card width — matches the `w-60` Tailwind class of the card. */
 export const CARD_WIDTH = 240;
-export const CARD_HEIGHT_ESTIMATE = 60;
+const CARD_HEIGHT_ESTIMATE = 60;
 
 export interface AnnotationLayoutInput {
   id: string;

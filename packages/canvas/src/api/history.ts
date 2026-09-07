@@ -5,7 +5,7 @@ export interface HistoryDepths {
   redo: number;
 }
 
-export type RevertedEntry =
+type RevertedEntry =
   | { kind: "screen"; screenId: string }
   | { kind: "board"; boardId: string }
   | { kind: "theme"; themeName: string }

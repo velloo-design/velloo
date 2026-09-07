@@ -54,7 +54,7 @@ export function aliasPairs(hostApp: HostApp | undefined): { from: string; to: st
 }
 
 /** Rewrite an aliased specifier to a host-root-relative path, or null if no alias matches. */
-export function applyAlias(spec: string, aliases: { from: string; to: string }[]): string | null {
+function applyAlias(spec: string, aliases: { from: string; to: string }[]): string | null {
   for (const { from, to } of aliases) {
     if (from && spec.startsWith(from)) return to + spec.slice(from.length);
   }

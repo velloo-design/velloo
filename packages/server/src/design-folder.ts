@@ -56,16 +56,16 @@ export interface DesignFolder {
 }
 
 /** Screen id is the filename stem (e.g. "landing" for screens/landing.json). */
-export function screenIdFromFilename(filename: string): string {
+function screenIdFromFilename(filename: string): string {
   return basename(filename, extname(filename));
 }
 
-export function boardIdFromFilename(filename: string): string {
+function boardIdFromFilename(filename: string): string {
   return basename(filename, extname(filename));
 }
 
 /** Snippet id is the filename stem (same convention). */
-export function snippetIdFromFilename(filename: string): string {
+function snippetIdFromFilename(filename: string): string {
   return basename(filename, extname(filename));
 }
 

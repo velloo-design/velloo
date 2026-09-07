@@ -188,7 +188,7 @@ export interface ScreenEntry {
 }
 
 /** Every screen under `<folder>/screens`, sorted; skips unparseable files. */
-export async function listScreens(folder: string): Promise<ScreenEntry[]> {
+async function listScreens(folder: string): Promise<ScreenEntry[]> {
   let files: string[];
   try {
     files = (await readdir(join(folder, "screens"))).filter((f) => f.endsWith(".json"));
@@ -218,7 +218,7 @@ export interface BoardEntry {
 }
 
 /** Every board under `<folder>/boards`, sorted; skips unparseable files. */
-export async function listBoards(folder: string): Promise<BoardEntry[]> {
+async function listBoards(folder: string): Promise<BoardEntry[]> {
   let files: string[];
   try {
     files = (await readdir(join(folder, "boards"))).filter((f) => f.endsWith(".json"));
@@ -243,7 +243,7 @@ export async function listBoards(folder: string): Promise<BoardEntry[]> {
 }
 
 /** screen id → the names of the boards it appears on. */
-export function boardsByScreen(boards: BoardEntry[]): Map<string, string[]> {
+function boardsByScreen(boards: BoardEntry[]): Map<string, string[]> {
   const map = new Map<string, string[]>();
   for (const b of boards) {
     for (const sid of b.screens) {

@@ -7,15 +7,15 @@ import { withBoardLock, withScreenLock, withSnippetLock } from "../mutations/con
 import { withThemeLock } from "../theme/index.ts";
 import type { WatchEvent } from "../watcher.ts";
 
-export type RevertFileStatus = "modified" | "added" | "deleted" | "untracked";
+type RevertFileStatus = "modified" | "added" | "deleted" | "untracked";
 
-export interface RevertFile {
+interface RevertFile {
   /** Path relative to the design folder. */
   path: string;
   status: RevertFileStatus;
 }
 
-export interface RevertStatus {
+interface RevertStatus {
   /** True when the folder is in a git repo with a HEAD and has changes to discard. */
   available: boolean;
   /** Why revert is unavailable (no repo, no commits, nothing to revert). */

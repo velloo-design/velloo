@@ -14,7 +14,7 @@ import type { Snippet } from "./snippet.ts";
  * A node slot bearing it is dropped (renders/emits nothing); a prop bearing it
  * is omitted. Internal sentinel: never appears in a persisted tree.
  */
-export const OMITTED: unique symbol = Symbol("velloo.omitted-optional-param");
+const OMITTED: unique symbol = Symbol("velloo.omitted-optional-param");
 
 /** Substitution result for an OMITTED value — pruned from arrays and prop objects. */
 const DROP: unique symbol = Symbol("velloo.drop");

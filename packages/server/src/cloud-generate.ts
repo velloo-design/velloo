@@ -61,12 +61,12 @@ export const INTENTS = [
   "cutout",
   "upscale",
 ] as const;
-export type Intent = (typeof INTENTS)[number];
+type Intent = (typeof INTENTS)[number];
 
 export const ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"] as const;
-export type Aspect = (typeof ASPECTS)[number];
+type Aspect = (typeof ASPECTS)[number];
 
-export type GenerateKind = "image" | "svg";
+type GenerateKind = "image" | "svg";
 
 export interface GenerateAssetRequest {
   prompt: string;
@@ -90,7 +90,7 @@ export interface GenerateAssetRequest {
   replaces?: string | undefined;
 }
 
-export interface GeneratedAssetFile {
+interface GeneratedAssetFile {
   assetPath: string;
   url: string;
   bytes: number;

@@ -55,7 +55,7 @@ import {
  * the daemon keeps it warm.
  */
 
-export type PublishStep = "check" | "select" | "styles" | "bundle" | "capture" | "upload";
+type PublishStep = "check" | "select" | "styles" | "bundle" | "capture" | "upload";
 
 export type PublishEvent =
   | { kind: "step"; step: PublishStep; message: string }
@@ -208,7 +208,7 @@ const publishedAt = (value: string | null): number => {
 export const PUBLISH_VIEWPORT: Viewport = { w: 1440, h: 900 };
 
 /** The default link title for a folder — its directory name. */
-export function defaultPublishTitle(folderRoot: string): string {
+function defaultPublishTitle(folderRoot: string): string {
   return `${folderRoot.split("/").filter(Boolean).pop()} designs`;
 }
 

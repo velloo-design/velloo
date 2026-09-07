@@ -47,7 +47,7 @@ export type PublishState =
     };
 
 /** Whether this account can publish, and why not when it can't. */
-export type PublishAccess = "ready" | "signed-out" | "expired";
+type PublishAccess = "ready" | "signed-out" | "expired";
 
 export interface PublishTargets {
   /** Convenience mirror of `access === "ready"`. */

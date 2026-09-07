@@ -28,7 +28,7 @@ import {
  * registry plus a per-island `runtimes` map the runtime mounts with.
  */
 
-export type { BundleError, BundleResult } from "./bundle-core.ts";
+export type { BundleResult } from "./bundle-core.ts";
 
 /** The `hostApp`/`hostApps` slice of config the bundler resolves against. */
 export type HostAppsConfig = Pick<Config, "hostApp" | "hostApps">;
@@ -48,7 +48,7 @@ export function liveExtensions(
 const DEFAULT_APP = "";
 
 /** Group live extensions by the host app they bundle against. */
-export function partitionByApp(
+function partitionByApp(
   live: Record<string, Extension>,
 ): Map<string, { id: string; importPath: string }[]> {
   const groups = new Map<string, { id: string; importPath: string }[]>();
@@ -63,7 +63,7 @@ export function partitionByApp(
 }
 
 /** The host app an extension resolves against, or null for an unknown key. */
-export function hostAppForExtension(
+function hostAppForExtension(
   config: HostAppsConfig,
   app: string | undefined,
 ): HostApp | undefined | null {
@@ -125,7 +125,7 @@ for (const g of groups) {
  * registries, and exposes a per-island `runtimes` map so each island mounts
  * with its own app's React.
  */
-export function buildLoaderModule(appKeys: string[], version: number): string {
+function buildLoaderModule(appKeys: string[], version: number): string {
   const imports = appKeys.map(
     (k) =>
       `  import(${JSON.stringify(`./bundle-app.js?app=${encodeURIComponent(k)}&v=${version}`)}),`,
@@ -140,7 +140,7 @@ export function buildLoaderModule(appKeys: string[], version: number): string {
  * no sibling endpoints. Needs an environment whose CSP admits `data:` module
  * imports (localhost asset server and Chromium screenshots do).
  */
-export function buildInlineLoaderModule(bundles: BundleResult[]): string {
+function buildInlineLoaderModule(bundles: BundleResult[]): string {
   const imports = bundles.map(
     (r) =>
       `  import("data:text/javascript;base64,${Buffer.from(r.code, "utf8").toString("base64")}"),`,

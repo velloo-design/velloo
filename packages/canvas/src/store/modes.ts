@@ -182,7 +182,7 @@ export interface ModesSlice {
 }
 
 /** What the export dialog is pointed at — a frame or a whole board. */
-export interface ExportTarget {
+interface ExportTarget {
   kind: "frame" | "board";
   id: string;
   /** Display name for the dialog title + default filename. */
@@ -190,7 +190,7 @@ export interface ExportTarget {
 }
 
 /** What the full-screen preview modal shows. Read-only — never written back. */
-export interface PreviewTarget {
+interface PreviewTarget {
   screenId: string;
   /** Display name for the modal title. */
   name: string;

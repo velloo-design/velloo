@@ -30,7 +30,7 @@ import type { CanvasState } from "./index.ts";
  * pinned theme is the bug where dragging a rhythm control changes a file
  * nothing on screen uses, and so appears to do nothing at all.
  */
-export function activeThemeName(state: Pick<CanvasState, "currentBoardId" | "boards">): string {
+function activeThemeName(state: Pick<CanvasState, "currentBoardId" | "boards">): string {
   const boardId = state.currentBoardId;
   return (boardId ? state.boards[boardId]?.theme : undefined) ?? "default";
 }

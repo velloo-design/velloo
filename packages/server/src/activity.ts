@@ -22,7 +22,7 @@ import { isArchived } from "@velloo/schema";
  * only — the durable audit trail is the trace recorder's job (VELLOO_TRACE).
  */
 
-export type ActivitySource = "mcp" | "canvas" | "cli";
+type ActivitySource = "mcp" | "canvas" | "cli";
 
 export interface ActivityTarget {
   screenId?: string;

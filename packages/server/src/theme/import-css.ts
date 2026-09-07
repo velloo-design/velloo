@@ -13,7 +13,7 @@ import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError, themeBadRequest } from "./errors.ts";
 
-export interface ThemeTokenChange {
+interface ThemeTokenChange {
   token: string;
   from: string | null;
   to: string;

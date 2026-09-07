@@ -9,7 +9,7 @@ import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
  * It is a pure pointer file — design settings stay in each folder's
  * `.design/config.json`; nothing here duplicates that contract.
  */
-export const MANIFEST_FILE = "velloo.json";
+const MANIFEST_FILE = "velloo.json";
 
 /** The conventional design-folder name, when a repo has no manifest yet. */
 const DEFAULT_FOLDER_NAME = "velloo";
@@ -22,9 +22,9 @@ const PROJECT_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
  * to agree on the file. Re-exported here so the CLI's callers don't need to
  * know that.
  */
-export const ManifestSchema = RepoManifestSchema;
+const ManifestSchema = RepoManifestSchema;
 
-export type Manifest = RepoManifest;
+type Manifest = RepoManifest;
 
 export interface FoundManifest {
   /** Absolute path of the velloo.json file. */

@@ -8,8 +8,6 @@ import type { ErrorEnvelope } from "@velloo/protocol";
 import { ensureConnected } from "./connection.ts";
 import { type ApiError, describeApiError } from "./errors.ts";
 
-export type { ApiError } from "./errors.ts";
-
 /**
  * Read the server's `{error}` envelope. The body is untrusted, so the shape is
  * checked rather than asserted: anything that is not a kinded object yields

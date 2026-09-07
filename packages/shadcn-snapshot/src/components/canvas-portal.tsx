@@ -34,8 +34,6 @@
  * The snapshot stays design-mode only; the upstream provider + adapter
  * layer drive real app behavior.
  */
-import type * as React from "react";
-
 /**
  * Decide whether a Radix root should pin `open=true` in design mode.
  * If the consumer explicitly set `open` or `defaultOpen`, respect it.
@@ -55,5 +53,3 @@ export function pinOpenInDesignMode<Props extends { open?: boolean; defaultOpen?
 export function inlineOpenAttrs(): { "data-state": "open"; "data-velloo-inline": "true" } {
   return { "data-state": "open", "data-velloo-inline": "true" };
 }
-
-export type CanvasInline<T> = React.PropsWithChildren<T & { className?: string }>;

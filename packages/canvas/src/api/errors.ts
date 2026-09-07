@@ -28,7 +28,7 @@ import {
  * knows what failed, and `LoggedOut` is the one kind the canvas must *act* on
  * rather than print. `AssetInUse` is the assets router's own refusal.
  */
-export type CloudRouteError = { kind: CloudError["kind"] | "AssetInUse"; message: string };
+type CloudRouteError = { kind: CloudError["kind"] | "AssetInUse"; message: string };
 
 export type ApiError = MutationError | ThemeError | CloudRouteError;
 

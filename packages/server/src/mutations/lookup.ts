@@ -36,7 +36,7 @@ import {
  * editor sets `selection.screenId = "snippet:<id>"`; everything
  * downstream (resolve, clone, persist) flows through this adapter.
  */
-export const SNIPPET_TREE_PREFIX = "snippet:";
+const SNIPPET_TREE_PREFIX = "snippet:";
 
 export function isSnippetTreeId(screenId: string): boolean {
   return screenId.startsWith(SNIPPET_TREE_PREFIX);
@@ -214,7 +214,7 @@ function describe(node: Node): string {
  * recent state (after an `add_extension` mutation that updates the
  * config in place).
  */
-export function getExtensions(ctx: MutationContext): Record<string, Extension> {
+function getExtensions(ctx: MutationContext): Record<string, Extension> {
   return ctx.folder.config.extensions ?? {};
 }
 

@@ -10,10 +10,6 @@ export function setApiConnected(next: boolean): void {
   connected = next;
 }
 
-export function apiConnected(): boolean {
-  return connected;
-}
-
 /**
  * Throw before a mutating request leaves the canvas while the daemon is
  * unreachable. Failing fast here (instead of letting fetch time out or the

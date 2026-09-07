@@ -14,7 +14,7 @@ import {
 } from "./spacing.ts";
 
 export type SxVal = string | number;
-export type SxSides = Sides<SxVal>;
+type SxSides = Sides<SxVal>;
 
 export interface SxModel {
   display?: SxVal | undefined;

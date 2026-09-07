@@ -15,7 +15,7 @@ export interface Stack {
   alias: string;
 }
 
-export const STACKS: Stack[] = [
+const STACKS: Stack[] = [
   { id: "nextjs", label: "Next.js", alias: "@/components/ui" },
   { id: "vite", label: "Vite (React)", alias: "@/components/ui" },
   { id: "astro", label: "Astro", alias: "@/components/ui" },

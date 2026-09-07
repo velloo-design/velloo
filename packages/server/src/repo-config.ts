@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { type FeedbackPrefs, REPO_MANIFEST_FILE, RepoManifestSchema } from "@velloo/schema";
 import { writeJsonAtomic } from "./fs.ts";
 
-export interface FoundRepoManifest {
+interface FoundRepoManifest {
   /** Absolute path of the velloo.json file. */
   path: string;
   /** Directory holding it — the repo root, as far as velloo is concerned. */

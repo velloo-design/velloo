@@ -22,7 +22,7 @@ import type { Screen, Snippet } from "@velloo/schema";
  * screen's pixels, so they never mark screens changed.
  */
 
-export type GitFileStatus = "A" | "M" | "D";
+type GitFileStatus = "A" | "M" | "D";
 
 export interface RawChange {
   status: GitFileStatus;
@@ -41,7 +41,7 @@ export interface DesignChangeSet {
   assets: Set<string>;
 }
 
-export type ScreenChangeStatus = "added" | "modified" | "deleted";
+type ScreenChangeStatus = "added" | "modified" | "deleted";
 
 export interface ChangedScreen {
   id: string;

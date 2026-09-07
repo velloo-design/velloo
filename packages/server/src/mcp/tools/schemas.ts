@@ -14,13 +14,7 @@ import { z } from "zod";
  * with the HTTP routes and `batch`, so they are declared in
  * `@velloo/protocol` and re-exported here under the names the tool files use.
  */
-export {
-  IdLocatorSchema as IdLocator,
-  InnerPathSchema,
-  jsonTolerant,
-  LocatorSchema as PathSchema,
-  PatchRecordSchema,
-} from "@velloo/protocol";
+export { InnerPathSchema, jsonTolerant, LocatorSchema as PathSchema } from "@velloo/protocol";
 export { NodeIdSchema as NodeIdInputSchema } from "@velloo/schema";
 export { ViewportSchema };
 

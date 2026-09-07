@@ -7,7 +7,7 @@
 import { applySide, rankVariant, type Sides, type SpacingVariant } from "./spacing.ts";
 
 export type CssVal = string | number;
-export type CssSides = Sides<CssVal>;
+type CssSides = Sides<CssVal>;
 
 export interface StyleModel {
   display?: CssVal | undefined;

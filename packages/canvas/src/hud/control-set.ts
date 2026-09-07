@@ -23,7 +23,7 @@ import type { Node, Snippet, SnippetParam, Theme } from "@velloo/schema";
 import { isComponentNode, isSnippetInstance } from "@velloo/schema";
 
 /** How a control renders and what gesture drives it. */
-export type ControlKind =
+type ControlKind =
   | "size" // Fill / Hug / Fixed, with a px value when fixed
   | "number" // scrubbable px value
   | "ratio" // scrubbable unitless value (line height)
@@ -56,7 +56,7 @@ export type StyleKey =
   | "gap";
 
 /** Where a control reads and writes. */
-export type Slot =
+type Slot =
   | { readonly via: "style"; readonly key: StyleKey }
   | { readonly via: "prop"; readonly name: string }
   | { readonly via: "arg"; readonly name: string };
@@ -76,7 +76,7 @@ export interface Choice {
  * each control declares whether it earns bar space; the pane always shows all
  * of them. A control demoted to `pane` is never hidden, only moved.
  */
-export type Tier = "bar" | "pane";
+type Tier = "bar" | "pane";
 
 export interface ControlSpec {
   readonly id: string;

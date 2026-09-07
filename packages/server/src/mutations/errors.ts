@@ -256,7 +256,7 @@ export const extensionInUse = (
 /**
  * Levenshtein distance for ranking nearest component names.
  */
-export function levenshtein(a: string, b: string): number {
+function levenshtein(a: string, b: string): number {
   const al = a.length;
   const bl = b.length;
   if (al === 0) return bl;

@@ -24,7 +24,3 @@ export async function setCustomCss(
   folder.customCss = css;
   return ok({ css, bytes: Buffer.byteLength(css, "utf8") });
 }
-
-export function getCustomCss(folder: DesignFolder): CustomCssResult {
-  return { css: folder.customCss, bytes: Buffer.byteLength(folder.customCss, "utf8") };
-}

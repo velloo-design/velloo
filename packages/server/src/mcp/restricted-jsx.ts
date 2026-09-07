@@ -1,7 +1,7 @@
 import type { ComponentProvider } from "@velloo/provider";
 import type { ComponentNode, Node, Screen, Snippet, SnippetInstance } from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
-import { nearestRefs, normalizeRef } from "../mutations/errors.ts";
+import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
 
 export interface JsxIssue {
@@ -517,6 +517,3 @@ export async function compileRestrictedJsx(
     snippets,
   });
 }
-
-/** Separator-insensitive tag lookup is only for suggestions, never resolution. */
-export const normalizeJsxTag = normalizeRef;

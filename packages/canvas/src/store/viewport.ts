@@ -17,7 +17,7 @@ import type { CursorMode } from "./types.ts";
  * a wheel or drag mid-flight must win instantly, never fight the animation.
  */
 let flightToken = 0;
-export function cancelCameraFlight(): void {
+function cancelCameraFlight(): void {
   flightToken += 1;
 }
 

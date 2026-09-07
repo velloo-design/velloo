@@ -2,7 +2,7 @@ import { stderr } from "node:process";
 import type { Writable } from "node:stream";
 import { type SpinnerResult, spinner } from "@clack/prompts";
 
-export interface ProgressStepOptions {
+interface ProgressStepOptions {
   /** Update a live spinner, but do not emit a separate line in CI or a pipe. */
   transient?: boolean | undefined;
 }

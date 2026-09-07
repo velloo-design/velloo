@@ -123,7 +123,7 @@ function radiusBase(theme: Theme): string | undefined {
   return typeof raw === "number" ? `${raw}px` : cssv(raw);
 }
 
-export function emitGlobalsCssV3(
+function emitGlobalsCssV3(
   theme: Theme,
   vars: ThemeVar[],
   opts: { customCss?: string | undefined } = {},
@@ -271,11 +271,7 @@ function presetObject(theme: Theme, vars: ThemeVar[]): Record<string, unknown> {
   return preset;
 }
 
-export function emitTailwindPresetV3(
-  theme: Theme,
-  vars: ThemeVar[],
-  moduleKind: "ts" | "cjs",
-): string {
+function emitTailwindPresetV3(theme: Theme, vars: ThemeVar[], moduleKind: "ts" | "cjs"): string {
   const body = JSON.stringify(presetObject(theme, vars), null, 2);
   const wiring =
     moduleKind === "ts"

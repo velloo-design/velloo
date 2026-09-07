@@ -18,7 +18,7 @@ const TEXT_PROPS = ["children", "label", "placeholder", "title", "alt"] as const
 /** Max chars of context returned around a text match. */
 const EXCERPT_WINDOW = 120;
 
-export interface BoardHit {
+interface BoardHit {
   id: string;
   name: string;
   frameCount: number;
@@ -26,14 +26,14 @@ export interface BoardHit {
   archived: boolean;
 }
 
-export interface ScreenHit {
+interface ScreenHit {
   id: string;
   name: string;
   /** Boards with a frame showing this screen, in sidebar order (archived last). */
   boards: { id: string; name: string; archived: boolean }[];
 }
 
-export interface TextHit {
+interface TextHit {
   screenId: string;
   screenName: string;
   /** First board (sidebar order, live before archived) showing the screen. */

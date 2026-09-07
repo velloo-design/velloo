@@ -101,7 +101,7 @@ export async function deletePersistedBoard(folder: DesignFolder, boardId: string
   folder.notes.delete(boardId);
 }
 
-export async function persistTheme(
+async function persistTheme(
   folder: DesignFolder,
   theme: Theme,
   coalesceKey?: string,

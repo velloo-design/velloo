@@ -1,7 +1,6 @@
-# CI: typecheck + lint + tests on every push/PR. The Playwright/Chromium
-# suites detect a missing browser and skip themselves (they're the local
-# `VELLOO_E2E=1` / installed-chromium opt-ins), so CI needs no browser
-# download and stays fast.
+# CI: typecheck + lint + tests on every push/PR, plus the canvas build and the
+# browser-backed suites in their own jobs so a slow or flaky dependency can't
+# hide a real failure in the fast one.
 name: CI
 
 on:
@@ -39,8 +38,84 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Dead code is only findable while the report is empty — one unexplained
+      # entry and the next reader stops reading it.
+      - name: Dead code
+        run: bun run lint:dead
+
+      # `typecheck` covers the canvas's TypeScript but never runs Vite, so a
+      # broken plugin, a missing asset or a bad import path would surface at
+      # release instead of here. Half a second, and it's the SPA we ship.
+      - name: Build canvas
+        run: bun run build
+        working-directory: packages/canvas
+
       - name: Test
         run: bun test --parallel
+
+  # The Playwright suites, on every push rather than a nightly: they guard the
+  # renderer and the canvas mount, and a nightly would report the break hours
+  # after the PR that caused it — long enough for a red nightly to become
+  # background noise. It's a separate job so a browser download that fails on
+  # the network doesn't read as "the test suite is broken", and it costs about
+  # a second of testing behind a cached ~200MB headless shell.
+  e2e:
+    name: Browser suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build shadcn snapshot manifest
+        run: bun run build
+        working-directory: packages/shadcn-snapshot
+
+      # Keyed on the pin in packages/renderer/src/screenshot.ts, so bumping
+      # Playwright fetches a fresh browser and every other run restores one.
+      - name: Resolve the Playwright pin
+        id: pw
+        run: |
+          pin=$(grep -o 'playwright@[0-9.]*' packages/renderer/src/screenshot.ts | head -1)
+          echo "pin=$pin" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        id: chromium-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.pin }}
+
+      # `velloo browser install` under the hood: the headless shell only, which
+      # is what headless launches use anyway and a third of the full build.
+      - name: Install Chromium
+        if: steps.chromium-cache.outputs.cache-hit != 'true'
+        run: bun x ${{ steps.pw.outputs.pin }} install chromium --only-shell
+
+      # System libraries the shell links against; cheap and not covered by the
+      # browser cache above.
+      - name: Install Chromium system dependencies
+        run: bun x ${{ steps.pw.outputs.pin }} install-deps chromium
+
+      # Fail loudly rather than letting every suite skip itself back to green —
+      # a silent skip is how this job would quietly stop testing anything.
+      - name: Verify Chromium is installed
+        run: |
+          bun -e '
+            const { chromiumExecutable } = await import("./packages/renderer/src/screenshot.ts");
+            const path = await chromiumExecutable();
+            if (!path) { console.error("no Chromium found — the e2e suites would all skip"); process.exit(1); }
+            console.log("chromium:", path);
+          '
+
+      - name: Test (with browser suites)
+        run: bun run test:e2e
 
   # Separate job because it is the one check that needs the network: a Google
   # outage should read as "the font check is red", not fail the suite that was

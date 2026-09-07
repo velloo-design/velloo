@@ -8,18 +8,10 @@ import { createLockMap } from "../locks.ts";
 import { persistBoard, persistNamedTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
-import {
-  type CustomCssResult,
-  getCustomCss as getCustomCssImpl,
-  setCustomCss as setCustomCssImpl,
-} from "./custom-css.ts";
+import { type CustomCssResult, setCustomCss as setCustomCssImpl } from "./custom-css.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
 import type { ThemeError } from "./errors.ts";
-import {
-  type ImportThemeCssResult,
-  importThemeCss as importThemeCssImpl,
-  type ThemeTokenChange,
-} from "./import-css.ts";
+import { type ImportThemeCssResult, importThemeCss as importThemeCssImpl } from "./import-css.ts";
 import { PRESET_NAMES, PRESETS } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import {
@@ -260,10 +252,6 @@ export async function setCustomCss(
   });
 }
 
-export function getCustomCss(ctx: ThemeContext): CustomCssResult {
-  return getCustomCssImpl(ctx.folder);
-}
-
 export type { CustomCssResult, FontSpec, TypesetSpec };
 
 export async function applyPreset(
@@ -313,15 +301,8 @@ export async function importThemeCss(
   });
 }
 
-export {
-  type ContrastResult,
-  type ContrastTier,
-  contrastRatio,
-  scoreThemeContrast,
-  scoreThemeContrastBoth,
-  tierForRatio,
-} from "./contrast.ts";
+export { scoreThemeContrast, scoreThemeContrastBoth } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
-export type { ImportThemeCssResult, ThemeTokenChange, TokenEntry };
+export type { ImportThemeCssResult, TokenEntry };
 export { PRESET_NAMES, PRESETS };

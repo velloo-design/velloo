@@ -6,7 +6,7 @@ async function resolvable<T>(value: T | (() => T | Promise<T>)): Promise<T> {
   return typeof value === "function" ? await (value as () => T | Promise<T>)() : value;
 }
 
-export interface FlagSpec {
+interface FlagSpec {
   /** The flag as the user types it (kebab-case, `--no-` form for default-true booleans). */
   flag: string;
   description: string;

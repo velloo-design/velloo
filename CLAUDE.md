@@ -80,8 +80,14 @@ Before considering anything done:
 ```bash
 bun run typecheck    # tsc -b across the workspace
 bun run lint         # biome check .
-bun test             # ~1780 tests across ~200 files, ~10s (--parallel)
+bun run lint:dead    # knip — unused files, exports, dependencies
+bun test             # ~1860 tests across ~200 files, ~10s (--parallel)
 ```
+
+`lint:dead` is expected to print nothing. If an export is only reachable from
+velloo-cloud (its share viewer sibling-imports a few browser-safe modules by
+path), add it to that package's `entry` list in `knip.jsonc` — don't delete it,
+and don't let the report grow a permanent baseline.
 
 Other test entry points: `bun run test:changed` (only what your diff touches — the
 fast inner loop), `bun run test:order` (`--randomize`, catches tests that only pass

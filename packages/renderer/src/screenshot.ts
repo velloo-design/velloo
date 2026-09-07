@@ -83,7 +83,7 @@ async function settleForCapture(
  * download) instead of shell + full Chrome for Testing (~300MB) — velloo only
  * ever launches headless, and playwright's headless launches use the shell.
  */
-export const PLAYWRIGHT_PIN = "playwright@1.61.1";
+const PLAYWRIGHT_PIN = "playwright@1.61.1";
 export const CHROMIUM_INSTALL_ARGV = [
   process.execPath,
   "x",

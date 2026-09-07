@@ -25,11 +25,7 @@ export interface LiveSession {
  */
 const sessions = new Map<string, LiveSession>();
 
-export function getSession(id: string): LiveSession | undefined {
-  return sessions.get(id);
-}
-
-export function activeSessions(): LiveSession[] {
+function activeSessions(): LiveSession[] {
   return [...sessions.values()].filter((s) => s.endedAt === null);
 }
 
@@ -75,10 +71,4 @@ export async function openSession(
     session.endedAt = Date.now();
   });
   return session;
-}
-
-/** Close every open session — daemon shutdown, and test teardown. */
-export async function closeAllSessions(): Promise<void> {
-  await Promise.all(activeSessions().map((s) => s.handle.close().catch(() => undefined)));
-  sessions.clear();
 }

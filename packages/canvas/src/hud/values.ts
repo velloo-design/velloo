@@ -181,11 +181,7 @@ function readStyleSlot(model: TwModel, key: StyleKey): string | number | null {
 }
 
 /** Apply a control's new value to the style model, in place of a mutation. */
-export function writeStyleSlot(
-  model: TwModel,
-  key: StyleKey,
-  value: string | number | null,
-): TwModel {
+function writeStyleSlot(model: TwModel, key: StyleKey, value: string | number | null): TwModel {
   const next: TwModel = { ...model, padding: { ...model.padding }, margin: { ...model.margin } };
   if (value === null) {
     switch (key) {

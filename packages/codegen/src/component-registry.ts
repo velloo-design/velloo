@@ -27,7 +27,7 @@ import {
   textInlineStyle,
 } from "@velloo/schema";
 
-export type LoweredEntry = {
+type LoweredEntry = {
   kind: "lowered";
   /**
    * Decide the HTML tag and extra Tailwind classes given the node's props.
@@ -42,7 +42,7 @@ export type LoweredEntry = {
   };
 };
 
-export type ShadcnEntry = {
+type ShadcnEntry = {
   kind: "shadcn";
   /** JSX component name as it appears in emitted code (e.g. "Button"). */
   jsxName: string;
@@ -50,7 +50,7 @@ export type ShadcnEntry = {
   importFile: string;
 };
 
-export type DynamicEntry = {
+type DynamicEntry = {
   kind: "dynamic";
   /** Bare-import specifier (e.g. "lucide-react"). */
   importFrom: string;

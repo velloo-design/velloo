@@ -1,7 +1,7 @@
 import { getJson } from "./discovery.ts";
 import { postJson } from "./http.ts";
 
-export type RevertFileStatus = "modified" | "added" | "deleted" | "untracked";
+type RevertFileStatus = "modified" | "added" | "deleted" | "untracked";
 
 export interface RevertFile {
   /** Path relative to the design folder. */

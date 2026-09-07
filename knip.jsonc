@@ -1,0 +1,78 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.ts"]
+    },
+    // Generators and checkers a script in package.json runs by path.
+    "packages/schema": {
+      "entry": ["scripts/*.ts"]
+    },
+    "packages/cli": {
+      // launcher.cjs is the npm `bin` shim — build.ts copies it by path, so
+      // nothing imports it and it reads as an unused file without this.
+      "entry": ["launcher.cjs"]
+    },
+    "packages/canvas": {
+      "entry": [
+        // Cross-repo API. velloo-cloud's share viewer sibling-imports these
+        // browser-safe slices by path (see its web/vite.config.ts aliases), so
+        // an export nothing here uses can still be load-bearing over there —
+        // and nothing in this repo would go red if it disappeared.
+        "src/board-geometry.ts",
+        "src/annotation-layout.ts",
+        "src/iframe-channel.ts",
+        "src/components/Markdown.tsx",
+        "src/components/Frame/frame-scheme.ts"
+      ]
+    },
+    "packages/server": {
+      // Same cross-repo aliasing: path.ts is @velloo/locator over there, and
+      // extensions/registry.ts is @velloo/ext-registry.
+      "entry": ["scripts/*.ts", "src/path.ts", "src/extensions/registry.ts"]
+    },
+    "packages/provider-none": {
+      "entry": ["src/registry.ts"]
+    },
+    "packages/shadcn-snapshot": {
+      "entry": ["src/registry.ts"]
+    },
+    "packages/renderer": {
+      // The share viewer builds its own screen documents from these.
+      "entry": [
+        "src/build-tree.ts",
+        "src/theme-to-css.ts",
+        "src/live-runtime.ts",
+        "src/iframe-runtime.ts"
+      ]
+    },
+    "packages/helpers": {
+      "entry": ["scripts/*.ts"],
+      // The icon generator reads lucide-react's dist off disk by path instead
+      // of importing it, so no static analysis can see the dependency.
+      "ignoreDependencies": ["lucide-react"]
+    }
+  },
+  "ignore": [
+    "**/*.css",
+    // Vendored upstream shadcn, kept whole so the next re-vendor is a clean
+    // copy rather than a merge — see CLAUDE.md, "two copies of shadcn, one
+    // upstream pull". Their unused exports are upstream's, not ours.
+    "packages/canvas/src/components/ui/**",
+    "packages/shadcn-snapshot/src/components/ui/**",
+    // A host app on disk that tests point the scanner and bundler at. Loaded
+    // by path, never imported.
+    "packages/server/src/__tests__/fixtures/**"
+  ],
+  "ignoreDependencies": [
+    // Referenced from CSS (@import / @plugin) and vite config, not from TS.
+    "tailwindcss",
+    // Loaded by the canvas's Toaster through its own re-export.
+    "sonner",
+    // @types/* for a dependency knip resolves without them.
+    "@types/diff",
+    // The renderer depends on playwright-core and shells out to the full
+    // `playwright` CLI only to install a browser.
+    "playwright"
+  ]
+}

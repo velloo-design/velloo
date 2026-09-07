@@ -9,7 +9,7 @@ const DESKTOP = { w: 1280, h: 800 };
 const MOBILE = { w: 390, h: 844, gap: 40 };
 
 /** Stable id from a user-typed screen or component name. */
-export function slugifyName(name: string, fallback = "screen"): string {
+function slugifyName(name: string, fallback = "screen"): string {
   const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")

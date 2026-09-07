@@ -56,7 +56,7 @@ export interface BatchCall {
   args: Record<string, unknown>;
 }
 
-export interface BatchCallResult {
+interface BatchCallResult {
   tool: string;
   ok: boolean;
   value?: unknown;

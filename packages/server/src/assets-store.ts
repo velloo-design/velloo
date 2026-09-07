@@ -20,7 +20,7 @@ import { writeJsonAtomic } from "./fs.ts";
  * provenance" instead of failing the folder load.
  */
 
-export const assetsFilePath = (root: string): string => join(root, "assets.json");
+const assetsFilePath = (root: string): string => join(root, "assets.json");
 
 /**
  * Read the store. A missing file is the normal case (a folder that has never

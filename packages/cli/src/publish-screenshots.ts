@@ -25,7 +25,7 @@ export const MAX_SCREENSHOT_COUNT = 120;
 /** Downscale target when a capture exceeds the byte limit. */
 export const DOWNSCALE_WIDTH = 1280;
 
-export interface ScreenshotManifest {
+interface ScreenshotManifest {
   cover: string;
   screens: Record<string, string>;
   boards: Record<string, string>;

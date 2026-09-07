@@ -1,4 +1,4 @@
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 
@@ -214,39 +214,6 @@ export function ColorField({
         className="min-w-0 flex-1 bg-transparent text-xs outline-none"
       />
     </div>
-  );
-}
-
-/** A removable token/class chip. */
-export function Chip({
-  label,
-  swatch,
-  onRemove,
-}: {
-  label: string;
-  swatch?: string | null;
-  onRemove?: () => void;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded bg-secondary text-secondary-foreground text-[11px] font-mono">
-      {swatch ? (
-        <span
-          className="size-3 rounded-[2px] border border-border"
-          style={{ background: swatch }}
-        />
-      ) : null}
-      <span className="truncate max-w-[14rem]">{label}</span>
-      {onRemove ? (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-muted-foreground hover:text-foreground"
-          aria-label={`remove ${label}`}
-        >
-          <X className="size-3" />
-        </button>
-      ) : null}
-    </span>
   );
 }
 

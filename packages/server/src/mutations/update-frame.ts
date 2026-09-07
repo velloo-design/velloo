@@ -5,7 +5,7 @@ import { frameNotFound, type MutationError } from "./errors.ts";
 import { getBoard } from "./lookup.ts";
 import { persistBoard } from "./persist.ts";
 
-export interface FramePatch {
+interface FramePatch {
   x?: number | undefined;
   y?: number | undefined;
   w?: number | undefined;

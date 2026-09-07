@@ -12,7 +12,7 @@ import {
 import { getScreen, resolve as resolveScreenLocator } from "./lookup.ts";
 import { persistAnnotations } from "./persist.ts";
 
-export function newAnnotationId(): string {
+function newAnnotationId(): string {
   return `ann_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
 }
 

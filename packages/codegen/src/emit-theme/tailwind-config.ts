@@ -1,5 +1,5 @@
 /** Next.js-shaped defaults; Vite/Astro/Remix hosts pass their own. */
-export const DEFAULT_CONTENT_GLOBS = [
+const DEFAULT_CONTENT_GLOBS = [
   "./app/**/*.{ts,tsx}",
   "./components/**/*.{ts,tsx}",
   "./pages/**/*.{ts,tsx}",

@@ -1,14 +1,6 @@
-import { $, DoAsync, type Result } from "@velloo/result";
 import { isComponentNode, isSnippetInstance, type Node } from "@velloo/schema";
-import type { MutationContext } from "./context.ts";
-import type { MutationError } from "./errors.ts";
-import { getScreen, getSnippet } from "./lookup.ts";
 
-export interface DarkModeAuditArgs {
-  screenId: string;
-}
-
-export interface DarkModeAuditNode {
+interface DarkModeAuditNode {
   path: number[];
   ref: string;
   /** The full className string, for context. */
@@ -392,42 +384,4 @@ export function darkModeAuditTree(root: Node): DarkModeAuditResult {
 
   const coverage = totalColored === 0 ? 1 : semanticCount / totalColored;
   return { coverage, problems, totalColored };
-}
-
-/**
- * Walk a screen tree and report nodes whose className uses raw palette
- * colors that won't theme-flip. Snippet instances are opaque — audit the
- * snippet body separately with `auditSnippet`.
- */
-export async function darkModeAudit(
-  ctx: MutationContext,
-  args: DarkModeAuditArgs,
-): Promise<Result<DarkModeAuditResult, MutationError>> {
-  return DoAsync<DarkModeAuditResult, MutationError>(async function* () {
-    const screen = yield* $(getScreen(ctx, args.screenId));
-    return darkModeAuditTree(screen.tree);
-  });
-}
-
-export interface AuditSnippetArgs {
-  snippetId: string;
-}
-
-/**
- * Run the dark-mode audit against a snippet's body. Catches bad raw-color
- * patterns at definition time, before the snippet is stamped into N pages.
- * Identical scoring rules and `data-accent` opt-out as the page-level
- * audit; paths are relative to the snippet body's root.
- *
- * `$param` placeholders inside the body are anonymous and have no
- * className — they're invisible to the audit by construction.
- */
-export async function auditSnippet(
-  ctx: MutationContext,
-  args: AuditSnippetArgs,
-): Promise<Result<DarkModeAuditResult, MutationError>> {
-  return DoAsync<DarkModeAuditResult, MutationError>(async function* () {
-    const snippet = yield* $(getSnippet(ctx, args.snippetId));
-    return darkModeAuditTree(snippet.tree);
-  });
 }

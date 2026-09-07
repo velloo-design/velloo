@@ -45,7 +45,7 @@ export interface CallRecord {
   sessionId?: string | undefined;
 }
 
-export interface TapeMeta {
+interface TapeMeta {
   tapeId: string;
   startedAt: string;
   folder: string;

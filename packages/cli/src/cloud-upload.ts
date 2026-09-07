@@ -28,8 +28,8 @@ import {
 } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
 
-export const VERSION_UPLOAD_TIMEOUT_MS = 60_000;
-export const VERSION_UPLOAD_RETRIES = 1;
+const VERSION_UPLOAD_TIMEOUT_MS = 60_000;
+const VERSION_UPLOAD_RETRIES = 1;
 
 export interface CloudLinkRequest {
   slug?: string | undefined;

@@ -24,7 +24,7 @@ interface Guide {
   body: string;
 }
 
-export const GUIDES: Record<string, Guide> = {
+const GUIDES: Record<string, Guide> = {
   snippets: {
     title: "Snippets",
     blurb: "Params, node slots, $if branching, and when to reuse vs inline.",
@@ -432,10 +432,10 @@ Canvas notes are a different thing: repo-owned board artifacts for durable desig
   },
 };
 
-export type GuideSlug = keyof typeof GUIDES;
+type GuideSlug = keyof typeof GUIDES;
 
 /** `velloo://guide/<slug>` for a guide the tool descriptions can point at. */
-export const guideUri = (slug: GuideSlug): string => `velloo://guide/${slug}`;
+const guideUri = (slug: GuideSlug): string => `velloo://guide/${slug}`;
 
 /**
  * Register every guide as a readable resource. The listing is what a session

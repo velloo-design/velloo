@@ -51,7 +51,7 @@ export interface ReplyToCommentInput {
   author?: CommentAuthor | undefined;
 }
 
-export type CommentScope = "local" | "shared";
+type CommentScope = "local" | "shared";
 export type CommentScopeFilter = CommentScope | "all";
 
 /**
@@ -77,7 +77,7 @@ export type CloudCommentAvailability =
  * The newest published link carrying this board. A board can sit in several
  * links; the most recent publish is the one a reviewer is looking at.
  */
-export function newestPublishedSlot(
+function newestPublishedSlot(
   slots: CanvasPublishSlot[],
   boardId: string,
 ): CanvasPublishSlot | undefined {

@@ -10,7 +10,7 @@ import type { CanvasState } from "./index.ts";
  * flashed by your own edits.
  */
 
-export type ActivitySource = "mcp" | "canvas" | "cli";
+type ActivitySource = "mcp" | "canvas" | "cli";
 
 export interface ActivityTarget {
   screenId?: string;

@@ -9,7 +9,7 @@ interface Props {
   size?: number | undefined;
 }
 
-export function Logo({ className, size = 24 }: Props) {
+function Logo({ className, size = 24 }: Props) {
   return (
     <svg
       viewBox="0 0 120 120"

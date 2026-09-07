@@ -11,7 +11,7 @@ import {
 import { assertSecureCloudUrl, isSecureCloudUrl } from "./cloud.ts";
 import { openUrl } from "./open-url.ts";
 
-export type { CloudAccount, DeviceLoginResult } from "@velloo/protocol";
+export type { DeviceLoginResult } from "@velloo/protocol";
 
 /**
  * The cloud's verdict on a stored token. `rejected` means revoked or expired —

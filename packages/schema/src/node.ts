@@ -219,8 +219,6 @@ export const NodeSchema: z.ZodType<Node> = z
   // (ZodPipe of unknown), so reassert the declared `z.ZodType<Node>`.
   .meta({ type: "object", additionalProperties: true }) as unknown as z.ZodType<Node>;
 
-export { ComponentNodeSchema, ParamRefSchema, SnippetInstanceSchema };
-
 /**
  * Read the `$id` of a node, if any. Convenience wrapper so callers don't
  * have to narrow by node kind first.
