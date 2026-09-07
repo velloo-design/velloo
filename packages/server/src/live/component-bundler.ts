@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Config, Extension, HostApp } from "@velloo/schema";
 import {
@@ -148,6 +149,15 @@ function buildInlineLoaderModule(bundles: BundleResult[]): string {
   return `const groups = await Promise.all([\n${imports.join("\n")}\n${LOADER_MERGE_BODY}`;
 }
 
+/** Resolved path, or the input when it doesn't exist yet. */
+function realPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
 export class LiveBundler {
   private cached: BundleResult | null = null;
   private cachedApps: Map<string, BundleResult> | null = null;
@@ -189,12 +199,17 @@ export class LiveBundler {
       const hostApp = hostAppForExtension(config, app || undefined);
       if (hostApp === null) continue; // unknown app key — surfaced by build()
       const hostRoot = hostAppRootFrom(this.folderRoot, hostApp);
-      const aliases = aliasPairs(hostApp);
-      const nodeModules = join(hostRoot, "node_modules");
+      // `Bun.resolveSync` hands back a realpath, so a host root reached through
+      // a symlink (macOS /tmp, a symlinked home, an external volume) never
+      // prefix-matches the resolved file — every dir would be dropped and the
+      // JIT would silently stop seeing the component's classes. Compare both
+      // sides resolved.
+      const realRoot = realPath(hostRoot);
+      const nodeModules = join(realRoot, "node_modules");
       for (const entry of entries) {
         try {
-          const file = resolveImport(entry.importPath, hostRoot, aliases);
-          if (file.startsWith(hostRoot) && !file.startsWith(nodeModules)) dirs.add(dirname(file));
+          const file = realPath(resolveImport(entry.importPath, hostRoot, aliasPairs(hostApp)));
+          if (file.startsWith(realRoot) && !file.startsWith(nodeModules)) dirs.add(dirname(file));
         } catch {
           // Unresolvable here too — surfaced by build(), skip for scanning.
         }

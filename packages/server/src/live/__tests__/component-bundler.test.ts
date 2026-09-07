@@ -142,6 +142,24 @@ describe("LiveBundler", () => {
     expect(dirs.some((d) => d.includes("node_modules"))).toBe(false);
   });
 
+  test("hostSourceDirs still finds the dirs when the host root is a symlink", async () => {
+    // Bun.resolveSync answers with a realpath. A host root reached through a
+    // symlink — macOS /tmp, a symlinked home, an external volume — therefore
+    // never prefix-matches it, and the JIT silently stops seeing the
+    // component's classes. That failure is invisible: no error, just utilities
+    // that quietly don't compile.
+    const linked = join(tmp, "linked-app");
+    await symlink(hostRoot, linked, "dir");
+    const bundler = makeBundler(
+      { PriceChart: liveExt("@/charts/PriceChart") },
+      {
+        root: linked,
+        aliases: { "@/*": "src/*" },
+      },
+    );
+    expect(bundler.hostSourceDirs().some((d) => d.endsWith(join("src", "charts")))).toBe(true);
+  });
+
   test("caches the build and rebuilds on invalidate (version bumps)", async () => {
     const bundler = makeBundler({ PriceChart: liveExt("@/charts/PriceChart") });
     expect(bundler.version).toBe(0);
