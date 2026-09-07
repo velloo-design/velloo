@@ -10,6 +10,16 @@ import { Checkbox } from "../ui/checkbox.tsx";
 import { Input } from "../ui/input.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select.tsx";
 import { Switch } from "../ui/switch.tsx";
+import {
+  hasMixedStyling,
+  orderedLibraries,
+  providerName,
+  showsId,
+  showsVersion,
+  sourceBadge,
+  stylingText,
+  versionText,
+} from "./library-facts.ts";
 import { Fact, SectionLabel, SettingRow, SettingRows } from "./parts.tsx";
 
 /** Sentinel for "no default" — Radix Select has no empty-string item value. */
@@ -55,7 +65,7 @@ export function FolderPane({ cfg }: { cfg: FolderConfig }) {
       <SettingRows>
         <SettingRow
           label="Board"
-          description="The board the canvas shows on a fresh load."
+          description="Pins every load to one board. Unset, the canvas reopens the board you were last on."
           htmlFor={boardId}
         >
           <Select
@@ -70,7 +80,7 @@ export function FolderPane({ cfg }: { cfg: FolderConfig }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE}>First board in the sidebar</SelectItem>
+              <SelectItem value={NONE}>Where you left off</SelectItem>
               {boards.map((b) => (
                 <SelectItem key={b.id} value={b.id}>
                   {b.name}
@@ -175,24 +185,76 @@ export function FolderPane({ cfg }: { cfg: FolderConfig }) {
       </SettingRows>
 
       <SectionLabel className="mt-5">What init decided</SectionLabel>
-      <div className="mt-2 grid grid-cols-2 gap-x-8 gap-y-1.5 rounded-lg bg-muted/50 px-4 py-3">
-        <Fact label="Library">
-          <span className="truncate">{cfg.libraries[0]?.providerId ?? cfg.defaultLibrary}</span>
-          {cfg.libraries[0] ? (
-            <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
-              {cfg.libraries[0].source}
-            </Badge>
-          ) : null}
+      {/* Two columns for the short facts; the library list and the folder id
+          are long enough that sharing a row only truncates them. */}
+      <div className="mt-2 grid grid-cols-2 items-start gap-x-8 gap-y-1.5 rounded-lg bg-muted/50 px-4 py-3">
+        <div className="col-span-2 min-w-0">
+          <LibraryFact cfg={cfg} />
+        </div>
+        <Fact label="Styling">
+          {hasMixedStyling(cfg.libraries) ? (
+            // Each library states its own channel a row up; repeating just the
+            // default's here would read as the whole folder's answer.
+            <span className="text-muted-foreground">per library</span>
+          ) : (
+            stylingText(cfg)
+          )}
         </Fact>
-        <Fact label="Styling">{cfg.styling === "none" ? "Inline styles" : "Tailwind"}</Fact>
         <Fact label="Format">
           schema v{cfg.schemaVersion} · velloo {cfg.toolVersion}
         </Fact>
-        <Fact label="Cloud id">
-          {cfg.folderId ? <CopyableId id={cfg.folderId} /> : <NotPublished />}
-        </Fact>
+        <div className="col-span-2 min-w-0">
+          <Fact label="Cloud id">
+            {cfg.folderId ? <CopyableId id={cfg.folderId} /> : <NotPublished />}
+          </Fact>
+        </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Every registered library, default first — a folder can target more than one,
+ * and showing only the first made the fact a coin toss. The id column appears
+ * only when there's a choice to name: it's what a screen puts in `library`.
+ */
+function LibraryFact({ cfg }: { cfg: FolderConfig }) {
+  if (cfg.libraries.length === 0) return <Fact label="Library">{cfg.defaultLibrary}</Fact>;
+  const libs = orderedLibraries(cfg);
+  const many = libs.length > 1;
+  // A folder with one channel already states it once, under "Styling".
+  const mixed = hasMixedStyling(libs);
+  return (
+    <Fact label="Library" stacked={many}>
+      {libs.map((lib) => {
+        const badge = sourceBadge(lib.source, lib.version);
+        const isDefault = lib.id === cfg.defaultLibrary;
+        return (
+          <span key={lib.id} className="flex min-w-0 items-center gap-1.5">
+            {many && showsId(lib, isDefault) ? (
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{lib.id}</span>
+            ) : null}
+            <span className="truncate">{providerName(lib.providerId)}</span>
+            {showsVersion(lib) ? (
+              <span className="shrink-0 text-muted-foreground">{versionText(lib.version)}</span>
+            ) : null}
+            <Badge
+              variant="secondary"
+              title={badge.title}
+              className="h-4 shrink-0 px-1.5 text-[10px] font-normal"
+            >
+              {badge.text}
+            </Badge>
+            {mixed && lib.styleLabel ? (
+              <span className="shrink-0 text-muted-foreground">{lib.styleLabel}</span>
+            ) : null}
+            {many && isDefault ? (
+              <span className="shrink-0 text-muted-foreground">· default</span>
+            ) : null}
+          </span>
+        );
+      })}
+    </Fact>
   );
 }
 

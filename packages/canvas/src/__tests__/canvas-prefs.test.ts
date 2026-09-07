@@ -28,6 +28,13 @@ class MemoryStorage {
   has(key: string): boolean {
     return this.data.has(key);
   }
+  // Enumeration: the per-board view keys are found by prefix, not by name.
+  get length(): number {
+    return this.data.size;
+  }
+  key(index: number): string | null {
+    return [...this.data.keys()][index] ?? null;
+  }
 }
 
 const storage = new MemoryStorage();
@@ -48,6 +55,9 @@ seed();
 
 const { useCanvas } = await import("../store.ts");
 const { readCanvasPrefs } = await import("../store/modes.ts");
+const { readBoardView, readLastBoard, writeBoardView, writeLastBoard } = await import(
+  "../board-memory.ts"
+);
 
 // Every test here reads or writes the same storage stub, and the store is a
 // module singleton — without a per-test reset the suite only passes in
@@ -150,11 +160,48 @@ describe("panel persistence", () => {
   });
 });
 
+/**
+ * Where you were. The board id and the per-board camera are stored apart —
+ * one board id, one camera per board — so reopening a board restores both the
+ * board and the view you had of it.
+ */
+describe("board memory", () => {
+  test("remembers the board to reopen", () => {
+    writeLastBoard("board-marketing");
+    expect(readLastBoard()).toBe("board-marketing");
+    writeLastBoard("board-app");
+    expect(readLastBoard()).toBe("board-app");
+  });
+
+  test("keeps a camera per board", () => {
+    writeBoardView("board-a", { pan: { x: -120, y: 40 }, zoom: 1.25 });
+    writeBoardView("board-b", { pan: { x: 0, y: 0 }, zoom: 0.5 });
+    expect(readBoardView("board-a")).toEqual({ pan: { x: -120, y: 40 }, zoom: 1.25 });
+    expect(readBoardView("board-b")?.zoom).toBe(0.5);
+  });
+
+  test("a board never seen, or a corrupt view, reads as null so the caller can fit to content", () => {
+    expect(readBoardView("board-unseen")).toBeNull();
+    storage.setItem("velloo:boardView:board-bad", JSON.stringify({ zoom: 1 }));
+    expect(readBoardView("board-bad")).toBeNull();
+    storage.setItem(
+      "velloo:boardView:board-nan",
+      JSON.stringify({ pan: { x: 0, y: 0 }, zoom: Number.NaN }),
+    );
+    expect(readBoardView("board-nan")).toBeNull();
+  });
+});
+
 describe("resetCanvasPrefs", () => {
   test("clears every stored key and returns the store to defaults", () => {
     useCanvas.getState().setAppTheme("light");
     useCanvas.getState().setDesignMode("dark");
+    writeLastBoard("board-app");
+    writeBoardView("board-app", { pan: { x: 10, y: 10 }, zoom: 2 });
     useCanvas.getState().resetCanvasPrefs();
+
+    expect(readLastBoard()).toBeNull();
+    expect(readBoardView("board-app")).toBeNull();
 
     for (const key of [
       "velloo:appTheme",

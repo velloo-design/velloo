@@ -13,24 +13,16 @@ interface Props {
   snippets: SnippetMeta[];
   currentBoardId: string | null;
   currentScreenId: string | null;
-  snapshotVersion: string;
 }
 
 /**
  * Outer sidebar shell. The top tab swaps between "Boards" mode (boards
  * list + tree of the active screen) and "Library" mode (categorized
- * components + snippets to browse and drill into). Footer + outer
- * chrome are shared so the swap feels like a tab change rather than a
- * page nav. Collapses to a rail (`[`) to hand its width to the canvas.
+ * components + snippets to browse and drill into). The outer chrome is
+ * shared so the swap feels like a tab change rather than a page nav.
+ * Collapses to a rail (`[`) to hand its width to the canvas.
  */
-export function Sidebar({
-  boards,
-  screens,
-  snippets,
-  currentBoardId,
-  currentScreenId,
-  snapshotVersion,
-}: Props) {
+export function Sidebar({ boards, screens, snippets, currentBoardId, currentScreenId }: Props) {
   const view = useCanvas((s) => s.view);
   const setView = useCanvas((s) => s.setView);
   const collapsed = useCanvas((s) => s.leftPaneCollapsed);
@@ -114,10 +106,6 @@ export function Sidebar({
       ) : (
         <LibrarySidebar snippets={snippets} />
       )}
-
-      <footer className="px-4 py-2 text-xs text-muted-foreground border-t">
-        shadcn snapshot {snapshotVersion}
-      </footer>
     </PaneShell>
   );
 }

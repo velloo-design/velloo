@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { type FrameworkAdapter, SX_PROP } from "@velloo/provider";
 import { unwrap } from "@velloo/result";
 import type { Config } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
@@ -192,11 +193,53 @@ describe("HTTP surface", () => {
       themes: ["default", "candidate"],
     });
     expect(body.libraries).toEqual([
-      { id: "default", providerId: "shadcn-upstream", version: "test", source: "binary" },
+      {
+        id: "default",
+        providerId: "shadcn-upstream",
+        version: "test",
+        source: "binary",
+        styleLabel: "Tailwind classes",
+      },
     ]);
     // Never the raw config: extensions and host-app paths stay server-side.
     expect(body).not.toHaveProperty("extensions");
     expect(body).not.toHaveProperty("hostApp");
+  });
+
+  test("GET /api/config reports each library's own style channel, not the folder's CSS axis", async () => {
+    // A second library on an sx provider (MUI's channel), in a folder whose
+    // `config.styling` is unset — the case the dialog used to call "Tailwind".
+    const sxAdapter: FrameworkAdapter = {
+      ...provider,
+      id: "mui",
+      styleChannel: SX_PROP,
+      styleChannels: ["sx"],
+    };
+    ctx = { ...ctx, providers: { ...ctx.providers, marketing: sxAdapter } };
+    folder.config.libraries.marketing = {
+      id: "mui",
+      version: "6",
+      source: "binary",
+      componentsPath: "binary",
+    };
+
+    const app = createConfigRouter(() => ctx);
+    const body = (await (await app.request("/")).json()) as { libraries: unknown[] };
+    expect(body.libraries).toContainEqual({
+      id: "marketing",
+      providerId: "mui",
+      version: "6",
+      source: "binary",
+      styleLabel: "sx props",
+    });
+    // The folder's other library keeps its own channel.
+    expect(body.libraries).toContainEqual({
+      id: "default",
+      providerId: "shadcn-upstream",
+      version: "test",
+      source: "binary",
+      styleLabel: "Tailwind classes",
+    });
   });
 
   test("POST /api/mutate/update_viewport_presets writes through the route", async () => {

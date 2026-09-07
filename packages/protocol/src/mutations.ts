@@ -365,6 +365,20 @@ export const removeFrameShape = {
 } satisfies z.ZodRawShape;
 export const RemoveFrameBody = z.strictObject(removeFrameShape);
 
+/**
+ * Re-file a placement onto another board. `x`/`y` are optional together —
+ * omitting them auto-places on the target the way `add_frame` does, since the
+ * source coordinates mean nothing on a board with its own layout.
+ */
+export const moveFrameShape = {
+  boardId: BoardId,
+  frameId: FrameId,
+  toBoardId: BoardId,
+  x: z.number().optional(),
+  y: z.number().optional(),
+} satisfies z.ZodRawShape;
+export const MoveFrameBody = z.strictObject(moveFrameShape);
+
 // ── Snippets ───────────────────────────────────────────────────────────
 
 export const addSnippetShape = {

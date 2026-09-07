@@ -1,5 +1,6 @@
 import type { FrameScheme } from "@velloo/schema";
 import type { StateCreator } from "zustand";
+import { clearBoardMemory } from "../board-memory.ts";
 import type { CanvasState } from "./index.ts";
 import type { AppTheme, DesignMode } from "./types.ts";
 
@@ -255,6 +256,7 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
     if (typeof localStorage !== "undefined") {
       for (const key of CANVAS_PREF_KEYS) localStorage.removeItem(key);
     }
+    clearBoardMemory();
     set({
       appTheme: "system",
       designMode: "light",

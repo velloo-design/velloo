@@ -19,7 +19,6 @@ import { SettingsDialog } from "./components/Settings/SettingsDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { SignInDialog } from "./components/SignInDialog.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
-import { StatusBar } from "./components/StatusBar.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Button } from "./components/ui/button.tsx";
 import { Toaster } from "./components/ui/sonner.tsx";
@@ -238,7 +237,6 @@ export function App() {
           snippets={design.snippets}
           currentBoardId={currentBoardId}
           currentScreenId={currentScreenId}
-          snapshotVersion={design.snapshotVersion}
         />
         <main className="flex-1 flex flex-col min-w-0">
           {view === "snippet" && editingSnippetId ? (
@@ -298,7 +296,6 @@ export function App() {
               }
             />
           )}
-          <StatusBar />
         </main>
         {view === "boards" ? <RightPanel screenId={currentScreenId} /> : null}
       </div>

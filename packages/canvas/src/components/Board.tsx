@@ -1,6 +1,7 @@
 import type { Board as BoardT, ViewportPreset } from "@velloo/schema";
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { fitToContent, wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
+import { readBoardView, writeBoardView } from "../board-memory.ts";
 import { useCanvas } from "../store.ts";
 import { CommentPinsLayer } from "./CommentPinsLayer.tsx";
 import { Frame } from "./Frame.tsx";
@@ -351,48 +352,3 @@ const DEFAULT_PRESETS: ViewportPreset[] = [
   { name: "Tablet", w: 768, h: 1024 },
   { name: "Desktop", w: 1440, h: 900 },
 ];
-
-const VIEW_STORAGE_PREFIX = "velloo:boardView:";
-
-interface BoardView {
-  pan: { x: number; y: number };
-  zoom: number;
-}
-
-/**
- * Pull this board's last pan+zoom from localStorage. Returns null if
- * we've never persisted a view for this board (or the stored value
- * is corrupt) so the caller can fall back to fit-to-content.
- */
-function readBoardView(boardId: string): BoardView | null {
-  if (typeof localStorage === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(VIEW_STORAGE_PREFIX + boardId);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<BoardView>;
-    const zoom =
-      typeof parsed.zoom === "number" && Number.isFinite(parsed.zoom) ? parsed.zoom : null;
-    const px =
-      parsed.pan && typeof parsed.pan.x === "number" && Number.isFinite(parsed.pan.x)
-        ? parsed.pan.x
-        : null;
-    const py =
-      parsed.pan && typeof parsed.pan.y === "number" && Number.isFinite(parsed.pan.y)
-        ? parsed.pan.y
-        : null;
-    if (zoom === null || px === null || py === null) return null;
-    return { pan: { x: px, y: py }, zoom };
-  } catch {
-    return null;
-  }
-}
-
-function writeBoardView(boardId: string, view: BoardView): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(VIEW_STORAGE_PREFIX + boardId, JSON.stringify(view));
-  } catch {
-    // Quota / private-mode failures are silently swallowed —
-    // pan/zoom persistence is a convenience, not a critical path.
-  }
-}

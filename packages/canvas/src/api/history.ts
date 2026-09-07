@@ -8,6 +8,8 @@ export interface HistoryDepths {
 type RevertedEntry =
   | { kind: "screen"; screenId: string }
   | { kind: "board"; boardId: string }
+  /** One act that wrote several boards, e.g. a frame moved between two. */
+  | { kind: "boards"; boardIds: string[] }
   | { kind: "theme"; themeName: string }
   | { kind: "snippet"; snippetId: string };
 

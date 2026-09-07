@@ -88,7 +88,8 @@ export function CanvasPane() {
         <div className="min-w-0">
           <div className="text-[13px] font-medium text-foreground">Reset canvas preferences</div>
           <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-            Clears theme and panel memory for this browser. Your design is untouched.
+            Clears theme, panel, and last-viewed board memory for this browser. Your design is
+            untouched.
           </p>
         </div>
         <Button

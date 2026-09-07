@@ -19,6 +19,7 @@ import {
   type HistoryDepths,
   mutate,
 } from "../api.ts";
+import { readLastBoard, writeLastBoard } from "../board-memory.ts";
 import type { FontDraft } from "../font-draft.ts";
 import type { CanvasState } from "./index.ts";
 
@@ -226,15 +227,20 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       return;
     }
     set({ design, bootError: null });
-    // Boards: URL seed (when it still exists) beats default beats first.
-    const seedBoard =
-      seed?.boardId && design.boards.some((b) => b.id === seed.boardId) ? seed.boardId : null;
-    const prefersBoard =
-      design.defaultBoard && design.boards.some((b) => b.id === design.defaultBoard)
-        ? design.defaultBoard
-        : null;
+    // Boards: a URL seed is where the user asked to go, so it wins; a
+    // configured `defaultBoard` is a deliberate "always open here" and beats
+    // this browser's memory of where it left off; the first board is the last
+    // resort. Every candidate is checked against the live boards — any of them
+    // can name one archived or deleted since.
+    const exists = (id: string | null | undefined) =>
+      id && design.boards.some((b) => b.id === id) ? id : null;
     const nextBoardId =
-      seedBoard ?? get().currentBoardId ?? prefersBoard ?? design.boards[0]?.id ?? null;
+      exists(seed?.boardId) ??
+      get().currentBoardId ??
+      exists(design.defaultBoard) ??
+      exists(readLastBoard()) ??
+      design.boards[0]?.id ??
+      null;
     // selectBoard handles screen coercion: if the current screen isn't
     // placed on the new board, it switches to the board's first frame.
     if (nextBoardId) await get().selectBoard(nextBoardId);
@@ -474,6 +480,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       board = loaded;
     }
     set({ currentBoardId: boardId, notes: [], commentThreads: [], activeCommentId: null });
+    // The board to reopen next time. Written here rather than at the call
+    // sites so every route in — sidebar, search, back button, boot — counts.
+    writeLastBoard(boardId);
     // Keep the sidebar Tree scoped to the active board. If the current
     // screen isn't placed on this board, jump to the first frame's
     // screen — or clear the screen entirely when the board is empty.

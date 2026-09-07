@@ -26,6 +26,13 @@ export type HistoryEntry =
       ts?: number | undefined;
     }
   | { kind: "board"; boardId: string; board: Board | null; ts?: number }
+  /**
+   * Several boards written as one act — a frame moved between two of them.
+   * Undo has to put both back together: reverting half a move would leave the
+   * frame duplicated or gone, neither of which is a state the user was ever in.
+   * Snapshots are in write order.
+   */
+  | { kind: "boards"; boards: Array<{ boardId: string; board: Board | null }>; ts?: number }
   | {
       kind: "theme";
       themeName: string;
@@ -55,6 +62,10 @@ const COALESCE_WINDOW_MS = 800;
 function keyOf(e: HistoryEntry): string | null {
   if (e.kind === "screen") return `screen:${e.screenId}${suffix(e.coalesceKey)}`;
   if (e.kind === "board") return `board:${e.boardId}`;
+  // A multi-board write is a discrete act, never a streamed one — nothing to
+  // collapse, and merging it into a neighbouring single-board entry would drop
+  // one of its snapshots.
+  if (e.kind === "boards") return null;
   if (e.kind === "snippet") return `snippet:${e.snippetId}${suffix(e.coalesceKey)}`;
   if (!e.coalesceKey) return null;
   // Scoped by name as well as control: merging two different theme files into
@@ -78,7 +89,7 @@ export class HistoryManager {
     const key = keyOf(stamped);
     // A named gesture is bounded by the client's pointer, not by a clock, so
     // it merges however long the user holds the drag still.
-    const named = entry.kind !== "board" && entry.coalesceKey !== undefined;
+    const named = "coalesceKey" in entry && entry.coalesceKey !== undefined;
     const inWindow =
       top?.ts !== undefined && stamped.ts !== undefined && stamped.ts - top.ts < COALESCE_WINDOW_MS;
     if (key !== null && top !== undefined && (named || inWindow)) {

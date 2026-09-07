@@ -22,14 +22,14 @@ export interface AddFrameResult {
 }
 
 /** Auto-place to the right of the rightmost existing frame. */
-function autoPosition(frames: Frame[]): { x: number; y: number } {
+export function autoPosition(frames: Frame[]): { x: number; y: number } {
   if (frames.length === 0) return { x: 0, y: 0 };
   let maxRight = 0;
   for (const f of frames) if (f.x + f.w > maxRight) maxRight = f.x + f.w;
   return { x: maxRight + 80, y: 0 };
 }
 
-function genFrameId(board: { frames: Frame[] }, screenId: string): string {
+export function genFrameId(board: { frames: Frame[] }, screenId: string): string {
   const existing = new Set(board.frames.map((f) => f.id));
   let i = 1;
   while (existing.has(`${screenId}-${i}`)) i++;

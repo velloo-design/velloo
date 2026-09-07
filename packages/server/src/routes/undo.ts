@@ -5,12 +5,18 @@ import { Hono } from "hono";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import type { HistoryEntry } from "../history.ts";
-import { withBoardLock, withScreenLock, withSnippetLock } from "../mutations/context.ts";
+import {
+  withBoardLock,
+  withBoardLocks,
+  withScreenLock,
+  withSnippetLock,
+} from "../mutations/context.ts";
 import type { WatchEvent } from "../watcher.ts";
 
 type Reverted =
   | { kind: "screen"; screenId: string }
   | { kind: "board"; boardId: string }
+  | { kind: "boards"; boardIds: string[] }
   | { kind: "theme"; themeName: string }
   | { kind: "snippet"; snippetId: string };
 
@@ -81,6 +87,28 @@ async function applyRevert(
     });
     broadcast({ type: "board-changed", boardId: entry.boardId });
     return { kind: "board", boardId: entry.boardId };
+  }
+
+  if (entry.kind === "boards") {
+    const boardIds = entry.boards.map((b) => b.boardId);
+    const back: HistoryEntry = {
+      kind: "boards",
+      boards: boardIds.map((boardId) => ({ boardId, board: folder.boards.get(boardId) ?? null })),
+    };
+    if (pushOpposite === "redo") folder.history.pushRedo(back);
+    else folder.history.pushUndoSilent(back);
+    // Every lock for the whole revert: the boards were written as one act and
+    // have to come back as one, with nothing landing between them.
+    await withBoardLocks(folder, boardIds, async () => {
+      // Reverse write order, mirroring the forward pass — the last write is
+      // the first undone, so the transient state is the same one crossing back.
+      for (const { boardId, board } of [...entry.boards].reverse()) {
+        if (board === null) await deleteBoard(folder, boardId);
+        else await writeBoard(folder, boardId, board);
+      }
+    });
+    for (const boardId of boardIds) broadcast({ type: "board-changed", boardId });
+    return { kind: "boards", boardIds };
   }
 
   if (entry.kind === "snippet") {

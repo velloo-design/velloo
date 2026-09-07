@@ -32,7 +32,7 @@ export {
   updateFeedback,
   updateViewportPresets,
 } from "./api/config.ts";
-export { addFrame, removeFrame, updateFrames } from "./api/frames.ts";
+export { addFrame, moveFrame, removeFrame, updateFrames } from "./api/frames.ts";
 export { inspect } from "./api/inspect.ts";
 export {
   addScreen,

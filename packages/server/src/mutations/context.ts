@@ -92,3 +92,19 @@ export function withBoardLock<T>(
 ): Promise<T> {
   return locks.run(lockKey(folder, "board", boardId), fn);
 }
+
+/**
+ * Hold several board locks at once, for a mutation that writes two boards as
+ * one act (moving a frame between them). Acquisition is sorted by id so two
+ * moves crossing the same pair in opposite directions can't deadlock each
+ * other.
+ */
+export function withBoardLocks<T>(
+  folder: LockFolder,
+  boardIds: string[],
+  fn: () => Promise<T>,
+): Promise<T> {
+  const [head, ...rest] = [...new Set(boardIds)].sort();
+  if (head === undefined) return fn();
+  return withBoardLock(folder, head, () => withBoardLocks(folder, rest, fn));
+}

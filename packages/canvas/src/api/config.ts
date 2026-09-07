@@ -16,7 +16,19 @@ export interface FolderConfig {
   toolVersion: string;
   folderId: string | null;
   defaultLibrary: string;
-  libraries: { id: string; providerId: string; version: string; source: string }[];
+  /**
+   * Registered libraries, keyed by the id screens name in `screen.library`.
+   * `styleLabel` is the provider's resolved style channel ("Tailwind classes",
+   * "sx props", "Inline styles") — the same label the inspector's style editor
+   * carries, so the dialog never has to guess Tailwind.
+   */
+  libraries: {
+    id: string;
+    providerId: string;
+    version: string;
+    source: string;
+    styleLabel: string | null;
+  }[];
   /** CSS framework, or null when the folder predates the styling axis. */
   styling: "tailwind" | "none" | null;
   viewportPresets: ViewportPreset[];

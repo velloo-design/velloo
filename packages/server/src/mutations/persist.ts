@@ -92,6 +92,34 @@ export async function persistBoard(
   return validated;
 }
 
+/**
+ * Write several boards as one act: one history entry holding every board's
+ * previous state, so undo puts all of them back in a single step. Validation
+ * runs over the whole set before anything is written, so a board the schema
+ * rejects can't leave the others half-applied.
+ */
+export async function persistBoards(
+  folder: DesignFolder,
+  writes: Array<{ boardId: string; board: Board }>,
+): Promise<Board[]> {
+  const validated = writes.map(({ boardId, board }) => ({
+    boardId,
+    board: BoardSchema.parse(board),
+  }));
+  folder.history.push({
+    kind: "boards",
+    boards: validated.map(({ boardId }) => ({
+      boardId,
+      board: folder.boards.get(boardId) ?? null,
+    })),
+  });
+  for (const { boardId, board } of validated) {
+    await writeJsonAtomic(join(folder.root, "boards", `${boardId}.json`), board);
+    folder.boards.set(boardId, board);
+  }
+  return validated.map((v) => v.board);
+}
+
 export async function deletePersistedBoard(folder: DesignFolder, boardId: string): Promise<void> {
   const prev = folder.boards.get(boardId) ?? null;
   folder.history.push({ kind: "board", boardId, board: prev });

@@ -57,12 +57,31 @@ export function SettingRow({
   );
 }
 
-/** One `label: value` line in a scope's read-only facts block. */
-export function Fact({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * One `label: value` line in a scope's read-only facts block. `stacked` is for
+ * a value that is itself a list (a folder's libraries): the rows sit under each
+ * other and the label holds the top line rather than floating beside the middle.
+ */
+export function Fact({
+  label,
+  stacked,
+  children,
+}: {
+  label: string;
+  stacked?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-2 text-[12px]">
+    <div className={cn("flex gap-2 text-[12px]", stacked ? "items-start" : "items-center")}>
       <span className="w-[68px] shrink-0 text-muted-foreground">{label}</span>
-      <span className="flex min-w-0 items-center gap-1.5 text-foreground">{children}</span>
+      <span
+        className={cn(
+          "flex min-w-0 text-foreground",
+          stacked ? "flex-col items-start gap-1" : "items-center gap-1.5",
+        )}
+      >
+        {children}
+      </span>
     </div>
   );
 }

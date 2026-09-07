@@ -47,6 +47,13 @@ export const mutate = {
   removeFrame(args: { boardId: string; frameId: string }) {
     return postMutate<{ removedFrameId: string }>("remove_frame", args);
   },
+  /** The target board auto-places the frame, and may rename it on a collision. */
+  moveFrame(args: { boardId: string; frameId: string; toBoardId: string }) {
+    return postMutate<{ frame: AddedFrame; fromBoardId: string; toBoardId: string }>(
+      "move_frame",
+      args,
+    );
+  },
   addBoard(args: { name: string; id?: string; group?: string }) {
     return postMutate<{ boardId: string; board: unknown }>("add_board", args);
   },

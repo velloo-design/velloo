@@ -2,7 +2,10 @@ import type { FrameScheme, ViewportPreset } from "@velloo/schema";
 import {
   Copy,
   Download,
+  FolderInput,
+  FolderPlus,
   GripVertical,
+  LayoutDashboard,
   Library as LibraryIcon,
   Link2,
   Maximize2,
@@ -50,6 +53,11 @@ interface FrameHeaderProps {
   /** Place a sibling frame of the same screen at the given size. */
   onAddSibling: (size: { w: number; h: number }) => void;
   onSchemeChange: (scheme: FrameScheme | null) => void;
+  /** Live boards this frame can move to — every board but the one it's on. */
+  moveTargets: { id: string; name: string }[];
+  onMoveToBoard: (boardId: string) => void;
+  /** Open the "name a new board" dialog; the move follows once it's created. */
+  onMoveToNewBoard: () => void;
 }
 
 const MIN_SIZE = 120;
@@ -84,6 +92,9 @@ export function FrameHeader({
   onPreview,
   onAddSibling,
   onSchemeChange,
+  moveTargets,
+  onMoveToBoard,
+  onMoveToNewBoard,
 }: FrameHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -173,6 +184,25 @@ export function FrameHeader({
                   <span className="ml-auto pl-3 text-xs text-muted-foreground tabular-nums">
                     {w}×{h}
                   </span>
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <FolderInput />
+                Move to board
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="max-h-[60vh] overflow-y-auto">
+                {moveTargets.map((b) => (
+                  <DropdownMenuItem key={b.id} onSelect={() => onMoveToBoard(b.id)}>
+                    <LayoutDashboard />
+                    <span className="truncate">{b.name}</span>
+                  </DropdownMenuItem>
+                ))}
+                {moveTargets.length > 0 ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuItem onSelect={onMoveToNewBoard}>
+                  <FolderPlus />
+                  New board…
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>

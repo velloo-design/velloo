@@ -1,13 +1,18 @@
-import { type Frame as FrameT, isSnippetInstance, type ViewportPreset } from "@velloo/schema";
+import {
+  type Frame as FrameT,
+  isSnippetInstance,
+  MAX_BOARD_NAME_LENGTH,
+  type ViewportPreset,
+} from "@velloo/schema";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { mutate } from "../api.ts";
+import { type BoardMeta, mutate } from "../api.ts";
 import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { fontDraftCss, fontDraftUrl } from "../font-draft.ts";
 import { frameRenderSrc } from "../frame-render-src.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { selectedNode } from "../store/selection.ts";
 import { type CanvasState, useCanvas } from "../store.ts";
-import { toastError } from "../toast.ts";
+import { pushToast, toastError } from "../toast.ts";
 import { typesetDraftCss } from "../typeset-draft.ts";
 import { FrameHeader } from "./Frame/FrameHeader.tsx";
 import { FrameViewportPresets } from "./Frame/FrameViewportPresets.tsx";
@@ -23,6 +28,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog.tsx";
+import { Button } from "./ui/button.tsx";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog.tsx";
+import { Input } from "./ui/input.tsx";
 
 interface FrameProps {
   boardId: string;
@@ -47,6 +55,9 @@ function selectionKindOf(s: CanvasState, screenId: string): "node" | "snippet" {
   const picked = s.selection?.screenId === screenId ? selectedNode(s.screens, s.selection) : null;
   return picked !== null && isSnippetInstance(picked) ? "snippet" : "node";
 }
+
+/** Stable empty list so the summary-boards selector doesn't re-render every tick. */
+const EMPTY_BOARDS: BoardMeta[] = [];
 
 /**
  * One placement on the Board: an iframe at the frame's chosen size, rendering
@@ -100,6 +111,9 @@ export const Frame = memo(function Frame({
   const activityFlash = useCanvas((s) => s.activityFlash[frame.screen]);
   const glowNonce = useCanvas((s) => s.frameGlow[frame.id]);
   const [glowing, setGlowing] = useState(false);
+  // Move targets come from the summary (every live board), not `boards` — that
+  // cache only holds boards the canvas has opened.
+  const summaryBoards = useCanvas((s) => s.design?.boards ?? EMPTY_BOARDS);
 
   const { draftPos, draftSize, startDrag, startResize } = useFrameInteractions({
     boardId,
@@ -699,6 +713,52 @@ export const Frame = memo(function Frame({
       .catch((err) => toastError(err, "Could not add frame"));
   };
 
+  const frameLabel = frame.label ?? screen?.name ?? frame.screen;
+
+  const moveTargets = useMemo(
+    () => summaryBoards.filter((b) => b.id !== boardId).map((b) => ({ id: b.id, name: b.name })),
+    [summaryBoards, boardId],
+  );
+
+  // The frame leaves the board you're looking at, so the toast is the only
+  // trace of where it went — and the way back to it.
+  const reportMove = (toBoardId: string, boardName: string) => {
+    pushToast({
+      kind: "info",
+      message: `Moved "${frameLabel}" to "${boardName}"`,
+      action: {
+        label: "Open board",
+        onClick: () => void useCanvas.getState().selectBoard(toBoardId),
+      },
+    });
+  };
+
+  const onMoveToBoard = (toBoardId: string) => {
+    const name = moveTargets.find((b) => b.id === toBoardId)?.name ?? toBoardId;
+    void mutate
+      .moveFrame({ boardId, frameId: frame.id, toBoardId })
+      .then(() => reportMove(toBoardId, name))
+      .catch((err) => toastError(err, "Could not move frame"));
+  };
+
+  // Non-null while the "new board" dialog is open; holds the draft name.
+  const [newBoardName, setNewBoardName] = useState<string | null>(null);
+
+  const submitNewBoard = async () => {
+    const name = newBoardName?.trim();
+    if (!name) return;
+    setNewBoardName(null);
+    try {
+      const { boardId: toBoardId } = await mutate.addBoard({ name });
+      await mutate.moveFrame({ boardId, frameId: frame.id, toBoardId });
+      // The new board only reaches the sidebar through the summary.
+      await useCanvas.getState().refreshDesignSummary();
+      reportMove(toBoardId, name);
+    } catch (err) {
+      toastError(err, "Could not move frame to a new board");
+    }
+  };
+
   const passThrough = cursorMode === "hand";
 
   return (
@@ -724,7 +784,7 @@ export const Frame = memo(function Frame({
           }}
         >
           <FrameHeader
-            label={frame.label ?? screen?.name ?? frame.screen}
+            label={frameLabel}
             w={w}
             h={h}
             sharedCount={sharedCount}
@@ -739,6 +799,9 @@ export const Frame = memo(function Frame({
             onPreview={onPreview}
             onAddSibling={onAddSibling}
             onSchemeChange={onSchemeChange}
+            moveTargets={moveTargets}
+            onMoveToBoard={onMoveToBoard}
+            onMoveToNewBoard={() => setNewBoardName(frameLabel)}
           />
         </div>
 
@@ -840,6 +903,44 @@ export const Frame = memo(function Frame({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={newBoardName !== null}
+        onOpenChange={(open) => {
+          if (!open) setNewBoardName(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Move to a new board</DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitNewBoard();
+            }}
+          >
+            <Input
+              autoFocus
+              value={newBoardName ?? ""}
+              onChange={(e) => setNewBoardName(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              maxLength={MAX_BOARD_NAME_LENGTH}
+              placeholder="Board name"
+              aria-label="Board name"
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setNewBoardName(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={(newBoardName ?? "").trim().length === 0}>
+                Create and move
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

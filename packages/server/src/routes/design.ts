@@ -110,7 +110,8 @@ export function createConfigRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
 
   r.get("/", (c) => {
-    const f = ctxFor().folder;
+    const ctx = ctxFor();
+    const f = ctx.folder;
     const cfg = f.config;
     return c.json({
       root: f.root,
@@ -119,12 +120,21 @@ export function createConfigRouter(ctxFor: () => MutationContext): Hono {
       toolVersion: cfg.toolVersion,
       folderId: cfg.folderId ?? null,
       defaultLibrary: cfg.defaultLibrary,
-      libraries: Object.entries(cfg.libraries).map(([id, lib]) => ({
-        id,
-        providerId: lib.id,
-        version: lib.version,
-        source: lib.source,
-      })),
+      libraries: Object.entries(cfg.libraries).map(([id, lib]) => {
+        // Resolved, not inferred: a library's channel is its provider's
+        // (`sx` for MUI, inline `style` for antd), and `config.styling` only
+        // gets a say where the provider offers a choice. The dialog would
+        // otherwise have to keep its own copy of that table.
+        const provider = ctx.providers[id];
+        const channel = provider ? styleChannelOf(provider, cfg.styling?.framework) : undefined;
+        return {
+          id,
+          providerId: lib.id,
+          version: lib.version,
+          source: lib.source,
+          styleLabel: channel?.editorLabel ?? null,
+        };
+      }),
       styling: cfg.styling?.framework ?? null,
       viewportPresets: cfg.viewportPresets,
       defaultBoard: cfg.defaultBoard ?? null,
