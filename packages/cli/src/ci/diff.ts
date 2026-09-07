@@ -204,6 +204,12 @@ function git(repo: string, args: string[]): string {
   return execFileSync("git", ["-C", repo, ...args], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    // Capture git's diagnostics instead of letting them reach the terminal:
+    // `materializeRef` *expects* `git archive` to fail when the base ref
+    // predates the design folder, and a raw `fatal: pathspec ...` there reads
+    // as a crash. Closing stdin keeps a credential or editor prompt from
+    // blocking a subprocess nobody is watching.
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 

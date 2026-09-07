@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# Repo pre-push gate: the `checks` job from .github/workflows/ci.yml, run
+# before the push instead of after it. Same commands, same order, ~25s. CI
+# stays the authority — it builds the snapshot manifest from scratch and runs
+# the browser suites on a Linux runner — but nothing in this list should ever
+# be discovered there.
+#
+# Enable once per clone with `git config core.hooksPath .githooks`.
+# Bypass a single push with `git push --no-verify`.
+#
+set -euo pipefail
+
+command -v bun >/dev/null 2>&1 || exit 0   # no bun -> don't block the push
+
+cd "$(git rev-parse --show-toplevel)"
+
+fail() {
+  {
+    echo
+    echo "  $1 failed — push aborted (this is what CI runs)."
+    echo "  Bypass this once with:  git push --no-verify"
+  } >&2
+  exit 1
+}
+
+echo "pre-push: typecheck"   >&2; bun run typecheck            || fail "typecheck"
+echo "pre-push: lint"        >&2; bun run lint                 || fail "lint"
+echo "pre-push: dead code"   >&2; bun run lint:dead            || fail "knip"
+echo "pre-push: canvas"      >&2; bun run --cwd packages/canvas build >/dev/null || fail "canvas build"
+
+# --randomize rather than the plain suite CI runs: a suite that only passes in
+# declaration order looks green everywhere a developer ever looks, and the
+# randomized run is the same cost. Anything it catches, CI would eventually
+# catch on a differently-loaded runner.
+echo "pre-push: test"        >&2; bun test --parallel --randomize || fail "tests"

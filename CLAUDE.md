@@ -92,7 +92,15 @@ and don't let the report grow a permanent baseline.
 Other test entry points: `bun run test:changed` (only what your diff touches — the
 fast inner loop), `bun run test:order` (`--randomize`, catches tests that only pass
 in declaration order), and `bun run test:e2e` (`VELLOO_E2E=1`, adds the Playwright
-suites — CI does not run these).
+suites). CI runs `test:e2e` in its own job, under a virtual display and the full
+Chromium build — the capture-session suite drives a *headed* browser, which the
+`--only-shell` install `velloo browser install` uses cannot open.
+
+The repo's hooks (`.githooks/`, enabled with `git config core.hooksPath .githooks`)
+run this list for you: `pre-commit` runs the lint, and
+`pre-push` runs the whole `checks` job — typecheck, lint, knip, the canvas
+build, and the suite under `--randomize`. Either can be skipped for one
+invocation with `--no-verify`.
 
 Prefer `bun run test` over a bare `bun test`: the canvas DOM suites need one
 global per file, so they skip themselves unless `--parallel` is on. Running a

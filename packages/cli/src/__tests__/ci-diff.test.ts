@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -49,28 +41,25 @@ setDefaultTimeout(30_000);
 
 /**
  * One parent dir for the whole file, removed in `afterAll` rather than per
- * test. A per-test `afterEach` reads whichever path the shared `repo` binding
- * holds *when it runs*; if a test trips the timeout, that hook can fire once
- * the next test's `beforeEach` has already rebound it, deleting a live repo
- * and turning one slow test into a file-wide cascade.
+ * test. A per-test `afterEach` reads whichever path a shared binding holds
+ * *when it runs*; if a test trips the timeout, that hook can fire once the
+ * next test has already rebound it, deleting a live repo and turning one slow
+ * test into a file-wide cascade.
  */
 let root: string;
 /** The committed base repo every test starts from — built once, copied per test. */
 let fixture: string;
-let repo: string;
-let design: string;
 let caseNo = 0;
 
 function gitIn(cwd: string, args: string[]): string {
   return execFileSync(
     "git",
     ["-C", cwd, "-c", "user.email=ci@test", "-c", "user.name=ci", ...args],
-    { encoding: "utf8" },
+    // Pipe both ways rather than inheriting: an expected failure's `fatal:`
+    // line is the test's business, not the reporter's, and a closed stdin
+    // can't leave git blocked on a prompt nobody will answer.
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
-}
-
-function git(args: string[]): string {
-  return gitIn(repo, args);
 }
 
 const screenJson = (id: string, className: string, children: unknown[] = []): string =>
@@ -113,17 +102,32 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-// A copy of the committed fixture, not a fresh `init`/`add`/`commit`: three
-// fewer subprocesses per test, and the base commit stays identical across them.
-beforeEach(async () => {
+interface Case {
+  repo: string;
+  design: string;
+  git: (args: string[]) => string;
+}
+
+/**
+ * A copy of the committed fixture, not a fresh `init`/`add`/`commit`: three
+ * fewer subprocesses, and the base commit stays identical across tests.
+ *
+ * Called from the test body rather than a `beforeEach`, so the paths are local
+ * consts. A shared binding is read by whichever code runs *last*: a test that
+ * trips the 30s timeout keeps executing, and its next `git` call would reach
+ * for a path the following test had already rebound — one slow test reported
+ * as several broken ones.
+ */
+async function newCase(): Promise<Case> {
   caseNo += 1;
-  repo = join(root, `case-${caseNo}`);
-  design = join(repo, "velloo");
+  const repo = join(root, `case-${caseNo}`);
   await cp(fixture, repo, { recursive: true });
-});
+  return { repo, design: join(repo, "velloo"), git: (args) => gitIn(repo, args) };
+}
 
 describe("git plumbing", () => {
   test("diffs base → worktree with add/modify/delete, scoped to the design folder", async () => {
+    const { repo, design, git } = await newCase();
     const base = git(["rev-parse", "HEAD"]).trim();
     await writeFile(join(design, "screens", "home.json"), screenJson("home", "bg-card"));
     await writeFile(join(design, "screens", "pricing.json"), screenJson("pricing", "p-8"));
@@ -145,6 +149,7 @@ describe("git plumbing", () => {
   });
 
   test("uncommitted worktree changes count when head is the checkout", async () => {
+    const { design, git } = await newCase();
     const base = git(["rev-parse", "HEAD"]).trim();
     await writeFile(join(design, "screens", "home.json"), screenJson("home", "bg-muted"));
 
@@ -153,6 +158,7 @@ describe("git plumbing", () => {
   });
 
   test("a head ref that isn't the checkout diffs ref-to-ref, ignoring the worktree", async () => {
+    const { design, git } = await newCase();
     const base = git(["rev-parse", "HEAD"]).trim();
     await writeFile(join(design, "screens", "home.json"), screenJson("home", "bg-card"));
     git(["add", "-A"]);
@@ -170,6 +176,7 @@ describe("git plumbing", () => {
   });
 
   test("materializeRef snapshots the base design folder without touching the tree", async () => {
+    const { design, git } = await newCase();
     const base = git(["rev-parse", "HEAD"]).trim();
     await writeFile(join(design, "screens", "home.json"), screenJson("home", "bg-card"));
     git(["add", "-A"]);
@@ -187,6 +194,7 @@ describe("git plumbing", () => {
   });
 
   test("materializeRef returns null when the ref has no design folder", async () => {
+    const { design, git } = await newCase();
     git(["rm", "-rq", "velloo"]);
     git(["commit", "-qm", "drop design"]);
     const emptyBase = git(["rev-parse", "HEAD"]).trim();

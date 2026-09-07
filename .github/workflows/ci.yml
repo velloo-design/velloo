@@ -58,7 +58,7 @@ jobs:
   # after the PR that caused it — long enough for a red nightly to become
   # background noise. It's a separate job so a browser download that fails on
   # the network doesn't read as "the test suite is broken", and it costs about
-  # a second of testing behind a cached ~200MB headless shell.
+  # a second of testing behind a cached browser.
   e2e:
     name: Browser suites
     runs-on: ubuntu-latest
@@ -90,32 +90,43 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.pin }}
+          key: ms-playwright-full-${{ runner.os }}-${{ steps.pw.outputs.pin }}
 
-      # `velloo browser install` under the hood: the headless shell only, which
-      # is what headless launches use anyway and a third of the full build.
+      # The full build, not the `--only-shell` one `velloo browser install`
+      # fetches: the capture-session suite drives a *headed* browser, and the
+      # headless shell has no window to open. `install chromium` lays down both,
+      # so the headless suites still get the shell they'd use anyway.
       - name: Install Chromium
         if: steps.chromium-cache.outputs.cache-hit != 'true'
-        run: bun x ${{ steps.pw.outputs.pin }} install chromium --only-shell
+        run: bun x ${{ steps.pw.outputs.pin }} install chromium
 
-      # System libraries the shell links against; cheap and not covered by the
-      # browser cache above.
+      # System libraries Chromium links against — including the Xvfb the headed
+      # launch needs — and not covered by the browser cache above.
       - name: Install Chromium system dependencies
-        run: bun x ${{ steps.pw.outputs.pin }} install-deps chromium
+        run: |
+          bun x ${{ steps.pw.outputs.pin }} install-deps chromium
+          sudo apt-get install -y xvfb
 
       # Fail loudly rather than letting every suite skip itself back to green —
-      # a silent skip is how this job would quietly stop testing anything.
-      - name: Verify Chromium is installed
+      # a silent skip is how this job would quietly stop testing anything. Both
+      # halves are asserted: a headless binary on disk, and a window that really
+      # opens under the virtual display.
+      - name: Verify both browsers launch
         run: |
-          bun -e '
+          xvfb-run -a bun -e '
             const { chromiumExecutable } = await import("./packages/renderer/src/screenshot.ts");
             const path = await chromiumExecutable();
             if (!path) { console.error("no Chromium found — the e2e suites would all skip"); process.exit(1); }
             console.log("chromium:", path);
+            const { chromium } = await import("playwright-core");
+            const browser = await chromium.launch({ headless: false });
+            console.log("headed:", browser.version());
+            await browser.close();
           '
 
+      # Under a virtual display, so the capture-session suite can open a window.
       - name: Test (with browser suites)
-        run: bun run test:e2e
+        run: xvfb-run -a bun run test:e2e
 
   # Separate job because it is the one check that needs the network: a Google
   # outage should read as "the font check is red", not fail the suite that was
