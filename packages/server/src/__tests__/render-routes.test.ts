@@ -214,6 +214,20 @@ describe("a render that fails outright", () => {
     expect(dark).toContain("color-scheme:dark");
   });
 
+  test("draws the frames in the fixed brand duotone in both modes", async () => {
+    // Guidelines §2.5: amber and coral are fixed — darkening them for contrast
+    // on the light ground is misuse, not a mode adaptation. The grounds change
+    // between modes; the mark does not.
+    for (const url of [
+      "http://localhost/api/render/broken",
+      "http://localhost/api/render/broken?mode=dark",
+    ]) {
+      const html = await (await app.fetch(new Request(url))).text();
+      expect(html).toContain("#FFAB1F");
+      expect(html).toContain("#FF6F4D");
+    }
+  });
+
   test("escapes the error message so a throw can't inject markup", async () => {
     const res = await app.fetch(new Request("http://localhost/api/render/unknown"));
     const html = await res.text();

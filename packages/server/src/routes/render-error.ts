@@ -13,34 +13,37 @@
  * Whatever went wrong upstream, this document has to be renderable.
  */
 
+/**
+ * Grounds and text per mode, from the brand token table. The mark's amber and
+ * coral are deliberately *not* in here: the frames are fixed duotone in both
+ * modes (guidelines §2.5 — recoloring them is misuse), so darkening them for
+ * contrast on the light ground is not an option the palette gets to offer.
+ */
 interface Palette {
   bg: string;
   fg: string;
   muted: string;
   border: string;
-  accent: string;
-  amber: string;
   code: string;
 }
 
+const AMBER = "#FFAB1F";
+const CORAL = "#FF6F4D";
+
 const DARK: Palette = {
-  bg: "#0D0C0A",
-  fg: "#F3EEE3",
-  muted: "#9A9488",
-  border: "#2A2823",
-  accent: "#FF6F4D",
-  amber: "#FFAB1F",
-  code: "#17150F",
+  bg: "#0D0C0A", // ink
+  fg: "#F7F2E6", // bone
+  muted: "#A59C8D", // muted
+  border: "#26221C", // line
+  code: "#15130E", // surface
 };
 
 const LIGHT: Palette = {
-  bg: "#FBFAF7",
-  fg: "#1A1815",
-  muted: "#6B6558",
-  border: "#E4E0D6",
-  accent: "#D8502C",
-  amber: "#B8790A",
-  code: "#F2EFE8",
+  bg: "#F7F2E6", // bone
+  fg: "#141210", // coal
+  muted: "#6F665A", // stone
+  border: "#E2D8C4", // rule
+  code: "#FFFDF7", // paper
 };
 
 function escapeHtml(value: string): string {
@@ -100,13 +103,13 @@ export function renderErrorDocument(page: RenderErrorPage): string {
 </style></head>
 <body><main>
 <svg class="art" viewBox="0 0 200 132" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <rect x="118" y="24" width="58" height="58" rx="20" stroke="${c.amber}" stroke-width="11" stroke-linejoin="round"/>
-  <circle class="spark" cx="102" cy="54" r="1.8" fill="${c.accent}"/>
-  <circle class="spark mid" cx="90" cy="66" r="2.5" fill="${c.accent}"/>
-  <circle class="spark late" cx="77" cy="78" r="3.2" fill="${c.accent}"/>
+  <rect x="118" y="24" width="58" height="58" rx="20" stroke="${AMBER}" stroke-width="11" stroke-linejoin="round"/>
+  <circle class="spark" cx="102" cy="54" r="1.8" fill="${CORAL}"/>
+  <circle class="spark mid" cx="90" cy="66" r="2.5" fill="${CORAL}"/>
+  <circle class="spark late" cx="77" cy="78" r="3.2" fill="${CORAL}"/>
   <g class="drift">
     <path d="M44 22 L44 29 A15 15 0 0 1 29 44 L15 44 A15 15 0 0 1 0 29 L0 15 A15 15 0 0 1 15 0 L26 0"
-      stroke="${c.accent}" stroke-width="9" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-22 44 86) translate(22 64)"/>
+      stroke="${CORAL}" stroke-width="9" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-22 44 86) translate(22 64)"/>
   </g>
 </svg>
 <h1>${escapeHtml(page.title)}</h1>
