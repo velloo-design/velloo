@@ -20,7 +20,16 @@ import { toastError } from "../toast.ts";
 import { AgentActivityIndicator } from "./ActivityFeed.tsx";
 import { LogoLockup } from "./Logo.tsx";
 import { SettingsMenu } from "./SettingsMenu.tsx";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "./ui/breadcrumb.tsx";
 import { Button } from "./ui/button.tsx";
+import { ButtonGroup } from "./ui/button-group.tsx";
+import { Kbd } from "./ui/kbd.tsx";
 import { Separator } from "./ui/separator.tsx";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip.tsx";
@@ -41,9 +50,11 @@ function HotkeyTip({
         <span className="flex items-center gap-1.5">
           {label}
           {hotkey ? (
-            <kbd className="rounded border border-border/40 bg-background/10 px-1 py-px font-mono text-[10px] opacity-80">
+            // Inside a tooltip the Kbd default (bg-background) is invisible
+            // against the inverted surface, so the tint comes from it instead.
+            <Kbd className="border-border/40 bg-background/10 text-current opacity-80">
               {hotkey}
-            </kbd>
+            </Kbd>
           ) : null}
         </span>
       </TooltipContent>
@@ -69,6 +80,12 @@ export function TopBar() {
   const setPublishOpen = useCanvas((s) => s.setPublishOpen);
 
   const currentScreen = design?.screens.find((s) => s.id === currentScreenId);
+  const crumbs =
+    view === "library"
+      ? ["Library", ...(libraryItem ? [libraryItem.id] : [])]
+      : currentScreen
+        ? [currentScreen.name]
+        : [];
   const isDesignDark = designMode === "dark";
   const hasDarkPalette = Boolean(theme?.colorsDark);
 
@@ -130,22 +147,21 @@ export function TopBar() {
       <header className="h-11 shrink-0 border-b bg-card flex items-center gap-3 px-4 text-sm">
         <div className="flex items-center gap-2 min-w-0">
           <LogoLockup fontSize={15} />
-          {view === "library" ? (
-            <>
-              <span className="text-muted-foreground">/</span>
-              <span className="truncate">Library</span>
-              {libraryItem ? (
-                <>
-                  <span className="text-muted-foreground">/</span>
-                  <span className="truncate">{libraryItem.id}</span>
-                </>
-              ) : null}
-            </>
-          ) : currentScreen ? (
-            <>
-              <span className="text-muted-foreground">/</span>
-              <span className="truncate">{currentScreen.name}</span>
-            </>
+          {crumbs.length > 0 ? (
+            <Breadcrumb>
+              <BreadcrumbList className="gap-1.5 text-sm sm:gap-1.5">
+                {crumbs.map((crumb, index) => (
+                  <BreadcrumbItem key={crumb}>
+                    <BreadcrumbSeparator className="[&>svg]:size-3" />
+                    {index === crumbs.length - 1 ? (
+                      <BreadcrumbPage className="truncate">{crumb}</BreadcrumbPage>
+                    ) : (
+                      <span className="truncate">{crumb}</span>
+                    )}
+                  </BreadcrumbItem>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
           ) : null}
         </div>
 
@@ -187,7 +203,7 @@ export function TopBar() {
 
           <MarkupToggle />
 
-          <div className="flex items-center gap-1 ml-2">
+          <ButtonGroup className="ml-2">
             <HotkeyTip
               label={`Undo${history.undo > 0 ? ` — ${history.undo} step${history.undo === 1 ? "" : "s"}` : ""}`}
               hotkey="⌘Z"
@@ -214,11 +230,11 @@ export function TopBar() {
                 <Redo2 />
               </Button>
             </HotkeyTip>
-          </div>
+          </ButtonGroup>
 
           <Separator orientation="vertical" className="mx-1 h-5" />
 
-          <div className="flex items-center gap-1">
+          <ButtonGroup>
             <HotkeyTip label="Zoom out" hotkey="−">
               <Button
                 variant="outline"
@@ -230,7 +246,7 @@ export function TopBar() {
             </HotkeyTip>
             <HotkeyTip label="Reset zoom" hotkey="0">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={onZoomReset}
                 className="min-w-[3rem] tabular-nums text-muted-foreground"
@@ -247,7 +263,7 @@ export function TopBar() {
                 <Plus />
               </Button>
             </HotkeyTip>
-          </div>
+          </ButtonGroup>
 
           <Separator orientation="vertical" className="mx-1 h-5" />
 

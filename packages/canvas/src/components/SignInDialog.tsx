@@ -1,4 +1,4 @@
-import { AlertTriangle, ExternalLink, LoaderCircle } from "lucide-react";
+import { AlertTriangle, ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SignInPrompt } from "../api/sign-in-gate.ts";
 import { type AuthStatus, auth, type LoginState, loginAttemptSucceeded } from "../api.ts";
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog.tsx";
+import { Spinner } from "./ui/spinner.tsx";
 
 /**
  * Sign in to velloo-cloud without leaving the canvas.
@@ -166,7 +167,7 @@ export function SignInDialog() {
 
         {starting || login.state === "idle" ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <LoaderCircle className="animate-spin" size={14} />
+            <Spinner className="size-3.5" />
             Starting sign-in…
           </div>
         ) : null}

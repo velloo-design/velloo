@@ -14,6 +14,8 @@ import {
   Breadcrumb as UIBreadcrumb,
 } from "./ui/breadcrumb.tsx";
 import { Button } from "./ui/button.tsx";
+import { Card } from "./ui/card.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
 
 interface Props {
   item: LibraryItemRef;
@@ -88,14 +90,14 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
             Preview
           </div>
-          <div className="rounded-lg border bg-card overflow-hidden">
+          <Card className="py-0">
             <iframe
               src={renderUrl(undefined, { w: 720, h: 220 })}
               title={`${item.id} preview`}
               loading="lazy"
               className="block w-full h-[220px] border-0"
             />
-          </div>
+          </Card>
         </section>
 
         {variants.length > 0 || sizes.length > 0 ? (
@@ -146,86 +148,92 @@ function VariantsMatrix({
   const cols = sizes.length > 0 ? sizes : [null];
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      <div
-        className="grid border-b bg-muted/30"
-        style={{ gridTemplateColumns: `120px repeat(${cols.length}, 1fr)` }}
-      >
-        <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-          {variants.length > 0 ? "variant" : ""}
-        </div>
-        {cols.map((c, i) => (
-          <div
-            key={c ?? `col-${i}`}
-            className="px-4 py-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium text-center"
-          >
-            {c ?? "preview"}
-          </div>
-        ))}
-      </div>
-      {rows.map((row, ri) => (
-        <div
-          key={row ?? `row-${ri}`}
-          className={`grid items-center ${ri < rows.length - 1 ? "border-b" : ""}`}
-          style={{ gridTemplateColumns: `120px repeat(${cols.length}, 1fr)` }}
-        >
-          <div className="px-4 py-2 text-xs font-mono">{row ?? ""}</div>
-          {cols.map((col, ci) => {
-            const props: Record<string, unknown> = {};
-            if (row !== null) props.variant = row;
-            if (col !== null) props.size = col;
-            return (
-              <div
-                key={`${row ?? ri}-${col ?? ci}`}
-                className="p-3 flex items-center justify-center"
+    <Card className="py-0">
+      <Table>
+        <TableHeader className="bg-muted/30">
+          <TableRow>
+            <TableHead className="w-32 text-[10px] uppercase tracking-wider">
+              {variants.length > 0 ? "variant" : ""}
+            </TableHead>
+            {cols.map((c, i) => (
+              <TableHead
+                key={c ?? `col-${i}`}
+                className="text-center text-[10px] uppercase tracking-wider"
               >
-                <iframe
-                  src={renderUrl(props, { w: 280, h: 80 })}
-                  title={`${componentId} ${row ?? ""} ${col ?? ""}`}
-                  loading="lazy"
-                  className="w-full h-[80px] border-0"
-                />
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
+                {c ?? "preview"}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row, ri) => (
+            <TableRow key={row ?? `row-${ri}`}>
+              <TableCell className="w-32 font-mono text-xs">{row ?? ""}</TableCell>
+              {cols.map((col, ci) => {
+                const props: Record<string, unknown> = {};
+                if (row !== null) props.variant = row;
+                if (col !== null) props.size = col;
+                return (
+                  <TableCell key={`${row ?? ri}-${col ?? ci}`} className="p-3">
+                    <iframe
+                      src={renderUrl(props, { w: 280, h: 80 })}
+                      title={`${componentId} ${row ?? ""} ${col ?? ""}`}
+                      loading="lazy"
+                      className="w-full h-[80px] border-0"
+                    />
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Card>
   );
 }
 
 function PropsTable({ props }: { props: PropDescriptor[] }) {
   return (
-    <div className="rounded-lg border bg-card divide-y">
-      {props.map((p) => (
-        <div key={p.name} className="px-4 py-3 flex items-start gap-4">
-          <div className="w-32 shrink-0">
-            <div className="text-xs font-mono font-medium">{p.name}</div>
-            {p.optional ? (
-              <div className="text-[10px] text-muted-foreground mt-0.5">optional</div>
-            ) : null}
-          </div>
-          <div className="flex-1 flex flex-row flex-wrap gap-1 items-center">
-            {p.enumValues && p.enumValues.length > 0 ? (
-              p.enumValues.map((v) => (
-                <Badge key={String(v)} variant="outline" className="font-mono text-[10px]">
-                  {String(v)}
-                </Badge>
-              ))
-            ) : (
-              <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">
-                {p.control}
-              </Badge>
-            )}
-            {p.defaultValue ? (
-              <span className="text-xs text-muted-foreground ml-2">
-                default: <span className="font-mono">{p.defaultValue}</span>
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ))}
-    </div>
+    <Card className="py-0">
+      <Table>
+        <TableHeader className="sr-only">
+          <TableRow>
+            <TableHead>Prop</TableHead>
+            <TableHead>Accepts</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {props.map((p) => (
+            <TableRow key={p.name}>
+              <TableCell className="w-32 py-3 align-top">
+                <div className="font-mono text-xs font-medium">{p.name}</div>
+                {p.optional ? (
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">optional</div>
+                ) : null}
+              </TableCell>
+              <TableCell className="flex flex-row flex-wrap items-center gap-1 py-3">
+                {p.enumValues && p.enumValues.length > 0 ? (
+                  p.enumValues.map((v) => (
+                    <Badge key={String(v)} variant="outline" className="font-mono text-[10px]">
+                      {String(v)}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">
+                    {p.control}
+                  </Badge>
+                )}
+                {p.defaultValue ? (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    default: <span className="font-mono">{p.defaultValue}</span>
+                  </span>
+                ) : null}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Card>
   );
 }
 
@@ -273,14 +281,14 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
             Preview
           </div>
-          <div className="rounded-lg border bg-card overflow-hidden">
+          <Card className="py-0">
             <iframe
               src={`/api/render/snippet/${encodeURIComponent(item.id)}?w=720&h=260&v=${themeVersion}${previewModeQs}`}
               title={`${item.id} preview`}
               loading="lazy"
               className="block w-full h-[260px] border-0"
             />
-          </div>
+          </Card>
         </section>
 
         {meta && meta.params.length > 0 ? (
@@ -288,25 +296,35 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
               Parameters
             </div>
-            <div className="rounded-lg border bg-card divide-y">
-              {meta.params.map((p) => (
-                <div key={p.name} className="px-4 py-3 flex items-start gap-4">
-                  <div className="w-32 shrink-0">
-                    <div className="text-xs font-mono font-medium">{p.name}</div>
-                  </div>
-                  <div className="flex-1 flex flex-row flex-wrap gap-1 items-center">
-                    <Badge variant="outline" className="font-mono text-[10px]">
-                      {p.type}
-                    </Badge>
-                    {p.default !== undefined ? (
-                      <span className="text-xs text-muted-foreground ml-2">
-                        default: <span className="font-mono">{JSON.stringify(p.default)}</span>
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Card className="py-0">
+              <Table>
+                <TableHeader className="sr-only">
+                  <TableRow>
+                    <TableHead>Parameter</TableHead>
+                    <TableHead>Type</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {meta.params.map((p) => (
+                    <TableRow key={p.name}>
+                      <TableCell className="w-32 py-3 font-mono text-xs font-medium">
+                        {p.name}
+                      </TableCell>
+                      <TableCell className="flex flex-row flex-wrap items-center gap-1 py-3">
+                        <Badge variant="outline" className="font-mono text-[10px]">
+                          {p.type}
+                        </Badge>
+                        {p.default !== undefined ? (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            default: <span className="font-mono">{JSON.stringify(p.default)}</span>
+                          </span>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           </section>
         ) : null}
       </div>

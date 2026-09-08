@@ -1,5 +1,6 @@
 import { AlertTriangle, CircleCheck, Copy, ExternalLink, Eye, EyeOff, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { preflightBoards, type ScreenRenderFailure } from "../api/preflight.ts";
 import {
   type PublishRequest,
   type PublishResult,
@@ -10,6 +11,7 @@ import {
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { LoadingMark } from "./Loading.tsx";
+import { RenderFailureDialog } from "./RenderFailureDialog.tsx";
 import { Button } from "./ui/button.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";
 import {
@@ -65,6 +67,7 @@ export function PublishDialog() {
   const [destinationSlug, setDestinationSlug] = useState("new");
   const [destinationTouched, setDestinationTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [failures, setFailures] = useState<ScreenRenderFailure[] | null>(null);
 
   const boards = design?.boards ?? [];
 
@@ -93,6 +96,7 @@ export function PublishDialog() {
     setDestinationSlug("new");
     setDestinationTouched(false);
     setBusy(false);
+    setFailures(null);
 
     let cancelled = false;
     void (async () => {
@@ -166,7 +170,7 @@ export function PublishDialog() {
     }
   }, [destinationSlug, matchingSlots, recommendedSlug]);
 
-  const start = () => {
+  const buildRequest = (): PublishRequest => {
     const destination: PublishRequest["destination"] = selectedSlot
       ? {
           mode: "update",
@@ -174,7 +178,7 @@ export function PublishDialog() {
           expectedVersionId: selectedSlot.latestVersionId,
         }
       : { mode: "new" };
-    return startRun({
+    return {
       boardIds,
       ...(title.trim() ? { title: title.trim() } : {}),
       visibility,
@@ -182,7 +186,23 @@ export function PublishDialog() {
       ...(teamId ? { teamId } : {}),
       destination,
       screenshots,
-    });
+    };
+  };
+
+  const start = async () => {
+    setBusy(true);
+    // The publish renders a placeholder where a component threw rather than
+    // failing, so ask before that lands on a link someone else opens. Checking
+    // here rather than in the daemon is what lets the answer still be "no":
+    // the run goes asynchronous the moment it starts. A pre-flight that itself
+    // fails is not a reason to block the publish.
+    const found = await preflightBoards(boardIds).catch(() => []);
+    if (found.length > 0) {
+      setBusy(false);
+      setFailures(found);
+      return;
+    }
+    await startRun(buildRequest());
   };
 
   const toggleBoard = (id: string, on: boolean) => {
@@ -210,292 +230,304 @@ export function PublishDialog() {
   const passwordMissing = scope?.mode === "password" && password.length < 3;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Publish to velloo-cloud</DialogTitle>
-          <DialogDescription>
-            {scope
-              ? `Sharing “${scope.name}” ${scope.mode === "private" ? "privately" : scope.mode === "password" ? "with password protection" : "publicly"}.`
-              : "Share a rendered, commentable copy of these boards by link."}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <RenderFailureDialog
+        failures={failures}
+        verb="Publish"
+        onCancel={() => setFailures(null)}
+        onConfirm={() => {
+          setFailures(null);
+          void startRun(buildRequest());
+        }}
+      />
+      <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Publish to velloo-cloud</DialogTitle>
+            <DialogDescription>
+              {scope
+                ? `Sharing “${scope.name}” ${scope.mode === "private" ? "privately" : scope.mode === "password" ? "with password protection" : "publicly"}.`
+                : "Share a rendered, commentable copy of these boards by link."}
+            </DialogDescription>
+          </DialogHeader>
 
-        {unavailable ? (
-          <p className="py-4 text-sm text-muted-foreground">
-            This canvas isn't running through the velloo CLI, so it has no account to publish with.
-          </p>
-        ) : signedOut ? (
-          <div className="flex flex-col gap-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              {expired
-                ? "Your velloo-cloud session has ended. Sign in again to publish these boards."
-                : "Publishing needs a velloo-cloud account."}
+          {unavailable ? (
+            <p className="py-4 text-sm text-muted-foreground">
+              This canvas isn't running through the velloo CLI, so it has no account to publish
+              with.
             </p>
-            <Button
-              onClick={() => {
-                setOpen(false);
-                openSignIn({ action: "publish these boards", ...(expired ? { expired } : {}) });
-              }}
-              className="self-start"
-            >
-              {expired ? "Sign in again…" : "Sign in…"}
-            </Button>
-          </div>
-        ) : run.state === "running" ? (
-          <div className="flex flex-col gap-3 py-4">
-            <div className="flex items-center gap-2 text-sm">
-              <LoadingMark size={16} />
-              <span>{run.message}</span>
-              {run.capture ? (
-                <span className="text-muted-foreground tabular-nums">
-                  {run.capture.done}/{run.capture.total}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Capturing previews takes the longest. You can close this — the publish keeps going.
-            </p>
-            <Warnings messages={run.warnings} />
-          </div>
-        ) : run.state === "done" ? (
-          <div className="flex flex-col gap-3 py-2">
-            <div className="flex items-center gap-2 text-sm">
-              <CircleCheck size={15} className="text-emerald-600 dark:text-emerald-500" />
-              <span>{run.result.created ? "Published." : "Updated the existing link."}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input readOnly value={run.result.shareUrl} className="font-mono text-xs" />
-              <Button
-                variant="outline"
-                size="icon-sm"
-                title="Copy link"
-                onClick={() => void copyLink(run.result.shareUrl)}
-              >
-                <Copy />
-              </Button>
-              <Button variant="outline" size="icon-sm" title="Open link" asChild>
-                <a href={run.result.shareUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink />
-                </a>
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">{describeAccess(run.result)}</p>
-            <p className="text-xs text-muted-foreground">
-              {run.result.boards} board{run.result.boards === 1 ? "" : "s"} · {run.result.screens}{" "}
-              screen{run.result.screens === 1 ? "" : "s"} · {run.result.files} files ·{" "}
-              {Math.round(run.result.bytes / 1024)} KB
-              {run.result.screenshots > 0 ? ` · ${run.result.screenshots} previews` : ""}
-            </p>
-            <HistoryNote history={run.result.history} />
-            <Warnings messages={run.warnings} />
-          </div>
-        ) : run.state === "error" ? (
-          <div className="flex flex-col gap-3 py-2">
-            <div className="flex items-start gap-2 text-sm text-destructive">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-              <span>{run.message}</span>
-            </div>
-            {/* A token can be revoked during the minutes a capture pass takes.
-                Losing that work to a dead end, with the fix one click away, is
-                the worst version of this failure. */}
-            {run.signInRequired ? (
+          ) : signedOut ? (
+            <div className="flex flex-col gap-3 py-2">
+              <p className="text-sm text-muted-foreground">
+                {expired
+                  ? "Your velloo-cloud session has ended. Sign in again to publish these boards."
+                  : "Publishing needs a velloo-cloud account."}
+              </p>
               <Button
                 onClick={() => {
                   setOpen(false);
-                  openSignIn({
-                    action: "publish these boards",
-                    expired: run.signInRequired === "expired",
-                  });
+                  openSignIn({ action: "publish these boards", ...(expired ? { expired } : {}) });
                 }}
                 className="self-start"
               >
-                Sign in and try again…
+                {expired ? "Sign in again…" : "Sign in…"}
               </Button>
-            ) : null}
-            <Warnings messages={run.warnings} />
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="publish-title">Title</Label>
-              <Input
-                id="publish-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Board title"
-              />
             </div>
-
-            {boards.length > 0 ? (
-              <div className="grid gap-2">
-                <Label>Boards</Label>
-                <div className="max-h-40 overflow-y-auto rounded-md border">
-                  {boards.map((board) => (
-                    <div
-                      key={board.id}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-accent/50"
-                    >
-                      <Checkbox
-                        id={`publish-board-${board.id}`}
-                        checked={boardIds.includes(board.id)}
-                        onCheckedChange={(v) => toggleBoard(board.id, v === true)}
-                      />
-                      <Label
-                        htmlFor={`publish-board-${board.id}`}
-                        className="flex-1 cursor-pointer truncate font-normal"
-                      >
-                        {board.name}
-                      </Label>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {board.frameCount} frame{board.frameCount === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+          ) : run.state === "running" ? (
+            <div className="flex flex-col gap-3 py-4">
+              <div className="flex items-center gap-2 text-sm">
+                <LoadingMark size={16} />
+                <span>{run.message}</span>
+                {run.capture ? (
+                  <span className="text-muted-foreground tabular-nums">
+                    {run.capture.done}/{run.capture.total}
+                  </span>
+                ) : null}
               </div>
-            ) : (
               <p className="text-xs text-muted-foreground">
-                This folder has no boards, so every screen is published.
+                Capturing previews takes the longest. You can close this — the publish keeps going.
               </p>
-            )}
-
-            <div className="grid gap-2">
-              <Label htmlFor="publish-destination">Destination</Label>
-              <Select
-                value={destinationSlug}
-                onValueChange={(value) => {
-                  setDestinationTouched(true);
-                  setDestinationSlug(value);
-                }}
-                disabled={Boolean(targets?.destinationError)}
-              >
-                <SelectTrigger id="publish-destination">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {matchingSlots.map((slot) => (
-                    <SelectItem key={slot.slug} value={slot.slug}>
-                      Update {slot.title || "Untitled design"}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="new">Create a new link</SelectItem>
-                </SelectContent>
-              </Select>
-              {targets?.destinationError ? (
-                <p className="text-xs text-destructive">{targets.destinationError}</p>
-              ) : selectedSlot ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Matches this team, board selection, and source.
-                </p>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  Creates a separate live URL and keeps existing review links unchanged.
-                </p>
-              )}
+              <Warnings messages={run.warnings} />
             </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="publish-visibility">Visibility</Label>
-              <Select
-                value={visibility}
-                onValueChange={(v) => setVisibility(v as "public" | "private")}
-              >
-                <SelectTrigger id="publish-visibility">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="public">Anyone with the link</SelectItem>
-                  <SelectItem value="private">Only your organization</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="publish-password">
-                Password{scope?.mode === "password" ? "" : " (optional)"}
-              </Label>
-              <div className="relative">
-                <Input
-                  id="publish-password"
-                  className="pr-10"
-                  type={showPassword ? "text" : "password"}
-                  minLength={3}
-                  autoComplete="new-password"
-                  placeholder="3+ characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+          ) : run.state === "done" ? (
+            <div className="flex flex-col gap-3 py-2">
+              <div className="flex items-center gap-2 text-sm">
+                <CircleCheck size={15} className="text-emerald-600 dark:text-emerald-500" />
+                <span>{run.result.created ? "Published." : "Updated the existing link."}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input readOnly value={run.result.shareUrl} className="font-mono text-xs" />
                 <Button
-                  type="button"
-                  variant="ghost"
-                  className="absolute right-0 top-0 h-9 w-9 p-0"
-                  onClick={() => setShowPassword((value) => !value)}
-                  title={showPassword ? "Hide password" : "Show password"}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  aria-pressed={showPassword}
+                  variant="outline"
+                  size="icon-sm"
+                  title="Copy link"
+                  onClick={() => void copyLink(run.result.shareUrl)}
                 >
-                  {showPassword ? <EyeOff /> : <Eye />}
+                  <Copy />
+                </Button>
+                <Button variant="outline" size="icon-sm" title="Open link" asChild>
+                  <a href={run.result.shareUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink />
+                  </a>
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Anyone with the password can view, signed in or not. Send it separately from the
-                link.
+              <p className="text-xs text-muted-foreground">{describeAccess(run.result)}</p>
+              <p className="text-xs text-muted-foreground">
+                {run.result.boards} board{run.result.boards === 1 ? "" : "s"} · {run.result.screens}{" "}
+                screen{run.result.screens === 1 ? "" : "s"} · {run.result.files} files ·{" "}
+                {Math.round(run.result.bytes / 1024)} KB
+                {run.result.screenshots > 0 ? ` · ${run.result.screenshots} previews` : ""}
               </p>
+              <HistoryNote history={run.result.history} />
+              <Warnings messages={run.warnings} />
             </div>
-
-            {targets && targets.teams.length > 1 && teamId ? (
+          ) : run.state === "error" ? (
+            <div className="flex flex-col gap-3 py-2">
+              <div className="flex items-start gap-2 text-sm text-destructive">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                <span>{run.message}</span>
+              </div>
+              {/* A token can be revoked during the minutes a capture pass takes.
+                Losing that work to a dead end, with the fix one click away, is
+                the worst version of this failure. */}
+              {run.signInRequired ? (
+                <Button
+                  onClick={() => {
+                    setOpen(false);
+                    openSignIn({
+                      action: "publish these boards",
+                      expired: run.signInRequired === "expired",
+                    });
+                  }}
+                  className="self-start"
+                >
+                  Sign in and try again…
+                </Button>
+              ) : null}
+              <Warnings messages={run.warnings} />
+            </div>
+          ) : (
+            <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="publish-team">Team</Label>
-                <Select value={teamId} onValueChange={setTeamId}>
-                  <SelectTrigger id="publish-team">
+                <Label htmlFor="publish-title">Title</Label>
+                <Input
+                  id="publish-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Board title"
+                />
+              </div>
+
+              {boards.length > 0 ? (
+                <div className="grid gap-2">
+                  <Label>Boards</Label>
+                  <div className="max-h-40 overflow-y-auto rounded-md border">
+                    {boards.map((board) => (
+                      <div
+                        key={board.id}
+                        className="flex items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-accent/50"
+                      >
+                        <Checkbox
+                          id={`publish-board-${board.id}`}
+                          checked={boardIds.includes(board.id)}
+                          onCheckedChange={(v) => toggleBoard(board.id, v === true)}
+                        />
+                        <Label
+                          htmlFor={`publish-board-${board.id}`}
+                          className="flex-1 cursor-pointer truncate font-normal"
+                        >
+                          {board.name}
+                        </Label>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {board.frameCount} frame{board.frameCount === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  This folder has no boards, so every screen is published.
+                </p>
+              )}
+
+              <div className="grid gap-2">
+                <Label htmlFor="publish-destination">Destination</Label>
+                <Select
+                  value={destinationSlug}
+                  onValueChange={(value) => {
+                    setDestinationTouched(true);
+                    setDestinationSlug(value);
+                  }}
+                  disabled={Boolean(targets?.destinationError)}
+                >
+                  <SelectTrigger id="publish-destination">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {targets.teams.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name}
+                    {matchingSlots.map((slot) => (
+                      <SelectItem key={slot.slug} value={slot.slug}>
+                        Update {slot.title || "Untitled design"}
                       </SelectItem>
                     ))}
+                    <SelectItem value="new">Create a new link</SelectItem>
+                  </SelectContent>
+                </Select>
+                {targets?.destinationError ? (
+                  <p className="text-xs text-destructive">{targets.destinationError}</p>
+                ) : selectedSlot ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Matches this team, board selection, and source.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Creates a separate live URL and keeps existing review links unchanged.
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="publish-visibility">Visibility</Label>
+                <Select
+                  value={visibility}
+                  onValueChange={(v) => setVisibility(v as "public" | "private")}
+                >
+                  <SelectTrigger id="publish-visibility">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Anyone with the link</SelectItem>
+                    <SelectItem value="private">Only your organization</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            ) : null}
 
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="publish-screenshots"
-                checked={screenshots}
-                onCheckedChange={(v) => setScreenshots(v === true)}
-              />
-              <Label htmlFor="publish-screenshots" className="cursor-pointer font-normal">
-                Capture preview images
-              </Label>
+              <div className="grid gap-2">
+                <Label htmlFor="publish-password">
+                  Password{scope?.mode === "password" ? "" : " (optional)"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="publish-password"
+                    className="pr-10"
+                    type={showPassword ? "text" : "password"}
+                    minLength={3}
+                    autoComplete="new-password"
+                    placeholder="3+ characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="absolute right-0 top-0 h-9 w-9 p-0"
+                    onClick={() => setShowPassword((value) => !value)}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOff /> : <Eye />}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Anyone with the password can view, signed in or not. Send it separately from the
+                  link.
+                </p>
+              </div>
+
+              {targets && targets.teams.length > 1 && teamId ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="publish-team">Team</Label>
+                  <Select value={teamId} onValueChange={setTeamId}>
+                    <SelectTrigger id="publish-team">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {targets.teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="publish-screenshots"
+                  checked={screenshots}
+                  onCheckedChange={(v) => setScreenshots(v === true)}
+                />
+                <Label htmlFor="publish-screenshots" className="cursor-pointer font-normal">
+                  Capture preview images
+                </Label>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            {run.state === "done" ? "Done" : "Close"}
-          </Button>
-          {run.state === "idle" && !signedOut && !unavailable ? (
-            <Button
-              onClick={() => void start()}
-              disabled={
-                busy || nothingSelected || passwordMissing || Boolean(targets?.destinationError)
-              }
-            >
-              <Share2 />
-              {busy ? "Starting…" : "Publish"}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              {run.state === "done" ? "Done" : "Close"}
             </Button>
-          ) : null}
-          {run.state === "error" ? (
-            <Button onClick={() => setRun({ state: "idle" })}>Back</Button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {run.state === "idle" && !signedOut && !unavailable ? (
+              <Button
+                onClick={() => void start()}
+                disabled={
+                  busy || nothingSelected || passwordMissing || Boolean(targets?.destinationError)
+                }
+              >
+                <Share2 />
+                {busy ? "Starting…" : "Publish"}
+              </Button>
+            ) : null}
+            {run.state === "error" ? (
+              <Button onClick={() => setRun({ state: "idle" })}>Back</Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

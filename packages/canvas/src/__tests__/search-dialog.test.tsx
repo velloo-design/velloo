@@ -114,7 +114,7 @@ domSuite("opening and querying", () => {
     const view = await mount(<SearchDialog />);
     try {
       await interact(() => useCanvas.getState().setSearchOpen(true));
-      expect(text($("p"))).toContain("Type to search");
+      expect(text($("[role=dialog]"))).toContain("Type to search");
 
       const input = $("input") as HTMLInputElement;
       await interact(() => typeInto(input, "p"));

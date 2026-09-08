@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { nodeRung } from "../node-typography.ts";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
+import { Badge } from "./ui/badge.tsx";
 
 interface Props {
   screen: Screen;
@@ -151,17 +152,18 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
         >
           <span className="font-medium">{nodeLabel(node)}</span>
           {nodeId(node) ? (
-            <span
+            <Badge
+              variant="outline"
               className={
-                "shrink-0 rounded px-1 py-0.5 text-[10px] font-mono leading-none border " +
+                "shrink-0 px-1 py-0 font-mono text-[10px] leading-none " +
                 (isSelected
                   ? "border-primary-foreground/40 text-primary-foreground"
-                  : "border-border text-muted-foreground")
+                  : "text-muted-foreground")
               }
               title={`Stable anchor: @${nodeId(node)}`}
             >
               @{nodeId(node)}
-            </span>
+            </Badge>
           ) : null}
           {description ? (
             <span

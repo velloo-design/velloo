@@ -37,8 +37,10 @@ import { nodeRung } from "../../node-typography.ts";
 import { pathFromString } from "../../path.ts";
 import { selectedNode, useCanvas } from "../../store.ts";
 import { ImagePanel } from "../ImagePanel.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog.tsx";
+import { Separator } from "../ui/separator.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
 import {
   AlignField,
@@ -209,18 +211,18 @@ export function NodeHud() {
             />
             <span className="max-w-[140px] truncate text-xs font-medium">{typeName}</span>
             {inBody ? (
-              <span className="rounded bg-violet-500/15 px-1 text-[10px] text-violet-600 dark:text-violet-300">
+              <Badge className="bg-violet-500/15 px-1 py-0 text-[10px] text-violet-600 dark:text-violet-300">
                 in snippet
-              </span>
+              </Badge>
             ) : null}
             {rung ? (
-              <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
+              <Badge variant="secondary" className="px-1 py-0 text-[10px]">
                 {rung}
-              </span>
+              </Badge>
             ) : null}
           </div>
 
-          <div className="w-px shrink-0 self-stretch bg-border" />
+          <Separator orientation="vertical" className="shrink-0 self-stretch" />
 
           {snippetId !== null ? (
             <div className="flex shrink-0 items-center gap-2 self-center">
@@ -242,7 +244,7 @@ export function NodeHud() {
                 {snippetFocus === snippetId ? "Done" : "Edit in place"}
               </Button>
               {resolved.controls.length > 0 ? (
-                <div className="w-px self-stretch bg-border" />
+                <Separator orientation="vertical" className="self-stretch" />
               ) : null}
             </div>
           ) : null}

@@ -528,6 +528,17 @@ export {
   type DarkModeAuditResult,
   darkModeAuditTree,
 } from "./mutations/dark-mode-audit.ts";
+// Pre-flight render check, shared by the export and publish surfaces so a
+// broken component is caught before it ships as a placeholder.
+export {
+  failureLines,
+  failureSummary,
+  type PreflightSource,
+  preflightScreens,
+  type ScreenRenderFailure,
+  screensForBoards,
+  screensForExportTarget,
+} from "./preflight.ts";
 export { createServerProviderLoader, resolveProviders } from "./providers.ts";
 export {
   findRepoManifest,

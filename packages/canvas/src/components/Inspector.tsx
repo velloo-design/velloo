@@ -1,4 +1,5 @@
 import { isComponentNode, isSnippetInstance, nodeId } from "@velloo/schema";
+import { Braces, MousePointerClick, Unlink } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { mutate } from "../api.ts";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
@@ -12,6 +13,7 @@ import { pathFromString } from "../path.ts";
 import { selectedNode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { CopyField } from "./CopyField.tsx";
+import { EmptyState } from "./EmptyState.tsx";
 import { NodeStyleSection } from "./hud/NodeStyleSection.tsx";
 import { IdField } from "./IdField.tsx";
 import { ImagePanel } from "./ImagePanel.tsx";
@@ -95,17 +97,23 @@ export function Inspector() {
 
   if (!selection) {
     return (
-      <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
-        Click a node in the canvas to edit its props.
-      </div>
+      <EmptyState
+        size="panel"
+        icon={MousePointerClick}
+        title="Nothing selected"
+        hint="Click a node in the canvas to edit its props."
+      />
     );
   }
 
   if (!node) {
     return (
-      <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
-        Selected node is no longer in the tree.
-      </div>
+      <EmptyState
+        size="panel"
+        icon={Unlink}
+        title="Selection is gone"
+        hint="The selected node is no longer in the tree."
+      />
     );
   }
 
@@ -115,9 +123,12 @@ export function Inspector() {
 
   if (!isComponentNode(node)) {
     return (
-      <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
-        $param placeholders are only addressable inside a snippet body — open the snippet to edit.
-      </div>
+      <EmptyState
+        size="panel"
+        icon={Braces}
+        title="Not editable here"
+        hint="$param placeholders are only addressable inside a snippet body — open the snippet to edit."
+      />
     );
   }
 

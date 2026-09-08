@@ -1,4 +1,4 @@
-import { Archive, Frame as FrameIcon, LayoutGrid, Search } from "lucide-react";
+import { Archive, Frame as FrameIcon, LayoutGrid, Search, SearchX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -11,6 +11,10 @@ import {
 import { pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog.tsx";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "./ui/input-group.tsx";
+import { Kbd, KbdGroup } from "./ui/kbd.tsx";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
 
 /**
  * The Ctrl/Cmd+K search dialog: boards, screens, and text content across the
@@ -178,52 +182,67 @@ export function SearchDialog() {
       >
         <DialogTitle className="sr-only">Search boards, screens, and text</DialogTitle>
 
-        <div className="flex h-[52px] items-center gap-3 border-b px-4">
-          <Search size={17} className="shrink-0 text-muted-foreground" />
-          <input
+        <InputGroup className="h-[52px] rounded-none border-0 border-b shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0">
+          <InputGroupAddon>
+            <Search size={17} className="shrink-0 text-muted-foreground" />
+          </InputGroupAddon>
+          <InputGroupInput
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search boards, screens, and text…"
-            className="h-full flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+            className="text-[15px]"
           />
-          <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            esc
-          </kbd>
-        </div>
+          <InputGroupAddon align="inline-end">
+            <Kbd>esc</Kbd>
+          </InputGroupAddon>
+        </InputGroup>
 
         {counts ? (
-          <div className="flex items-center gap-1.5 border-b px-3 py-2">
+          <ToggleGroup
+            type="single"
+            value={filter}
+            onValueChange={(next) => {
+              if (!next) return;
+              setFilter(next as Filter);
+              setActiveIndex(0);
+            }}
+            aria-label="Result filter"
+            className="justify-start gap-1.5 border-b px-3 py-2"
+          >
             {FILTER_CYCLE.map((f) => (
-              <button
+              <ToggleGroupItem
                 key={f}
-                type="button"
-                onClick={() => {
-                  setFilter(f);
-                  setActiveIndex(0);
-                }}
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-[11px] capitalize",
-                  filter === f
-                    ? "bg-foreground font-medium text-background"
-                    : "bg-muted text-muted-foreground hover:text-foreground",
-                )}
+                value={f}
+                className="rounded-full bg-muted px-2.5 text-[11px] capitalize data-[state=on]:bg-foreground data-[state=on]:font-medium data-[state=on]:text-background"
               >
                 {f === "all" ? "All" : f} {counts[f]}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
         ) : null}
 
         <div ref={listRef} className="max-h-[380px] overflow-y-auto scroll-stable pb-1.5">
           {!results ? (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-              Type to search board names, screen names, and text inside screens.
-            </p>
+            <Empty className="p-6">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Search />
+                </EmptyMedia>
+                <EmptyDescription>
+                  Type to search board names, screen names, and text inside screens.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : items.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-              No matches for “{q}”.
-            </p>
+            <Empty className="p-6">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchX />
+                </EmptyMedia>
+                <EmptyTitle>No matches for “{q}”.</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <>
               {groups.boards.length > 0 ? <GroupLabel>Boards</GroupLabel> : null}
@@ -400,7 +419,11 @@ function Highlighted({ text, query }: { text: string; query: string }) {
 function Hint({ keys, children }: { keys: string; children: React.ReactNode }) {
   return (
     <span className="flex items-center gap-1.5">
-      <kbd className="rounded border bg-muted px-1 py-px text-[10px] font-medium">{keys}</kbd>
+      <KbdGroup>
+        {[...keys].map((key) => (
+          <Kbd key={key}>{key}</Kbd>
+        ))}
+      </KbdGroup>
       {children}
     </span>
   );

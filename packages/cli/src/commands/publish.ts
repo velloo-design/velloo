@@ -7,6 +7,7 @@ import {
   findHostTailwindConfig,
   loadDesignFolder,
   resolveProviders,
+  screensForBoards,
   TailwindJit,
 } from "@velloo/server";
 import { defineCommand } from "citty";
@@ -15,6 +16,7 @@ import { loadCredential } from "../cloud-credentials.ts";
 import { type CloudPublishSlot, listPublishDestinations } from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, pickBoards, resolveDesignFolder } from "../folder.ts";
+import { confirmRenderFailures } from "../preflight-gate.ts";
 import { createProgress, type Progress } from "../progress.ts";
 import { changedPreviewsSince } from "../publish/changed-previews.ts";
 import {
@@ -55,7 +57,8 @@ export default defineCommand({
     },
     yes: {
       type: "boolean",
-      description: "Skip the --remove confirmation (required without an interactive terminal)",
+      description:
+        "Skip confirmations — the --remove prompt, and publishing a screen whose component fails to render (required without an interactive terminal)",
     },
     url: {
       type: "string",
@@ -233,6 +236,18 @@ export default defineCommand({
     const password = privacy.password ? await readSharePassword() : undefined;
     const passwordExpiresAt = resolvePasswordExpiry(args["password-expires"], password != null);
     const { providers, defaultProvider } = await resolveProviders(config, folder);
+
+    // Last gate before the expensive work, and the last one where the answer
+    // can still be "no": a share link is read by someone who cannot tell a
+    // placeholder from a design.
+    await confirmRenderFailures(
+      "publish",
+      { folder: design, providers, defaultProvider },
+      source.boardIds.length > 0
+        ? screensForBoards(design, source.boardIds)
+        : [...design.screens.values()],
+      args.yes === true,
+    );
 
     // The publish-flavored live bundler is shared with the JIT below so the host
     // app's classes compile from the same source dirs we bundle from.

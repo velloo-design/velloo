@@ -17,8 +17,11 @@ import type { WriteContext } from "../../hud/use-control-write.ts";
 import type { Origin } from "../../hud/values.ts";
 import { ColorWheel, HexInput, type Hsv, hexToHsv, hsvToHex } from "../color-picker.tsx";
 import { IconGrid, LUCIDE } from "../IconPicker.tsx";
+import { Empty, EmptyDescription } from "../ui/empty.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select.tsx";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.tsx";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip.tsx";
 
 // ------------------------------------------------------------- field chrome
@@ -333,30 +336,32 @@ export function AlignField({
   onChange(next: string): void;
 }) {
   const active = value ?? ghost ?? null;
+  // An inherited or ghosted value renders held-not-chosen, which is a third
+  // state ToggleGroup has no variant for — hence the data-[state=on] override.
+  const held = muted || value === null;
   return (
-    <div className={`${CONTROL} flex items-stretch overflow-hidden p-0.5`}>
-      {choices.map((c) => {
-        const on = active === c.value;
-        return (
-          <button
-            key={c.value}
-            type="button"
-            title={c.label}
-            aria-pressed={on}
-            className={`flex-1 rounded-sm text-[10px] ${
-              on
-                ? muted || value === null
-                  ? "bg-muted text-muted-foreground"
-                  : "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/50"
-            }`}
-            onClick={() => onChange(c.value)}
-          >
-            {c.label.charAt(0)}
-          </button>
-        );
-      })}
-    </div>
+    <ToggleGroup
+      type="single"
+      value={active ?? ""}
+      onValueChange={(next) => next && onChange(next)}
+      className={`${CONTROL} items-stretch p-0.5`}
+    >
+      {choices.map((c) => (
+        <ToggleGroupItem
+          key={c.value}
+          value={c.value}
+          title={c.label}
+          className={
+            "min-w-0 flex-1 rounded-sm text-[10px] text-muted-foreground hover:bg-accent/50 " +
+            (held
+              ? "data-[state=on]:bg-muted data-[state=on]:text-muted-foreground"
+              : "data-[state=on]:bg-accent data-[state=on]:text-accent-foreground")
+          }
+        >
+          {c.label.charAt(0)}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }
 
@@ -425,27 +430,25 @@ export function ColorField({
         <span className="truncate">{shown ? labelFor(choices, shown) : EMPTY}</span>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0">
-        <div className="flex gap-1 border-b p-1.5">
-          {(["theme", "custom"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`flex-1 rounded-sm py-1 text-xs capitalize ${
-                tab === t
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50"
-              }`}
-              onClick={() => setTab(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        <Tabs value={tab} onValueChange={(next) => setTab(next as "theme" | "custom")}>
+          <TabsList className="w-full rounded-none border-b bg-transparent p-1.5">
+            <TabsTrigger value="theme" className="flex-1 text-xs capitalize">
+              theme
+            </TabsTrigger>
+            <TabsTrigger value="custom" className="flex-1 text-xs capitalize">
+              custom
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {tab === "theme" ? (
           <div className="max-h-64 overflow-y-auto p-1">
             {choices.length === 0 ? (
-              <p className="p-3 text-xs text-muted-foreground">This theme declares no colours.</p>
+              <Empty className="p-3">
+                <EmptyDescription className="text-xs">
+                  This theme declares no colours.
+                </EmptyDescription>
+              </Empty>
             ) : null}
             {choices.map((c) => {
               const css = c.swatch ?? resolve(c.value);

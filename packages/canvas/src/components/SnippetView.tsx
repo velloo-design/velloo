@@ -1,5 +1,5 @@
 import type { Screen, Snippet, ViewportPreset } from "@velloo/schema";
-import { ArrowLeft, Pencil, Sparkles } from "lucide-react";
+import { ArrowLeft, MousePointerClick, Pencil, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { postMutate } from "../api/http.ts";
 import { fetchSnippet, type SnippetMeta } from "../api.ts";
@@ -12,6 +12,7 @@ import { SnippetParamsPanel } from "./SnippetParamsPanel.tsx";
 import { Tree } from "./Tree.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
 import { Input } from "./ui/input.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
@@ -278,11 +279,19 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
         {showInspector ? (
           <Inspector />
         ) : (
-          <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center leading-relaxed">
-            Click a node in the snippet preview to edit its props, classes, or stable id. Param
-            slots render as <span className="font-mono">$name</span> badges — open the param's
-            instances elsewhere to see how each is filled.
-          </div>
+          <Empty className="flex-1 p-6">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <MousePointerClick />
+              </EmptyMedia>
+              <EmptyTitle className="text-xs">Nothing selected</EmptyTitle>
+              <EmptyDescription className="text-xs">
+                Click a node in the snippet preview to edit its props, classes, or stable id. Param
+                slots render as <span className="font-mono">$name</span> badges — open the param's
+                instances elsewhere to see how each is filled.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </aside>
     </div>

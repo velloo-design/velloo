@@ -14,6 +14,8 @@ import { auth, type CloudAccount, fetchRevertStatus, type RevertStatus } from ".
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { RevertDialog } from "./RevertDialog.tsx";
+import { Alert, AlertDescription } from "./ui/alert.tsx";
+import { Avatar, AvatarFallback } from "./ui/avatar.tsx";
 import { Button } from "./ui/button.tsx";
 import {
   DropdownMenu,
@@ -147,17 +149,21 @@ export function SettingsMenu() {
               className="max-w-[12rem] gap-2 pl-1 pr-2.5 text-xs"
               title={`${account.email} — account & settings`}
             >
-              <span
-                aria-hidden="true"
-                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                  // An expired credential still shows the person, muted — the
-                  // menu explains why, and a red avatar would read as an error
-                  // with their identity rather than with the token.
-                  expired ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground"
-                }`}
-              >
-                {initials(account)}
-              </span>
+              <Avatar aria-hidden="true" className="size-6">
+                <AvatarFallback
+                  className={
+                    // An expired credential still shows the person, muted — the
+                    // menu explains why, and a red avatar would read as an error
+                    // with their identity rather than with the token.
+                    "text-[10px] font-semibold " +
+                    (expired
+                      ? "bg-muted text-muted-foreground"
+                      : "bg-primary text-primary-foreground")
+                  }
+                >
+                  {initials(account)}
+                </AvatarFallback>
+              </Avatar>
               <span className="truncate">{firstName(account)}</span>
             </Button>
           ) : (
@@ -199,10 +205,12 @@ export function SettingsMenu() {
             )}
           </DropdownMenuLabel>
           {expired ? (
-            <div className="flex items-start gap-1.5 px-2 pb-1 text-[11px] text-destructive">
+            <Alert variant="destructive" className="mb-1 gap-1.5 border-0 bg-transparent px-2 py-0">
               <AlertTriangle size={12} className="mt-px shrink-0" />
-              <span>This credential expired — sign in again.</span>
-            </div>
+              <AlertDescription className="text-[11px] text-destructive">
+                This credential expired — sign in again.
+              </AlertDescription>
+            </Alert>
           ) : null}
           {loggedIn ? (
             <>

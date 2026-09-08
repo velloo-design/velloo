@@ -1,10 +1,18 @@
-import { Search } from "lucide-react";
+import { Search, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { libraryCategories } from "../library-categories.ts";
 import { type LibraryItemRef, useCanvas } from "../store.ts";
-import { Input } from "./ui/input.tsx";
+import { Badge } from "./ui/badge.tsx";
+import { Card, CardFooter } from "./ui/card.tsx";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "./ui/input-group.tsx";
 import { Separator } from "./ui/separator.tsx";
+import { Skeleton } from "./ui/skeleton.tsx";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
+
+/** A ToggleGroup value cannot be null, so "every shelf" needs a name. */
+const ALL_SHELVES = "\u0000all";
 
 interface Props {
   snippets: SnippetMeta[];
@@ -149,59 +157,59 @@ export function LibraryHome({ snippets }: Props) {
 
         <div className="sticky top-0 z-20 bg-background/85 backdrop-blur-sm px-8 pt-3 pb-3">
           <div className="flex items-center gap-3 mb-3">
-            <div className="relative flex-1 max-w-md">
-              <Search
-                size={14}
-                strokeWidth={2}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-              />
-              <Input
+            <InputGroup className="h-9 flex-1 max-w-md">
+              <InputGroupAddon>
+                <Search size={14} strokeWidth={2} />
+              </InputGroupAddon>
+              <InputGroupInput
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search components and snippets…"
-                className="h-9 pl-9"
               />
-            </div>
+            </InputGroup>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip
-              active={activeCategory === null}
-              onClick={() => setActiveCategory(null)}
-              label={`All ${allTiles.length}`}
-              prominent
-            />
+          <ToggleGroup
+            type="single"
+            // ALL_SHELVES stands in for "no filter": Radix drops the value when
+            // the active item is pressed again, and a shelf list with nothing
+            // selected has no meaning.
+            value={activeCategory ?? ALL_SHELVES}
+            onValueChange={(next) => {
+              if (!next) return;
+              setActiveCategory(next === ALL_SHELVES ? null : next);
+            }}
+            aria-label="Component shelf"
+            className="flex-wrap items-center justify-start gap-2"
+          >
+            <Chip value={ALL_SHELVES} label={`All ${allTiles.length}`} />
             {categories.map((cat) => {
               const count = allTiles.filter((t) => t.category === cat.label).length;
               if (count === 0) return null;
-              return (
-                <Chip
-                  key={cat.id}
-                  active={activeCategory === cat.label}
-                  onClick={() => setActiveCategory(cat.label)}
-                  label={`${cat.label} ${count}`}
-                />
-              );
+              return <Chip key={cat.id} value={cat.label} label={`${cat.label} ${count}`} />;
             })}
             {snippetCount > 0 ? (
               <>
                 <Separator orientation="vertical" className="mx-1 h-5" />
-                <Chip
-                  active={activeCategory === "Snippets"}
-                  onClick={() => setActiveCategory("Snippets")}
-                  label={`Snippets ${snippetCount}`}
-                  accent
-                />
+                <Chip value="Snippets" label={`Snippets ${snippetCount}`} accent />
               </>
             ) : null}
-          </div>
+          </ToggleGroup>
         </div>
 
         <div className="px-8 pb-12 mt-5">
           {filtered.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              No matches for "{query}".
-            </div>
+            <Empty className="py-16">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchX />
+                </EmptyMedia>
+                <EmptyTitle>No matches for "{query}".</EmptyTitle>
+                <EmptyDescription>
+                  Try a shorter word, or clear the shelf filter above.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="flex items-start gap-4">
               {columns.map((col, i) => {
@@ -228,37 +236,20 @@ export function LibraryHome({ snippets }: Props) {
   );
 }
 
-function Chip({
-  active,
-  onClick,
-  label,
-  prominent,
-  accent,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  prominent?: boolean;
-  accent?: boolean;
-}) {
-  const base =
-    "px-3 h-7 rounded-full text-xs flex items-center transition-colors whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background";
-  let cls: string;
-  if (active && prominent) {
-    cls = "bg-foreground text-background font-medium";
-  } else if (active && accent) {
-    cls = "bg-primary text-primary-foreground font-medium";
-  } else if (active) {
-    cls = "bg-foreground text-background font-medium";
-  } else if (accent) {
-    cls = "border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10";
-  } else {
-    cls = "border bg-card text-muted-foreground hover:text-foreground";
-  }
+/** Snippets are the folder's own work, so their chip keeps the accent hue. */
+function Chip({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className={`${base} ${cls}`}>
+    <ToggleGroupItem
+      value={value}
+      className={
+        "h-7 rounded-full px-3 text-xs whitespace-nowrap " +
+        (accent
+          ? "border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary data-[state=on]:bg-primary data-[state=on]:font-medium data-[state=on]:text-primary-foreground"
+          : "bg-card text-muted-foreground data-[state=on]:bg-foreground data-[state=on]:font-medium data-[state=on]:text-background")
+      }
+    >
       {label}
-    </button>
+    </ToggleGroupItem>
   );
 }
 
@@ -280,46 +271,50 @@ function TileButton({
       : `/api/render/component/${encodeURIComponent(tile.ref.id)}?w=480&h=${tile.previewHeight}&v=${themeVersion}${previewMode}`;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Card
       className={
-        "group block w-full overflow-hidden rounded-lg border bg-card text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background " +
-        (isSnippet
-          ? "border-primary/30 ring-1 ring-primary/10 hover:border-primary/60"
-          : "hover:border-primary/40")
+        "gap-0 py-0 transition-shadow " +
+        (isSnippet ? "ring-primary/25 hover:ring-primary/60" : "hover:ring-primary/40")
       }
     >
-      <div
-        className="relative w-full overflow-hidden bg-background"
-        style={{ height: tile.previewHeight }}
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
-        <iframe
-          src={url}
-          title={`${tile.label} preview`}
-          loading="lazy"
-          className="absolute inset-0 w-full h-full pointer-events-none border-0"
-        />
-      </div>
-      <div className="px-3 py-2 border-t flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span
-            className={
-              "h-1.5 w-1.5 rounded-full shrink-0 " +
-              (isSnippet ? "bg-primary" : "bg-muted-foreground")
-            }
-          />
-          <span className="text-xs font-medium truncate">{tile.label}</span>
-        </div>
-        <span
-          className={
-            "text-[10px] uppercase tracking-wider " +
-            (isSnippet ? "text-primary opacity-80" : "text-muted-foreground")
-          }
+        <div
+          className="relative w-full overflow-hidden bg-background"
+          style={{ height: tile.previewHeight }}
         >
-          {isSnippet ? "Snippet" : tile.category}
-        </span>
-      </div>
-    </button>
+          <Skeleton className="absolute inset-0 rounded-none" />
+          <iframe
+            src={url}
+            title={`${tile.label} preview`}
+            loading="lazy"
+            className="absolute inset-0 w-full h-full pointer-events-none border-0"
+          />
+        </div>
+        <CardFooter className="flex items-center justify-between gap-2 border-t px-3 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={
+                "h-1.5 w-1.5 rounded-full shrink-0 " +
+                (isSnippet ? "bg-primary" : "bg-muted-foreground")
+              }
+            />
+            <span className="text-xs font-medium truncate">{tile.label}</span>
+          </div>
+          <Badge
+            variant={isSnippet ? "secondary" : "outline"}
+            className={
+              "px-1.5 py-0 text-[10px] uppercase tracking-wider " +
+              (isSnippet ? "text-primary" : "text-muted-foreground")
+            }
+          >
+            {isSnippet ? "Snippet" : tile.category}
+          </Badge>
+        </CardFooter>
+      </button>
+    </Card>
   );
 }

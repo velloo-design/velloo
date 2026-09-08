@@ -23,6 +23,7 @@ import {
 import { createExportRouter } from "./routes/export.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
+import { createPreflightRouter } from "./routes/preflight.ts";
 import { createPublishRouter } from "./routes/publish.ts";
 import { createRenderRouter } from "./routes/render.ts";
 import { createRevertRouter } from "./routes/revert.ts";
@@ -73,6 +74,7 @@ export function createApp(
   app.route("/api/assets", createAssetsRouter(folder, cloud));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
+  app.route("/api/preflight", createPreflightRouter(ctxFor));
   app.route("/api/live", createLiveRouter(bundler));
   app.route(
     "/api/canvas",

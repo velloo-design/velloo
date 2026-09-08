@@ -131,6 +131,42 @@ describe("comments panel affordances", () => {
     expect(html).toContain("Agent");
   });
 
+  /**
+   * The three voices have to stay visually distinct, and the distinction is
+   * carried entirely by data attributes the bubble variants key off — so a
+   * wrong variant is invisible in a content assertion but obvious here.
+   */
+  test("gives each voice its own side and surface", () => {
+    const messageOf = (author: CommentThreadView["messages"][number]["author"]) =>
+      renderToStaticMarkup(
+        <ThreadMessages
+          messages={[
+            {
+              id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              author,
+              body: "x",
+              createdAt: thread.createdAt,
+            },
+          ]}
+        />,
+      );
+
+    // Yours reads as sent: right-aligned, filled.
+    const own = messageOf({ kind: "user" });
+    expect(own).toContain('data-align="end"');
+    expect(own).toContain('data-variant="default"');
+
+    // The agent answers on the other side, muted.
+    const agent = messageOf({ kind: "agent" });
+    expect(agent).toContain('data-align="start"');
+    expect(agent).toContain('data-variant="muted"');
+
+    // A reviewer is outlined — they are speaking from off this machine.
+    const reviewer = messageOf({ kind: "reviewer" });
+    expect(reviewer).toContain('data-align="start"');
+    expect(reviewer).toContain('data-variant="outline"');
+  });
+
   test("renders the thread-row scope label and Go to control", () => {
     const row = renderToStaticMarkup(
       <CommentThreadListItem

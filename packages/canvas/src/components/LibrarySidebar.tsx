@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { libraryCategories } from "../library-categories.ts";
 import { useCanvas } from "../store.ts";
-import { Input } from "./ui/input.tsx";
+import { Badge } from "./ui/badge.tsx";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "./ui/input-group.tsx";
+import { Kbd } from "./ui/kbd.tsx";
+import { Separator } from "./ui/separator.tsx";
 
 interface Props {
   snippets: SnippetMeta[];
@@ -43,34 +47,35 @@ export function LibrarySidebar({ snippets }: Props) {
   return (
     <>
       <section className="border-b p-2">
-        <div className="relative">
-          <Search
-            size={12}
-            strokeWidth={2}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-          />
-          <Input
+        <InputGroup className="h-7">
+          <InputGroupAddon>
+            <Search size={12} strokeWidth={2} />
+          </InputGroupAddon>
+          <InputGroupInput
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search library…"
-            className="h-7 pl-7"
           />
-        </div>
+        </InputGroup>
       </section>
 
       <div className="flex-1 overflow-auto scroll-stable">
         <SectionHeader icon={<ComponentIcon size={11} strokeWidth={2} />} label="Snippets" accent />
         {snippets.length === 0 ? (
-          <div className="px-4 py-3 text-xs text-muted-foreground leading-relaxed">
-            No snippets yet. Create one with{" "}
-            <code className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">add_snippet</code>{" "}
-            in the MCP, or save a subtree from a screen.
-          </div>
+          <Empty className="gap-2 p-4">
+            <EmptyHeader className="gap-1">
+              <EmptyMedia variant="icon" className="size-8">
+                <ComponentIcon />
+              </EmptyMedia>
+              <EmptyTitle className="text-xs">No snippets yet.</EmptyTitle>
+              <EmptyDescription className="text-xs">
+                Create one with <Kbd>add_snippet</Kbd> in the MCP, or save a subtree from a screen.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : filteredSnippets.length === 0 ? (
-          <div className="px-4 py-3 text-xs text-muted-foreground">
-            No snippet matches "{query}".
-          </div>
+          <NoMatch query={query} noun="snippet" />
         ) : (
           <ul className="flex flex-col px-2 gap-0.5 pb-1">
             {filteredSnippets.map((s) => {
@@ -101,7 +106,7 @@ export function LibrarySidebar({ snippets }: Props) {
 
         {extensions.length > 0 ? (
           <>
-            <div className="h-px bg-border mx-2 my-3" />
+            <Separator className="mx-2 my-3" />
             <SectionHeader
               icon={<Package size={11} strokeWidth={2} />}
               label="Extensions"
@@ -109,9 +114,7 @@ export function LibrarySidebar({ snippets }: Props) {
               accent
             />
             {filteredExtensions.length === 0 ? (
-              <div className="px-4 py-3 text-xs text-muted-foreground">
-                No extension matches "{query}".
-              </div>
+              <NoMatch query={query} noun="extension" />
             ) : (
               <ul className="flex flex-col px-2 gap-0.5 pb-1">
                 {filteredExtensions.map((e) => {
@@ -141,7 +144,7 @@ export function LibrarySidebar({ snippets }: Props) {
           </>
         ) : null}
 
-        <div className="h-px bg-border mx-2 my-3" />
+        <Separator className="mx-2 my-3" />
 
         {categories.map((cat) => {
           const filtered = cat.components.filter(matches);
@@ -197,8 +200,21 @@ function SectionHeader({
       {icon}
       <span className="flex-1">{label}</span>
       {count !== undefined ? (
-        <span className="text-[10px] font-normal text-muted-foreground tabular-nums">{count}</span>
+        <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal tabular-nums">
+          {count}
+        </Badge>
       ) : null}
     </div>
+  );
+}
+
+/** The panel is narrow, so a filtered-to-nothing shelf stays a single line. */
+function NoMatch({ query, noun }: { query: string; noun: string }) {
+  return (
+    <Empty className="p-3">
+      <EmptyDescription className="text-xs">
+        No {noun} matches "{query}".
+      </EmptyDescription>
+    </Empty>
   );
 }

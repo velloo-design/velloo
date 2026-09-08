@@ -7,6 +7,7 @@ import { Loading } from "./Loading.tsx";
 import { CollapsedPaneRail, PaneCollapseButton } from "./PaneRail.tsx";
 import { PaneShell } from "./PaneShell.tsx";
 import { ThemePanel } from "./ThemePanel.tsx";
+import { Empty, EmptyDescription } from "./ui/empty.tsx";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs.tsx";
 
 interface Props {
@@ -141,8 +142,8 @@ export function RightPanel({ screenId }: Props) {
 
 function EmptyMessage({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex-1 grid place-items-center text-xs text-muted-foreground p-6 text-center">
-      {children}
-    </div>
+    <Empty className="flex-1 p-6">
+      <EmptyDescription className="text-xs">{children}</EmptyDescription>
+    </Empty>
   );
 }

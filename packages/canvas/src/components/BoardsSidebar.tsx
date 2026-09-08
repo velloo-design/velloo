@@ -47,6 +47,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu.tsx";
+import { Empty, EmptyDescription } from "./ui/empty.tsx";
 import { Input } from "./ui/input.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
@@ -695,9 +696,11 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
           </div>
         </div>
         {boardsCollapsed ? null : boards.length === 0 ? (
-          <div className="px-4 pb-2 text-sm text-muted-foreground">
-            {archivedBoards.length > 0 ? "No boards — everything's archived." : "No boards yet."}
-          </div>
+          <Empty className="gap-1 px-4 pb-2 pt-0">
+            <EmptyDescription className="text-sm">
+              {archivedBoards.length > 0 ? "No boards — everything's archived." : "No boards yet."}
+            </EmptyDescription>
+          </Empty>
         ) : (
           <ul
             className="flex flex-1 flex-col gap-0.5 overflow-auto scroll-stable px-2 pb-2 min-h-0"
@@ -910,9 +913,11 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             {treeScreen ? (
               <Tree key={treeScreen.id} screen={treeScreen} />
             ) : (
-              <div className="px-4 py-2 text-xs text-muted-foreground">
-                Pick a screen above to see its tree.
-              </div>
+              <Empty className="px-4 py-2">
+                <EmptyDescription className="text-xs">
+                  Pick a screen above to see its tree.
+                </EmptyDescription>
+              </Empty>
             )}
           </div>
         )}

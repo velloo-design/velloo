@@ -2,7 +2,9 @@ import { Bot, ChevronDown, ChevronRight, MousePointer2, TerminalSquare, X } from
 import { useEffect, useState } from "react";
 import type { ActivityEntry, ActivityTarget } from "../store/activity.ts";
 import { useCanvas } from "../store.ts";
+import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
 
 /**
  * Agent-activity surfaces: the TopBar indicator that pulses while
@@ -175,12 +177,14 @@ function FeedRow({ entry }: { entry: ActivityEntry }) {
           >
             <span className="font-medium">{humanVerb(entry.verb)}</span>
             {grouped ? (
-              <span className="ml-1 rounded bg-muted px-1 text-[10px]">
+              <Badge variant="secondary" className="ml-1 px-1 py-0 text-[10px]">
                 {entry.opCount ?? entry.ops?.length} ops
-              </span>
+              </Badge>
             ) : null}
             {resolved.deleted ? (
-              <span className="ml-1 rounded bg-muted px-1 text-[10px]">deleted</span>
+              <Badge variant="secondary" className="ml-1 px-1 py-0 text-[10px]">
+                deleted
+              </Badge>
             ) : null}
             <span className="block truncate text-muted-foreground">
               {resolved.crumbs.join(" › ") || "—"}
@@ -189,9 +193,13 @@ function FeedRow({ entry }: { entry: ActivityEntry }) {
           <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
             <span>{timeAgo(entry.ts)}</span>
             {entry.session ? (
-              <span className="rounded bg-muted px-1" title={`MCP session ${entry.session}`}>
+              <Badge
+                variant="secondary"
+                className="px-1 py-0"
+                title={`MCP session ${entry.session}`}
+              >
                 agent·{entry.session.slice(0, 4)}
-              </span>
+              </Badge>
             ) : null}
           </div>
         </div>
@@ -264,9 +272,17 @@ export function ActivityFeed() {
         </Button>
       </div>
       {newestFirst.length === 0 ? (
-        <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-          No activity yet — agent and canvas edits will appear here.
-        </div>
+        <Empty className="px-3 py-6">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Bot />
+            </EmptyMedia>
+            <EmptyTitle className="text-xs">No activity yet</EmptyTitle>
+            <EmptyDescription className="text-xs">
+              Agent and canvas edits will appear here.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <ul className="flex-1 overflow-y-auto">
           {newestFirst.map((entry) => (

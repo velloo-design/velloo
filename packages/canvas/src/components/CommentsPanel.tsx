@@ -10,8 +10,24 @@ import {
   cloudUnavailableHint,
   LOCAL_COMMENT_SCOPE_HELP,
 } from "./CommentScopeControls.tsx";
+import { Badge } from "./ui/badge.tsx";
+import { Bubble, BubbleContent } from "./ui/bubble.tsx";
 import { Button } from "./ui/button.tsx";
-import { Textarea } from "./ui/textarea.tsx";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "./ui/input-group.tsx";
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+  MessageGroup,
+  MessageHeader,
+} from "./ui/message.tsx";
+import { NativeSelect, NativeSelectOption } from "./ui/native-select.tsx";
 
 function relativeTime(iso: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
@@ -31,35 +47,51 @@ const DEFAULT_AUTHOR_NAME: Record<AuthorKind, string> = {
 };
 
 function AuthorIcon({ kind }: { kind: AuthorKind }) {
-  if (kind === "agent") return <Bot size={11} />;
-  if (kind === "reviewer") return <Cloud size={11} />;
-  return <MessageCircle size={11} />;
+  if (kind === "agent") return <Bot size={12} />;
+  if (kind === "reviewer") return <Cloud size={12} />;
+  return <MessageCircle size={12} />;
 }
 
 /**
- * One thread's conversation. On a cloud thread the designer is reading replies
- * from outside their machine, so a reviewer is badged; their own voice and
- * their agent's are the expected ones here and are left plain.
+ * A thread reads as a conversation, so each voice gets its own surface: yours
+ * filled and right-aligned, your agent's muted, and a reviewer's outlined
+ * because they are speaking from outside this machine — which is also why
+ * theirs is the only one badged.
  */
+const BUBBLE_VARIANT: Record<AuthorKind, "default" | "muted" | "outline"> = {
+  user: "default",
+  agent: "muted",
+  reviewer: "outline",
+};
+
 export function ThreadMessages({ messages }: { messages: CommentThreadView["messages"] }) {
   return (
-    <div className="mt-2 space-y-2">
-      {messages.map((message) => (
-        <div key={message.id} className="rounded-md border bg-card p-2.5">
-          <div className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-            <AuthorIcon kind={message.author.kind} />
-            {message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
-            {message.author.kind === "reviewer" ? (
-              <span className="rounded border px-1 text-[9px] uppercase tracking-wide">
-                Reviewer
-              </span>
-            ) : null}
-            <span className="ml-auto">{relativeTime(message.createdAt)}</span>
-          </div>
-          <p className="mt-1 whitespace-pre-wrap text-sm">{message.body}</p>
-        </div>
-      ))}
-    </div>
+    <MessageGroup className="mt-2 gap-3">
+      {messages.map((message) => {
+        const kind = message.author.kind;
+        return (
+          <Message key={message.id} align={kind === "user" ? "end" : "start"}>
+            <MessageAvatar className="size-6 min-w-6 text-muted-foreground">
+              <AuthorIcon kind={kind} />
+            </MessageAvatar>
+            <MessageContent className="gap-1">
+              <MessageHeader className="gap-1.5 px-3">
+                {message.author.displayName ?? DEFAULT_AUTHOR_NAME[kind]}
+                {kind === "reviewer" ? (
+                  <Badge variant="outline" className="px-1 py-0 text-[9px] uppercase">
+                    Reviewer
+                  </Badge>
+                ) : null}
+                <span className="ml-auto font-normal">{relativeTime(message.createdAt)}</span>
+              </MessageHeader>
+              <Bubble variant={BUBBLE_VARIANT[kind]}>
+                <BubbleContent className="whitespace-pre-wrap">{message.body}</BubbleContent>
+              </Bubble>
+            </MessageContent>
+          </Message>
+        );
+      })}
+    </MessageGroup>
   );
 }
 
@@ -170,16 +202,17 @@ export function CommentsPanel() {
     <div className="flex min-h-0 flex-1 flex-col" data-velloo-comments-panel>
       <div className="space-y-2 border-b px-3 py-2">
         <div className="flex items-center gap-2">
-          <select
+          <NativeSelect
             aria-label="Comment status"
-            className="h-7 rounded border bg-background px-2 text-xs"
+            size="sm"
+            className="w-auto text-xs"
             value={status}
             onChange={(event) => setStatus(event.target.value as typeof status)}
           >
-            <option value="open">Open</option>
-            <option value="resolved">Resolved</option>
-            <option value="all">All</option>
-          </select>
+            <NativeSelectOption value="open">Open</NativeSelectOption>
+            <NativeSelectOption value="resolved">Resolved</NativeSelectOption>
+            <NativeSelectOption value="all">All</NativeSelectOption>
+          </NativeSelect>
           <span className="text-xs text-muted-foreground">{threads.length}</span>
           <Button
             variant="outline"
@@ -221,48 +254,56 @@ export function CommentsPanel() {
             ))}
           </ul>
         ) : (
-          <div className="grid h-full place-items-center p-6 text-center text-xs text-muted-foreground">
-            <div>
-              <MessageCircle className="mx-auto mb-2" size={22} />
-              <p>No {status === "all" ? "" : `${status} `}comments on this board.</p>
-              <p className="mt-1">Add a pin on the canvas or start a broad thread below.</p>
-            </div>
-          </div>
+          <Empty className="h-full">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <MessageCircle />
+              </EmptyMedia>
+              <EmptyTitle>
+                No {status === "all" ? "" : `${status} `}comments on this board.
+              </EmptyTitle>
+              <EmptyDescription>
+                Add a pin on the canvas or start a broad thread below.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </div>
       {!active ? (
         <div className="border-t p-3" data-board-comment-composer>
-          <Textarea
-            aria-label="Start board-wide thread"
-            value={boardDraft}
-            onChange={(event) => setBoardDraft(event.target.value)}
-            placeholder="Start a broad thread about this board…"
-            className="min-h-16 resize-none text-sm"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""));
-              }
-            }}
-          />
-          <div className="mt-2 flex items-center gap-2">
-            <CommentTargetPicker
-              scope={boardScope}
-              onChange={setBoardScope}
-              cloud={cloud}
-              onPublish={publishBoard}
+          <InputGroup>
+            <InputGroupTextarea
+              aria-label="Start board-wide thread"
+              value={boardDraft}
+              onChange={(event) => setBoardDraft(event.target.value)}
+              placeholder="Start a broad thread about this board…"
+              className="min-h-16 text-sm"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.preventDefault();
+                  void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""));
+                }
+              }}
             />
-            <Button
-              size="sm"
-              className="ml-auto"
-              disabled={!boardDraft.trim()}
-              onClick={() =>
-                void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""))
-              }
-            >
-              Start thread
-            </Button>
-          </div>
+            <InputGroupAddon align="block-end">
+              <CommentTargetPicker
+                scope={boardScope}
+                onChange={setBoardScope}
+                cloud={cloud}
+                onPublish={publishBoard}
+              />
+              <InputGroupButton
+                variant="default"
+                className="ml-auto"
+                disabled={!boardDraft.trim()}
+                onClick={() =>
+                  void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""))
+                }
+              >
+                Start thread
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             Board-wide threads have no canvas pin. {LOCAL_COMMENT_SCOPE_HELP}
           </p>
@@ -316,18 +357,25 @@ function ThreadDetail({
       </div>
       <ThreadMessages messages={thread.messages} />
       {thread.status === "open" ? (
-        <div className="mt-3">
-          <Textarea
+        <InputGroup className="mt-3">
+          <InputGroupTextarea
             aria-label="Reply"
             value={replyDraft}
             onChange={(event) => setReplyDraft(event.target.value)}
             placeholder="Reply…"
-            className="min-h-16 resize-none text-sm"
+            className="min-h-16 text-sm"
           />
-          <Button size="sm" className="mt-2 w-full" disabled={!replyDraft.trim()} onClick={onReply}>
-            Reply
-          </Button>
-        </div>
+          <InputGroupAddon align="block-end">
+            <InputGroupButton
+              variant="default"
+              className="ml-auto"
+              disabled={!replyDraft.trim()}
+              onClick={onReply}
+            >
+              Reply
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
       ) : null}
       <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
         {thread.status === "open" ? (

@@ -17,6 +17,7 @@ import {
   exportScreenPdf,
   exportScreenPng,
   findFrame,
+  screensForExportTarget,
   writeText,
 } from "@velloo/server";
 import { defineCommand } from "citty";
@@ -25,6 +26,7 @@ import { captureWithBrowserSetup } from "../browser-setup.ts";
 import { loadPipeline } from "../ci/render.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
+import { confirmRenderFailures } from "../preflight-gate.ts";
 
 /**
  * `velloo export` — the user-facing artifact command over the shared
@@ -74,6 +76,11 @@ export default defineCommand({
     h: {
       type: "string",
       description: "Viewport height for screen targets (default: first preset)",
+    },
+    yes: {
+      type: "boolean",
+      description:
+        "Export even when a component fails to render (required without an interactive terminal)",
     },
   },
   async run({ args }) {
@@ -154,6 +161,15 @@ export default defineCommand({
       w: args.w ? Number(args.w) : preset.w,
       h: args.h ? Number(args.h) : preset.h,
     };
+
+    // Everything above only validated the request. Check the design itself
+    // before the browser starts and the file gets written.
+    await confirmRenderFailures(
+      "export",
+      { folder: design, providers: pipeline.providers, defaultProvider: pipeline.defaultProvider },
+      screensForExportTarget(design, kind, targetId),
+      args.yes === true,
+    );
 
     const opts = { mode, scale, ...(args.theme ? { theme: args.theme } : {}) };
     let assetOrigin: string | undefined;
