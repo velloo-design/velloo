@@ -455,7 +455,7 @@ ${registry}
 };
 export const __velloo_canvas_diagnostics = ${JSON.stringify(opts.diagnostics)};
 
-function chrome(props) { return { className: typeof props.className === "string" ? props.className : undefined, "data-node-path": props["data-node-path"] }; }
+function chrome(props) { return { className: typeof props.className === "string" ? props.className : undefined, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"] }; }
 function mergeSx(base, sx) { return sx && typeof sx === "object" && !Array.isArray(sx) ? Object.assign({}, base, sx) : base; }
 function element(Component, props, children) { return React.createElement.apply(React, [Component, props].concat(children)); }
 var Paper = registry.Paper, MuiBox = registry.Box;
@@ -471,7 +471,7 @@ var overlayIds = new Set(${JSON.stringify(opts.overlayIds)});
 function Missing(props) {
   // NB: never name this prop \`ref\` — React <=18 strips it into element.ref and a
   // string ref with no owner throws during reconciliation, taking down the mount.
-  return React.createElement("div", { "data-velloo-component-fallback": props.componentId, "data-node-path": props["data-node-path"], style: { border: "1px dashed currentColor", borderRadius: 6, padding: 12, opacity: .7, font: "12px ui-monospace, monospace" } }, props.children && props.children.length ? props.children : "Unavailable component: " + props.componentId);
+  return React.createElement("div", { "data-velloo-component-fallback": props.componentId, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"], style: { border: "1px dashed currentColor", borderRadius: 6, padding: 12, opacity: .7, font: "12px ui-monospace, monospace" } }, props.children && props.children.length ? props.children : "Unavailable component: " + props.componentId);
 }
 function build(node) {
   if (node == null) return null;

@@ -10,9 +10,14 @@ import { resolveSnippetBody } from "./build-tree.ts";
 /**
  * A screen tree resolved to plain JSON for the framework-native canvas bundle's
  * client interpreter (#18): snippet instances + params are inlined server-side,
- * `data-node-path` is baked into props (so client clicks still select), and the
- * shape is `{ ref, props, children }` — a mirror of what `buildTree` feeds
+ * `data-node-path` and the snippet-body markers are baked into props (so client
+ * clicks still select, and a snippet is still editable in place), and the shape
+ * is `{ ref, props, children }` — a mirror of what `buildTree` feeds
  * `createElement`, minus React. A `string`/`number` child is text content.
+ *
+ * Being a mirror is load-bearing: this output *replaces* the SSR DOM, so
+ * anything `buildTree` bakes in that this drops stops existing on the page the
+ * user is actually clicking.
  */
 export interface SerializedNode {
   ref: string;
@@ -53,12 +58,16 @@ export function serializeTree(
   path: number[] = [],
   stack: string[] = [],
   lockedPath: number[] | null = null,
+  body: BodyPosition | null = null,
 ): SerializedNode | null {
   if (isSnippetInstance(node)) {
     const snippet = opts.snippets?.get(node.$snippet);
     if (!snippet || stack.includes(snippet.id)) return null;
     const resolved = resolveSnippetBody(node, snippet);
-    return serializeTree(resolved, opts, path, [...stack, snippet.id], lockedPath ?? path);
+    return serializeTree(resolved, opts, path, [...stack, snippet.id], lockedPath ?? path, {
+      snippetId: snippet.id,
+      path: [],
+    });
   }
   if (isParamRef(node)) return null;
   if (!isComponentNode(node)) return null;
@@ -71,10 +80,12 @@ export function serializeTree(
     children = node.children
       .flatMap((child, i) =>
         Array.isArray(child)
-          ? (child as Node[]).map((c, j) =>
-              serializeTree(c, opts, [...path, i, j], stack, lockedPath),
+          ? // An expanded slot has no counterpart position in the definition,
+            // so nothing inside it is addressable as snippet body.
+            (child as Node[]).map((c, j) =>
+              serializeTree(c, opts, [...path, i, j], stack, lockedPath, null),
             )
-          : serializeTree(child, opts, [...path, i], stack, lockedPath),
+          : serializeTree(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
       )
       .filter((c): c is SerializedNode => c !== null);
   } else if (childrenProp !== undefined) {
@@ -83,9 +94,25 @@ export function serializeTree(
 
   return {
     ref: node.$ref,
-    props: { ...restProps, "data-node-path": dataNodePath },
+    props: {
+      ...restProps,
+      "data-node-path": dataNodePath,
+      ...(body === null
+        ? {}
+        : { "data-snippet-id": body.snippetId, "data-snippet-path": body.path.join(".") }),
+    },
     ...(children && children.length > 0 ? { children } : {}),
   };
+}
+
+/** Where a node sits inside the snippet definition it was materialized from. */
+interface BodyPosition {
+  snippetId: string;
+  path: number[];
+}
+
+function descend(body: BodyPosition | null, index: number): BodyPosition | null {
+  return body === null ? null : { snippetId: body.snippetId, path: [...body.path, index] };
 }
 
 /** A raw JSON value that is itself a node (mirror of build-tree's isNodeLike). */

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { registry as noneRegistry } from "@velloo/provider-none";
-import { registry as snapshotRegistry } from "@velloo/shadcn-snapshot";
+import { loadManifest, registry as snapshotRegistry } from "@velloo/shadcn-snapshot";
 import { REGISTRY } from "../component-registry.ts";
 
 /**
@@ -20,5 +20,28 @@ describe("codegen registry covers every shipping provider component", () => {
   test("every provider-none registry id has a codegen entry", () => {
     const missing = Object.keys(noneRegistry).filter((id) => !(id in REGISTRY));
     expect(missing).toEqual([]);
+  });
+
+  /**
+   * Coverage alone lets an id sit under the *wrong* file, which is worse than
+   * a missing one: `importFile` is what `shadcnInstallTargets` puts after
+   * `npx shadcn add`, so a misfiling tells the user to install some other
+   * component and emits an import from a file that never exports the name.
+   * The snapshot build records the true file as `registryName` — that is the
+   * one source, and this is the only thing holding the hand-written copy to it.
+   */
+  test("every shadcn entry imports from the file the snapshot puts it in", async () => {
+    const registryName = new Map(
+      (await loadManifest()).flatMap((c) =>
+        c.registryName ? [[c.id, c.registryName] as const] : [],
+      ),
+    );
+    const misfiled = Object.entries(REGISTRY).flatMap(([id, entry]) => {
+      if (entry.kind !== "shadcn" || entry.importFile.startsWith("velloo/")) return [];
+      const truth = registryName.get(id);
+      if (truth === undefined || truth === entry.importFile) return [];
+      return [`${id}: codegen imports from ${entry.importFile}, snapshot ships it in ${truth}`];
+    });
+    expect(misfiled).toEqual([]);
   });
 });

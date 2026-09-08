@@ -187,7 +187,15 @@ export const IFRAME_RUNTIME = String.raw`
     // Dim by walking down from the root and stopping at the first element that
     // either is, or contains, an instance — so the instances stay bright
     // without needing to out-stack a full-page overlay.
-    const live = document.querySelectorAll('[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\\\"') + '"]');
+    // Only instances that are actually rendered count. When a canvas bundle
+    // mounts it hides the SSR copy rather than removing it, and a hidden
+    // element still matches a selector — so an unfiltered query finds the
+    // stale copy, clears the "no instances" guard below, and then dims the
+    // entire visible tree because none of the matches live in it.
+    const live = [].filter.call(
+      document.querySelectorAll('[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\\\"') + '"]'),
+      (el) => el.getClientRects().length > 0,
+    );
     if (live.length === 0) return;
     const dim = (el) => {
       for (let i = 0; i < el.children.length; i++) {
