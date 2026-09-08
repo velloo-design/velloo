@@ -1,0 +1,38 @@
+{
+  "id": "err-control",
+  "name": "Control — nothing broken",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "p-8 flex flex-col gap-4"
+    },
+    "children": [
+      {
+        "$ref": "Heading",
+        "props": {
+          "level": 2,
+          "children": "Everything renders"
+        }
+      },
+      {
+        "$ref": "Text",
+        "props": {
+          "children": "No component on this screen throws. Use it to tell a real failure from a styling problem."
+        }
+      },
+      {
+        "$ref": "Button",
+        "props": {
+          "children": "A button"
+        }
+      },
+      {
+        "$ref": "Badge",
+        "props": {
+          "variant": "secondary",
+          "children": "healthy"
+        }
+      }
+    ]
+  }
+}

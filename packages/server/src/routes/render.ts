@@ -21,6 +21,7 @@ import {
   renderPassForScreen,
 } from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
+import { renderErrorDocument } from "./render-error.ts";
 
 /**
  * Render a screen as standalone HTML. The viewport size for responsive Tailwind
@@ -108,8 +109,8 @@ export function createRenderRouter(
     const { ctx, screen, viewport } = opts;
     const f = ctx.folder;
     const owner = opts.libraryOf ?? screen;
+    const dark = c.req.query("mode") === "dark";
     try {
-      const dark = c.req.query("mode") === "dark";
       const snapshotCss = await jit.build();
       const theme = themeByName(f, c.req.query("theme"));
       const canvasBundle = opts.withBundles
@@ -128,10 +129,28 @@ export function createRenderRouter(
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
     } catch (err) {
-      if (err instanceof UnknownComponentError) {
-        return c.json({ error: err.message, ref: err.ref }, 422);
-      }
-      throw err;
+      // The frame is an iframe, so its only way of saying anything is a
+      // document. Statuses stay as they were — the canvas reads them — but the
+      // body is now something a person can act on rather than a blank rect.
+      const page =
+        err instanceof UnknownComponentError
+          ? {
+              title: "Unknown component",
+              lede: `Nothing in this screen's library is registered as "${err.ref}", so the screen has no tree to draw.`,
+              detail: err.message,
+              hint: "Check the spelling against list_components, or register it as an extension.",
+            }
+          : {
+              title: "This screen didn't render",
+              lede: "A component threw an error the canvas could not pin on a single node, so it could not stand in for it and draw the rest. Every other screen is unaffected.",
+              detail: err instanceof Error ? err.message : String(err),
+              hint: "The message above is the component's own. It usually names the prop or the parent it needs.",
+            };
+      return c.body(
+        renderErrorDocument({ ...page, screenName: screen.name, dark }),
+        err instanceof UnknownComponentError ? 422 : 500,
+        { "Content-Type": "text/html; charset=utf-8" },
+      );
     }
   };
 

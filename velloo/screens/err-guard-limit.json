@@ -1,0 +1,69 @@
+{
+  "id": "err-guard-limit",
+  "name": "Past the stand-in ceiling",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "p-8 flex flex-col gap-3"
+    },
+    "children": [
+      {
+        "$ref": "Heading",
+        "props": {
+          "level": 2,
+          "children": "Too many to contain"
+        }
+      },
+      {
+        "$ref": "TabsTrigger",
+        "props": {
+          "value": "a",
+          "children": "a"
+        }
+      },
+      {
+        "$ref": "TabsList",
+        "props": {}
+      },
+      {
+        "$ref": "TabsContent",
+        "props": {
+          "value": "a"
+        }
+      },
+      {
+        "$ref": "AccordionItem",
+        "props": {
+          "value": "a"
+        }
+      },
+      {
+        "$ref": "AccordionContent",
+        "props": {}
+      },
+      {
+        "$ref": "AvatarImage",
+        "props": {
+          "src": "/assets/none.png",
+          "alt": "a"
+        }
+      },
+      {
+        "$ref": "AvatarFallback",
+        "props": {
+          "children": "AB"
+        }
+      },
+      {
+        "$ref": "PopoverTrigger",
+        "props": {
+          "children": "b"
+        }
+      },
+      {
+        "$ref": "PopoverAnchor",
+        "props": {}
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "err-bad-props",
+  "name": "Bad props, not nesting",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "p-8 flex flex-col gap-4"
+    },
+    "children": [
+      {
+        "$ref": "Heading",
+        "props": {
+          "level": 2,
+          "children": "Broken by its own props"
+        }
+      },
+      {
+        "$ref": "Text",
+        "props": {
+          "children": "Icon with no name. Nothing to do with nesting, so the message names no parent."
+        }
+      },
+      {
+        "$ref": "Icon",
+        "props": {}
+      },
+      {
+        "$ref": "Button",
+        "props": {
+          "children": "Still here"
+        }
+      }
+    ]
+  }
+}

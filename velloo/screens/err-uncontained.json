@@ -1,0 +1,37 @@
+{
+  "id": "err-uncontained",
+  "name": "Uncontained — the guard cannot pin it",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "p-8 flex flex-col gap-4"
+    },
+    "children": [
+      {
+        "$ref": "Heading",
+        "props": {
+          "level": 2,
+          "children": "Nothing renders here"
+        }
+      },
+      {
+        "$ref": "Text",
+        "props": {
+          "children": "Slider throws deep inside Radix, where no stack frame carries a registry name."
+        }
+      },
+      {
+        "$ref": "Slider",
+        "props": {
+          "value": 50
+        }
+      },
+      {
+        "$ref": "Button",
+        "props": {
+          "children": "Not reached"
+        }
+      }
+    ]
+  }
+}

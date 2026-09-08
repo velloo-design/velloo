@@ -1,0 +1,61 @@
+{
+  "id": "render-errors",
+  "name": "Render errors",
+  "frames": [
+    {
+      "id": "err-control-1",
+      "screen": "err-control",
+      "x": 0,
+      "y": 0,
+      "w": 720,
+      "h": 520,
+      "label": "Control — nothing broken"
+    },
+    {
+      "id": "err-one-node-1",
+      "screen": "err-one-node",
+      "x": 800,
+      "y": 0,
+      "w": 720,
+      "h": 520,
+      "label": "One bad node"
+    },
+    {
+      "id": "err-bad-props-1",
+      "screen": "err-bad-props",
+      "x": 1600,
+      "y": 0,
+      "w": 720,
+      "h": 520,
+      "label": "Bad props, not nesting"
+    },
+    {
+      "id": "err-uncontained-1",
+      "screen": "err-uncontained",
+      "x": 2400,
+      "y": 0,
+      "w": 720,
+      "h": 520,
+      "label": "Uncontained — the guard cannot pin it"
+    },
+    {
+      "id": "err-several-1",
+      "screen": "err-several",
+      "x": 3200,
+      "y": 0,
+      "w": 720,
+      "h": 520,
+      "label": "Several broken families"
+    },
+    {
+      "id": "err-guard-limit-1",
+      "screen": "err-guard-limit",
+      "x": 4000,
+      "y": 0,
+      "w": 720,
+      "h": 520,
+      "label": "Past the stand-in ceiling"
+    }
+  ],
+  "groups": []
+}

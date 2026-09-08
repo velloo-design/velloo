@@ -1,0 +1,38 @@
+{
+  "id": "err-one-node",
+  "name": "One bad node",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "p-8 flex flex-col gap-4"
+    },
+    "children": [
+      {
+        "$ref": "Heading",
+        "props": {
+          "level": 2,
+          "children": "One broken component"
+        }
+      },
+      {
+        "$ref": "Text",
+        "props": {
+          "children": "The heading above and the button below must both survive it."
+        }
+      },
+      {
+        "$ref": "TabsTrigger",
+        "props": {
+          "value": "overview",
+          "children": "Overview"
+        }
+      },
+      {
+        "$ref": "Button",
+        "props": {
+          "children": "Still here"
+        }
+      }
+    ]
+  }
+}

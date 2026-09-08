@@ -1,0 +1,51 @@
+{
+  "id": "err-several",
+  "name": "Several broken families",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "p-8 flex flex-col gap-4"
+    },
+    "children": [
+      {
+        "$ref": "Heading",
+        "props": {
+          "level": 2,
+          "children": "Four at once"
+        }
+      },
+      {
+        "$ref": "TabsTrigger",
+        "props": {
+          "value": "one",
+          "children": "Tabs"
+        }
+      },
+      {
+        "$ref": "AccordionItem",
+        "props": {
+          "value": "one"
+        }
+      },
+      {
+        "$ref": "AvatarImage",
+        "props": {
+          "src": "/assets/none.png",
+          "alt": "avatar"
+        }
+      },
+      {
+        "$ref": "PopoverTrigger",
+        "props": {
+          "children": "Popover"
+        }
+      },
+      {
+        "$ref": "Text",
+        "props": {
+          "children": "Each one is replaced independently; the screen still renders."
+        }
+      }
+    ]
+  }
+}

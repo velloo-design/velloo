@@ -64,6 +64,18 @@ beforeEach(async () => {
   await writeJson(join(tmp, ".design/config.json"), sampleConfig);
   await writeJson(join(tmp, "theme/default.json"), sampleTheme);
   await writeJson(join(tmp, "snippets/stat-card.json"), sampleSnippet);
+  // A throw the render guard can't attribute to any one component (Slider
+  // fails inside its own internals), so the whole screen render fails.
+  await writeJson(join(tmp, "screens/broken.json"), {
+    id: "broken",
+    name: "Broken screen",
+    tree: { $ref: "Slider", props: { value: 50 } },
+  });
+  await writeJson(join(tmp, "screens/unknown.json"), {
+    id: "unknown",
+    name: "Unknown ref screen",
+    tree: { $ref: "NotARealComponent" },
+  });
   folder = await loadDesignFolder(tmp);
   jit = new TailwindJit(provider, join(folder.root, "screens"));
   const bundler = new LiveBundler(
@@ -160,6 +172,54 @@ describe("/api/render/snippet-body/:id (editor route)", () => {
   test("404 for an unknown snippet id", async () => {
     const res = await app.fetch(new Request("http://localhost/api/render/snippet-body/no-such"));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("a render that fails outright", () => {
+  // A frame is an iframe, so a body-less error status shows as a blank rect —
+  // indistinguishable from a screen that draws nothing. These routes answer
+  // with a document instead, and the status stays honest for the canvas.
+  test("answers 500 with a document naming the screen and the underlying error", async () => {
+    const res = await app.fetch(new Request("http://localhost/api/render/broken"));
+    expect(res.status).toBe(500);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain("This screen didn't render");
+    expect(html).toContain("Broken screen");
+    expect(html).toContain("is not a function");
+  });
+
+  test("answers 422 for an unknown $ref, naming the missing component", async () => {
+    const res = await app.fetch(new Request("http://localhost/api/render/unknown"));
+    expect(res.status).toBe(422);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain("Unknown component");
+    expect(html).toContain("NotARealComponent");
+  });
+
+  test("carries no Tailwind, theme CSS or script — it has to render when the screen can't", async () => {
+    const res = await app.fetch(new Request("http://localhost/api/render/broken"));
+    const html = await res.text();
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("--velloo");
+  });
+
+  test("follows the frame's light/dark mode", async () => {
+    const light = await (await app.fetch(new Request("http://localhost/api/render/broken"))).text();
+    const dark = await (
+      await app.fetch(new Request("http://localhost/api/render/broken?mode=dark"))
+    ).text();
+    expect(light).toContain("color-scheme:light");
+    expect(dark).toContain("color-scheme:dark");
+  });
+
+  test("escapes the error message so a throw can't inject markup", async () => {
+    const res = await app.fetch(new Request("http://localhost/api/render/unknown"));
+    const html = await res.text();
+    // UnknownComponentError quotes the ref; the quotes must arrive escaped
+    // inside the <pre>, not as raw attribute-capable characters.
+    expect(html).toContain("&quot;NotARealComponent&quot;");
   });
 });
 
