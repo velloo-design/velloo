@@ -1,0 +1,252 @@
+{
+  "id": "hd-menu-paid",
+  "name": "Header \u00b7 menu, paid plan",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative flex h-screen w-full flex-col bg-background"
+    },
+    "children": [
+      {
+        "$snippet": "vl-topbar",
+        "args": {
+          "crumb": "Settings \u00b7 folder",
+          "account": {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "size": "sm",
+              "className": "max-w-[12rem] gap-2 pl-1 pr-2.5 text-xs bg-muted text-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Avatar",
+                "props": {
+                  "className": "size-6"
+                },
+                "children": [
+                  {
+                    "$ref": "AvatarFallback",
+                    "props": {
+                      "className": "bg-primary text-primary-foreground text-[10px] font-semibold",
+                      "children": "AL"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "truncate",
+                  "as": "span",
+                  "children": "Ada"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex flex-1 items-center justify-center bg-background text-xs text-muted-foreground",
+          "children": "canvas"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute right-4 top-[46px] z-50"
+        },
+        "children": [
+          {
+            "$ref": "DropdownMenuContent",
+            "props": {
+              "className": "w-64"
+            },
+            "children": [
+              {
+                "$ref": "DropdownMenuLabel",
+                "props": {
+                  "className": "font-normal"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-col gap-0.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[11px] text-muted-foreground",
+                          "as": "span",
+                          "children": "Signed in to api.velloo.ai"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "truncate text-sm",
+                          "as": "span",
+                          "children": "Ada Lovelace"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "truncate text-[11px] text-muted-foreground",
+                          "as": "span",
+                          "children": "ada@velloo.ai"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "text-[11px] text-muted-foreground",
+                          "as": "span",
+                          "children": "Team plan"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "DropdownMenuSeparator"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center justify-between gap-2 px-2 py-1.5 text-xs"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex items-center gap-2 text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "coins",
+                          "size": 14,
+                          "className": "shrink-0"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Credits"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "font-medium tabular-nums",
+                      "as": "span",
+                      "children": "$128.00"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "DropdownMenuSeparator"
+              },
+              {
+                "$ref": "DropdownMenuItem",
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "sliders-horizontal",
+                      "size": 16
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "children": "Settings\u2026"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "DropdownMenuItem",
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "external-link",
+                      "size": 16
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "children": "Open velloo-cloud"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "DropdownMenuSeparator"
+              },
+              {
+                "$ref": "DropdownMenuItem",
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "log-out",
+                      "size": 16
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "children": "Log out"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "DropdownMenuSeparator"
+              },
+              {
+                "$ref": "DropdownMenuItem",
+                "props": {
+                  "variant": "destructive"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "history",
+                      "size": 16
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "children": "Revert all design changes\u2026"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

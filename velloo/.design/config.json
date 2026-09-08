@@ -37,13 +37,21 @@
     "images",
     "main",
     "search-explorations",
-    "settings-dialog"
+    "settings-dialog",
+    "velloo-header",
+    "velloo-left-pane",
+    "velloo-right-pane"
   ],
   "boardGroups": [
     {
       "id": "canvas",
       "name": "Canvas",
       "color": "#8b5cf6"
+    },
+    {
+      "id": "velloo",
+      "name": "Velloo",
+      "color": "#ffab1f"
     }
   ],
   "hostApp": {

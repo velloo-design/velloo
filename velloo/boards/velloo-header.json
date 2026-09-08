@@ -1,0 +1,109 @@
+{
+  "id": "velloo-header",
+  "name": "Velloo \u00b7 header",
+  "theme": "canvas",
+  "group": "velloo",
+  "frames": [
+    {
+      "id": "f-hd-signed-in-light",
+      "screen": "hd-signed-in",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 120,
+      "label": "Signed in \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-hd-signed-in-dark",
+      "screen": "hd-signed-in",
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 120,
+      "label": "Signed in \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-hd-signed-out-light",
+      "screen": "hd-signed-out",
+      "x": 0,
+      "y": 210,
+      "w": 1280,
+      "h": 120,
+      "label": "Signed out \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-hd-signed-out-dark",
+      "screen": "hd-signed-out",
+      "x": 1360,
+      "y": 210,
+      "w": 1280,
+      "h": 120,
+      "label": "Signed out \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-hd-menu-signed-out-light",
+      "screen": "hd-menu-signed-out",
+      "x": 0,
+      "y": 420,
+      "w": 1280,
+      "h": 380,
+      "label": "Settings menu \u00b7 signed out \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-hd-menu-signed-out-dark",
+      "screen": "hd-menu-signed-out",
+      "x": 1360,
+      "y": 420,
+      "w": 1280,
+      "h": 380,
+      "label": "Settings menu \u00b7 signed out \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-hd-menu-free-light",
+      "screen": "hd-menu-free",
+      "x": 0,
+      "y": 890,
+      "w": 1280,
+      "h": 460,
+      "label": "Settings menu \u00b7 free plan \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-hd-menu-free-dark",
+      "screen": "hd-menu-free",
+      "x": 1360,
+      "y": 890,
+      "w": 1280,
+      "h": 460,
+      "label": "Settings menu \u00b7 free plan \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-hd-menu-paid-light",
+      "screen": "hd-menu-paid",
+      "x": 0,
+      "y": 1440,
+      "w": 1280,
+      "h": 440,
+      "label": "Settings menu \u00b7 paid plan \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-hd-menu-paid-dark",
+      "screen": "hd-menu-paid",
+      "x": 1360,
+      "y": 1440,
+      "w": 1280,
+      "h": 440,
+      "label": "Settings menu \u00b7 paid plan \u00b7 dark",
+      "scheme": "dark"
+    }
+  ],
+  "groups": []
+}

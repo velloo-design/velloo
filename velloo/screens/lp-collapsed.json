@@ -1,0 +1,86 @@
+{
+  "id": "lp-collapsed",
+  "name": "Left pane \u00b7 collapsed",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex h-screen w-full bg-background"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex h-full shrink-0 flex-col items-center gap-1 overflow-hidden bg-card py-2 border-r border-border",
+          "style": {
+            "width": 36
+          }
+        },
+        "children": [
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "size": "icon-sm"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "panel-left-open",
+                  "size": 16
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "my-1 h-px w-4 shrink-0 bg-border"
+            }
+          },
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "size": "icon-sm",
+              "className": "relative bg-accent text-accent-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "layout-dashboard",
+                  "size": 16
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "size": "icon-sm",
+              "className": "relative text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "library-big",
+                  "size": 16
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex flex-1 items-center justify-center bg-background text-xs text-muted-foreground",
+          "children": "canvas"
+        }
+      }
+    ]
+  }
+}

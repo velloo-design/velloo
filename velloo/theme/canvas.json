@@ -1,0 +1,105 @@
+{
+  "name": "canvas",
+  "colors": {
+    "background": "#f7f2e6",
+    "foreground": "#141210",
+    "primary": {
+      "DEFAULT": "#ffab1f",
+      "foreground": "#141210"
+    },
+    "secondary": {
+      "DEFAULT": "#ece3d2",
+      "foreground": "#141210"
+    },
+    "muted": {
+      "DEFAULT": "#efe7d8",
+      "foreground": "#6f665a"
+    },
+    "accent": {
+      "DEFAULT": "#ffe9c2",
+      "foreground": "#7a4a12"
+    },
+    "destructive": {
+      "DEFAULT": "oklch(0.58 0.22 27)",
+      "foreground": "oklch(0.99 0 0)"
+    },
+    "card": {
+      "DEFAULT": "#fffdf7",
+      "foreground": "#141210"
+    },
+    "popover": {
+      "DEFAULT": "#fffdf7",
+      "foreground": "#141210"
+    },
+    "border": "#e2d8c4",
+    "input": "#e2d8c4",
+    "ring": "#ffab1f"
+  },
+  "colorsDark": {
+    "background": "#0d0c0a",
+    "foreground": "#f3eee3",
+    "primary": {
+      "DEFAULT": "#ffab1f",
+      "foreground": "#0d0c0a"
+    },
+    "secondary": {
+      "DEFAULT": "#1d1a14",
+      "foreground": "#f3eee3"
+    },
+    "muted": {
+      "DEFAULT": "#1d1a14",
+      "foreground": "#a59c8d"
+    },
+    "accent": {
+      "DEFAULT": "#26221c",
+      "foreground": "#ffab1f"
+    },
+    "destructive": {
+      "DEFAULT": "oklch(0.65 0.22 27)",
+      "foreground": "oklch(0.99 0 0)"
+    },
+    "card": {
+      "DEFAULT": "#15130e",
+      "foreground": "#f3eee3"
+    },
+    "popover": {
+      "DEFAULT": "#15130e",
+      "foreground": "#f3eee3"
+    },
+    "border": "#26221c",
+    "input": "#26221c",
+    "ring": "#ffab1f"
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": "-apple-system, BlinkMacSystemFont, \"Inter\", \"Segoe UI\", system-ui, sans-serif",
+      "mono": "ui-monospace, \"JetBrains Mono\", SFMono-Regular, Menlo, monospace"
+    },
+    "typesets": {
+      "default": {
+        "fontBody": "sans",
+        "fontHeading": "sans",
+        "fontMono": "mono",
+        "size": 14
+      }
+    }
+  },
+  "spacing": {
+    "0": 0,
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "6": 24,
+    "8": 32,
+    "12": 48,
+    "16": 64
+  },
+  "radius": {
+    "sm": 4,
+    "md": "0.625rem",
+    "lg": 8,
+    "xl": 12,
+    "full": 9999
+  }
+}

@@ -1,0 +1,214 @@
+{
+  "id": "vl-topbar",
+  "name": "Canvas top bar",
+  "params": [
+    { "name": "crumb", "type": "string", "default": "Settings · folder" },
+    {
+      "name": "account",
+      "type": "node",
+      "description": "Trailing account control — the avatar button when signed in, the Settings button when signed out."
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "as": "header",
+      "className": "flex h-11 shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-sm"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": { "className": "flex min-w-0 items-center gap-2" },
+        "children": [
+          {
+            "$id": "logo",
+            "$ref": "Box",
+            "props": { "className": "flex items-center", "style": { "gap": 6 } },
+            "children": [
+              {
+                "$ref": "SVG",
+                "props": {
+                  "viewBox": "0 0 120 120",
+                  "className": "shrink-0",
+                  "style": { "width": 23, "height": 23 },
+                  "content": "<defs><clipPath id=\"velloo-weave\"><rect x=\"52\" y=\"30\" width=\"38\" height=\"35\"/></clipPath></defs><rect x=\"21\" y=\"21\" width=\"58\" height=\"58\" rx=\"20\" fill=\"none\" stroke=\"#FF6F4D\" stroke-width=\"11\" stroke-linejoin=\"round\"/><rect x=\"41\" y=\"41\" width=\"58\" height=\"58\" rx=\"20\" fill=\"none\" stroke=\"#FFAB1F\" stroke-width=\"11\" stroke-linejoin=\"round\"/><g clip-path=\"url(#velloo-weave)\"><rect x=\"21\" y=\"21\" width=\"58\" height=\"58\" rx=\"20\" fill=\"none\" stroke=\"#FF6F4D\" stroke-width=\"11\" stroke-linejoin=\"round\"/></g>"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "inline-flex items-center font-bold text-foreground",
+                  "style": { "fontSize": 15, "letterSpacing": "-0.06em", "lineHeight": 1 }
+                },
+                "children": [
+                  { "$ref": "Box", "props": { "as": "span", "children": "vell" } },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "inline-block rounded-full",
+                      "style": { "width": 9, "height": 9, "marginLeft": 1, "background": "#FFAB1F" }
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "inline-block rounded-full",
+                      "style": { "width": 9, "height": 9, "marginLeft": 1, "background": "#FF6F4D" }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Breadcrumb",
+            "children": [
+              {
+                "$ref": "BreadcrumbList",
+                "props": { "className": "gap-1.5 text-sm sm:gap-1.5" },
+                "children": [
+                  {
+                    "$ref": "BreadcrumbItem",
+                    "children": [
+                      { "$ref": "BreadcrumbSeparator", "props": { "className": "[&>svg]:size-3" } },
+                      {
+                        "$ref": "BreadcrumbPage",
+                        "props": { "className": "truncate", "children": { "$param": "crumb" } }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$id": "toolbar",
+        "$ref": "Box",
+        "props": { "className": "ml-auto flex items-center gap-1.5" },
+        "children": [
+          {
+            "$ref": "Button",
+            "props": { "variant": "ghost", "size": "sm", "className": "gap-1.5" },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "relative inline-flex h-2 w-2 rounded-full bg-muted-foreground/40"
+                }
+              },
+              { "$ref": "Icon", "props": { "name": "bot", "size": 14 } }
+            ]
+          },
+          {
+            "$ref": "Button",
+            "props": { "variant": "outline", "size": "icon-sm" },
+            "children": [{ "$ref": "Icon", "props": { "name": "search", "size": 16 } }]
+          },
+          { "$ref": "Separator", "props": { "orientation": "vertical", "className": "mx-1 h-5" } },
+          {
+            "$ref": "ToggleGroup",
+            "props": { "type": "single", "variant": "outline", "size": "sm", "value": "select" },
+            "children": [
+              {
+                "$ref": "ToggleGroupItem",
+                "props": {
+                  "value": "select",
+                  "aria-label": "Select",
+                  "data-state": "on",
+                  "className": "bg-accent text-accent-foreground"
+                },
+                "children": [{ "$ref": "Icon", "props": { "name": "mouse-pointer-2", "size": 14 } }]
+              },
+              {
+                "$ref": "ToggleGroupItem",
+                "props": { "value": "hand", "aria-label": "Pan canvas" },
+                "children": [{ "$ref": "Icon", "props": { "name": "hand", "size": 14 } }]
+              },
+              {
+                "$ref": "ToggleGroupItem",
+                "props": { "value": "note", "aria-label": "Drop a free note" },
+                "children": [{ "$ref": "Icon", "props": { "name": "sticky-note", "size": 14 } }]
+              },
+              {
+                "$ref": "ToggleGroupItem",
+                "props": { "value": "comment", "aria-label": "Comment on the design" },
+                "children": [
+                  { "$ref": "Icon", "props": { "name": "message-square-text", "size": 14 } }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Button",
+            "props": { "variant": "outline", "size": "icon-sm" },
+            "children": [{ "$ref": "Icon", "props": { "name": "eye", "size": 16 } }]
+          },
+          {
+            "$ref": "ButtonGroup",
+            "props": { "className": "ml-2" },
+            "children": [
+              {
+                "$ref": "Button",
+                "props": { "variant": "outline", "size": "icon-sm" },
+                "children": [{ "$ref": "Icon", "props": { "name": "undo-2", "size": 16 } }]
+              },
+              {
+                "$ref": "Button",
+                "props": { "variant": "outline", "size": "icon-sm" },
+                "children": [{ "$ref": "Icon", "props": { "name": "redo-2", "size": 16 } }]
+              }
+            ]
+          },
+          { "$ref": "Separator", "props": { "orientation": "vertical", "className": "mx-1 h-5" } },
+          {
+            "$ref": "ButtonGroup",
+            "children": [
+              {
+                "$ref": "Button",
+                "props": { "variant": "outline", "size": "icon-sm" },
+                "children": [{ "$ref": "Icon", "props": { "name": "minus", "size": 16 } }]
+              },
+              {
+                "$ref": "Button",
+                "props": {
+                  "variant": "outline",
+                  "size": "sm",
+                  "className": "min-w-[3rem] tabular-nums text-muted-foreground",
+                  "children": "100%"
+                }
+              },
+              {
+                "$ref": "Button",
+                "props": { "variant": "outline", "size": "icon-sm" },
+                "children": [{ "$ref": "Icon", "props": { "name": "plus", "size": 16 } }]
+              }
+            ]
+          },
+          { "$ref": "Separator", "props": { "orientation": "vertical", "className": "mx-1 h-5" } },
+          {
+            "$ref": "Button",
+            "props": { "variant": "outline", "size": "sm" },
+            "children": [
+              { "$ref": "Icon", "props": { "name": "moon", "size": 14 } },
+              { "$ref": "Box", "props": { "as": "span", "children": "Default" } }
+            ]
+          },
+          {
+            "$ref": "Button",
+            "props": { "variant": "outline", "size": "sm" },
+            "children": [
+              { "$ref": "Icon", "props": { "name": "share-2", "size": 14 } },
+              { "$ref": "Box", "props": { "as": "span", "children": "Publish" } }
+            ]
+          },
+          { "$param": "account" }
+        ]
+      }
+    ]
+  }
+}

@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { componentsDir, loadManifest } from "@velloo/shadcn-snapshot";
 import { findUiDir, installedAddNames, shadcnAddName } from "../install.ts";
 import { createProvider } from "../provider.ts";
 
@@ -21,6 +23,32 @@ describe("shadcnAddName", () => {
   test("registry-name exceptions", () => {
     expect(shadcnAddName("Toaster")).toBe("sonner");
     expect(shadcnAddName("ScrollBar")).toBe("scroll-area");
+    expect(shadcnAddName("DirectionProvider")).toBe("direction");
+  });
+
+  test("a longer family wins over a shorter one that prefixes it", () => {
+    expect(shadcnAddName("ButtonGroup")).toBe("button-group");
+    expect(shadcnAddName("ButtonGroupSeparator")).toBe("button-group");
+    expect(shadcnAddName("InputGroupAddon")).toBe("input-group");
+  });
+
+  /**
+   * The family list is hand-maintained against the snapshot pull, so it goes
+   * stale silently: a missing family makes an id resolve to some *other*
+   * family's file (`ButtonGroup` → `button.tsx`), which exists and compiles.
+   * Nothing throws — the canvas imports it, `pick` finds no such export, and
+   * React gets a module namespace object. Pin the whole manifest instead of
+   * sampling ids.
+   */
+  test("every library id resolves to a file the snapshot actually has", async () => {
+    const files = new Set(
+      readdirSync(join(componentsDir, "ui")).map((f) => f.replace(/\.\w+$/, "")),
+    );
+    const unresolved = (await loadManifest())
+      .filter((c) => c.source !== "velloo")
+      .map((c) => c.id)
+      .filter((id) => !files.has(shadcnAddName(id)));
+    expect(unresolved).toEqual([]);
   });
 });
 

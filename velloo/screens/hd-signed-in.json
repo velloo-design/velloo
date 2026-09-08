@@ -1,0 +1,58 @@
+{
+  "id": "hd-signed-in",
+  "name": "Header \u00b7 signed in",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex h-screen w-full flex-col bg-background"
+    },
+    "children": [
+      {
+        "$snippet": "vl-topbar",
+        "args": {
+          "crumb": "Settings \u00b7 folder",
+          "account": {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "size": "sm",
+              "className": "max-w-[12rem] gap-2 pl-1 pr-2.5 text-xs"
+            },
+            "children": [
+              {
+                "$ref": "Avatar",
+                "props": {
+                  "className": "size-6"
+                },
+                "children": [
+                  {
+                    "$ref": "AvatarFallback",
+                    "props": {
+                      "className": "bg-primary text-primary-foreground text-[10px] font-semibold",
+                      "children": "AL"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "truncate",
+                  "as": "span",
+                  "children": "Ada"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex flex-1 items-center justify-center bg-background text-xs text-muted-foreground",
+          "children": "canvas"
+        }
+      }
+    ]
+  }
+}

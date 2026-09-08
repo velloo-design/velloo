@@ -1,0 +1,89 @@
+{
+  "id": "velloo-left-pane",
+  "name": "Velloo \u00b7 left pane",
+  "theme": "canvas",
+  "group": "velloo",
+  "frames": [
+    {
+      "id": "f-lp-boards-light",
+      "screen": "lp-boards",
+      "x": 0,
+      "y": 0,
+      "w": 560,
+      "h": 1020,
+      "label": "Boards \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-lp-boards-dark",
+      "screen": "lp-boards",
+      "x": 640,
+      "y": 0,
+      "w": 560,
+      "h": 1020,
+      "label": "Boards \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-lp-library-light",
+      "screen": "lp-library",
+      "x": 0,
+      "y": 1110,
+      "w": 560,
+      "h": 820,
+      "label": "Library & snippets \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-lp-library-dark",
+      "screen": "lp-library",
+      "x": 640,
+      "y": 1110,
+      "w": 560,
+      "h": 820,
+      "label": "Library & snippets \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-lp-library-canvas-light",
+      "screen": "lp-library-canvas",
+      "x": 0,
+      "y": 2020,
+      "w": 560,
+      "h": 1080,
+      "label": "Component list \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-lp-library-canvas-dark",
+      "screen": "lp-library-canvas",
+      "x": 640,
+      "y": 2020,
+      "w": 560,
+      "h": 1080,
+      "label": "Component list \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-lp-collapsed-light",
+      "screen": "lp-collapsed",
+      "x": 0,
+      "y": 3190,
+      "w": 300,
+      "h": 420,
+      "label": "Collapsed \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-lp-collapsed-dark",
+      "screen": "lp-collapsed",
+      "x": 380,
+      "y": 3190,
+      "w": 300,
+      "h": 420,
+      "label": "Collapsed \u00b7 dark",
+      "scheme": "dark"
+    }
+  ],
+  "groups": []
+}

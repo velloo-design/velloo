@@ -1,0 +1,50 @@
+{
+  "id": "hd-signed-out",
+  "name": "Header \u00b7 signed out",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex h-screen w-full flex-col bg-background"
+    },
+    "children": [
+      {
+        "$snippet": "vl-topbar",
+        "args": {
+          "crumb": "Settings \u00b7 folder",
+          "account": {
+            "$ref": "Button",
+            "props": {
+              "variant": "outline",
+              "size": "sm",
+              "className": "max-w-[12rem] text-xs"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "settings",
+                  "size": 14
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "truncate",
+                  "as": "span",
+                  "children": "Settings"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex flex-1 items-center justify-center bg-background text-xs text-muted-foreground",
+          "children": "canvas"
+        }
+      }
+    ]
+  }
+}

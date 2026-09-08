@@ -1,0 +1,454 @@
+{
+  "id": "rp-comments-signed-out",
+  "name": "Right pane \u00b7 comments (signed out)",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex h-screen w-full bg-background"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex flex-1 items-center justify-center bg-background text-xs text-muted-foreground",
+          "children": "canvas"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex h-full shrink-0 flex-col overflow-hidden bg-card border-l border-border",
+          "style": {
+            "width": 320
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-1 border-b border-border p-2"
+            },
+            "children": [
+              {
+                "$ref": "Button",
+                "props": {
+                  "variant": "ghost",
+                  "size": "icon-sm",
+                  "className": "shrink-0 text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "panel-right-close",
+                      "size": 16
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Tabs",
+                "props": {
+                  "value": "comments",
+                  "className": "min-w-0 flex-1"
+                },
+                "children": [
+                  {
+                    "$ref": "TabsList",
+                    "props": {
+                      "className": "w-full h-8"
+                    },
+                    "children": [
+                      {
+                        "$ref": "TabsTrigger",
+                        "props": {
+                          "value": "node"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "square-mouse-pointer",
+                              "size": 16
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "Node"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "TabsTrigger",
+                        "props": {
+                          "value": "theme"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "palette",
+                              "size": 16
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "Theme"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "TabsTrigger",
+                        "props": {
+                          "value": "comments",
+                          "data-state": "active"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "message-square-text",
+                              "size": 16
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "Comments"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-2 border-b border-border px-3 py-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center gap-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex h-7 items-center gap-1 rounded-lg border border-border bg-background px-2.5 text-xs"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Open"
+                        }
+                      },
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "chevron-down",
+                          "size": 14,
+                          "className": "opacity-50"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "text-xs text-muted-foreground",
+                      "as": "span",
+                      "children": "0"
+                    }
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "outline",
+                      "size": "sm",
+                      "className": "ml-auto"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "plus",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Add"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "ToggleGroup",
+                "props": {
+                  "type": "single",
+                  "size": "sm",
+                  "variant": "outline",
+                  "className": "w-full",
+                  "value": "all"
+                },
+                "children": [
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "props": {
+                      "value": "all",
+                      "className": "text-[11px]",
+                      "data-state": "on"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "All"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "props": {
+                      "value": "local",
+                      "className": "text-[11px]"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "message-circle",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Local"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "props": {
+                      "value": "cloud",
+                      "className": "text-[11px]"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "cloud",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Cloud"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-1 items-center justify-center overflow-hidden"
+            },
+            "children": [
+              {
+                "$ref": "Empty",
+                "props": {
+                  "className": "h-full"
+                },
+                "children": [
+                  {
+                    "$ref": "EmptyHeader",
+                    "children": [
+                      {
+                        "$ref": "EmptyMedia",
+                        "props": {
+                          "variant": "icon"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "message-circle",
+                              "size": 16
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "EmptyTitle",
+                        "props": {
+                          "children": "No open comments on this board."
+                        }
+                      },
+                      {
+                        "$ref": "EmptyDescription",
+                        "props": {
+                          "children": "Add a pin on the canvas or start a broad thread below."
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "border-t border-border p-3"
+            },
+            "children": [
+              {
+                "$ref": "InputGroup",
+                "children": [
+                  {
+                    "$ref": "InputGroupTextarea",
+                    "props": {
+                      "className": "min-h-16 text-sm",
+                      "placeholder": "Start a broad thread about this board\u2026"
+                    }
+                  },
+                  {
+                    "$ref": "InputGroupAddon",
+                    "props": {
+                      "align": "block-end",
+                      "className": "flex-wrap gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "ToggleGroup",
+                        "props": {
+                          "type": "single",
+                          "size": "sm",
+                          "variant": "outline",
+                          "value": "local"
+                        },
+                        "children": [
+                          {
+                            "$ref": "ToggleGroupItem",
+                            "props": {
+                              "value": "local",
+                              "className": "text-[11px]",
+                              "data-state": "on"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "message-circle",
+                                  "size": 14
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": "Local"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "ToggleGroupItem",
+                            "props": {
+                              "value": "cloud",
+                              "className": "text-[11px] opacity-50",
+                              "disabled": true
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "cloud",
+                                  "size": 14
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": "Cloud"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Button",
+                        "props": {
+                          "variant": "ghost",
+                          "size": "sm",
+                          "className": "text-[11px]"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "Sign in"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "InputGroupButton",
+                        "props": {
+                          "variant": "default",
+                          "className": "ml-auto",
+                          "children": "Start thread"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "mt-1.5 block text-[11px] text-muted-foreground",
+                  "as": "span",
+                  "children": "Board-wide threads have no canvas pin. Local comments stay on this machine. Cloud comments live on the published board, where reviewers can see and answer them."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

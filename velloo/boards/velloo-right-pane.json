@@ -1,0 +1,169 @@
+{
+  "id": "velloo-right-pane",
+  "name": "Velloo \u00b7 right pane",
+  "theme": "canvas",
+  "group": "velloo",
+  "frames": [
+    {
+      "id": "f-rp-node-text-light",
+      "screen": "rp-node-text",
+      "x": 0,
+      "y": 0,
+      "w": 560,
+      "h": 940,
+      "label": "Node \u00b7 Text \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-node-text-dark",
+      "screen": "rp-node-text",
+      "x": 640,
+      "y": 0,
+      "w": 560,
+      "h": 940,
+      "label": "Node \u00b7 Text \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-node-box-light",
+      "screen": "rp-node-box",
+      "x": 0,
+      "y": 1030,
+      "w": 560,
+      "h": 840,
+      "label": "Node \u00b7 Box \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-node-box-dark",
+      "screen": "rp-node-box",
+      "x": 640,
+      "y": 1030,
+      "w": 560,
+      "h": 840,
+      "label": "Node \u00b7 Box \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-node-button-light",
+      "screen": "rp-node-button",
+      "x": 0,
+      "y": 1960,
+      "w": 560,
+      "h": 820,
+      "label": "Node \u00b7 Button \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-node-button-dark",
+      "screen": "rp-node-button",
+      "x": 640,
+      "y": 1960,
+      "w": 560,
+      "h": 820,
+      "label": "Node \u00b7 Button \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-theme-light",
+      "screen": "rp-theme",
+      "x": 0,
+      "y": 2870,
+      "w": 560,
+      "h": 1020,
+      "label": "Theme \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-theme-dark",
+      "screen": "rp-theme",
+      "x": 640,
+      "y": 2870,
+      "w": 560,
+      "h": 1020,
+      "label": "Theme \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-comments-published-light",
+      "screen": "rp-comments-published",
+      "x": 0,
+      "y": 3980,
+      "w": 560,
+      "h": 780,
+      "label": "Comments \u00b7 published \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-comments-published-dark",
+      "screen": "rp-comments-published",
+      "x": 640,
+      "y": 3980,
+      "w": 560,
+      "h": 780,
+      "label": "Comments \u00b7 published \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-comments-unpublished-light",
+      "screen": "rp-comments-unpublished",
+      "x": 0,
+      "y": 4850,
+      "w": 560,
+      "h": 780,
+      "label": "Comments \u00b7 unpublished \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-comments-unpublished-dark",
+      "screen": "rp-comments-unpublished",
+      "x": 640,
+      "y": 4850,
+      "w": 560,
+      "h": 780,
+      "label": "Comments \u00b7 unpublished \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-comments-signed-out-light",
+      "screen": "rp-comments-signed-out",
+      "x": 0,
+      "y": 5720,
+      "w": 560,
+      "h": 700,
+      "label": "Comments \u00b7 signed out \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-comments-signed-out-dark",
+      "screen": "rp-comments-signed-out",
+      "x": 640,
+      "y": 5720,
+      "w": 560,
+      "h": 700,
+      "label": "Comments \u00b7 signed out \u00b7 dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-collapsed-light",
+      "screen": "rp-collapsed",
+      "x": 0,
+      "y": 6510,
+      "w": 300,
+      "h": 420,
+      "label": "Collapsed \u00b7 light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-collapsed-dark",
+      "screen": "rp-collapsed",
+      "x": 380,
+      "y": 6510,
+      "w": 300,
+      "h": 420,
+      "label": "Collapsed \u00b7 dark",
+      "scheme": "dark"
+    }
+  ],
+  "groups": []
+}

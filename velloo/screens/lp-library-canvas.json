@@ -1,0 +1,472 @@
+{
+  "id": "lp-library-canvas",
+  "name": "Left pane · component list",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex h-screen w-full bg-background"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex h-full shrink-0 flex-col overflow-hidden bg-card border-r border-border",
+          "style": {
+            "width": 320
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-1 border-b border-border p-2"
+            },
+            "children": [
+              {
+                "$ref": "Tabs",
+                "props": {
+                  "value": "library",
+                  "className": "min-w-0 flex-1"
+                },
+                "children": [
+                  {
+                    "$ref": "TabsList",
+                    "props": {
+                      "className": "w-full h-8"
+                    },
+                    "children": [
+                      {
+                        "$ref": "TabsTrigger",
+                        "props": {
+                          "value": "boards"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "layout-dashboard",
+                              "size": 16
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "Boards"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "TabsTrigger",
+                        "props": {
+                          "value": "library",
+                          "data-state": "active"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "library-big",
+                              "size": 16
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "Library"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Button",
+                "props": {
+                  "variant": "ghost",
+                  "size": "icon-sm",
+                  "className": "shrink-0 text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "panel-left-close",
+                      "size": 16
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "border-b border-border p-2"
+            },
+            "children": [
+              {
+                "$ref": "InputGroup",
+                "props": {
+                  "className": "h-7"
+                },
+                "children": [
+                  {
+                    "$ref": "InputGroupAddon",
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "search",
+                          "size": 12
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "InputGroupInput",
+                    "props": {
+                      "placeholder": "Search library…"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-1.5 px-4 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex-1",
+                  "as": "span",
+                  "children": "Actions"
+                }
+              },
+              {
+                "$ref": "Badge",
+                "props": {
+                  "variant": "secondary",
+                  "className": "px-1.5 py-0 text-[10px] font-normal tabular-nums",
+                  "children": "4"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5 px-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Button"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "ButtonGroup"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Toggle"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "ToggleGroup"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-1.5 px-4 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex-1",
+                  "as": "span",
+                  "children": "Forms & Inputs"
+                }
+              },
+              {
+                "$ref": "Badge",
+                "props": {
+                  "variant": "secondary",
+                  "className": "px-1.5 py-0 text-[10px] font-normal tabular-nums",
+                  "children": "7"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5 px-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Checkbox"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Field"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm bg-primary text-primary-foreground",
+                  "children": "Input"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "InputGroup"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Label"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "RadioGroup"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Select"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-1.5 px-4 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex-1",
+                  "as": "span",
+                  "children": "Display"
+                }
+              },
+              {
+                "$ref": "Badge",
+                "props": {
+                  "variant": "secondary",
+                  "className": "px-1.5 py-0 text-[10px] font-normal tabular-nums",
+                  "children": "5"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5 px-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Avatar"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Badge"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Card"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Item"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Table"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-1.5 px-4 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex-1",
+                  "as": "span",
+                  "children": "Feedback"
+                }
+              },
+              {
+                "$ref": "Badge",
+                "props": {
+                  "variant": "secondary",
+                  "className": "px-1.5 py-0 text-[10px] font-normal tabular-nums",
+                  "children": "4"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5 px-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Alert"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Empty"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Progress"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Skeleton"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-1.5 px-4 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex-1",
+                  "as": "span",
+                  "children": "Navigation"
+                }
+              },
+              {
+                "$ref": "Badge",
+                "props": {
+                  "variant": "secondary",
+                  "className": "px-1.5 py-0 text-[10px] font-normal tabular-nums",
+                  "children": "3"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5 px-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Breadcrumb"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Pagination"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "w-full rounded-md px-2 py-1 text-left text-sm",
+                  "children": "Tabs"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex flex-1 items-center justify-center bg-background text-xs text-muted-foreground",
+          "children": "canvas"
+        }
+      }
+    ]
+  }
+}
