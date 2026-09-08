@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { Manifest } from "@velloo/provider";
 
 /**
  * Read-only shadcn host-app discovery. Design composition resolves against
@@ -13,88 +14,25 @@ function kebab(id: string): string {
 }
 
 /**
- * The shadcn registry's installable families (one file each), PascalCase —
- * the vendored snapshot's component surface. Part ids extend their family's
- * name (`AlertDialogAction` → `AlertDialog`), so the longest family prefix
- * identifies the file to install. Kept in sync with the snapshot pull the
- * same way `snapshotVersion` is.
+ * Look up the shadcn CLI's installable unit for a manifest id
+ * (`ButtonGroupSeparator` → `button-group`, `Toaster` → `sonner`).
+ *
+ * A lookup rather than a rule, because the rule cannot be made safe. This was
+ * a hand-kept list of families matched by longest prefix, and a family missing
+ * from it did not fail closed — `ButtonGroup` fell through to `Button` and
+ * resolved to `button.tsx`, a file that exists, compiles, and exports
+ * something else entirely. `build.ts` already reads the filename each
+ * component was vendored from, so ask it.
+ *
+ * The kebab fallback is for an id the manifest does not carry — a host-only
+ * component, or one added upstream since the snapshot — where a guess is all
+ * there is and being wrong only costs a fallback render.
  */
-const SHADCN_FAMILIES = [
-  "Accordion",
-  "Alert",
-  "AlertDialog",
-  "AspectRatio",
-  "Attachment",
-  "Avatar",
-  "Badge",
-  "Breadcrumb",
-  "Bubble",
-  "Button",
-  "ButtonGroup",
-  "Calendar",
-  "Card",
-  "Carousel",
-  "Chart",
-  "Checkbox",
-  "Collapsible",
-  "Combobox",
-  "ContextMenu",
-  "Dialog",
-  "Drawer",
-  "DropdownMenu",
-  "Empty",
-  "Field",
-  "HoverCard",
-  "Input",
-  "InputGroup",
-  "Item",
-  "Kbd",
-  "Label",
-  "Marker",
-  "Menubar",
-  "Message",
-  "NativeSelect",
-  "NavigationMenu",
-  "Pagination",
-  "Popover",
-  "Progress",
-  "RadioGroup",
-  "ScrollArea",
-  "Select",
-  "Separator",
-  "Sheet",
-  "Skeleton",
-  "Slider",
-  "Spinner",
-  "Switch",
-  "Table",
-  "Tabs",
-  "Textarea",
-  "Toggle",
-  "ToggleGroup",
-  "Tooltip",
-] as const;
-
-/** Ids whose registry name isn't the kebab of a family prefix. */
-const ADD_NAME_EXCEPTIONS: Record<string, string> = {
-  Toaster: "sonner",
-  ScrollBar: "scroll-area",
-  DirectionProvider: "direction",
-};
-
-/**
- * The shadcn CLI's installable unit for a manifest id: the longest family
- * whose PascalCase name prefixes the id (`AlertDialogAction` → `alert-dialog`,
- * `ToggleGroupItem` → `toggle-group`). Unknown ids kebab directly, so a future
- * upstream component still gets a sane registry name.
- */
-export function shadcnAddName(id: string): string {
-  const exception = ADD_NAME_EXCEPTIONS[id];
-  if (exception) return exception;
-  const family = SHADCN_FAMILIES.filter((f) => id.startsWith(f)).sort(
-    (a, b) => b.length - a.length,
-  )[0];
-  return kebab(family ?? id);
+export function addNameIndex(manifest: Manifest): (id: string) => string {
+  const byId = new Map(
+    manifest.flatMap((c) => (c.registryName ? [[c.id, c.registryName] as const] : [])),
+  );
+  return (id) => byId.get(id) ?? kebab(id);
 }
 
 /**

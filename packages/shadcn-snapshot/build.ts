@@ -374,6 +374,7 @@ async function buildManifest(): Promise<void> {
       source,
       ...(group ? { group } : {}),
       ...(root ? { family: root } : {}),
+      registryName: family,
       props,
       ...(notes ? { designModeNotes: notes } : {}),
       ...(example ? { example } : {}),

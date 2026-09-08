@@ -73,6 +73,15 @@ export interface ComponentDescriptor {
    * families that state their own shape.
    */
   family?: string | undefined;
+  /**
+   * The library's own name for the unit this component ships in — for shadcn,
+   * the registry item and so the filename (`ButtonGroupSeparator` →
+   * `button-group`). Set by whatever generated the manifest, which is the only
+   * thing that knows it; inferring it from the id means guessing where a
+   * component lives, and a wrong guess resolves to some *other* component's
+   * file rather than failing. Absent for libraries that install as one package.
+   */
+  registryName?: string | undefined;
   props: PropDescriptor[];
   designModeNotes?: string | undefined;
   /**

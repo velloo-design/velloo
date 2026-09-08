@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Manifest, PropDescriptor } from "@velloo/provider";
 import { exportsName } from "./host-source.ts";
-import { shadcnAddName } from "./install.ts";
+import { addNameIndex } from "./install.ts";
 
 /**
  * Bounded host-source enrichment for the inspector and agent catalogue.
@@ -13,6 +13,7 @@ import { shadcnAddName } from "./install.ts";
  */
 export function enrichManifestFromHost(manifest: Manifest, uiDir: string | null): Manifest {
   if (!uiDir) return manifest;
+  const addNameOf = addNameIndex(manifest);
   const byFile = new Map<string, string>();
   const read = (addName: string): string | null => {
     if (byFile.has(addName)) return byFile.get(addName) ?? null;
@@ -29,14 +30,17 @@ export function enrichManifestFromHost(manifest: Manifest, uiDir: string | null)
 
   return manifest.map((descriptor) => {
     if (descriptor.source === "velloo") return descriptor;
-    const source = read(shadcnAddName(descriptor.id));
+    const source = read(addNameOf(descriptor.id));
     // Only describe a component the file actually exports. A fork that renames
     // the primitive (card.tsx → Panel, badge.tsx → StatusChip) would otherwise
     // graft ITS variants onto the snapshot descriptor of a component the app
     // does not have, and the inspector would offer props that do not exist.
     if (!source || !exportsName(source, descriptor.id)) return descriptor;
     const additions = [
-      ...variantPropsFor(source, descriptor.id),
+      // A file's cva table describes its root export, so applying it to the
+      // compound's parts would offer `AlertDialogAction` the variants of
+      // `AlertDialog`. The manifest already names each family's root.
+      ...variantPropsFor(source, descriptor.id === descriptor.family),
       ...declaredPropsFor(source, descriptor.id),
     ];
     if (additions.length === 0) return descriptor;
@@ -61,8 +65,9 @@ function appendNote(current: string | undefined, next: string): string {
   return current ? `${current} ${next}` : next;
 }
 
-function variantPropsFor(source: string, componentId: string): PropDescriptor[] {
+function variantPropsFor(source: string, primary: boolean): PropDescriptor[] {
   const out: PropDescriptor[] = [];
+  if (!primary) return out;
   const variantsAt = source.indexOf("variants:");
   if (variantsAt < 0) return out;
   const open = source.indexOf("{", variantsAt);
@@ -80,9 +85,7 @@ function variantPropsFor(source: string, componentId: string): PropDescriptor[] 
       ...(defaultVariant(source, name) ? { defaultValue: defaultVariant(source, name) } : {}),
     });
   }
-  // Avoid applying one file's variant surface to compound part exports.
-  const primary = componentId === pascal(shadcnAddName(componentId));
-  return primary ? out : [];
+  return out;
 }
 
 function defaultVariant(source: string, name: string): string | undefined {
@@ -177,11 +180,4 @@ function objectEntries(body: string): [string, string][] {
     index = end < 0 ? body.length : end + 1;
   }
   return out;
-}
-
-function pascal(value: string): string {
-  return value
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
 }

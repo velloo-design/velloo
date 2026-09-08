@@ -1,3 +1,4 @@
+import type { ComponentDescriptor } from "@velloo/provider";
 import {
   isComponentNode,
   isParamRef,
@@ -62,6 +63,46 @@ function nodeChildren(node: Node): Node[] | undefined {
   return isComponentNode(node) ? node.children : undefined;
 }
 
+/** `/api/components` tags entries with `kind`; the Manifest type predates it. */
+type LibraryEntry = ComponentDescriptor & { kind?: "library" | "extension" | "snippet" };
+
+interface Provenance {
+  tone: string;
+  title: string;
+}
+
+/**
+ * Where a row's `$ref` comes from. Velloo helpers deliberately return null:
+ * a screen is overwhelmingly `Box`, so marking those would bury the one
+ * signal this carries — which rows are the project's real components.
+ *
+ * A dot rather than the library's name: the name is the same on every row of
+ * a given folder, so it spends width restating the folder's target while
+ * pushing the class hint out of a tree that is already indented deep. Which
+ * library it is belongs in the tooltip, where it's asked for, not on 200 rows.
+ */
+function provenanceOf(node: Node, byId: Map<string, LibraryEntry>): Provenance | null {
+  if (!isComponentNode(node)) return null;
+  const entry = byId.get(node.$ref);
+  if (!entry) {
+    return {
+      tone: "bg-destructive",
+      title: `${node.$ref} isn't in this screen's library — it renders as a fallback.`,
+    };
+  }
+  if (entry.kind === "extension") {
+    return {
+      tone: "bg-transparent ring-1 ring-inset ring-primary",
+      title: `${node.$ref} — a custom component registered with add_extension.`,
+    };
+  }
+  if (entry.source === "velloo") return null;
+  return {
+    tone: "bg-primary",
+    title: `${node.$ref} — a real ${entry.source} component from this project's library.`,
+  };
+}
+
 interface RowProps {
   node: Node;
   path: number[];
@@ -69,9 +110,10 @@ interface RowProps {
   depth: number;
   expandedSet: Set<string>;
   setExpanded: (path: string, expanded: boolean) => void;
+  byId: Map<string, LibraryEntry>;
 }
 
-function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowProps) {
+function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }: RowProps) {
   const pathStr = pathToString(path);
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
@@ -99,6 +141,7 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
   const isOpen = hasChildren ? expandedSet.has(pathStr) : false;
   const description = describeNode(node);
   const snippetRef = isSnippetInstance(node) ? node.$snippet : null;
+  const provenance = provenanceOf(node, byId);
 
   const rowClass = [
     "w-full flex items-center gap-1 px-2 py-1 rounded-sm text-sm cursor-default select-none text-left group/row",
@@ -151,6 +194,17 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
           title={snippetRef ? `Double-click or Enter to open ${snippetRef} in canvas` : undefined}
         >
           <span className="font-medium">{nodeLabel(node)}</span>
+          {provenance ? (
+            <span
+              role="img"
+              aria-label={provenance.title}
+              className={
+                "size-1.5 shrink-0 rounded-full " +
+                (isSelected ? "bg-primary-foreground" : provenance.tone)
+              }
+              title={provenance.title}
+            />
+          ) : null}
           {nodeId(node) ? (
             <Badge
               variant="outline"
@@ -223,6 +277,7 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded }: RowP
                 depth={depth + 1}
                 expandedSet={expandedSet}
                 setExpanded={setExpanded}
+                byId={byId}
               />
             );
           })}
@@ -254,6 +309,19 @@ function allPaths(node: Node, path: number[] = [], out: Set<string> = new Set())
 
 export function Tree({ screen }: Props) {
   const selection = useCanvas((s) => s.selection);
+  const components = useCanvas((s) => s.components);
+  const loadComponents = useCanvas((s) => s.loadComponents);
+
+  // The tree is reachable without ever opening the library or the inspector,
+  // so it can't assume the manifest is already in the store.
+  useEffect(() => {
+    void loadComponents();
+  }, [loadComponents]);
+
+  const byId = useMemo(
+    () => new Map((components ?? []).map((c) => [c.id, c as LibraryEntry])),
+    [components],
+  );
 
   const [expandedSet, setExpandedState] = useState<Set<string>>(() => allPaths(screen.tree));
 
@@ -283,6 +351,7 @@ export function Tree({ screen }: Props) {
         depth={0}
         expandedSet={effectiveExpanded}
         setExpanded={setExpanded}
+        byId={byId}
       />
     </div>
   );

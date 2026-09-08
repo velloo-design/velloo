@@ -3,54 +3,64 @@ import { readdirSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ComponentDescriptor } from "@velloo/provider";
 import { componentsDir, loadManifest } from "@velloo/shadcn-snapshot";
-import { findUiDir, installedAddNames, shadcnAddName } from "../install.ts";
+import { addNameIndex, findUiDir, installedAddNames } from "../install.ts";
 import { createProvider } from "../provider.ts";
 
-describe("shadcnAddName", () => {
-  test("roots kebab directly", () => {
-    expect(shadcnAddName("Button")).toBe("button");
-    expect(shadcnAddName("Card")).toBe("card");
+describe("addNameIndex", () => {
+  test("reads the registry name the manifest recorded", () => {
+    const addNameOf = addNameIndex([
+      descriptor("ButtonGroupSeparator", "button-group"),
+      descriptor("Button", "button"),
+      // The two upstream files named after neither their component nor their
+      // export, which no id-shaped rule can reach.
+      descriptor("Toaster", "sonner"),
+      descriptor("DirectionProvider", "direction"),
+    ]);
+    expect(addNameOf("ButtonGroupSeparator")).toBe("button-group");
+    expect(addNameOf("Button")).toBe("button");
+    expect(addNameOf("Toaster")).toBe("sonner");
+    expect(addNameOf("DirectionProvider")).toBe("direction");
   });
 
-  test("parts resolve to their longest family, not a shorter prefix", () => {
-    expect(shadcnAddName("AlertDialogAction")).toBe("alert-dialog");
-    expect(shadcnAddName("AccordionContent")).toBe("accordion");
-    expect(shadcnAddName("ToggleGroupItem")).toBe("toggle-group");
-    expect(shadcnAddName("ToggleGroup")).toBe("toggle-group");
-  });
-
-  test("registry-name exceptions", () => {
-    expect(shadcnAddName("Toaster")).toBe("sonner");
-    expect(shadcnAddName("ScrollBar")).toBe("scroll-area");
-    expect(shadcnAddName("DirectionProvider")).toBe("direction");
-  });
-
-  test("a longer family wins over a shorter one that prefixes it", () => {
-    expect(shadcnAddName("ButtonGroup")).toBe("button-group");
-    expect(shadcnAddName("ButtonGroupSeparator")).toBe("button-group");
-    expect(shadcnAddName("InputGroupAddon")).toBe("input-group");
+  test("kebabs an id the manifest does not carry", () => {
+    // A host-only component, or one upstream added since the snapshot: a guess
+    // is all there is, and being wrong only costs a fallback render.
+    expect(addNameIndex([])("DropdownMenu")).toBe("dropdown-menu");
   });
 
   /**
-   * The family list is hand-maintained against the snapshot pull, so it goes
-   * stale silently: a missing family makes an id resolve to some *other*
-   * family's file (`ButtonGroup` → `button.tsx`), which exists and compiles.
-   * Nothing throws — the canvas imports it, `pick` finds no such export, and
-   * React gets a module namespace object. Pin the whole manifest instead of
-   * sampling ids.
+   * The invariant the old hand-kept family list kept breaking. A stale list
+   * did not fail closed — a missing family fell through to a shorter one, so
+   * `ButtonGroup` resolved to `button.tsx`, which exists and compiles.
+   * Pin the whole manifest rather than sampling ids.
    */
   test("every library id resolves to a file the snapshot actually has", async () => {
+    const manifest = await loadManifest();
+    const addNameOf = addNameIndex(manifest);
     const files = new Set(
       readdirSync(join(componentsDir, "ui")).map((f) => f.replace(/\.\w+$/, "")),
     );
-    const unresolved = (await loadManifest())
+    const unresolved = manifest
       .filter((c) => c.source !== "velloo")
       .map((c) => c.id)
-      .filter((id) => !files.has(shadcnAddName(id)));
+      .filter((id) => !files.has(addNameOf(id)));
     expect(unresolved).toEqual([]);
   });
+
+  /** The lookup is only as good as the build populating it. */
+  test("the build records a registry name for every library component", async () => {
+    const missing = (await loadManifest())
+      .filter((c) => c.source !== "velloo" && !c.registryName)
+      .map((c) => c.id);
+    expect(missing).toEqual([]);
+  });
 });
+
+function descriptor(id: string, registryName: string): ComponentDescriptor {
+  return { id, category: "ui", source: "shadcn", registryName, props: [] };
+}
 
 async function fakeApp(withComponentsJson: boolean): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "velloo-upstream-app-"));

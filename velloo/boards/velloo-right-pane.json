@@ -1,6 +1,6 @@
 {
   "id": "velloo-right-pane",
-  "name": "Velloo \u00b7 right pane",
+  "name": "Velloo · right pane",
   "theme": "canvas",
   "group": "velloo",
   "frames": [
@@ -11,7 +11,7 @@
       "y": 0,
       "w": 560,
       "h": 940,
-      "label": "Node \u00b7 Text \u00b7 light",
+      "label": "Node · Text · light",
       "scheme": "light"
     },
     {
@@ -21,7 +21,7 @@
       "y": 0,
       "w": 560,
       "h": 940,
-      "label": "Node \u00b7 Text \u00b7 dark",
+      "label": "Node · Text · dark",
       "scheme": "dark"
     },
     {
@@ -31,7 +31,7 @@
       "y": 1030,
       "w": 560,
       "h": 840,
-      "label": "Node \u00b7 Box \u00b7 light",
+      "label": "Node · Box · light",
       "scheme": "light"
     },
     {
@@ -41,7 +41,7 @@
       "y": 1030,
       "w": 560,
       "h": 840,
-      "label": "Node \u00b7 Box \u00b7 dark",
+      "label": "Node · Box · dark",
       "scheme": "dark"
     },
     {
@@ -51,7 +51,7 @@
       "y": 1960,
       "w": 560,
       "h": 820,
-      "label": "Node \u00b7 Button \u00b7 light",
+      "label": "Node · Button · light",
       "scheme": "light"
     },
     {
@@ -61,7 +61,7 @@
       "y": 1960,
       "w": 560,
       "h": 820,
-      "label": "Node \u00b7 Button \u00b7 dark",
+      "label": "Node · Button · dark",
       "scheme": "dark"
     },
     {
@@ -71,7 +71,7 @@
       "y": 2870,
       "w": 560,
       "h": 1020,
-      "label": "Theme \u00b7 light",
+      "label": "Theme · light",
       "scheme": "light"
     },
     {
@@ -81,7 +81,7 @@
       "y": 2870,
       "w": 560,
       "h": 1020,
-      "label": "Theme \u00b7 dark",
+      "label": "Theme · dark",
       "scheme": "dark"
     },
     {
@@ -91,7 +91,7 @@
       "y": 3980,
       "w": 560,
       "h": 780,
-      "label": "Comments \u00b7 published \u00b7 light",
+      "label": "Comments · published · light",
       "scheme": "light"
     },
     {
@@ -101,7 +101,7 @@
       "y": 3980,
       "w": 560,
       "h": 780,
-      "label": "Comments \u00b7 published \u00b7 dark",
+      "label": "Comments · published · dark",
       "scheme": "dark"
     },
     {
@@ -111,7 +111,7 @@
       "y": 4850,
       "w": 560,
       "h": 780,
-      "label": "Comments \u00b7 unpublished \u00b7 light",
+      "label": "Comments · unpublished · light",
       "scheme": "light"
     },
     {
@@ -121,7 +121,7 @@
       "y": 4850,
       "w": 560,
       "h": 780,
-      "label": "Comments \u00b7 unpublished \u00b7 dark",
+      "label": "Comments · unpublished · dark",
       "scheme": "dark"
     },
     {
@@ -131,7 +131,7 @@
       "y": 5720,
       "w": 560,
       "h": 700,
-      "label": "Comments \u00b7 signed out \u00b7 light",
+      "label": "Comments · signed out · light",
       "scheme": "light"
     },
     {
@@ -141,27 +141,47 @@
       "y": 5720,
       "w": 560,
       "h": 700,
-      "label": "Comments \u00b7 signed out \u00b7 dark",
+      "label": "Comments · signed out · dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-rp-comments-thread-light",
+      "screen": "rp-comments-thread",
+      "x": 0,
+      "y": 6500,
+      "w": 560,
+      "h": 780,
+      "label": "Comments · thread open · light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-rp-comments-thread-dark",
+      "screen": "rp-comments-thread",
+      "x": 640,
+      "y": 6500,
+      "w": 560,
+      "h": 780,
+      "label": "Comments · thread open · dark",
       "scheme": "dark"
     },
     {
       "id": "f-rp-collapsed-light",
       "screen": "rp-collapsed",
       "x": 0,
-      "y": 6510,
+      "y": 7370,
       "w": 300,
       "h": 420,
-      "label": "Collapsed \u00b7 light",
+      "label": "Collapsed · light",
       "scheme": "light"
     },
     {
       "id": "f-rp-collapsed-dark",
       "screen": "rp-collapsed",
       "x": 380,
-      "y": 6510,
+      "y": 7370,
       "w": 300,
       "h": 420,
-      "label": "Collapsed \u00b7 dark",
+      "label": "Collapsed · dark",
       "scheme": "dark"
     }
   ],

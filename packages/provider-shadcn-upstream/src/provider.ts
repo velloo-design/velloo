@@ -16,7 +16,7 @@ import {
 } from "@velloo/shadcn-snapshot";
 import { enrichManifestFromHost } from "./host-manifest.ts";
 import { hostComponentFile } from "./host-source.ts";
-import { findUiDir, installedAddNames, shadcnAddName } from "./install.ts";
+import { addNameIndex, findUiDir, installedAddNames } from "./install.ts";
 import { readManifest } from "./manifest.ts";
 
 /**
@@ -92,10 +92,11 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
     // because installed source can still need an adapted or fallback render.
     catalog: async (): Promise<CatalogEntry[]> => {
       const manifest = await loadManifest();
+      const addNameOf = addNameIndex(manifest);
       const shadcn = manifest.filter((c) => c.source !== "velloo");
       const present = hostAppRoot ? installedAddNames(hostAppRoot) : new Set<string>();
       return shadcn.map((c) => {
-        const addName = shadcnAddName(c.id);
+        const addName = addNameOf(c.id);
         return {
           id: c.id,
           installed: present.has(addName),
@@ -107,6 +108,7 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
       styleRuntime: { kind: "none" },
       components: async (ids) => {
         const manifest = await loadManifest();
+        const addNameOf = addNameIndex(manifest);
         const sourceById = new Map(manifest.map((entry) => [entry.id, entry.source]));
         const uiDir = hostUiDir();
         return ids.flatMap((id): CanvasComponentSpec[] => {
@@ -129,7 +131,7 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
               : [];
           }
           if (!sourceById.has(id)) return [];
-          const addName = shadcnAddName(id);
+          const addName = addNameOf(id);
           const snapshotPath = join(snapshotComponentsDir, "ui", `${addName}.tsx`);
           if (CANVAS_ADAPTED_FAMILIES.has(addName)) {
             return [
