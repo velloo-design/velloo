@@ -135,11 +135,15 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
   },
 
   revealSelection(sel, options = {}) {
+    // Read the nonce before setSelection, which clears `reveal` — deriving it
+    // afterwards pinned every jump at 1, leaving object identity as the only
+    // thing telling frames a repeat jump happened.
+    const nonce = (get().reveal?.nonce ?? 0) + 1;
     get().setSelection(sel);
-    set((s) => ({
-      reveal: { ...sel, nonce: (s.reveal?.nonce ?? 0) + 1 },
+    set({
+      reveal: { ...sel, nonce },
       selectionIntent: options.preserveTab ? "preserve-tab" : "inspect",
-    }));
+    });
   },
 
   setHover(hover) {

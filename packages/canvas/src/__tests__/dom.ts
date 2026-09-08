@@ -36,7 +36,33 @@ export const domSuite: typeof describe.skip = isolated
   ? describe
   : (describe.skip as typeof describe.skip);
 
-if (isolated) GlobalRegistrator.register({ url: "http://localhost/" });
+if (isolated) {
+  GlobalRegistrator.register({
+    url: "http://localhost/",
+    // Frames render real <iframe src="/api/render/…"> elements. happy-dom would
+    // try to navigate them over the network — which no fetch stub intercepts,
+    // because iframe loading doesn't go through `fetch` — filling the run with
+    // aborted-request noise. The canvas never needs the inner document here:
+    // what the tests drive is the parent's src/buffer bookkeeping.
+    settings: { disableIframePageLoading: true },
+  });
+}
+
+/**
+ * happy-dom logs a DOMException for every iframe src it declines to load. That
+ * is the setting above working as intended, not a failure — but a board of
+ * frames would bury the run in it, so drop exactly that message and nothing
+ * else.
+ */
+const realConsoleError = console.error;
+if (isolated) {
+  console.error = (...args: unknown[]) => {
+    const first = args[0];
+    const message = first instanceof Error ? first.message : String(first ?? "");
+    if (message.includes("Iframe page loading is disabled")) return;
+    realConsoleError(...args);
+  };
+}
 
 // React 19 gates `act` behind this flag and warns loudly without it.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -179,6 +205,7 @@ export function press(target: Element, key: string, init: KeyboardEventInit = {}
 
 afterAll(async () => {
   if (!isolated) return;
+  console.error = realConsoleError;
   for (const { root, host } of mounted.splice(0)) {
     root.unmount();
     host.remove();

@@ -14,6 +14,7 @@ import {
   Sun,
   Undo2,
 } from "lucide-react";
+import { Fragment } from "react";
 import { redo as redoApi, undo as undoApi } from "../api.ts";
 import { type CursorMode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -151,14 +152,19 @@ export function TopBar() {
             <Breadcrumb>
               <BreadcrumbList className="gap-1.5 text-sm sm:gap-1.5">
                 {crumbs.map((crumb, index) => (
-                  <BreadcrumbItem key={crumb}>
+                  // The separator is its own <li>, so it's a sibling of the
+                  // item rather than nested inside it — an <li> cannot contain
+                  // an <li>, and the trail is a list to a screen reader.
+                  <Fragment key={crumb}>
                     <BreadcrumbSeparator className="[&>svg]:size-3" />
-                    {index === crumbs.length - 1 ? (
-                      <BreadcrumbPage className="truncate">{crumb}</BreadcrumbPage>
-                    ) : (
-                      <span className="truncate">{crumb}</span>
-                    )}
-                  </BreadcrumbItem>
+                    <BreadcrumbItem>
+                      {index === crumbs.length - 1 ? (
+                        <BreadcrumbPage className="truncate">{crumb}</BreadcrumbPage>
+                      ) : (
+                        <span className="truncate">{crumb}</span>
+                      )}
+                    </BreadcrumbItem>
+                  </Fragment>
                 ))}
               </BreadcrumbList>
             </Breadcrumb>
