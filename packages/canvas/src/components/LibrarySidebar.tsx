@@ -9,6 +9,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./
 import { InputGroup, InputGroupAddon, InputGroupInput } from "./ui/input-group.tsx";
 import { Kbd } from "./ui/kbd.tsx";
 import { Separator } from "./ui/separator.tsx";
+import { Skeleton } from "./ui/skeleton.tsx";
 
 interface Props {
   snippets: SnippetMeta[];
@@ -16,6 +17,7 @@ interface Props {
 
 export function LibrarySidebar({ snippets }: Props) {
   const components = useCanvas((s) => s.components);
+  const loadingComponents = useCanvas((s) => s.components === null && s.componentsLoading);
   const libraryItem = useCanvas((s) => s.libraryItem);
   const openLibrary = useCanvas((s) => s.openLibrary);
   const [query, setQuery] = useState("");
@@ -146,6 +148,8 @@ export function LibrarySidebar({ snippets }: Props) {
 
         <Separator className="mx-2 my-3" />
 
+        {loadingComponents ? <PendingShelves /> : null}
+
         {categories.map((cat) => {
           const filtered = cat.components.filter(matches);
           if (filtered.length === 0) return null;
@@ -176,6 +180,17 @@ export function LibrarySidebar({ snippets }: Props) {
         })}
       </div>
     </>
+  );
+}
+
+/** Shelves come from the manifest, which lands after the snippets above it. */
+function PendingShelves() {
+  return (
+    <div className="px-4 flex flex-col gap-2" aria-hidden="true">
+      {["70%", "45%", "60%", "38%", "55%", "48%"].map((w) => (
+        <Skeleton key={w} className="h-3.5" style={{ width: w }} />
+      ))}
+    </div>
   );
 }
 

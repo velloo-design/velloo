@@ -1,4 +1,4 @@
-import { COMPUTED_PROPS, HOVER_RING, PROTOCOL_VERSION } from "./iframe-protocol.ts";
+import { COMPUTED_PROPS, HOVER_RING, PROTOCOL_VERSION, SELECT_RING } from "./iframe-protocol.ts";
 
 /**
  * Inlined into every rendered design HTML doc. Establishes a Storybook-style
@@ -34,16 +34,21 @@ export const IFRAME_RUNTIME = String.raw`
     // Widths come from custom properties the parent drives with the board
     // zoom via setChromeScale: the iframe is scaled, so a fixed 2px ring grows
     // into a slab that swallows the parent's zoom-constant resize grips.
-    ":root { --velloo-ring: 2px; --velloo-ring-hover: 1px; }" +
+    ":root { --velloo-ring: 2px; --velloo-ring-hover: 1px; --velloo-ring-select: 0px; }" +
     ".__velloo-hover { outline: var(--velloo-ring-hover) solid ${HOVER_RING} !important;" +
     " outline-offset: calc(-1 * var(--velloo-ring-hover)) !important; }" +
-    // The SELECTION box is not drawn here. An outline follows the element's
-    // border-radius, so on a rounded card the corner grips — which mark the
-    // bounding box a resize drag actually operates on — floated outside the
-    // visible line by radius x 0.29 x zoom. The parent draws a square-cornered
-    // box instead and the grips land on it at any radius. Hover stays an
-    // outline: it has no handles to agree with, and hugging the real shape
-    // reads better for a transient cue.
+    // The SELECTION box is normally not drawn here, hence the 0px default. An
+    // outline follows the element's border-radius, so on a rounded card the
+    // corner grips — which mark the bounding box a resize drag actually
+    // operates on — floated outside the visible line by radius x 0.29 x zoom.
+    // The board draws a square-cornered box in the parent instead and the grips
+    // land on it at any radius. Hover stays an outline: it has no handles to
+    // agree with, and hugging the real shape reads better for a transient cue.
+    // A preview with no grips and no parent overlay — the snippet editor — opts
+    // in by widening the property (buildDocument's selectionRing option),
+    // because a click there would otherwise select silently.
+    ".__velloo-selected { outline: var(--velloo-ring-select) solid ${SELECT_RING} !important;" +
+    " outline-offset: calc(-1 * var(--velloo-ring-select)) !important; }" +
     // The rest of the screen while a snippet is being edited in place.
     ".__velloo-dimmed { opacity: 0.28 !important; filter: saturate(0.4) !important; }" +
     // Scrollable frames need a *visible* affordance: wheel events forward to

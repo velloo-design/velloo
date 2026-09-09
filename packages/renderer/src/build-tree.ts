@@ -11,6 +11,7 @@ import {
   resolveSnippetArgs,
   type Snippet,
   type SnippetInstance,
+  type SnippetParam,
   substituteSnippetParams,
 } from "@velloo/schema";
 import { cloneElement, createElement, Fragment, type ReactElement, type ReactNode } from "react";
@@ -149,7 +150,7 @@ export function buildTree(
     );
   }
 
-  const Component = opts.registry[node.$ref];
+  const Component = node.$ref === PARAM_TAG_REF ? ParamTag : opts.registry[node.$ref];
   if (!Component) throw new UnknownComponentError(node.$ref);
 
   const { children: childrenProp, ...restProps } = (node.props ?? {}) as Record<string, unknown>;
@@ -255,7 +256,7 @@ export function buildRoot(node: Node, opts: BuildTreeOptions): ReactElement {
  *
  * Param substitutions are scoped to *value positions* (props that
  * embed `$param` refs), not whole-node positions. A `$param` node
- * sitting as a child stays in the tree as a small Badge placeholder
+ * sitting as a child stays in the tree as a small tag placeholder
  * so the path index for its siblings doesn't shift when a default is
  * substituted. The placeholder visibly shows "$<name>" so designers
  * see what's slotted in by each instance.
@@ -266,7 +267,7 @@ export function resolveSnippetBodyForEdit(
   snippetId: string,
 ): Node {
   if (isParamRef(body)) {
-    return placeholderForParam(body.$param);
+    return paramTagNode(body.$param);
   }
   if (isSnippetInstance(body)) {
     // Inner snippet instance: keep it. Nested-snippet edits happen by
@@ -287,13 +288,69 @@ export function resolveSnippetBodyForEdit(
   };
 }
 
-function placeholderForParam(name: string): ComponentNode {
-  return {
-    $ref: "Badge",
-    props: {
-      variant: "outline",
-      className: "font-mono text-[10px] bg-muted/40 border-dashed text-muted-foreground",
-      children: `$${name}`,
-    },
-  };
+/**
+ * Reserved `$ref` for the tag standing in for an unbound snippet param.
+ * `buildTree` resolves it itself rather than through the registry: every
+ * provider has to be able to draw a slot, and `none` has no `Badge` to draw
+ * one with (nor does a MUI folder mean shadcn's by that name).
+ */
+const PARAM_TAG_REF = "velloo:param-tag";
+
+/** The node that draws a param slot. Never persisted — previews synthesize it. */
+function paramTagNode(name: string): ComponentNode {
+  return { $ref: PARAM_TAG_REF, props: { name } };
+}
+
+/**
+ * What stands in for a param a preview has nothing to bind to. Shared by the
+ * library previews and the snippet editor so a slot reads the same in both.
+ * A declared `default` wins — supplying real content is what a default is for.
+ * What's left is required, and reads as its own name: a `node` slot as the tag
+ * element, a scalar as the literal `$name`, since a scalar lands in a prop
+ * position where an element can't go.
+ */
+export function snippetParamPlaceholder(param: SnippetParam): unknown {
+  if (param.default !== undefined) return param.default;
+  switch (param.type) {
+    case "node":
+      return paramTagNode(param.name);
+    case "number":
+      return 0;
+    case "boolean":
+      return false;
+    case "icon":
+      return "Circle";
+    case "color":
+      return "#7c3aed";
+    case "enum":
+      return param.enum?.[0] ?? "";
+    default:
+      return `$${param.name}`;
+  }
+}
+
+/**
+ * Inline styles rather than classes: the tag has to look the same in a
+ * `none/none` folder (no Tailwind JIT to compile a class it invented) and in a
+ * MUI folder (whose style channel is `sx`). Theme vars with fallbacks so it
+ * takes the folder's palette where there is one.
+ */
+const PARAM_TAG_STYLE = {
+  display: "inline-flex",
+  alignItems: "center",
+  // A slot often sits directly in a flex column, where the default `stretch`
+  // would smear the tag across the whole track.
+  alignSelf: "flex-start",
+  borderRadius: "0.375rem",
+  border: "1px dashed var(--color-border, #d4d4d8)",
+  padding: "0.05rem 0.4rem",
+  color: "var(--color-muted-foreground, #71717a)",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: "0.75rem",
+  lineHeight: 1.6,
+  whiteSpace: "nowrap",
+} as const;
+
+function ParamTag({ name, ...rest }: { name: string }): ReactElement {
+  return createElement("span", { ...rest, style: PARAM_TAG_STYLE }, `$${name}`);
 }

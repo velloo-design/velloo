@@ -355,6 +355,21 @@ describe("renderScreen", () => {
     expect(html).toContain("data-node-path");
   });
 
+  test("the selection ring is off unless a render opts in", async () => {
+    // A board frame's selection box is parent-drawn chrome — square-cornered
+    // so it agrees with the resize grips — so the iframe must not draw one.
+    // The snippet editor has no such parent, and opts in.
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const off = await renderScreen(screen, sampleTheme, opts);
+    expect(off.html).toContain("--velloo-ring-select: 0px");
+    expect(off.html).not.toContain('<html lang="en" style');
+
+    const on = await renderScreen(screen, sampleTheme, { ...opts, selectionRing: true });
+    // Inline, not a `:root` rule: the runtime appends its own stylesheet at
+    // parse time and would win the tie against anything in the head.
+    expect(on.html).toContain('<html lang="en" style="--velloo-ring-select: 2px"');
+  });
+
   test("renders every batch-1 component without throwing", async () => {
     const trees: Screen["tree"][] = [
       {

@@ -80,14 +80,21 @@ export function App() {
     if (initialized.current) return;
     initialized.current = true;
     const seed = readUrlState();
+    // Enter the destination view *before* the boot fetches, not after them.
+    // `loadDesign` publishes the design summary on its first round trip and
+    // keeps going for several more (board, screen, theme, history), so a view
+    // flipped at the end leaves the board mounted — frame iframes and all —
+    // for the whole tail of a boot the deep link never asked for a board in.
+    if (seed.view === "library") {
+      useCanvas.getState().openLibrary(seed.libraryItem);
+    } else if (seed.view === "snippet" && seed.snippetId) {
+      useCanvas.getState().openSnippetEditor(seed.snippetId);
+    }
     void (async () => {
       await loadDesign({ boardId: seed.boardId, screenId: seed.screenId });
-      if (seed.selection) setSelection(seed.selection);
-      if (seed.view === "library") {
-        useCanvas.getState().openLibrary(seed.libraryItem);
-      } else if (seed.view === "snippet" && seed.snippetId) {
-        useCanvas.getState().openSnippetEditor(seed.snippetId);
-      }
+      // Only boards carry a node selection in the URL, and openSnippetEditor
+      // deliberately clears one — don't hand it back.
+      if (seed.view === "boards" && seed.selection) setSelection(seed.selection);
     })();
     const stop = connectWs();
     return stop;

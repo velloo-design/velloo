@@ -46,6 +46,23 @@ const sampleSnippet = {
   },
 };
 
+/** Required params only — the case both previews have to stand in for. */
+const unboundSnippet = {
+  id: "shell",
+  name: "Shell",
+  params: [
+    { name: "title", type: "string" as const },
+    { name: "sidebar", type: "node" as const },
+  ],
+  tree: {
+    $ref: "Box",
+    children: [
+      { $ref: "Heading", props: { level: 2, children: { $param: "title" } } },
+      { $param: "sidebar" },
+    ],
+  },
+};
+
 async function writeJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -64,6 +81,7 @@ beforeEach(async () => {
   await writeJson(join(tmp, ".design/config.json"), sampleConfig);
   await writeJson(join(tmp, "theme/default.json"), sampleTheme);
   await writeJson(join(tmp, "snippets/stat-card.json"), sampleSnippet);
+  await writeJson(join(tmp, "snippets/shell.json"), unboundSnippet);
   // A throw the render guard can't attribute to any one component (Slider
   // fails inside its own internals), so the whole screen render fails.
   await writeJson(join(tmp, "screens/broken.json"), {
@@ -144,6 +162,17 @@ describe("/api/render/snippet/:id (preview route)", () => {
     expect(html).toContain("1,284");
   });
 
+  test("an unbound param reads as $name, not as content it isn't", async () => {
+    // The preview used to fill a required node slot with a Text node holding
+    // the bare param name, so "sidebar" looked like copy the snippet ships.
+    const res = await app.fetch(new Request("http://localhost/api/render/snippet/shell"));
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("$title");
+    expect(html).toContain("$sidebar");
+    expect(html).not.toMatch(/>sidebar</);
+  });
+
   test("404 for an unknown snippet id", async () => {
     const res = await app.fetch(new Request("http://localhost/api/render/snippet/no-such"));
     expect(res.status).toBe(404);
@@ -167,6 +196,25 @@ describe("/api/render/snippet-body/:id (editor route)", () => {
     // defaults flow through to the rendered output.
     expect(html).toContain("Active users");
     expect(html).toContain("1,284");
+  });
+
+  test("tags an unbound slot the same way the library preview does", async () => {
+    const res = await app.fetch(new Request("http://localhost/api/render/snippet-body/shell"));
+    const html = await res.text();
+    expect(html).toContain("$title");
+    expect(html).toContain("$sidebar");
+  });
+
+  test("draws its own selection box — no board frame is doing it here", async () => {
+    const editor = await (
+      await app.fetch(new Request("http://localhost/api/render/snippet-body/shell"))
+    ).text();
+    expect(editor).toContain('style="--velloo-ring-select: 2px"');
+    // The library preview is a thumbnail: nothing selects in it.
+    const tile = await (
+      await app.fetch(new Request("http://localhost/api/render/snippet/shell"))
+    ).text();
+    expect(tile).not.toContain("--velloo-ring-select: 2px");
   });
 
   test("404 for an unknown snippet id", async () => {

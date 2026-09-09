@@ -4,6 +4,7 @@ import {
   renderScreen,
   resolveSnippetBodyForEdit,
   serializeTree,
+  snippetParamPlaceholder,
   UnknownComponentError,
 } from "@velloo/renderer";
 import type { Node, Screen, Snippet, Theme, Viewport } from "@velloo/schema";
@@ -104,6 +105,7 @@ export function createRenderRouter(
       viewport: Viewport;
       libraryOf?: Pick<Screen, "library"> | Pick<Snippet, "library">;
       withBundles?: boolean;
+      selectionRing?: boolean;
     },
   ): Promise<Response> => {
     const { ctx, screen, viewport } = opts;
@@ -126,6 +128,7 @@ export function createRenderRouter(
         dark,
         ...(opts.withBundles ? { liveBundleUrl: liveBundleUrl(ctx) } : {}),
         ...(canvasBundle ? { canvasBundle } : {}),
+        ...(opts.selectionRing ? { selectionRing: true } : {}),
       });
       return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
     } catch (err) {
@@ -175,20 +178,16 @@ export function createRenderRouter(
     const viewport = parseViewport(c, 480, 320);
 
     /**
-     * Fill required params (no default) with friendly placeholders so
-     * the thumbnail never crashes the renderer. Optional params get
-     * their declared defaults via the snippet body's `$param` lookup.
+     * Fill required params (no default) with placeholders so the thumbnail
+     * never crashes the renderer, using the same table the editor preview
+     * does — a slot reads as `$name` in both, not as content here and as a
+     * tag there. A param with a declared default is left out: the snippet
+     * body's own `$param` lookup supplies it.
      */
     const args: Record<string, unknown> = {};
     for (const p of snippet.params) {
       if (p.default !== undefined) continue;
-      if (p.type === "string") args[p.name] = p.name;
-      else if (p.type === "number") args[p.name] = 0;
-      else if (p.type === "boolean") args[p.name] = false;
-      else if (p.type === "node") args[p.name] = { $ref: "Text", props: { children: p.name } };
-      else if (p.type === "icon") args[p.name] = "Circle";
-      else if (p.type === "color") args[p.name] = "#7c3aed";
-      else if (p.type === "enum") args[p.name] = p.enum?.[0] ?? "";
+      args[p.name] = snippetParamPlaceholder(p);
     }
 
     const snippetInstance: Node = {
@@ -216,7 +215,7 @@ export function createRenderRouter(
    * Render a snippet *body* (not the instance wrapper) — used by the
    * canvas's snippet editor view. Substitutes `$param` references in
    * prop positions with their declared defaults, but leaves `$param`
-   * nodes as small placeholder badges so the body's path space stays
+   * nodes as small placeholder tags so the body's path space stays
    * intact. Clicks in the iframe report paths that match the snippet
    * tree, which the canvas maps to `update_props` calls against the
    * virtualized `snippet:<id>` screenId.
@@ -231,19 +230,7 @@ export function createRenderRouter(
 
     const paramDefaults: Record<string, unknown> = {};
     for (const p of snippet.params) {
-      if (p.default !== undefined) {
-        paramDefaults[p.name] = p.default;
-        continue;
-      }
-      // Type-aware fallbacks for required params so the edit-preview
-      // doesn't crash on a missing arg. Mirrors `/snippet/:id`.
-      if (p.type === "string") paramDefaults[p.name] = `$${p.name}`;
-      else if (p.type === "number") paramDefaults[p.name] = 0;
-      else if (p.type === "boolean") paramDefaults[p.name] = false;
-      else if (p.type === "icon") paramDefaults[p.name] = "Circle";
-      else if (p.type === "color") paramDefaults[p.name] = "#7c3aed";
-      else if (p.type === "enum") paramDefaults[p.name] = p.enum?.[0] ?? "";
-      else paramDefaults[p.name] = `$${p.name}`;
+      paramDefaults[p.name] = snippetParamPlaceholder(p);
     }
 
     const tree = resolveSnippetBodyForEdit(snippet.tree, paramDefaults, snippet.id);
@@ -253,7 +240,9 @@ export function createRenderRouter(
       tree,
     };
 
-    return renderPreview(c, { ctx, screen, viewport, libraryOf: snippet });
+    // Nothing draws selection chrome over this iframe — there is no board
+    // frame around it — so the document draws its own.
+    return renderPreview(c, { ctx, screen, viewport, libraryOf: snippet, selectionRing: true });
   });
 
   /**

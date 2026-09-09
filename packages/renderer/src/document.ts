@@ -31,6 +31,13 @@ export interface DocumentOptions {
   title?: string | undefined;
   /** When true, omit the iframe runtime script. Defaults to true. */
   includeRuntime?: boolean | undefined;
+  /**
+   * Let the runtime draw its own selection box. Off by default: on a board the
+   * parent draws it, square-cornered, so it agrees with the resize grips. A
+   * preview that has neither grips nor a parent overlay — the snippet editor —
+   * needs the iframe to draw one or a click selects invisibly.
+   */
+  selectionRing?: boolean | undefined;
   /** Mount the dark-mode class on <html>. */
   dark?: boolean | undefined;
   /**
@@ -68,6 +75,7 @@ export function buildDocument(opts: DocumentOptions): string {
     dark,
     liveBundleUrl,
     canvasBundle,
+    selectionRing,
   } = opts;
   const runtime = includeRuntime ? `<script>${IFRAME_RUNTIME}</script>` : "";
   const live = liveBundleUrl
@@ -102,13 +110,19 @@ export function buildDocument(opts: DocumentOptions): string {
     customCss && customCss.trim() !== ""
       ? `\n    <style>${neutralizeCssText(customCss)}</style>`
       : "";
+  // Widens the width the runtime's `.__velloo-selected` rule reads; the rule
+  // itself lives with the rest of the chrome CSS in iframe-runtime.ts. It has
+  // to be an inline property, not a `:root` rule — the runtime appends its own
+  // stylesheet at parse time, so a rule in this head would lose the tie to the
+  // 0px default. `setChromeScale` drives its two siblings the same way.
+  const selectionRingStyle = selectionRing ? ' style="--velloo-ring-select: 2px"' : "";
   // Defeat password managers and form-fillers (LastPass / 1Password / Bitwarden
   // / native browser autofill) so design Input components stay clean.
   const antiAutofill =
     'data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" autocomplete="off"';
   const htmlClass = dark ? ' class="dark"' : "";
   return `<!doctype html>
-<html lang="en"${htmlClass}>
+<html lang="en"${htmlClass}${selectionRingStyle}>
   <head>
     <meta charset="utf-8" />${baseHref ? `\n    <base href="${escapeHtml(baseHref)}" />` : ""}
     <meta name="viewport" content="width=${viewport.w}, initial-scale=1" />

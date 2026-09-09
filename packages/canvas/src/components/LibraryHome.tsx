@@ -75,6 +75,7 @@ function heightFor(componentId: string): number {
  */
 export function LibraryHome({ snippets }: Props) {
   const components = useCanvas((s) => s.components);
+  const loadingComponents = useCanvas((s) => s.components === null && s.componentsLoading);
   const openLibrary = useCanvas((s) => s.openLibrary);
   const themeVersion = useCanvas((s) => s.themeVersion);
   const designMode = useCanvas((s) => s.designMode);
@@ -147,7 +148,8 @@ export function LibraryHome({ snippets }: Props) {
           <div className="flex items-baseline gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">Library</h1>
             <span className="text-sm text-muted-foreground">
-              {componentCount} components · {snippetCount} snippets
+              {loadingComponents ? "loading components" : `${componentCount} components`} ·{" "}
+              {snippetCount} snippets
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
@@ -197,20 +199,8 @@ export function LibraryHome({ snippets }: Props) {
           </ToggleGroup>
         </div>
 
-        <div className="px-8 pb-12 mt-5">
-          {filtered.length === 0 ? (
-            <Empty className="py-16">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <SearchX />
-                </EmptyMedia>
-                <EmptyTitle>No matches for "{query}".</EmptyTitle>
-                <EmptyDescription>
-                  Try a shorter word, or clear the shelf filter above.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
+        <div className="px-8 pb-12 mt-5 flex flex-col gap-4">
+          {filtered.length > 0 ? (
             <div className="flex items-start gap-4">
               {columns.map((col, i) => {
                 const colKey = `col-${i}`;
@@ -229,9 +219,43 @@ export function LibraryHome({ snippets }: Props) {
                 );
               })}
             </div>
-          )}
+          ) : null}
+          {loadingComponents ? (
+            <PendingTiles />
+          ) : filtered.length === 0 ? (
+            <Empty className="py-16">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchX />
+                </EmptyMedia>
+                <EmptyTitle>No matches for "{query}".</EmptyTitle>
+                <EmptyDescription>
+                  Try a shorter word, or clear the shelf filter above.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The manifest arrives on a round trip of its own, after the snippets the
+ * design summary already carried. Standing in for the component tiles keeps
+ * the grid from reading as a library with nothing in it.
+ */
+function PendingTiles() {
+  return (
+    <div className="flex items-start gap-4" aria-hidden="true">
+      {["left", "middle", "right"].map((col) => (
+        <div key={col} className="flex-1 flex flex-col gap-4 min-w-0">
+          <Skeleton className="h-[160px] w-full" />
+          <Skeleton className="h-[110px] w-full" />
+          <Skeleton className="h-[140px] w-full" />
+        </div>
+      ))}
     </div>
   );
 }

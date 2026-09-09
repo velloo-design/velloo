@@ -2,6 +2,7 @@ import type { Snippet, SnippetParam } from "@velloo/schema";
 import { Pencil, Save, X } from "lucide-react";
 import { useState } from "react";
 import { useIconNames } from "../hooks/useIconNames.ts";
+import { formatParamDefault } from "../snippet-params.ts";
 import { pushToast } from "../toast.ts";
 import {
   AlertDialog,
@@ -137,7 +138,7 @@ function ParamRow({
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  const summary = formatDefaultSummary(param);
+  const summary = formatParamDefault(param);
   return (
     <div className="flex items-center gap-1.5 px-2 py-1">
       <div className="flex-1 min-w-0 flex items-center gap-1.5">
@@ -146,7 +147,7 @@ function ParamRow({
           {param.type}
         </Badge>
         {summary ? (
-          <span className="text-[10px] text-muted-foreground truncate">{summary}</span>
+          <span className="text-[10px] text-muted-foreground truncate">= {summary}</span>
         ) : (
           <span className="text-[10px] text-amber-600 dark:text-amber-400">required</span>
         )}
@@ -164,14 +165,6 @@ function ParamRow({
       </Button>
     </div>
   );
-}
-
-function formatDefaultSummary(param: SnippetParam): string | null {
-  if (param.default === undefined) return null;
-  if (typeof param.default === "string") return `= "${param.default}"`;
-  if (typeof param.default === "number" || typeof param.default === "boolean")
-    return `= ${param.default}`;
-  return "= …";
 }
 
 function ParamEditor({

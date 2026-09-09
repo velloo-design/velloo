@@ -32,6 +32,7 @@ function resetStore(): void {
     screenVersion: 0,
     screenVersions: {},
     components: null,
+    componentsLoading: false,
     generatedAssets: {},
     theme: null,
     themeName: "default",
@@ -379,6 +380,31 @@ describe("lazily loaded folder data", () => {
     await useCanvas.getState().loadComponents();
     await useCanvas.getState().loadComponents();
     expect(server.calls.filter((c) => c === "/api/components")).toHaveLength(1);
+  });
+
+  test("two callers racing the first load still make one request", async () => {
+    // Opening the snippet editor asks for the manifest from the store action
+    // and again from the view's mount effect, in the same tick.
+    await Promise.all([
+      useCanvas.getState().loadComponents(),
+      useCanvas.getState().loadComponents(),
+    ]);
+    expect(server.calls.filter((c) => c === "/api/components")).toHaveLength(1);
+  });
+
+  test("the in-flight flag distinguishes a loading library from an empty one", async () => {
+    expect(useCanvas.getState().componentsLoading).toBe(false);
+    const pending = useCanvas.getState().loadComponents();
+    expect(useCanvas.getState().componentsLoading).toBe(true);
+    await pending;
+    expect(useCanvas.getState().componentsLoading).toBe(false);
+  });
+
+  test("a failed manifest fetch clears the flag, so the shelf isn't stuck loading", async () => {
+    server.fail("/api/components", 500);
+    await expect(useCanvas.getState().loadComponents()).rejects.toThrow();
+    expect(useCanvas.getState().componentsLoading).toBe(false);
+    expect(useCanvas.getState().components).toBeNull();
   });
 
   test("asset provenance is an enhancement — a folder without it still works", async () => {

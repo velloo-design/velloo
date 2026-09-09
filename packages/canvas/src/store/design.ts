@@ -62,6 +62,12 @@ export interface DesignSlice {
   screenVersions: Record<string, number>;
   components: Manifest | null;
   /**
+   * Whether the manifest fetch is in flight. `components === null` can't say
+   * on its own, so every library surface read an unloaded manifest as an empty
+   * one — the shelf showed "0 components" and the grid a "no matches" panel.
+   */
+  componentsLoading: boolean;
+  /**
    * Provenance for velloo-generated assets, keyed by folder-relative path
    * ("assets/hero.png"). An image whose src isn't a key here is one velloo
    * didn't generate — which is exactly the distinction the image panel draws.
@@ -199,6 +205,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   screenVersion: 0,
   screenVersions: {},
   components: null,
+  componentsLoading: false,
   generatedAssets: {},
   styleChannel: null,
   channelsByLibrary: {},
@@ -321,9 +328,17 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   },
 
   async loadComponents() {
-    if (get().components) return;
-    const { manifest, styleChannel, channelsByLibrary } = await fetchComponents();
-    set({ components: manifest, styleChannel, channelsByLibrary });
+    // The in-flight guard is load-bearing, not just tidy: opening the snippet
+    // editor calls this from the store action and again from the view's mount
+    // effect, which used to be two concurrent fetches of the same manifest.
+    if (get().components || get().componentsLoading) return;
+    set({ componentsLoading: true });
+    try {
+      const { manifest, styleChannel, channelsByLibrary } = await fetchComponents();
+      set({ components: manifest, styleChannel, channelsByLibrary });
+    } finally {
+      set({ componentsLoading: false });
+    }
   },
 
   async loadGeneratedAssets() {

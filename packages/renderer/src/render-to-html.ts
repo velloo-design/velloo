@@ -101,6 +101,11 @@ export interface RenderOptions {
    * canvas-facing behavior.
    */
   includeRuntime?: boolean | undefined;
+  /**
+   * Let the rendered document draw its own selection box. Boards leave this
+   * off — the canvas draws that chrome in the parent. See DocumentOptions.
+   */
+  selectionRing?: boolean | undefined;
 }
 
 /**
@@ -151,6 +156,7 @@ export async function renderScreen(
     liveBundleUrl: options.liveBundleUrl,
     canvasBundle,
     ...(options.includeRuntime !== undefined ? { includeRuntime: options.includeRuntime } : {}),
+    ...(options.selectionRing !== undefined ? { selectionRing: options.selectionRing } : {}),
   });
 
   return { html, bodyHtml, themeCss, failures };

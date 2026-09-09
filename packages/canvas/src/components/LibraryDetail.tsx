@@ -1,8 +1,10 @@
 import type { ComponentDescriptor, PropDescriptor } from "@velloo/provider";
+import type { SnippetParam } from "@velloo/schema";
 import { ArrowLeft, LibraryBig, PanelsTopLeft } from "lucide-react";
 import { useMemo } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { categoryForComponent } from "../library-categories.ts";
+import { formatParamDefault } from "../snippet-params.ts";
 import { type LibraryItemRef, useCanvas } from "../store.ts";
 import { Badge } from "./ui/badge.tsx";
 import {
@@ -270,10 +272,14 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
             </div>
           </div>
           {meta ? (
-            <p className="mt-1 text-sm text-muted-foreground max-w-xl">
-              {meta.params.length} parameter{meta.params.length === 1 ? "" : "s"}
-              {meta.params.length > 0 ? ` · ${meta.params.map((p) => p.name).join(", ")}` : ""}
-            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span>
+                {meta.params.length} parameter{meta.params.length === 1 ? "" : "s"}
+              </span>
+              {meta.params.map((p) => (
+                <ParamChip key={p.name} param={p} />
+              ))}
+            </div>
           ) : null}
         </header>
 
@@ -308,17 +314,21 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
                   {meta.params.map((p) => (
                     <TableRow key={p.name}>
                       <TableCell className="w-32 py-3 font-mono text-xs font-medium">
-                        {p.name}
+                        ${p.name}
                       </TableCell>
                       <TableCell className="flex flex-row flex-wrap items-center gap-1 py-3">
                         <Badge variant="outline" className="font-mono text-[10px]">
                           {p.type}
                         </Badge>
-                        {p.default !== undefined ? (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            default: <span className="font-mono">{JSON.stringify(p.default)}</span>
+                        {formatParamDefault(p) === null ? (
+                          <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+                            required
                           </span>
-                        ) : null}
+                        ) : (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            default: <span className="font-mono">{formatParamDefault(p)}</span>
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -329,6 +339,25 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * A param reads as `$name` wherever nothing is bound to it — the preview, the
+ * body tree, here. The declared default rides along so the header says which
+ * slots an instance has to fill and which already have an answer.
+ */
+function ParamChip({ param }: { param: SnippetParam }) {
+  const preset = formatParamDefault(param);
+  return (
+    <Badge
+      variant="outline"
+      className="border-dashed font-mono text-[10px] text-muted-foreground"
+      title={`${param.type}${preset === null ? " · required" : ""}`}
+    >
+      ${param.name}
+      {preset === null ? null : <span className="opacity-70"> = {preset}</span>}
+    </Badge>
   );
 }
 

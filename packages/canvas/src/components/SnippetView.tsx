@@ -51,6 +51,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const setNodeRects = useCanvas((s) => s.setNodeRects);
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
   const selection = useCanvas((s) => s.selection);
+  const hover = useCanvas((s) => s.hover);
   const nodeState = useCanvas((s) => s.nodeState);
   const setScreen = useCanvas((s) => s.setSyntheticScreen);
   const loadComponents = useCanvas((s) => s.loadComponents);
@@ -130,6 +131,18 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
         if (path === null) setHover(null);
         else setHover({ screenId: virtualScreenId, path });
       },
+      // A theme or body edit reloads the iframe into a document that knows
+      // nothing about the current selection, so re-send it (and hover, which
+      // survives a reload when the pointer never left the tree).
+      onReady() {
+        const s = useCanvas.getState();
+        if (s.selection?.screenId === virtualScreenId) {
+          channel.send({ type: "applyHighlight", path: s.selection.path });
+        }
+        if (s.hover?.screenId === virtualScreenId) {
+          channel.send({ type: "applyHover", path: s.hover.path });
+        }
+      },
       onRects(rects) {
         setNodeRects(frameId, rects);
       },
@@ -168,6 +181,19 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
       channel.send({ type: "clearHighlight" });
     }
   }, [selection, virtualScreenId]);
+
+  // Hover travels both ways: the iframe reports it (onHover above) so the Tree
+  // tints, and the Tree's own hover has to come back out or a row lit in the
+  // sidebar rings nothing in the preview.
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel) return;
+    if (hover?.screenId === virtualScreenId) {
+      channel.send({ type: "applyHover", path: hover.path });
+    } else {
+      channel.send({ type: "clearHover" });
+    }
+  }, [hover, virtualScreenId]);
 
   // Force-state preview (mirrors Frame): drive the body iframe's pinned
   // pseudo-state from the Inspector's State dropdown for the selected node.
@@ -287,7 +313,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
               <EmptyTitle className="text-xs">Nothing selected</EmptyTitle>
               <EmptyDescription className="text-xs">
                 Click a node in the snippet preview to edit its props, classes, or stable id. Param
-                slots render as <span className="font-mono">$name</span> badges — open the param's
+                slots render as <span className="font-mono">$name</span> tags — open the param's
                 instances elsewhere to see how each is filled.
               </EmptyDescription>
             </EmptyHeader>

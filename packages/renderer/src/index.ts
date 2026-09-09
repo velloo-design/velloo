@@ -21,6 +21,7 @@ export {
   resolveSnippetBodyForEdit,
   SnippetCycleError,
   SnippetParamError,
+  snippetParamPlaceholder,
   UnknownComponentError,
   UnknownSnippetError,
 } from "./build-tree.ts";

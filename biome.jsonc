@@ -13,6 +13,7 @@
       "!**/node_modules",
       "!**/.design",
       "!velloo",
+      "!initial-board",
       "!**/tailwind-entry.css",
       // Vendored verbatim from the shadcn package; its @custom-variant blocks
       // use Tailwind-only syntax the CSS parser rejects, and reformatting a

@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import type { Screen, Snippet, Theme, Viewport } from "@velloo/schema";
+import type { Screen, Snippet, SnippetParam, Theme, Viewport } from "@velloo/schema";
 import { registry } from "@velloo/shadcn-snapshot";
+import { createElement } from "react";
 import {
   renderBody,
   renderScreen,
+  resolveSnippetBodyForEdit,
   SnippetCycleError,
   SnippetParamError,
+  snippetParamPlaceholder,
   UnknownSnippetError,
 } from "../index.ts";
 
@@ -352,5 +355,54 @@ describe("snippet resolution", () => {
     const html = renderBody(screen, registry, snippets);
     const matches = html.match(/data-node-path="0"/g);
     expect(matches?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("preview placeholders for unbound params", () => {
+  test("a declared default wins — that is what a default is for", () => {
+    expect(snippetParamPlaceholder({ name: "crumb", type: "string", default: "Settings" })).toBe(
+      "Settings",
+    );
+    expect(snippetParamPlaceholder({ name: "rows", type: "number", default: 3 })).toBe(3);
+  });
+
+  test("a required param reads as its own name, $-prefixed", () => {
+    expect(snippetParamPlaceholder({ name: "label", type: "string" })).toBe("$label");
+    expect(snippetParamPlaceholder({ name: "tone", type: "enum", enum: ["a", "b"] })).toBe("a");
+  });
+
+  test("a required node slot becomes a tag that needs no library component", async () => {
+    // The tag used to be a shadcn Badge, which a no-library or MUI folder has
+    // no entry for — the whole preview 422'd on an UnknownComponentError.
+    const sidebar: SnippetParam = { name: "sidebar", type: "node" };
+    const shell: Snippet = {
+      id: "shell",
+      name: "Shell",
+      params: [sidebar],
+      tree: { $ref: "Box", children: [{ $param: "sidebar" }] },
+    };
+    const bare = { Box: (p: Record<string, unknown>) => createElement("div", p) };
+    const { bodyHtml } = await renderScreen(
+      screenWith({ $snippet: "shell", args: { sidebar: snippetParamPlaceholder(sidebar) } }),
+      theme,
+      { ...opts, registry: bare, snippets: new Map([[shell.id, shell]]) },
+    );
+    expect(bodyHtml).toContain("$sidebar");
+    expect(bodyHtml).toContain("dashed");
+  });
+
+  test("the editor preview tags the same slot, so both previews read alike", () => {
+    const shell: Snippet = {
+      id: "shell",
+      name: "Shell",
+      params: [{ name: "sidebar", type: "node" }],
+      tree: { $ref: "Box", children: [{ $param: "sidebar" }] },
+    };
+    const bare = { Box: (p: Record<string, unknown>) => createElement("div", p) };
+    const body = resolveSnippetBodyForEdit(shell.tree, { sidebar: "$sidebar" }, shell.id);
+    const html = renderBody(screenWith(body), bare);
+    expect(html).toContain("$sidebar");
+    // The slot keeps its own path, so its siblings don't shift under it.
+    expect(html).toContain('data-node-path="0"');
   });
 });

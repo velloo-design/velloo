@@ -207,6 +207,41 @@ domSuite("every large panel renders", () => {
   }
 });
 
+domSuite("a deep link opens its own view, not the board", () => {
+  afterEach(() => {
+    window.history.replaceState({}, "", "/");
+  });
+
+  test("the destination is entered without waiting on the design summary", async () => {
+    // The seed used to be applied *after* `loadDesign`, which publishes the
+    // summary on its first round trip and keeps going for several more — so
+    // the board mounted, iframes and all, for the whole tail of a boot the
+    // link never asked for a board in. Starving the summary here proves the
+    // view no longer depends on it.
+    server.fail("/api/design", 503);
+    useCanvas.setState({ design: null, view: "boards", libraryItem: null, bootError: null });
+    window.history.replaceState({}, "", "/?view=library&item=snippet:card");
+
+    const view = await mount(<App />);
+    views.push(view);
+
+    expect(useCanvas.getState().view).toBe("library");
+    expect(useCanvas.getState().libraryItem).toEqual({ kind: "snippet", id: "card" });
+  });
+
+  test("a snippet link opens the editor the same way", async () => {
+    server.fail("/api/design", 503);
+    useCanvas.setState({ design: null, view: "boards", editingSnippetId: null, bootError: null });
+    window.history.replaceState({}, "", "/?view=snippet&snippet=card");
+
+    const view = await mount(<App />);
+    views.push(view);
+
+    expect(useCanvas.getState().view).toBe("snippet");
+    expect(useCanvas.getState().editingSnippetId).toBe("card");
+  });
+});
+
 domSuite("the settings panes render against a real folder config", () => {
   beforeEach(async () => {
     await useCanvas.getState().loadFolderConfig();
