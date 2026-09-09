@@ -12,8 +12,12 @@ The `velloo` binary. Citty-based.
 - **`velloo emit <folder>`** — print the agent IR for one screen (or write to a file).
 - **`velloo render <folder>`** — render a screen to HTML or PNG on stdout/disk.
 - **`velloo theme export <folder>`** — write DTCG `tokens.json` plus the framework-specific theme artifacts into a target app folder, with a diff against existing files.
-- **`velloo upgrade <folder>`** — upgrade a design folder to the current schema version.
-- **`velloo upgrade`** — upgrade the installed CLI through npm or the standalone installer.
+- **`velloo upgrade [folder]`** — update the installation (npm, the standalone
+  installer, or Homebrew) *and* migrate the design folder to the current schema
+  version. Outside a design folder it updates the installation alone; `--check`
+  reports both without writing, and `--binary-only` / `--folder-only` run one
+  half. Contributors: `bun run cli:build` records the build it just packed, and
+  `velloo upgrade` then installs it over the global one.
 - **`velloo browser install`** — install the optional headless browser used for screenshots.
 
 ## Layout

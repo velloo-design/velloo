@@ -73,6 +73,7 @@ import {
   scanApps,
 } from "../scan/index.ts";
 import { dirExists } from "../scan/walk.ts";
+import { offerUpgradeBeforeInit } from "../upgrade-prompt.ts";
 import type { WizardAnswers } from "../wizard/answers.ts";
 import {
   answersFromArgs,
@@ -635,6 +636,12 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   if (cliArgs.scanDir && !(await dirExists(resolve(appRoot, cliArgs.scanDir)))) {
     fail("init", `--scan-dir "${cliArgs.scanDir}" doesn't exist under ${appRoot}.`);
   }
+
+  // Before anything is scaffolded — and before the logo, so accepting doesn't
+  // print it twice across the re-exec: a design folder records the velloo that
+  // made it and the skills it installs come from that binary, so upgrading
+  // halfway through means doing both again.
+  if (interactive && (await offerUpgradeBeforeInit(process.argv.slice(2)))) return;
 
   if (interactive) printLogo();
 

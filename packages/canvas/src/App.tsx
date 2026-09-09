@@ -24,6 +24,7 @@ import { Button } from "./components/ui/button.tsx";
 import { Toaster } from "./components/ui/sonner.tsx";
 import { useCanvas } from "./store.ts";
 import { toastError } from "./toast.ts";
+import { startUpdateWatch } from "./updates.ts";
 import { readUrlState, useUrlState } from "./url-state.ts";
 import { connectWs } from "./ws-client.ts";
 
@@ -95,6 +96,9 @@ export function App() {
   useUrlState();
   useApplyAppTheme();
   useCloudSession();
+  // A new velloo announces itself once, then sits as a dot on the account
+  // menu — the daemon does the actual checking on its own schedule.
+  useEffect(startUpdateWatch, []);
 
   // Browser tab: `<repo> · <board> - velloo` (middle-dot between repo/board).
   useEffect(() => {

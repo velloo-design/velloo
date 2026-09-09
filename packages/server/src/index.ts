@@ -40,6 +40,7 @@ import { PublishRunner } from "./publish-run.ts";
 import { requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
+import type { CanvasUpdates } from "./updates.ts";
 import { type WatchEvent, type Watcher, watchDesignFolder, watchSourcePaths } from "./watcher.ts";
 
 /**
@@ -73,6 +74,11 @@ export interface ServerOptions {
    * credential and the cloud transport). Omit ⇒ the canvas can't publish.
    */
   publish?: CanvasPublish | undefined;
+  /**
+   * Self-update for the canvas menu, provided by the CLI (it alone knows how
+   * this velloo was installed). Omit ⇒ the canvas offers no upgrade.
+   */
+  updates?: CanvasUpdates | undefined;
 }
 
 export interface ServerHandle {
@@ -329,6 +335,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     publishRunner,
     opts.cloud,
     comments,
+    opts.updates,
   );
 
   let watcher: Watcher | null = null;
@@ -563,5 +570,6 @@ export {
   scoreThemeContrastBoth,
 } from "./theme/contrast.ts";
 export { derivePalette } from "./theme/derive-palette.ts";
+export type { CanvasUpdateResult, CanvasUpdateStatus, CanvasUpdates } from "./updates.ts";
 export { readFeedbackContactOk, writeFeedbackContactOk } from "./user-prefs.ts";
 export type { WatchEvent } from "./watcher.ts";

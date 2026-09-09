@@ -35,6 +35,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUN_VERSION, RUNTIME_TARGETS } from "../../scripts/distribution/targets.ts";
@@ -142,6 +143,18 @@ function installedVersion(pkg: string): string {
 }
 
 /**
+ * Which release stream the artifact tracks (see packages/cli/src/release.ts).
+ * A plain `bun run cli:build` is a contributor's own build, so it defaults to
+ * the local channel: `velloo upgrade` then reinstalls from the tarball this
+ * script just packed instead of pulling the public release over it. The
+ * release scripts set VELLOO_BUILD_CHANNEL explicitly.
+ */
+const CHANNEL = process.env.VELLOO_BUILD_CHANNEL ?? "local";
+if (!["stable", "dev", "local"].includes(CHANNEL)) {
+  throw new Error(`VELLOO_BUILD_CHANNEL must be stable | dev | local, got ${CHANNEL}`);
+}
+
+/**
  * The build stamp baked into the binary's `--version` (see src/version.ts):
  * `<version> (<short-sha>[-dirty] · <build-date>)`. Derived from git at build
  * time so a dogfooder's `--version` maps to an exact commit; degrades to just
@@ -157,11 +170,18 @@ function buildVersion(): string {
   const dirty = status !== undefined && status !== "";
   const now = new Date();
   const pad = (n: number): string => `${n}`.padStart(2, "0");
-  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  // A local build is rebuilt many times a day off the same (dirty) commit, so
+  // the date alone would make every `velloo upgrade` report "X → X" — and two
+  // builds a minute apart is a normal inner loop, hence seconds. A release
+  // only ever needs the day.
+  const clock = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const date = CHANNEL === "local" ? `${day} ${clock}` : day;
   const ref = sha ? `${sha}${dirty ? "-dirty" : ""} · ${date}` : date;
   return `${VERSION} (${ref})`;
 }
 const BUILD_VERSION = buildVersion();
+const BUILD_TIME_MS = Date.now();
 
 // 1. Clean.
 step("cleaning dist/");
@@ -205,6 +225,7 @@ const externalizeRuntimeDeps = {
 // hosted cloud (see src/cloud.ts). Unset → the binary defaults to localhost.
 const prodCloudUrl = process.env.VELLOO_BUILD_CLOUD_URL;
 if (prodCloudUrl) step(`baking default cloud URL → ${prodCloudUrl}`);
+step(`release channel → ${CHANNEL}`);
 
 const result = await Bun.build({
   entrypoints: [entry],
@@ -228,6 +249,8 @@ const result = await Bun.build({
   plugins: [externalizeRuntimeDeps],
   define: {
     __VELLOO_BUILD_VERSION__: JSON.stringify(BUILD_VERSION),
+    __VELLOO_BUILD_TIME__: JSON.stringify(BUILD_TIME_MS),
+    __VELLOO_RELEASE_CHANNEL__: JSON.stringify(CHANNEL),
     ...(prodCloudUrl ? { __VELLOO_DEFAULT_CLOUD_URL__: JSON.stringify(prodCloudUrl) } : {}),
   },
 });
@@ -415,6 +438,31 @@ step("packing tarball…");
 run(["bun", "pm", "pack", "--destination", repoRoot], distDir);
 
 const tgz = `velloo-${VERSION}.tgz`;
+
+// 7. Record the build so an already-installed velloo can upgrade to it. The
+//    local channel has no version bump to notice — every build of a branch is
+//    the same `VERSION` — so the marker carries the build time, which is the
+//    only thing that orders one local build against the next.
+if (CHANNEL === "local") {
+  const marker =
+    process.env.VELLOO_LOCAL_RELEASE ?? join(homedir(), ".velloo", "local-release.json");
+  mkdirSync(dirname(marker), { recursive: true });
+  writeFileSync(
+    marker,
+    `${JSON.stringify(
+      {
+        version: VERSION,
+        build: BUILD_VERSION,
+        builtAt: BUILD_TIME_MS,
+        tarball: join(repoRoot, tgz),
+        repo: repoRoot,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  step(`recorded local build → ${marker}`);
+}
 const bundleKb = Math.round(Bun.file(cliJs).size / 1024);
 const chunksKb = Math.round(
   chunkNames.reduce((sum, f) => sum + Bun.file(join(distDir, f)).size, 0) / 1024,
@@ -433,6 +481,9 @@ console.log(
     `  tarball:  ${tgz}`,
     "",
     `  install:  npm install -g ./${tgz}   (private Bun ${process.versions.bun})`,
+    ...(CHANNEL === "local"
+      ? ["  upgrade:  velloo upgrade                 (installs this build)"]
+      : []),
     "",
   ].join("\n"),
 );

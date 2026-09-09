@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  ArrowUpCircle,
   Coins,
   ExternalLink,
   History,
@@ -13,6 +14,7 @@ import { useEffect, useState } from "react";
 import { auth, type CloudAccount, fetchRevertStatus, type RevertStatus } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
+import { compactVersion, refreshUpdateStatus, upgradeVelloo, useUpdateState } from "../updates.ts";
 import { RevertDialog } from "./RevertDialog.tsx";
 import { Alert, AlertDescription } from "./ui/alert.tsx";
 import { Avatar, AvatarFallback } from "./ui/avatar.tsx";
@@ -95,10 +97,27 @@ function cloudLabel(cloudUrl: string | undefined): string {
   }
 }
 
+/**
+ * The "there is a newer velloo" mark on the menu trigger. Purely decorative —
+ * the menu item below it is the thing that is reachable and labelled — so it
+ * is hidden from assistive tech rather than announced as an unlabelled dot.
+ */
+function UpdateDot() {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="settings-update-dot"
+      className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
+    />
+  );
+}
+
 export function SettingsMenu() {
   const status = useCanvas((s) => s.authStatus);
   const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
+  const { status: update, upgrading } = useUpdateState();
+  const updateReady = Boolean(update?.available && update.upgradable);
 
   // Revert availability, refreshed each time the menu opens. Null while
   // unknown; the item hides entirely when the folder isn't in a git repo.
@@ -108,6 +127,7 @@ export function SettingsMenu() {
   // stays a mount-only (and menu-open) refresh with no reactive dependencies.
   const refresh = () => {
     void useCanvas.getState().refreshAuth();
+    void refreshUpdateStatus();
     fetchRevertStatus()
       .then(setRevertStatus)
       .catch(() => setRevertStatus(null));
@@ -146,7 +166,7 @@ export function SettingsMenu() {
             <Button
               variant="ghost"
               size="sm"
-              className="max-w-[12rem] gap-2 pl-1 pr-2.5 text-xs"
+              className="relative max-w-[12rem] gap-2 pl-1 pr-2.5 text-xs"
               title={`${account.email} — account & settings`}
             >
               <Avatar aria-hidden="true" className="size-6">
@@ -165,16 +185,18 @@ export function SettingsMenu() {
                 </AvatarFallback>
               </Avatar>
               <span className="truncate">{firstName(account)}</span>
+              {updateReady ? <UpdateDot /> : null}
             </Button>
           ) : (
             <Button
               variant="outline"
               size="sm"
-              className="max-w-[12rem] text-xs"
+              className="relative max-w-[12rem] text-xs"
               title="Settings & account"
             >
               <Settings />
               <span className="truncate">Settings</span>
+              {updateReady ? <UpdateDot /> : null}
             </Button>
           )}
         </DropdownMenuTrigger>
@@ -282,6 +304,33 @@ export function SettingsMenu() {
                 Open velloo-cloud
               </a>
             </DropdownMenuItem>
+          ) : null}
+          {/* Deliberately not next to "Upgrade plan": one buys a tier, the
+              other replaces the binary, and adjacent "Upgrade …" items read as
+              two halves of the same thing. */}
+          {updateReady ? (
+            <>
+              <DropdownMenuItem
+                disabled={upgrading}
+                data-testid="settings-upgrade-velloo"
+                title={`You're on ${update?.current}`}
+                onSelect={(event) => {
+                  // Keep the menu's own close out of it: the upgrade runs for
+                  // seconds and reports through toasts, not through this menu.
+                  event.preventDefault();
+                  void upgradeVelloo();
+                }}
+              >
+                <ArrowUpCircle className="text-primary" />
+                {upgrading ? "Updating velloo…" : "Update velloo"}
+              </DropdownMenuItem>
+              {/* A local build's stamp carries a timestamp, which is far too
+                  long for a right-aligned chip — it gets its own line, the way
+                  the revert reason does. */}
+              <div className="truncate px-2 pb-1 pl-8 text-[11px] text-muted-foreground">
+                {compactVersion(update?.latest)}
+              </div>
+            </>
           ) : null}
           <DropdownMenuSeparator />
           {loggedIn && !expired ? (

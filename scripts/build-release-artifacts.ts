@@ -26,18 +26,35 @@ function run(command: string[], env?: Record<string, string>): void {
 rmSync(artifacts, { recursive: true, force: true });
 mkdirSync(artifacts, { recursive: true });
 
-run(["bun", "packages/cli/build.ts"]);
+// Releases are cut for a named channel; the artifacts then check that
+// channel's host for updates rather than the production one.
+const channel = process.env.VELLOO_BUILD_CHANNEL ?? "stable";
+const downloadBase =
+  process.env.VELLOO_DOWNLOAD_BASE ??
+  (channel === "dev" ? "https://get.dev.velloo.design" : "https://get.velloo.design");
+
+run(["bun", "packages/cli/build.ts"], { VELLOO_BUILD_CHANNEL: channel });
 copyFileSync(join(repoRoot, `velloo-${version}.tgz`), join(artifacts, `velloo-${version}.tgz`));
 
 for (const target of RUNTIME_TARGETS.filter((candidate) => candidate.os !== "win32")) {
-  run(["bun", "scripts/build-direct-artifact.ts", "--target", target.id]);
+  run(["bun", "scripts/build-direct-artifact.ts", "--target", target.id], {
+    VELLOO_DOWNLOAD_BASE: downloadBase,
+  });
 }
 
-const installer = readFileSync(join(repoRoot, "scripts", "install.sh"), "utf8").replaceAll(
-  "@VELLOO_VERSION@",
-  version,
-);
+const installer = readFileSync(join(repoRoot, "scripts", "install.sh"), "utf8")
+  .replaceAll("@VELLOO_VERSION@", version)
+  .replaceAll("@VELLOO_DOWNLOAD_BASE@", downloadBase);
 writeFileSync(join(artifacts, "install.sh"), installer, { mode: 0o755 });
+
+// The version endpoint every non-npm installation polls. npm installs on the
+// stable channel ask the registry instead — that is the artifact npm would
+// actually resolve — but a dev release never reaches npm, and the direct
+// archives are cut independently of the publish, so they need their own answer.
+writeFileSync(
+  join(artifacts, "latest.json"),
+  `${JSON.stringify({ version, channel, builtAt: Date.now() }, null, 2)}\n`,
+);
 
 const files = readdirSync(artifacts)
   .filter((name) => !name.startsWith(".") && name !== "SHA256SUMS")

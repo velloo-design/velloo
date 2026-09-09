@@ -33,6 +33,14 @@ for (const required of [commonTarball, runtimeLicense]) {
   if (!existsSync(required)) throw new Error(`missing ${required}; build the CLI first`);
 }
 
+// Baked, not defaulted: a dev-channel archive must keep asking the dev host
+// about updates, or the first `velloo upgrade` silently moves the tester onto
+// the production release.
+const downloadBase = (process.env.VELLOO_DOWNLOAD_BASE ?? "https://get.velloo.design").replace(
+  /\/+$/,
+  "",
+);
+
 const stage = join(artifacts, `direct-${target.id}`);
 const app = join(stage, "app");
 const cache = join(artifacts, ".npm-cache");
@@ -84,14 +92,15 @@ while [ -L "$self" ]; do
 done
 root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
 export VELLOO_INSTALL_METHOD=direct
-export VELLOO_INSTALLER_URL="\${VELLOO_INSTALLER_URL:-https://get.velloo.design/install.sh}"
+export VELLOO_DOWNLOAD_BASE="\${VELLOO_DOWNLOAD_BASE:-${downloadBase}}"
+export VELLOO_INSTALLER_URL="\${VELLOO_INSTALLER_URL:-$VELLOO_DOWNLOAD_BASE/install.sh}"
 exec "$root/runtime/bun" "$root/app/node_modules/velloo/cli.js" "$@"
 `;
 writeFileSync(join(stage, "bin", "velloo"), wrapper, { mode: 0o755 });
 writeFileSync(join(stage, "VERSION"), `${version}\n`);
 writeFileSync(
   join(stage, "manifest.json"),
-  `${JSON.stringify({ version, target: target.id, bun: BUN_VERSION }, null, 2)}\n`,
+  `${JSON.stringify({ version, target: target.id, bun: BUN_VERSION, downloadBase }, null, 2)}\n`,
 );
 
 const artifactName = `velloo-${version}-${target.id}.tar.gz`;

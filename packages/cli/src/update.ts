@@ -3,51 +3,37 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import pc from "picocolors";
-import { PACKAGE_VERSION } from "./version.ts";
-
-export type InstallMethod = "npm" | "direct" | "source" | "unknown";
+import {
+  downloadBase,
+  fetchLatestRelease,
+  type InstallMethod,
+  installerUrl,
+  installMethod,
+  isNewerRelease,
+  localReleasePath,
+  npmExecutable,
+  type ReleaseInfo,
+  readLocalRelease,
+  releaseChannel,
+  releaseLabel,
+  runningRelease,
+  selfUpgradable,
+} from "./release.ts";
 
 interface UpdateCache {
   checkedAt: number;
   latest: string;
+  /** Build stamp of the cached release, when its channel publishes one. */
+  latestBuild?: string;
+  /** Epoch ms the cached release was built — the local channel's ordering. */
+  latestBuiltAt?: number;
   notifiedAt?: number;
   notifiedVersion?: string;
 }
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const FETCH_TIMEOUT_MS = 2_000;
-const DEFAULT_UPDATE_URL = "https://registry.npmjs.org/velloo/latest";
-const DEFAULT_INSTALLER_URL = "https://get.velloo.design/install.sh";
-
-export function compareVersions(left: string, right: string): number {
-  const parse = (value: string): { core: number[]; prerelease: string | null } | null => {
-    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
-    if (!match) return null;
-    return {
-      core: [Number(match[1]), Number(match[2]), Number(match[3])],
-      prerelease: match[4] ?? null,
-    };
-  };
-  const a = parse(left);
-  const b = parse(right);
-  if (!a || !b) return 0;
-  for (let index = 0; index < 3; index++) {
-    const delta = (a.core[index] ?? 0) - (b.core[index] ?? 0);
-    if (delta !== 0) return Math.sign(delta);
-  }
-  if (a.prerelease === b.prerelease) return 0;
-  if (a.prerelease === null) return 1;
-  if (b.prerelease === null) return -1;
-  return a.prerelease.localeCompare(b.prerelease, undefined, { numeric: true });
-}
-
-export function installMethod(env: NodeJS.ProcessEnv = process.env): InstallMethod {
-  if (env.VELLOO_INSTALL_METHOD === "npm" || env.VELLOO_INSTALL_METHOD === "direct") {
-    return env.VELLOO_INSTALL_METHOD;
-  }
-  if (env.VELLOO_INSTALL_METHOD === "source") return "source";
-  return "unknown";
-}
+/** A local channel reads a file, so re-check it far more eagerly than a host. */
+const LOCAL_CHECK_INTERVAL_MS = 10 * 1000;
 
 function cachePath(): string {
   return process.env.VELLOO_UPDATE_CACHE ?? join(homedir(), ".velloo", "update-check.json");
@@ -77,29 +63,33 @@ async function writeCache(value: UpdateCache): Promise<void> {
   }
 }
 
-export async function fetchLatestVersion(
-  url = process.env.VELLOO_UPDATE_URL ?? DEFAULT_UPDATE_URL,
-): Promise<string> {
-  const response = await fetch(url, {
-    headers: { accept: "application/json", "user-agent": `velloo/${PACKAGE_VERSION}` },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`release check returned HTTP ${response.status}`);
-  const body = (await response.json()) as { version?: unknown };
-  if (typeof body.version !== "string" || !/^\d+\.\d+\.\d+/.test(body.version)) {
-    throw new Error("release check returned an invalid version");
-  }
-  return body.version;
+/** The cached entry as a release, so callers compare one shape. */
+function cachedRelease(cache: UpdateCache): ReleaseInfo {
+  return {
+    version: cache.latest,
+    ...(cache.latestBuild === undefined ? {} : { build: cache.latestBuild }),
+    ...(cache.latestBuiltAt === undefined ? {} : { builtAt: cache.latestBuiltAt }),
+  };
+}
+
+/** Back-compat shim for the pre-channel API: the latest version string. */
+export async function fetchLatestVersion(): Promise<string> {
+  const release = await fetchLatestRelease();
+  if (!release) throw new Error("this channel has no published release");
+  return release.version;
 }
 
 /** Internal child-process entry: failures are intentionally swallowed. */
 export async function refreshUpdateCache(): Promise<void> {
   try {
     const previous = await readCache();
-    const latest = await fetchLatestVersion();
+    const latest = await fetchLatestRelease();
+    if (!latest) return;
     await writeCache({
       checkedAt: Date.now(),
-      latest,
+      latest: latest.version,
+      ...(latest.build === undefined ? {} : { latestBuild: latest.build }),
+      ...(latest.builtAt === undefined ? {} : { latestBuiltAt: latest.builtAt }),
       ...(previous?.notifiedAt ? { notifiedAt: previous.notifiedAt } : {}),
       ...(previous?.notifiedVersion ? { notifiedVersion: previous.notifiedVersion } : {}),
     });
@@ -121,49 +111,58 @@ function spawnUpdateCheck(): void {
   } catch {}
 }
 
+function checkIntervalMs(): number {
+  return releaseChannel() === "local" ? LOCAL_CHECK_INTERVAL_MS : CHECK_INTERVAL_MS;
+}
+
+function checkSuppressed(): boolean {
+  return (
+    process.env.VELLOO_DISABLE_UPDATE_CHECK === "1" ||
+    process.env.VELLOO_UPDATE_CHECK_CHILD === "1" ||
+    !selfUpgradable(installMethod())
+  );
+}
+
 /**
  * Show only a cached notice, then refresh stale state in a detached child.
  * The foreground command never waits on DNS, TLS, npm, or the network timeout.
+ *
+ * The local channel is the exception: its "release host" is a JSON file this
+ * machine just wrote, so it is read in the foreground. A contributor who runs
+ * `cli:build` and then a command expects to be told on *that* command, not on
+ * the one after it.
  */
 export async function maybeNotifyAboutUpdate(
   options: { isTTY?: boolean; now?: number } = {},
 ): Promise<void> {
-  if (
-    process.env.VELLOO_DISABLE_UPDATE_CHECK === "1" ||
-    process.env.VELLOO_UPDATE_CHECK_CHILD === "1" ||
-    !(options.isTTY ?? process.stderr.isTTY) ||
-    !["npm", "direct"].includes(installMethod())
-  ) {
-    return;
-  }
+  if (checkSuppressed() || !(options.isTTY ?? process.stderr.isTTY)) return;
 
   const now = options.now ?? Date.now();
   const cached = await readCache();
-  if (cached && compareVersions(cached.latest, PACKAGE_VERSION) > 0) {
+  const local = releaseChannel() === "local" ? await fetchLatestRelease().catch(() => null) : null;
+  const latest = local ?? (cached ? cachedRelease(cached) : null);
+  if (latest && isNewerRelease(latest)) {
     const alreadyNotifiedRecently =
-      cached.notifiedVersion === cached.latest &&
-      typeof cached.notifiedAt === "number" &&
-      now - cached.notifiedAt < CHECK_INTERVAL_MS;
+      cached?.notifiedVersion === releaseLabel(latest) &&
+      typeof cached?.notifiedAt === "number" &&
+      now - cached.notifiedAt < checkIntervalMs();
     if (!alreadyNotifiedRecently) {
+      const running = runningRelease();
       console.error("");
       console.error(
-        `${pc.yellow("Update available:")} ${PACKAGE_VERSION} → ${cached.latest}. Run ${pc.cyan("velloo upgrade")}.`,
+        `${pc.yellow("Update available:")} ${releaseLabel(running)} → ${releaseLabel(latest)}. Run ${pc.cyan("velloo upgrade")}.`,
       );
-      await writeCache({ ...cached, notifiedAt: now, notifiedVersion: cached.latest }).catch(
-        () => {},
-      );
+      await writeCache({
+        checkedAt: cached?.checkedAt ?? now,
+        latest: latest.version,
+        ...(latest.build === undefined ? {} : { latestBuild: latest.build }),
+        ...(latest.builtAt === undefined ? {} : { latestBuiltAt: latest.builtAt }),
+        notifiedAt: now,
+        notifiedVersion: releaseLabel(latest),
+      }).catch(() => {});
     }
   }
-  if (!cached || now - cached.checkedAt >= CHECK_INTERVAL_MS) spawnUpdateCheck();
-}
-
-function npmExecutable(): string {
-  const node = process.env.VELLOO_NODE_EXECUTABLE;
-  if (node) {
-    const adjacent = join(dirname(node), process.platform === "win32" ? "npm.cmd" : "npm");
-    if (existsSync(adjacent)) return adjacent;
-  }
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+  if (!cached || now - cached.checkedAt >= checkIntervalMs()) spawnUpdateCheck();
 }
 
 async function runInherited(
@@ -179,44 +178,172 @@ async function runInherited(
   if (code !== 0) throw new Error(`\`${command.join(" ")}\` exited with status ${code}`);
 }
 
-export async function upgradeInstalledVelloo(options: { checkOnly?: boolean } = {}): Promise<void> {
-  const method = installMethod();
-  if (method === "source") {
-    throw new Error(
-      "this Velloo is running from source; update the checkout with your Git workflow",
-    );
-  }
-  if (method === "unknown") {
-    throw new Error(
-      "could not identify this installation. Reinstall with `npm install -g velloo@latest` or the installer at https://get.velloo.design/install.sh",
-    );
-  }
+export interface UpdateStatus {
+  method: InstallMethod;
+  channel: string;
+  /** Build stamp of the running binary. */
+  current: string;
+  /** Build stamp (or version) of the newest release, null when unknown. */
+  latest: string | null;
+  available: boolean;
+  /** False when this installation can't replace itself (source / unknown). */
+  upgradable: boolean;
+  /** Why an upgrade can't run here, or why the check couldn't answer. */
+  reason?: string;
+}
 
-  const latest = await fetchLatestVersion();
-  if (compareVersions(latest, PACKAGE_VERSION) <= 0) {
-    console.log(`velloo: ${PACKAGE_VERSION} is already the latest version.`);
-    return;
+/**
+ * The update picture for a caller that wants to *report* it — `velloo status`
+ * and the canvas menu. `refresh: false` answers from the cache alone, which is
+ * what a UI polling every few minutes should do.
+ */
+export async function updateStatus(opts: { refresh?: boolean } = {}): Promise<UpdateStatus> {
+  const method = installMethod();
+  const channel = releaseChannel();
+  const running = runningRelease();
+  const base: UpdateStatus = {
+    method,
+    channel,
+    current: releaseLabel(running),
+    latest: null,
+    available: false,
+    upgradable: selfUpgradable(method),
+    ...(selfUpgradable(method) ? {} : { reason: unsupportedReason(method) }),
+  };
+  if (!selfUpgradable(method)) return base;
+
+  let release: ReleaseInfo | null = null;
+  if (opts.refresh) {
+    try {
+      release = await fetchLatestRelease();
+      if (release) {
+        await writeCache({
+          checkedAt: Date.now(),
+          latest: release.version,
+          ...(release.build === undefined ? {} : { latestBuild: release.build }),
+          ...(release.builtAt === undefined ? {} : { latestBuiltAt: release.builtAt }),
+        }).catch(() => {});
+      }
+    } catch (error) {
+      return { ...base, reason: error instanceof Error ? error.message : String(error) };
+    }
+  } else {
+    const cached = await readCache();
+    if (cached) release = cachedRelease(cached);
+    // Nothing cached yet, or the cache is stale — warm it for the next poll
+    // without making this call wait on the network.
+    if (!cached || Date.now() - cached.checkedAt >= checkIntervalMs()) spawnUpdateCheck();
+  }
+  if (!release) return base;
+  return {
+    ...base,
+    latest: releaseLabel(release),
+    available: isNewerRelease(release, running),
+  };
+}
+
+function unsupportedReason(method: InstallMethod): string {
+  return method === "source"
+    ? "this Velloo is running from source; update the checkout with your Git workflow"
+    : "could not identify this installation. Reinstall with `npm install -g velloo@latest` or the installer at https://get.velloo.design/install.sh";
+}
+
+export interface UpgradeOutcome {
+  /** True when a new build was installed. */
+  upgraded: boolean;
+  from: string;
+  /** The release that is now installed (or already was). */
+  to: string;
+  method: InstallMethod;
+  channel: string;
+}
+
+/**
+ * Replace this installation with the newest release on its channel.
+ *
+ * Homebrew is deliberately not driven through the archive installer: brew owns
+ * the files it wrote, and a self-extract over them leaves the formula's
+ * receipt describing a version that is no longer there.
+ */
+export async function upgradeInstalledVelloo(
+  options: { checkOnly?: boolean } = {},
+): Promise<UpgradeOutcome> {
+  const method = installMethod();
+  const channel = releaseChannel();
+  const running = runningRelease();
+  if (!selfUpgradable(method)) throw new Error(unsupportedReason(method));
+
+  const latest = await fetchLatestRelease();
+  if (!latest) {
+    throw new Error(
+      channel === "local"
+        ? `no local build found at ${localReleasePath()} — run \`bun run cli:build\` in the velloo checkout first`
+        : "this channel has no published release",
+    );
+  }
+  const done = (upgraded: boolean): UpgradeOutcome => ({
+    upgraded,
+    from: releaseLabel(running),
+    to: releaseLabel(latest),
+    method,
+    channel,
+  });
+
+  if (!isNewerRelease(latest, running)) {
+    console.log(`velloo: ${releaseLabel(running)} is already the latest ${channel} build.`);
+    return done(false);
   }
   if (options.checkOnly) {
-    console.log(`velloo: ${PACKAGE_VERSION} → ${latest} is available (${method} installation).`);
-    return;
+    console.log(
+      `velloo: ${releaseLabel(running)} → ${releaseLabel(latest)} is available (${method} installation, ${channel} channel).`,
+    );
+    return done(false);
   }
 
-  if (method === "npm") {
+  if (method === "homebrew") {
+    await runInherited(["brew", "upgrade", process.env.VELLOO_BREW_FORMULA ?? "velloo"]);
+  } else if (channel === "local") {
+    await upgradeFromLocalBuild();
+  } else if (method === "npm") {
     const packageName = process.env.VELLOO_NPM_PACKAGE ?? "velloo";
-    await runInherited([npmExecutable(), "install", "-g", `${packageName}@${latest}`]);
+    // A dev-channel release never reaches the registry, so npm is pointed at
+    // the channel's own tarball rather than at a version specifier.
+    const spec =
+      channel === "dev" ? `${downloadBase()}/velloo.tgz` : `${packageName}@${latest.version}`;
+    await runInherited([npmExecutable(), "install", "-g", spec]);
   } else {
-    const installerUrl = process.env.VELLOO_INSTALLER_URL ?? DEFAULT_INSTALLER_URL;
-    const response = await fetch(installerUrl, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetch(installerUrl(), { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) throw new Error(`installer download returned HTTP ${response.status}`);
     const directory = await mkdtemp(join(tmpdir(), "velloo-upgrade-"));
     const installer = join(directory, "install.sh");
     try {
       await writeFile(installer, await response.text(), { mode: 0o700 });
-      await runInherited(["bash", installer], { ...process.env, VELLOO_VERSION: latest });
+      await runInherited(["bash", installer], {
+        ...process.env,
+        VELLOO_VERSION: latest.version,
+        VELLOO_DOWNLOAD_BASE: downloadBase(),
+      });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
   }
-  console.log(`velloo: upgraded ${PACKAGE_VERSION} → ${latest} via ${method}.`);
+  console.log(`velloo: upgraded ${releaseLabel(running)} → ${releaseLabel(latest)} via ${method}.`);
+  return done(true);
+}
+
+/**
+ * Install the tarball the contributor's last `bun run cli:build` packed. The
+ * artifact is an ordinary npm package, so this is the same command
+ * `bun run cli:install` runs — the point of the channel is only that
+ * `velloo upgrade` can find it without them retyping the path.
+ */
+async function upgradeFromLocalBuild(): Promise<void> {
+  const local = await readLocalRelease();
+  if (!local) throw new Error("no local build recorded — run `bun run cli:build` first");
+  if (!existsSync(local.tarball)) {
+    throw new Error(
+      `the recorded local build is gone (${local.tarball}) — run \`bun run cli:build\` in ${local.repo} again`,
+    );
+  }
+  await runInherited([npmExecutable(), "install", "-g", "--include=optional", local.tarball]);
 }

@@ -30,8 +30,10 @@ import { createRevertRouter } from "./routes/revert.ts";
 import { createSearchRouter } from "./routes/search.ts";
 import { createThemeRouter } from "./routes/theme.ts";
 import { createUndoRouter } from "./routes/undo.ts";
+import { createUpdatesRouter } from "./routes/updates.ts";
 import { localOnlyMiddleware } from "./security.ts";
 import type { TailwindJit } from "./styles/tailwind-jit.ts";
+import type { CanvasUpdates } from "./updates.ts";
 
 /**
  * Build the Hono app. WS upgrade and static SPA serving are attached at
@@ -46,6 +48,7 @@ export function createApp(
   publish?: PublishRunner,
   cloud?: CloudAuth,
   comments?: LocalCommentsService,
+  updates?: CanvasUpdates,
 ): Hono {
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
@@ -87,6 +90,7 @@ export function createApp(
   app.route("/api/notes", createNotesRouter(ctxFor));
   app.route("/api/auth", createAuthRouter(auth));
   app.route("/api/publish", createPublishRouter(publish));
+  app.route("/api/updates", createUpdatesRouter(updates));
   app.route(
     "/api/undo",
     createUndoRouter(folder, (e) => ctxFor().broadcast(e)),

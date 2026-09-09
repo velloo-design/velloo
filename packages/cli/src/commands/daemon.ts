@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import {
   type CanvasAuth,
   type CanvasPublish,
+  type CanvasUpdates,
   createServer,
   type ServerHandle,
 } from "@velloo/server";
@@ -10,6 +11,7 @@ import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { createCanvasAuth } from "../daemon/canvas-auth.ts";
 import { createCanvasPublish } from "../daemon/canvas-publish.ts";
+import { createCanvasUpdates } from "../daemon/canvas-updates.ts";
 import {
   type DaemonRecord,
   daemonRoot,
@@ -72,6 +74,9 @@ export default defineCommand({
     // Takes `auth` so both read one verdict on the stored credential: the
     // account menu and the publish dialog must never disagree about it.
     const publish: CanvasPublish = createCanvasPublish(cloudUrl, auth);
+    // Self-update for the canvas menu. The daemon inherits the launcher's
+    // install-method env, so it knows how this velloo replaces itself.
+    const updates: CanvasUpdates = createCanvasUpdates();
 
     // Probe this folder's ports in order (see portCandidates), fall back to a
     // free one. Whatever it lands on is remembered below, so the next start
@@ -92,6 +97,7 @@ export default defineCommand({
         cloud,
         auth,
         publish,
+        updates,
       });
     } catch (err) {
       // Lost the preferred port between probe and bind — take any free port.
@@ -104,6 +110,7 @@ export default defineCommand({
         cloud,
         auth,
         publish,
+        updates,
       });
     }
 

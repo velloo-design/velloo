@@ -50,7 +50,14 @@ if (process.platform === "win32" && process.argv.length === 3 && process.argv[2]
   const packageName = process.env.VELLOO_NPM_PACKAGE || "velloo";
   const upgrade = spawnSync(npm, ["install", "-g", `${packageName}@latest`], { stdio: "inherit" });
   if (upgrade.error) die(`could not start npm: ${upgrade.error.message}`);
-  process.exit(upgrade.status == null ? 1 : upgrade.status);
+  if (upgrade.status !== 0) process.exit(upgrade.status == null ? 1 : upgrade.status);
+  // npm rewrote this launcher's package in place, so re-entering by the same
+  // path runs the NEW velloo — which is the one that must migrate the design
+  // folder, since only it knows the format it migrated towards.
+  const migrate = spawnSync(process.execPath, [__filename, "upgrade", "--folder-only"], {
+    stdio: "inherit",
+  });
+  process.exit(migrate.status == null ? 1 : migrate.status);
 }
 
 const runtimeName = runtimePackage();
@@ -80,6 +87,9 @@ const child = spawnSync(runtime, [app, ...process.argv.slice(2)], {
     VELLOO_INSTALL_METHOD: process.env.VELLOO_INSTALL_METHOD || "npm",
     VELLOO_NPM_PACKAGE: process.env.VELLOO_NPM_PACKAGE || "velloo",
     VELLOO_NODE_EXECUTABLE: process.execPath,
+    // The install path is how a Homebrew-managed velloo is told apart from an
+    // npm one under a Homebrew-installed Node (both live under /opt/homebrew).
+    VELLOO_LAUNCHER_PATH: __filename,
   },
 });
 

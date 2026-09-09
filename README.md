@@ -95,7 +95,7 @@ HTTP clients use the printed query-bearing URL. MCP configuration can also set
 `VELLOO_MCP_SURFACE`. The shared canvas daemon remains one writer; each MCP
 session independently selects its public tool surface.
 
-`Ctrl-C` stops the server. Velloo periodically checks for a newer release without delaying commands and prints a small notice when one is available. Run `velloo upgrade` to update through the channel that installed it (npm-global or standalone). To migrate an older design-folder format, pass the folder explicitly: `velloo upgrade <folder>`.
+`Ctrl-C` stops the server. Velloo periodically checks for a newer release without delaying commands and prints a small notice when one is available; the canvas shows the same news as a toast and a dot on the account menu, with an **Update velloo** entry that runs it. `velloo upgrade` does both halves: it updates the installation through whatever channel installed it (npm-global, the standalone installer, or Homebrew), then migrates the design folder you are standing in to the current on-disk format — with the newly installed binary, since only it knows the format it migrates towards. Run it from anywhere without a design folder and it just updates the installation. `velloo upgrade --check` reports both without changing anything.
 
 ### Screenshots — the one optional extra
 

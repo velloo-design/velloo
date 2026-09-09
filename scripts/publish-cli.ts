@@ -107,6 +107,10 @@ function run(cmd: string[], env?: Record<string, string>): void {
 if (!noBuild) {
   run(["bun", join(repoRoot, "scripts", "build-release-artifacts.ts")], {
     VELLOO_BUILD_CLOUD_URL: cloudUrl,
+    // The channel is what the shipped binaries poll for updates, so it has to
+    // match the host they are being uploaded to.
+    VELLOO_BUILD_CHANNEL: envName === "prod" ? "stable" : envName,
+    VELLOO_DOWNLOAD_BASE: `https://${target.getHost}`,
   });
 }
 
@@ -126,6 +130,7 @@ const files = readdirSync(artifactDir).filter(
     !name.startsWith(".") &&
     !name.startsWith("direct-") &&
     (name === "install.sh" ||
+      name === "latest.json" ||
       name === "SHA256SUMS" ||
       name.endsWith(".tgz") ||
       name.endsWith(".tar.gz") ||
