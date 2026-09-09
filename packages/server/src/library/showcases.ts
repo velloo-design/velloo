@@ -180,150 +180,123 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
   // payload to look at; instead we render a stylized mockup of what the
   // overlay would display when invoked. Same idea for AlertDialog, Sheet,
   // Popover, DropdownMenu, Tooltip below.
+  // Overlays compose the way the canvas-portal contract intends: the Root
+  // pins open in design mode and Content renders inline, so the tile is the
+  // real family rather than a card that resembles it.
   Dialog: () => ({
-    $ref: "Card",
-    props: { className: "p-4 flex flex-col gap-3 w-72" },
+    $ref: "Dialog",
     children: [
       {
-        $ref: "Card",
-        props: {
-          className: "flex flex-col gap-0.5 ring-0 shadow-none bg-transparent p-0",
-        },
+        $ref: "DialogContent",
+        props: { className: "w-72" },
         children: [
           {
-            $ref: "Heading",
-            props: { level: 3, className: "text-sm font-semibold", children: "Confirm change" },
+            $ref: "DialogHeader",
+            children: [
+              { $ref: "DialogTitle", props: { children: "Confirm change" } },
+              {
+                $ref: "DialogDescription",
+                props: { children: "Modal dialog content shown when triggered." },
+              },
+            ],
           },
           {
-            $ref: "Text",
-            props: {
-              className: "text-xs text-muted-foreground",
-              children: "Modal dialog content shown when triggered.",
-            },
+            $ref: "DialogFooter",
+            children: [
+              { $ref: "Button", props: { variant: "outline", size: "sm", children: "Cancel" } },
+              { $ref: "Button", props: { size: "sm", children: "Save" } },
+            ],
           },
-        ],
-      },
-      {
-        $ref: "Card",
-        props: {
-          className: "flex flex-row gap-2 justify-end ring-0 shadow-none bg-transparent p-0",
-        },
-        children: [
-          { $ref: "Button", props: { variant: "outline", size: "sm", children: "Cancel" } },
-          { $ref: "Button", props: { size: "sm", children: "Save" } },
         ],
       },
     ],
   }),
   AlertDialog: () => ({
-    $ref: "Card",
-    props: { className: "p-4 flex flex-col gap-3 w-72" },
+    $ref: "AlertDialog",
     children: [
       {
-        $ref: "Card",
-        props: {
-          className: "flex flex-col gap-0.5 ring-0 shadow-none bg-transparent p-0",
-        },
+        $ref: "AlertDialogContent",
+        props: { className: "w-72" },
         children: [
           {
-            $ref: "Heading",
-            props: { level: 3, className: "text-sm font-semibold", children: "Delete file?" },
+            $ref: "AlertDialogHeader",
+            children: [
+              { $ref: "AlertDialogTitle", props: { children: "Delete file?" } },
+              {
+                $ref: "AlertDialogDescription",
+                props: { children: "This action can't be undone." },
+              },
+            ],
           },
           {
-            $ref: "Text",
-            props: {
-              className: "text-xs text-muted-foreground",
-              children: "This action can't be undone.",
-            },
+            $ref: "AlertDialogFooter",
+            children: [
+              { $ref: "AlertDialogCancel", props: { size: "sm", children: "Cancel" } },
+              {
+                $ref: "AlertDialogAction",
+                props: { variant: "destructive", size: "sm", children: "Delete" },
+              },
+            ],
           },
-        ],
-      },
-      {
-        $ref: "Card",
-        props: {
-          className: "flex flex-row gap-2 justify-end ring-0 shadow-none bg-transparent p-0",
-        },
-        children: [
-          { $ref: "Button", props: { variant: "outline", size: "sm", children: "Cancel" } },
-          { $ref: "Button", props: { variant: "destructive", size: "sm", children: "Delete" } },
         ],
       },
     ],
   }),
   Popover: () => ({
-    $ref: "Card",
-    props: { className: "p-3 flex flex-col gap-2 w-56" },
+    $ref: "Popover",
     children: [
       {
-        $ref: "Text",
-        props: { className: "text-xs font-medium", children: "Popover content" },
-      },
-      {
-        $ref: "Text",
-        props: {
-          className: "text-[10px] text-muted-foreground",
-          children: "Anchored to a trigger.",
-        },
+        $ref: "PopoverContent",
+        props: { className: "w-56" },
+        children: [
+          {
+            $ref: "PopoverHeader",
+            children: [
+              { $ref: "PopoverTitle", props: { children: "Popover content" } },
+              { $ref: "PopoverDescription", props: { children: "Anchored to a trigger." } },
+            ],
+          },
+        ],
       },
     ],
   }),
   DropdownMenu: () => ({
-    $ref: "Card",
-    props: {
-      className: "p-1 flex flex-col gap-0.5 w-44 ring-0",
-    },
+    $ref: "DropdownMenu",
     children: [
       {
-        $ref: "Card",
-        props: {
-          className: "px-2 py-1 text-sm rounded-sm ring-0 shadow-none bg-transparent",
-        },
-        children: [{ $ref: "Text", props: { className: "text-sm", children: "Profile" } }],
-      },
-      {
-        $ref: "Card",
-        props: {
-          className: "px-2 py-1 text-sm rounded-sm bg-muted ring-0 shadow-none",
-        },
-        children: [{ $ref: "Text", props: { className: "text-sm", children: "Settings" } }],
-      },
-      { $ref: "Separator", props: { className: "my-1" } },
-      {
-        $ref: "Card",
-        props: {
-          className:
-            "px-2 py-1 text-sm rounded-sm text-destructive ring-0 shadow-none bg-transparent",
-        },
+        $ref: "DropdownMenuContent",
+        props: { className: "w-44" },
         children: [
-          { $ref: "Text", props: { className: "text-sm text-destructive", children: "Log out" } },
+          { $ref: "DropdownMenuItem", props: { children: "Profile" } },
+          { $ref: "DropdownMenuItem", props: { children: "Settings" } },
+          { $ref: "DropdownMenuSeparator" },
+          {
+            $ref: "DropdownMenuItem",
+            props: { variant: "destructive", children: "Log out" },
+          },
         ],
       },
     ],
   }),
   Tooltip: () => ({
-    $ref: "Card",
-    props: {
-      className:
-        "px-2.5 py-1.5 rounded-md bg-foreground text-background text-xs font-medium ring-0",
-    },
-    children: [{ $ref: "Text", props: { className: "text-xs", children: "Helpful hint" } }],
+    $ref: "Tooltip",
+    children: [{ $ref: "TooltipContent", props: { children: "Helpful hint" } }],
   }),
   Sheet: () => ({
-    $ref: "Card",
-    props: {
-      className: "p-4 flex flex-col gap-3 w-64 border-l-2 border-l-foreground/20",
-    },
+    $ref: "Sheet",
     children: [
       {
-        $ref: "Heading",
-        props: { level: 3, className: "text-sm font-semibold", children: "Slide-in panel" },
-      },
-      {
-        $ref: "Text",
-        props: {
-          className: "text-xs text-muted-foreground",
-          children: "Drawer mounted on a screen edge.",
-        },
+        $ref: "SheetContent",
+        props: { side: "right", className: "h-56 w-64 rounded-lg p-4" },
+        children: [
+          {
+            $ref: "SheetHeader",
+            children: [
+              { $ref: "SheetTitle", props: { children: "Slide-in panel" } },
+              { $ref: "SheetDescription", props: { children: "Drawer mounted on a screen edge." } },
+            ],
+          },
+        ],
       },
     ],
   }),

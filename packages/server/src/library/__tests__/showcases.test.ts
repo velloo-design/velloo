@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { renderScreen } from "@velloo/renderer";
 import type { ComponentNode, Node } from "@velloo/schema";
 import { isComponentNode } from "@velloo/schema";
-import { testContext } from "../../testing/design-folder.ts";
+import { designTheme, testContext } from "../../testing/design-folder.ts";
 import { buildShowcaseTree, showcaseIds } from "../showcases.ts";
 
 /**
@@ -62,18 +63,66 @@ describe("the showcase table agrees with the library", () => {
   });
 
   test("every showcase actually contains the component it is showing", () => {
-    // Not necessarily at the root — a Label needs the input it labels — but a
-    // showcase that has drifted off its subject entirely previews the wrong
-    // component. The exceptions are the overlays, whose tiles are hand-drawn
-    // out of Card and Text rather than the real family: a tile is too small to
-    // host one, and the snapshot's overlays render pinned open. That makes
-    // their preview an imitation that theme changes won't follow, so the list
-    // is pinned here rather than left to grow quietly.
-    const IMITATED = ["AlertDialog", "Dialog", "DropdownMenu", "Popover", "Sheet", "Tooltip"];
-    const absent = showcaseIds()
-      .filter((id) => !refsIn(buildShowcaseTree(id)).includes(id))
-      .sort();
-    expect(absent).toEqual(IMITATED);
+    // Not necessarily at the root — a Label needs the input it labels, an
+    // overlay needs its Root around the Content — but a showcase that has
+    // drifted off its subject entirely previews the wrong component, which is
+    // what the overlays used to do when their tiles were drawn from Card.
+    const absent = showcaseIds().filter((id) => !refsIn(buildShowcaseTree(id)).includes(id));
+    expect(absent).toEqual([]);
+  });
+});
+
+describe("showcases render", () => {
+  /** SSR one showcase the way the preview route does, and return its body. */
+  const html = async (id: string): Promise<string> => {
+    const { bodyHtml } = await renderScreen(
+      { id: `${id}__preview`, name: id, tree: buildShowcaseTree(id) },
+      designTheme(),
+      {
+        viewport: { w: 320, h: 240 },
+        snapshotCss: "",
+        registry: folder.ctx.defaultProvider.registry,
+        includeRuntime: false,
+      },
+    );
+    return bodyHtml;
+  };
+
+  test("every showcase produces markup, not an empty box", async () => {
+    const empty: string[] = [];
+    for (const id of showcaseIds()) {
+      if ((await html(id)).trim().length === 0) empty.push(id);
+    }
+    expect(empty).toEqual([]);
+  });
+
+  test("the overlays render their own family's slots, inline", async () => {
+    // The whole reason these can be the real components: the Root pins open in
+    // design mode and Content drops the portal, so the family's own markup
+    // lands in the page flow where a tile can show it.
+    for (const [id, slot] of [
+      ["Dialog", "dialog-content"],
+      ["AlertDialog", "alert-dialog-content"],
+      ["Popover", "popover-content"],
+      ["DropdownMenu", "dropdown-menu-content"],
+      ["Tooltip", "tooltip-content"],
+      ["Sheet", "sheet-content"],
+    ] as const) {
+      const markup = await html(id);
+      expect(markup).toContain(`data-slot="${slot}"`);
+      expect(markup).toContain('data-velloo-inline="true"');
+      // Inline means in the flow — never a viewport-pinned layer.
+      expect(markup).not.toContain("fixed inset-0");
+    }
+  });
+
+  test("overlay copy survives the move to the real components", async () => {
+    expect(await html("Dialog")).toContain("Confirm change");
+    expect(await html("AlertDialog")).toContain("Delete file?");
+    expect(await html("DropdownMenu")).toContain("Log out");
+    expect(await html("Tooltip")).toContain("Helpful hint");
+    expect(await html("Sheet")).toContain("Slide-in panel");
+    expect(await html("Popover")).toContain("Anchored to a trigger.");
   });
 });
 
