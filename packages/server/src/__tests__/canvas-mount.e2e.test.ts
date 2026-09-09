@@ -91,6 +91,54 @@ describe.skipIf(!RUN)("canvas mount (Playwright)", () => {
       await browser.close();
     }
   }, 30_000);
+
+  /**
+   * The mount hides the SSR tree rather than removing it, so it must give up
+   * its `data-node-path`s when it commits — otherwise a lookup that takes the
+   * first match measures the `display:none` copy (0x0) and the parent's resize
+   * grips collapse onto the frame's top-left corner. Drive the real protocol
+   * and check the reported box is the one the user can see.
+   */
+  test("reports rects from the mounted tree, not the hidden SSR copy", async () => {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.goto(base, { waitUntil: "networkidle" });
+      await page.waitForFunction("window.__velloo_canvas_ready === true", { timeout: 10_000 });
+      const r = await page.evaluate(async () => {
+        const mounted = document.querySelector<HTMLElement>("#velloo-canvas-root [data-node-path]");
+        if (!mounted) throw new Error("no mounted node carries a data-node-path");
+        const path = mounted.getAttribute("data-node-path") ?? "";
+        const box = mounted.getBoundingClientRect();
+        const channel = new MessageChannel();
+        const rects = await new Promise<{ path: string; w: number; h: number }[]>(
+          (resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error("no nodeRects")), 5000);
+            channel.port1.onmessage = (ev) => {
+              if (ev.data?.type !== "nodeRects") return;
+              clearTimeout(timer);
+              resolve(ev.data.rects);
+            };
+            window.postMessage({ type: "__velloo_init" }, "*", [channel.port2]);
+            channel.port1.postMessage({ type: "requestRects", paths: [path] });
+          },
+        );
+        return {
+          copies: document.querySelectorAll(`[data-node-path="${path}"]`).length,
+          reported: rects.find((rect) => rect.path === path) ?? null,
+          mounted: { w: box.width, h: box.height },
+        };
+      });
+      // The hidden copy is still in the document, but no longer answers to the
+      // path — which is what makes the single reported rect the right one.
+      expect(r.copies).toBe(1);
+      expect(r.mounted.w).toBeGreaterThan(0);
+      expect(r.reported?.w).toBeCloseTo(r.mounted.w, 1);
+      expect(r.reported?.h).toBeCloseTo(r.mounted.h, 1);
+    } finally {
+      await browser.close();
+    }
+  }, 30_000);
 });
 
 function startServer(html: string, bundle: string): ReturnType<typeof Bun.serve> {

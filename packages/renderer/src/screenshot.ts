@@ -915,6 +915,22 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
         .catch(() => {});
       // Islands live in the two child iframes, not the top document.
       await settleForCapture(page, wrapper, { liveIslands: false });
+      // `dataset.ready` only says the frame loaded and measured. Fonts, live
+      // islands and the framework-native mount all settle *after* that, and
+      // each half is its own document — so without this the comparison shot
+      // is of two SSR fallbacks in fallback fonts, which is precisely the
+      // fidelity the tool exists to judge. Mirrors the deck path's per-frame
+      // settle; the deck already did this and compare silently didn't.
+      await Promise.all(
+        page
+          .frames()
+          .filter((frame) => frame !== page.mainFrame())
+          .map(async (frame) => {
+            const html = frame.name() === "R" ? opts.rightHtml : opts.leftHtml;
+            await waitForFonts(frame);
+            await waitForLiveIslands(frame, html);
+          }),
+      );
       return await page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS });
     },
   );
@@ -958,11 +974,11 @@ function buildCompareWrapper(
   <div class="row">
     <div class="panel">
       <div class="label">${esc(leftLabel)}</div>
-      <iframe id="L" width="${panelWidth}" height="${panelHeight}" srcdoc="${esc(leftHtml)}"></iframe>
+      <iframe id="L" name="L" width="${panelWidth}" height="${panelHeight}" srcdoc="${esc(leftHtml)}"></iframe>
     </div>
     <div class="panel">
       <div class="label">${esc(rightLabel)}</div>
-      <iframe id="R" width="${panelWidth}" height="${panelHeight}" srcdoc="${esc(rightHtml)}"></iframe>
+      <iframe id="R" name="R" width="${panelWidth}" height="${panelHeight}" srcdoc="${esc(rightHtml)}"></iframe>
     </div>
   </div>
   <script>

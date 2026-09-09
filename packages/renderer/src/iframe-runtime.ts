@@ -222,6 +222,16 @@ export const IFRAME_RUNTIME = String.raw`
     document.querySelectorAll('.' + cls).forEach((el) => el.classList.remove(cls));
   }
 
+  // The repo-backed canvas mount leaves the SSR tree in the document, hidden,
+  // so a failed mount can restore it — but it strips the identity attributes
+  // off that copy the moment it commits (CANVAS_RUNTIME's dropIdentity). So a
+  // path resolves to the rendered element and these can be plain lookups; if
+  // that ever stops being true the symptom is a 0x0 rect, which the
+  // canvas-mount e2e suite asserts against.
+  function pathSelector(path) {
+    return '[data-node-path="' + String(path).replace(/"/g, '\\"') + '"]';
+  }
+
   function applyHighlight(path, cls, scroll, kind, snippetPath) {
     clearClass(cls);
     if (cls === SELECT_CLASS) {
@@ -237,7 +247,7 @@ export const IFRAME_RUNTIME = String.raw`
         '[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\"') + '"][data-snippet-path="' + String(snippetPath).replace(/"/g, '\\"') + '"]',
       );
     } else if (path !== null && path !== undefined) {
-      els = document.querySelectorAll('[data-node-path="' + path.replace(/"/g, '\\"') + '"]');
+      els = document.querySelectorAll(pathSelector(path));
     } else {
       return;
     }
@@ -261,7 +271,7 @@ export const IFRAME_RUNTIME = String.raw`
       .querySelectorAll('[data-velloo-state]')
       .forEach((el) => el.removeAttribute('data-velloo-state'));
     if (!state || state === 'default' || path === null || path === undefined) return;
-    const el = document.querySelector('[data-node-path="' + path.replace(/"/g, '\\"') + '"]');
+    const el = document.querySelector(pathSelector(path));
     if (el) el.setAttribute('data-velloo-state', state);
   }
 
@@ -295,7 +305,7 @@ export const IFRAME_RUNTIME = String.raw`
     const els = [];
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i];
-      const el = document.querySelector('[data-node-path="' + String(path).replace(/"/g, '\\"') + '"]');
+      const el = document.querySelector(pathSelector(path));
       if (!el) continue;
       els.push(el);
       const r = el.getBoundingClientRect();
@@ -319,7 +329,7 @@ export const IFRAME_RUNTIME = String.raw`
   // What a slot the node says nothing about actually resolves to. The parent
   // shows it greyed, so the field reads "16" rather than a dash.
   function reportComputed(path) {
-    const el = document.querySelector('[data-node-path="' + String(path).replace(/"/g, '\\"') + '"]');
+    const el = document.querySelector(pathSelector(path));
     if (!el) return;
     const cs = getComputedStyle(el);
     const values = {};

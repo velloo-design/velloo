@@ -36,8 +36,29 @@ export const CANVAS_RUNTIME = `
     if (ssr) ssr.style.display = "";
     window.__velloo_canvas_ready = true;
   }
+  // The SSR tree stays in the document as a visual fallback, but it must stop
+  // answering to node identity the moment the mount owns the screen. Every
+  // consumer resolves a path to the FIRST match — the iframe runtime's rects,
+  // computed styles and forced states, and the capture path's clip locator and
+  // rect sweep — and a display:none copy measures 0x0. Stripping here fixes all
+  // of them at once; filtering at each call site only fixes the ones that
+  // remembered to, and the capture path (a Playwright selector, not our code)
+  // could not be fixed that way at all.
+  var IDENTITY_ATTRS = ["data-node-path", "data-snippet-id", "data-snippet-path"];
+
+  function dropIdentity(el) {
+    var stale = el.querySelectorAll("[" + IDENTITY_ATTRS.join("],[") + "]");
+    for (var i = 0; i < stale.length; i++) {
+      for (var j = 0; j < IDENTITY_ATTRS.length; j++) stale[i].removeAttribute(IDENTITY_ATTRS[j]);
+    }
+    for (var k = 0; k < IDENTITY_ATTRS.length; k++) el.removeAttribute(IDENTITY_ATTRS[k]);
+  }
+
   function settleOnMount() {
-    if (ssr) ssr.style.display = "none";
+    if (ssr) {
+      ssr.style.display = "none";
+      dropIdentity(ssr);
+    }
     window.__velloo_canvas_ready = true;
   }
 

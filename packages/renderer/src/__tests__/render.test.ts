@@ -155,7 +155,9 @@ describe("renderScreen", () => {
   test("no canvasBundle ⇒ no #velloo-ssr wrapper or mount runtime (SSR unchanged)", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html } = await renderScreen(screen, sampleTheme, opts);
-    expect(html).not.toContain("velloo-ssr");
+    // The iframe runtime names the wrapper too (it skips the hidden copy when
+    // resolving a node path), so the assertion is about the wrapper itself.
+    expect(html).not.toContain('id="velloo-ssr"');
     expect(html).not.toContain("__velloo_canvas");
   });
 
