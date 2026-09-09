@@ -14,6 +14,7 @@
       "!**/.design",
       "!velloo",
       "!initial-board",
+      "!demo-boards",
       "!**/tailwind-entry.css",
       // Vendored verbatim from the shadcn package; its @custom-variant blocks
       // use Tailwind-only syntax the CSS parser rejects, and reformatting a

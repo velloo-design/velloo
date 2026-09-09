@@ -1,0 +1,203 @@
+{
+  "id": "elsewhere-destination",
+  "name": "DestinationCard",
+  "params": [
+    {
+      "name": "image",
+      "type": "string"
+    },
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "country",
+      "type": "string"
+    },
+    {
+      "name": "note",
+      "type": "string"
+    }
+  ],
+  "tree": {
+    "$ref": "Card",
+    "props": {
+      "sx": {
+        "backgroundColor": "var(--color-card)",
+        "color": "var(--color-card-foreground)",
+        "border": "1px solid var(--color-border)",
+        "borderRadius": "16px",
+        "display": "flex",
+        "flexDirection": "column",
+        "gap": "0px",
+        "padding": "0px",
+        "overflow": "hidden",
+        "boxShadow": "none"
+      }
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "block",
+            "position": "relative",
+            "height": "210px",
+            "overflow": "hidden"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Image",
+            "props": {
+              "src": {
+                "$param": "image"
+              },
+              "fill": false,
+              "style": {
+                "display": "block",
+                "objectFit": "cover",
+                "position": "absolute",
+                "inset": "0px",
+                "height": "100%",
+                "width": "100%"
+              }
+            }
+          },
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "contained",
+              "aria-label": "Save destination",
+              "sx": {
+                "textTransform": "none",
+                "fontSize": "12px",
+                "minHeight": "36px",
+                "padding": "0px",
+                "display": "inline-flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "gap": "8px",
+                "whiteSpace": "nowrap",
+                "borderRadius": "9999px",
+                "boxShadow": "none",
+                "lineHeight": 1.4,
+                "backgroundColor": "var(--color-secondary)",
+                "color": "var(--color-secondary-foreground)",
+                "border": "1px solid transparent",
+                "width": "32px",
+                "height": "32px",
+                "minWidth": "32px",
+                "position": "absolute",
+                "right": "12px",
+                "top": "12px"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "Heart",
+                  "style": {
+                    "width": "16px",
+                    "height": "16px",
+                    "flexShrink": 0
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "block",
+            "padding": "20px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": {
+                "$param": "country"
+              },
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "10px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)",
+                "textTransform": "uppercase",
+                "letterSpacing": "0.18em"
+              }
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "marginTop": "8px"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Typography",
+                "props": {
+                  "children": {
+                    "$param": "name"
+                  },
+                  "component": "h2",
+                  "sx": {
+                    "display": "block",
+                    "margin": "0px",
+                    "fontSize": "30px",
+                    "lineHeight": 1.15,
+                    "color": "inherit",
+                    "fontFamily": "var(--font-display, Georgia, serif)",
+                    "fontWeight": 400,
+                    "letterSpacing": "-0.035em"
+                  }
+                }
+              },
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "ArrowUpRight",
+                  "style": {
+                    "width": "16px",
+                    "height": "16px",
+                    "flexShrink": 0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": {
+                "$param": "note"
+              },
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "12px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)",
+                "marginTop": "8px"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

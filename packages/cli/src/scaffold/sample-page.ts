@@ -1,33 +1,34 @@
-/**
- * Sample design shipped by `velloo init`. The screens, snippets, board layout,
- * and theme are kept as canonical JSON under ./pulse/ — easier to iterate on
- * inside the canvas, then re-copy here when something improves.
- *
- * Three boards (App + Marketing + Playground), seven screens. Every color
- * uses semantic theme tokens so it adapts cleanly to dark mode. Playground
- * hosts the components showcase — every component Velloo ships on one
- * screen, useful as a visual reference for what's available to designs.
- */
+/** Elsewhere: the canonical welcome design shared by every provider. */
 import type { Board, Screen } from "@velloo/schema";
-
-import appBoard from "./pulse/boards/app.json" with { type: "json" };
-import marketingBoard from "./pulse/boards/marketing.json" with { type: "json" };
-import playgroundBoard from "./pulse/boards/playground.json" with { type: "json" };
-import dashboard from "./pulse/screens/dashboard.json" with { type: "json" };
-import insights from "./pulse/screens/insights.json" with { type: "json" };
-import landing from "./pulse/screens/landing.json" with { type: "json" };
-import pricing from "./pulse/screens/pricing.json" with { type: "json" };
-import settings from "./pulse/screens/settings.json" with { type: "json" };
-import showcase from "./pulse/screens/showcase.json" with { type: "json" };
-import signup from "./pulse/screens/signup.json" with { type: "json" };
-
-const APP_SCREENS = [dashboard, insights, settings] as Screen[];
-const MARKETING_SCREENS = [landing, pricing, signup] as Screen[];
-
+import elsewhere_discover from "./elsewhere/screens/elsewhere-discover.json" with { type: "json" };
+import elsewhere_itinerary from "./elsewhere/screens/elsewhere-itinerary.json" with {
+  type: "json",
+};
+import elsewhere_overview from "./elsewhere/screens/elsewhere-overview.json" with { type: "json" };
+import elsewhere_stay from "./elsewhere/screens/elsewhere-stay.json" with { type: "json" };
+import elsewhere_trips_board from "./elsewhere/screens/elsewhere-trips-board.json" with {
+  type: "json",
+};
+import elsewhere_trips_journal from "./elsewhere/screens/elsewhere-trips-journal.json" with {
+  type: "json",
+};
+import elsewhere_trips_library from "./elsewhere/screens/elsewhere-trips-library.json" with {
+  type: "json",
+};
 export function buildSampleScreens(): Screen[] {
-  return [...MARKETING_SCREENS, ...APP_SCREENS, showcase as Screen];
+  return structuredClone([
+    elsewhere_discover,
+    elsewhere_itinerary,
+    elsewhere_overview,
+    elsewhere_stay,
+    elsewhere_trips_board,
+    elsewhere_trips_journal,
+    elsewhere_trips_library,
+  ] as Screen[]);
 }
 
+import elsewhere_details from "./elsewhere/boards/elsewhere-details.json" with { type: "json" };
+import main from "./elsewhere/boards/main.json" with { type: "json" };
 export function buildSampleBoards(): Board[] {
-  return [appBoard as Board, marketingBoard as Board, playgroundBoard as Board];
+  return structuredClone([main, elsewhere_details] as Board[]);
 }

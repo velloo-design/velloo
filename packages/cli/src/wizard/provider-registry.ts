@@ -8,20 +8,7 @@ import { MUI_VERSION } from "@velloo/provider-mui/version";
 import { noLibVersion } from "@velloo/provider-none/version";
 import type { Config, Library, Theme } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
-import { buildAntdBoards, buildAntdScreens, buildAntdSnippets } from "../scaffold/antd-sample.ts";
-import {
-  buildChakraBoards,
-  buildChakraScreens,
-  buildChakraSnippets,
-} from "../scaffold/chakra-sample.ts";
-import { buildMuiBoards, buildMuiScreens, buildMuiSnippets } from "../scaffold/mui-sample.ts";
-import {
-  buildNoLibBoards,
-  buildNoLibScreens,
-  buildNoLibSnippets,
-} from "../scaffold/nolib-sample.ts";
-import { buildSampleBoards, buildSampleScreens } from "../scaffold/sample-page.ts";
-import { buildSampleSnippets } from "../scaffold/sample-snippets.ts";
+import { buildElsewhereScaffold } from "../scaffold/elsewhere-sample.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
 import type { DetectedHost, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 
@@ -72,10 +59,9 @@ export interface WizardProviderEntry {
   /** Resolve the wizard's answers into this provider's library declaration. */
   planInstall(answers: WizardAnswers): InstallPlan;
   /**
-   * The provider's own sample scaffold, or undefined to ship the shadcn
-   * welcome-sample default (see `sampleScaffold`).
+   * The complete Elsewhere sample composed for this provider.
    */
-  buildSampleScaffold(theme: Theme, answers: WizardAnswers): Scaffold | undefined;
+  buildSampleScaffold(theme: Theme, answers: WizardAnswers): Scaffold;
   /**
    * `config.styling` for a fresh folder — only the no-framework provider has
    * a real CSS-framework choice; single-channel providers return undefined.
@@ -132,8 +118,8 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
         pendingUpstream: { targetDir, relative: answers.componentsRelative },
       };
     },
-    // The welcome sample is shadcn-native — the shared default in `sampleScaffold` carries it.
-    buildSampleScaffold: () => undefined,
+    // The canonical design uses shadcn; other providers rebuild native controls.
+    buildSampleScaffold: (theme) => buildElsewhereScaffold("shadcn-upstream", theme),
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "shadcn",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
@@ -170,19 +156,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
         location: "bundled with velloo",
       },
     }),
-    // No-library welcome sample doesn't exist (Avatar / Tabs / Accordion / Chart have
-    // no no-lib equivalents) — a smaller two-screen welcome sample instead.
-    buildSampleScaffold: (theme) => ({
-      theme,
-      screens: buildNoLibScreens(),
-      boards: buildNoLibBoards(),
-      snippets: buildNoLibSnippets(),
-      annotations: [],
-      notes: [],
-    }),
-    // The one provider with a real CSS-framework choice: detect Tailwind in
-    // the host (config/dep) ⇒ "tailwind", otherwise ⇒ "none" (inline styles,
-    // no build step).
+    buildSampleScaffold: (theme) => buildElsewhereScaffold("none", theme),
     stylingFor: (answers) => ({
       framework: answers.detected?.tailwindMajor ? "tailwind" : "none",
     }),
@@ -211,16 +185,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       library: { id: "mui", version: MUI_VERSION, source: "binary", componentsPath: "binary" },
       summary: { name: `Material UI v${MUI_VERSION}`, location: "bundled with velloo" },
     }),
-    // The welcome sample isn't ported to MUI (its shadcn composition would need a full
-    // redesign) — a two-screen MUI welcome sample (sx styling) instead.
-    buildSampleScaffold: (theme) => ({
-      theme,
-      screens: buildMuiScreens(),
-      boards: buildMuiBoards(),
-      snippets: buildMuiSnippets(),
-      annotations: [],
-      notes: [],
-    }),
+    buildSampleScaffold: (theme) => buildElsewhereScaffold("mui", theme),
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "mui",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
@@ -259,18 +224,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       library: { id: "antd", version: ANTD_VERSION, source: "binary", componentsPath: "binary" },
       summary: { name: `Ant Design v${ANTD_VERSION}`, location: "bundled with velloo" },
     }),
-    // The welcome sample isn't ported to antd (its shadcn composition would need a full
-    // redesign) — a two-screen antd welcome sample (inline styles) instead.
-    buildSampleScaffold: (theme) => ({
-      theme,
-      screens: buildAntdScreens(),
-      boards: buildAntdBoards(),
-      snippets: buildAntdSnippets(),
-      annotations: [],
-      notes: [],
-    }),
-    // The style channel is intrinsic (inline `style`, like MUI's `sx`) — the
-    // CSS-framework axis doesn't apply, so no `config.styling` is written.
+    buildSampleScaffold: (theme) => buildElsewhereScaffold("antd", theme),
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "antd",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
@@ -312,18 +266,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       },
       summary: { name: `Chakra UI v${CHAKRA_VERSION}`, location: "bundled with velloo" },
     }),
-    // The welcome sample isn't ported to chakra (its shadcn composition would need a full
-    // redesign) — a two-screen chakra welcome sample (sx styling) instead.
-    buildSampleScaffold: (theme) => ({
-      theme,
-      screens: buildChakraScreens(),
-      boards: buildChakraBoards(),
-      snippets: buildChakraSnippets(),
-      annotations: [],
-      notes: [],
-    }),
-    // The style channel is intrinsic (`sx`, like MUI) — the CSS-framework
-    // axis doesn't apply, so no `config.styling` is written.
+    buildSampleScaffold: (theme) => buildElsewhereScaffold("chakra", theme),
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "chakra",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
@@ -383,16 +326,7 @@ export function planInstall(answers: WizardAnswers): InstallPlan {
  * (shadcn-upstream) fall back to the full welcome sample.
  */
 export function sampleScaffold(answers: WizardAnswers, theme: Theme): Scaffold {
-  return (
-    WIZARD_PROVIDERS[answers.library].buildSampleScaffold(theme, answers) ?? {
-      theme,
-      screens: buildSampleScreens(),
-      boards: buildSampleBoards(),
-      snippets: buildSampleSnippets(),
-      annotations: [],
-      notes: [],
-    }
-  );
+  return WIZARD_PROVIDERS[answers.library].buildSampleScaffold(theme, answers);
 }
 
 /**

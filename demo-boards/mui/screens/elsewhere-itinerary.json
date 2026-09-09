@@ -1,0 +1,2283 @@
+{
+  "id": "elsewhere-itinerary",
+  "name": "03 · A day in Kyoto",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "data-ew-root": "",
+      "sx": {
+        "display": "block",
+        "backgroundColor": "var(--color-background)",
+        "color": "var(--color-foreground)",
+        "minHeight": "100vh",
+        "fontFamily": "var(--font-sans, sans-serif)"
+      }
+    },
+    "children": [
+      {
+        "$snippet": "elsewhere-nav",
+        "args": {}
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "block",
+            "borderBottom": "1px solid var(--color-border)",
+            "borderColor": "var(--color-border)",
+            "paddingLeft": "24px",
+            "paddingRight": "24px",
+            "@media (min-width: 768px)": {
+              "paddingLeft": "48px",
+              "paddingRight": "48px"
+            },
+            "paddingTop": "28px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "flex",
+                "justifyContent": "space-between",
+                "alignItems": "center",
+                "marginBottom": "24px"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "8px"
+                    }
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "YOUR NEXT CHAPTER",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "9px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-muted-foreground)",
+                        "letterSpacing": ".2em"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-5"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "A week in Kyoto",
+                      "component": "h2",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "36px",
+                        "lineHeight": 1.15,
+                        "color": "inherit",
+                        "fontFamily": "var(--font-display, Georgia, serif)",
+                        "fontWeight": 400,
+                        "letterSpacing": "-0.035em"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-6"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "12–17 October 2026   ·   2 travellers",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "12px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-muted-foreground)"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-7"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-4"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "none",
+                    "@media (min-width: 768px)": {
+                      "display": "flex"
+                    },
+                    "gap": "12px",
+                    "alignItems": "center"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex",
+                        "& > * + *": {
+                          "marginLeft": "-8px"
+                        }
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Avatar",
+                        "props": {
+                          "children": "AL",
+                          "sx": {
+                            "width": "32px",
+                            "height": "32px",
+                            "borderRadius": "50%",
+                            "backgroundColor": "var(--color-secondary)",
+                            "color": "var(--color-secondary-foreground)",
+                            "fontSize": "10px",
+                            "display": "flex",
+                            "alignItems": "center",
+                            "justifyContent": "center",
+                            "flexShrink": 0,
+                            "borderWidth": "2px",
+                            "borderStyle": "solid",
+                            "borderColor": "var(--color-background)"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-10"
+                      },
+                      {
+                        "$ref": "Avatar",
+                        "props": {
+                          "children": "JR",
+                          "sx": {
+                            "width": "32px",
+                            "height": "32px",
+                            "borderRadius": "50%",
+                            "backgroundColor": "var(--color-secondary)",
+                            "color": "var(--color-secondary-foreground)",
+                            "fontSize": "10px",
+                            "display": "flex",
+                            "alignItems": "center",
+                            "justifyContent": "center",
+                            "flexShrink": 0,
+                            "borderWidth": "2px",
+                            "borderStyle": "solid",
+                            "borderColor": "var(--color-background)"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-12"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-9"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "outlined",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "8px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "9999px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid var(--color-border)"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "UserPlus",
+                          "style": {
+                            "width": "16px",
+                            "height": "16px",
+                            "flexShrink": 0
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-15"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Invite",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "14px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-16"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-14"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "contained",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "8px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "9999px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "var(--color-primary)",
+                        "color": "var(--color-primary-foreground)",
+                        "border": "1px solid transparent"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "ArrowUpRight",
+                          "style": {
+                            "width": "16px",
+                            "height": "16px",
+                            "flexShrink": 0
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-18"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Share trip",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "14px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-19"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-17"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-8"
+              }
+            ],
+            "$id": "elsewhere-itinerary-3"
+          },
+          {
+            "$ref": "Tabs",
+            "props": {
+              "value": "Itinerary",
+              "sx": {}
+            },
+            "children": [
+              {
+                "$ref": "Tab",
+                "props": {
+                  "label": "Overview",
+                  "value": "Overview",
+                  "sx": {
+                    "fontSize": "12px",
+                    "textTransform": "none",
+                    "minWidth": "auto",
+                    "padding": "12px 16px"
+                  }
+                }
+              },
+              {
+                "$ref": "Tab",
+                "props": {
+                  "label": "Itinerary",
+                  "value": "Itinerary",
+                  "sx": {
+                    "fontSize": "12px",
+                    "textTransform": "none",
+                    "minWidth": "auto",
+                    "padding": "12px 16px"
+                  }
+                }
+              },
+              {
+                "$ref": "Tab",
+                "props": {
+                  "label": "Stays",
+                  "value": "Stays",
+                  "sx": {
+                    "fontSize": "12px",
+                    "textTransform": "none",
+                    "minWidth": "auto",
+                    "padding": "12px 16px"
+                  }
+                }
+              },
+              {
+                "$ref": "Tab",
+                "props": {
+                  "label": "Budget",
+                  "value": "Budget",
+                  "sx": {
+                    "fontSize": "12px",
+                    "textTransform": "none",
+                    "minWidth": "auto",
+                    "padding": "12px 16px"
+                  }
+                }
+              }
+            ],
+            "$id": "elsewhere-itinerary-20"
+          }
+        ],
+        "$id": "elsewhere-itinerary-2"
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "grid",
+            "@media (min-width: 768px)": {
+              "gridTemplateColumns": "440px 1fr"
+            }
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "block",
+                "padding": "24px",
+                "@media (min-width: 768px)": {
+                  "padding": "28px"
+                },
+                "& > * + *": {
+                  "marginTop": "20px"
+                }
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "alignItems": "center"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "Monday, 12 October",
+                      "component": "h2",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "24px",
+                        "lineHeight": 1.15,
+                        "color": "inherit",
+                        "fontFamily": "var(--font-display, Georgia, serif)",
+                        "fontWeight": 400,
+                        "letterSpacing": "-0.035em"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-29"
+                  },
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "ChevronDown",
+                      "style": {
+                        "width": "16px",
+                        "height": "16px",
+                        "flexShrink": 0
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-30"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-28"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "gap": "8px",
+                    "width": "100%"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "value": "12",
+                      "variant": "contained",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "4px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "12px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "var(--color-secondary)",
+                        "color": "var(--color-secondary-foreground)",
+                        "border": "1px solid transparent",
+                        "height": "56px",
+                        "width": "48px",
+                        "flexDirection": "column"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "MON",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "8px",
+                            "lineHeight": 1.5,
+                            "color": "inherit",
+                            "letterSpacing": ".1em"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-33"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "12",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "16px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-34"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-32"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "value": "13",
+                      "variant": "text",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "4px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "12px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid transparent",
+                        "height": "56px",
+                        "width": "48px",
+                        "flexDirection": "column"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "TUE",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "8px",
+                            "lineHeight": 1.5,
+                            "color": "inherit",
+                            "letterSpacing": ".1em"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-36"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "13",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "16px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-37"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-35"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "value": "14",
+                      "variant": "text",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "4px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "12px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid transparent",
+                        "height": "56px",
+                        "width": "48px",
+                        "flexDirection": "column"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "WED",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "8px",
+                            "lineHeight": 1.5,
+                            "color": "inherit",
+                            "letterSpacing": ".1em"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-39"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "14",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "16px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-40"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-38"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "value": "15",
+                      "variant": "text",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "4px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "12px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid transparent",
+                        "height": "56px",
+                        "width": "48px",
+                        "flexDirection": "column"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "THU",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "8px",
+                            "lineHeight": 1.5,
+                            "color": "inherit",
+                            "letterSpacing": ".1em"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-42"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "15",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "16px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-43"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-41"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "value": "16",
+                      "variant": "text",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "4px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "12px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid transparent",
+                        "height": "56px",
+                        "width": "48px",
+                        "flexDirection": "column"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "FRI",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "8px",
+                            "lineHeight": 1.5,
+                            "color": "inherit",
+                            "letterSpacing": ".1em"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-45"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "16",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "16px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-46"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-44"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "value": "17",
+                      "variant": "text",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "4px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "12px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid transparent",
+                        "height": "56px",
+                        "width": "48px",
+                        "flexDirection": "column"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "SAT",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "8px",
+                            "lineHeight": 1.5,
+                            "color": "inherit",
+                            "letterSpacing": ".1em"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-48"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "17",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "16px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-49"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-47"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-31"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "flex",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "paddingTop": "4px",
+                    "paddingBottom": "4px"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "Sun",
+                      "style": {
+                        "width": "16px",
+                        "height": "16px",
+                        "flexShrink": 0,
+                        "color": "var(--color-primary)"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-51"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "22° · A lovely day to get lost",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "12px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-muted-foreground)"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-52"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-50"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "alignItems": "flex-end"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "block",
+                        "& > * + *": {
+                          "marginTop": "12px"
+                        }
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "DAY 01",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "10px",
+                            "lineHeight": 1.5,
+                            "color": "var(--color-primary)",
+                            "textTransform": "uppercase",
+                            "letterSpacing": "0.22em",
+                            "fontWeight": 600
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-55"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Ease into Kyoto.",
+                          "component": "h2",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "36px",
+                            "lineHeight": 1.15,
+                            "color": "inherit",
+                            "fontFamily": "var(--font-display, Georgia, serif)",
+                            "fontWeight": 400,
+                            "letterSpacing": "-0.035em",
+                            "@media (min-width: 768px)": {
+                              "fontSize": "48px"
+                            }
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-56"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-54"
+                  },
+                  {
+                    "$ref": "Chip",
+                    "props": {
+                      "label": "4 stops",
+                      "size": "small",
+                      "sx": {
+                        "backgroundColor": "var(--color-secondary)",
+                        "color": "var(--color-secondary-foreground)",
+                        "border": "none",
+                        "borderRadius": "9999px",
+                        "fontSize": "10px",
+                        "lineHeight": 1.5,
+                        "padding": "3px 10px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "width": "fit-content",
+                        "whiteSpace": "nowrap",
+                        "paddingLeft": "12px",
+                        "paddingRight": "12px",
+                        "paddingTop": "4px",
+                        "paddingBottom": "4px",
+                        "fontWeight": 400
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-57"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-53"
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "sx": {
+                    "backgroundColor": "var(--color-card)",
+                    "color": "var(--color-card-foreground)",
+                    "border": "1px solid var(--color-border)",
+                    "borderRadius": "12px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": "0px",
+                    "padding": "12px",
+                    "boxShadow": "none"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex",
+                        "gap": "16px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "position": "relative",
+                            "overflow": "hidden",
+                            "width": "82px",
+                            "height": "92px",
+                            "flexShrink": 0,
+                            "borderRadius": "8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "props": {
+                              "src": "/assets/elsewhere-kyoto.jpg",
+                              "alt": "Yasaka Pagoda above a Kyoto street at sunset",
+                              "fill": false,
+                              "style": {
+                                "display": "block",
+                                "objectFit": "cover",
+                                "position": "absolute",
+                                "inset": "0px",
+                                "height": "100%",
+                                "width": "100%"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-61"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-60"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "flex": "1 1 0%",
+                            "paddingTop": "4px",
+                            "paddingBottom": "4px",
+                            "& > * + *": {
+                              "marginTop": "8px"
+                            }
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "09:00 – 10:30",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-64"
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "style": {
+                                    "width": "12px",
+                                    "height": "12px",
+                                    "flexShrink": 0,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-65"
+                              }
+                            ],
+                            "$id": "elsewhere-itinerary-63"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Taste your way through Nishiki",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-66"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "A slow breakfast at the market.",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "11px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-67"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Food & drink · $18 / person",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "9px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-primary)",
+                                "textTransform": "uppercase",
+                                "letterSpacing": ".05em"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-68"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-62"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-59"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-58"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "flex",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "marginLeft": "20px",
+                    "color": "var(--color-muted-foreground)"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "Footprints",
+                      "style": {
+                        "width": "12px",
+                        "height": "12px",
+                        "flexShrink": 0
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-70"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "18 min walk · 1.2 km",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "10px",
+                        "lineHeight": 1.5,
+                        "color": "inherit"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-71"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-69"
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "sx": {
+                    "backgroundColor": "var(--color-card)",
+                    "color": "var(--color-card-foreground)",
+                    "border": "1px solid var(--color-border)",
+                    "borderRadius": "12px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": "0px",
+                    "padding": "12px",
+                    "boxShadow": "none"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex",
+                        "gap": "16px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "position": "relative",
+                            "overflow": "hidden",
+                            "width": "82px",
+                            "height": "92px",
+                            "flexShrink": 0,
+                            "borderRadius": "8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "props": {
+                              "src": "/assets/elsewhere-japan.jpg",
+                              "alt": "japan travel photography",
+                              "fill": false,
+                              "style": {
+                                "display": "block",
+                                "objectFit": "cover",
+                                "position": "absolute",
+                                "inset": "0px",
+                                "height": "100%",
+                                "width": "100%"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-75"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-74"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "flex": "1 1 0%",
+                            "paddingTop": "4px",
+                            "paddingBottom": "4px",
+                            "& > * + *": {
+                              "marginTop": "8px"
+                            }
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "11:00 – 12:30",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-78"
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "style": {
+                                    "width": "12px",
+                                    "height": "12px",
+                                    "flexShrink": 0,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-79"
+                              }
+                            ],
+                            "$id": "elsewhere-itinerary-77"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "The quieter side of Gion",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-80"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Lanes, little shops, no rush.",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "11px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-81"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Explore · Free",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "9px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-primary)",
+                                "textTransform": "uppercase",
+                                "letterSpacing": ".05em"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-82"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-76"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-73"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-72"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "flex",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "marginLeft": "20px",
+                    "color": "var(--color-muted-foreground)"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "Footprints",
+                      "style": {
+                        "width": "12px",
+                        "height": "12px",
+                        "flexShrink": 0
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-84"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "12 min walk · 800 m",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "10px",
+                        "lineHeight": 1.5,
+                        "color": "inherit"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-85"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-83"
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "sx": {
+                    "backgroundColor": "var(--color-card)",
+                    "color": "var(--color-card-foreground)",
+                    "border": "1px solid var(--color-border)",
+                    "borderRadius": "12px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": "0px",
+                    "padding": "12px",
+                    "boxShadow": "none"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex",
+                        "gap": "16px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "position": "relative",
+                            "overflow": "hidden",
+                            "width": "82px",
+                            "height": "92px",
+                            "flexShrink": 0,
+                            "borderRadius": "8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "props": {
+                              "src": "/assets/elsewhere-room.jpg",
+                              "alt": "Quiet contemporary guest room",
+                              "fill": false,
+                              "style": {
+                                "display": "block",
+                                "objectFit": "cover",
+                                "position": "absolute",
+                                "inset": "0px",
+                                "height": "100%",
+                                "width": "100%"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-89"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-88"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "flex": "1 1 0%",
+                            "paddingTop": "4px",
+                            "paddingBottom": "4px",
+                            "& > * + *": {
+                              "marginTop": "8px"
+                            }
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "14:00 – 15:00",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-92"
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "style": {
+                                    "width": "12px",
+                                    "height": "12px",
+                                    "flexShrink": 0,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-93"
+                              }
+                            ],
+                            "$id": "elsewhere-itinerary-91"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Tea, with a little ceremony",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-94"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "A moment to pause with a local host.",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "11px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-95"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Reserved · $32 / person",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "9px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-primary)",
+                                "textTransform": "uppercase",
+                                "letterSpacing": ".05em"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-96"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-90"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-87"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-86"
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "sx": {
+                    "backgroundColor": "var(--color-card)",
+                    "color": "var(--color-card-foreground)",
+                    "border": "1px solid var(--color-border)",
+                    "borderRadius": "12px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": "0px",
+                    "padding": "12px",
+                    "boxShadow": "none"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex",
+                        "gap": "16px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "position": "relative",
+                            "overflow": "hidden",
+                            "width": "82px",
+                            "height": "92px",
+                            "flexShrink": 0,
+                            "borderRadius": "8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "props": {
+                              "src": "/assets/elsewhere-forest.jpg",
+                              "alt": "forest travel photography",
+                              "fill": false,
+                              "style": {
+                                "display": "block",
+                                "objectFit": "cover",
+                                "position": "absolute",
+                                "inset": "0px",
+                                "height": "100%",
+                                "width": "100%"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-100"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-99"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "flex": "1 1 0%",
+                            "paddingTop": "4px",
+                            "paddingBottom": "4px",
+                            "& > * + *": {
+                              "marginTop": "8px"
+                            }
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "16:00 – 17:30",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-103"
+                              },
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "style": {
+                                    "width": "12px",
+                                    "height": "12px",
+                                    "flexShrink": 0,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "elsewhere-itinerary-104"
+                              }
+                            ],
+                            "$id": "elsewhere-itinerary-102"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Follow the Philosopher’s Path",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-105"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "An unhurried afternoon by the canal.",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "11px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-106"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Outdoors · Free",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "9px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-primary)",
+                                "textTransform": "uppercase",
+                                "letterSpacing": ".05em"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-107"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-101"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-98"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-97"
+              },
+              {
+                "$ref": "Button",
+                "props": {
+                  "variant": "outlined",
+                  "sx": {
+                    "textTransform": "none",
+                    "fontSize": "12px",
+                    "minHeight": "36px",
+                    "padding": "8px 16px",
+                    "display": "inline-flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "gap": "8px",
+                    "whiteSpace": "nowrap",
+                    "borderRadius": "12px",
+                    "boxShadow": "none",
+                    "lineHeight": 1.4,
+                    "backgroundColor": "transparent",
+                    "color": "var(--color-foreground)",
+                    "border": "1px solid var(--color-border)",
+                    "width": "100%",
+                    "borderStyle": "dashed"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "Plus",
+                      "style": {
+                        "width": "16px",
+                        "height": "16px",
+                        "flexShrink": 0
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-109"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "Add a little discovery",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "14px",
+                        "lineHeight": 1.5,
+                        "color": "inherit"
+                      }
+                    },
+                    "$id": "elsewhere-itinerary-110"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-108"
+              }
+            ],
+            "$id": "elsewhere-itinerary-27"
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "block",
+                "position": "relative",
+                "minHeight": "620px",
+                "@media (min-width: 768px)": {
+                  "minHeight": "980px"
+                },
+                "overflow": "hidden",
+                "borderLeft": "1px solid var(--color-border)",
+                "borderColor": "var(--color-border)"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Image",
+                "props": {
+                  "src": "/assets/elsewhere-kyoto-map.svg",
+                  "alt": "Illustrated Kyoto route linking the market, Gion, a tea stop and Philosopher’s Path",
+                  "fill": false,
+                  "data-ew-style": "ew1",
+                  "style": {
+                    "display": "block",
+                    "objectFit": "cover",
+                    "position": "absolute",
+                    "inset": "0px",
+                    "height": "100%",
+                    "width": "100%"
+                  }
+                },
+                "$id": "elsewhere-itinerary-112"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "flex",
+                    "position": "absolute",
+                    "left": "20px",
+                    "top": "20px",
+                    "right": "20px",
+                    "justifyContent": "space-between"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "props": {
+                          "variant": "contained",
+                          "sx": {
+                            "textTransform": "none",
+                            "fontSize": "12px",
+                            "minHeight": "36px",
+                            "padding": "8px 16px",
+                            "display": "inline-flex",
+                            "alignItems": "center",
+                            "justifyContent": "center",
+                            "gap": "8px",
+                            "whiteSpace": "nowrap",
+                            "borderRadius": "8px",
+                            "boxShadow": "none",
+                            "lineHeight": 1.4,
+                            "backgroundColor": "var(--color-secondary)",
+                            "color": "var(--color-secondary-foreground)",
+                            "border": "1px solid transparent"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "Map",
+                              "style": {
+                                "width": "16px",
+                                "height": "16px",
+                                "flexShrink": 0
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-116"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Map",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-117"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-115"
+                      },
+                      {
+                        "$ref": "Button",
+                        "props": {
+                          "variant": "outlined",
+                          "sx": {
+                            "textTransform": "none",
+                            "fontSize": "12px",
+                            "minHeight": "36px",
+                            "padding": "8px 16px",
+                            "display": "inline-flex",
+                            "alignItems": "center",
+                            "justifyContent": "center",
+                            "gap": "8px",
+                            "whiteSpace": "nowrap",
+                            "borderRadius": "8px",
+                            "boxShadow": "none",
+                            "lineHeight": 1.4,
+                            "backgroundColor": "transparent",
+                            "color": "var(--color-foreground)",
+                            "border": "1px solid var(--color-border)"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Satellite",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-119"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-118"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-114"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "contained",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "8px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "9999px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "var(--color-secondary)",
+                        "color": "var(--color-secondary-foreground)",
+                        "border": "1px solid transparent"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "Expand",
+                          "style": {
+                            "width": "16px",
+                            "height": "16px",
+                            "flexShrink": 0
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-121"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Expand",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "14px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-122"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-120"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-113"
+              },
+              {
+                "$ref": "Card",
+                "props": {
+                  "sx": {
+                    "backgroundColor": "var(--color-card)",
+                    "color": "var(--color-card-foreground)",
+                    "border": "1px solid var(--color-border)",
+                    "borderRadius": "12px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": "12px",
+                    "padding": "20px",
+                    "position": "absolute",
+                    "bottom": "24px",
+                    "left": "24px",
+                    "right": "24px",
+                    "boxShadow": "0 10px 20px #00000018"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex",
+                        "justifyContent": "space-between",
+                        "alignItems": "center"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "alignItems": "center",
+                            "gap": "8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "Route",
+                              "style": {
+                                "width": "16px",
+                                "height": "16px",
+                                "flexShrink": 0
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-126"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "A day, beautifully unhurried.",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-127"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-125"
+                      },
+                      {
+                        "$ref": "Chip",
+                        "props": {
+                          "label": "Walkable",
+                          "size": "small",
+                          "sx": {
+                            "backgroundColor": "var(--color-secondary)",
+                            "color": "var(--color-secondary-foreground)",
+                            "border": "none",
+                            "borderRadius": "9999px",
+                            "fontSize": "10px",
+                            "lineHeight": 1.5,
+                            "padding": "3px 10px",
+                            "display": "inline-flex",
+                            "alignItems": "center",
+                            "width": "fit-content",
+                            "whiteSpace": "nowrap",
+                            "paddingLeft": "12px",
+                            "paddingRight": "12px",
+                            "paddingTop": "4px",
+                            "paddingBottom": "4px",
+                            "fontWeight": 400
+                          }
+                        },
+                        "$id": "elsewhere-itinerary-128"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-124"
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "grid",
+                        "gridTemplateColumns": "repeat(3, minmax(0, 1fr))",
+                        "gap": "16px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "4.8 km",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "20px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontFamily": "var(--font-display, Georgia, serif)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-131"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "on foot",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-132"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-130"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "4 stops",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "20px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontFamily": "var(--font-display, Georgia, serif)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-134"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "room to wander",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-135"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-133"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "$100",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "20px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontFamily": "var(--font-display, Georgia, serif)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-137"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "for two travellers",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "elsewhere-itinerary-138"
+                          }
+                        ],
+                        "$id": "elsewhere-itinerary-136"
+                      }
+                    ],
+                    "$id": "elsewhere-itinerary-129"
+                  }
+                ],
+                "$id": "elsewhere-itinerary-123"
+              }
+            ],
+            "$id": "elsewhere-itinerary-111"
+          }
+        ],
+        "$id": "elsewhere-itinerary-26"
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "flex",
+            "paddingLeft": "24px",
+            "paddingRight": "24px",
+            "@media (min-width: 768px)": {
+              "paddingLeft": "56px",
+              "paddingRight": "56px"
+            },
+            "paddingTop": "32px",
+            "paddingBottom": "32px",
+            "borderTop": "1px solid var(--color-border)",
+            "borderColor": "var(--color-border)",
+            "justifyContent": "space-between",
+            "alignItems": "center",
+            "gap": "16px",
+            "flexWrap": "wrap"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "Go a little further. Stay a little longer.",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "18px",
+                "lineHeight": 1.5,
+                "color": "inherit",
+                "fontFamily": "var(--font-display, Georgia, serif)"
+              }
+            },
+            "$id": "elsewhere-itinerary-140"
+          },
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "elsewhere / 2026",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "10px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)",
+                "textTransform": "uppercase",
+                "letterSpacing": ".1em"
+              }
+            },
+            "$id": "elsewhere-itinerary-141"
+          }
+        ],
+        "$id": "elsewhere-itinerary-139"
+      }
+    ],
+    "$id": "elsewhere-itinerary-1"
+  }
+}

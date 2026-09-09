@@ -306,7 +306,7 @@ describe("renderScreen", () => {
   });
 
   test("Input with value and no onChange gets readOnly (canvas-safe contract)", async () => {
-    // Pulse designs ship JSON like <Input value="Rod"> — without
+    // Designs ship JSON like <Input value="Rod"> — without
     // readOnly React warns. The component auto-injects readOnly so
     // the iframe stays warning-free in design mode. Match the
     // attribute case-insensitively because react-dom-server emits

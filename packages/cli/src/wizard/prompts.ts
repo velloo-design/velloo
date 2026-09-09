@@ -337,8 +337,8 @@ export function hostGoalOptions(
   const selfContained: { value: GoalMode; label: string; hint: string }[] = [
     {
       value: "sample",
-      label: "Welcome sample",
-      hint: "A finished multi-screen app to poke at and reshape",
+      label: "Elsewhere welcome sample",
+      hint: "Travel app with imagery, dark mode and three agentic trip explorations",
     },
     {
       value: "blank",

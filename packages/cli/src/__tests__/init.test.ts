@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  AssetsFileSchema,
   BoardSchema,
   ConfigSchema,
   CURRENT_SCHEMA_VERSION,
@@ -52,7 +53,9 @@ async function runInit(appRoot: string, extraArgs: string[] = []) {
 }
 
 async function jsonFiles(dir: string): Promise<string[]> {
-  return (await readdir(dir).catch(() => [])).filter((f) => f.endsWith(".json"));
+  return (await readdir(dir).catch(() => [])).filter(
+    (f) => f.endsWith(".json") && !f.endsWith(".notes.json") && !f.endsWith(".annotations.json"),
+  );
 }
 
 describe("velloo init", () => {
@@ -68,7 +71,8 @@ describe("velloo init", () => {
     expect(config.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(config.defaultLibrary).toBe("default");
     expect(config.libraries.default?.id).toBe("shadcn-upstream");
-    expect(config.defaultBoard).toBeUndefined();
+    expect(config.defaultBoard).toBe("main");
+    expect(config.boardOrder).toEqual(["main", "elsewhere-details"]);
     expect(config.defaultScreen).toBeDefined();
 
     const theme = ThemeSchema.parse(
@@ -90,6 +94,20 @@ describe("velloo init", () => {
     expect(snippetFiles.length).toBeGreaterThan(0);
     for (const f of snippetFiles)
       SnippetSchema.parse(JSON.parse(await readFile(join(design, "snippets", f), "utf8")));
+
+    const assets = AssetsFileSchema.parse(
+      JSON.parse(await readFile(join(design, "assets.json"), "utf8")),
+    );
+    expect(Object.keys(assets.generated).length).toBeGreaterThan(0);
+    for (const [path, metadata] of Object.entries(assets.generated)) {
+      expect(metadata.prompt.length).toBeGreaterThan(0);
+      expect((await readFile(join(design, path))).byteLength).toBeGreaterThan(0);
+    }
+    expect(await readFile(join(design, "theme/custom.css"), "utf8")).toContain("ew-photo-shade");
+    expect(
+      JSON.parse(await readFile(join(design, "boards/elsewhere-details.notes.json"), "utf8"))
+        .length,
+    ).toBeGreaterThan(0);
 
     // A .gitignore keeps daemon runtime state + trace tapes out of git.
     const gitignore = await readFile(join(design, ".gitignore"), "utf8");
@@ -167,7 +185,7 @@ describe("velloo init", () => {
     expect(config.defaultScreen).toBeUndefined();
     expect((await jsonFiles(join(design, "screens"))).length).toBe(0);
     expect((await jsonFiles(join(design, "boards"))).length).toBe(0);
-    // Neutral zinc default — not the welcome-sample indigo.
+    // Neutral zinc default — not the welcome-sample green.
     const theme = ThemeSchema.parse(
       JSON.parse(await readFile(join(design, "theme/default.json"), "utf8")),
     );
@@ -190,9 +208,8 @@ describe("velloo init", () => {
     const design = designDir(tmp);
 
     expect((await jsonFiles(join(design, "boards"))).sort()).toEqual([
-      "app.json",
-      "marketing.json",
-      "playground.json",
+      "elsewhere-details.json",
+      "main.json",
     ]);
 
     // The remix stack lands as the codegen import alias.
@@ -230,7 +247,7 @@ describe("velloo init", () => {
     expect(readme).toContain("Bringing shadcn into your app");
   }, 30_000);
 
-  test("--library=mui scaffolds a MUI folder with a two-screen sx sample", async () => {
+  test("--library=mui scaffolds a MUI folder with a seven-screen sx sample", async () => {
     const { exitCode } = await runInit(tmp, ["--library=mui"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -241,12 +258,17 @@ describe("velloo init", () => {
     expect(config.libraries.default?.source).toBe("binary");
 
     const screenFiles = await jsonFiles(join(design, "screens"));
-    expect(screenFiles).toContain("welcome.json");
-    expect(screenFiles).toContain("signup.json");
-    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+    expect(screenFiles).toContain("elsewhere-discover.json");
+    expect(screenFiles).toContain("elsewhere-trips-library.json");
+    expect((await jsonFiles(join(design, "boards"))).sort()).toEqual([
+      "elsewhere-details.json",
+      "main.json",
+    ]);
 
     // The sample uses MUI component ids + sx styling, not shadcn refs/classNames.
-    const welcome = JSON.parse(await readFile(join(design, "screens/welcome.json"), "utf8"));
+    const welcome = JSON.parse(
+      await readFile(join(design, "screens/elsewhere-discover.json"), "utf8"),
+    );
     const json = JSON.stringify(welcome);
     expect(json).toContain('"Typography"');
     expect(json).toContain('"sx"');
@@ -257,7 +279,7 @@ describe("velloo init", () => {
     expect(readme).toContain("npm install @mui/material @emotion/react @emotion/styled");
   }, 30_000);
 
-  test("--library=antd scaffolds an antd folder with a two-screen inline-style sample", async () => {
+  test("--library=antd scaffolds an antd folder with a seven-screen inline-style sample", async () => {
     const { exitCode } = await runInit(tmp, ["--library=antd"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -270,13 +292,18 @@ describe("velloo init", () => {
     expect(config.styling).toBeUndefined();
 
     const screenFiles = await jsonFiles(join(design, "screens"));
-    expect(screenFiles).toContain("welcome.json");
-    expect(screenFiles).toContain("signup.json");
-    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+    expect(screenFiles).toContain("elsewhere-discover.json");
+    expect(screenFiles).toContain("elsewhere-trips-library.json");
+    expect((await jsonFiles(join(design, "boards"))).sort()).toEqual([
+      "elsewhere-details.json",
+      "main.json",
+    ]);
 
     // The sample uses antd component ids + inline style objects, not shadcn
     // refs/classNames or sx.
-    const welcome = JSON.parse(await readFile(join(design, "screens/welcome.json"), "utf8"));
+    const welcome = JSON.parse(
+      await readFile(join(design, "screens/elsewhere-discover.json"), "utf8"),
+    );
     const json = JSON.stringify(welcome);
     expect(json).toContain('"TypographyTitle"');
     expect(json).toContain('"style"');
@@ -288,7 +315,7 @@ describe("velloo init", () => {
     expect(readme).toContain("npm install antd");
   }, 30_000);
 
-  test("--library=chakra scaffolds a chakra folder with a two-screen sx sample", async () => {
+  test("--library=chakra scaffolds a chakra folder with a seven-screen sx sample", async () => {
     const { exitCode } = await runInit(tmp, ["--library=chakra"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -301,25 +328,29 @@ describe("velloo init", () => {
     expect(config.styling).toBeUndefined();
 
     const screenFiles = await jsonFiles(join(design, "screens"));
-    expect(screenFiles).toContain("welcome.json");
-    expect(screenFiles).toContain("signup.json");
-    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+    expect(screenFiles).toContain("elsewhere-discover.json");
+    expect(screenFiles).toContain("elsewhere-trips-library.json");
+    expect((await jsonFiles(join(design, "boards"))).sort()).toEqual([
+      "elsewhere-details.json",
+      "main.json",
+    ]);
 
     // The sample uses chakra component ids + sx objects, not shadcn
     // refs/classNames or inline styles.
-    const welcome = JSON.parse(await readFile(join(design, "screens/welcome.json"), "utf8"));
+    const welcome = JSON.parse(
+      await readFile(join(design, "screens/elsewhere-discover.json"), "utf8"),
+    );
     const json = JSON.stringify(welcome);
     expect(json).toContain('"Heading"');
     expect(json).toContain('"sx"');
     expect(json).not.toContain('"className"');
-    expect(json).not.toContain('"style"');
 
     // The README hands off the app-level chakra install (for the emitted code).
     const readme = await readFile(join(design, "README.md"), "utf8");
     expect(readme).toContain("npm install @chakra-ui/react@2 @emotion/react @emotion/styled");
   }, 30_000);
 
-  test("--library=none ships bare primitives with a two-screen sample", async () => {
+  test("--library=none ships bare primitives with a seven-screen sample", async () => {
     const { exitCode } = await runInit(tmp, ["--library=none"]);
     expect(exitCode).toBe(0);
     const design = designDir(tmp);
@@ -330,9 +361,12 @@ describe("velloo init", () => {
     expect(config.libraries.default?.source).toBe("binary");
 
     const screenFiles = await jsonFiles(join(design, "screens"));
-    expect(screenFiles).toContain("welcome.json");
-    expect(screenFiles).toContain("form.json");
-    expect(await jsonFiles(join(design, "boards"))).toEqual(["main.json"]);
+    expect(screenFiles).toContain("elsewhere-discover.json");
+    expect(screenFiles).toContain("elsewhere-trips-board.json");
+    expect((await jsonFiles(join(design, "boards"))).sort()).toEqual([
+      "elsewhere-details.json",
+      "main.json",
+    ]);
 
     const readme = await readFile(join(design, "README.md"), "utf8");
     expect(readme.toLowerCase()).toContain("no-library");

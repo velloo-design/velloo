@@ -1,0 +1,1245 @@
+{
+  "id": "elsewhere-itinerary",
+  "name": "03 · A day in Kyoto",
+  "tree": {
+    "$ref": "Box",
+    "$id": "elsewhere-itinerary-1",
+    "props": {
+      "className": "bg-background text-foreground min-h-screen font-sans"
+    },
+    "children": [
+      {
+        "$snippet": "elsewhere-nav",
+        "args": {}
+      },
+      {
+        "$ref": "Box",
+        "$id": "elsewhere-itinerary-2",
+        "props": {
+          "className": "border-b border-border px-6 md:px-12 pt-7"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "elsewhere-itinerary-3",
+            "props": {
+              "className": "flex justify-between items-center mb-6"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-4",
+                "props": {
+                  "className": "space-y-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-itinerary-5",
+                    "props": {
+                      "children": "YOUR NEXT CHAPTER",
+                      "className": "text-[9px] tracking-[.2em] text-muted-foreground"
+                    }
+                  },
+                  {
+                    "$ref": "Heading",
+                    "$id": "elsewhere-itinerary-6",
+                    "props": {
+                      "children": "A week in Kyoto",
+                      "className": "font-display font-normal tracking-[-0.035em] text-4xl"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-itinerary-7",
+                    "props": {
+                      "children": "12–17 October 2026   ·   2 travellers",
+                      "className": "text-xs text-muted-foreground"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-8",
+                "props": {
+                  "className": "hidden md:flex gap-3 items-center"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-9",
+                    "props": {
+                      "className": "flex -space-x-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Avatar",
+                        "$id": "elsewhere-itinerary-10",
+                        "props": {
+                          "className": "size-8 border-2 border-background"
+                        },
+                        "children": [
+                          {
+                            "$ref": "AvatarFallback",
+                            "$id": "elsewhere-itinerary-11",
+                            "props": {
+                              "children": "AL",
+                              "className": "text-[10px] bg-secondary text-secondary-foreground"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Avatar",
+                        "$id": "elsewhere-itinerary-12",
+                        "props": {
+                          "className": "size-8 border-2 border-background"
+                        },
+                        "children": [
+                          {
+                            "$ref": "AvatarFallback",
+                            "$id": "elsewhere-itinerary-13",
+                            "props": {
+                              "children": "JR",
+                              "className": "text-[10px] bg-secondary text-secondary-foreground"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Button",
+                    "$id": "elsewhere-itinerary-14",
+                    "props": {
+                      "variant": "outline",
+                      "className": "rounded-full "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "$id": "elsewhere-itinerary-15",
+                        "props": {
+                          "name": "UserPlus",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-16",
+                        "props": {
+                          "children": "Invite",
+                          "className": " text-inherit",
+                          "style": {
+                            "color": "inherit"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Button",
+                    "$id": "elsewhere-itinerary-17",
+                    "props": {
+                      "variant": "default",
+                      "className": "rounded-full "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "$id": "elsewhere-itinerary-18",
+                        "props": {
+                          "name": "ArrowUpRight",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-19",
+                        "props": {
+                          "children": "Share trip",
+                          "className": " text-inherit",
+                          "style": {
+                            "color": "inherit"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Tabs",
+            "$id": "elsewhere-itinerary-20",
+            "props": {
+              "defaultValue": "Itinerary"
+            },
+            "children": [
+              {
+                "$ref": "TabsList",
+                "$id": "elsewhere-itinerary-21",
+                "props": {
+                  "variant": "line",
+                  "className": "gap-5"
+                },
+                "children": [
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-itinerary-22",
+                    "props": {
+                      "value": "Overview",
+                      "children": "Overview",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  },
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-itinerary-23",
+                    "props": {
+                      "value": "Itinerary",
+                      "children": "Itinerary",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  },
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-itinerary-24",
+                    "props": {
+                      "value": "Stays",
+                      "children": "Stays",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  },
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-itinerary-25",
+                    "props": {
+                      "value": "Budget",
+                      "children": "Budget",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "elsewhere-itinerary-26",
+        "props": {
+          "className": "grid md:grid-cols-[440px_1fr]"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "elsewhere-itinerary-27",
+            "props": {
+              "className": "p-6 md:p-7 space-y-5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-28",
+                "props": {
+                  "className": "flex justify-between items-center"
+                },
+                "children": [
+                  {
+                    "$ref": "Heading",
+                    "$id": "elsewhere-itinerary-29",
+                    "props": {
+                      "children": "Monday, 12 October",
+                      "className": "font-display font-normal tracking-[-0.035em] text-2xl"
+                    }
+                  },
+                  {
+                    "$ref": "Icon",
+                    "$id": "elsewhere-itinerary-30",
+                    "props": {
+                      "name": "ChevronDown",
+                      "className": "size-4"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "ToggleGroup",
+                "$id": "elsewhere-itinerary-31",
+                "props": {
+                  "type": "single",
+                  "defaultValue": "12",
+                  "className": "justify-between w-full"
+                },
+                "children": [
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "$id": "elsewhere-itinerary-32",
+                    "props": {
+                      "value": "12",
+                      "className": "rounded-xl h-14 w-12 flex-col gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-33",
+                        "props": {
+                          "children": "MON",
+                          "className": "text-[8px] tracking-widest"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-34",
+                        "props": {
+                          "children": "12",
+                          "className": "text-base"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "$id": "elsewhere-itinerary-35",
+                    "props": {
+                      "value": "13",
+                      "className": "rounded-xl h-14 w-12 flex-col gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-36",
+                        "props": {
+                          "children": "TUE",
+                          "className": "text-[8px] tracking-widest"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-37",
+                        "props": {
+                          "children": "13",
+                          "className": "text-base"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "$id": "elsewhere-itinerary-38",
+                    "props": {
+                      "value": "14",
+                      "className": "rounded-xl h-14 w-12 flex-col gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-39",
+                        "props": {
+                          "children": "WED",
+                          "className": "text-[8px] tracking-widest"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-40",
+                        "props": {
+                          "children": "14",
+                          "className": "text-base"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "$id": "elsewhere-itinerary-41",
+                    "props": {
+                      "value": "15",
+                      "className": "rounded-xl h-14 w-12 flex-col gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-42",
+                        "props": {
+                          "children": "THU",
+                          "className": "text-[8px] tracking-widest"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-43",
+                        "props": {
+                          "children": "15",
+                          "className": "text-base"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "$id": "elsewhere-itinerary-44",
+                    "props": {
+                      "value": "16",
+                      "className": "rounded-xl h-14 w-12 flex-col gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-45",
+                        "props": {
+                          "children": "FRI",
+                          "className": "text-[8px] tracking-widest"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-46",
+                        "props": {
+                          "children": "16",
+                          "className": "text-base"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ToggleGroupItem",
+                    "$id": "elsewhere-itinerary-47",
+                    "props": {
+                      "value": "17",
+                      "className": "rounded-xl h-14 w-12 flex-col gap-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-48",
+                        "props": {
+                          "children": "SAT",
+                          "className": "text-[8px] tracking-widest"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-49",
+                        "props": {
+                          "children": "17",
+                          "className": "text-base"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-50",
+                "props": {
+                  "className": "flex items-center gap-2 py-1"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "$id": "elsewhere-itinerary-51",
+                    "props": {
+                      "name": "Sun",
+                      "className": "size-4 text-primary"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-itinerary-52",
+                    "props": {
+                      "children": "22° · A lovely day to get lost",
+                      "className": "text-xs text-muted-foreground"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-53",
+                "props": {
+                  "className": "flex justify-between items-end"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-54",
+                    "props": {
+                      "className": "space-y-3"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-55",
+                        "props": {
+                          "children": "DAY 01",
+                          "className": "text-[10px] uppercase tracking-[0.22em] font-semibold text-primary"
+                        }
+                      },
+                      {
+                        "$ref": "Heading",
+                        "$id": "elsewhere-itinerary-56",
+                        "props": {
+                          "children": "Ease into Kyoto.",
+                          "className": "font-display font-normal tracking-[-0.035em] text-4xl md:text-5xl"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Badge",
+                    "$id": "elsewhere-itinerary-57",
+                    "props": {
+                      "variant": "secondary",
+                      "className": "rounded-full px-3 py-1 font-normal",
+                      "children": "4 stops"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "$id": "elsewhere-itinerary-58",
+                "props": {
+                  "className": "p-3 gap-0 rounded-xl shadow-none"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-59",
+                    "props": {
+                      "className": "flex gap-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-60",
+                        "props": {
+                          "className": "relative overflow-hidden w-[82px] h-[92px] shrink-0 rounded-lg"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "$id": "elsewhere-itinerary-61",
+                            "props": {
+                              "src": "/assets/elsewhere-kyoto.jpg",
+                              "alt": "Yasaka Pagoda above a Kyoto street at sunset",
+                              "className": "absolute inset-0 h-full w-full",
+                              "fill": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-62",
+                        "props": {
+                          "className": "flex-1 py-1 space-y-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "elsewhere-itinerary-63",
+                            "props": {
+                              "className": "flex justify-between"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-itinerary-64",
+                                "props": {
+                                  "children": "09:00 – 10:30",
+                                  "className": "text-[10px] text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "$id": "elsewhere-itinerary-65",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "className": "size-3 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-66",
+                            "props": {
+                              "children": "Taste your way through Nishiki",
+                              "className": "text-sm font-semibold"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-67",
+                            "props": {
+                              "children": "A slow breakfast at the market.",
+                              "className": "text-[11px] text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-68",
+                            "props": {
+                              "children": "Food & drink · $18 / person",
+                              "className": "text-[9px] uppercase tracking-wider text-primary"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-69",
+                "props": {
+                  "className": "flex items-center gap-2 ml-5 text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "$id": "elsewhere-itinerary-70",
+                    "props": {
+                      "name": "Footprints",
+                      "className": "size-3"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-itinerary-71",
+                    "props": {
+                      "children": "18 min walk · 1.2 km",
+                      "className": "text-[10px]"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "$id": "elsewhere-itinerary-72",
+                "props": {
+                  "className": "p-3 gap-0 rounded-xl shadow-none"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-73",
+                    "props": {
+                      "className": "flex gap-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-74",
+                        "props": {
+                          "className": "relative overflow-hidden w-[82px] h-[92px] shrink-0 rounded-lg"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "$id": "elsewhere-itinerary-75",
+                            "props": {
+                              "src": "/assets/elsewhere-japan.jpg",
+                              "alt": "japan travel photography",
+                              "className": "absolute inset-0 h-full w-full",
+                              "fill": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-76",
+                        "props": {
+                          "className": "flex-1 py-1 space-y-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "elsewhere-itinerary-77",
+                            "props": {
+                              "className": "flex justify-between"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-itinerary-78",
+                                "props": {
+                                  "children": "11:00 – 12:30",
+                                  "className": "text-[10px] text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "$id": "elsewhere-itinerary-79",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "className": "size-3 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-80",
+                            "props": {
+                              "children": "The quieter side of Gion",
+                              "className": "text-sm font-semibold"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-81",
+                            "props": {
+                              "children": "Lanes, little shops, no rush.",
+                              "className": "text-[11px] text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-82",
+                            "props": {
+                              "children": "Explore · Free",
+                              "className": "text-[9px] uppercase tracking-wider text-primary"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-83",
+                "props": {
+                  "className": "flex items-center gap-2 ml-5 text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "$id": "elsewhere-itinerary-84",
+                    "props": {
+                      "name": "Footprints",
+                      "className": "size-3"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-itinerary-85",
+                    "props": {
+                      "children": "12 min walk · 800 m",
+                      "className": "text-[10px]"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "$id": "elsewhere-itinerary-86",
+                "props": {
+                  "className": "p-3 gap-0 rounded-xl shadow-none"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-87",
+                    "props": {
+                      "className": "flex gap-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-88",
+                        "props": {
+                          "className": "relative overflow-hidden w-[82px] h-[92px] shrink-0 rounded-lg"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "$id": "elsewhere-itinerary-89",
+                            "props": {
+                              "src": "/assets/elsewhere-room.jpg",
+                              "alt": "Quiet contemporary guest room",
+                              "className": "absolute inset-0 h-full w-full",
+                              "fill": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-90",
+                        "props": {
+                          "className": "flex-1 py-1 space-y-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "elsewhere-itinerary-91",
+                            "props": {
+                              "className": "flex justify-between"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-itinerary-92",
+                                "props": {
+                                  "children": "14:00 – 15:00",
+                                  "className": "text-[10px] text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "$id": "elsewhere-itinerary-93",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "className": "size-3 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-94",
+                            "props": {
+                              "children": "Tea, with a little ceremony",
+                              "className": "text-sm font-semibold"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-95",
+                            "props": {
+                              "children": "A moment to pause with a local host.",
+                              "className": "text-[11px] text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-96",
+                            "props": {
+                              "children": "Reserved · $32 / person",
+                              "className": "text-[9px] uppercase tracking-wider text-primary"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "$id": "elsewhere-itinerary-97",
+                "props": {
+                  "className": "p-3 gap-0 rounded-xl shadow-none"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-98",
+                    "props": {
+                      "className": "flex gap-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-99",
+                        "props": {
+                          "className": "relative overflow-hidden w-[82px] h-[92px] shrink-0 rounded-lg"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "$id": "elsewhere-itinerary-100",
+                            "props": {
+                              "src": "/assets/elsewhere-forest.jpg",
+                              "alt": "forest travel photography",
+                              "className": "absolute inset-0 h-full w-full",
+                              "fill": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-101",
+                        "props": {
+                          "className": "flex-1 py-1 space-y-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "elsewhere-itinerary-102",
+                            "props": {
+                              "className": "flex justify-between"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-itinerary-103",
+                                "props": {
+                                  "children": "16:00 – 17:30",
+                                  "className": "text-[10px] text-muted-foreground"
+                                }
+                              },
+                              {
+                                "$ref": "Icon",
+                                "$id": "elsewhere-itinerary-104",
+                                "props": {
+                                  "name": "GripVertical",
+                                  "className": "size-3 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-105",
+                            "props": {
+                              "children": "Follow the Philosopher’s Path",
+                              "className": "text-sm font-semibold"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-106",
+                            "props": {
+                              "children": "An unhurried afternoon by the canal.",
+                              "className": "text-[11px] text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-107",
+                            "props": {
+                              "children": "Outdoors · Free",
+                              "className": "text-[9px] uppercase tracking-wider text-primary"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Button",
+                "$id": "elsewhere-itinerary-108",
+                "props": {
+                  "variant": "outline",
+                  "className": "rounded-full w-full border-dashed rounded-xl"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "$id": "elsewhere-itinerary-109",
+                    "props": {
+                      "name": "Plus",
+                      "className": "size-4"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-itinerary-110",
+                    "props": {
+                      "children": "Add a little discovery",
+                      "className": " text-inherit",
+                      "style": {
+                        "color": "inherit"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "$id": "elsewhere-itinerary-111",
+            "props": {
+              "className": "relative min-h-[620px] md:min-h-[980px] overflow-hidden border-l border-border"
+            },
+            "children": [
+              {
+                "$ref": "Image",
+                "$id": "elsewhere-itinerary-112",
+                "props": {
+                  "src": "/assets/elsewhere-kyoto-map.svg",
+                  "alt": "Illustrated Kyoto route linking the market, Gion, a tea stop and Philosopher’s Path",
+                  "fill": true,
+                  "className": "absolute inset-0 h-full w-full ew-route-map"
+                }
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-itinerary-113",
+                "props": {
+                  "className": "absolute left-5 top-5 right-5 flex justify-between"
+                },
+                "children": [
+                  {
+                    "$ref": "ButtonGroup",
+                    "$id": "elsewhere-itinerary-114",
+                    "props": {},
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "$id": "elsewhere-itinerary-115",
+                        "props": {
+                          "variant": "secondary",
+                          "className": "rounded-full rounded-lg"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "elsewhere-itinerary-116",
+                            "props": {
+                              "name": "Map",
+                              "className": "size-4"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-117",
+                            "props": {
+                              "children": "Map",
+                              "className": " text-inherit",
+                              "style": {
+                                "color": "inherit"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Button",
+                        "$id": "elsewhere-itinerary-118",
+                        "props": {
+                          "variant": "outline",
+                          "className": "rounded-full rounded-lg"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-119",
+                            "props": {
+                              "children": "Satellite",
+                              "className": " text-inherit",
+                              "style": {
+                                "color": "inherit"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Button",
+                    "$id": "elsewhere-itinerary-120",
+                    "props": {
+                      "variant": "secondary",
+                      "className": "rounded-full "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "$id": "elsewhere-itinerary-121",
+                        "props": {
+                          "name": "Expand",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-itinerary-122",
+                        "props": {
+                          "children": "Expand",
+                          "className": " text-inherit",
+                          "style": {
+                            "color": "inherit"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "$id": "elsewhere-itinerary-123",
+                "props": {
+                  "className": "absolute bottom-6 left-6 right-6 p-5 rounded-xl shadow-lg gap-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-124",
+                    "props": {
+                      "className": "flex justify-between items-center"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-125",
+                        "props": {
+                          "className": "flex items-center gap-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "elsewhere-itinerary-126",
+                            "props": {
+                              "name": "Route",
+                              "className": "size-4"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-127",
+                            "props": {
+                              "children": "A day, beautifully unhurried.",
+                              "className": "font-semibold text-sm"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Badge",
+                        "$id": "elsewhere-itinerary-128",
+                        "props": {
+                          "variant": "secondary",
+                          "className": "rounded-full px-3 py-1 font-normal",
+                          "children": "Walkable"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-itinerary-129",
+                    "props": {
+                      "className": "grid grid-cols-3 gap-4"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-130",
+                        "props": {
+                          "className": ""
+                        },
+                        "children": [
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-131",
+                            "props": {
+                              "children": "4.8 km",
+                              "className": "text-xl font-display"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-132",
+                            "props": {
+                              "children": "on foot",
+                              "className": "text-[10px] text-muted-foreground"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-133",
+                        "props": {
+                          "className": ""
+                        },
+                        "children": [
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-134",
+                            "props": {
+                              "children": "4 stops",
+                              "className": "text-xl font-display"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-135",
+                            "props": {
+                              "children": "room to wander",
+                              "className": "text-[10px] text-muted-foreground"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "elsewhere-itinerary-136",
+                        "props": {
+                          "className": ""
+                        },
+                        "children": [
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-137",
+                            "props": {
+                              "children": "$100",
+                              "className": "text-xl font-display"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-itinerary-138",
+                            "props": {
+                              "children": "for two travellers",
+                              "className": "text-[10px] text-muted-foreground"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "elsewhere-itinerary-139",
+        "props": {
+          "className": "px-6 md:px-14 py-8 border-t border-border flex justify-between items-center gap-4 flex-wrap"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "$id": "elsewhere-itinerary-140",
+            "props": {
+              "children": "Go a little further. Stay a little longer.",
+              "className": "font-display text-lg"
+            }
+          },
+          {
+            "$ref": "Text",
+            "$id": "elsewhere-itinerary-141",
+            "props": {
+              "children": "elsewhere / 2026",
+              "className": "text-[10px] uppercase tracking-widest text-muted-foreground"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

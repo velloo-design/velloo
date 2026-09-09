@@ -1,0 +1,3522 @@
+{
+  "id": "elsewhere-trips-board",
+  "name": "B · The brief-to-plan workspace",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "data-ew-root": "",
+      "sx": {
+        "display": "block",
+        "minHeight": "100vh",
+        "backgroundColor": "var(--color-background)",
+        "color": "var(--color-foreground)",
+        "fontFamily": "var(--font-sans, sans-serif)"
+      }
+    },
+    "children": [
+      {
+        "$snippet": "elsewhere-nav"
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "block",
+            "paddingLeft": "48px",
+            "paddingRight": "48px",
+            "paddingTop": "40px",
+            "paddingBottom": "40px",
+            "& > * + *": {
+              "marginTop": "32px"
+            }
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "flex",
+                "justifyContent": "space-between",
+                "alignItems": "flex-end"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "12px"
+                    }
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "YOU SET THE DIRECTION",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "10px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-primary)",
+                        "textTransform": "uppercase",
+                        "letterSpacing": ".2em"
+                      }
+                    },
+                    "$id": "agentic-2-5"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "A little brief. A thoughtful whole trip.",
+                      "component": "h2",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "48px",
+                        "lineHeight": "1.08",
+                        "color": "inherit",
+                        "fontFamily": "var(--font-display, Georgia, serif)",
+                        "fontWeight": 400,
+                        "letterSpacing": "-0.03em"
+                      }
+                    },
+                    "$id": "agentic-2-6"
+                  },
+                  {
+                    "$ref": "Typography",
+                    "props": {
+                      "children": "Tell your companion what matters. Watch the plan take shape, then make it yours.",
+                      "component": "p",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "14px",
+                        "lineHeight": "28px",
+                        "color": "var(--color-muted-foreground)",
+                        "maxWidth": "672px"
+                      }
+                    },
+                    "$id": "agentic-2-7"
+                  }
+                ],
+                "$id": "agentic-2-4"
+              },
+              {
+                "$ref": "Chip",
+                "props": {
+                  "label": "New trip · Draft",
+                  "size": "small",
+                  "sx": {
+                    "backgroundColor": "var(--color-secondary)",
+                    "color": "var(--color-secondary-foreground)",
+                    "border": "none",
+                    "borderRadius": "9999px",
+                    "fontSize": "10px",
+                    "lineHeight": 1.5,
+                    "padding": "3px 10px",
+                    "display": "inline-flex",
+                    "alignItems": "center",
+                    "width": "fit-content",
+                    "whiteSpace": "nowrap",
+                    "paddingLeft": "12px",
+                    "paddingRight": "12px",
+                    "paddingTop": "4px",
+                    "paddingBottom": "4px",
+                    "fontWeight": 400
+                  }
+                },
+                "$id": "agentic-2-8"
+              }
+            ],
+            "$id": "agentic-2-3"
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "grid",
+                "gridTemplateColumns": "340px 1fr",
+                "gap": "28px",
+                "alignItems": "flex-start"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "24px"
+                    }
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "var(--color-card)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Your starting point",
+                          "component": "h2",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "30px",
+                            "lineHeight": 1.15,
+                            "color": "inherit",
+                            "fontFamily": "var(--font-display, Georgia, serif)",
+                            "fontWeight": 400,
+                            "letterSpacing": "-0.03em"
+                          }
+                        },
+                        "$id": "agentic-2-12"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "gap": "20px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "gap": "8px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Where",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "12px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit",
+                                    "fontWeight": 600
+                                  }
+                                },
+                                "$id": "agentic-2-15"
+                              },
+                              {
+                                "$ref": "TextField",
+                                "props": {
+                                  "defaultValue": "Kyoto, Japan",
+                                  "size": "small",
+                                  "fullWidth": true,
+                                  "sx": {
+                                    "width": "100%",
+                                    "minWidth": "0px",
+                                    "fontSize": "12px",
+                                    "color": "var(--color-foreground)",
+                                    "backgroundColor": "var(--color-card)",
+                                    "& .MuiInputBase-root": {
+                                      "fontSize": "inherit",
+                                      "color": "inherit"
+                                    }
+                                  }
+                                },
+                                "$id": "agentic-2-16"
+                              }
+                            ],
+                            "$id": "agentic-2-14"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "gap": "8px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "When",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "12px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit",
+                                    "fontWeight": 600
+                                  }
+                                },
+                                "$id": "agentic-2-18"
+                              },
+                              {
+                                "$ref": "TextField",
+                                "props": {
+                                  "defaultValue": "12–17 October 2026",
+                                  "size": "small",
+                                  "fullWidth": true,
+                                  "sx": {
+                                    "width": "100%",
+                                    "minWidth": "0px",
+                                    "fontSize": "12px",
+                                    "color": "var(--color-foreground)",
+                                    "backgroundColor": "var(--color-card)",
+                                    "& .MuiInputBase-root": {
+                                      "fontSize": "inherit",
+                                      "color": "inherit"
+                                    }
+                                  }
+                                },
+                                "$id": "agentic-2-19"
+                              }
+                            ],
+                            "$id": "agentic-2-17"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "gap": "8px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Who’s coming",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "12px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit",
+                                    "fontWeight": 600
+                                  }
+                                },
+                                "$id": "agentic-2-21"
+                              },
+                              {
+                                "$ref": "TextField",
+                                "props": {
+                                  "defaultValue": "2 travellers",
+                                  "size": "small",
+                                  "fullWidth": true,
+                                  "sx": {
+                                    "width": "100%",
+                                    "minWidth": "0px",
+                                    "fontSize": "12px",
+                                    "color": "var(--color-foreground)",
+                                    "backgroundColor": "var(--color-card)",
+                                    "& .MuiInputBase-root": {
+                                      "fontSize": "inherit",
+                                      "color": "inherit"
+                                    }
+                                  }
+                                },
+                                "$id": "agentic-2-22"
+                              }
+                            ],
+                            "$id": "agentic-2-20"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "gap": "8px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Comfortable budget",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "12px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit",
+                                    "fontWeight": 600
+                                  }
+                                },
+                                "$id": "agentic-2-24"
+                              },
+                              {
+                                "$ref": "TextField",
+                                "props": {
+                                  "defaultValue": "$3,200",
+                                  "size": "small",
+                                  "fullWidth": true,
+                                  "sx": {
+                                    "width": "100%",
+                                    "minWidth": "0px",
+                                    "fontSize": "12px",
+                                    "color": "var(--color-foreground)",
+                                    "backgroundColor": "var(--color-card)",
+                                    "& .MuiInputBase-root": {
+                                      "fontSize": "inherit",
+                                      "color": "inherit"
+                                    }
+                                  }
+                                },
+                                "$id": "agentic-2-25"
+                              }
+                            ],
+                            "$id": "agentic-2-23"
+                          }
+                        ],
+                        "$id": "agentic-2-13"
+                      },
+                      {
+                        "$ref": "Divider",
+                        "props": {
+                          "sx": {
+                            "border": 0,
+                            "borderTop": "1px solid var(--color-border)",
+                            "margin": 0,
+                            "width": "100%"
+                          }
+                        },
+                        "$id": "agentic-2-26"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "YOUR KIND OF TRIP",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "9px",
+                            "lineHeight": 1.5,
+                            "color": "var(--color-muted-foreground)",
+                            "letterSpacing": ".1em"
+                          }
+                        },
+                        "$id": "agentic-2-27"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "flexWrap": "wrap",
+                            "gap": "8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Chip",
+                            "props": {
+                              "label": "Local food",
+                              "size": "small",
+                              "sx": {
+                                "backgroundColor": "var(--color-secondary)",
+                                "color": "var(--color-secondary-foreground)",
+                                "border": "none",
+                                "borderRadius": "9999px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "padding": "3px 10px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "width": "fit-content",
+                                "whiteSpace": "nowrap",
+                                "paddingLeft": "12px",
+                                "paddingRight": "12px",
+                                "paddingTop": "4px",
+                                "paddingBottom": "4px",
+                                "fontWeight": 400
+                              }
+                            },
+                            "$id": "agentic-2-29"
+                          },
+                          {
+                            "$ref": "Chip",
+                            "props": {
+                              "label": "Small galleries",
+                              "size": "small",
+                              "sx": {
+                                "backgroundColor": "var(--color-secondary)",
+                                "color": "var(--color-secondary-foreground)",
+                                "border": "none",
+                                "borderRadius": "9999px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "padding": "3px 10px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "width": "fit-content",
+                                "whiteSpace": "nowrap",
+                                "paddingLeft": "12px",
+                                "paddingRight": "12px",
+                                "paddingTop": "4px",
+                                "paddingBottom": "4px",
+                                "fontWeight": 400
+                              }
+                            },
+                            "$id": "agentic-2-30"
+                          },
+                          {
+                            "$ref": "Chip",
+                            "props": {
+                              "label": "Quiet stays",
+                              "size": "small",
+                              "sx": {
+                                "backgroundColor": "var(--color-secondary)",
+                                "color": "var(--color-secondary-foreground)",
+                                "border": "none",
+                                "borderRadius": "9999px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "padding": "3px 10px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "width": "fit-content",
+                                "whiteSpace": "nowrap",
+                                "paddingLeft": "12px",
+                                "paddingRight": "12px",
+                                "paddingTop": "4px",
+                                "paddingBottom": "4px",
+                                "fontWeight": 400
+                              }
+                            },
+                            "$id": "agentic-2-31"
+                          },
+                          {
+                            "$ref": "Chip",
+                            "props": {
+                              "label": "Slow mornings",
+                              "size": "small",
+                              "sx": {
+                                "backgroundColor": "var(--color-secondary)",
+                                "color": "var(--color-secondary-foreground)",
+                                "border": "none",
+                                "borderRadius": "9999px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "padding": "3px 10px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "width": "fit-content",
+                                "whiteSpace": "nowrap",
+                                "paddingLeft": "12px",
+                                "paddingRight": "12px",
+                                "paddingTop": "4px",
+                                "paddingBottom": "4px",
+                                "fontWeight": 400
+                              }
+                            },
+                            "$id": "agentic-2-32"
+                          }
+                        ],
+                        "$id": "agentic-2-28"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "gap": "8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Anything else?",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "12px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "agentic-2-34"
+                          },
+                          {
+                            "$ref": "TextField",
+                            "props": {
+                              "defaultValue": "One early start is fine. Leave a couple of afternoons free. We would love a tea experience.",
+                              "size": "small",
+                              "fullWidth": true,
+                              "multiline": true,
+                              "minRows": 3,
+                              "sx": {
+                                "width": "100%",
+                                "minWidth": "0px",
+                                "fontSize": "12px",
+                                "color": "var(--color-foreground)",
+                                "backgroundColor": "var(--color-card)",
+                                "& .MuiInputBase-root": {
+                                  "fontSize": "inherit",
+                                  "color": "inherit"
+                                },
+                                "minHeight": "110px"
+                              }
+                            },
+                            "$id": "agentic-2-35"
+                          }
+                        ],
+                        "$id": "agentic-2-33"
+                      },
+                      {
+                        "$ref": "Button",
+                        "props": {
+                          "variant": "contained",
+                          "sx": {
+                            "textTransform": "none",
+                            "fontSize": "12px",
+                            "minHeight": "36px",
+                            "padding": "8px 16px",
+                            "display": "inline-flex",
+                            "alignItems": "center",
+                            "justifyContent": "center",
+                            "gap": "8px",
+                            "whiteSpace": "nowrap",
+                            "borderRadius": "9999px",
+                            "boxShadow": "none",
+                            "lineHeight": 1.4,
+                            "backgroundColor": "var(--color-primary)",
+                            "color": "var(--color-primary-foreground)",
+                            "border": "1px solid transparent",
+                            "height": "44px",
+                            "width": "100%"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "Sparkles",
+                              "style": {
+                                "width": "16px",
+                                "height": "16px",
+                                "flexShrink": 0
+                              }
+                            },
+                            "$id": "agentic-2-37"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "children": "Build my first draft",
+                              "sx": {
+                                "display": "block"
+                              }
+                            },
+                            "$id": "agentic-2-38"
+                          }
+                        ],
+                        "$id": "agentic-2-36"
+                      }
+                    ],
+                    "$id": "agentic-2-11"
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "color-mix(in srgb, var(--color-muted) 40%, transparent)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "gap": "8px",
+                            "alignItems": "center"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "Compass",
+                              "style": {
+                                "width": "16px",
+                                "height": "16px",
+                                "flexShrink": 0
+                              }
+                            },
+                            "$id": "agentic-2-41"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "A little research, taken care of.",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "14px",
+                                "lineHeight": 1.5,
+                                "color": "inherit",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "agentic-2-42"
+                          }
+                        ],
+                        "$id": "agentic-2-40"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "& > * + *": {
+                              "borderTop": "1px solid var(--color-border)"
+                            }
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "alignItems": "center",
+                                "justifyContent": "space-between",
+                                "gap": "12px",
+                                "paddingTop": "12px",
+                                "paddingBottom": "12px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "gap": "12px"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "CircleCheck",
+                                      "style": {
+                                        "width": "16px",
+                                        "height": "16px",
+                                        "flexShrink": 0,
+                                        "color": "var(--color-primary)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-46"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Matched your pace and interests",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-47"
+                                  }
+                                ],
+                                "$id": "agentic-2-45"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Done",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-48"
+                              }
+                            ],
+                            "$id": "agentic-2-44"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "alignItems": "center",
+                                "justifyContent": "space-between",
+                                "gap": "12px",
+                                "paddingTop": "12px",
+                                "paddingBottom": "12px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "gap": "12px"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "CircleCheck",
+                                      "style": {
+                                        "width": "16px",
+                                        "height": "16px",
+                                        "flexShrink": 0,
+                                        "color": "var(--color-primary)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-51"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Compared 6 neighbourhood stays",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-52"
+                                  }
+                                ],
+                                "$id": "agentic-2-50"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Done",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-53"
+                              }
+                            ],
+                            "$id": "agentic-2-49"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "alignItems": "center",
+                                "justifyContent": "space-between",
+                                "gap": "12px",
+                                "paddingTop": "12px",
+                                "paddingBottom": "12px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "gap": "12px"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "CircleCheck",
+                                      "style": {
+                                        "width": "16px",
+                                        "height": "16px",
+                                        "flexShrink": 0,
+                                        "color": "var(--color-primary)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-56"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Grouped nearby discoveries",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-57"
+                                  }
+                                ],
+                                "$id": "agentic-2-55"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Done",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-58"
+                              }
+                            ],
+                            "$id": "agentic-2-54"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "alignItems": "center",
+                                "justifyContent": "space-between",
+                                "gap": "12px",
+                                "paddingTop": "12px",
+                                "paddingBottom": "12px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "gap": "12px"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "CircleCheck",
+                                      "style": {
+                                        "width": "16px",
+                                        "height": "16px",
+                                        "flexShrink": 0,
+                                        "color": "var(--color-primary)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-61"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Balanced the plan with your budget",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-62"
+                                  }
+                                ],
+                                "$id": "agentic-2-60"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Done",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-63"
+                              }
+                            ],
+                            "$id": "agentic-2-59"
+                          }
+                        ],
+                        "$id": "agentic-2-43"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Suggestions prepared · Nothing booked",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "10px",
+                            "lineHeight": 1.5,
+                            "color": "var(--color-muted-foreground)"
+                          }
+                        },
+                        "$id": "agentic-2-64"
+                      }
+                    ],
+                    "$id": "agentic-2-39"
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "color-mix(in srgb, var(--color-secondary) 30%, transparent)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Your companion remembers.",
+                          "component": "h2",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "24px",
+                            "lineHeight": 1.15,
+                            "color": "inherit",
+                            "fontFamily": "var(--font-display, Georgia, serif)",
+                            "fontWeight": 400,
+                            "letterSpacing": "-0.03em"
+                          }
+                        },
+                        "$id": "agentic-2-66"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "These preferences guide every suggestion. Change your brief any time to update the plan.",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "12px",
+                            "lineHeight": "24px",
+                            "color": "var(--color-muted-foreground)"
+                          }
+                        },
+                        "$id": "agentic-2-67"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "alignItems": "center",
+                            "gap": "12px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Switch",
+                            "props": {
+                              "defaultChecked": true,
+                              "sx": {}
+                            },
+                            "$id": "agentic-2-69"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Use my saved travel preferences",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "12px",
+                                "lineHeight": 1.5,
+                                "color": "inherit"
+                              }
+                            },
+                            "$id": "agentic-2-70"
+                          }
+                        ],
+                        "$id": "agentic-2-68"
+                      }
+                    ],
+                    "$id": "agentic-2-65"
+                  }
+                ],
+                "$id": "agentic-2-10"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "24px"
+                    }
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "var(--color-card)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "justifyContent": "space-between",
+                            "alignItems": "center"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "gap": "12px",
+                                "alignItems": "center"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "width": "32px",
+                                    "height": "32px",
+                                    "borderRadius": "9999px",
+                                    "backgroundColor": "var(--color-primary)",
+                                    "color": "var(--color-primary-foreground)",
+                                    "alignItems": "center",
+                                    "justifyContent": "center",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "Sparkles",
+                                      "style": {
+                                        "width": "16px",
+                                        "height": "16px",
+                                        "flexShrink": 0
+                                      }
+                                    },
+                                    "$id": "agentic-2-76"
+                                  }
+                                ],
+                                "$id": "agentic-2-75"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Your first draft is ready",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "14px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit",
+                                        "fontWeight": 600
+                                      }
+                                    },
+                                    "$id": "agentic-2-78"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Built around your brief · 5 nights",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "10px",
+                                        "lineHeight": 1.5,
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-79"
+                                  }
+                                ],
+                                "$id": "agentic-2-77"
+                              }
+                            ],
+                            "$id": "agentic-2-74"
+                          },
+                          {
+                            "$ref": "Chip",
+                            "props": {
+                              "label": "Ready to refine",
+                              "size": "small",
+                              "sx": {
+                                "backgroundColor": "var(--color-secondary)",
+                                "color": "var(--color-secondary-foreground)",
+                                "border": "none",
+                                "borderRadius": "9999px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "padding": "3px 10px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "width": "fit-content",
+                                "whiteSpace": "nowrap",
+                                "paddingLeft": "12px",
+                                "paddingRight": "12px",
+                                "paddingTop": "4px",
+                                "paddingBottom": "4px",
+                                "fontWeight": 400
+                              }
+                            },
+                            "$id": "agentic-2-80"
+                          }
+                        ],
+                        "$id": "agentic-2-73"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Kyoto, with room to breathe.",
+                          "component": "h2",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "36px",
+                            "lineHeight": 1.15,
+                            "color": "inherit",
+                            "fontFamily": "var(--font-display, Georgia, serif)",
+                            "fontWeight": 400,
+                            "letterSpacing": "-0.03em"
+                          }
+                        },
+                        "$id": "agentic-2-81"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "A central stay, five gently paced days, and a budget with plenty of breathing room. Here’s the direction I suggest.",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "14px",
+                            "lineHeight": "28px",
+                            "color": "var(--color-muted-foreground)"
+                          }
+                        },
+                        "$id": "agentic-2-82"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "grid",
+                            "gridTemplateColumns": "repeat(3, minmax(0, 1fr))",
+                            "gap": "16px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "block",
+                                "backgroundColor": "color-mix(in srgb, var(--color-muted) 60%, transparent)",
+                                "borderRadius": "12px",
+                                "padding": "16px",
+                                "& > * + *": {
+                                  "marginTop": "4px"
+                                }
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "$1,730",
+                                  "component": "h2",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "24px",
+                                    "lineHeight": 1.15,
+                                    "color": "inherit",
+                                    "fontFamily": "var(--font-display, Georgia, serif)",
+                                    "fontWeight": 400,
+                                    "letterSpacing": "-0.03em"
+                                  }
+                                },
+                                "$id": "agentic-2-85"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "estimated total",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-86"
+                              }
+                            ],
+                            "$id": "agentic-2-84"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "block",
+                                "backgroundColor": "color-mix(in srgb, var(--color-muted) 60%, transparent)",
+                                "borderRadius": "12px",
+                                "padding": "16px",
+                                "& > * + *": {
+                                  "marginTop": "4px"
+                                }
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "2",
+                                  "component": "h2",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "24px",
+                                    "lineHeight": 1.15,
+                                    "color": "inherit",
+                                    "fontFamily": "var(--font-display, Georgia, serif)",
+                                    "fontWeight": 400,
+                                    "letterSpacing": "-0.03em"
+                                  }
+                                },
+                                "$id": "agentic-2-88"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "open afternoons",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-89"
+                              }
+                            ],
+                            "$id": "agentic-2-87"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "block",
+                                "backgroundColor": "color-mix(in srgb, var(--color-muted) 60%, transparent)",
+                                "borderRadius": "12px",
+                                "padding": "16px",
+                                "& > * + *": {
+                                  "marginTop": "4px"
+                                }
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "4.8 km",
+                                  "component": "h2",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "24px",
+                                    "lineHeight": 1.15,
+                                    "color": "inherit",
+                                    "fontFamily": "var(--font-display, Georgia, serif)",
+                                    "fontWeight": 400,
+                                    "letterSpacing": "-0.03em"
+                                  }
+                                },
+                                "$id": "agentic-2-91"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "longest walking day",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "10px",
+                                    "lineHeight": 1.5,
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-92"
+                              }
+                            ],
+                            "$id": "agentic-2-90"
+                          }
+                        ],
+                        "$id": "agentic-2-83"
+                      }
+                    ],
+                    "$id": "agentic-2-72"
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "var(--color-card)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "justifyContent": "space-between"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Choose your home base.",
+                              "component": "h2",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "30px",
+                                "lineHeight": 1.15,
+                                "color": "inherit",
+                                "fontFamily": "var(--font-display, Georgia, serif)",
+                                "fontWeight": 400,
+                                "letterSpacing": "-0.03em"
+                              }
+                            },
+                            "$id": "agentic-2-95"
+                          },
+                          {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "text",
+                              "sx": {
+                                "textTransform": "none",
+                                "fontSize": "12px",
+                                "minHeight": "36px",
+                                "padding": "8px 16px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "gap": "8px",
+                                "whiteSpace": "nowrap",
+                                "borderRadius": "9999px",
+                                "boxShadow": "none",
+                                "lineHeight": 1.4,
+                                "backgroundColor": "transparent",
+                                "color": "var(--color-foreground)",
+                                "border": "1px solid transparent"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "ArrowUpRight",
+                                  "style": {
+                                    "width": "16px",
+                                    "height": "16px",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "$id": "agentic-2-97"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "children": "Compare stays",
+                                  "sx": {
+                                    "display": "block"
+                                  }
+                                },
+                                "$id": "agentic-2-98"
+                              }
+                            ],
+                            "$id": "agentic-2-96"
+                          }
+                        ],
+                        "$id": "agentic-2-94"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "grid",
+                            "gridTemplateColumns": "repeat(2, minmax(0, 1fr))",
+                            "gap": "16px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Card",
+                            "props": {
+                              "sx": {
+                                "backgroundColor": "var(--color-card)",
+                                "color": "var(--color-card-foreground)",
+                                "border": "1px solid var(--color-border)",
+                                "borderRadius": "12px",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "gap": "0px",
+                                "padding": "0px",
+                                "overflow": "hidden",
+                                "boxShadow": "none"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "position": "relative",
+                                    "overflow": "hidden",
+                                    "height": "155px"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Image",
+                                    "props": {
+                                      "src": "/assets/elsewhere-room.jpg",
+                                      "alt": "room travel inspiration",
+                                      "fill": false,
+                                      "style": {
+                                        "display": "block",
+                                        "objectFit": "cover",
+                                        "position": "absolute",
+                                        "inset": "0px",
+                                        "width": "100%",
+                                        "height": "100%"
+                                      }
+                                    },
+                                    "$id": "agentic-2-102"
+                                  }
+                                ],
+                                "$id": "agentic-2-101"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "padding": "16px",
+                                    "& > * + *": {
+                                      "marginTop": "12px"
+                                    }
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Higashiyama House",
+                                      "component": "h2",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "24px",
+                                        "lineHeight": 1.15,
+                                        "color": "inherit",
+                                        "fontFamily": "var(--font-display, Georgia, serif)",
+                                        "fontWeight": 400,
+                                        "letterSpacing": "-0.03em"
+                                      }
+                                    },
+                                    "$id": "agentic-2-104"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "$970 / FIVE NIGHTS",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "10px",
+                                        "lineHeight": 1.5,
+                                        "color": "var(--color-primary)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-105"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Recommended for your walkable, food-first week.",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": "24px",
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-106"
+                                  }
+                                ],
+                                "$id": "agentic-2-103"
+                              }
+                            ],
+                            "$id": "agentic-2-100"
+                          },
+                          {
+                            "$ref": "Card",
+                            "props": {
+                              "sx": {
+                                "backgroundColor": "var(--color-card)",
+                                "color": "var(--color-card-foreground)",
+                                "border": "1px solid var(--color-border)",
+                                "borderRadius": "12px",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "gap": "0px",
+                                "padding": "0px",
+                                "overflow": "hidden",
+                                "boxShadow": "none"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "position": "relative",
+                                    "overflow": "hidden",
+                                    "height": "155px"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Image",
+                                    "props": {
+                                      "src": "/assets/elsewhere-forest.jpg",
+                                      "alt": "forest travel inspiration",
+                                      "fill": false,
+                                      "style": {
+                                        "display": "block",
+                                        "objectFit": "cover",
+                                        "position": "absolute",
+                                        "inset": "0px",
+                                        "width": "100%",
+                                        "height": "100%"
+                                      }
+                                    },
+                                    "$id": "agentic-2-109"
+                                  }
+                                ],
+                                "$id": "agentic-2-108"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "padding": "16px",
+                                    "& > * + *": {
+                                      "marginTop": "12px"
+                                    }
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "The Garden Retreat",
+                                      "component": "h2",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "24px",
+                                        "lineHeight": 1.15,
+                                        "color": "inherit",
+                                        "fontFamily": "var(--font-display, Georgia, serif)",
+                                        "fontWeight": 400,
+                                        "letterSpacing": "-0.03em"
+                                      }
+                                    },
+                                    "$id": "agentic-2-111"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "$1,095 / FIVE NIGHTS",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "10px",
+                                        "lineHeight": 1.5,
+                                        "color": "var(--color-primary)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-112"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "A quieter setting with a little more travel time.",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": "24px",
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-113"
+                                  }
+                                ],
+                                "$id": "agentic-2-110"
+                              }
+                            ],
+                            "$id": "agentic-2-107"
+                          }
+                        ],
+                        "$id": "agentic-2-99"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "justifyContent": "space-between",
+                            "alignItems": "center"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Chip",
+                            "props": {
+                              "label": "Higashiyama selected",
+                              "size": "small",
+                              "sx": {
+                                "backgroundColor": "var(--color-secondary)",
+                                "color": "var(--color-secondary-foreground)",
+                                "border": "none",
+                                "borderRadius": "9999px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "padding": "3px 10px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "width": "fit-content",
+                                "whiteSpace": "nowrap",
+                                "paddingLeft": "12px",
+                                "paddingRight": "12px",
+                                "paddingTop": "4px",
+                                "paddingBottom": "4px",
+                                "fontWeight": 400
+                              }
+                            },
+                            "$id": "agentic-2-115"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Nothing reserved yet",
+                              "component": "p",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "10px",
+                                "lineHeight": 1.5,
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "$id": "agentic-2-116"
+                          }
+                        ],
+                        "$id": "agentic-2-114"
+                      }
+                    ],
+                    "$id": "agentic-2-93"
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "var(--color-card)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "justifyContent": "space-between",
+                            "alignItems": "center"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Your days, laid out.",
+                              "component": "h2",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "30px",
+                                "lineHeight": 1.15,
+                                "color": "inherit",
+                                "fontFamily": "var(--font-display, Georgia, serif)",
+                                "fontWeight": 400,
+                                "letterSpacing": "-0.03em"
+                              }
+                            },
+                            "$id": "agentic-2-119"
+                          },
+                          {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "outlined",
+                              "sx": {
+                                "textTransform": "none",
+                                "fontSize": "12px",
+                                "minHeight": "36px",
+                                "padding": "8px 16px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "gap": "8px",
+                                "whiteSpace": "nowrap",
+                                "borderRadius": "9999px",
+                                "boxShadow": "none",
+                                "lineHeight": 1.4,
+                                "backgroundColor": "transparent",
+                                "color": "var(--color-foreground)",
+                                "border": "1px solid var(--color-border)"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "SlidersHorizontal",
+                                  "style": {
+                                    "width": "16px",
+                                    "height": "16px",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "$id": "agentic-2-121"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "children": "Edit the pace",
+                                  "sx": {
+                                    "display": "block"
+                                  }
+                                },
+                                "$id": "agentic-2-122"
+                              }
+                            ],
+                            "$id": "agentic-2-120"
+                          }
+                        ],
+                        "$id": "agentic-2-118"
+                      },
+                      {
+                        "$ref": "Tabs",
+                        "props": {
+                          "value": "plan",
+                          "sx": {}
+                        },
+                        "children": [
+                          {
+                            "$ref": "Tab",
+                            "props": {
+                              "label": "Day by day",
+                              "value": "plan",
+                              "sx": {
+                                "fontSize": "12px",
+                                "textTransform": "none",
+                                "minWidth": "auto",
+                                "padding": "12px 16px"
+                              }
+                            }
+                          },
+                          {
+                            "$ref": "Tab",
+                            "props": {
+                              "label": "On the map",
+                              "value": "map",
+                              "sx": {
+                                "fontSize": "12px",
+                                "textTransform": "none",
+                                "minWidth": "auto",
+                                "padding": "12px 16px"
+                              }
+                            }
+                          }
+                        ],
+                        "$id": "agentic-2-123"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "& > * + *": {
+                              "borderTop": "1px solid var(--color-border)"
+                            }
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "gap": "16px",
+                                "alignItems": "flex-start",
+                                "paddingTop": "20px",
+                                "paddingBottom": "20px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "width": "40px",
+                                    "height": "40px",
+                                    "borderRadius": "9999px",
+                                    "backgroundColor": "var(--color-secondary)",
+                                    "justifyContent": "center",
+                                    "alignItems": "center",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "01",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-130"
+                                  }
+                                ],
+                                "$id": "agentic-2-129"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "flex": "1 1 0%",
+                                    "& > * + *": {
+                                      "marginTop": "8px"
+                                    }
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "sx": {
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "space-between"
+                                      }
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "Arrive gently",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "14px",
+                                            "lineHeight": 1.5,
+                                            "color": "inherit",
+                                            "fontWeight": 600
+                                          }
+                                        },
+                                        "$id": "agentic-2-133"
+                                      },
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "$100",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "12px",
+                                            "lineHeight": 1.5,
+                                            "color": "var(--color-muted-foreground)"
+                                          }
+                                        },
+                                        "$id": "agentic-2-134"
+                                      }
+                                    ],
+                                    "$id": "agentic-2-132"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Nishiki Market · Gion lanes · Tea with a local host",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": "24px",
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-135"
+                                  }
+                                ],
+                                "$id": "agentic-2-131"
+                              }
+                            ],
+                            "$id": "agentic-2-128"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "gap": "16px",
+                                "alignItems": "flex-start",
+                                "paddingTop": "20px",
+                                "paddingBottom": "20px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "width": "40px",
+                                    "height": "40px",
+                                    "borderRadius": "9999px",
+                                    "backgroundColor": "var(--color-secondary)",
+                                    "justifyContent": "center",
+                                    "alignItems": "center",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "02",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-138"
+                                  }
+                                ],
+                                "$id": "agentic-2-137"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "flex": "1 1 0%",
+                                    "& > * + *": {
+                                      "marginTop": "8px"
+                                    }
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "sx": {
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "space-between"
+                                      }
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "A greener kind of morning",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "14px",
+                                            "lineHeight": 1.5,
+                                            "color": "inherit",
+                                            "fontWeight": 600
+                                          }
+                                        },
+                                        "$id": "agentic-2-141"
+                                      },
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "$85",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "12px",
+                                            "lineHeight": 1.5,
+                                            "color": "var(--color-muted-foreground)"
+                                          }
+                                        },
+                                        "$id": "agentic-2-142"
+                                      }
+                                    ],
+                                    "$id": "agentic-2-140"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Early bamboo grove · Riverside lunch · An open afternoon",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": "24px",
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-143"
+                                  }
+                                ],
+                                "$id": "agentic-2-139"
+                              }
+                            ],
+                            "$id": "agentic-2-136"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "gap": "16px",
+                                "alignItems": "flex-start",
+                                "paddingTop": "20px",
+                                "paddingBottom": "20px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "width": "40px",
+                                    "height": "40px",
+                                    "borderRadius": "9999px",
+                                    "backgroundColor": "var(--color-secondary)",
+                                    "justifyContent": "center",
+                                    "alignItems": "center",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "03",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-146"
+                                  }
+                                ],
+                                "$id": "agentic-2-145"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "flex": "1 1 0%",
+                                    "& > * + *": {
+                                      "marginTop": "8px"
+                                    }
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "sx": {
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "space-between"
+                                      }
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "Follow your curiosity",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "14px",
+                                            "lineHeight": 1.5,
+                                            "color": "inherit",
+                                            "fontWeight": 600
+                                          }
+                                        },
+                                        "$id": "agentic-2-149"
+                                      },
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "$120",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "12px",
+                                            "lineHeight": 1.5,
+                                            "color": "var(--color-muted-foreground)"
+                                          }
+                                        },
+                                        "$id": "agentic-2-150"
+                                      }
+                                    ],
+                                    "$id": "agentic-2-148"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "Small galleries · Independent shops · Dinner in Pontocho",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": "24px",
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-151"
+                                  }
+                                ],
+                                "$id": "agentic-2-147"
+                              }
+                            ],
+                            "$id": "agentic-2-144"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "gap": "16px",
+                                "alignItems": "flex-start",
+                                "paddingTop": "20px",
+                                "paddingBottom": "20px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "width": "40px",
+                                    "height": "40px",
+                                    "borderRadius": "9999px",
+                                    "backgroundColor": "var(--color-secondary)",
+                                    "justifyContent": "center",
+                                    "alignItems": "center",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "04",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-154"
+                                  }
+                                ],
+                                "$id": "agentic-2-153"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "flex": "1 1 0%",
+                                    "& > * + *": {
+                                      "marginTop": "8px"
+                                    }
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "sx": {
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "space-between"
+                                      }
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "A little further afield",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "14px",
+                                            "lineHeight": 1.5,
+                                            "color": "inherit",
+                                            "fontWeight": 600
+                                          }
+                                        },
+                                        "$id": "agentic-2-157"
+                                      },
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "$110",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "12px",
+                                            "lineHeight": 1.5,
+                                            "color": "var(--color-muted-foreground)"
+                                          }
+                                        },
+                                        "$id": "agentic-2-158"
+                                      }
+                                    ],
+                                    "$id": "agentic-2-156"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "A day in Uji · Tea fields · Back before sunset",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": "24px",
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-159"
+                                  }
+                                ],
+                                "$id": "agentic-2-155"
+                              }
+                            ],
+                            "$id": "agentic-2-152"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "gap": "16px",
+                                "alignItems": "flex-start",
+                                "paddingTop": "20px",
+                                "paddingBottom": "20px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "flex",
+                                    "width": "40px",
+                                    "height": "40px",
+                                    "borderRadius": "9999px",
+                                    "backgroundColor": "var(--color-secondary)",
+                                    "justifyContent": "center",
+                                    "alignItems": "center",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "05",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": 1.5,
+                                        "color": "inherit"
+                                      }
+                                    },
+                                    "$id": "agentic-2-162"
+                                  }
+                                ],
+                                "$id": "agentic-2-161"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "sx": {
+                                    "display": "block",
+                                    "flex": "1 1 0%",
+                                    "& > * + *": {
+                                      "marginTop": "8px"
+                                    }
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "sx": {
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "space-between"
+                                      }
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "Leave room for one more thing",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "14px",
+                                            "lineHeight": 1.5,
+                                            "color": "inherit",
+                                            "fontWeight": 600
+                                          }
+                                        },
+                                        "$id": "agentic-2-165"
+                                      },
+                                      {
+                                        "$ref": "Typography",
+                                        "props": {
+                                          "children": "$65",
+                                          "component": "p",
+                                          "sx": {
+                                            "display": "block",
+                                            "margin": "0px",
+                                            "fontSize": "12px",
+                                            "lineHeight": 1.5,
+                                            "color": "var(--color-muted-foreground)"
+                                          }
+                                        },
+                                        "$id": "agentic-2-166"
+                                      }
+                                    ],
+                                    "$id": "agentic-2-164"
+                                  },
+                                  {
+                                    "$ref": "Typography",
+                                    "props": {
+                                      "children": "A slow breakfast · Your favourite neighbourhood · Homeward",
+                                      "component": "p",
+                                      "sx": {
+                                        "display": "block",
+                                        "margin": "0px",
+                                        "fontSize": "12px",
+                                        "lineHeight": "24px",
+                                        "color": "var(--color-muted-foreground)"
+                                      }
+                                    },
+                                    "$id": "agentic-2-167"
+                                  }
+                                ],
+                                "$id": "agentic-2-163"
+                              }
+                            ],
+                            "$id": "agentic-2-160"
+                          }
+                        ],
+                        "$id": "agentic-2-127"
+                      },
+                      {
+                        "$ref": "Alert",
+                        "props": {
+                          "severity": "success",
+                          "sx": {
+                            "padding": "16px",
+                            "border": "1px solid var(--color-border)",
+                            "borderRadius": "12px",
+                            "fontSize": "12px",
+                            "backgroundColor": "color-mix(in srgb, var(--color-secondary) 30%, transparent)"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "Leaf",
+                              "style": {
+                                "width": "16px",
+                                "height": "16px",
+                                "flexShrink": 0
+                              }
+                            },
+                            "$id": "agentic-2-169"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "children": "Two afternoons are deliberately open",
+                              "sx": {
+                                "fontSize": "12px",
+                                "fontWeight": 600
+                              }
+                            },
+                            "$id": "agentic-2-170"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "children": "Day 2 and Day 4 leave space for whatever you discover along the way.",
+                              "sx": {
+                                "fontSize": "12px",
+                                "lineHeight": 1.6
+                              }
+                            },
+                            "$id": "agentic-2-171"
+                          }
+                        ],
+                        "$id": "agentic-2-168"
+                      }
+                    ],
+                    "$id": "agentic-2-117"
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "var(--color-card)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "gap": "12px",
+                            "alignItems": "center"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "width": "32px",
+                                "height": "32px",
+                                "borderRadius": "9999px",
+                                "backgroundColor": "var(--color-primary)",
+                                "color": "var(--color-primary-foreground)",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "flexShrink": 0
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "Sparkles",
+                                  "style": {
+                                    "width": "16px",
+                                    "height": "16px",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "$id": "agentic-2-175"
+                              }
+                            ],
+                            "$id": "agentic-2-174"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "Make a change. Keep the good parts.",
+                              "component": "h2",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "24px",
+                                "lineHeight": 1.15,
+                                "color": "inherit",
+                                "fontFamily": "var(--font-display, Georgia, serif)",
+                                "fontWeight": 400,
+                                "letterSpacing": "-0.03em"
+                              }
+                            },
+                            "$id": "agentic-2-176"
+                          }
+                        ],
+                        "$id": "agentic-2-173"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "alignItems": "center",
+                            "gap": "8px",
+                            "border": "1px solid var(--color-border)",
+                            "borderRadius": "8px",
+                            "minHeight": "36px",
+                            "padding": "0px 8px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "TextField",
+                            "props": {
+                              "defaultValue": "Less temple hopping, more neighbourhood food.",
+                              "size": "small",
+                              "fullWidth": true,
+                              "sx": {
+                                "width": "100%",
+                                "minWidth": "0px",
+                                "fontSize": "12px",
+                                "color": "var(--color-foreground)",
+                                "backgroundColor": "transparent",
+                                "& .MuiInputBase-root": {
+                                  "fontSize": "inherit",
+                                  "color": "inherit"
+                                },
+                                "& fieldset": {
+                                  "border": 0
+                                },
+                                "flex": 1,
+                                "border": 0
+                              }
+                            },
+                            "$id": "agentic-2-178"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "align": "inline-end",
+                              "sx": {
+                                "display": "flex",
+                                "alignItems": "center",
+                                "flexShrink": 0
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Button",
+                                "props": {
+                                  "variant": "contained",
+                                  "sx": {
+                                    "textTransform": "none",
+                                    "fontSize": "12px",
+                                    "minHeight": "36px",
+                                    "padding": "8px 16px",
+                                    "display": "inline-flex",
+                                    "alignItems": "center",
+                                    "justifyContent": "center",
+                                    "gap": "8px",
+                                    "whiteSpace": "nowrap",
+                                    "borderRadius": "9999px",
+                                    "boxShadow": "none",
+                                    "lineHeight": 1.4,
+                                    "backgroundColor": "var(--color-primary)",
+                                    "color": "var(--color-primary-foreground)",
+                                    "border": "1px solid transparent",
+                                    "height": "32px"
+                                  }
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "ArrowUp",
+                                      "style": {
+                                        "width": "16px",
+                                        "height": "16px",
+                                        "flexShrink": 0
+                                      }
+                                    },
+                                    "$id": "agentic-2-181"
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "children": "Update plan",
+                                      "sx": {
+                                        "display": "block"
+                                      }
+                                    },
+                                    "$id": "agentic-2-182"
+                                  }
+                                ],
+                                "$id": "agentic-2-180"
+                              }
+                            ],
+                            "$id": "agentic-2-179"
+                          }
+                        ],
+                        "$id": "agentic-2-177"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "alignItems": "flex-start",
+                            "gap": "12px",
+                            "backgroundColor": "color-mix(in srgb, var(--color-secondary) 40%, transparent)",
+                            "borderRadius": "12px",
+                            "padding": "16px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "CircleCheck",
+                              "style": {
+                                "width": "16px",
+                                "height": "16px",
+                                "flexShrink": 0,
+                                "marginTop": "4px",
+                                "color": "var(--color-primary)"
+                              }
+                            },
+                            "$id": "agentic-2-184"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "block",
+                                "& > * + *": {
+                                  "marginTop": "8px"
+                                }
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Day 3 updated",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "12px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit",
+                                    "fontWeight": 600
+                                  }
+                                },
+                                "$id": "agentic-2-186"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "A neighbourhood tasting walk replaces the temple circuit. Your stay and open afternoons are unchanged.",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "12px",
+                                    "lineHeight": "24px",
+                                    "color": "var(--color-muted-foreground)"
+                                  }
+                                },
+                                "$id": "agentic-2-187"
+                              }
+                            ],
+                            "$id": "agentic-2-185"
+                          }
+                        ],
+                        "$id": "agentic-2-183"
+                      }
+                    ],
+                    "$id": "agentic-2-172"
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "var(--color-card)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "A budget that still has room.",
+                          "component": "h2",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "30px",
+                            "lineHeight": 1.15,
+                            "color": "inherit",
+                            "fontFamily": "var(--font-display, Georgia, serif)",
+                            "fontWeight": 400,
+                            "letterSpacing": "-0.03em"
+                          }
+                        },
+                        "$id": "agentic-2-189"
+                      },
+                      {
+                        "$ref": "SVG",
+                        "props": {
+                          "viewBox": "0 0 560 210",
+                          "content": "<text x=\"10\" y=\"15\" font-size=\"10\" fill=\"var(--color-muted-foreground)\">$</text><path d=\"M45 175H540\" stroke=\"var(--color-border)\"/><text x=\"35\" y=\"178\" text-anchor=\"end\" font-size=\"9\" fill=\"var(--color-muted-foreground)\">0</text><path d=\"M45 137H540\" stroke=\"var(--color-border)\"/><text x=\"35\" y=\"140\" text-anchor=\"end\" font-size=\"9\" fill=\"var(--color-muted-foreground)\">279</text><path d=\"M45 99H540\" stroke=\"var(--color-border)\"/><text x=\"35\" y=\"102\" text-anchor=\"end\" font-size=\"9\" fill=\"var(--color-muted-foreground)\">558</text><path d=\"M45 61H540\" stroke=\"var(--color-border)\"/><text x=\"35\" y=\"64\" text-anchor=\"end\" font-size=\"9\" fill=\"var(--color-muted-foreground)\">837</text><path d=\"M45 23H540\" stroke=\"var(--color-border)\"/><text x=\"35\" y=\"26\" text-anchor=\"end\" font-size=\"9\" fill=\"var(--color-muted-foreground)\">1116</text><rect x=\"83\" y=\"42.82608695652175\" width=\"44\" height=\"132.17391304347825\" rx=\"3\" fill=\"var(--color-primary)\"/><title>Stay: 970</title><rect x=\"203\" y=\"125.94576423128642\" width=\"44\" height=\"49.05423576871358\" rx=\"3\" fill=\"var(--color-primary)\"/><title>Food: 360</title><rect x=\"323\" y=\"142.29717615419094\" width=\"44\" height=\"32.702823845809064\" rx=\"3\" fill=\"var(--color-primary)\"/><title>Experiences: 240</title><rect x=\"443\" y=\"153.1981174361273\" width=\"44\" height=\"21.80188256387271\" rx=\"3\" fill=\"var(--color-primary)\"/><title>Transport: 160</title><text x=\"105\" y=\"200\" text-anchor=\"middle\" font-size=\"10\" fill=\"var(--color-muted-foreground)\">Stay</text><text x=\"225\" y=\"200\" text-anchor=\"middle\" font-size=\"10\" fill=\"var(--color-muted-foreground)\">Food</text><text x=\"345\" y=\"200\" text-anchor=\"middle\" font-size=\"10\" fill=\"var(--color-muted-foreground)\">Experiences</text><text x=\"465\" y=\"200\" text-anchor=\"middle\" font-size=\"10\" fill=\"var(--color-muted-foreground)\">Transport</text>",
+                          "role": "img",
+                          "aria-label": "Estimated cost",
+                          "style": {
+                            "width": "100%",
+                            "height": "190px",
+                            "display": "block"
+                          }
+                        },
+                        "$id": "agentic-2-190"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "block",
+                            "& > * + *": {
+                              "marginTop": "12px"
+                            },
+                            "fontSize": "12px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Stay",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-193"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "$970",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-194"
+                              }
+                            ],
+                            "$id": "agentic-2-192"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Food & coffee",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-196"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "$360",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-197"
+                              }
+                            ],
+                            "$id": "agentic-2-195"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Experiences",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-199"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "$240",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-200"
+                              }
+                            ],
+                            "$id": "agentic-2-198"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Local transport",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-202"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "$160",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-203"
+                              }
+                            ],
+                            "$id": "agentic-2-201"
+                          },
+                          {
+                            "$ref": "Divider",
+                            "props": {
+                              "sx": {
+                                "border": 0,
+                                "borderTop": "1px solid var(--color-border)",
+                                "margin": 0,
+                                "width": "100%"
+                              }
+                            },
+                            "$id": "agentic-2-204"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "fontWeight": 600
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Estimated trip total",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-206"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "$1,730",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-207"
+                              }
+                            ],
+                            "$id": "agentic-2-205"
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "sx": {
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "color": "var(--color-muted-foreground)"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "Left for the unexpected",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-209"
+                              },
+                              {
+                                "$ref": "Typography",
+                                "props": {
+                                  "children": "$1,470",
+                                  "component": "p",
+                                  "sx": {
+                                    "display": "block",
+                                    "margin": "0px",
+                                    "fontSize": "14px",
+                                    "lineHeight": 1.5,
+                                    "color": "inherit"
+                                  }
+                                },
+                                "$id": "agentic-2-210"
+                              }
+                            ],
+                            "$id": "agentic-2-208"
+                          }
+                        ],
+                        "$id": "agentic-2-191"
+                      }
+                    ],
+                    "$id": "agentic-2-188"
+                  },
+                  {
+                    "$ref": "Card",
+                    "props": {
+                      "sx": {
+                        "backgroundColor": "color-mix(in srgb, var(--color-secondary) 35%, transparent)",
+                        "color": "var(--color-card-foreground)",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "16px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": "20px",
+                        "padding": "24px",
+                        "boxShadow": "none"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "gap": "12px",
+                            "alignItems": "center"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "CircleCheck",
+                              "style": {
+                                "width": "20px",
+                                "height": "20px",
+                                "flexShrink": 0,
+                                "color": "var(--color-primary)"
+                              }
+                            },
+                            "$id": "agentic-2-213"
+                          },
+                          {
+                            "$ref": "Typography",
+                            "props": {
+                              "children": "A trip that feels like you.",
+                              "component": "h2",
+                              "sx": {
+                                "display": "block",
+                                "margin": "0px",
+                                "fontSize": "24px",
+                                "lineHeight": 1.15,
+                                "color": "inherit",
+                                "fontFamily": "var(--font-display, Georgia, serif)",
+                                "fontWeight": 400,
+                                "letterSpacing": "-0.03em"
+                              }
+                            },
+                            "$id": "agentic-2-214"
+                          }
+                        ],
+                        "$id": "agentic-2-212"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Save this draft to My trips. You can keep refining it with your companion, invite Jamie, and book each stay or experience when you’re ready.",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "12px",
+                            "lineHeight": "24px",
+                            "color": "var(--color-muted-foreground)"
+                          }
+                        },
+                        "$id": "agentic-2-215"
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "gap": "12px"
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "contained",
+                              "sx": {
+                                "textTransform": "none",
+                                "fontSize": "12px",
+                                "minHeight": "36px",
+                                "padding": "8px 16px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "gap": "8px",
+                                "whiteSpace": "nowrap",
+                                "borderRadius": "9999px",
+                                "boxShadow": "none",
+                                "lineHeight": 1.4,
+                                "backgroundColor": "var(--color-primary)",
+                                "color": "var(--color-primary-foreground)",
+                                "border": "1px solid transparent",
+                                "height": "44px",
+                                "paddingLeft": "24px",
+                                "paddingRight": "24px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "Check",
+                                  "style": {
+                                    "width": "16px",
+                                    "height": "16px",
+                                    "flexShrink": 0
+                                  }
+                                },
+                                "$id": "agentic-2-218"
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "children": "Save my trip",
+                                  "sx": {
+                                    "display": "block"
+                                  }
+                                },
+                                "$id": "agentic-2-219"
+                              }
+                            ],
+                            "$id": "agentic-2-217"
+                          },
+                          {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "outlined",
+                              "sx": {
+                                "textTransform": "none",
+                                "fontSize": "12px",
+                                "minHeight": "36px",
+                                "padding": "8px 16px",
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "gap": "8px",
+                                "whiteSpace": "nowrap",
+                                "borderRadius": "9999px",
+                                "boxShadow": "none",
+                                "lineHeight": 1.4,
+                                "backgroundColor": "transparent",
+                                "color": "var(--color-foreground)",
+                                "border": "1px solid var(--color-border)",
+                                "height": "44px"
+                              }
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "children": "Keep refining",
+                                  "sx": {
+                                    "display": "block"
+                                  }
+                                },
+                                "$id": "agentic-2-221"
+                              }
+                            ],
+                            "$id": "agentic-2-220"
+                          }
+                        ],
+                        "$id": "agentic-2-216"
+                      },
+                      {
+                        "$ref": "Typography",
+                        "props": {
+                          "children": "Saving creates a private trip. Bookings happen separately.",
+                          "component": "p",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "10px",
+                            "lineHeight": 1.5,
+                            "color": "var(--color-muted-foreground)"
+                          }
+                        },
+                        "$id": "agentic-2-222"
+                      }
+                    ],
+                    "$id": "agentic-2-211"
+                  }
+                ],
+                "$id": "agentic-2-71"
+              }
+            ],
+            "$id": "agentic-2-9"
+          }
+        ],
+        "$id": "agentic-2-2"
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "flex",
+            "borderTop": "1px solid var(--color-border)",
+            "borderColor": "var(--color-border)",
+            "paddingLeft": "48px",
+            "paddingRight": "48px",
+            "paddingTop": "32px",
+            "paddingBottom": "32px",
+            "justifyContent": "space-between"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "A little help. A world of possibilities.",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "20px",
+                "lineHeight": 1.5,
+                "color": "inherit",
+                "fontFamily": "var(--font-display, Georgia, serif)"
+              }
+            },
+            "$id": "agentic-2-224"
+          },
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "ELSEWHERE / YOUR TRAVEL COMPANION",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "9px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)",
+                "letterSpacing": ".1em"
+              }
+            },
+            "$id": "agentic-2-225"
+          }
+        ],
+        "$id": "agentic-2-223"
+      }
+    ],
+    "$id": "agentic-2-1"
+  }
+}

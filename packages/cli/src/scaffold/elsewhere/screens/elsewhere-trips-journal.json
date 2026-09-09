@@ -1,0 +1,1932 @@
+{
+  "id": "elsewhere-trips-journal",
+  "name": "C · The inspiration-led companion",
+  "tree": {
+    "$ref": "Box",
+    "$id": "agentic-3-1",
+    "props": {
+      "className": "min-h-screen bg-background text-foreground font-sans"
+    },
+    "children": [
+      {
+        "$snippet": "elsewhere-nav"
+      },
+      {
+        "$ref": "Box",
+        "$id": "agentic-3-2",
+        "props": {
+          "className": "px-12 py-10 space-y-9"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "agentic-3-3",
+            "props": {
+              "className": "space-y-3"
+            },
+            "children": [
+              {
+                "$ref": "Text",
+                "$id": "agentic-3-4",
+                "props": {
+                  "children": "FOLLOW A FEELING",
+                  "className": "text-[10px] uppercase tracking-[.2em] text-primary"
+                }
+              },
+              {
+                "$ref": "Heading",
+                "$id": "agentic-3-5",
+                "props": {
+                  "children": "Build a trip from the things you love.",
+                  "className": "font-display font-normal tracking-[-0.03em] text-5xl leading-[1.08]"
+                }
+              },
+              {
+                "$ref": "Text",
+                "$id": "agentic-3-6",
+                "props": {
+                  "children": "Choose a few places, moods, and moments. Your companion will find the thread between them.",
+                  "className": "text-sm leading-7 text-muted-foreground max-w-2xl"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "$id": "agentic-3-7",
+            "props": {
+              "className": "grid grid-cols-[1fr_350px] gap-7 items-start"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "$id": "agentic-3-8",
+                "props": {
+                  "className": "space-y-8"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "agentic-3-9",
+                    "props": {
+                      "className": "flex justify-between items-center"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Heading",
+                        "$id": "agentic-3-10",
+                        "props": {
+                          "children": "What draws you in?",
+                          "className": "font-display font-normal tracking-[-0.03em] text-3xl"
+                        }
+                      },
+                      {
+                        "$ref": "Badge",
+                        "$id": "agentic-3-11",
+                        "props": {
+                          "variant": "secondary",
+                          "children": "3 things you love",
+                          "className": "rounded-full px-3 py-1 text-[10px] font-normal"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "agentic-3-12",
+                    "props": {
+                      "className": "grid grid-cols-2 gap-5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Card",
+                        "$id": "agentic-3-13",
+                        "props": {
+                          "className": "p-0 gap-0 rounded-2xl overflow-hidden shadow-none ring-2 ring-primary"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-14",
+                            "props": {
+                              "className": "relative overflow-hidden h-[240px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Image",
+                                "$id": "agentic-3-15",
+                                "props": {
+                                  "src": "/assets/elsewhere-kyoto.jpg",
+                                  "alt": "kyoto travel inspiration",
+                                  "fill": true,
+                                  "className": "absolute inset-0 w-full h-full"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-16",
+                                "props": {
+                                  "className": "absolute top-4 right-4"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Button",
+                                    "$id": "agentic-3-17",
+                                    "props": {
+                                      "variant": "default",
+                                      "className": "rounded-full h-8 text-xs"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "$id": "agentic-3-18",
+                                        "props": {
+                                          "name": "Check",
+                                          "className": "size-4"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "$id": "agentic-3-19",
+                                        "props": {
+                                          "className": "",
+                                          "children": "Added"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "CardContent",
+                            "$id": "agentic-3-20",
+                            "props": {
+                              "className": "p-5 space-y-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Heading",
+                                "$id": "agentic-3-21",
+                                "props": {
+                                  "children": "Streets worth getting lost in",
+                                  "className": "font-display font-normal tracking-[-0.03em] text-2xl"
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "$id": "agentic-3-22",
+                                "props": {
+                                  "children": "Lanterns, little shops, and the long way home.",
+                                  "className": "text-xs leading-6 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Card",
+                        "$id": "agentic-3-23",
+                        "props": {
+                          "className": "p-0 gap-0 rounded-2xl overflow-hidden shadow-none ring-2 ring-primary"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-24",
+                            "props": {
+                              "className": "relative overflow-hidden h-[240px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Image",
+                                "$id": "agentic-3-25",
+                                "props": {
+                                  "src": "/assets/elsewhere-room.jpg",
+                                  "alt": "room travel inspiration",
+                                  "fill": true,
+                                  "className": "absolute inset-0 w-full h-full"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-26",
+                                "props": {
+                                  "className": "absolute top-4 right-4"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Button",
+                                    "$id": "agentic-3-27",
+                                    "props": {
+                                      "variant": "default",
+                                      "className": "rounded-full h-8 text-xs"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "$id": "agentic-3-28",
+                                        "props": {
+                                          "name": "Check",
+                                          "className": "size-4"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "$id": "agentic-3-29",
+                                        "props": {
+                                          "className": "",
+                                          "children": "Added"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "CardContent",
+                            "$id": "agentic-3-30",
+                            "props": {
+                              "className": "p-5 space-y-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Heading",
+                                "$id": "agentic-3-31",
+                                "props": {
+                                  "children": "Somewhere that feels like a retreat",
+                                  "className": "font-display font-normal tracking-[-0.03em] text-2xl"
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "$id": "agentic-3-32",
+                                "props": {
+                                  "children": "Warm timber, soft light, and a slow breakfast.",
+                                  "className": "text-xs leading-6 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Card",
+                        "$id": "agentic-3-33",
+                        "props": {
+                          "className": "p-0 gap-0 rounded-2xl overflow-hidden shadow-none ring-2 ring-primary"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-34",
+                            "props": {
+                              "className": "relative overflow-hidden h-[240px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Image",
+                                "$id": "agentic-3-35",
+                                "props": {
+                                  "src": "/assets/elsewhere-forest.jpg",
+                                  "alt": "forest travel inspiration",
+                                  "fill": true,
+                                  "className": "absolute inset-0 w-full h-full"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-36",
+                                "props": {
+                                  "className": "absolute top-4 right-4"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Button",
+                                    "$id": "agentic-3-37",
+                                    "props": {
+                                      "variant": "default",
+                                      "className": "rounded-full h-8 text-xs"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "$id": "agentic-3-38",
+                                        "props": {
+                                          "name": "Check",
+                                          "className": "size-4"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "$id": "agentic-3-39",
+                                        "props": {
+                                          "className": "",
+                                          "children": "Added"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "CardContent",
+                            "$id": "agentic-3-40",
+                            "props": {
+                              "className": "p-5 space-y-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Heading",
+                                "$id": "agentic-3-41",
+                                "props": {
+                                  "children": "A quieter kind of adventure",
+                                  "className": "font-display font-normal tracking-[-0.03em] text-2xl"
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "$id": "agentic-3-42",
+                                "props": {
+                                  "children": "Green paths. Fresh air. No rush.",
+                                  "className": "text-xs leading-6 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Card",
+                        "$id": "agentic-3-43",
+                        "props": {
+                          "className": "p-0 gap-0 rounded-2xl overflow-hidden shadow-none "
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-44",
+                            "props": {
+                              "className": "relative overflow-hidden h-[240px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Image",
+                                "$id": "agentic-3-45",
+                                "props": {
+                                  "src": "/assets/elsewhere-japan.jpg",
+                                  "alt": "japan travel inspiration",
+                                  "fill": true,
+                                  "className": "absolute inset-0 w-full h-full"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-46",
+                                "props": {
+                                  "className": "absolute top-4 right-4"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Button",
+                                    "$id": "agentic-3-47",
+                                    "props": {
+                                      "variant": "secondary",
+                                      "className": "rounded-full h-8 text-xs"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "$id": "agentic-3-48",
+                                        "props": {
+                                          "name": "Plus",
+                                          "className": "size-4"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Box",
+                                        "$id": "agentic-3-49",
+                                        "props": {
+                                          "className": "",
+                                          "children": "This feels like me"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "CardContent",
+                            "$id": "agentic-3-50",
+                            "props": {
+                              "className": "p-5 space-y-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Heading",
+                                "$id": "agentic-3-51",
+                                "props": {
+                                  "children": "Stay out a little later",
+                                  "className": "font-display font-normal tracking-[-0.03em] text-2xl"
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "$id": "agentic-3-52",
+                                "props": {
+                                  "children": "Neighbourhood bars and another good story.",
+                                  "className": "text-xs leading-6 text-muted-foreground"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "agentic-3-53",
+                    "props": {
+                      "className": "flex gap-2 flex-wrap"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "$id": "agentic-3-54",
+                        "props": {
+                          "variant": "outline",
+                          "className": "rounded-full text-xs"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "agentic-3-55",
+                            "props": {
+                              "name": "RefreshCw",
+                              "className": "size-4"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-56",
+                            "props": {
+                              "className": "",
+                              "children": "More like these"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Button",
+                        "$id": "agentic-3-57",
+                        "props": {
+                          "variant": "outline",
+                          "className": "rounded-full text-xs"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "agentic-3-58",
+                            "props": {
+                              "name": "Bookmark",
+                              "className": "size-4"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-59",
+                            "props": {
+                              "className": "",
+                              "children": "Add a saved place"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Button",
+                        "$id": "agentic-3-60",
+                        "props": {
+                          "variant": "outline",
+                          "className": "rounded-full text-xs"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "agentic-3-61",
+                            "props": {
+                              "name": "ImagePlus",
+                              "className": "size-4"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-62",
+                            "props": {
+                              "className": "",
+                              "children": "Upload inspiration"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-63",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-64",
+                        "props": {
+                          "className": "flex gap-3 items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-65",
+                            "props": {
+                              "className": "size-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "$id": "agentic-3-66",
+                                "props": {
+                                  "name": "Sparkles",
+                                  "className": "size-4"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Heading",
+                            "$id": "agentic-3-67",
+                            "props": {
+                              "children": "I’m seeing a lovely little pattern.",
+                              "className": "font-display font-normal tracking-[-0.03em] text-3xl"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "agentic-3-68",
+                        "props": {
+                          "children": "You’re drawn to atmospheric streets, quiet places to stay, and time outdoors. Kyoto can give you all three without moving hotels.",
+                          "className": "text-sm leading-7 text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-69",
+                        "props": {
+                          "className": "relative overflow-hidden h-[220px] rounded-xl"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "$id": "agentic-3-70",
+                            "props": {
+                              "src": "/assets/elsewhere-kyoto.jpg",
+                              "alt": "kyoto travel inspiration",
+                              "fill": true,
+                              "className": "absolute inset-0 w-full h-full"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-71",
+                        "props": {
+                          "className": "flex justify-between items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-72",
+                            "props": {
+                              "className": "space-y-1"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Heading",
+                                "$id": "agentic-3-73",
+                                "props": {
+                                  "children": "Kyoto is your kind of elsewhere.",
+                                  "className": "font-display font-normal tracking-[-0.03em] text-2xl"
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "$id": "agentic-3-74",
+                                "props": {
+                                  "children": "Walkable neighbourhoods · Small discoveries · A gentle pace",
+                                  "className": "text-xs text-muted-foreground"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Button",
+                            "$id": "agentic-3-75",
+                            "props": {
+                              "variant": "default",
+                              "className": "rounded-full text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "$id": "agentic-3-76",
+                                "props": {
+                                  "name": "Check",
+                                  "className": "size-4"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-77",
+                                "props": {
+                                  "className": "",
+                                  "children": "Let’s go with Kyoto"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-78",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Heading",
+                        "$id": "agentic-3-79",
+                        "props": {
+                          "children": "A few little details.",
+                          "className": "font-display font-normal tracking-[-0.03em] text-3xl"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-80",
+                        "props": {
+                          "className": "grid grid-cols-3 gap-4"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Field",
+                            "$id": "agentic-3-81",
+                            "children": [
+                              {
+                                "$ref": "FieldLabel",
+                                "$id": "agentic-3-82",
+                                "props": {
+                                  "children": "Dates"
+                                }
+                              },
+                              {
+                                "$ref": "Input",
+                                "$id": "agentic-3-83",
+                                "props": {
+                                  "defaultValue": "12–17 October",
+                                  "className": "bg-card"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Field",
+                            "$id": "agentic-3-84",
+                            "children": [
+                              {
+                                "$ref": "FieldLabel",
+                                "$id": "agentic-3-85",
+                                "props": {
+                                  "children": "Travellers"
+                                }
+                              },
+                              {
+                                "$ref": "Input",
+                                "$id": "agentic-3-86",
+                                "props": {
+                                  "defaultValue": "2 people",
+                                  "className": "bg-card"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Field",
+                            "$id": "agentic-3-87",
+                            "children": [
+                              {
+                                "$ref": "FieldLabel",
+                                "$id": "agentic-3-88",
+                                "props": {
+                                  "children": "Budget"
+                                }
+                              },
+                              {
+                                "$ref": "Input",
+                                "$id": "agentic-3-89",
+                                "props": {
+                                  "defaultValue": "$3,200",
+                                  "className": "bg-card"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Button",
+                        "$id": "agentic-3-90",
+                        "props": {
+                          "variant": "default",
+                          "className": "rounded-full h-11 self-start"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "agentic-3-91",
+                            "props": {
+                              "name": "Sparkles",
+                              "className": "size-4"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-92",
+                            "props": {
+                              "className": "",
+                              "children": "Turn this into a trip"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-93",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-94",
+                        "props": {
+                          "className": "flex justify-between items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Heading",
+                            "$id": "agentic-3-95",
+                            "props": {
+                              "children": "Your collection becomes a journey.",
+                              "className": "font-display font-normal tracking-[-0.03em] text-3xl"
+                            }
+                          },
+                          {
+                            "$ref": "Badge",
+                            "$id": "agentic-3-96",
+                            "props": {
+                              "variant": "secondary",
+                              "children": "Draft 01",
+                              "className": "rounded-full px-3 py-1 text-[10px] font-normal"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "agentic-3-97",
+                        "props": {
+                          "children": "The places you chose, connected into days that make sense together.",
+                          "className": "text-sm text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-98",
+                        "props": {
+                          "className": "relative h-[650px] rounded-xl overflow-hidden"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Image",
+                            "$id": "agentic-3-99",
+                            "props": {
+                              "src": "/assets/elsewhere-kyoto-map.svg",
+                              "alt": "An illustrated route connecting your Kyoto discoveries",
+                              "fill": true,
+                              "className": "absolute inset-0 w-full h-full"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-100",
+                        "props": {
+                          "className": "divide-y divide-border"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-101",
+                            "props": {
+                              "className": "flex gap-4 items-start py-5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-102",
+                                "props": {
+                                  "className": "size-10 rounded-full bg-secondary flex justify-center items-center shrink-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-103",
+                                    "props": {
+                                      "children": "01",
+                                      "className": "text-xs"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-104",
+                                "props": {
+                                  "className": "flex-1 space-y-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "$id": "agentic-3-105",
+                                    "props": {
+                                      "className": "flex items-center justify-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-106",
+                                        "props": {
+                                          "children": "Arrive gently",
+                                          "className": "text-sm font-semibold"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-107",
+                                        "props": {
+                                          "children": "$100",
+                                          "className": "text-xs text-muted-foreground"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-108",
+                                    "props": {
+                                      "children": "Nishiki Market · Gion lanes · Tea with a local host",
+                                      "className": "text-xs leading-6 text-muted-foreground"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-109",
+                            "props": {
+                              "className": "flex gap-4 items-start py-5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-110",
+                                "props": {
+                                  "className": "size-10 rounded-full bg-secondary flex justify-center items-center shrink-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-111",
+                                    "props": {
+                                      "children": "02",
+                                      "className": "text-xs"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-112",
+                                "props": {
+                                  "className": "flex-1 space-y-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "$id": "agentic-3-113",
+                                    "props": {
+                                      "className": "flex items-center justify-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-114",
+                                        "props": {
+                                          "children": "A greener kind of morning",
+                                          "className": "text-sm font-semibold"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-115",
+                                        "props": {
+                                          "children": "$85",
+                                          "className": "text-xs text-muted-foreground"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-116",
+                                    "props": {
+                                      "children": "Early bamboo grove · Riverside lunch · An open afternoon",
+                                      "className": "text-xs leading-6 text-muted-foreground"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-117",
+                            "props": {
+                              "className": "flex gap-4 items-start py-5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-118",
+                                "props": {
+                                  "className": "size-10 rounded-full bg-secondary flex justify-center items-center shrink-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-119",
+                                    "props": {
+                                      "children": "03",
+                                      "className": "text-xs"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-120",
+                                "props": {
+                                  "className": "flex-1 space-y-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "$id": "agentic-3-121",
+                                    "props": {
+                                      "className": "flex items-center justify-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-122",
+                                        "props": {
+                                          "children": "Follow your curiosity",
+                                          "className": "text-sm font-semibold"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-123",
+                                        "props": {
+                                          "children": "$120",
+                                          "className": "text-xs text-muted-foreground"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-124",
+                                    "props": {
+                                      "children": "Small galleries · Independent shops · Dinner in Pontocho",
+                                      "className": "text-xs leading-6 text-muted-foreground"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-125",
+                            "props": {
+                              "className": "flex gap-4 items-start py-5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-126",
+                                "props": {
+                                  "className": "size-10 rounded-full bg-secondary flex justify-center items-center shrink-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-127",
+                                    "props": {
+                                      "children": "04",
+                                      "className": "text-xs"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-128",
+                                "props": {
+                                  "className": "flex-1 space-y-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "$id": "agentic-3-129",
+                                    "props": {
+                                      "className": "flex items-center justify-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-130",
+                                        "props": {
+                                          "children": "A little further afield",
+                                          "className": "text-sm font-semibold"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-131",
+                                        "props": {
+                                          "children": "$110",
+                                          "className": "text-xs text-muted-foreground"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-132",
+                                    "props": {
+                                      "children": "A day in Uji · Tea fields · Back before sunset",
+                                      "className": "text-xs leading-6 text-muted-foreground"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-133",
+                            "props": {
+                              "className": "flex gap-4 items-start py-5"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-134",
+                                "props": {
+                                  "className": "size-10 rounded-full bg-secondary flex justify-center items-center shrink-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-135",
+                                    "props": {
+                                      "children": "05",
+                                      "className": "text-xs"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-136",
+                                "props": {
+                                  "className": "flex-1 space-y-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "$id": "agentic-3-137",
+                                    "props": {
+                                      "className": "flex items-center justify-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-138",
+                                        "props": {
+                                          "children": "Leave room for one more thing",
+                                          "className": "text-sm font-semibold"
+                                        }
+                                      },
+                                      {
+                                        "$ref": "Text",
+                                        "$id": "agentic-3-139",
+                                        "props": {
+                                          "children": "$65",
+                                          "className": "text-xs text-muted-foreground"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-140",
+                                    "props": {
+                                      "children": "A slow breakfast · Your favourite neighbourhood · Homeward",
+                                      "className": "text-xs leading-6 text-muted-foreground"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-141",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 bg-secondary/35"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-142",
+                        "props": {
+                          "className": "flex gap-3 items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "agentic-3-143",
+                            "props": {
+                              "name": "CircleCheck",
+                              "className": "size-5 text-primary"
+                            }
+                          },
+                          {
+                            "$ref": "Heading",
+                            "$id": "agentic-3-144",
+                            "props": {
+                              "children": "A trip that feels like you.",
+                              "className": "font-display font-normal tracking-[-0.03em] text-2xl"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "agentic-3-145",
+                        "props": {
+                          "children": "Save this draft to My trips. You can keep refining it with your companion, invite Jamie, and book each stay or experience when you’re ready.",
+                          "className": "text-xs leading-6 text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-146",
+                        "props": {
+                          "className": "flex gap-3"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Button",
+                            "$id": "agentic-3-147",
+                            "props": {
+                              "variant": "default",
+                              "className": "rounded-full h-11 px-6"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "$id": "agentic-3-148",
+                                "props": {
+                                  "name": "Check",
+                                  "className": "size-4"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-149",
+                                "props": {
+                                  "className": "",
+                                  "children": "Save my trip"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Button",
+                            "$id": "agentic-3-150",
+                            "props": {
+                              "variant": "outline",
+                              "className": "rounded-full h-11"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-151",
+                                "props": {
+                                  "className": "",
+                                  "children": "Keep refining"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "agentic-3-152",
+                        "props": {
+                          "children": "Saving creates a private trip. Bookings happen separately.",
+                          "className": "text-[10px] text-muted-foreground"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "agentic-3-153",
+                "props": {
+                  "className": "space-y-6"
+                },
+                "children": [
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-154",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-155",
+                        "props": {
+                          "className": "flex gap-3 items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-156",
+                            "props": {
+                              "className": "size-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "$id": "agentic-3-157",
+                                "props": {
+                                  "name": "Sparkles",
+                                  "className": "size-4"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-158",
+                            "props": {
+                              "className": ""
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "agentic-3-159",
+                                "props": {
+                                  "children": "Your travel companion",
+                                  "className": "font-semibold text-sm"
+                                }
+                              },
+                              {
+                                "$ref": "Text",
+                                "$id": "agentic-3-160",
+                                "props": {
+                                  "children": "Learning what feels like you",
+                                  "className": "text-[10px] text-muted-foreground"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Message",
+                        "$id": "agentic-3-161",
+                        "props": {
+                          "align": "start",
+                          "className": "w-full"
+                        },
+                        "children": [
+                          {
+                            "$ref": "MessageAvatar",
+                            "$id": "agentic-3-162",
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-163",
+                                "props": {
+                                  "className": "size-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "$id": "agentic-3-164",
+                                    "props": {
+                                      "name": "Sparkles",
+                                      "className": "size-4"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-165",
+                            "props": {
+                              "className": "min-w-0 flex-1 space-y-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "MessageHeader",
+                                "$id": "agentic-3-166",
+                                "props": {
+                                  "className": "text-xs text-muted-foreground"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-167",
+                                    "props": {
+                                      "children": "Elsewhere",
+                                      "className": "text-inherit"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "MessageContent",
+                                "$id": "agentic-3-168",
+                                "props": {
+                                  "className": "space-y-4"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-169",
+                                    "props": {
+                                      "children": "Start with anything that catches your eye. A place, a room, even just a feeling.",
+                                      "className": "text-sm leading-7"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-170",
+                        "props": {
+                          "className": "flex flex-wrap gap-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Badge",
+                            "$id": "agentic-3-171",
+                            "props": {
+                              "variant": "secondary",
+                              "children": "Quiet corners",
+                              "className": "rounded-full px-3 py-1 text-[10px] font-normal"
+                            }
+                          },
+                          {
+                            "$ref": "Badge",
+                            "$id": "agentic-3-172",
+                            "props": {
+                              "variant": "secondary",
+                              "children": "Beautiful stays",
+                              "className": "rounded-full px-3 py-1 text-[10px] font-normal"
+                            }
+                          },
+                          {
+                            "$ref": "Badge",
+                            "$id": "agentic-3-173",
+                            "props": {
+                              "variant": "secondary",
+                              "children": "A little greenery",
+                              "className": "rounded-full px-3 py-1 text-[10px] font-normal"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Separator",
+                        "$id": "agentic-3-174"
+                      },
+                      {
+                        "$ref": "Message",
+                        "$id": "agentic-3-175",
+                        "props": {
+                          "align": "end",
+                          "className": "w-full"
+                        },
+                        "children": [
+                          {
+                            "$ref": "MessageAvatar",
+                            "$id": "agentic-3-176",
+                            "children": [
+                              {
+                                "$ref": "Avatar",
+                                "$id": "agentic-3-177",
+                                "props": {
+                                  "className": "size-8"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "AvatarFallback",
+                                    "$id": "agentic-3-178",
+                                    "props": {
+                                      "children": "AL",
+                                      "className": "bg-secondary text-[10px]"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-179",
+                            "props": {
+                              "className": "min-w-0 flex-1 space-y-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "MessageHeader",
+                                "$id": "agentic-3-180",
+                                "props": {
+                                  "className": "text-xs text-muted-foreground"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-181",
+                                    "props": {
+                                      "children": "You",
+                                      "className": "text-inherit"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "MessageContent",
+                                "$id": "agentic-3-182",
+                                "props": {
+                                  "className": "bg-secondary/65 rounded-2xl px-5 py-4"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-183",
+                                    "props": {
+                                      "children": "These are lovely. We’d like to avoid changing hotels.",
+                                      "className": "text-sm leading-7"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Message",
+                        "$id": "agentic-3-184",
+                        "props": {
+                          "align": "start",
+                          "className": "w-full"
+                        },
+                        "children": [
+                          {
+                            "$ref": "MessageAvatar",
+                            "$id": "agentic-3-185",
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-186",
+                                "props": {
+                                  "className": "size-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "$id": "agentic-3-187",
+                                    "props": {
+                                      "name": "Sparkles",
+                                      "className": "size-4"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-188",
+                            "props": {
+                              "className": "min-w-0 flex-1 space-y-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "MessageHeader",
+                                "$id": "agentic-3-189",
+                                "props": {
+                                  "className": "text-xs text-muted-foreground"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-190",
+                                    "props": {
+                                      "children": "Elsewhere",
+                                      "className": "text-inherit"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "MessageContent",
+                                "$id": "agentic-3-191",
+                                "props": {
+                                  "className": "space-y-4"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Text",
+                                    "$id": "agentic-3-192",
+                                    "props": {
+                                      "children": "One thoughtful base, then. I’ll keep the discoveries close enough for easy day trips.",
+                                      "className": "text-sm leading-7"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-193",
+                        "props": {
+                          "className": "space-y-2 bg-secondary/40 rounded-xl p-4"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Text",
+                            "$id": "agentic-3-194",
+                            "props": {
+                              "children": "ADDED TO YOUR BRIEF",
+                              "className": "text-[9px] tracking-widest text-primary"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "agentic-3-195",
+                            "props": {
+                              "children": "One base · Easy day trips · Unhurried pace",
+                              "className": "text-xs leading-6"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-196",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "agentic-3-197",
+                        "props": {
+                          "children": "YOUR COLLECTION",
+                          "className": "text-[9px] tracking-widest text-muted-foreground"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-198",
+                        "props": {
+                          "className": "flex gap-3 items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-199",
+                            "props": {
+                              "className": "relative overflow-hidden size-14 rounded-lg shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Image",
+                                "$id": "agentic-3-200",
+                                "props": {
+                                  "src": "/assets/elsewhere-kyoto.jpg",
+                                  "alt": "kyoto travel inspiration",
+                                  "fill": true,
+                                  "className": "absolute inset-0 w-full h-full"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "agentic-3-201",
+                            "props": {
+                              "children": "Kyoto’s old streets",
+                              "className": "text-xs"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-202",
+                        "props": {
+                          "className": "flex gap-3 items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-203",
+                            "props": {
+                              "className": "relative overflow-hidden size-14 rounded-lg shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Image",
+                                "$id": "agentic-3-204",
+                                "props": {
+                                  "src": "/assets/elsewhere-room.jpg",
+                                  "alt": "room travel inspiration",
+                                  "fill": true,
+                                  "className": "absolute inset-0 w-full h-full"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "agentic-3-205",
+                            "props": {
+                              "children": "A warm, quiet guest room",
+                              "className": "text-xs"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-206",
+                        "props": {
+                          "className": "flex gap-3 items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "agentic-3-207",
+                            "props": {
+                              "className": "relative overflow-hidden size-14 rounded-lg shrink-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Image",
+                                "$id": "agentic-3-208",
+                                "props": {
+                                  "src": "/assets/elsewhere-forest.jpg",
+                                  "alt": "forest travel inspiration",
+                                  "fill": true,
+                                  "className": "absolute inset-0 w-full h-full"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "agentic-3-209",
+                            "props": {
+                              "children": "A little time in the green",
+                              "className": "text-xs"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-210",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 bg-card"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Textarea",
+                        "$id": "agentic-3-211",
+                        "props": {
+                          "placeholder": "A little more about us…",
+                          "className": "border-0 shadow-none resize-none p-0 min-h-[62px] bg-transparent text-sm"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "$id": "agentic-3-212",
+                        "props": {
+                          "className": "flex justify-between items-center"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Button",
+                            "$id": "agentic-3-213",
+                            "props": {
+                              "variant": "ghost",
+                              "className": "rounded-full px-0 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "$id": "agentic-3-214",
+                                "props": {
+                                  "name": "Paperclip",
+                                  "className": "size-4"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-215",
+                                "props": {
+                                  "className": "",
+                                  "children": "Add inspiration"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Button",
+                            "$id": "agentic-3-216",
+                            "props": {
+                              "variant": "default",
+                              "className": "rounded-full h-9"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "$id": "agentic-3-217",
+                                "props": {
+                                  "name": "ArrowUp",
+                                  "className": "size-4"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "$id": "agentic-3-218",
+                                "props": {
+                                  "className": "",
+                                  "children": "Send"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Card",
+                    "$id": "agentic-3-219",
+                    "props": {
+                      "className": "rounded-2xl shadow-none p-6 gap-5 bg-secondary/30"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "$id": "agentic-3-220",
+                        "props": {
+                          "name": "Heart",
+                          "className": "size-6 text-primary"
+                        }
+                      },
+                      {
+                        "$ref": "Heading",
+                        "$id": "agentic-3-221",
+                        "props": {
+                          "children": "Your taste,\nnot a template.",
+                          "className": "font-display font-normal tracking-[-0.03em] text-3xl whitespace-pre-line"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "agentic-3-222",
+                        "props": {
+                          "children": "Every choice helps your companion make better suggestions. Remove a saved moment any time and the plan can adapt.",
+                          "className": "text-xs leading-7 text-muted-foreground"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "agentic-3-223",
+        "props": {
+          "className": "border-t border-border px-12 py-8 flex justify-between"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "$id": "agentic-3-224",
+            "props": {
+              "children": "A little help. A world of possibilities.",
+              "className": "font-display text-xl"
+            }
+          },
+          {
+            "$ref": "Text",
+            "$id": "agentic-3-225",
+            "props": {
+              "children": "ELSEWHERE / YOUR TRAVEL COMPANION",
+              "className": "text-[9px] tracking-widest text-muted-foreground"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

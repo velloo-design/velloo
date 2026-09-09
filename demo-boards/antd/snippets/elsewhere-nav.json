@@ -1,0 +1,201 @@
+{
+  "id": "elsewhere-nav",
+  "name": "ElsewhereNav",
+  "params": [],
+  "tree": {
+    "$ref": "Flex",
+    "props": {
+      "data-ew-style": "ew120",
+      "style": {
+        "display": "flex",
+        "height": "80px",
+        "borderBottom": "1px solid var(--color-border)",
+        "borderColor": "var(--color-border)",
+        "alignItems": "center",
+        "justifyContent": "space-between",
+        "paddingLeft": "24px",
+        "paddingRight": "24px",
+        "backgroundColor": "var(--color-background)"
+      }
+    },
+    "children": [
+      {
+        "$ref": "Flex",
+        "props": {
+          "style": {
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "8px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "SVG",
+            "props": {
+              "viewBox": "0 0 32 32",
+              "content": "<circle cx=\"16\" cy=\"16\" r=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><path d=\"M8 21 22 9l-4 15-3-7-7 4Z\" fill=\"currentColor\"/>",
+              "style": {
+                "display": "inline-block",
+                "width": "32px",
+                "height": "32px",
+                "color": "var(--color-primary)"
+              }
+            }
+          },
+          {
+            "$ref": "TypographyText",
+            "props": {
+              "children": "elsewhere",
+              "style": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "30px",
+                "lineHeight": 1.5,
+                "color": "inherit",
+                "fontFamily": "var(--font-display, Georgia, serif)",
+                "letterSpacing": "-0.05em"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Flex",
+        "props": {
+          "data-ew-style": "ew118",
+          "style": {
+            "display": "none",
+            "alignItems": "center",
+            "gap": "32px",
+            "fontSize": "14px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "TypographyText",
+            "props": {
+              "children": "Discover",
+              "style": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "14px",
+                "lineHeight": 1.5,
+                "color": "inherit",
+                "fontWeight": 600
+              }
+            }
+          },
+          {
+            "$ref": "TypographyText",
+            "props": {
+              "children": "Our kind of stays",
+              "style": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "14px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)"
+              }
+            }
+          },
+          {
+            "$ref": "TypographyText",
+            "props": {
+              "children": "Field notes",
+              "style": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "14px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Flex",
+        "props": {
+          "style": {
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "16px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Button",
+            "props": {
+              "type": "text",
+              "data-ew-style": "ew119",
+              "style": {
+                "textTransform": "none",
+                "fontSize": "12px",
+                "minHeight": "36px",
+                "padding": "8px 16px",
+                "display": "none",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "gap": "8px",
+                "whiteSpace": "nowrap",
+                "borderRadius": "9999px",
+                "boxShadow": "none",
+                "lineHeight": 1.4,
+                "backgroundColor": "transparent",
+                "color": "var(--color-foreground)",
+                "border": "1px solid transparent"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "Bookmark",
+                  "style": {
+                    "width": "16px",
+                    "height": "16px",
+                    "flexShrink": 0
+                  }
+                }
+              },
+              {
+                "$ref": "TypographyText",
+                "props": {
+                  "children": "My trips",
+                  "style": {
+                    "display": "block",
+                    "margin": "0px",
+                    "fontSize": "14px",
+                    "lineHeight": 1.5,
+                    "color": "inherit"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Avatar",
+            "props": {
+              "children": "AL",
+              "style": {
+                "width": "32px",
+                "height": "32px",
+                "borderRadius": "50%",
+                "backgroundColor": "var(--color-secondary)",
+                "color": "var(--color-secondary-foreground)",
+                "fontSize": "10px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "flexShrink": 0,
+                "borderWidth": "2px",
+                "borderStyle": "solid",
+                "borderColor": "var(--color-background)"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

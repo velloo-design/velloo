@@ -1,0 +1,940 @@
+{
+  "id": "elsewhere-overview",
+  "name": "04 · Your trip, at a glance",
+  "tree": {
+    "$ref": "Box",
+    "$id": "elsewhere-overview-1",
+    "props": {
+      "className": "bg-background text-foreground min-h-screen font-sans"
+    },
+    "children": [
+      {
+        "$snippet": "elsewhere-nav",
+        "args": {}
+      },
+      {
+        "$ref": "Box",
+        "$id": "elsewhere-overview-2",
+        "props": {
+          "className": "border-b border-border px-6 md:px-12 pt-7"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "elsewhere-overview-3",
+            "props": {
+              "className": "flex justify-between items-center mb-6"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-overview-4",
+                "props": {
+                  "className": "space-y-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-overview-5",
+                    "props": {
+                      "children": "YOUR NEXT CHAPTER",
+                      "className": "text-[9px] tracking-[.2em] text-muted-foreground"
+                    }
+                  },
+                  {
+                    "$ref": "Heading",
+                    "$id": "elsewhere-overview-6",
+                    "props": {
+                      "children": "A week in Kyoto",
+                      "className": "font-display font-normal tracking-[-0.035em] text-4xl"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-overview-7",
+                    "props": {
+                      "children": "12–17 October 2026   ·   2 travellers",
+                      "className": "text-xs text-muted-foreground"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-overview-8",
+                "props": {
+                  "className": "hidden md:flex gap-3 items-center"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-overview-9",
+                    "props": {
+                      "className": "flex -space-x-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Avatar",
+                        "$id": "elsewhere-overview-10",
+                        "props": {
+                          "className": "size-8 border-2 border-background"
+                        },
+                        "children": [
+                          {
+                            "$ref": "AvatarFallback",
+                            "$id": "elsewhere-overview-11",
+                            "props": {
+                              "children": "AL",
+                              "className": "text-[10px] bg-secondary text-secondary-foreground"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Avatar",
+                        "$id": "elsewhere-overview-12",
+                        "props": {
+                          "className": "size-8 border-2 border-background"
+                        },
+                        "children": [
+                          {
+                            "$ref": "AvatarFallback",
+                            "$id": "elsewhere-overview-13",
+                            "props": {
+                              "children": "JR",
+                              "className": "text-[10px] bg-secondary text-secondary-foreground"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Button",
+                    "$id": "elsewhere-overview-14",
+                    "props": {
+                      "variant": "outline",
+                      "className": "rounded-full "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "$id": "elsewhere-overview-15",
+                        "props": {
+                          "name": "UserPlus",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-overview-16",
+                        "props": {
+                          "children": "Invite",
+                          "className": " text-inherit",
+                          "style": {
+                            "color": "inherit"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Button",
+                    "$id": "elsewhere-overview-17",
+                    "props": {
+                      "variant": "default",
+                      "className": "rounded-full "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "$id": "elsewhere-overview-18",
+                        "props": {
+                          "name": "ArrowUpRight",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-overview-19",
+                        "props": {
+                          "children": "Share trip",
+                          "className": " text-inherit",
+                          "style": {
+                            "color": "inherit"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Tabs",
+            "$id": "elsewhere-overview-20",
+            "props": {
+              "defaultValue": "Overview"
+            },
+            "children": [
+              {
+                "$ref": "TabsList",
+                "$id": "elsewhere-overview-21",
+                "props": {
+                  "variant": "line",
+                  "className": "gap-5"
+                },
+                "children": [
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-overview-22",
+                    "props": {
+                      "value": "Overview",
+                      "children": "Overview",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  },
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-overview-23",
+                    "props": {
+                      "value": "Itinerary",
+                      "children": "Itinerary",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  },
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-overview-24",
+                    "props": {
+                      "value": "Stays",
+                      "children": "Stays",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  },
+                  {
+                    "$ref": "TabsTrigger",
+                    "$id": "elsewhere-overview-25",
+                    "props": {
+                      "value": "Budget",
+                      "children": "Budget",
+                      "className": "px-0 pb-3 text-xs"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "elsewhere-overview-26",
+        "props": {
+          "className": "px-6 md:px-12 py-7 space-y-6"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "$id": "elsewhere-overview-27",
+            "props": {
+              "className": "relative overflow-hidden rounded-xl h-[210px]"
+            },
+            "children": [
+              {
+                "$ref": "Image",
+                "$id": "elsewhere-overview-28",
+                "props": {
+                  "src": "/assets/elsewhere-kyoto.jpg",
+                  "alt": "Yasaka Pagoda above a Kyoto street at sunset",
+                  "className": "absolute inset-0 h-full w-full",
+                  "fill": true
+                }
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-overview-29",
+                "props": {
+                  "className": "absolute inset-0 ew-photo-shade",
+                  "data-accent": "ok"
+                },
+                "children": []
+              },
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-overview-30",
+                "props": {
+                  "className": "relative p-7 md:p-9 text-white",
+                  "data-accent": "ok"
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-overview-31",
+                    "props": {
+                      "children": "YOU’RE GOING TO JAPAN",
+                      "className": "text-[9px] tracking-[.2em] text-white",
+                      "data-accent": "ok"
+                    }
+                  },
+                  {
+                    "$ref": "Heading",
+                    "$id": "elsewhere-overview-32",
+                    "props": {
+                      "children": "Less planning.\nMore looking forward.",
+                      "className": "font-display font-normal tracking-[-0.035em] text-3xl md:text-4xl whitespace-pre-line mt-3 text-white",
+                      "data-accent": "ok"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-overview-33",
+                    "props": {
+                      "children": "Your trip is coming together beautifully.",
+                      "className": "text-xs mt-3 text-white/80",
+                      "data-accent": "ok"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "$id": "elsewhere-overview-34",
+            "props": {
+              "className": "grid grid-cols-2 md:grid-cols-4 gap-4"
+            },
+            "children": [
+              {
+                "$snippet": "elsewhere-metric",
+                "args": {
+                  "label": "Departure",
+                  "value": "12 October",
+                  "note": "34 days to go"
+                }
+              },
+              {
+                "$snippet": "elsewhere-metric",
+                "args": {
+                  "label": "Your stay",
+                  "value": "5 nights",
+                  "note": "Higashiyama, Kyoto"
+                }
+              },
+              {
+                "$snippet": "elsewhere-metric",
+                "args": {
+                  "label": "Trip budget",
+                  "value": "$3,200",
+                  "note": "$1,470 still available"
+                }
+              },
+              {
+                "$snippet": "elsewhere-metric",
+                "args": {
+                  "label": "Your discoveries",
+                  "value": "12 saved",
+                  "note": "4 added to your itinerary"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "$id": "elsewhere-overview-35",
+            "props": {
+              "className": "grid md:grid-cols-[1.4fr_1fr] gap-6"
+            },
+            "children": [
+              {
+                "$ref": "Card",
+                "$id": "elsewhere-overview-36",
+                "props": {
+                  "className": "p-6 rounded-xl shadow-none gap-5"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-overview-37",
+                    "props": {
+                      "className": "flex justify-between items-center"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Heading",
+                        "$id": "elsewhere-overview-38",
+                        "props": {
+                          "children": "A little room for spontaneity.",
+                          "className": "font-display font-normal tracking-[-0.035em] text-2xl"
+                        }
+                      },
+                      {
+                        "$ref": "Badge",
+                        "$id": "elsewhere-overview-39",
+                        "props": {
+                          "variant": "secondary",
+                          "className": "rounded-full px-3 py-1 font-normal",
+                          "children": "On track"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-overview-40",
+                    "props": {
+                      "className": "flex items-baseline gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Heading",
+                        "$id": "elsewhere-overview-41",
+                        "props": {
+                          "children": "$1,730",
+                          "className": "font-display font-normal tracking-[-0.035em] text-4xl"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-overview-42",
+                        "props": {
+                          "children": "of $3,200 planned",
+                          "className": "text-xs text-muted-foreground"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Progress",
+                    "$id": "elsewhere-overview-43",
+                    "props": {
+                      "value": 54,
+                      "className": "h-2"
+                    }
+                  },
+                  {
+                    "$ref": "Chart",
+                    "$id": "elsewhere-overview-44",
+                    "props": {
+                      "kind": "bar",
+                      "categories": ["Stay", "Food", "Experiences", "Transport"],
+                      "series": [
+                        {
+                          "name": "Planned",
+                          "data": [970, 360, 240, 160]
+                        }
+                      ],
+                      "className": "h-[200px] w-full",
+                      "legend": false,
+                      "yLabel": "$"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-overview-45",
+                    "props": {
+                      "className": "flex justify-between text-xs text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-overview-46",
+                        "props": {
+                          "children": "A comfortable budget for two.",
+                          "className": ""
+                        }
+                      },
+                      {
+                        "$ref": "Button",
+                        "$id": "elsewhere-overview-47",
+                        "props": {
+                          "variant": "ghost",
+                          "className": "rounded-full h-6 text-xs"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "$id": "elsewhere-overview-48",
+                            "props": {
+                              "name": "ArrowUpRight",
+                              "className": "size-4"
+                            }
+                          },
+                          {
+                            "$ref": "Text",
+                            "$id": "elsewhere-overview-49",
+                            "props": {
+                              "children": "View budget",
+                              "className": " text-inherit",
+                              "style": {
+                                "color": "inherit"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Card",
+                "$id": "elsewhere-overview-50",
+                "props": {
+                  "className": "p-6 rounded-xl shadow-none gap-4"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-overview-51",
+                    "props": {
+                      "className": "flex justify-between"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Heading",
+                        "$id": "elsewhere-overview-52",
+                        "props": {
+                          "children": "Kyoto in October",
+                          "className": "font-display font-normal tracking-[-0.035em] text-2xl"
+                        }
+                      },
+                      {
+                        "$ref": "Icon",
+                        "$id": "elsewhere-overview-53",
+                        "props": {
+                          "name": "Sun",
+                          "className": "size-5"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "elsewhere-overview-54",
+                    "props": {
+                      "className": "flex items-baseline gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Heading",
+                        "$id": "elsewhere-overview-55",
+                        "props": {
+                          "children": "22°",
+                          "className": "font-display font-normal tracking-[-0.035em] text-4xl"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-overview-56",
+                        "props": {
+                          "children": "a little cooler, a little quieter",
+                          "className": "text-xs text-muted-foreground"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Chart",
+                    "$id": "elsewhere-overview-57",
+                    "props": {
+                      "kind": "line",
+                      "categories": ["May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"],
+                      "series": [
+                        {
+                          "name": "Typical daytime °C",
+                          "data": [25, 28, 32, 33, 29, 22, 17]
+                        }
+                      ],
+                      "className": "h-[170px] w-full",
+                      "legend": false,
+                      "yLabel": "°C"
+                    }
+                  },
+                  {
+                    "$ref": "Text",
+                    "$id": "elsewhere-overview-58",
+                    "props": {
+                      "children": "Crisp mornings, warm afternoons. Pack a light layer and your most comfortable shoes.",
+                      "className": "text-xs leading-6 text-muted-foreground"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Card",
+            "$id": "elsewhere-overview-59",
+            "props": {
+              "className": "p-6 rounded-xl shadow-none gap-4"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "$id": "elsewhere-overview-60",
+                "props": {
+                  "className": "flex justify-between items-center"
+                },
+                "children": [
+                  {
+                    "$ref": "Heading",
+                    "$id": "elsewhere-overview-61",
+                    "props": {
+                      "children": "The essentials, taken care of.",
+                      "className": "font-display font-normal tracking-[-0.035em] text-2xl"
+                    }
+                  },
+                  {
+                    "$ref": "Button",
+                    "$id": "elsewhere-overview-62",
+                    "props": {
+                      "variant": "ghost",
+                      "className": "rounded-full "
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "$id": "elsewhere-overview-63",
+                        "props": {
+                          "name": "ArrowUpRight",
+                          "className": "size-4"
+                        }
+                      },
+                      {
+                        "$ref": "Text",
+                        "$id": "elsewhere-overview-64",
+                        "props": {
+                          "children": "All bookings",
+                          "className": " text-inherit",
+                          "style": {
+                            "color": "inherit"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Table",
+                "$id": "elsewhere-overview-65",
+                "props": {},
+                "children": [
+                  {
+                    "$ref": "TableHeader",
+                    "$id": "elsewhere-overview-66",
+                    "props": {},
+                    "children": [
+                      {
+                        "$ref": "TableRow",
+                        "$id": "elsewhere-overview-67",
+                        "props": {},
+                        "children": [
+                          {
+                            "$ref": "TableHead",
+                            "$id": "elsewhere-overview-68",
+                            "props": {
+                              "children": "Booking",
+                              "className": "text-xs"
+                            }
+                          },
+                          {
+                            "$ref": "TableHead",
+                            "$id": "elsewhere-overview-69",
+                            "props": {
+                              "children": "Dates",
+                              "className": "text-xs"
+                            }
+                          },
+                          {
+                            "$ref": "TableHead",
+                            "$id": "elsewhere-overview-70",
+                            "props": {
+                              "children": "Status",
+                              "className": "text-xs"
+                            }
+                          },
+                          {
+                            "$ref": "TableHead",
+                            "$id": "elsewhere-overview-71",
+                            "props": {
+                              "children": "Total",
+                              "className": "text-xs"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "TableBody",
+                    "$id": "elsewhere-overview-72",
+                    "props": {},
+                    "children": [
+                      {
+                        "$ref": "TableRow",
+                        "$id": "elsewhere-overview-73",
+                        "props": {},
+                        "children": [
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-74",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-75",
+                                "props": {
+                                  "children": "The Higashiyama House",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-76",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-77",
+                                "props": {
+                                  "children": "12–17 Oct",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-78",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Badge",
+                                "$id": "elsewhere-overview-79",
+                                "props": {
+                                  "variant": "secondary",
+                                  "className": "rounded-full px-3 py-1 font-normal",
+                                  "children": "Confirmed"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-80",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-81",
+                                "props": {
+                                  "children": "$970",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "TableRow",
+                        "$id": "elsewhere-overview-82",
+                        "props": {},
+                        "children": [
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-83",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-84",
+                                "props": {
+                                  "children": "Tea with a local host",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-85",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-86",
+                                "props": {
+                                  "children": "12 Oct · 14:00",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-87",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Badge",
+                                "$id": "elsewhere-overview-88",
+                                "props": {
+                                  "variant": "secondary",
+                                  "className": "rounded-full px-3 py-1 font-normal",
+                                  "children": "Reserved"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-89",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-90",
+                                "props": {
+                                  "children": "$64",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "TableRow",
+                        "$id": "elsewhere-overview-91",
+                        "props": {},
+                        "children": [
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-92",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-93",
+                                "props": {
+                                  "children": "Airport transfer",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-94",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-95",
+                                "props": {
+                                  "children": "12 Oct · 08:10",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-96",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Badge",
+                                "$id": "elsewhere-overview-97",
+                                "props": {
+                                  "variant": "secondary",
+                                  "className": "rounded-full px-3 py-1 font-normal",
+                                  "children": "To book"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "TableCell",
+                            "$id": "elsewhere-overview-98",
+                            "props": {
+                              "className": "py-4 text-xs"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Text",
+                                "$id": "elsewhere-overview-99",
+                                "props": {
+                                  "children": "$80",
+                                  "className": ""
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "elsewhere-overview-100",
+        "props": {
+          "className": "px-6 md:px-14 py-8 border-t border-border flex justify-between items-center gap-4 flex-wrap"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "$id": "elsewhere-overview-101",
+            "props": {
+              "children": "Go a little further. Stay a little longer.",
+              "className": "font-display text-lg"
+            }
+          },
+          {
+            "$ref": "Text",
+            "$id": "elsewhere-overview-102",
+            "props": {
+              "children": "elsewhere / 2026",
+              "className": "text-[10px] uppercase tracking-widest text-muted-foreground"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

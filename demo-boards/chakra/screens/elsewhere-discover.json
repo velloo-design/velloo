@@ -1,0 +1,914 @@
+{
+  "id": "elsewhere-discover",
+  "name": "01 · Discover your elsewhere",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "data-ew-root": "",
+      "sx": {
+        "display": "block",
+        "backgroundColor": "var(--color-background)",
+        "color": "var(--color-foreground)",
+        "minHeight": "100vh",
+        "fontFamily": "var(--font-sans, sans-serif)"
+      }
+    },
+    "children": [
+      {
+        "$snippet": "elsewhere-nav",
+        "args": {}
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "block",
+            "paddingLeft": "20px",
+            "paddingRight": "20px",
+            "@media (min-width: 768px)": {
+              "paddingLeft": "40px",
+              "paddingRight": "40px"
+            },
+            "paddingTop": "20px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "block",
+                "position": "relative",
+                "overflow": "hidden",
+                "borderRadius": "16px",
+                "minHeight": "550px",
+                "@media (min-width: 768px)": {
+                  "minHeight": "520px"
+                }
+              }
+            },
+            "children": [
+              {
+                "$ref": "Image",
+                "props": {
+                  "src": "/assets/elsewhere-kyoto.jpg",
+                  "alt": "Yasaka Pagoda above a Kyoto street at sunset",
+                  "fill": false,
+                  "style": {
+                    "display": "block",
+                    "objectFit": "cover",
+                    "position": "absolute",
+                    "inset": "0px",
+                    "height": "100%",
+                    "width": "100%"
+                  }
+                },
+                "$id": "elsewhere-discover-4"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "data-accent": "ok",
+                  "sx": {
+                    "display": "block",
+                    "position": "absolute",
+                    "inset": "0px",
+                    "background": "linear-gradient(90deg,rgba(8,24,19,.65),rgba(8,24,19,.05) 90%)"
+                  }
+                },
+                "$id": "elsewhere-discover-5"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "data-accent": "ok",
+                  "sx": {
+                    "display": "block",
+                    "position": "relative",
+                    "zIndex": 10,
+                    "paddingLeft": "28px",
+                    "paddingRight": "28px",
+                    "paddingTop": "48px",
+                    "paddingBottom": "48px",
+                    "@media (min-width: 768px)": {
+                      "paddingLeft": "56px",
+                      "paddingRight": "56px",
+                      "paddingTop": "64px",
+                      "paddingBottom": "64px"
+                    },
+                    "maxWidth": "700px",
+                    "color": "#fff"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "FOR THE QUIETLY CURIOUS",
+                      "data-accent": "ok",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "10px",
+                        "lineHeight": 1.5,
+                        "color": "#fff",
+                        "letterSpacing": "0.26em",
+                        "marginBottom": "28px"
+                      }
+                    },
+                    "$id": "elsewhere-discover-7"
+                  },
+                  {
+                    "$ref": "Heading",
+                    "props": {
+                      "children": "Somewhere new.\nSomething real.",
+                      "data-accent": "ok",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "49px",
+                        "lineHeight": "1.02",
+                        "color": "#fff",
+                        "fontFamily": "var(--font-display, Georgia, serif)",
+                        "fontWeight": 400,
+                        "letterSpacing": "-0.035em",
+                        "whiteSpace": "pre-line",
+                        "@media (min-width: 768px)": {
+                          "fontSize": "76px"
+                        }
+                      }
+                    },
+                    "$id": "elsewhere-discover-8"
+                  },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "Thoughtful stays. Local discoveries.\nTrips that feel a little more like you.",
+                      "data-accent": "ok",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "14px",
+                        "lineHeight": "24px",
+                        "color": "color-mix(in srgb, #fff 85%, transparent)",
+                        "whiteSpace": "pre-line",
+                        "marginTop": "24px"
+                      }
+                    },
+                    "$id": "elsewhere-discover-9"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "solid",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "8px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "9999px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "var(--color-secondary)",
+                        "color": "var(--color-secondary-foreground)",
+                        "border": "1px solid transparent",
+                        "marginTop": "28px",
+                        "height": "44px",
+                        "paddingLeft": "24px",
+                        "paddingRight": "24px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "ArrowUpRight",
+                          "style": {
+                            "width": "16px",
+                            "height": "16px",
+                            "flexShrink": 0
+                          }
+                        },
+                        "$id": "elsewhere-discover-11"
+                      },
+                      {
+                        "$ref": "Text",
+                        "props": {
+                          "children": "Find your elsewhere",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "14px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-discover-12"
+                      }
+                    ],
+                    "$id": "elsewhere-discover-10"
+                  }
+                ],
+                "$id": "elsewhere-discover-6"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "data-accent": "ok",
+                  "sx": {
+                    "display": "none",
+                    "position": "absolute",
+                    "bottom": "64px",
+                    "right": "32px",
+                    "@media (min-width: 768px)": {
+                      "display": "flex"
+                    },
+                    "alignItems": "center",
+                    "gap": "12px",
+                    "color": "#fff"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "MapPin",
+                      "style": {
+                        "width": "16px",
+                        "height": "16px",
+                        "flexShrink": 0
+                      }
+                    },
+                    "$id": "elsewhere-discover-14"
+                  },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "Higashiyama, Kyoto · Japan",
+                      "data-accent": "ok",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "12px",
+                        "lineHeight": 1.5,
+                        "color": "#fff"
+                      }
+                    },
+                    "$id": "elsewhere-discover-15"
+                  }
+                ],
+                "$id": "elsewhere-discover-13"
+              }
+            ],
+            "$id": "elsewhere-discover-3"
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "grid",
+                "position": "relative",
+                "@media (min-width: 768px)": {
+                  "marginTop": "-32px",
+                  "marginLeft": "56px",
+                  "marginRight": "56px",
+                  "gridTemplateColumns": "1.5fr 1fr 1fr auto"
+                },
+                "zIndex": 20,
+                "marginLeft": "12px",
+                "marginRight": "12px",
+                "backgroundColor": "var(--color-card)",
+                "borderWidth": "1px",
+                "borderStyle": "solid",
+                "borderColor": "var(--color-border)",
+                "borderRadius": "12px",
+                "boxShadow": "0 10px 20px #00000018",
+                "padding": "16px",
+                "gap": "16px"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "4px"
+                    },
+                    "@media (min-width: 768px)": {
+                      "borderRight": "1px solid var(--color-border)"
+                    },
+                    "borderColor": "var(--color-border)",
+                    "paddingLeft": "12px",
+                    "paddingRight": "12px"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "WHERE TO?",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "9px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-muted-foreground)",
+                        "fontWeight": 600,
+                        "letterSpacing": ".1em"
+                      }
+                    },
+                    "$id": "elsewhere-discover-18"
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "sx": {
+                        "display": "flex",
+                        "alignItems": "center",
+                        "gap": "8px",
+                        "border": "1px solid var(--color-border)",
+                        "borderRadius": "8px",
+                        "minHeight": "36px",
+                        "padding": "0px 8px",
+                        "borderWidth": "0px",
+                        "boxShadow": "none",
+                        "backgroundColor": "transparent"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "sx": {
+                            "display": "flex",
+                            "alignItems": "center",
+                            "flexShrink": 0
+                          }
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "Search",
+                              "style": {
+                                "width": "16px",
+                                "height": "16px",
+                                "flexShrink": 0
+                              }
+                            },
+                            "$id": "elsewhere-discover-21"
+                          }
+                        ],
+                        "$id": "elsewhere-discover-20"
+                      },
+                      {
+                        "$ref": "Input",
+                        "props": {
+                          "placeholder": "A place, a feeling, a little escape…",
+                          "sx": {
+                            "width": "100%",
+                            "minWidth": "0px",
+                            "fontSize": "12px",
+                            "color": "var(--color-foreground)",
+                            "backgroundColor": "transparent",
+                            "flex": 1,
+                            "border": 0
+                          }
+                        },
+                        "$id": "elsewhere-discover-22"
+                      }
+                    ],
+                    "$id": "elsewhere-discover-19"
+                  }
+                ],
+                "$id": "elsewhere-discover-17"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "4px"
+                    },
+                    "paddingLeft": "12px",
+                    "paddingRight": "12px"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "WHEN",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "9px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-muted-foreground)",
+                        "fontWeight": 600,
+                        "letterSpacing": ".1em"
+                      }
+                    },
+                    "$id": "elsewhere-discover-24"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "ghost",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "8px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "9999px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid transparent",
+                        "paddingLeft": "0px",
+                        "paddingRight": "0px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "CalendarDays",
+                          "style": {
+                            "width": "16px",
+                            "height": "16px",
+                            "flexShrink": 0
+                          }
+                        },
+                        "$id": "elsewhere-discover-26"
+                      },
+                      {
+                        "$ref": "Text",
+                        "props": {
+                          "children": "October 2026",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "14px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-discover-27"
+                      }
+                    ],
+                    "$id": "elsewhere-discover-25"
+                  }
+                ],
+                "$id": "elsewhere-discover-23"
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "4px"
+                    },
+                    "paddingLeft": "12px",
+                    "paddingRight": "12px"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "WHO’S COMING",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "9px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-muted-foreground)",
+                        "fontWeight": 600,
+                        "letterSpacing": ".1em"
+                      }
+                    },
+                    "$id": "elsewhere-discover-29"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "ghost",
+                      "sx": {
+                        "textTransform": "none",
+                        "fontSize": "12px",
+                        "minHeight": "36px",
+                        "padding": "8px 16px",
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "gap": "8px",
+                        "whiteSpace": "nowrap",
+                        "borderRadius": "9999px",
+                        "boxShadow": "none",
+                        "lineHeight": 1.4,
+                        "backgroundColor": "transparent",
+                        "color": "var(--color-foreground)",
+                        "border": "1px solid transparent",
+                        "paddingLeft": "0px",
+                        "paddingRight": "0px"
+                      }
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "Users",
+                          "style": {
+                            "width": "16px",
+                            "height": "16px",
+                            "flexShrink": 0
+                          }
+                        },
+                        "$id": "elsewhere-discover-31"
+                      },
+                      {
+                        "$ref": "Text",
+                        "props": {
+                          "children": "2 travellers",
+                          "sx": {
+                            "display": "block",
+                            "margin": "0px",
+                            "fontSize": "14px",
+                            "lineHeight": 1.5,
+                            "color": "inherit"
+                          }
+                        },
+                        "$id": "elsewhere-discover-32"
+                      }
+                    ],
+                    "$id": "elsewhere-discover-30"
+                  }
+                ],
+                "$id": "elsewhere-discover-28"
+              },
+              {
+                "$ref": "Button",
+                "props": {
+                  "variant": "solid",
+                  "sx": {
+                    "textTransform": "none",
+                    "fontSize": "12px",
+                    "minHeight": "36px",
+                    "padding": "8px 16px",
+                    "display": "inline-flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "gap": "8px",
+                    "whiteSpace": "nowrap",
+                    "borderRadius": "9999px",
+                    "boxShadow": "none",
+                    "lineHeight": 1.4,
+                    "backgroundColor": "var(--color-primary)",
+                    "color": "var(--color-primary-foreground)",
+                    "border": "1px solid transparent",
+                    "height": "48px",
+                    "alignSelf": "center",
+                    "paddingLeft": "24px",
+                    "paddingRight": "24px"
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "ArrowRight",
+                      "style": {
+                        "width": "16px",
+                        "height": "16px",
+                        "flexShrink": 0
+                      }
+                    },
+                    "$id": "elsewhere-discover-34"
+                  },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "Explore stays",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "14px",
+                        "lineHeight": 1.5,
+                        "color": "inherit"
+                      }
+                    },
+                    "$id": "elsewhere-discover-35"
+                  }
+                ],
+                "$id": "elsewhere-discover-33"
+              }
+            ],
+            "$id": "elsewhere-discover-16"
+          }
+        ],
+        "$id": "elsewhere-discover-2"
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "block",
+            "paddingLeft": "24px",
+            "paddingRight": "24px",
+            "@media (min-width: 768px)": {
+              "paddingLeft": "56px",
+              "paddingRight": "56px"
+            },
+            "paddingTop": "48px",
+            "paddingBottom": "48px",
+            "& > * + *": {
+              "marginTop": "28px"
+            }
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "flex",
+                "alignItems": "flex-end",
+                "justifyContent": "space-between"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "sx": {
+                    "display": "block",
+                    "& > * + *": {
+                      "marginTop": "12px"
+                    }
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "A GOOD PLACE TO START",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "10px",
+                        "lineHeight": 1.5,
+                        "color": "var(--color-primary)",
+                        "textTransform": "uppercase",
+                        "letterSpacing": "0.22em",
+                        "fontWeight": 600
+                      }
+                    },
+                    "$id": "elsewhere-discover-39"
+                  },
+                  {
+                    "$ref": "Heading",
+                    "props": {
+                      "children": "Follow your curiosity.",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "36px",
+                        "lineHeight": 1.15,
+                        "color": "inherit",
+                        "fontFamily": "var(--font-display, Georgia, serif)",
+                        "fontWeight": 400,
+                        "letterSpacing": "-0.035em",
+                        "@media (min-width: 768px)": {
+                          "fontSize": "48px"
+                        }
+                      }
+                    },
+                    "$id": "elsewhere-discover-40"
+                  }
+                ],
+                "$id": "elsewhere-discover-38"
+              },
+              {
+                "$ref": "Button",
+                "props": {
+                  "variant": "ghost",
+                  "sx": {
+                    "textTransform": "none",
+                    "fontSize": "12px",
+                    "minHeight": "36px",
+                    "padding": "8px 16px",
+                    "display": "none",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "gap": "8px",
+                    "whiteSpace": "nowrap",
+                    "borderRadius": "9999px",
+                    "boxShadow": "none",
+                    "lineHeight": 1.4,
+                    "backgroundColor": "transparent",
+                    "color": "var(--color-foreground)",
+                    "border": "1px solid transparent",
+                    "@media (min-width: 768px)": {
+                      "display": "inline-flex"
+                    }
+                  }
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "ArrowUpRight",
+                      "style": {
+                        "width": "16px",
+                        "height": "16px",
+                        "flexShrink": 0
+                      }
+                    },
+                    "$id": "elsewhere-discover-42"
+                  },
+                  {
+                    "$ref": "Text",
+                    "props": {
+                      "children": "All destinations",
+                      "sx": {
+                        "display": "block",
+                        "margin": "0px",
+                        "fontSize": "14px",
+                        "lineHeight": 1.5,
+                        "color": "inherit"
+                      }
+                    },
+                    "$id": "elsewhere-discover-43"
+                  }
+                ],
+                "$id": "elsewhere-discover-41"
+              }
+            ],
+            "$id": "elsewhere-discover-37"
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "grid",
+                "@media (min-width: 768px)": {
+                  "gridTemplateColumns": "repeat(3, minmax(0, 1fr))"
+                },
+                "gap": "20px"
+              }
+            },
+            "children": [
+              {
+                "$snippet": "elsewhere-destination",
+                "args": {
+                  "image": "/assets/elsewhere-kyoto.jpg",
+                  "name": "Kyoto",
+                  "country": "JAPAN / 35.0116° N",
+                  "note": "Ancient rituals. A slower rhythm."
+                }
+              },
+              {
+                "$snippet": "elsewhere-destination",
+                "args": {
+                  "image": "/assets/elsewhere-bali.jpg",
+                  "name": "Bali",
+                  "country": "INDONESIA / 8.4095° S",
+                  "note": "A little closer to the wild."
+                }
+              },
+              {
+                "$snippet": "elsewhere-destination",
+                "args": {
+                  "image": "/assets/elsewhere-alps.jpg",
+                  "name": "The Dolomites",
+                  "country": "ITALY / 46.4102° N",
+                  "note": "Take the scenic way home."
+                }
+              }
+            ],
+            "$id": "elsewhere-discover-44"
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "sx": {
+                "display": "flex",
+                "justifyContent": "space-between",
+                "paddingTop": "16px",
+                "fontSize": "12px",
+                "color": "var(--color-muted-foreground)",
+                "gap": "16px",
+                "flexWrap": "wrap"
+              }
+            },
+            "children": [
+              {
+                "$ref": "Text",
+                "props": {
+                  "children": "Small collections. Extraordinary places.",
+                  "sx": {
+                    "display": "block",
+                    "margin": "0px",
+                    "fontSize": "14px",
+                    "lineHeight": 1.5,
+                    "color": "inherit"
+                  }
+                },
+                "$id": "elsewhere-discover-46"
+              },
+              {
+                "$ref": "Text",
+                "props": {
+                  "children": "01 — 03",
+                  "sx": {
+                    "display": "block",
+                    "margin": "0px",
+                    "fontSize": "14px",
+                    "lineHeight": 1.5,
+                    "color": "inherit"
+                  }
+                },
+                "$id": "elsewhere-discover-47"
+              }
+            ],
+            "$id": "elsewhere-discover-45"
+          }
+        ],
+        "$id": "elsewhere-discover-36"
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "flex",
+            "paddingLeft": "24px",
+            "paddingRight": "24px",
+            "@media (min-width: 768px)": {
+              "paddingLeft": "56px",
+              "paddingRight": "56px"
+            },
+            "paddingTop": "32px",
+            "paddingBottom": "32px",
+            "borderTop": "1px solid var(--color-border)",
+            "borderColor": "var(--color-border)",
+            "justifyContent": "space-between",
+            "alignItems": "center",
+            "gap": "16px",
+            "flexWrap": "wrap"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "props": {
+              "children": "Go a little further. Stay a little longer.",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "18px",
+                "lineHeight": 1.5,
+                "color": "inherit",
+                "fontFamily": "var(--font-display, Georgia, serif)"
+              }
+            },
+            "$id": "elsewhere-discover-49"
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "children": "elsewhere / 2026",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "10px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)",
+                "textTransform": "uppercase",
+                "letterSpacing": ".1em"
+              }
+            },
+            "$id": "elsewhere-discover-50"
+          }
+        ],
+        "$id": "elsewhere-discover-48"
+      }
+    ],
+    "$id": "elsewhere-discover-1"
+  }
+}

@@ -1,16 +1,10 @@
-/**
- * Sample snippets shipped by `velloo init`. The welcome sample uses three:
- * stat-card (dashboard tiles), feature-row (landing features), and
- * sidebar-nav-row (every app screen's sidebar). Definitions live as JSON
- * under ./pulse/snippets/ so they can be iterated on in the canvas and
- * re-copied here.
- */
+/** Elsewhere: the canonical welcome design shared by every provider. */
 import type { Snippet } from "@velloo/schema";
-
-import featureRow from "./pulse/snippets/feature-row.json" with { type: "json" };
-import sidebarNavRow from "./pulse/snippets/sidebar-nav-row.json" with { type: "json" };
-import statCard from "./pulse/snippets/stat-card.json" with { type: "json" };
-
+import elsewhere_destination from "./elsewhere/snippets/elsewhere-destination.json" with {
+  type: "json",
+};
+import elsewhere_metric from "./elsewhere/snippets/elsewhere-metric.json" with { type: "json" };
+import elsewhere_nav from "./elsewhere/snippets/elsewhere-nav.json" with { type: "json" };
 export function buildSampleSnippets(): Snippet[] {
-  return [statCard as Snippet, featureRow as Snippet, sidebarNavRow as Snippet];
+  return structuredClone([elsewhere_destination, elsewhere_metric, elsewhere_nav] as Snippet[]);
 }

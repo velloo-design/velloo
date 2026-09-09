@@ -1,0 +1,111 @@
+{
+  "id": "elsewhere-nav",
+  "name": "ElsewhereNav",
+  "params": [],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "h-20 border-b border-border flex items-center justify-between px-6 md:px-14 bg-background"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-2"
+        },
+        "children": [
+          {
+            "$ref": "SVG",
+            "props": {
+              "viewBox": "0 0 32 32",
+              "content": "<circle cx=\"16\" cy=\"16\" r=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><path d=\"M8 21 22 9l-4 15-3-7-7 4Z\" fill=\"currentColor\"/>",
+              "className": "size-8 text-primary"
+            }
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "children": "elsewhere",
+              "className": "font-display text-[30px] tracking-[-0.05em]"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "hidden md:flex items-center gap-8 text-sm"
+        },
+        "children": [
+          {
+            "$ref": "Text",
+            "props": {
+              "children": "Discover",
+              "className": "font-semibold"
+            }
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "children": "Our kind of stays",
+              "className": "text-muted-foreground"
+            }
+          },
+          {
+            "$ref": "Text",
+            "props": {
+              "children": "Field notes",
+              "className": "text-muted-foreground"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-4"
+        },
+        "children": [
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "className": "rounded-full hidden md:inline-flex"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "Bookmark",
+                  "className": "size-4"
+                }
+              },
+              {
+                "$ref": "Text",
+                "props": {
+                  "children": "My trips",
+                  "className": ""
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Avatar",
+            "props": {
+              "className": "size-8 border-2 border-background"
+            },
+            "children": [
+              {
+                "$ref": "AvatarFallback",
+                "props": {
+                  "children": "AL",
+                  "className": "text-[10px] bg-secondary text-secondary-foreground"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

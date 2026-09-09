@@ -1,0 +1,16 @@
+.ew-photo-shade {
+  background: linear-gradient(90deg, rgba(8, 24, 19, 0.65), rgba(8, 24, 19, 0.05) 90%);
+}
+.ew-paper-grid {
+  background-image: radial-gradient(currentColor 0.6px, transparent 0.6px);
+  background-size: 16px 16px;
+}
+@media (max-width: 767px) {
+  .ew-route-map img {
+    object-fit: contain !important;
+    background: #edefe4;
+  }
+}
+
+body { margin: 0; } [data-ew-root], [data-ew-root] * { box-sizing: border-box; }
+@media (max-width: 767px){[data-ew-style="ew1"]{object-fit:contain !important;background-color:#EDEFE4 !important;}}

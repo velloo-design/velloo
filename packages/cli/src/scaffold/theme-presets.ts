@@ -2,7 +2,7 @@
  * Built-in theme presets for `velloo init`. Each is a seed color the
  * wizard shows as a swatch; the full light + dark palette is derived from
  * it via the same `derivePalette` the canvas's theme panel uses, so a
- * preset and a hand-tuned theme are the same shape. `indigo` is the curated
+ * preset and a hand-tuned theme are the same shape. `elsewhere` is the curated
  * welcome-sample palette and short-circuits to its JSON rather than
  * re-deriving.
  */
@@ -19,6 +19,7 @@ export interface ThemePreset {
 }
 
 const THEME_PRESETS: ThemePreset[] = [
+  { id: "elsewhere", label: "Elsewhere", seed: "#244d3c" },
   { id: "indigo", label: "Indigo", seed: "#5e6ad2" },
   { id: "violet", label: "Violet", seed: "#7c3aed" },
   { id: "blue", label: "Blue", seed: "#2563eb" },
@@ -34,10 +35,10 @@ const THEME_PRESETS: ThemePreset[] = [
  * nothing. Distinct from `DEFAULT_THEME_PRESET`, which is only what a folder
  * gets when nobody picked.
  */
-const CURATED_PRESET = "indigo";
+const CURATED_PRESET = "elsewhere";
 
 /** What a fresh folder gets — init doesn't ask, the canvas edits it later. */
-export const DEFAULT_THEME_PRESET = "amber";
+export const DEFAULT_THEME_PRESET = "elsewhere";
 
 export function presetById(id: string | undefined): ThemePreset | undefined {
   return id ? THEME_PRESETS.find((p) => p.id === id) : undefined;
@@ -49,7 +50,7 @@ export function isValidPreset(id: string): boolean {
 
 /**
  * Build a Theme for a preset id, named `name`. Falls back to the curated
- * welcome-sample theme for an unknown id or for `indigo`, which it already is.
+ * welcome-sample theme for an unknown id or for `elsewhere`, which it already is.
  */
 export function buildPresetTheme(id: string | undefined, name = "default"): Theme {
   const base = buildDefaultTheme();

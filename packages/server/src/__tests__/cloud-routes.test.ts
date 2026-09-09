@@ -352,7 +352,7 @@ describe("/api/publish", () => {
 
     const started = await post(app, "/api/publish", {
       boardIds: ["main"],
-      title: "Pulse designs",
+      title: "Elsewhere designs",
       visibility: "private",
       destination: { mode: "new" },
       teamId: "t1",
@@ -361,7 +361,7 @@ describe("/api/publish", () => {
     expect(started.status).toBe(202);
     expect(fake.requests[0]).toEqual({
       boardIds: ["main"],
-      title: "Pulse designs",
+      title: "Elsewhere designs",
       visibility: "private",
       destination: { mode: "new" },
       teamId: "t1",

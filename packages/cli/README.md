@@ -4,7 +4,7 @@ The `velloo` binary. Citty-based.
 
 ## Subcommands
 
-- **`velloo init <folder>`** — scaffold a new design folder (welcome sample by default). Writes `.design/config.json`, `theme/default.json`, `screens/*.json`, `boards/*.json`, `snippets/*.json`.
+- **`velloo init <folder>`** — scaffold a new design folder (Elsewhere travel sample by default). Writes `.design/config.json`, `theme/default.json`, `screens/*.json`, `boards/*.json`, `snippets/*.json`.
 - **`velloo connect <folder>`** — wire the user's AI agent: write its MCP config (`velloo mcp` over stdio) + the per-tool guidance (Claude skill / Cursor rule).
 - **`velloo mcp <folder>`** — the MCP server itself, spoken over stdio (the agent starts this; `--http` exposes it on `:7301` instead). Attaches to the folder's canvas daemon, spawning one if needed.
 - **`velloo run <folder>`** — open the canvas for a folder, spawning a persistent per-folder daemon if none is running (prefers `:7300`, else a free port). Stays in the foreground on a TTY (`b` background, `s` stop, `o` open the browser); `--open` opens the browser immediately, `--background` returns to the shell. Canvas-only — the MCP server is separate (see `velloo mcp`).
@@ -32,10 +32,10 @@ src/
     default-theme.ts
     sample-page.ts      — sample screens + boards
     sample-snippets.ts  — sample snippets
-    pulse/              — canonical JSON for the welcome sample
+    elsewhere/              — canonical JSON for the welcome sample
 ```
 
-The welcome sample lives as JSON under `scaffold/pulse/` so it can be iterated in the canvas and copied back. See `scaffold/pulse/README.md` for the iteration workflow.
+The seven-screen Elsewhere sample, two boards, reusable snippets, local images and prompt metadata live as JSON under `scaffold/elsewhere/` so it can be iterated in the canvas and copied back. See `scaffold/elsewhere/README.md` for the iteration workflow.
 
 ## End-to-end test
 

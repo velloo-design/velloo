@@ -244,7 +244,7 @@ const result = await Bun.build({
   // CHUNK's directory. A chunks/ subfolder broke all of those in the
   // installed binary ("Velloo canvas not built"). Guarded below.
   splitting: true,
-  naming: { chunk: "chunk-[hash].[ext]" },
+  naming: { chunk: "chunk-[hash].[ext]", asset: "assets/[name]-[hash].[ext]" },
   minify: { whitespace: true, syntax: true, identifiers: false },
   plugins: [externalizeRuntimeDeps],
   define: {
@@ -284,10 +284,11 @@ const MUST_BE_INLINED = [
   "@modelcontextprotocol/sdk",
 ];
 const chunkNames = readdirSync(distDir).filter((f) => /^chunk-.*\.js$/.test(f));
+// Imported sample images live in assets/. JavaScript still stays flat.
 // Flat-layout guard (see the naming comment above): a chunk in a subdirectory
 // shifts import.meta.url and breaks every `<here>/…` asset resolution.
 const strayDirs = readdirSync(distDir, { withFileTypes: true }).filter(
-  (e) => e.isDirectory() && e.name !== "canvas",
+  (e) => e.isDirectory() && !["canvas", "assets"].includes(e.name),
 );
 if (strayDirs.length > 0) {
   throw new Error(
@@ -418,6 +419,7 @@ const manifest = {
     "cli.js",
     "launcher.cjs",
     "chunk-*.js",
+    "assets",
     "canvas",
     "skills",
     "plugins",

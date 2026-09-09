@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "generated": {
+    "assets/elsewhere-kyoto.jpg": {
+      "intent": "photo",
+      "aspect": "3:2",
+      "prompt": "Editorial travel photograph of Kyoto at dusk, looking down a traditional Higashiyama stone lane toward Yasaka Pagoda. Warm amber light in timber houses, cool blue sky, a few distant travellers, natural atmospheric detail. Boutique travel magazine aesthetic, generous darker space on the left for an editorial headline. No text or logos.",
+      "generatedAt": "2026-09-08T12:50:50.661Z"
+    },
+    "assets/elsewhere-japan.jpg": {
+      "intent": "photo",
+      "aspect": "3:2",
+      "prompt": "Intimate night-time photograph of a narrow Japanese alley, a glowing red paper lantern in the foreground, dark timber facades and distant blue street light. Rich shadows, cinematic natural colour, a sense of discovering a quiet local place. Premium travel editorial photography, no added lettering or logos.",
+      "generatedAt": "2026-09-08T12:50:50.661Z"
+    },
+    "assets/elsewhere-bali.jpg": {
+      "intent": "photo",
+      "aspect": "3:2",
+      "prompt": "Atmospheric travel photograph of a traditional Balinese water temple beside a still lake, layered pagoda roofs and lush tropical foliage reflected in the water, soft hazy light, muted emerald greens and warm stone. Serene, considered boutique travel aesthetic. No text or logos.",
+      "generatedAt": "2026-09-08T12:50:50.661Z"
+    },
+    "assets/elsewhere-alps.jpg": {
+      "intent": "photo",
+      "aspect": "3:2",
+      "prompt": "Wide editorial landscape photograph of an Alpine valley, rugged mountain peaks in the distance, forested slopes and sunlit meadow in the foreground, soft clouds across a blue sky. An invitation to slow travel and hiking. Natural detailed photography with a restrained green and stone palette. No text or logos.",
+      "generatedAt": "2026-09-08T12:50:50.661Z"
+    },
+    "assets/elsewhere-room.jpg": {
+      "intent": "photo",
+      "aspect": "3:2",
+      "prompt": "Quiet boutique guest-room interior with warm timber and textured walls, soft natural bed linen, a carefully made bed and an open view into a small leafy garden. Intimate natural daylight, amber bedside lighting, tactile materials and understated hospitality. Premium architectural travel photography. No people, text or logos.",
+      "generatedAt": "2026-09-08T12:50:50.661Z"
+    },
+    "assets/elsewhere-forest.jpg": {
+      "intent": "photo",
+      "aspect": "3:2",
+      "prompt": "Immersive photograph inside a peaceful green forest, tall straight trees, fern-covered ground and soft shafts of daylight through a hazy canopy. Deep moss greens, natural textures and a cool, unhurried atmosphere. Editorial outdoor travel photograph. No text or logos.",
+      "generatedAt": "2026-09-08T12:50:50.661Z"
+    },
+    "assets/elsewhere-kyoto-map.svg": {
+      "intent": "vector",
+      "aspect": "3:4",
+      "prompt": "Create an elegant schematic SVG walking map of Kyoto in warm ivory, sage and forest green. Show a pale blue-green Kamo River, simplified neighbourhood blocks, quiet roads and green park areas. Link four numbered stops with a dashed forest-green walking route: Nishiki Market, Gion backstreets, Tea at 14:00 and Philosopher’s Path. Add small white location labels and a north marker. Flat vector styling with clean readable typography. This is an illustrated route, not a navigation map.",
+      "generatedAt": "2026-09-08T12:50:50.661Z"
+    }
+  }
+}

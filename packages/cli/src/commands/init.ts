@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir } from "node:fs/promises";
+import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
@@ -182,7 +182,7 @@ async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaf
     return { theme, screens, boards, snippets: [], annotations: [], notes: [] };
   }
 
-  // The provider's own welcome sample, or the shadcn welcome sample default.
+  // The complete Elsewhere sample composed for the selected library.
   return sampleScaffold(answers, theme);
 }
 
@@ -230,6 +230,7 @@ async function writeScaffold(
   const config = buildDefaultConfig({
     library: plan.library,
     defaultScreen: defaultScreenForScaffold(scaffold),
+    defaultBoard: scaffold.boards[0]?.id,
     ...(hostAppRoot
       ? { hostApp: { root: hostAppRoot, ...(hostAliases ? { aliases: hostAliases } : {}) } }
       : {}),
@@ -241,6 +242,7 @@ async function writeScaffold(
       componentsDir: answers.componentsRelative,
     },
   });
+  config.boardOrder = scaffold.boards.map((b) => b.id);
   ConfigSchema.parse(config);
   ThemeSchema.parse(scaffold.theme);
   for (const screen of scaffold.screens) ScreenSchema.parse(screen);
@@ -285,6 +287,23 @@ async function writeScaffold(
   for (const s of scaffold.snippets) {
     writes.push(writeJsonAtomic(`${folder}/snippets/${s.id}.json`, s));
   }
+  for (const notes of scaffold.notes)
+    writes.push(writeJsonAtomic(`${folder}/boards/${notes.boardId}.notes.json`, notes.entries));
+  for (const annotations of scaffold.annotations)
+    writes.push(
+      writeJsonAtomic(
+        `${folder}/screens/${annotations.screenId}.annotations.json`,
+        annotations.entries,
+      ),
+    );
+  if (scaffold.customCss) writes.push(writeText(`${folder}/theme/custom.css`, scaffold.customCss));
+  if (scaffold.assetMetadata)
+    writes.push(writeJsonAtomic(`${folder}/assets.json`, scaffold.assetMetadata));
+  for (const [path, text] of Object.entries(scaffold.documents ?? {}))
+    writes.push(writeText(join(folder, path), text));
+  await mkdir(join(folder, "assets"), { recursive: true });
+  for (const [path, source] of Object.entries(scaffold.assetFiles ?? {}))
+    writes.push(copyFile(source, join(folder, path)));
   await Promise.all(writes);
 }
 
@@ -599,7 +618,8 @@ export default defineCommand({
     },
     themePreset: {
       type: "string",
-      description: "Theme preset: indigo | violet | blue | emerald | rose | orange | amber | zinc",
+      description:
+        "Theme preset: elsewhere | indigo | violet | blue | emerald | rose | orange | amber | zinc",
     },
     stack: {
       type: "string",

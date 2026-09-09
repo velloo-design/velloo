@@ -1,0 +1,119 @@
+{
+  "name": "forest",
+  "colors": {
+    "background": "#F8F7F2",
+    "foreground": "#203C32",
+    "primary": {
+      "DEFAULT": "#244D3C",
+      "foreground": "#FFFFFF"
+    },
+    "secondary": {
+      "DEFAULT": "#E9EDDF",
+      "foreground": "#294332"
+    },
+    "muted": {
+      "DEFAULT": "#F0F0E8",
+      "foreground": "#626D63"
+    },
+    "accent": {
+      "DEFAULT": "#E8EDDA",
+      "foreground": "#244D3C"
+    },
+    "destructive": {
+      "DEFAULT": "oklch(0.577 0.245 27)",
+      "foreground": "oklch(0.985 0 0)"
+    },
+    "card": {
+      "DEFAULT": "#FFFFFF",
+      "foreground": "#203C32"
+    },
+    "popover": {
+      "DEFAULT": "oklch(0.99 0.01 145)",
+      "foreground": "oklch(0.21 0.04 145)"
+    },
+    "border": "#DFE3D8",
+    "input": "#DFE3D8",
+    "ring": "oklch(0.42 0.12 145)"
+  },
+  "colorsDark": {
+    "background": "#14251F",
+    "foreground": "#F0F1E8",
+    "primary": {
+      "DEFAULT": "#BED5A4",
+      "foreground": "#14251F"
+    },
+    "secondary": {
+      "DEFAULT": "#2B4235",
+      "foreground": "#E8EDDF"
+    },
+    "muted": {
+      "DEFAULT": "#263D31",
+      "foreground": "#B0BEAE"
+    },
+    "accent": {
+      "DEFAULT": "#304737",
+      "foreground": "#E8EDDF"
+    },
+    "card": {
+      "DEFAULT": "#1C3128",
+      "foreground": "#F0F1E8"
+    },
+    "border": "#3B5143",
+    "input": "#3B5143"
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": "\"DM Sans\", Arial, sans-serif",
+      "mono": "ui-monospace, SFMono-Regular, monospace",
+      "display": "\"DM Serif Display\", Georgia, serif"
+    },
+    "googleFonts": ["DM+Serif+Display", "DM+Sans:wght@400;500;600;700"],
+    "typesets": {
+      "default": {
+        "size": 14,
+        "leading": 1.5,
+        "flow": "1.25em",
+        "fontBody": "sans",
+        "fontHeading": "display",
+        "fontMono": "mono"
+      },
+      "docs": {
+        "size": 15,
+        "leading": 1.75,
+        "flow": "1.5em"
+      },
+      "chat": {
+        "leading": 1.6,
+        "flow": "1em"
+      },
+      "compact": {
+        "size": 14,
+        "leading": 1.6,
+        "flow": "1em"
+      },
+      "reading": {
+        "size": 18,
+        "leading": 1.9,
+        "flow": "2em"
+      }
+    }
+  },
+  "spacing": {
+    "0": 0,
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "6": 24,
+    "8": 32,
+    "12": 48,
+    "16": 64
+  },
+  "radius": {
+    "sm": 4,
+    "md": 6,
+    "lg": 8,
+    "xl": 12,
+    "full": 9999
+  }
+}

@@ -1,0 +1,213 @@
+{
+  "id": "elsewhere-nav",
+  "name": "ElsewhereNav",
+  "params": [],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "sx": {
+        "display": "flex",
+        "height": "80px",
+        "borderBottom": "1px solid var(--color-border)",
+        "borderColor": "var(--color-border)",
+        "alignItems": "center",
+        "justifyContent": "space-between",
+        "paddingLeft": "24px",
+        "paddingRight": "24px",
+        "@media (min-width: 768px)": {
+          "paddingLeft": "56px",
+          "paddingRight": "56px"
+        },
+        "backgroundColor": "var(--color-background)"
+      }
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "8px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "SVG",
+            "props": {
+              "viewBox": "0 0 32 32",
+              "content": "<circle cx=\"16\" cy=\"16\" r=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><path d=\"M8 21 22 9l-4 15-3-7-7 4Z\" fill=\"currentColor\"/>",
+              "style": {
+                "display": "inline-block",
+                "width": "32px",
+                "height": "32px",
+                "color": "var(--color-primary)"
+              }
+            }
+          },
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "elsewhere",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "30px",
+                "lineHeight": 1.5,
+                "color": "inherit",
+                "fontFamily": "var(--font-display, Georgia, serif)",
+                "letterSpacing": "-0.05em"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "none",
+            "@media (min-width: 768px)": {
+              "display": "flex"
+            },
+            "alignItems": "center",
+            "gap": "32px",
+            "fontSize": "14px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "Discover",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "14px",
+                "lineHeight": 1.5,
+                "color": "inherit",
+                "fontWeight": 600
+              }
+            }
+          },
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "Our kind of stays",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "14px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)"
+              }
+            }
+          },
+          {
+            "$ref": "Typography",
+            "props": {
+              "children": "Field notes",
+              "component": "p",
+              "sx": {
+                "display": "block",
+                "margin": "0px",
+                "fontSize": "14px",
+                "lineHeight": 1.5,
+                "color": "var(--color-muted-foreground)"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "sx": {
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "16px"
+          }
+        },
+        "children": [
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "text",
+              "sx": {
+                "textTransform": "none",
+                "fontSize": "12px",
+                "minHeight": "36px",
+                "padding": "8px 16px",
+                "display": "none",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "gap": "8px",
+                "whiteSpace": "nowrap",
+                "borderRadius": "9999px",
+                "boxShadow": "none",
+                "lineHeight": 1.4,
+                "backgroundColor": "transparent",
+                "color": "var(--color-foreground)",
+                "border": "1px solid transparent",
+                "@media (min-width: 768px)": {
+                  "display": "inline-flex"
+                }
+              }
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "Bookmark",
+                  "style": {
+                    "width": "16px",
+                    "height": "16px",
+                    "flexShrink": 0
+                  }
+                }
+              },
+              {
+                "$ref": "Typography",
+                "props": {
+                  "children": "My trips",
+                  "component": "p",
+                  "sx": {
+                    "display": "block",
+                    "margin": "0px",
+                    "fontSize": "14px",
+                    "lineHeight": 1.5,
+                    "color": "inherit"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Avatar",
+            "props": {
+              "children": "AL",
+              "sx": {
+                "width": "32px",
+                "height": "32px",
+                "borderRadius": "50%",
+                "backgroundColor": "var(--color-secondary)",
+                "color": "var(--color-secondary-foreground)",
+                "fontSize": "10px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "flexShrink": 0,
+                "borderWidth": "2px",
+                "borderStyle": "solid",
+                "borderColor": "var(--color-background)"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
