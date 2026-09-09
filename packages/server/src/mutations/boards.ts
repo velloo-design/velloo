@@ -1,6 +1,6 @@
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import { type Board, MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
-import { orderedBoards } from "../design-folder.ts";
+import { type DesignFolder, orderedBoards } from "../design-folder.ts";
 import { resolveGroup } from "./board-groups.ts";
 import { type MutationContext, withScreenLock } from "./context.ts";
 import { badRequest, boardIdConflict, boardIdExhausted, type MutationError } from "./errors.ts";
@@ -8,11 +8,13 @@ import { getBoard } from "./lookup.ts";
 import {
   deletePersistedBoard,
   deletePersistedScreen,
+  deletePersistedSnippet,
   persistBoard,
   persistConfig,
 } from "./persist.ts";
 import { screensPlacedOnlyOn } from "./screen-refs.ts";
 import { slugify } from "./slugify.ts";
+import { reachableSnippetIds } from "./snippet-refs.ts";
 
 function boardNameTooLong(name: string): MutationError | null {
   if (name.length <= MAX_BOARD_NAME_LENGTH) return null;
@@ -192,6 +194,8 @@ export interface RemoveBoardResult {
   removedBoardId: string;
   /** Screens deleted with the board because no other board placed them. */
   removedScreenIds: string[];
+  /** Snippets deleted with those screens because nothing else reached them. */
+  removedSnippetIds: string[];
 }
 
 export async function removeBoard(
@@ -205,6 +209,7 @@ export async function removeBoard(
     // not the canvas, not export, not publish. Resolved before the board is
     // gone, since the answer depends on its frames.
     const orphaned = screensPlacedOnlyOn(ctx.folder, args.boardId);
+    const strandedSnippets = snippetsStrandedByRemoving(ctx.folder, orphaned);
     // No last-board rule: a folder with zero boards is a supported state
     // (the sidebar has an empty state, the MCP instructions have `bareFolder`),
     // so removing the only board is the user's call.
@@ -215,6 +220,12 @@ export async function removeBoard(
     for (const screenId of orphaned) {
       await withScreenLock(ctx.folder, screenId, () => deletePersistedScreen(ctx.folder, screenId));
       ctx.broadcast({ type: "screen-changed", screenId });
+    }
+    // Snippets last, so undo (which unwinds in reverse) puts them back before
+    // the screens that instantiate them.
+    for (const snippetId of strandedSnippets) {
+      await deletePersistedSnippet(ctx.folder, snippetId);
+      ctx.broadcast({ type: "snippet-changed", snippetId });
     }
     // Prune the deleted id from the saved sidebar order so config.json
     // doesn't accumulate dangling ids. Drop the field entirely once
@@ -229,6 +240,34 @@ export async function removeBoard(
       await persistConfig(ctx.folder, nextConfig);
     }
     ctx.broadcast({ type: "board-changed", boardId: args.boardId });
-    return { removedBoardId: args.boardId, removedScreenIds: orphaned };
+    return {
+      removedBoardId: args.boardId,
+      removedScreenIds: orphaned,
+      removedSnippetIds: strandedSnippets,
+    };
   });
+}
+
+/**
+ * Snippets that only the given screens reached — the ones a cascade would
+ * otherwise leave on disk with nothing rendering them.
+ *
+ * Reachability before minus reachability after, rather than a reference count,
+ * for two reasons. A snippet that was *already* unreferenced stays put: it
+ * isn't this delete's to remove, and quietly collecting it would make an
+ * unrelated board delete eat a library item someone parked. And a snippet
+ * reachable only through a chain of other stranded snippets goes with them,
+ * which counting direct references would miss.
+ */
+function snippetsStrandedByRemoving(folder: DesignFolder, screenIds: string[]): string[] {
+  if (screenIds.length === 0) return [];
+  const going = new Set(screenIds);
+  const before = reachableSnippetIds(folder, folder.screens.values());
+  const after = reachableSnippetIds(
+    folder,
+    [...folder.screens].filter(([id]) => !going.has(id)).map(([, screen]) => screen),
+  );
+  // `before` can name a snippet with no file (a screen instantiating one that's
+  // already gone); only real ones are deletable.
+  return [...before].filter((id) => !after.has(id) && folder.snippets.has(id)).sort();
 }

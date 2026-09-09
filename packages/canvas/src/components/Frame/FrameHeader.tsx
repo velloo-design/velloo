@@ -9,8 +9,10 @@ import {
   Library as LibraryIcon,
   Link2,
   Maximize2,
+  Moon,
   MoreHorizontal,
   Plus,
+  Sun,
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -43,6 +45,12 @@ interface FrameHeaderProps {
   /** Persisted frame pin; absent means follow canvasDefault. */
   scheme?: FrameScheme | undefined;
   canvasDefault: FrameScheme;
+  /**
+   * On-screen width of the header row in CSS pixels (frame width × board
+   * zoom). The row counter-scales against the zoom, so this — not `w` — is
+   * the space the chrome actually has to lay itself out in.
+   */
+  chromeWidth: number;
   onPointerDownGrip: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
   /** Open the export dialog for this frame (PNG / PDF / standalone HTML). */
@@ -64,6 +72,14 @@ interface FrameHeaderProps {
 const MIN_SIZE = 120;
 const MAX_SIZE = 4096;
 
+/**
+ * Below this on-screen width the header sheds everything but the name and the
+ * actions menu. The fixed parts — grip, size inputs, badges, menu — need about
+ * 135px between them, so anything narrower left the label no room and the row
+ * spilled across the neighbouring frames.
+ */
+const COMPACT_WIDTH = 190;
+
 function clamp(n: number): number {
   return Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.round(n)));
 }
@@ -71,6 +87,13 @@ function clamp(n: number): number {
 /**
  * Top row of a frame: drag grip, label + editable size inputs,
  * shared-screen badge, and the remove button (visible on hover).
+ *
+ * A frame that pins its own colour scheme says so with a sun/moon badge — the
+ * pin is otherwise only visible by opening the menu, or by noticing the frame
+ * didn't follow when the canvas default changed.
+ *
+ * The row is as wide as the frame is on screen, so zooming out shrinks it
+ * until only the name and the actions menu still fit — see `COMPACT_WIDTH`.
  *
  * The size readout is a pair of `<input type="number">` so power users
  * can type an exact size or press ↑/↓ to nudge the frame by 1px (or
@@ -86,6 +109,7 @@ export function FrameHeader({
   presets,
   scheme,
   canvasDefault,
+  chromeWidth,
   onPointerDownGrip,
   onRemove,
   onExport,
@@ -97,8 +121,9 @@ export function FrameHeader({
   onMoveToBoard,
   onMoveToNewBoard,
 }: FrameHeaderProps) {
+  const compact = chromeWidth < COMPACT_WIDTH;
   return (
-    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+    <div className="flex items-center justify-between gap-2 overflow-hidden text-xs text-muted-foreground">
       <div className="flex items-center gap-1 min-w-0">
         <div
           onPointerDown={onPointerDownGrip}
@@ -108,32 +133,50 @@ export function FrameHeader({
         >
           <GripVertical size={12} strokeWidth={2} />
         </div>
-        <span className="font-medium truncate">{label}</span>
-        <span className="inline-flex items-center gap-0.5 opacity-60 tabular-nums">
-          <SizeInput
-            value={w}
-            ariaLabel="frame width"
-            onCommit={(v) => onResize({ w: clamp(v) })}
-          />
-          <span className="opacity-60">×</span>
-          <SizeInput
-            value={h}
-            ariaLabel="frame height"
-            onCommit={(v) => onResize({ h: clamp(v) })}
-          />
+        <span className="font-medium truncate" title={label}>
+          {label}
         </span>
-        {library ? (
+        {compact ? null : (
+          <span className="inline-flex shrink-0 items-center gap-0.5 opacity-60 tabular-nums">
+            <SizeInput
+              value={w}
+              ariaLabel="frame width"
+              onCommit={(v) => onResize({ w: clamp(v) })}
+            />
+            <span className="opacity-60">×</span>
+            <SizeInput
+              value={h}
+              ariaLabel="frame height"
+              onCommit={(v) => onResize({ h: clamp(v) })}
+            />
+          </span>
+        )}
+        {scheme && !compact ? (
           <span
-            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-muted text-muted-foreground"
+            className="inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[10px] bg-muted text-muted-foreground"
+            title={`Pinned to ${scheme} — this frame ignores the canvas default (${canvasDefault}).`}
+            role="img"
+            aria-label={`pinned to ${scheme}`}
+          >
+            {scheme === "dark" ? (
+              <Moon size={10} strokeWidth={2} />
+            ) : (
+              <Sun size={10} strokeWidth={2} />
+            )}
+          </span>
+        ) : null}
+        {library && !compact ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-muted text-muted-foreground"
             title={`This screen renders against library "${library}".`}
           >
             <LibraryIcon size={10} strokeWidth={2} />
             {library}
           </span>
         ) : null}
-        {sharedCount > 1 ? (
+        {sharedCount > 1 && !compact ? (
           <span
-            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-primary/10 text-primary"
+            className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-primary/10 text-primary"
             title={`${sharedCount} frames share this screen — edits sync across all of them.`}
           >
             <Link2 size={10} />
@@ -141,7 +184,7 @@ export function FrameHeader({
           </span>
         ) : null}
       </div>
-      <div className="flex items-center gap-0.5">
+      <div className="flex shrink-0 items-center gap-0.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

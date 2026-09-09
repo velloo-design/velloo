@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { activeBoards, type DesignFolder, orderedBoards } from "../design-folder.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { findSnippetInstances } from "../mutations/snippet-instances.ts";
+import { unusedSnippetIds } from "../mutations/snippet-refs.ts";
 import { managedProjectContext } from "../project-location.ts";
 
 /**
@@ -29,6 +30,21 @@ function projectNameFor(root: string): string {
     if (parent === dir) return basename(root);
     dir = parent;
   }
+}
+
+/**
+ * The snippet list both read surfaces serve. `unused` rides along because the
+ * library is where a designer would look for it, and the alternative is a
+ * per-tile round trip; one reachability walk per summary covers every snippet.
+ */
+function snippetSummaries(f: DesignFolder) {
+  const unused = new Set(unusedSnippetIds(f));
+  return [...f.snippets.entries()].map(([id, snippet]) => ({
+    id,
+    name: snippet.name,
+    params: snippet.params,
+    unused: unused.has(id),
+  }));
 }
 
 export function createDesignRouter(ctxFor: () => MutationContext): Hono {
@@ -87,11 +103,9 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
           group: board.group ?? null,
           archivedAt: board.archivedAt ?? null,
         })),
-      snippets: [...f.snippets.entries()].map(([id, snippet]) => ({
-        id,
-        name: snippet.name,
-        params: snippet.params,
-        library: snippet.library ?? f.config.defaultLibrary ?? null,
+      snippets: snippetSummaries(f).map((entry) => ({
+        ...entry,
+        library: f.snippets.get(entry.id)?.library ?? f.config.defaultLibrary ?? null,
       })),
       extensionsCount: Object.keys(f.config.extensions ?? {}).length,
     });
@@ -193,11 +207,7 @@ export function createSnippetsRouter(folder: () => DesignFolder): Hono {
   r.get("/", (c) => {
     const f = folder();
     return c.json({
-      snippets: [...f.snippets.entries()].map(([id, snippet]) => ({
-        id,
-        name: snippet.name,
-        params: snippet.params,
-      })),
+      snippets: snippetSummaries(f),
     });
   });
 

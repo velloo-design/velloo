@@ -31,7 +31,7 @@ export type MutationError =
   | { kind: "SnippetNotFound"; snippetId: string }
   | { kind: "SnippetParamMismatch"; snippetId: string; reason: string; details?: unknown }
   | { kind: "SnippetCycle"; snippetId: string; viaPath: string[] }
-  | { kind: "SnippetInUse"; snippetId: string; screenIds: string[] }
+  | { kind: "SnippetInUse"; snippetId: string; screenIds: string[]; snippetIds: string[] }
   | { kind: "SnippetIdConflict"; snippetId: string }
   | { kind: "IdNotFound"; screenId: string; id: string; hint?: string }
   | { kind: "IdConflict"; screenId: string; id: string; paths: number[][] }

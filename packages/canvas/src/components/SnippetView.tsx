@@ -204,9 +204,9 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
     channel.send({ type: "applyVelloState", path, state: path ? nodeState : "default" });
   }, [nodeState, selection, virtualScreenId]);
 
-  const onPatchMeta = async (patch: Partial<Pick<Snippet, "name" | "params">>) => {
+  const onPatchName = async (name: string) => {
     try {
-      await postMutate("update_snippet", { snippetId, patch });
+      await postMutate("update_snippet", { snippetId, patch: { name } });
       void refreshDesignSummary();
     } catch (err) {
       toastError(err, "Could not update snippet");
@@ -236,8 +236,9 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
 
   // The local `snippet` is a one-shot fetch; `snippetMeta` (from the design
   // summary) is refreshed on every `snippet-changed`, so overlay its name/params
-  // for the header + params panel — otherwise a rename/param-add only shows
-  // after close+reopen. The body/tree stay on the synthetic screen (also fresh).
+  // for the header + params panel — otherwise a rename here, or an agent's param
+  // change, only shows after close+reopen. The body/tree stay on the synthetic
+  // screen (also fresh).
   const displaySnippet: Snippet = {
     ...snippet,
     name: snippetMeta?.name ?? snippet.name,
@@ -256,11 +257,8 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
             snippet
           </Badge>
         </div>
-        <SnippetHeader snippet={displaySnippet} onPatchName={(name) => onPatchMeta({ name })} />
-        <SnippetParamsPanel
-          snippet={displaySnippet}
-          onPatchParams={(params) => onPatchMeta({ params })}
-        />
+        <SnippetHeader snippet={displaySnippet} onPatchName={onPatchName} />
+        <SnippetParamsPanel snippet={displaySnippet} />
         <div className="border-t flex-1 overflow-y-auto scroll-stable">
           <SectionLabel>Body</SectionLabel>
           {syntheticScreen ? (
@@ -312,9 +310,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
               </EmptyMedia>
               <EmptyTitle className="text-xs">Nothing selected</EmptyTitle>
               <EmptyDescription className="text-xs">
-                Click a node in the snippet preview to edit its props, classes, or stable id. Param
-                slots render as <span className="font-mono">$name</span> tags — open the param's
-                instances elsewhere to see how each is filled.
+                Click a node in the snippet preview to edit.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

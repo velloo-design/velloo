@@ -793,6 +793,7 @@ export const Frame = memo(function Frame({
             presets={presets}
             scheme={frame.scheme}
             canvasDefault={designMode}
+            chromeWidth={w * canvasZoom}
             onPointerDownGrip={startDrag}
             onRemove={onRemove}
             onExport={onExport}

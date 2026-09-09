@@ -23,6 +23,8 @@ interface Tile {
   label: string;
   category: string;
   isSnippet: boolean;
+  /** Snippets only: nothing renders it, so the tile says so. */
+  unused?: boolean;
   previewHeight: number;
 }
 
@@ -104,6 +106,7 @@ export function LibraryHome({ snippets }: Props) {
         label: s.name,
         category: "Snippets",
         isSnippet: true,
+        ...(s.unused ? { unused: true } : {}),
         previewHeight: 150,
       });
     }
@@ -332,10 +335,15 @@ function TileButton({
             variant={isSnippet ? "secondary" : "outline"}
             className={
               "px-1.5 py-0 text-[10px] uppercase tracking-wider " +
-              (isSnippet ? "text-primary" : "text-muted-foreground")
+              (tile.unused
+                ? "text-amber-600 dark:text-amber-400"
+                : isSnippet
+                  ? "text-primary"
+                  : "text-muted-foreground")
             }
+            title={tile.unused ? "No screen reaches this snippet — nothing renders it." : undefined}
           >
-            {isSnippet ? "Snippet" : tile.category}
+            {tile.unused ? "Unused" : isSnippet ? "Snippet" : tile.category}
           </Badge>
         </CardFooter>
       </button>

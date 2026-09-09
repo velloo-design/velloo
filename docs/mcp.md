@@ -71,7 +71,7 @@ Every registered tool carries MCP behavioural annotations, classified in one tab
 | `get_screen` | `screenId, mode?: "full" \| "outline"` | full screen JSON, or a stripped `{ref/snippet, $id, classSnippet (≤40 chars), children}` tree when `mode: "outline"` for scanning long screens |
 | `list_boards` | `includeFrames?, includeArchived?` | `{ boards: [{ id, name, frameCount, group?, frames?, groups?, archivedAt? }] }` — `group` names the sidebar group the board is filed under (absent ⇒ ungrouped); `includeFrames` embeds each board's full frame list, `includeArchived` also lists boards the user archived |
 | `get_board` | `boardId` | `{ id, name, frames: [...], groups: [...] }` — frame placement on the named board |
-| `list_components` | `filter?, mode?: "index" \| "summary" \| "full", kind?` | Index mode (default) returns `{ snapshotVersion, groups: [{ group, label, families: [{ id, pieces?, designModeNotes? }] }], totals, unavailableInDesign?, notInstalledInApp? }`; summary and full modes return `{ snapshotVersion, components: [...] }`, summary carrying prop names only. `kind` narrows to library, extension or snippet |
+| `list_components` | `filter?, mode?: "index" \| "summary" \| "full", kind?, unusedOnly?` | Index mode (default) returns `{ snapshotVersion, groups: [{ group, label, families: [{ id, pieces?, designModeNotes? }] }], totals, unavailableInDesign?, notInstalledInApp? }`; summary and full modes return `{ snapshotVersion, components: [...] }`, summary carrying prop names only. `kind` narrows to library, extension or snippet. A snippet no screen reaches (directly or through another snippet) is flagged `unused`; `unusedOnly` lists only those |
 | `install_component` | `componentId, screenId?` | The existing-project flow's "is this component available + install it if not." Resolves the active library's catalog: an already-present component (every shipped library bundles its whole set, so the common case) returns `{ installed: true, importPath }` — just `$ref` it; an uninstalled one routes to the adapter's installer (shadcn-upstream's per-component fetch); an unknown id errors with the catalog. `screenId` picks the library; omitted ⇒ folder default |
 | `list_snippets` | — | `[{ id, name, params }]` |
 | `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
@@ -114,7 +114,7 @@ Boards are filed into **sidebar groups** — areas of work ("Side pane", "Accoun
 |---|---|---|
 | `add_board` | `name, id?, group?` | Create a new empty board. Id is derived from `name` if omitted; `group` files it (creating the group when the name is new) |
 | `update_board` | `boardId, patch` | Sparse patch on `name`, `theme`, `archived`, `group` (`null` ⇒ Ungrouped) |
-| `remove_board` | `boardId` | Refuses to remove the last board (returns `LastBoard`). Undoable |
+| `remove_board` | `boardId` | Cascades: screens no other board places go with it (`removedScreenIds`), then snippets those screens were the last to reach (`removedSnippetIds`) — a snippet already unreferenced is left alone. A folder with zero boards is a supported state, so removing the only board is allowed. Undoable |
 | `reorder_boards` | `order` | Set the sidebar board order (board ids). Unknown ids dropped, omitted boards appended. Persists to `config.boardOrder`; the canvas drag-and-drop calls this |
 
 ### Folder config
@@ -291,7 +291,6 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `InvalidPath` | Path doesn't resolve in the screen tree |
 | `InvalidMove` | `move_node` would create a cycle or move into self |
 | `LastScreen` | `remove_screen` refuses when only one screen is left |
-| `LastBoard` | `remove_board` refuses when only one board is left |
 | `ScreenInUse` | The strict removal variant (`removeScreenStrict`, HTTP layer) refuses when frames reference the screen; carries `usage: { boardId, frameIds[] }[]`. The MCP `remove_screen` tool cascades instead and never returns this |
 | `ScreenIdConflict` | `add_screen` id collides with an existing screen |
 | `ScreenIdExhausted` | Couldn't derive a unique screen id from the supplied name |
@@ -302,7 +301,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `SnippetNotFound` | The named snippet doesn't exist |
 | `SnippetParamMismatch` | `args` to `instantiate_snippet` don't match the declared `params` (missing required, unknown extras, type mismatch) |
 | `SnippetCycle` | Snippet body would reference itself (directly or transitively) |
-| `SnippetInUse` | `remove_snippet` refuses when screens still instantiate it; carries the referencing `screenIds[]` |
+| `SnippetInUse` | `remove_snippet` refuses while anything still instantiates it; splits the referencers into `screenIds[]` and `snippetIds[]` (other snippets whose body embeds this one) |
 | `SnippetIdConflict` | `add_snippet` id collides with an existing snippet |
 | `IdNotFound` | An `@id` locator didn't resolve to any node in the screen; carries `id` |
 | `IdConflict` | Two nodes in the same screen share an `$id`; carries `id` + `paths[]` |

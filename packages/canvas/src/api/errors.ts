@@ -107,9 +107,10 @@ function baseMessage(error: ApiError): string {
     case "AnnotationConflict":
       return "That node already has an annotation.";
     case "SnippetInUse":
-      return `Snippet "${error.snippetId}" is still used on ${list(
-        error.screenIds,
-      )} — remove those first.`;
+      return `Snippet "${error.snippetId}" is still used by ${list([
+        ...error.screenIds,
+        ...error.snippetIds.map((id) => `snippet ${id}`),
+      ])} — remove those first.`;
     case "ExtensionIdConflict":
     case "ExtensionNotFound":
     case "ExtensionInUse":

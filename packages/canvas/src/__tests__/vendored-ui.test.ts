@@ -114,6 +114,32 @@ describe("the chrome's vendored shadcn", () => {
   });
 
   /**
+   * A Radix submenu is a DOM child of the menu it opens from, and upstream
+   * gives that menu `overflow-x-hidden overflow-y-auto` so a long list can
+   * scroll. Its popper wrapper is `position: fixed` with a transform, which
+   * makes it the submenu's containing block — so the overflow scissors the
+   * submenu off at the parent's right edge and every sub-item ("Color scheme"
+   * on a frame, the whole list under it) simply vanishes. `overflow-x: visible`
+   * next to a scrolling y-axis computes back to `auto`, so portalling the
+   * submenu out of the scroll box is the only way out.
+   */
+  test("portals submenus out of the scrolling menu that clips them", async () => {
+    const unportalled: string[] = [];
+    for (const { file, source } of await uiSources()) {
+      const at = source.search(/^function \w+SubContent\(/m);
+      if (at < 0) continue;
+      // Up to the next top-level declaration: the signature's own destructure
+      // closes on a column-zero `}`, so "first closing brace" ends too early.
+      const rest = source.slice(at + 1);
+      const end = rest.search(/^(function|export) /m);
+      if (!/Primitive\.Portal/.test(end < 0 ? rest : rest.slice(0, end))) unportalled.push(file);
+    }
+
+    // Both menu families ship a SubContent; neither may render it inline.
+    expect(unportalled).toEqual([]);
+  });
+
+  /**
    * `AlertDialogAction` renders `<Button asChild>`, and Radix's Slot
    * *concatenates* the two className strings instead of running them through
    * tailwind-merge. A hand-rolled `bg-destructive` therefore lands on the

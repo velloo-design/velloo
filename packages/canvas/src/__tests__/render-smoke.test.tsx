@@ -168,7 +168,7 @@ const cases: { name: string; render: () => ReactElement; paints?: boolean }[] = 
   },
   {
     name: "SnippetParamsPanel",
-    render: () => <SnippetParamsPanel snippet={snippet()} onPatchParams={() => undefined} />,
+    render: () => <SnippetParamsPanel snippet={snippet()} />,
   },
   {
     name: "ImagePanel",
@@ -239,6 +239,33 @@ domSuite("a deep link opens its own view, not the board", () => {
 
     expect(useCanvas.getState().view).toBe("snippet");
     expect(useCanvas.getState().editingSnippetId).toBe("card");
+  });
+});
+
+domSuite("the params rail is read-only", () => {
+  /**
+   * A param is a contract with every instance across every screen, and this
+   * panel can only ever change one side of it — the version that let you
+   * delete one silently broke screens you weren't looking at. Only an agent
+   * moves the declaration and the call sites together, so the rail has to stay
+   * inert: no buttons, no inputs, no selects.
+   */
+  test("it shows the signature and offers nothing to click", async () => {
+    const withParams: Snippet = {
+      ...snippet(),
+      params: [
+        { name: "title", type: "string" },
+        { name: "tone", type: "string", default: "quiet" },
+      ],
+    } as Snippet;
+
+    const view = await mount(<SnippetParamsPanel snippet={withParams} />);
+    views.push(view);
+
+    expect(view.host.textContent).toContain("$title");
+    expect(view.host.textContent).toContain("required");
+    expect(view.host.textContent).toContain('"quiet"');
+    expect(view.host.querySelectorAll("button, input, select, [role=button]")).toHaveLength(0);
   });
 });
 

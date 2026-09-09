@@ -89,9 +89,9 @@ function ParamRefRow({
   if (nodeParams.length === 0) {
     return (
       <div className="text-[11px] text-muted-foreground leading-relaxed">
-        <span className="font-medium text-foreground">+ param ref</span> — declare a{" "}
+        <span className="font-medium text-foreground">+ param ref</span> — this snippet has no{" "}
         <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-muted">node</code> param to
-        insert a fillable slot here.
+        slot in. Ask your agent to declare one.
       </div>
     );
   }
@@ -130,9 +130,9 @@ function IfBranchRow({
   if (boolParams.length === 0) {
     return (
       <div className="text-[11px] text-muted-foreground leading-relaxed">
-        <span className="font-medium text-foreground">+ if branch</span> — declare a{" "}
+        <span className="font-medium text-foreground">+ if branch</span> — this snippet has no{" "}
         <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-muted">boolean</code> param to
-        branch a prop on it.
+        branch on. Ask your agent to declare one.
       </div>
     );
   }

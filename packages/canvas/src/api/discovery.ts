@@ -69,6 +69,13 @@ export interface SnippetMeta {
   params: SnippetParam[];
   /** Resolved library id. */
   library?: string | null | undefined;
+  /**
+   * No screen reaches it, directly or through another snippet — so nothing
+   * renders it. Inert rather than broken (the library still lists it,
+   * `emit_snippet` still emits it), but worth saying out loud, since it's what
+   * a deleted board or a rewritten screen leaves behind.
+   */
+  unused?: boolean | undefined;
 }
 
 /**

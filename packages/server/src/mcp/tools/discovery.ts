@@ -27,6 +27,7 @@ import {
 } from "../../design-folder.ts";
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { resolveLocator } from "../../path.ts";
 import { snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
@@ -318,15 +319,19 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List the unified `compose` tag namespace: library components, extensions, and snippets. `mode: "index"` (default) groups families onto shelves with their sub-pieces folded in and carries per-family usage notes — read this first, then `filter` to the handful you will actually use. `"summary"` adds prop names per component; `"full"` returns whole descriptors with examples. A family entry means you compose its `pieces` inside it (`Field` ⇒ `FieldLabel`/`FieldDescription`/`FieldError`) — prefer a real family over rebuilding one from `Box` and `Text`. Snippet entries carry `snippetId`; their `id` is the PascalCase JSX tag. `installedInApp` is host-app status only; false does not block design, and `emit_code.componentsToInstall` carries the handoff plan. `filter` substring-matches tags; `kind` narrows the result.',
+        'List the unified `compose` tag namespace: library components, extensions, and snippets. `mode: "index"` (default) groups families onto shelves with their sub-pieces folded in and carries per-family usage notes — read this first, then `filter` to the handful you will actually use. `"summary"` adds prop names per component; `"full"` returns whole descriptors with examples. A family entry means you compose its `pieces` inside it (`Field` ⇒ `FieldLabel`/`FieldDescription`/`FieldError`) — prefer a real family over rebuilding one from `Box` and `Text`. Snippet entries carry `snippetId`; their `id` is the PascalCase JSX tag. `installedInApp` is host-app status only; false does not block design, and `emit_code.componentsToInstall` carries the handoff plan. `filter` substring-matches tags; `kind` narrows the result. A snippet no screen reaches — directly or through another snippet — is marked `unused`; `unusedOnly: true` lists just those, which is how you find snippets a board delete or a screen rewrite left behind.',
       outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
         mode: z.enum(["index", "summary", "full"]).optional(),
         kind: z.enum(["library", "extension", "snippet"]).optional(),
+        unusedOnly: z
+          .boolean()
+          .optional()
+          .describe("Only snippets nothing reaches — implies kind: \u0022snippet\u0022"),
       },
     },
-    async ({ filter, mode, kind }) => {
+    async ({ filter, mode, kind, unusedOnly }) => {
       const manifest = await loadManifestForCtx(ctx);
       const provider = ctx.defaultProvider as FrameworkAdapter;
       const catalog = provider.catalog ? await provider.catalog().catch(() => []) : [];
@@ -354,19 +359,27 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         availableInDesign: true,
         installedInApp: true,
       }));
+      // Unused rides in `designModeNotes` as well as its own field, so it's
+      // visible in index mode too — that's the whole report, and it's the one
+      // mode an agent reads first.
+      const unused = new Set(unusedSnippetIds(ctx.folder));
       const snippetEntries = [...ctx.folder.snippets.values()].map((snippet) => ({
         id: snippetJsxTags(snippet)[0] ?? snippet.id,
         snippetId: snippet.id,
         category: "composition",
         source: "snippet",
         props: snippet.params.map(withRequiredFlag),
-        designModeNotes: `Reusable snippet: ${snippet.name}`,
+        designModeNotes: unused.has(snippet.id)
+          ? `Reusable snippet: ${snippet.name} — unused: no screen reaches it`
+          : `Reusable snippet: ${snippet.name}`,
         kind: "snippet" as const,
         availableInDesign: true,
         installedInApp: true,
+        ...(unused.has(snippet.id) ? { unused: true as const } : {}),
       }));
-      const all =
-        kind === "library"
+      const all = unusedOnly
+        ? snippetEntries.filter((entry) => unused.has(entry.snippetId))
+        : kind === "library"
           ? libraryEntries
           : kind === "extension"
             ? extensionEntries
@@ -426,7 +439,9 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
                 kind: c.kind,
                 availableInDesign: c.availableInDesign,
                 installedInApp: c.installedInApp,
-                ...(c.kind === "snippet" ? { snippetId: c.snippetId } : {}),
+                ...(c.kind === "snippet"
+                  ? { snippetId: c.snippetId, ...("unused" in c ? { unused: c.unused } : {}) }
+                  : {}),
                 ...("importPath" in c ? { importPath: c.importPath } : {}),
               };
             });

@@ -64,7 +64,11 @@ export const mutate = {
     return postMutate<{ board: unknown }>("update_board", args);
   },
   removeBoard(args: { boardId: string }) {
-    return postMutate<{ removedBoardId: string; removedScreenIds: string[] }>("remove_board", args);
+    return postMutate<{
+      removedBoardId: string;
+      removedScreenIds: string[];
+      removedSnippetIds: string[];
+    }>("remove_board", args);
   },
   reorderBoards(args: { order: string[] }) {
     return postMutate<{ order: string[] }>("reorder_boards", args);

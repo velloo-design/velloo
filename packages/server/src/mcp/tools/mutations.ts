@@ -245,7 +245,7 @@ export function registerMutationTools(
     "remove_board",
     {
       description:
-        "Delete a board and its notes. Screens no other board places are deleted with it and returned in `removedScreenIds`; screens also framed elsewhere are kept. Permanent — to file a board away reversibly, prefer update_board { patch: { archived: true } }.",
+        "Delete a board and its notes. Screens no other board places are deleted with it and returned in `removedScreenIds`; screens also framed elsewhere are kept. Snippets those screens were the last to reach go too, in `removedSnippetIds` — a snippet already unreferenced before the call is left alone. Permanent — to file a board away reversibly, prefer update_board { patch: { archived: true } }.",
       inputSchema: removeBoardShape,
     },
     async (args) => toMcp(await removeBoard(ctx, args)),
@@ -362,7 +362,7 @@ export function registerMutationTools(
     "remove_snippet",
     {
       description:
-        "Delete a snippet. Refuses with SnippetInUse if any screen instantiates it; the error payload lists the referencing screenIds.",
+        "Delete a snippet. Refuses with SnippetInUse while anything still instantiates it; the payload splits the referencers into `screenIds` (clear with remove_node) and `snippetIds` — other snippets whose body embeds this one (clear with update_snippet).",
       inputSchema: removeSnippetShape,
     },
     async (args) => toMcp(await removeSnippet(ctx, args)),

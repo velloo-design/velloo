@@ -264,6 +264,15 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
             >
               snippet
             </Badge>
+            {meta?.unused ? (
+              <Badge
+                variant="outline"
+                className="text-[10px] uppercase tracking-wider border-amber-500/40 text-amber-600 dark:text-amber-400"
+                title="No screen reaches this snippet, directly or through another snippet — nothing renders it."
+              >
+                unused
+              </Badge>
+            ) : null}
             <div className="ml-auto">
               <Button size="sm" onClick={() => openSnippetEditor(item.id)}>
                 <PanelsTopLeft />

@@ -47,6 +47,8 @@ export const ListComponentsOutput = z.looseObject({
       installedInApp: z.boolean(),
       /** Present for snippet tags: the persisted kebab-case definition id. */
       snippetId: z.string().optional(),
+      /** Present and true on a snippet no screen reaches, directly or via another snippet. */
+      unused: z.boolean().optional(),
       /** Present on extensions: where the real component lives in the host app. */
       importPath: z.string().optional(),
     }),

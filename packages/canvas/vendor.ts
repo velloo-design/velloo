@@ -10,9 +10,9 @@
  * working dialogs and a live Sonner toaster. It is deliberately not
  * `@velloo/shadcn-snapshot`, whose overlays are pinned open and inline so they
  * can be selected inside a static design iframe — see the "two copies, one
- * upstream pull" invariant in CLAUDE.md. Hence no ADAPTED set here: nothing in
- * this directory is allowed to diverge from upstream, and anything that needs
- * to becomes a wrapper in `src/components/` instead.
+ * upstream pull" invariant in CLAUDE.md. Divergence here is the exception, not
+ * the contract: prefer a wrapper in `src/components/`, and only when the file
+ * itself must change does it earn a place in ADAPTED below.
  *
  * Both copies read their style and CLI pin from their own package.json so the
  * two can be compared at a glance and moved together.
@@ -96,9 +96,9 @@ const COMPONENTS = [
  *
  * Keep this set small — unlike the snapshot's, whose whole reason to exist is
  * the canvas-safe contract, a divergence here is a bug being worked around or
- * an accessibility fix upstream hasn't taken. Two today, and the two forks that
- * used to live here (select's `size`, dropdown-menu's icon sizing) both went
- * away at the 2026.09 pull because upstream shipped them.
+ * an accessibility fix upstream hasn't taken. Four today, and the two forks
+ * that used to live here (select's `size`, dropdown-menu's icon sizing) both
+ * went away at the 2026.09 pull because upstream shipped them.
  */
 const ADAPTED = new Set([
   // aria-label moved onto the thumb, where Radix puts role="slider"; plus a
@@ -106,6 +106,10 @@ const ADAPTED = new Set([
   "slider",
   // Upstream's Toaster reads next-themes; the canvas owns its own dark mode.
   "sonner",
+  // SubContent is portalled in both: upstream renders it inside the parent
+  // Content, whose `overflow-x-hidden overflow-y-auto` clips every submenu away.
+  "dropdown-menu",
+  "context-menu",
 ]);
 
 /**

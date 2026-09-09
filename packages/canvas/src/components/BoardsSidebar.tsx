@@ -52,6 +52,24 @@ import { Empty, EmptyDescription } from "./ui/empty.tsx";
 import { Input } from "./ui/input.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
+/**
+ * What a board delete took with it. Screens cascade because nothing but a
+ * frame references one, and snippets cascade behind them once nothing reaches
+ * them — both are quiet, so the toast has to name them.
+ */
+function deletedBoardSummary(
+  name: string,
+  removed: { removedScreenIds: string[]; removedSnippetIds: string[] },
+): string {
+  const also: string[] = [];
+  const screens = removed.removedScreenIds.length;
+  const snippets = removed.removedSnippetIds.length;
+  if (screens > 0) also.push(`${screens} screen${screens === 1 ? "" : "s"}`);
+  if (snippets > 0) also.push(`${snippets} unused snippet${snippets === 1 ? "" : "s"}`);
+  if (also.length === 0) return `Deleted "${name}"`;
+  return `Deleted "${name}" and ${also.join(" + ")}`;
+}
+
 /** Stable empty array so the `archivedBoards` selector doesn't re-render on every store tick. */
 const EMPTY_BOARDS: BoardMeta[] = [];
 /** Same, for the groups selector. */
@@ -302,12 +320,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
         // keeps the initiator's sidebar honest even if the WS is down.
         useCanvas.getState().pruneScreens(r.removedScreenIds);
         await useCanvas.getState().pruneBoard(id);
-        const n = r.removedScreenIds.length;
-        pushToast({
-          kind: "info",
-          message:
-            n > 0 ? `Deleted "${name}" and ${n} screen${n === 1 ? "" : "s"}` : `Deleted "${name}"`,
-        });
+        pushToast({ kind: "info", message: deletedBoardSummary(name, r) });
       } catch (e) {
         toastError(e, "Could not delete board");
       }
@@ -1048,7 +1061,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             <AlertDialogTitle>Delete board</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingBoardDelete
-                ? `Delete board "${pendingBoardDelete.name}"? Screens only this board places are deleted with it. Screens another board also places are kept.`
+                ? `Delete board "${pendingBoardDelete.name}"? Screens only this board places are deleted with it, along with any snippet nothing else reaches afterwards. Screens another board also places are kept.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -28,7 +28,7 @@ const MUTATION_SAMPLES: MutationError[] = [
   { kind: "SnippetNotFound", snippetId: "hero" },
   { kind: "SnippetParamMismatch", snippetId: "hero", reason: "missing required param `title`" },
   { kind: "SnippetCycle", snippetId: "hero", viaPath: ["hero", "cta"] },
-  { kind: "SnippetInUse", snippetId: "hero", screenIds: ["landing", "pricing"] },
+  { kind: "SnippetInUse", snippetId: "hero", screenIds: ["landing"], snippetIds: ["shell"] },
   { kind: "SnippetIdConflict", snippetId: "hero" },
   { kind: "IdNotFound", screenId: "landing", id: "cta" },
   { kind: "IdConflict", screenId: "landing", id: "cta", paths: [[0], [1]] },

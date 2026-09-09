@@ -280,3 +280,51 @@ describe("snippet param contract", () => {
     expect(parse(u).propWarnings).toBeUndefined();
   });
 });
+
+/**
+ * A snippet no screen reaches renders nowhere, and nothing used to say so —
+ * so a board delete or a rewritten screen left files behind that only a manual
+ * grep would find. `site-header` in this fixture is exactly that: defined, and
+ * instantiated by no screen.
+ */
+describe("unused snippets", () => {
+  test("unusedOnly lists just the snippets nothing reaches", async () => {
+    const data = parse(
+      await callTool("list_components", { unusedOnly: true, mode: "summary" }),
+    ) as {
+      components: { snippetId: string; kind: string; unused?: boolean }[];
+    };
+
+    expect(data.components.map((c) => c.snippetId)).toEqual(["site-header"]);
+    expect(data.components[0]?.kind).toBe("snippet");
+    expect(data.components[0]?.unused).toBe(true);
+  });
+
+  test("a referenced snippet carries no unused flag", async () => {
+    await writeJson(join(tmp, "screens/landing.json"), {
+      id: "landing",
+      name: "Landing",
+      tree: {
+        $ref: "Box",
+        children: [{ $snippet: "site-header", args: { title: "Hi" } }],
+      },
+    });
+    ctx.folder = await loadDesignFolder(tmp);
+
+    const data = parse(await callTool("list_components", { kind: "snippet", mode: "summary" })) as {
+      components: { snippetId: string; unused?: boolean }[];
+    };
+    expect(data.components.find((c) => c.snippetId === "site-header")?.unused).toBeUndefined();
+    expect(
+      parse(await callTool("list_components", { unusedOnly: true, mode: "summary" })).components,
+    ).toEqual([]);
+  });
+
+  test("the index says it too, where an agent reads first", async () => {
+    const data = parse(await callTool("list_components", {})) as {
+      groups: { group: string; families: { id: string; designModeNotes?: string }[] }[];
+    };
+    const shelf = data.groups.find((g) => g.group === "snippets");
+    expect(shelf?.families.find((f) => f.id === "SiteHeader")?.designModeNotes).toContain("unused");
+  });
+});

@@ -174,10 +174,12 @@ export const snippetCycle = (
 export const snippetInUse = (
   snippetId: string,
   screenIds: string[],
+  snippetIds: string[],
 ): ErrorOf<MutationError, "SnippetInUse"> => ({
   kind: "SnippetInUse",
   snippetId,
   screenIds,
+  snippetIds,
 });
 export const snippetIdConflict = (
   snippetId: string,
