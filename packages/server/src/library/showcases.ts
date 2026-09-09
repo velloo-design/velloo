@@ -467,6 +467,16 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
 };
 
 /**
+ * The component ids that carry a hand-built showcase. Exported so the contract
+ * between this table and the library's actual components can be asserted: an
+ * entry naming a component that no longer exists renders a fallback tile with
+ * nothing failing, which is exactly how a registry refresh goes unnoticed.
+ */
+export function showcaseIds(): string[] {
+  return Object.keys(SHOWCASES);
+}
+
+/**
  * Build a showcase tree for the given component id. Optional `propOverrides`
  * lets the detail page render variant×size combinations by patching only the
  * top-level component's props (the children stay intact).
