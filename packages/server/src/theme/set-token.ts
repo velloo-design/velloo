@@ -35,6 +35,19 @@ function applyPath(
 }
 
 /**
+ * Read a dot-path out of a value; `undefined` when any segment is missing.
+ * Used to confirm a write survived validation — see {@link setTokens}.
+ */
+function valueAt(source: unknown, path: string): unknown {
+  let cursor: unknown = source;
+  for (const segment of path.split(".")) {
+    if (cursor === null || typeof cursor !== "object") return undefined;
+    cursor = (cursor as Record<string, unknown>)[segment];
+  }
+  return cursor;
+}
+
+/**
  * Apply a batch of token writes: every entry lands on ONE in-memory copy,
  * validated entry-by-entry (so a failure names the offending path), then the
  * result is persisted ONCE. All-or-nothing: any bad entry means nothing is
@@ -67,6 +80,17 @@ export async function setTokens(
       failed.push({
         path,
         reason: `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme at "${where}": ${issue?.message ?? "schema mismatch"}`,
+      });
+      continue;
+    }
+    // A closed `z.object` STRIPS unknown keys instead of rejecting them, so a
+    // misspelled slot parses cleanly and then isn't there. Reporting that as
+    // applied is the worst outcome: the agent is told the token landed while
+    // nothing changed on disk or in memory.
+    if (valueAt(parsed.data, path) === undefined) {
+      failed.push({
+        path,
+        reason: `"${path}" is not a token this theme defines, so the write was dropped. Check the slot name (e.g. "colors.primary.DEFAULT", "colorsDark.background"), or use "palette.<name>" for a raw brand value.`,
       });
       continue;
     }

@@ -333,6 +333,32 @@ describe("setTokens (bulk)", () => {
     expect(await diskTheme()).toEqual(before);
     expect(events).toEqual([]);
   });
+
+  test("a slot the schema doesn't define is refused, not silently dropped", async () => {
+    // `ThemeSchema` is a closed object, and zod STRIPS unknown keys rather
+    // than rejecting them — so a misspelled slot used to parse cleanly, vanish
+    // from the parsed result, and still be reported as applied. The agent was
+    // told the token landed while nothing changed anywhere.
+    const before = await diskTheme();
+    const r = await setTokens(ctx, [{ path: "colors.nope.DEFAULT", value: "#ff0000" }]);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.error.kind === "BulkTokensInvalid") {
+      expect(r.error.applied).toEqual([]);
+      expect(r.error.failed[0]?.path).toBe("colors.nope.DEFAULT");
+      expect(r.error.failed[0]?.reason).toContain("palette.");
+    } else if (!r.ok) {
+      throw new Error(`expected BulkTokensInvalid, got ${r.error.kind}`);
+    }
+    expect(await diskTheme()).toEqual(before);
+  });
+
+  test("the palette passthrough still takes any name", async () => {
+    const r = await setTokens(ctx, [{ path: "palette.brand-ink", value: "#123456" }]);
+    expect(r.ok).toBe(true);
+    expect(((await diskTheme()) as { palette?: Record<string, unknown> }).palette).toMatchObject({
+      "brand-ink": "#123456",
+    });
+  });
 });
 
 describe("withThemeLock", () => {
