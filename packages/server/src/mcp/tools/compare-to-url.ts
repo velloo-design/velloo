@@ -23,6 +23,7 @@ import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { diagnosticsForScreen } from "../diagnostics.ts";
+import { readCaptureDom, styleDiffForRegions } from "./computed.ts";
 import { CompareToUrlOutput } from "./outputs.ts";
 import { errorResult, type McpContent, structuredResult } from "./result.ts";
 import { ThemeNameSchema, ViewportSchema } from "./schemas.ts";
@@ -147,7 +148,7 @@ export function registerCompareToUrlTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. 0.85+ is a faithful structural port; fix `topMismatches` in order and don't chase 1.0. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Guide: velloo://guide/porting.",
+        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. 0.85+ is a faithful structural port; fix `topMismatches` in order and don't chase 1.0. `styleDiff` names the resolved computed properties behind each of those regions (design vs page) — read it instead of inferring from class strings which utility won. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Guide: velloo://guide/porting.",
       inputSchema: {
         screenId: z.string(),
         source: z
@@ -309,6 +310,7 @@ export function registerCompareToUrlTool(
             viewport,
             fullPage: fullPage ?? true,
             deviceScaleFactor: scaleFactor,
+            dom: true,
           }),
           storedPng
             ? Promise.resolve<UrlCaptureResult>({
@@ -325,6 +327,7 @@ export function registerCompareToUrlTool(
                   fullPage: fullPage ?? true,
                   deviceScaleFactor: scaleFactor,
                   dark: mode === "dark",
+                  dom: true,
                   ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
                   ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
                   ...(cookies ? { cookies } : {}),
@@ -347,6 +350,20 @@ export function registerCompareToUrlTool(
             : "";
           return `~${share}% of the diff at (${r.x},${r.y} ${r.w}×${r.h})${node}`;
         });
+        // The pixel diff says *where* the two differ; this says *what* differs
+        // there. Reasoning from class strings to resolved styles is the part
+        // that can't be checked, so measure both sides with the same walker
+        // and report the properties that actually disagree.
+        const referenceDom =
+          urlCapture.dom ??
+          (captureId !== undefined
+            ? readCaptureDom(ctx.folder.root, captureId, ctx.folder.config.folderId)
+            : null);
+        const styleDiff =
+          velloo.dom && referenceDom
+            ? styleDiffForRegions(regions, velloo.dom, referenceDom, scaleFactor)
+            : [];
+
         // An auth wall counts only when the requested page isn't itself a login
         // page (porting a login screen legitimately has a password field).
         // A stored capture cannot be an auth wall or a redirect surprise: a
@@ -421,6 +438,7 @@ export function registerCompareToUrlTool(
               }
             : {}),
           ...(topMismatches.length ? { topMismatches } : {}),
+          ...(styleDiff.length ? { styleDiff } : {}),
           regions,
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
           ...(unverified

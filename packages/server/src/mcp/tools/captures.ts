@@ -12,7 +12,7 @@ import {
 } from "@velloo/renderer";
 import { z } from "zod";
 import { emitActivity } from "../../activity.ts";
-import { openSession } from "../../capture/sessions.ts";
+import { openSession, sessionStatuses } from "../../capture/sessions.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { errorResult, type McpResult } from "./result.ts";
 
@@ -90,7 +90,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
           sessionId: session.handle.sessionId,
           url: url ?? null,
           status: "open",
-          note: "The browser window is open and the user is driving it. This call did NOT wait — poll list_captures for captures as they appear, and tell the user to hit 'Capture page' in the toolbar on each page you need, then 'Done'.",
+          note: "The browser window is open and the user is driving it. This call did NOT wait — poll list_captures, whose `sessions[]` reports whether the window is still open and what page the user is on, and tell them to hit 'Capture page' in the toolbar on each page you need, then 'Done'.",
         });
       } catch (err) {
         if (err instanceof HeadedBrowserMissingError) return errorResult(err.message);
@@ -105,7 +105,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "list_captures",
     {
       description:
-        "Stored browser captures for this folder, newest first. Each `captureId` reads with `get_capture` and diffs against a screen with `compare_to_url { source: { captureId } }`. Captures come from `start_capture_session` or `velloo capture`.",
+        "Stored browser captures for this folder, newest first, plus the state of any capture session this daemon opened. Each `captureId` reads with `get_capture` and diffs against a screen with `compare_to_url { source: { captureId } }`. `sessions[]` says whether the user is still in the browser (`status`, `currentUrl`) — poll this rather than re-calling `start_capture_session`. Captures come from `start_capture_session` or `velloo capture`.",
       inputSchema: {},
     },
     async () => {
@@ -119,13 +119,22 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
         nodeCount: m.nodeCount,
         assetCount: m.assetCount,
       }));
+      const sessions = sessionStatuses();
+      const open = sessions.find((s) => s.status === "open");
       return jsonResult({
         captures,
-        ...(captures.length === 0
+        sessions,
+        ...(open
           ? {
-              note: "No captures yet. `start_capture_session` opens a browser for the user to log in and capture pages from.",
+              note: `A capture session is open${open.currentUrl ? ` on ${open.currentUrl}` : ""}. The user drives it: ask them to reach each page you need and hit 'Capture page', then 'Done'. Poll this tool — do not call start_capture_session again.`,
             }
-          : {}),
+          : captures.length === 0
+            ? {
+                note: sessions.length
+                  ? "The capture session has closed and produced nothing. Ask the user whether they hit 'Capture page' before 'Done', then start another session."
+                  : "No captures yet. `start_capture_session` opens a browser for the user to log in and capture pages from.",
+              }
+            : {}),
       });
     },
   );

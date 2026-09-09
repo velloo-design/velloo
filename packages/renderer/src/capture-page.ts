@@ -27,6 +27,12 @@ export interface DomNode {
   src?: string;
   href?: string;
   /**
+   * `data-node-path` of the design node that rendered this element, when the
+   * page is a Velloo render rather than a captured app page. It is what lets a
+   * computed style be attributed to a node the agent can edit.
+   */
+  nodePath?: string;
+  /**
    * Set on the first element of a run of visually identical siblings — the
    * signal that a card grid / list / repeated row is a single component
    * instantiated N times, which is what the agent should re-express it as.
@@ -55,7 +61,6 @@ export interface ThemeVars {
   fonts: string[];
 }
 
-/** Bound the extract so a huge page can't produce an unusable multi-MB dump. */
 const MAX_NODES = 1500;
 const MAX_DEPTH = 24;
 const MAX_TEXT = 240;
@@ -105,11 +110,21 @@ const STYLE_PROPS = [
  * Runs in the page so it sees what the user sees — post-hydration, post-CSS,
  * with real geometry. Invisible and zero-area elements are dropped: they carry
  * no design information and would otherwise dominate the node budget.
+ *
+ * Exported because a Velloo render is worth walking with exactly this walker:
+ * the design side of a fidelity diff needs the same properties, measured the
+ * same way, or the two sides are not comparable. On a Velloo render the
+ * elements also carry `data-node-path`, so every measurement lands on a node
+ * the agent can address.
  */
-async function extractDom(
+export async function extractDom(
   page: Page,
-  limits: { maxNodes: number; maxDepth: number; maxText: number },
-  toolbarTag: string,
+  limits: { maxNodes: number; maxDepth: number; maxText: number } = {
+    maxNodes: MAX_NODES,
+    maxDepth: MAX_DEPTH,
+    maxText: MAX_TEXT,
+  },
+  toolbarTag: string = TOOLBAR_TAG,
 ): Promise<DomExtract> {
   return page.evaluate(
     ({ props, maxNodes, maxDepth, maxText, toolbar }) => {
@@ -181,6 +196,8 @@ async function extractDom(
         if (src) entry.src = src;
         const href = el.getAttribute("href");
         if (href) entry.href = href.slice(0, 300);
+        const nodePath = el.getAttribute("data-node-path");
+        if (nodePath !== null) entry.nodePath = nodePath;
         nodes.push(entry);
 
         // Detect repeated sibling runs once per parent, on the first member.

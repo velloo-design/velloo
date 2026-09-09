@@ -1,6 +1,8 @@
 import { defineCommand } from "citty";
+import pc from "picocolors";
 import { daemonRoot, listDaemons, stopDaemon } from "../daemon/runtime.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
+import { projectLabel } from "../manifest.ts";
 
 export default defineCommand({
   meta: {
@@ -35,9 +37,25 @@ export default defineCommand({
 
     const folder = await resolveDesignFolder(args.folder, "stop");
     const root = daemonRoot(folder);
-    const stopped = await stopDaemon(root);
+    if (await stopDaemon(root)) {
+      console.log(`velloo: stopped canvas for ${root}`);
+      return;
+    }
+
+    // `stop` is folder-scoped and `status` is machine-wide, so a bare `stop`
+    // run from the wrong folder used to report "nothing running" about a
+    // daemon `status` was happily listing. Name the others rather than
+    // leaving two notions of ownership to reconcile by hand.
+    console.log(`velloo: no canvas running for ${root}`);
+    const others = await listDaemons();
+    if (others.length === 0) return;
     console.log(
-      stopped ? `velloo: stopped canvas for ${root}` : `velloo: no canvas running for ${root}`,
+      pc.dim(
+        `  ${others.length} canvas${others.length === 1 ? "" : "es"} running elsewhere — stop one by path, or \`velloo stop --all\`:`,
+      ),
     );
+    for (const d of others) {
+      console.log(pc.dim(`    ${d.canvasUrl}  ${(await projectLabel(d.root)) ?? d.root}`));
+    }
   },
 });

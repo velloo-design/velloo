@@ -242,7 +242,7 @@ function buildMcpServer(
   registerDiscoveryTools(mcp, ctx);
   registerComposeTool(mcp, ctx, jit);
   registerMutationTools(mcp, ctx, jit);
-  registerInspectTool(mcp, ctx);
+  registerInspectTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx, jit);
   registerScreenshotTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);

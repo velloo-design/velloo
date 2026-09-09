@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { Viewport } from "@velloo/schema";
 import type { Browser, BrowserContext, Frame, Page } from "playwright-core";
 import pkg from "../package.json" with { type: "json" };
+import { type DomExtract, extractDom } from "./capture-page.ts";
 
 /** Flags the injected live/canvas runtimes set on the rendered page's window. */
 type VellooReadyFlags = {
@@ -405,6 +406,12 @@ export interface CaptureResult {
   png: Buffer;
   /** Bounding rects in CSS pixels (multiply by deviceScaleFactor for image px). */
   nodeRects: CaptureNodeRect[];
+  /**
+   * Computed styles + geometry per element, present only when `dom: true` was
+   * asked for. Measured by the same walker that reads a captured app page, so
+   * the two sides of a fidelity diff are comparable property for property.
+   */
+  dom?: DomExtract;
 }
 
 /**
@@ -414,7 +421,7 @@ export interface CaptureResult {
  * register as phantom diffs.
  */
 export async function captureScreenshot(
-  opts: Omit<ScreenshotOptions, "outPath" | "clipSelector">,
+  opts: Omit<ScreenshotOptions, "outPath" | "clipSelector"> & { dom?: boolean },
 ): Promise<CaptureResult> {
   return withContext(
     {
@@ -446,7 +453,8 @@ export async function captureScreenshot(
         caret: "hide",
         timeout: CAPTURE_TIMEOUT_MS,
       });
-      return { png, nodeRects };
+      const dom = opts.dom ? await extractDom(page) : undefined;
+      return { png, nodeRects, ...(dom ? { dom } : {}) };
     },
   );
 }
@@ -473,6 +481,8 @@ export interface UrlCaptureResult {
    * against a broken target, not the design, so similarity is meaningless.
    */
   pageError: string | null;
+  /** Computed styles + geometry per element, when `dom: true` was asked for. */
+  dom?: DomExtract;
 }
 
 export interface UrlScreenshotOptions {
@@ -502,6 +512,8 @@ export interface UrlScreenshotOptions {
    * with a bespoke theme mechanism may not flip — verify the capture.
    */
   dark?: boolean | undefined;
+  /** Also walk the page for computed styles + geometry (see `CaptureResult.dom`). */
+  dom?: boolean | undefined;
 }
 
 /**
@@ -598,7 +610,8 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
         caret: "hide",
         timeout: CAPTURE_TIMEOUT_MS,
       });
-      return { png, finalUrl, authWall, pageError };
+      const dom = opts.dom ? await extractDom(page).catch(() => undefined) : undefined;
+      return { png, finalUrl, authWall, pageError, ...(dom ? { dom } : {}) };
     },
   );
 }
@@ -670,6 +683,34 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
       }
       const buf = await page.screenshot({ fullPage, timeout: CAPTURE_TIMEOUT_MS });
       return buf;
+    },
+  );
+}
+
+/**
+ * Measure a Velloo render in a real browser: every visible element's geometry
+ * and computed styles, keyed back to the design node that produced it.
+ *
+ * The SSR path can say which component rendered but not what it rendered *as* —
+ * whether a `size="xl"` button actually got a height, whether one utility class
+ * lost to another in the cascade. Those are facts only a browser holds, and
+ * predicting them from class strings is exactly the fragile reasoning this
+ * removes. No screenshot is taken: the caller wants the numbers.
+ */
+export async function measureRendered(opts: {
+  html: string;
+  viewport: Viewport;
+}): Promise<DomExtract> {
+  return withContext(
+    { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
+    async (context) => {
+      const page = await context.newPage();
+      await page.setContent(opts.html, {
+        waitUntil: "domcontentloaded",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      await settleForCapture(page, opts.html);
+      return extractDom(page);
     },
   );
 }

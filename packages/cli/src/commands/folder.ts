@@ -1,9 +1,16 @@
+import { existsSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { confirm, isCancel } from "@clack/prompts";
 import { loadDesignFolder, managedDesignId, writeManagedBinding } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import {
+  applyAppRootChange,
+  planAppRootChange,
+  promptAppRootChoice,
+  recordedAppRoot,
+} from "../app-root.ts";
 import { daemonRoot, isLive, readLock, stopDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import {
@@ -251,6 +258,69 @@ const bind = defineCommand({
   },
 });
 
+const setAppRoot = defineCommand({
+  meta: {
+    name: "set-app-root",
+    description: "Point a design folder at a different application root",
+  },
+  args: {
+    folder: { type: "positional", required: false, description: FOLDER_ARG_DESCRIPTION },
+    to: {
+      type: "string",
+      description: "New application root (asked from the repo's apps when omitted)",
+    },
+    yes: { type: "boolean", description: "Apply the displayed change" },
+  },
+  async run({ args }) {
+    const folder = await resolveDesignFolder(args.folder, "folder", {
+      interactive: true,
+      requireConfig: true,
+    });
+    const current = await recordedAppRoot(folder);
+    console.log(`Design: ${folder}`);
+    console.log(
+      `Application: ${current.path}${current.exists ? (current.looksLikeApp ? "" : pc.yellow(" (no package.json)")) : pc.yellow(" (missing)")}`,
+    );
+
+    const target = args.to ? resolve(args.to) : await promptAppRootChoice(current.path);
+    if (!target) {
+      console.log(pc.dim("  No other application found in this repo — pass --to <path>."));
+      return;
+    }
+    const change = await planAppRootChange(folder, target).catch((err: unknown) =>
+      fail("folder", (err as Error).message),
+    );
+    if (resolve(change.to) === resolve(change.from)) {
+      console.log(pc.dim("  Already pointing there — nothing changed."));
+      return;
+    }
+    if (!existsSync(change.to)) fail("folder", `${change.to} does not exist.`);
+
+    console.log(`New application: ${change.to}`);
+    if (!existsSync(join(change.to, "package.json")))
+      console.log(
+        pc.yellow(`  ! no package.json there — codegen and live islands will not resolve`),
+      );
+    if (change.manifest)
+      console.log(
+        pc.dim(
+          `  ${change.manifest.path}: projects.${change.manifest.project}.appRoot → ${change.manifest.to}`,
+        ),
+      );
+    for (const r of change.rewritten) console.log(pc.dim(`  ${r.field}: ${r.from} → ${r.to}`));
+    if (!args.yes) {
+      console.log("Preview only. Add --yes to apply.");
+      return;
+    }
+
+    // The daemon holds the resolved application root for its whole lifetime —
+    // provider loading, the live-island bundler, codegen paths.
+    await stopDaemon(daemonRoot(folder));
+    await applyAppRootChange(folder, change);
+    console.log(`velloo folder: application root is now ${change.to}`);
+  },
+});
+
 const checkpointCommand = defineCommand({
   meta: {
     name: "checkpoint",
@@ -271,7 +341,15 @@ export default defineCommand({
     name: "folder",
     description: "Manage this repo's design folders (list, add, remove)",
   },
-  subCommands: { list, add, remove, relocate, bind, checkpoint: checkpointCommand },
+  subCommands: {
+    list,
+    add,
+    remove,
+    relocate,
+    bind,
+    "set-app-root": setAppRoot,
+    checkpoint: checkpointCommand,
+  },
   // Bare `velloo folder` is the question "what have I got?" — answer it
   // rather than printing usage.
   run: ({ args }) => (args._?.length ? undefined : list.run?.({ args, cmd: list, rawArgs: [] })),

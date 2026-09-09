@@ -24,6 +24,7 @@ import {
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
 import {
   BROWSER_PROMPT_DETAIL,
   BROWSER_PROMPT_SIZE,
@@ -619,7 +620,7 @@ export default defineCommand({
  * scaffold path rather than a second, drifting copy.
  */
 export async function runInit(cliArgs: InitCliArgs): Promise<void> {
-  const appRoot = resolve(cliArgs.folder ?? ".");
+  let appRoot = resolve(cliArgs.folder ?? ".");
   const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
   const allowNonEmpty = cliArgs.force;
   // True when the user chose "Create another design folder" — the wizard's
@@ -691,6 +692,25 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       // instead of being asked again.
       secondFolder = true;
       inherited = await inheritedFromFolder(existing);
+    }
+  }
+
+  // The application root is taken from the directory init was run in, and a
+  // monorepo root is a directory people run it in — leaving the design bound
+  // to a repo root that is not an app at all. Ask only when that is provable:
+  // the repo holds UI apps and this directory is not one of them.
+  if (interactive && !cliArgs.folder) {
+    // A scan hiccup must not block scaffolding: the prompt is a courtesy, and
+    // `folder set-app-root` fixes afterwards what this would have prevented.
+    const candidates = await appRootIsNotAnApp(appRoot).catch(() => null);
+    if (candidates) {
+      console.log(
+        pc.dim(
+          `  ${appRoot} holds ${candidates.length} app${candidates.length === 1 ? "" : "s"} but isn't one itself.`,
+        ),
+      );
+      const chosen = await promptAppRootChoice(appRoot, { currentHint: "this directory" });
+      if (chosen) appRoot = chosen;
     }
   }
 

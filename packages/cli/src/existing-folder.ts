@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { confirm, isCancel, log, select } from "@clack/prompts";
@@ -11,11 +10,16 @@ import {
   schemaVersionOf,
   type Theme,
 } from "@velloo/schema";
-import { resolveProjectPath } from "@velloo/server";
 import pc from "picocolors";
+import {
+  applyAppRootChange,
+  planAppRootChange,
+  promptAppRootChoice,
+  recordedAppRoot,
+} from "./app-root.ts";
 import { installChromiumInteractive } from "./browser-setup.ts";
 import { globallyWiredAgents } from "./connect/index.ts";
-import { ensureDaemon } from "./daemon/runtime.ts";
+import { daemonRoot, ensureDaemon, stopDaemon } from "./daemon/runtime.ts";
 import { findManifest, registerProject } from "./manifest.ts";
 import { findMuiTheme, importThemeFromMui } from "./scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "./scaffold/import-theme.ts";
@@ -336,11 +340,15 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
   if (facts.project) ok(`registered in velloo.json as "${facts.project}"`);
   else bad("not registered in velloo.json — commands must name the path");
 
-  const hostApp = config.hostApp as { root?: string | undefined } | undefined;
-  if (hostApp?.root) {
-    const abs = resolveProjectPath(folder, hostApp.root);
-    if (existsSync(abs)) ok(`host app at ${displayPath(abs)}`);
-    else bad(`host app path ${hostApp.root} no longer exists (config.hostApp.root)`);
+  // The application root is the one recorded fact `init` takes from the
+  // directory it happened to be run in, so it is the one most likely to be
+  // wrong — and reporting it without offering the repair is what left an
+  // agent hand-editing a folder it had been told never to touch.
+  const app = await recordedAppRoot(folder).catch(() => null);
+  if (app) {
+    if (!app.exists) bad(`host app ${displayPath(app.path)} no longer exists`);
+    else if (!app.looksLikeApp) bad(`host app ${displayPath(app.path)} holds no package.json`);
+    else ok(`host app at ${displayPath(app.path)}`);
   }
 
   const wired = await globallyWiredAgents();
@@ -359,7 +367,26 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
       else log.info("Already registered.");
     }
   }
+  if (app && !app.looksLikeApp) await repairAppRoot(folder, app.path);
   if (!browser) await installChromiumInteractive();
+}
+
+/** Offer the repo's real applications, and point the folder at the chosen one. */
+async function repairAppRoot(folder: string, current: string): Promise<void> {
+  const go = await confirm({ message: "Point this design at a different application?" });
+  if (isCancel(go) || !go) return;
+  const target = await promptAppRootChoice(current);
+  if (!target) {
+    log.info(
+      `No other application found in this repo — \`velloo folder set-app-root --to <path>\`.`,
+    );
+    return;
+  }
+  const change = await planAppRootChange(folder, target);
+  if (resolve(change.to) === resolve(change.from)) return;
+  await stopDaemon(daemonRoot(folder));
+  await applyAppRootChange(folder, change);
+  log.success(`Application root is now ${displayPath(change.to)}.`);
 }
 
 /** Start (or attach to) the folder's canvas daemon and print its URL. */

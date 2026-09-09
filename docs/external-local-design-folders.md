@@ -133,6 +133,25 @@ simultaneous independent work. `folder bind` also recovers a moved application,
 stale mapping or lost `.locations` record. It retains `appRoot` from the portable
 manifest so nested apps resolve correctly.
 
+To *change* which application a design points at — as opposed to re-binding it to
+the same one — use `folder set-app-root`:
+
+```sh
+velloo folder set-app-root web --to packages/triagem/web
+velloo folder set-app-root web --to packages/triagem/web --yes
+```
+
+`init` records the application root from the directory it was run in, so a design
+scaffolded from a monorepo root is bound to a directory that is not an app. Until
+this existed the only repair was hand-editing files the folder declares tool-owned.
+The command previews before it applies, like `relocate`. A managed design changes
+only the manifest entry and its binding — `project:` paths already mean "under the
+application root", so they follow it. An in-repo design has no such symbolic form,
+so the paths that were *under* the old root (`hostApp.root`, `hostApps[*].root`,
+an `in-repo` library's `componentsPath`) are re-anchored onto the new one, and
+anything pointing elsewhere is left alone. `init` now also asks when the mistake
+is provable: the repo holds UI apps and the directory it was run in is not one.
+
 Legacy absolute or `../`-escaping string entries still parse, but cannot implicitly
 authorize writes outside the manifest repository. Supply the design's path
 explicitly to authorize that invocation, or migrate from the application root:

@@ -98,6 +98,7 @@ export {
   closePooledBrowser,
   isCaptureTimeout,
   MAX_CONCURRENT_RENDERS,
+  measureRendered,
   type PdfPageOptions,
   pdfDeckBuffer,
   pdfPageBuffer,

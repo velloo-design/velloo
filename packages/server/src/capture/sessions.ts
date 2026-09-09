@@ -29,6 +29,55 @@ function activeSessions(): LiveSession[] {
   return [...sessions.values()].filter((s) => s.endedAt === null);
 }
 
+/** A session as an agent polling for captures needs to see it. */
+export interface SessionStatus {
+  sessionId: string;
+  status: "open" | "closed";
+  /** Where the session was opened, when a URL was given. */
+  startedUrl: string | null;
+  /** The page the user is on right now. Null once the window is gone. */
+  currentUrl: string | null;
+  openedAt: string;
+  endedAt: string | null;
+  /** Captures taken during this session, oldest first. */
+  captured: { captureId: string; url: string }[];
+}
+
+/**
+ * What the daemon knows about the browser windows it opened.
+ *
+ * `start_capture_session` returns immediately by design, which left the agent
+ * that called it blind: it could see finished captures appear but not whether
+ * the user was still in the browser, still logging in, or had closed the
+ * window ten minutes ago. The daemon has tracked all of it since the session
+ * map existed — this is the reporting half.
+ */
+export function sessionStatuses(list: Iterable<LiveSession> = sessions.values()): SessionStatus[] {
+  return [...list].map((session) => {
+    const open = session.endedAt === null;
+    // A handle whose window has gone throws rather than answering.
+    const read = <T>(get: () => T): T | null => {
+      try {
+        return get();
+      } catch {
+        return null;
+      }
+    };
+    return {
+      sessionId: session.handle.sessionId,
+      status: open ? "open" : "closed",
+      startedUrl: session.url ?? null,
+      currentUrl: open ? read(() => session.handle.currentUrl()) : null,
+      openedAt: new Date(session.startedAt).toISOString(),
+      endedAt: session.endedAt === null ? null : new Date(session.endedAt).toISOString(),
+      captured: (read(() => session.handle.captures()) ?? []).map((m) => ({
+        captureId: m.id,
+        url: m.finalUrl || m.url,
+      })),
+    };
+  });
+}
+
 /**
  * Open a capture session for this folder. Rejects a second concurrent session
  * — two browser windows writing one session file would race, and the user only

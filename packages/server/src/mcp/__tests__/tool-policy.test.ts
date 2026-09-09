@@ -109,7 +109,7 @@ beforeAll(async () => {
   registerDiscoveryTools(mcp, ctx);
   registerComposeTool(mcp, ctx);
   registerMutationTools(mcp, ctx);
-  registerInspectTool(mcp, ctx);
+  registerInspectTool(mcp, ctx, stub(), stub(), stub());
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
   registerScreenshotTool(mcp, ctx, stub(), stub(), stub());

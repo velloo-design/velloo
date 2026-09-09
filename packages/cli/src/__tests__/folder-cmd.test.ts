@@ -150,3 +150,63 @@ describe("existingDesignFolder", () => {
     expect(await existingDesignFolder(repo)).toBeNull();
   });
 });
+
+describe("velloo folder set-app-root", () => {
+  beforeEach(async () => {
+    await makeDesignFolder(join(repo, "velloo"), { hostApp: { root: ".." } });
+    await writeManifest({ projects: { app: "velloo" } });
+    await mkdir(join(repo, "packages", "web", "src"), { recursive: true });
+    await writeFile(
+      join(repo, "packages", "web", "package.json"),
+      JSON.stringify({ name: "web", dependencies: { react: "^19.0.0" } }),
+      "utf8",
+    );
+  });
+
+  test("previews the change and writes nothing without --yes", async () => {
+    const { exitCode, out } = await runCli([
+      "folder",
+      "set-app-root",
+      "velloo",
+      "--to",
+      "packages/web",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("hostApp.root: .. → ../packages/web");
+    expect(out).toContain("Preview only");
+    const config = JSON.parse(
+      await readFile(join(repo, "velloo", ".design", "config.json"), "utf8"),
+    );
+    expect(config.hostApp.root).toBe("..");
+  });
+
+  test("--yes applies it", async () => {
+    const { exitCode, out } = await runCli([
+      "folder",
+      "set-app-root",
+      "velloo",
+      "--to",
+      "packages/web",
+      "--yes",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("application root is now");
+    const config = JSON.parse(
+      await readFile(join(repo, "velloo", ".design", "config.json"), "utf8"),
+    );
+    expect(config.hostApp.root).toBe("../packages/web");
+  });
+
+  test("a destination that does not exist fails instead of recording it", async () => {
+    const { exitCode, out } = await runCli([
+      "folder",
+      "set-app-root",
+      "velloo",
+      "--to",
+      "packages/nope",
+      "--yes",
+    ]);
+    expect(exitCode).not.toBe(0);
+    expect(out).toContain("does not exist");
+  });
+});

@@ -181,7 +181,7 @@ export async function unregisterProject(
 }
 
 /** Walk up from `start` for a `.git` entry (dir, or file for worktrees). */
-async function findGitRoot(start: string): Promise<string | null> {
+export async function findGitRoot(start: string): Promise<string | null> {
   let dir = resolve(start);
   while (true) {
     try {

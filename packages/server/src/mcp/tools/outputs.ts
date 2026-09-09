@@ -104,6 +104,12 @@ export const CompareToUrlOutput = z.looseObject({
   contentHeight: z.number(),
   /** The worst regions, ranked, each naming the node responsible. Fix in order. */
   topMismatches: z.array(z.string()).optional(),
+  /**
+   * Per-node computed-style differences behind the worst regions: what the
+   * live page resolved versus what the design resolved. Present when both
+   * sides could be measured in a browser.
+   */
+  styleDiff: z.array(z.unknown()).optional(),
   regions: z.array(z.unknown()),
   /** Board frames too short for this screen — resize with update_frame. */
   framesShorterThanContent: z.array(z.unknown()).optional(),
