@@ -12,6 +12,7 @@
     ".": "./src/index.ts",
     "./tailwind-entry.css": "./src/tailwind-entry.css",
     "./manifest.json": "./dist/manifest.json",
+    "./registry-files": "./src/registry-files.ts",
     "./version": "./src/version.ts"
   },
   "scripts": {

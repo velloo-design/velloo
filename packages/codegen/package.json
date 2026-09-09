@@ -4,23 +4,23 @@
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "Velloo codegen — design JSON → idiomatic shadcn JSX + Tailwind v4 globals.css",
+  "description": "Velloo codegen \u2014 design JSON \u2192 idiomatic shadcn JSX + Tailwind v4 globals.css",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
     "@velloo/helpers": "workspace:*",
+    "@velloo/provider": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
+    "@velloo/shadcn-snapshot": "workspace:*",
     "culori": "4.0.2",
-    "diff": "9.0.0",
-    "@velloo/provider": "workspace:*"
+    "diff": "9.0.0"
   },
   "devDependencies": {
     "@types/culori": "4.0.1",
     "@types/diff": "8.0.0",
     "@types/react": "19.2.18",
-    "@velloo/provider-none": "workspace:*",
-    "@velloo/shadcn-snapshot": "workspace:*"
+    "@velloo/provider-none": "workspace:*"
   }
 }

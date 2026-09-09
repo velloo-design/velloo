@@ -193,7 +193,7 @@ export const IFRAME_RUNTIME = String.raw`
     // stale copy, clears the "no instances" guard below, and then dims the
     // entire visible tree because none of the matches live in it.
     const live = [].filter.call(
-      document.querySelectorAll('[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\\\"') + '"]'),
+      document.querySelectorAll('[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\"') + '"]'),
       (el) => el.getClientRects().length > 0,
     );
     if (live.length === 0) return;
@@ -230,10 +230,10 @@ export const IFRAME_RUNTIME = String.raw`
       // One definition path, every instance of it — the point of editing in
       // place is seeing all of them respond.
       els = document.querySelectorAll(
-        '[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\\\"') + '"][data-snippet-path="' + String(snippetPath).replace(/"/g, '\\\\"') + '"]',
+        '[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\"') + '"][data-snippet-path="' + String(snippetPath).replace(/"/g, '\\"') + '"]',
       );
     } else if (path !== null && path !== undefined) {
-      els = document.querySelectorAll('[data-node-path="' + path.replace(/"/g, '\\\\"') + '"]');
+      els = document.querySelectorAll('[data-node-path="' + path.replace(/"/g, '\\"') + '"]');
     } else {
       return;
     }

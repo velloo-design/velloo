@@ -7,7 +7,14 @@ import {
   nodeId,
   type Screen,
 } from "@velloo/schema";
-import { Crosshair, PanelsTopLeft } from "lucide-react";
+import {
+  Component as ComponentIcon,
+  Crosshair,
+  type LucideIcon,
+  PanelsTopLeft,
+  Puzzle,
+  TriangleAlert,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { nodeRung } from "../node-typography.ts";
 import { pathFromString, pathToString } from "../path.ts";
@@ -18,14 +25,19 @@ interface Props {
   screen: Screen;
 }
 
+/**
+ * Rows size to their content so the tree scrolls sideways rather than
+ * squeezing, which makes an unbounded string set the scroll width for every
+ * row. A single Tailwind class is easily longer than the pane is wide
+ * (`data-[state=open]:bg-accent`), so classes are clamped like any other text.
+ */
+const clamp = (s: string, max = 28) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+
 function describeNode(node: Node): string | null {
   if (isSnippetInstance(node)) {
     const argEntries = Object.entries(node.args ?? {});
     const first = argEntries.find(([, v]) => typeof v === "string" && (v as string).trim());
-    if (first) {
-      const v = (first[1] as string).trim();
-      return v.length > 28 ? `${v.slice(0, 27)}…` : v;
-    }
+    if (first) return clamp((first[1] as string).trim());
     return argEntries.length > 0 ? `${argEntries.length} args` : null;
   }
   if (isParamRef(node)) return null;
@@ -34,15 +46,12 @@ function describeNode(node: Node): string | null {
   const candidates = ["children", "label", "placeholder", "value", "title"];
   for (const key of candidates) {
     const v = p[key];
-    if (typeof v === "string" && v.trim()) {
-      const t = v.trim();
-      return t.length > 28 ? `${t.slice(0, 27)}…` : t;
-    }
+    if (typeof v === "string" && v.trim()) return clamp(v.trim());
     if (typeof v === "number") return String(v);
   }
   if (typeof p.className === "string") {
     const cn = p.className.trim();
-    if (cn) return `.${cn.split(/\s+/)[0]}`;
+    if (cn) return clamp(`.${cn.split(/\s+/)[0]}`);
   }
   return null;
 }
@@ -67,6 +76,7 @@ function nodeChildren(node: Node): Node[] | undefined {
 type LibraryEntry = ComponentDescriptor & { kind?: "library" | "extension" | "snippet" };
 
 interface Provenance {
+  Icon: LucideIcon;
   tone: string;
   title: string;
 }
@@ -76,29 +86,34 @@ interface Provenance {
  * a screen is overwhelmingly `Box`, so marking those would bury the one
  * signal this carries — which rows are the project's real components.
  *
- * A dot rather than the library's name: the name is the same on every row of
+ * A glyph rather than the library's name: the name is the same on every row of
  * a given folder, so it spends width restating the folder's target while
  * pushing the class hint out of a tree that is already indented deep. Which
  * library it is belongs in the tooltip, where it's asked for, not on 200 rows.
+ * The three cases differ by shape, not just colour, so the distinction
+ * survives being 11px in a dense tree.
  */
 function provenanceOf(node: Node, byId: Map<string, LibraryEntry>): Provenance | null {
   if (!isComponentNode(node)) return null;
   const entry = byId.get(node.$ref);
   if (!entry) {
     return {
-      tone: "bg-destructive",
+      Icon: TriangleAlert,
+      tone: "text-destructive",
       title: `${node.$ref} isn't in this screen's library — it renders as a fallback.`,
     };
   }
   if (entry.kind === "extension") {
     return {
-      tone: "bg-transparent ring-1 ring-inset ring-primary",
+      Icon: Puzzle,
+      tone: "text-primary",
       title: `${node.$ref} — a custom component registered with add_extension.`,
     };
   }
   if (entry.source === "velloo") return null;
   return {
-    tone: "bg-primary",
+    Icon: ComponentIcon,
+    tone: "text-primary",
     title: `${node.$ref} — a real ${entry.source} component from this project's library.`,
   };
 }
@@ -190,20 +205,19 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
               openSnippetEditor(snippetRef);
             }
           }}
-          className="flex flex-1 min-w-0 items-center gap-1 text-left text-inherit"
+          className="flex shrink-0 items-center gap-1 text-left text-inherit"
           title={snippetRef ? `Double-click or Enter to open ${snippetRef} in canvas` : undefined}
         >
-          <span className="font-medium">{nodeLabel(node)}</span>
+          <span className="font-medium whitespace-nowrap">{nodeLabel(node)}</span>
           {provenance ? (
             <span
               role="img"
               aria-label={provenance.title}
-              className={
-                "size-1.5 shrink-0 rounded-full " +
-                (isSelected ? "bg-primary-foreground" : provenance.tone)
-              }
               title={provenance.title}
-            />
+              className={`inline-flex shrink-0 ${isSelected ? "text-primary-foreground" : provenance.tone}`}
+            >
+              <provenance.Icon size={11} strokeWidth={2} aria-hidden />
+            </span>
           ) : null}
           {nodeId(node) ? (
             <Badge
@@ -222,7 +236,7 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
           {description ? (
             <span
               className={
-                "truncate text-xs opacity-70 " +
+                "whitespace-nowrap text-xs opacity-70 " +
                 (isSelected ? "text-primary-foreground" : "text-muted-foreground")
               }
             >
@@ -237,7 +251,10 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
             void useCanvas.getState().locateNode(screenId, pathStr);
           }}
           className={
-            "shrink-0 inline-flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover/row:opacity-70 hover:opacity-100 transition-opacity " +
+            // `ml-auto` keeps the actions at the right edge while a row has
+            // slack, and collapses to nothing once the content is wider than
+            // the pane — so they sit just past the label instead of off-screen.
+            "ml-auto shrink-0 inline-flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover/row:opacity-70 hover:opacity-100 transition-opacity " +
             (isSelected ? "text-primary-foreground" : "text-muted-foreground")
           }
           aria-label="Locate on canvas"
@@ -342,8 +359,12 @@ export function Tree({ screen }: Props) {
     return merged;
   }, [expandedSet, selection, screen.id]);
 
+  // `w-max` sizes the tree to its widest row so the sidebar's overflow-auto
+  // scrolls horizontally; `min-w-full` keeps it filling the pane when every
+  // row is short. Rows are `w-full` of *that*, so a selected row's background
+  // spans the full scroll width instead of stopping at the viewport edge.
   return (
-    <div className="flex flex-col py-1">
+    <div className="flex w-max min-w-full flex-col py-1">
       <TreeRow
         node={screen.tree}
         path={[]}
