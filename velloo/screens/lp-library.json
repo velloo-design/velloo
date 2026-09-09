@@ -38,6 +38,7 @@
                       {
                         "$ref": "TabsTrigger",
                         "props": {
+                          "className": "text-xs",
                           "value": "boards"
                         },
                         "children": [
@@ -60,6 +61,7 @@
                       {
                         "$ref": "TabsTrigger",
                         "props": {
+                          "className": "text-xs",
                           "value": "library",
                           "data-state": "active"
                         },

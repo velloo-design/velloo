@@ -112,7 +112,13 @@
           { "$ref": "Separator", "props": { "orientation": "vertical", "className": "mx-1 h-5" } },
           {
             "$ref": "ToggleGroup",
-            "props": { "type": "single", "variant": "outline", "size": "sm", "value": "select" },
+            "props": {
+              "type": "single",
+              "variant": "outline",
+              "size": "sm",
+              "spacing": 0,
+              "value": "select"
+            },
             "children": [
               {
                 "$ref": "ToggleGroupItem",

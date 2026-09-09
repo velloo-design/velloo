@@ -78,11 +78,11 @@ export function Sidebar({ boards, screens, snippets, currentBoardId, currentScre
           className="min-w-0 flex-1"
         >
           <TabsList className="w-full h-8">
-            <TabsTrigger value="boards">
+            <TabsTrigger value="boards" className="text-xs">
               <LayoutDashboard />
               Boards
             </TabsTrigger>
-            <TabsTrigger value="library">
+            <TabsTrigger value="library" className="text-xs">
               <LibraryBig />
               Library
             </TabsTrigger>

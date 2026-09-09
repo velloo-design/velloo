@@ -62,6 +62,7 @@
                       {
                         "$ref": "TabsTrigger",
                         "props": {
+                          "className": "text-xs",
                           "value": "node"
                         },
                         "children": [
@@ -84,6 +85,7 @@
                       {
                         "$ref": "TabsTrigger",
                         "props": {
+                          "className": "text-xs",
                           "value": "theme",
                           "data-state": "active"
                         },
@@ -107,6 +109,7 @@
                       {
                         "$ref": "TabsTrigger",
                         "props": {
+                          "className": "text-xs",
                           "value": "comments"
                         },
                         "children": [

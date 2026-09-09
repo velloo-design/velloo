@@ -181,6 +181,7 @@ export function TopBar() {
             type="single"
             variant="outline"
             size="sm"
+            spacing={0}
             value={cursorMode}
             onValueChange={(v) => {
               if (!v) return;

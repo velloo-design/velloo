@@ -27,24 +27,28 @@ export const IFRAME_RUNTIME = String.raw`
   const SELECT_CLASS = '__velloo-selected';
   const HOVER_CLASS = '__velloo-hover';
 
-  // Inject highlight styles once. Use inset box-shadow instead of
-  // outline so the ring stays inside the element — outline + a
-  // positive offset extends past the element border, and elements
-  // near the iframe edge get the ring clipped by the iframe's
-  // bounding box. Inset shadow draws at the element's inner edge
-  // and is always fully visible regardless of position.
+  // Inject highlight styles once. The ring is an outline pulled inside the
+  // border box by a negative offset: it lands where an inset shadow would,
+  // so an element at the iframe edge still shows a whole ring, but outlines
+  // paint on top of the stacking context rather than in the element's own
+  // background layer. An inset shadow sits *under* the descendants, so
+  // selecting anything whose child fills it — a Card inside the screen root
+  // — hid all but the few pixels the child didn't cover. Outline also leaves
+  // the design's own box-shadow alone, which the !important shadow ate.
   const style = document.createElement('style');
   style.textContent =
     // Widths come from custom properties the parent drives with the board
     // zoom via setChromeScale: the iframe is scaled, so a fixed 2px ring grows
     // into a slab that swallows the parent's zoom-constant resize grips.
     ":root { --velloo-ring: 2px; --velloo-ring-hover: 1px; }" +
-    ".__velloo-hover { box-shadow: inset 0 0 0 var(--velloo-ring-hover) ${HOVER_RING} !important; }" +
-    ".__velloo-selected { box-shadow: inset 0 0 0 var(--velloo-ring) ${SELECT_RING} !important; }" +
+    ".__velloo-hover { outline: var(--velloo-ring-hover) solid ${HOVER_RING} !important;" +
+    " outline-offset: calc(-1 * var(--velloo-ring-hover)) !important; }" +
+    ".__velloo-selected { outline: var(--velloo-ring) solid ${SELECT_RING} !important;" +
+    " outline-offset: calc(-1 * var(--velloo-ring)) !important; }" +
     // A snippet instance is a different kind of thing to select — editing it
     // moves every other instance too — so it gets its own colour rather than
     // looking like an ordinary node.
-    ".__velloo-selected[data-velloo-select-kind='snippet'] { box-shadow: inset 0 0 0 var(--velloo-ring) ${SELECT_RING_SNIPPET} !important; }" +
+    ".__velloo-selected[data-velloo-select-kind='snippet'] { outline-color: ${SELECT_RING_SNIPPET} !important; }" +
     // The rest of the screen while a snippet is being edited in place.
     ".__velloo-dimmed { opacity: 0.28 !important; filter: saturate(0.4) !important; }" +
     // Scrollable frames need a *visible* affordance: wheel events forward to

@@ -102,15 +102,15 @@ export function RightPanel({ screenId }: Props) {
           className="min-w-0 flex-1"
         >
           <TabsList className="w-full h-8">
-            <TabsTrigger value="node">
+            <TabsTrigger value="node" className="text-xs">
               <SquareMousePointer />
               Node
             </TabsTrigger>
-            <TabsTrigger value="theme">
+            <TabsTrigger value="theme" className="text-xs">
               <Palette />
               Theme
             </TabsTrigger>
-            <TabsTrigger value="comments">
+            <TabsTrigger value="comments" className="text-xs">
               <MessageSquareText />
               Comments
             </TabsTrigger>

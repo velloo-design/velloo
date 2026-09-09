@@ -351,8 +351,11 @@ export function AlignField({
           key={c.value}
           value={c.value}
           title={c.label}
+          // h-auto so items-stretch fills the shell: the item's own size
+          // variant is taller than CONTROL, and a fixed height ignores
+          // stretch and hangs out of the bottom of the field.
           className={
-            "min-w-0 flex-1 rounded-sm text-[10px] text-muted-foreground hover:bg-accent/50 " +
+            "h-auto min-w-0 flex-1 rounded-sm text-[10px] text-muted-foreground hover:bg-accent/50 " +
             (held
               ? "data-[state=on]:bg-muted data-[state=on]:text-muted-foreground"
               : "data-[state=on]:bg-accent data-[state=on]:text-accent-foreground")
