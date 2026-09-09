@@ -1,10 +1,4 @@
-import {
-  COMPUTED_PROPS,
-  HOVER_RING,
-  PROTOCOL_VERSION,
-  SELECT_RING,
-  SELECT_RING_SNIPPET,
-} from "./iframe-protocol.ts";
+import { COMPUTED_PROPS, HOVER_RING, PROTOCOL_VERSION } from "./iframe-protocol.ts";
 
 /**
  * Inlined into every rendered design HTML doc. Establishes a Storybook-style
@@ -43,12 +37,13 @@ export const IFRAME_RUNTIME = String.raw`
     ":root { --velloo-ring: 2px; --velloo-ring-hover: 1px; }" +
     ".__velloo-hover { outline: var(--velloo-ring-hover) solid ${HOVER_RING} !important;" +
     " outline-offset: calc(-1 * var(--velloo-ring-hover)) !important; }" +
-    ".__velloo-selected { outline: var(--velloo-ring) solid ${SELECT_RING} !important;" +
-    " outline-offset: calc(-1 * var(--velloo-ring)) !important; }" +
-    // A snippet instance is a different kind of thing to select — editing it
-    // moves every other instance too — so it gets its own colour rather than
-    // looking like an ordinary node.
-    ".__velloo-selected[data-velloo-select-kind='snippet'] { outline-color: ${SELECT_RING_SNIPPET} !important; }" +
+    // The SELECTION box is not drawn here. An outline follows the element's
+    // border-radius, so on a rounded card the corner grips — which mark the
+    // bounding box a resize drag actually operates on — floated outside the
+    // visible line by radius x 0.29 x zoom. The parent draws a square-cornered
+    // box instead and the grips land on it at any radius. Hover stays an
+    // outline: it has no handles to agree with, and hugging the real shape
+    // reads better for a transient cue.
     // The rest of the screen while a snippet is being edited in place.
     ".__velloo-dimmed { opacity: 0.28 !important; filter: saturate(0.4) !important; }" +
     // Scrollable frames need a *visible* affordance: wheel events forward to
@@ -172,6 +167,17 @@ export const IFRAME_RUNTIME = String.raw`
     return undefined;
   }
 
+  // Which instance the click landed in, as an index into the same outermost set
+  // reportRects measures — so the parent can anchor the grips to the instance
+  // the user actually pointed at rather than to whichever one renders first.
+  function instanceIndex(target, snippetPath) {
+    const all = outermost(document.querySelectorAll(snippetSelector(snippetPath)));
+    for (let i = 0; i < all.length; i++) {
+      if (all[i] === target || all[i].contains(target)) return i;
+    }
+    return 0;
+  }
+
   function nearestSnippetId(target) {
     let el = target;
     while (el && el.nodeType === 1) {
@@ -232,20 +238,33 @@ export const IFRAME_RUNTIME = String.raw`
     return '[data-node-path="' + String(path).replace(/"/g, '\\"') + '"]';
   }
 
-  function applyHighlight(path, cls, scroll, kind, snippetPath) {
-    clearClass(cls);
-    if (cls === SELECT_CLASS) {
-      document
-        .querySelectorAll('[data-velloo-select-kind]')
-        .forEach((el) => el.removeAttribute('data-velloo-select-kind'));
+  function snippetSelector(snippetPath) {
+    return '[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\"') + '"][data-snippet-path="' + String(snippetPath).replace(/"/g, '\\"') + '"]';
+  }
+
+  // Every element inside a snippet body carries the body's own path, so a
+  // nested match is a descendant of the instance the user means, not another
+  // instance. Keep only the outermost of each chain — the same set the ring
+  // draws on, so grips and ring land on the same boxes.
+  function outermost(els) {
+    const out = [];
+    for (let i = 0; i < els.length; i++) {
+      let nested = false;
+      for (let j = 0; j < els.length; j++) {
+        if (i !== j && els[j].contains(els[i]) && els[j] !== els[i]) nested = true;
+      }
+      if (!nested) out.push(els[i]);
     }
+    return out;
+  }
+
+  function applyHighlight(path, cls, scroll, snippetPath) {
+    clearClass(cls);
     let els;
     if (snippetPath !== undefined && snippetPath !== null && focusedSnippet !== null) {
       // One definition path, every instance of it — the point of editing in
       // place is seeing all of them respond.
-      els = document.querySelectorAll(
-        '[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\"') + '"][data-snippet-path="' + String(snippetPath).replace(/"/g, '\\"') + '"]',
-      );
+      els = document.querySelectorAll(snippetSelector(snippetPath));
     } else if (path !== null && path !== undefined) {
       els = document.querySelectorAll(pathSelector(path));
     } else {
@@ -259,7 +278,6 @@ export const IFRAME_RUNTIME = String.raw`
       const el = els[i];
       if (el.parentElement && el.parentElement.closest('.' + cls)) continue;
       el.classList.add(cls);
-      if (kind) el.setAttribute('data-velloo-select-kind', kind);
       if (first === null) first = el;
     }
     if (scroll && first) first.scrollIntoView({ block: 'center', inline: 'nearest' });
@@ -281,15 +299,16 @@ export const IFRAME_RUNTIME = String.raw`
   // only when it actually differs — anchors and the selection handles both
   // ride on this.
   let lastRectPaths = [];
+  let lastRectSnippetPaths = [];
   let lastRectsJson = '';
   let observedEls = [];
   let rectTimer = 0;
 
   function remeasureSoon() {
-    if (rectTimer || lastRectPaths.length === 0) return;
+    if (rectTimer || (lastRectPaths.length === 0 && lastRectSnippetPaths.length === 0)) return;
     rectTimer = setTimeout(() => {
       rectTimer = 0;
-      reportRects(lastRectPaths);
+      reportRects(lastRectPaths, lastRectSnippetPaths);
     }, 80);
   }
 
@@ -299,8 +318,9 @@ export const IFRAME_RUNTIME = String.raw`
   if (hasRO) new ResizeObserver(remeasureSoon).observe(document.documentElement);
   const elObserver = hasRO ? new ResizeObserver(remeasureSoon) : null;
 
-  function reportRects(paths) {
+  function reportRects(paths, snippetPaths) {
     lastRectPaths = paths;
+    lastRectSnippetPaths = snippetPaths || [];
     const rects = [];
     const els = [];
     for (let i = 0; i < paths.length; i++) {
@@ -310,6 +330,17 @@ export const IFRAME_RUNTIME = String.raw`
       els.push(el);
       const r = el.getBoundingClientRect();
       rects.push({ path: path, x: r.left, y: r.top, w: r.width, h: r.height });
+    }
+    // A definition path resolves to one box per instance, all of them ringed
+    // and all of them draggable — the edit reaches the definition either way.
+    for (let i = 0; i < lastRectSnippetPaths.length && focusedSnippet !== null; i++) {
+      const path = lastRectSnippetPaths[i];
+      const found = outermost(document.querySelectorAll(snippetSelector(path)));
+      for (let j = 0; j < found.length; j++) {
+        els.push(found[j]);
+        const r = found[j].getBoundingClientRect();
+        rects.push({ path: path, x: r.left, y: r.top, w: r.width, h: r.height, snippet: true });
+      }
     }
     // Re-observe only when the element set changed, or observing would retrigger
     // the observer forever.
@@ -355,12 +386,12 @@ export const IFRAME_RUNTIME = String.raw`
   function handleParentMessage(ev) {
     const msg = ev.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'applyHighlight') applyHighlight(msg.path, SELECT_CLASS, msg.scroll === true, msg.kind, msg.snippetPath);
+    if (msg.type === 'applyHighlight') applyHighlight(msg.path, SELECT_CLASS, msg.scroll === true, msg.snippetPath);
     else if (msg.type === 'clearHighlight') clearClass(SELECT_CLASS);
-    else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS, false, null, msg.snippetPath);
+    else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS, false, msg.snippetPath);
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
     else if (msg.type === 'applyVelloState') applyVelloState(msg.path, msg.state);
-    else if (msg.type === 'requestRects') reportRects(msg.paths || []);
+    else if (msg.type === 'requestRects') reportRects(msg.paths || [], msg.snippetPaths || []);
     else if (msg.type === 'requestComputed') reportComputed(msg.path);
     else if (msg.type === 'setChromeScale') setChromeScale(msg.scale);
     else if (msg.type === 'applySnippetFocus') applySnippetFocus(msg.snippetId);
@@ -389,7 +420,7 @@ export const IFRAME_RUNTIME = String.raw`
     const snippetPath = findSnippetPath(ev.target);
     // null path = empty space inside the frame → parent clears selection.
     if (snippetPath === undefined) send({ type: 'select', path: path });
-    else send({ type: 'select', path: path, snippetPath: snippetPath });
+    else send({ type: 'select', path: path, snippetPath: snippetPath, instance: instanceIndex(ev.target, snippetPath) });
   }, true);
 
   // Double-click is "open up what this is made of" — the parent turns it into

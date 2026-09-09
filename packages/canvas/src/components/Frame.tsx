@@ -1,9 +1,4 @@
-import {
-  type Frame as FrameT,
-  isSnippetInstance,
-  MAX_BOARD_NAME_LENGTH,
-  type ViewportPreset,
-} from "@velloo/schema";
+import { type Frame as FrameT, MAX_BOARD_NAME_LENGTH, type ViewportPreset } from "@velloo/schema";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { type BoardMeta, mutate } from "../api.ts";
 import { wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
@@ -43,17 +38,6 @@ interface FrameProps {
   frames: FrameT[];
   presets: ViewportPreset[];
   sharedCount: number;
-}
-
-/**
- * A snippet instance selects as a different kind of thing than an ordinary
- * node — editing it moves every other instance — so the ring is a different
- * colour. Every send of `applyHighlight` for a selection must carry this;
- * the runtime clears the attribute on each apply.
- */
-function selectionKindOf(s: CanvasState, screenId: string): "node" | "snippet" {
-  const picked = s.selection?.screenId === screenId ? selectedNode(s.screens, s.selection) : null;
-  return picked !== null && isSnippetInstance(picked) ? "snippet" : "node";
 }
 
 /** Stable empty list so the summary-boards selector doesn't re-render every tick. */
@@ -129,16 +113,28 @@ export const Frame = memo(function Frame({
   // The selected node joins the anchored set: the HUD's resize handles are
   // parent-side chrome and need its box, which only the iframe can measure.
   const selectedPath = selection?.screenId === frame.screen ? selection.path : null;
-  const selectionKind = useCanvas((s) => selectionKindOf(s, frame.screen));
   const anchoredPaths = useMemo(() => {
     const paths = anchoredNodePaths({ commentThreads, notes, annotations }, frame.id, frame.screen);
     if (selectedPath !== null && !paths.includes(selectedPath)) paths.push(selectedPath);
     return paths;
   }, [commentThreads, notes, annotations, frame.id, frame.screen, selectedPath]);
+  // While a snippet is focused the selection addresses the definition, which is
+  // a different namespace from the host tree's node paths — asking for it as a
+  // node path measures nothing, which is why the grips never drew in that mode.
+  const snippetSelectedPath =
+    snippetFocus !== null && selection?.screenId === `snippet:${snippetFocus}`
+      ? selection.path
+      : null;
+  const snippetPaths = useMemo(
+    () => (snippetSelectedPath === null ? [] : [snippetSelectedPath]),
+    [snippetSelectedPath],
+  );
   // Scroll reports arrive on a channel built once per frame, so the handler
   // can't close over the current paths — it reads them from here instead.
   const anchoredPathsRef = useRef(anchoredPaths);
   anchoredPathsRef.current = anchoredPaths;
+  const snippetPathsRef = useRef(snippetPaths);
+  snippetPathsRef.current = snippetPaths;
 
   // The iframe src embeds only *committed* frame size — draft (mid-drag)
   // sizes stretch the element visually via width/height styling, so a resize
@@ -241,7 +237,7 @@ export const Frame = memo(function Frame({
     const iframe = frontRef.current;
     if (!iframe) return;
     const channel = new IframeChannel(iframe, {
-      onSelect(path, snippetPath) {
+      onSelect(path, snippetPath, instance) {
         if (path === null) {
           setSelection(null);
           return;
@@ -254,7 +250,13 @@ export const Frame = memo(function Frame({
           // Only the focused snippet is editable while the mode is open;
           // anything else is dimmed scenery, so clicking it just deselects.
           if (snippetPath === undefined) setSelection(null);
-          else setSelection({ screenId: `snippet:${state.snippetFocus}`, path: snippetPath });
+          else {
+            setSelection({ screenId: `snippet:${state.snippetFocus}`, path: snippetPath });
+            // After setSelection: re-clicking a different instance is the same
+            // {screenId, path}, so the selection dedupe drops it and only the
+            // anchor actually changes.
+            useCanvas.getState().setSelectionAnchor({ frameId: frame.id, instance: instance ?? 0 });
+          }
           return;
         }
         if (state.cursorMode === "note") {
@@ -333,7 +335,9 @@ export const Frame = memo(function Frame({
         // Rects are viewport-relative, so scrolling invalidates every anchor —
         // pins, connectors and the selection handles alike.
         const paths = anchoredPathsRef.current;
-        if (paths.length > 0) channel.send({ type: "requestRects", paths });
+        const snippets = snippetPathsRef.current;
+        if (paths.length > 0 || snippets.length > 0)
+          channel.send({ type: "requestRects", paths, snippetPaths: snippets });
       },
       onReady() {
         const s = useCanvas.getState();
@@ -356,7 +360,6 @@ export const Frame = memo(function Frame({
           channel.send({
             type: "applyHighlight",
             path: s.selection.path,
-            kind: selectionKindOf(s, frame.screen),
             ...(scroll ? { scroll } : {}),
           });
         }
@@ -371,8 +374,9 @@ export const Frame = memo(function Frame({
         // drops the selection's box and the resize grips vanish on every
         // reload — which a live resize causes several times a second.
         const anchored = anchoredPathsRef.current;
-        if (anchored.length > 0) {
-          channel.send({ type: "requestRects", paths: anchored });
+        const snippets = snippetPathsRef.current;
+        if (anchored.length > 0 || snippets.length > 0) {
+          channel.send({ type: "requestRects", paths: anchored, snippetPaths: snippets });
         }
         channel.send({ type: "setChromeScale", scale: useCanvas.getState().canvasZoom });
         if (s.selection?.screenId === frame.screen) {
@@ -451,14 +455,14 @@ export const Frame = memo(function Frame({
     const channel = channelRef.current;
     if (!channel) return;
     if (selection?.screenId === frame.screen) {
-      channel.send({ type: "applyHighlight", path: selection.path, kind: selectionKind });
+      channel.send({ type: "applyHighlight", path: selection.path });
     } else if (snippetFocus !== null && selection?.screenId === `snippet:${snippetFocus}`) {
       // A definition path lights up in every instance at once.
       channel.send({ type: "applyHighlight", path: "", snippetPath: selection.path });
     } else {
       channel.send({ type: "clearHighlight" });
     }
-  }, [selection, selectionKind, snippetFocus, frame.screen]);
+  }, [selection, snippetFocus, frame.screen]);
 
   // Scope the screen to one snippet — everything else dims and clicks inside
   // instances start addressing the definition.
@@ -567,11 +571,7 @@ export const Frame = memo(function Frame({
       const s = useCanvas.getState();
       const sel = s.selection;
       if (sel?.screenId === frame.screen) {
-        channel.send({
-          type: "applyHighlight",
-          path: sel.path,
-          kind: selectionKindOf(s, frame.screen),
-        });
+        channel.send({ type: "applyHighlight", path: sel.path });
       } else {
         channel.send({ type: "clearHighlight" });
       }
@@ -597,8 +597,9 @@ export const Frame = memo(function Frame({
     channel.send({
       type: "requestRects",
       paths: [...new Set([rectProbe.path, ...anchoredPaths])],
+      snippetPaths,
     });
-  }, [rectProbe, frame.id, anchoredPaths]);
+  }, [rectProbe, frame.id, anchoredPaths, snippetPaths]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -632,12 +633,12 @@ export const Frame = memo(function Frame({
     void screenVersion;
     const channel = channelRef.current;
     if (!channel) return;
-    if (anchoredPaths.length === 0) {
+    if (anchoredPaths.length === 0 && snippetPaths.length === 0) {
       clearNodeRects(frame.id);
       return;
     }
-    channel.send({ type: "requestRects", paths: anchoredPaths });
-  }, [anchoredPaths, frame.id, screenVersion, clearNodeRects]);
+    channel.send({ type: "requestRects", paths: anchoredPaths, snippetPaths });
+  }, [anchoredPaths, snippetPaths, frame.id, screenVersion, clearNodeRects]);
 
   // The selection ring is drawn in iframe pixels and the iframe is scaled by
   // the board, so without this a 2px ring becomes a 10px slab at 500% and

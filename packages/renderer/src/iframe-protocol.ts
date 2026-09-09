@@ -75,6 +75,13 @@ export interface NodeRect {
   y: number;
   w: number;
   h: number;
+  /**
+   * Set when `path` addresses the focused snippet's *definition*, not a node in
+   * the host tree. The two namespaces collide freely — "0.1" is a legal path in
+   * both — so the parent keys them apart rather than merging them into one map.
+   * One rect per rendered instance, so several can share a `path`.
+   */
+  snippet?: boolean;
 }
 
 export type ChildMessage =
@@ -84,8 +91,13 @@ export type ChildMessage =
    * `snippetPath` is present only while the canvas has a snippet focused and
    * the click landed inside one of its instances. It addresses the node in the
    * *definition*, so an edit reaches every instance at once. Additive field.
+   *
+   * `instance` says WHICH instance was clicked, as an index into the same
+   * outermost set `requestRects` measures. Every instance shows a selection
+   * box, but only this one carries the resize grips — one obvious thing to
+   * grab instead of eight handles per instance across the whole board.
    */
-  | { type: "select"; path: string | null; snippetPath?: string }
+  | { type: "select"; path: string | null; snippetPath?: string; instance?: number }
   | { type: "hover"; path: string | null; snippetPath?: string }
   /** Double-click, offered as "edit what this is made of". */
   | { type: "enter"; path: string; snippetId?: string }
@@ -139,16 +151,10 @@ export type ParentMessage =
    * selection (the clicked node is visible by definition). Additive
    * field, so no PROTOCOL_VERSION bump: older docs just don't scroll.
    */
-  /**
-   * `kind` colours the ring: a snippet instance is a different kind of thing
-   * to have selected, since editing it moves every other instance. Additive
-   * field — older docs ignore it and draw the ordinary ring.
-   */
   | {
       type: "applyHighlight";
       path: string;
       scroll?: boolean;
-      kind?: "node" | "snippet";
       /** Highlight every instance of this definition path instead of one node. */
       snippetPath?: string;
     }
@@ -160,7 +166,14 @@ export type ParentMessage =
       path: string | null;
       state: "default" | "hover" | "focus" | "active" | "disabled";
     }
-  | { type: "requestRects"; paths: string[] }
+  /**
+   * `snippetPaths` addresses definition paths of the focused snippet, answered
+   * with one rect per rendered instance (`NodeRect.snippet`). Selection chrome
+   * needs it: while a snippet is focused the selection lives in that namespace,
+   * so asking by node path alone measures nothing and the grips never appear.
+   * Additive field — older docs simply report no snippet rects.
+   */
+  | { type: "requestRects"; paths: string[]; snippetPaths?: string[] }
   /** Ask for one node's resolved CSS — what the HUD shows in place of a dash. */
   | { type: "requestComputed"; path: string }
   /**

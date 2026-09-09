@@ -15,10 +15,19 @@
  * the boxes it draws are frozen at pointer-down so the handles don't chase a
  * settling layout.
  *
- * The ring itself is *not* drawn here. The iframe runtime draws it from the
- * element's own box, which can't go stale the way a reported rect can; this
- * layer only adds the grips, whose position is allowed to lag a reflow by a
- * frame.
+ * The selection box is drawn here too, square-cornered. It used to be the
+ * iframe's own CSS outline on the element, which can't go stale the way a
+ * reported rect can — but an outline follows the element's border-radius,
+ * while the grips mark the bounding box a resize drag actually operates on.
+ * On a radius-6 row at 320% zoom the corner grips sat 5.6px outside the
+ * visible line (the gap is radius x 0.29 x zoom), reading as handles that had
+ * come loose. A square box costs a frame of lag after a reflow and buys grips
+ * that land on it at any radius. Hover is still the iframe's outline: it has
+ * no handles to agree with, and hugging the real shape suits a transient cue.
+ *
+ * A snippet definition renders once per instance and every instance shows a
+ * box — that is the scope of the edit — but only the instance that was clicked
+ * carries grips. Eight handles on each of 41 instances is not a selection.
  */
 
 import { SELECT_RING, SELECT_RING_SNIPPET } from "@velloo/renderer/iframe-protocol";
@@ -150,8 +159,9 @@ export function SelectionLayer() {
   const shown = drag.current !== null || live !== null ? frozen.current : rects;
   if (shown.length === 0) return null;
 
-  // The ring itself is the iframe's; the grips borrow its colour so the two
-  // read as one outline rather than as chrome sitting on top of it.
+  // A snippet instance selects as a different kind of thing — editing it moves
+  // every other instance — so it gets its own colour. Box and grips share it,
+  // so they read as one piece of chrome.
   const ring = "$snippet" in node ? SELECT_RING_SNIPPET : SELECT_RING;
 
   // Handles are chrome: they keep their pixel size whatever the board zoom is.
@@ -160,73 +170,97 @@ export function SelectionLayer() {
   return (
     <div className="pointer-events-none absolute inset-0" data-velloo-selection-layer>
       {shown.map((rect) => {
-        const w = live?.w ?? rect.w;
-        const h = live?.h ?? rect.h;
+        const w = live && rect.anchor ? live.w : rect.w;
+        const h = live && rect.anchor ? live.h : rect.h;
         return (
+          // Rects are measured against the frame's iframe viewport, so a node
+          // scrolled out of view reports a box beyond the frame. Clipping to
+          // the viewport keeps the chrome inside the frame it belongs to
+          // instead of floating over the board.
           <div
-            key={rect.frameId}
-            className="absolute"
-            style={{ left: rect.x, top: rect.y, width: w, height: h }}
+            key={rect.key}
+            className="absolute overflow-hidden"
+            style={{
+              left: rect.clip.x,
+              top: rect.clip.y,
+              width: rect.clip.w,
+              height: rect.clip.h,
+            }}
           >
-            {live ? (
+            <div
+              className="absolute"
+              style={{ left: rect.x - rect.clip.x, top: rect.y - rect.clip.y, width: w, height: h }}
+            >
+              {/* Square corners, whatever the element's radius: the grips sit on
+                this box, and a box that traced the shape would leave them
+                stranded in the gap outside each rounded corner. */}
               <div
-                className="absolute left-1/2 whitespace-nowrap rounded px-1.5 py-0.5 text-white tabular-nums"
-                style={{
-                  top: h + 6 * s,
-                  fontSize: 10 * s,
-                  background: ring,
-                  transform: "translateX(-50%)",
-                }}
-              >
-                {Math.round(live.w)} × {Math.round(live.h)}
-              </div>
-            ) : null}
-            {HANDLES.map((handle) => (
-              <button
-                key={handle.id}
-                type="button"
-                aria-label={`Resize ${handle.id}`}
-                // Solid squares in the ring's own colour, centred on the ring's
-                // corners and edge midpoints — the grips read as part of the
-                // selection outline rather than as separate dots on top of it.
-                className="pointer-events-auto absolute rounded-none"
-                style={{
-                  left: handle.x * w,
-                  top: handle.y * h,
-                  width: GRIP * s,
-                  height: GRIP * s,
-                  marginLeft: (-GRIP / 2) * s,
-                  marginTop: (-GRIP / 2) * s,
-                  background: ring,
-                  cursor: handle.cursor,
-                }}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  // Capture, *and* window listeners. Capture is what keeps the
-                  // events coming once the pointer crosses onto the iframe —
-                  // without it the child document swallows every move and up,
-                  // so the drag froze on its first tick and never ended. The
-                  // listeners are on `window` because the grip itself may be
-                  // replaced by a re-render mid-drag; captured events still
-                  // bubble there from the parent document.
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  drag.current = {
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    startW: rect.w,
-                    startH: rect.h,
-                    sx: handle.sx,
-                    sy: handle.sy,
-                    zoom,
-                    // One id for the whole pull, so the stream of writes it
-                    // makes is a single act to undo.
-                    gesture: `resize-${e.pointerId}-${Date.now()}`,
-                  };
-                  setLive({ w: rect.w, h: rect.h });
-                }}
+                className="absolute inset-0"
+                data-velloo-selection-box
+                style={{ outline: `${2 * s}px solid ${ring}`, outlineOffset: -2 * s }}
               />
-            ))}
+              {live && rect.anchor ? (
+                <div
+                  className="absolute left-1/2 whitespace-nowrap rounded px-1.5 py-0.5 text-white tabular-nums"
+                  style={{
+                    top: h + 6 * s,
+                    fontSize: 10 * s,
+                    background: ring,
+                    transform: "translateX(-50%)",
+                  }}
+                >
+                  {Math.round(live.w)} × {Math.round(live.h)}
+                </div>
+              ) : null}
+              {rect.anchor
+                ? HANDLES.map((handle) => (
+                    <button
+                      key={handle.id}
+                      type="button"
+                      aria-label={`Resize ${handle.id}`}
+                      // Solid squares in the ring's own colour, centred on the ring's
+                      // corners and edge midpoints — the grips read as part of the
+                      // selection outline rather than as separate dots on top of it.
+                      className="pointer-events-auto absolute rounded-none"
+                      style={{
+                        left: handle.x * w,
+                        top: handle.y * h,
+                        width: GRIP * s,
+                        height: GRIP * s,
+                        marginLeft: (-GRIP / 2) * s,
+                        marginTop: (-GRIP / 2) * s,
+                        background: ring,
+                        cursor: handle.cursor,
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Capture, *and* window listeners. Capture is what keeps the
+                        // events coming once the pointer crosses onto the iframe —
+                        // without it the child document swallows every move and up,
+                        // so the drag froze on its first tick and never ended. The
+                        // listeners are on `window` because the grip itself may be
+                        // replaced by a re-render mid-drag; captured events still
+                        // bubble there from the parent document.
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        drag.current = {
+                          startX: e.clientX,
+                          startY: e.clientY,
+                          startW: rect.w,
+                          startH: rect.h,
+                          sx: handle.sx,
+                          sy: handle.sy,
+                          zoom,
+                          // One id for the whole pull, so the stream of writes it
+                          // makes is a single act to undo.
+                          gesture: `resize-${e.pointerId}-${Date.now()}`,
+                        };
+                        setLive({ w: rect.w, h: rect.h });
+                      }}
+                    />
+                  ))
+                : null}
+            </div>
           </div>
         );
       })}

@@ -22,7 +22,7 @@ export interface ChannelHandlers {
    * landed inside one of its instances — it addresses the definition, not the
    * instance.
    */
-  onSelect?(path: string | null, snippetPath?: string): void;
+  onSelect?(path: string | null, snippetPath?: string, instance?: number): void;
   onHover?(path: string | null, snippetPath?: string): void;
   /** Double-click. `snippetId` is set when the target sits inside an instance. */
   onEnter?(path: string, snippetId?: string): void;
@@ -147,7 +147,7 @@ export class IframeChannel {
       this.handlers.onReady?.();
       return;
     }
-    if (msg.type === "select") this.handlers.onSelect?.(msg.path, msg.snippetPath);
+    if (msg.type === "select") this.handlers.onSelect?.(msg.path, msg.snippetPath, msg.instance);
     else if (msg.type === "hover") this.handlers.onHover?.(msg.path, msg.snippetPath);
     else if (msg.type === "enter") this.handlers.onEnter?.(msg.path, msg.snippetId);
     else if (msg.type === "exit") this.handlers.onExit?.();

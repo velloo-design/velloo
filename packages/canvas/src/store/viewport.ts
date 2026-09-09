@@ -71,6 +71,14 @@ export interface ViewportSlice {
    */
   nodeRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>;
   /**
+   * The same measurements for paths in the *focused snippet's definition*,
+   * kept apart from `nodeRects` because the two namespaces overlap — "0.1"
+   * addresses a node in the host tree and a node in the snippet body, and
+   * merging them would silently anchor one to the other's box. A definition
+   * path renders once per instance, so each key holds every instance's box.
+   */
+  snippetRects: Record<string, Record<string, { x: number; y: number; w: number; h: number }[]>>;
+  /**
    * Measured frame chrome, fed by a ResizeObserver in Frame.tsx: `x`/`y` are
    * the iframe's offset from the frame origin (header row above it) in
    * board-world units, `chromeH` the total vertical chrome around the iframe
@@ -124,7 +132,7 @@ export interface ViewportSlice {
   ): Promise<void>;
   setNodeRects(
     frameId: string,
-    rects: { path: string; x: number; y: number; w: number; h: number }[],
+    rects: { path: string; x: number; y: number; w: number; h: number; snippet?: boolean }[],
   ): void;
   clearNodeRects(frameId: string): void;
   /** Pass `null` to drop the measurement when the frame unmounts. */
@@ -139,6 +147,7 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
   cursorMode: "select",
   pan: { x: 0, y: 0 },
   nodeRects: {},
+  snippetRects: {},
   frameInsets: {},
   rectProbe: null,
 
@@ -330,17 +339,32 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
   setNodeRects(frameId, rects) {
     set((s) => {
       const next: Record<string, { x: number; y: number; w: number; h: number }> = {};
-      for (const r of rects) next[r.path] = { x: r.x, y: r.y, w: r.w, h: r.h };
-      return { nodeRects: { ...s.nodeRects, [frameId]: next } };
+      const snippet: Record<string, { x: number; y: number; w: number; h: number }[]> = {};
+      for (const r of rects) {
+        const box = { x: r.x, y: r.y, w: r.w, h: r.h };
+        if (!r.snippet) {
+          next[r.path] = box;
+          continue;
+        }
+        const instances = snippet[r.path];
+        if (instances) instances.push(box);
+        else snippet[r.path] = [box];
+      }
+      return {
+        nodeRects: { ...s.nodeRects, [frameId]: next },
+        snippetRects: { ...s.snippetRects, [frameId]: snippet },
+      };
     });
   },
 
   clearNodeRects(frameId) {
     set((s) => {
-      if (!(frameId in s.nodeRects)) return s;
+      if (!(frameId in s.nodeRects) && !(frameId in s.snippetRects)) return s;
       const { [frameId]: _drop, ...rest } = s.nodeRects;
+      const { [frameId]: _dropSnippet, ...restSnippet } = s.snippetRects;
       void _drop;
-      return { nodeRects: rest };
+      void _dropSnippet;
+      return { nodeRects: rest, snippetRects: restSnippet };
     });
   },
 

@@ -34,8 +34,19 @@ export interface SelectionSlice {
    * numbers while the new node's report is in flight.
    */
   selectionComputed: Record<string, string> | null;
+  /**
+   * Which rendered instance the snippet selection was made from. A definition
+   * path resolves to one box per instance — 41 of them on a board that reuses
+   * a row — and every one shows a selection box, but only this one carries the
+   * resize grips. `instance` indexes the frame's rects for that path.
+   *
+   * Kept apart from `selection` because clicking a different instance is the
+   * same `{screenId, path}`: the value-dedupe in `setSelection` would drop it.
+   */
+  selectionAnchor: { frameId: string; instance: number } | null;
 
   setSelection(s: Selection | null): void;
+  setSelectionAnchor(anchor: { frameId: string; instance: number } | null): void;
   /** Ignored unless `path` still matches the selection the report was asked for. */
   setSelectionComputed(path: string, values: Record<string, string>): void;
   setHover(h: Selection | null): void;
@@ -69,6 +80,7 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
   selectionIntent: "inspect",
   snippetFocus: null,
   selectionComputed: null,
+  selectionAnchor: null,
 
   setSelectionComputed(path, values) {
     if (get().selection?.path !== path) return;
@@ -117,7 +129,13 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
         selection !== null &&
         prev.screenId === selection.screenId &&
         prev.path === selection.path);
-    if (!same) set({ selection, selectionIntent: "inspect", selectionComputed: null });
+    if (!same)
+      set({
+        selection,
+        selectionIntent: "inspect",
+        selectionComputed: null,
+        selectionAnchor: null,
+      });
     else if (selection && get().selectionIntent !== "inspect") set({ selectionIntent: "inspect" });
     // If the selected node lives on a screen other than the currently
     // open one, follow it — otherwise the sidebar Tree shows a tree
@@ -144,6 +162,17 @@ export const createSelectionSlice: StateCreator<CanvasState, [], [], SelectionSl
       reveal: { ...sel, nonce },
       selectionIntent: options.preserveTab ? "preserve-tab" : "inspect",
     });
+  },
+
+  setSelectionAnchor(selectionAnchor) {
+    const prev = get().selectionAnchor;
+    const same =
+      prev === selectionAnchor ||
+      (prev !== null &&
+        selectionAnchor !== null &&
+        prev.frameId === selectionAnchor.frameId &&
+        prev.instance === selectionAnchor.instance);
+    if (!same) set({ selectionAnchor });
   },
 
   setHover(hover) {
