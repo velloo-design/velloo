@@ -414,7 +414,7 @@ export async function runInteractive(ctx: {
     ctx.presetFolder ??
     (await text({
       message: subtitledText(
-        "Where should the design folder live?",
+        "Design folder name or path",
         ctx.secondFolder
           ? "A second canvas in this repo — its own boards, theme, daemon and MCP endpoint."
           : "Your designs are plain files that live in this repo — commit them alongside your code.",

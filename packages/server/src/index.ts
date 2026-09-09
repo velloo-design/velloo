@@ -539,6 +539,15 @@ export {
   screensForBoards,
   screensForExportTarget,
 } from "./preflight.ts";
+export {
+  managedDesignId,
+  managedDesignPath,
+  managedProjectContext,
+  type ProjectContext,
+  readManagedBinding,
+  resolveProjectPath,
+  writeManagedBinding,
+} from "./project-location.ts";
 export { createServerProviderLoader, resolveProviders } from "./providers.ts";
 export {
   findRepoManifest,

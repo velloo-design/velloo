@@ -54,7 +54,8 @@ export type CodegenConfig = z.infer<typeof CodegenConfigSchema>;
  * Where the host app lives, used by the live-island bundler to resolve
  * a `render:"live"` extension's `importPath` (and its dependencies, e.g.
  * the app's own recharts) into a browser bundle. `root` is absolute or
- * resolved from the design folder root; absent ⇒ the bundler defaults to
+ * resolved from the design folder root; `project:` paths resolve from the
+ * locally bound application root for managed designs. Absent ⇒ the bundler defaults to
  * the design folder's parent (the `<appRoot>/velloo` layout `init`
  * produces). `aliases` mirrors the host tsconfig path map (e.g.
  * `{ "@/*": "src/*" }`); absent ⇒ `{ "@/*": "*" }`. Reading the host

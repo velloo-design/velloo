@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { relative, resolve } from "node:path";
 import { isCancel, log, multiselect, select } from "@clack/prompts";
+import { managedProjectContext } from "@velloo/server";
 import pc from "picocolors";
 import {
   AGENTS,
@@ -355,7 +356,9 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   // `velloo`'s `#!/usr/bin/env bun` shebang would fail to find bun, and a
   // cwd-resolved folder would resolve nowhere — so wire the absolute bun +
   // cli script and pin the design folder absolutely.
-  const designRel = relative(projectRoot, opts.designFolder) || ".";
+  const designRel =
+    managedProjectContext(opts.designFolder)?.projectName ??
+    (relative(projectRoot, opts.designFolder) || ".");
   const connectionFor = (agent: AgentTarget): McpConnection => {
     if (transport === "http") return { transport: "http", url: opts.mcpUrl ?? DEFAULT_MCP_URL };
     if (agent.gui) {

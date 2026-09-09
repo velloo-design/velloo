@@ -8,6 +8,8 @@ import {
   UnknownProviderError,
 } from "@velloo/provider";
 import type { Config, HostApp, Library } from "@velloo/schema";
+import { hostAppRootFrom } from "./live/bundle-core.ts";
+import { resolveProjectPath } from "./project-location.ts";
 
 /**
  * Build the loader the server uses to resolve `Library` → provider.
@@ -19,11 +21,7 @@ export function createServerProviderLoader(folderRoot?: string, hostApp?: HostAp
   // The upstream provider installs into (and reads installed-status from) the
   // host app. Absent `hostApp.root` ⇒ the conventional `<appRoot>/velloo`
   // layout puts the app one level above the design folder.
-  const hostAppRoot = folderRoot
-    ? hostApp?.root
-      ? resolve(folderRoot, hostApp.root)
-      : resolve(folderRoot, "..")
-    : undefined;
+  const hostAppRoot = folderRoot ? hostAppRootFrom(folderRoot, hostApp) : undefined;
   // Every factory dynamic-imports its provider package: a folder only pays
   // for the frameworks it actually registers, and the bundled CLI splits each
   // provider (antd, MUI, chakra, the shadcn snapshot) into a lazy chunk that
@@ -73,7 +71,7 @@ function resolveUpstreamCacheDir(library: Library, folderRoot: string | undefine
   }
   if (isAbsolute(path)) return library.source === "in-repo" || existsSync(path) ? path : null;
   if (!folderRoot) return null;
-  const abs = resolve(folderRoot, path);
+  const abs = resolveProjectPath(folderRoot, path);
   return library.source === "in-repo" || existsSync(abs) ? abs : null;
 }
 

@@ -21,6 +21,7 @@ export interface InitCliArgs {
    * "where should it live?" prompt is answered too.
    */
   addFolder?: boolean | undefined;
+  external?: boolean | undefined;
   force?: boolean | undefined;
   nonInteractive?: boolean | undefined;
   /** Wire MCP config + guidance for Claude Code + Cursor (default true). */

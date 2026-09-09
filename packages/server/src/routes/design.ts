@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { activeBoards, type DesignFolder, orderedBoards } from "../design-folder.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { findSnippetInstances } from "../mutations/snippet-instances.ts";
+import { managedProjectContext } from "../project-location.ts";
 
 /**
  * The design folder's read surface: the summary the canvas boots from plus
@@ -19,6 +20,8 @@ import { findSnippetInstances } from "../mutations/snippet-instances.ts";
  * Falls back to the design folder's own basename outside a repo.
  */
 function projectNameFor(root: string): string {
+  const managed = managedProjectContext(root);
+  if (managed) return managed.projectName;
   let dir = root;
   for (;;) {
     if (existsSync(join(dir, ".git"))) return basename(dir);

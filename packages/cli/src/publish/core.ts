@@ -22,6 +22,7 @@ import {
   type DesignFolder,
   LiveBundler,
   liveExtensions,
+  managedProjectContext,
   orderedBoards,
   registryForScreen,
   renderPassForScreen,
@@ -209,7 +210,7 @@ export const PUBLISH_VIEWPORT: Viewport = { w: 1440, h: 900 };
 
 /** The default link title for a folder — its directory name. */
 function defaultPublishTitle(folderRoot: string): string {
-  return `${folderRoot.split("/").filter(Boolean).pop()} designs`;
+  return `${managedProjectContext(folderRoot)?.projectName ?? folderRoot.split("/").filter(Boolean).pop()} designs`;
 }
 
 /**

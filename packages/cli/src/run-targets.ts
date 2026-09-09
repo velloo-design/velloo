@@ -48,7 +48,11 @@ export async function resolveRunTargets(
 
   const targets: RunTarget[] = [];
   for (const [name, folder] of found.folders) {
-    if (await hasDesignConfig(folder)) targets.push({ name, folder });
+    if (typeof found.manifest.projects[name] !== "string" || (await hasDesignConfig(folder)))
+      targets.push({
+        name,
+        folder: await resolveDesignFolder(name, "run", { cwd, requireConfig: true }),
+      });
   }
   // A manifest full of stale paths shouldn't silently start nothing — fall
   // back to the single-folder resolver so the user gets its diagnostics.

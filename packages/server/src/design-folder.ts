@@ -152,7 +152,10 @@ function isPlainJson(file: string): boolean {
   return !stem.includes(".");
 }
 
-export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
+export async function loadDesignFolder(
+  folder: string,
+  options: { preferences?: boolean } = {},
+): Promise<DesignFolder> {
   const root = resolve(folder);
   const configRaw = await readJson(join(root, ".design", "config.json"));
   const themeRaw = await readJson(join(root, "theme", "default.json"));
@@ -176,7 +179,7 @@ export async function loadDesignFolder(folder: string): Promise<DesignFolder> {
   // reader keeps asking `config.feedback` and none of them cares where it was
   // stored. A folder outside a registered repo (or written before the move)
   // falls back to its own recorded answer.
-  const repoFeedback = await readRepoFeedback(root);
+  const repoFeedback = options.preferences === false ? null : await readRepoFeedback(root);
   const feedback = repoFeedback ?? parsedConfig.feedback;
   // `contactOk` is the person's, not the repo's: it comes from this machine
   // regardless of what any committed file says.

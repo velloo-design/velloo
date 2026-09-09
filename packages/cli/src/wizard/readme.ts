@@ -8,7 +8,11 @@ import { type InstallPlan, WIZARD_PROVIDERS } from "./provider-registry.ts";
  * context, and the human's `cd <folder>` lands on a guide that matches the
  * install they actually picked.
  */
-export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): string {
+export function renderDesignReadme(
+  answers: WizardAnswers,
+  plan: InstallPlan,
+  external = false,
+): string {
   const lines: string[] = [];
   lines.push("# Velloo design folder");
   lines.push("");
@@ -33,8 +37,12 @@ export function renderDesignReadme(answers: WizardAnswers, plan: InstallPlan): s
   lines.push("| | |");
   lines.push("|---|---|");
   lines.push(`| Library | ${plan.summary.name} |`);
-  lines.push(`| Components | ${plan.summary.location} |`);
-  lines.push(`| App root | ${answers.appRoot} |`);
+  lines.push(
+    `| Components | ${external && plan.pendingUpstream ? `project:${plan.pendingUpstream.relative}` : plan.summary.location} |`,
+  );
+  lines.push(
+    `| App root | ${external ? "project:. (local application binding)" : answers.appRoot} |`,
+  );
   const contentLabel =
     answers.initialContent === "sample"
       ? "Welcome sample"

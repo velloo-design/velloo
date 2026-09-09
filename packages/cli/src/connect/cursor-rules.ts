@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
+import { managedProjectContext } from "@velloo/server";
 
 export interface CursorRulesResult {
   installed: boolean;
@@ -17,7 +18,9 @@ export async function installCursorRules(
   projectRoot: string,
   designFolder: string,
 ): Promise<CursorRulesResult> {
-  const designRel = relative(projectRoot, designFolder) || ".";
+  const designRel =
+    managedProjectContext(designFolder)?.projectName ??
+    (relative(projectRoot, designFolder) || ".");
   const body = `---
 description: Drive UI design through the Velloo MCP server (a local design canvas backed by this project's shadcn components).
 alwaysApply: false

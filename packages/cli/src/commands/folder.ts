@@ -1,11 +1,18 @@
 import { readdir, rm } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { confirm, isCancel } from "@clack/prompts";
+import { loadDesignFolder, managedDesignId, writeManagedBinding } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { daemonRoot, isLive, readLock, stopDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, hasDesignConfig, resolveDesignFolder } from "../folder.ts";
+import {
+  FOLDER_ARG_DESCRIPTION,
+  hasDesignConfig,
+  resolveDesignFolder,
+  resolveDesignLocation,
+} from "../folder.ts";
+import { checkpoint, planRelocation, relocateDesign } from "../managed-folders.ts";
 import { findManifest, unregisterProject } from "../manifest.ts";
 import { runInit } from "./init.ts";
 
@@ -81,12 +88,18 @@ const add = defineCommand({
       required: false,
       description: "Where the new design folder goes, relative to the repo (asked when omitted)",
     },
+    external: { type: "boolean", description: "Create in Velloo-managed external storage" },
+    nonInteractive: { type: "boolean", description: "Use defaults without prompting" },
+    connect: { type: "boolean", default: true, description: "Wire project agents" },
     library: { type: "string", description: "Component library (default: the sibling folder's)" },
     project: { type: "string", description: "Project name for velloo.json" },
   },
   async run({ args }) {
     await runInit({
       addFolder: true,
+      external: args.external,
+      nonInteractive: args.nonInteractive,
+      connect: args.connect,
       ...(args.path ? { designFolder: args.path } : {}),
       ...(args.library ? { library: args.library } : {}),
       ...(args.project ? { project: args.project } : {}),
@@ -97,13 +110,17 @@ const add = defineCommand({
 const remove = defineCommand({
   meta: {
     name: "remove",
-    description: "Delete a design folder and drop it from velloo.json",
+    description: "Remove a project; external content is kept unless --delete-content is passed",
   },
   args: {
     folder: {
       type: "positional",
       required: false,
       description: FOLDER_ARG_DESCRIPTION,
+    },
+    deleteContent: {
+      type: "boolean",
+      description: "Also delete external design content and its standalone Git history",
     },
     yes: {
       type: "boolean",
@@ -117,6 +134,7 @@ const remove = defineCommand({
       requireConfig: true,
       cwd,
     });
+    const keepContent = managedDesignId(folder) !== null && args.deleteContent !== true;
     const interactive = Boolean(process.stdin.isTTY);
     if (!interactive && args.yes !== true) {
       fail("folder", "refusing to delete a design folder without --yes");
@@ -127,13 +145,15 @@ const remove = defineCommand({
     console.log(`velloo folder: ${folder}`);
     console.log(
       pc.dim(
-        `  ${boards} board${boards === 1 ? "" : "s"}, ${screens} screen${screens === 1 ? "" : "s"} — deleted from disk.`,
+        `  ${boards} board${boards === 1 ? "" : "s"}, ${screens} screen${screens === 1 ? "" : "s"} — ${keepContent ? "registration removed; content retained." : "deleted from disk."}`,
       ),
     );
 
     if (args.yes !== true) {
       const approved = await confirm({
-        message: `Delete this design folder? ${pc.dim("(committed designs are still recoverable with git)")}`,
+        message: keepContent
+          ? "Remove this project registration and retain its external content?"
+          : "Delete this design folder and any standalone Git history it contains?",
         initialValue: false,
       });
       if (isCancel(approved) || !approved) {
@@ -148,9 +168,9 @@ const remove = defineCommand({
     const stopped = await stopDaemon(daemonRoot(folder));
     if (stopped) console.log(pc.dim("  Stopped its canvas."));
 
-    await rm(folder, { recursive: true, force: true });
-    const dropped = await unregisterProject(folder, cwd).catch(() => null);
-    console.log(`velloo folder: removed ${folder}`);
+    const dropped = await unregisterProject(folder, cwd);
+    if (!keepContent) await rm(folder, { recursive: true, force: true });
+    console.log(`velloo folder: ${keepContent ? "retained content at" : "removed"} ${folder}`);
     if (dropped?.name) {
       console.log(
         pc.dim(
@@ -163,12 +183,95 @@ const remove = defineCommand({
   },
 });
 
+const relocate = defineCommand({
+  meta: {
+    name: "relocate",
+    description: "Preview moving a design between repository and managed storage; --yes applies",
+  },
+  args: {
+    folder: { type: "positional", required: false, description: FOLDER_ARG_DESCRIPTION },
+    external: { type: "boolean", description: "Move to managed external storage" },
+    to: { type: "string", description: "New directory inside the application repository" },
+    yes: { type: "boolean", description: "Apply the displayed relocation" },
+  },
+  async run({ args }) {
+    const location = await resolveDesignLocation(args.folder, "folder", { requireConfig: true });
+    const plan = await planRelocation(
+      location.designRoot,
+      resolve("."),
+      args.to,
+      args.external === true,
+    );
+    console.log(
+      `Source: ${plan.source}\nDestination: ${plan.destination}\nManifest: ${plan.manifestPath}\nProject ${plan.projectName}: ${JSON.stringify(plan.manifest.projects[plan.projectName])}`,
+    );
+    if (!args.yes) {
+      console.log("Preview only. Add --yes to apply relocation.");
+      return;
+    }
+    await relocateDesign(plan);
+    console.log(
+      `Relocated ${plan.projectName} to ${plan.destination}. Run velloo connect to refresh existing agent guidance.`,
+    );
+  },
+});
+
+const bind = defineCommand({
+  meta: {
+    name: "bind",
+    description: "Explicitly bind a restored managed design to this application checkout",
+  },
+  args: {
+    project: {
+      type: "positional",
+      required: true,
+      description: "Managed project name in velloo.json",
+    },
+    yes: { type: "boolean", description: "Confirm the local application binding" },
+  },
+  async run({ args }) {
+    const found = await findManifest(resolve("."));
+    const entry = found?.manifest.projects[args.project];
+    if (!found || !entry || typeof entry === "string")
+      fail("folder", "Choose a managed project in this application's velloo.json.");
+    const folder = found.folders.get(args.project) as string;
+    console.log(`Design: ${folder}\nApplication: ${found.dir}\nProject: ${args.project}`);
+    if (!args.yes) {
+      console.log("Preview only. Add --yes to confirm this local binding.");
+      return;
+    }
+    await loadDesignFolder(folder, { preferences: false });
+    await stopDaemon(daemonRoot(folder));
+    await writeManagedBinding(entry.managed, {
+      manifestPath: found.path,
+      appRoot: resolve(found.dir, entry.appRoot ?? "."),
+      projectName: args.project,
+    });
+    console.log("Local binding saved.");
+  },
+});
+
+const checkpointCommand = defineCommand({
+  meta: {
+    name: "checkpoint",
+    description: "Save a named durable Git checkpoint of a managed design",
+  },
+  args: {
+    folder: { type: "positional", required: false, description: FOLDER_ARG_DESCRIPTION },
+    message: { type: "string", required: true, description: "Checkpoint name" },
+  },
+  async run({ args }) {
+    const folder = await resolveDesignFolder(args.folder, "folder", { requireConfig: true });
+    console.log(`Checkpoint saved: ${await checkpoint(folder, args.message)}`);
+  },
+});
+
 export default defineCommand({
   meta: {
     name: "folder",
     description: "Manage this repo's design folders (list, add, remove)",
   },
-  subCommands: { list, add, remove },
+  subCommands: { list, add, remove, relocate, bind, checkpoint: checkpointCommand },
   // Bare `velloo folder` is the question "what have I got?" — answer it
   // rather than printing usage.
   run: ({ args }) => (args._?.length ? undefined : list.run?.({ args, cmd: list, rawArgs: [] })),

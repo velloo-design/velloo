@@ -11,6 +11,7 @@ import {
   schemaVersionOf,
   type Theme,
 } from "@velloo/schema";
+import { resolveProjectPath } from "@velloo/server";
 import pc from "picocolors";
 import { installChromiumInteractive } from "./browser-setup.ts";
 import { globallyWiredAgents } from "./connect/index.ts";
@@ -337,7 +338,7 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
 
   const hostApp = config.hostApp as { root?: string | undefined } | undefined;
   if (hostApp?.root) {
-    const abs = resolve(folder, hostApp.root);
+    const abs = resolveProjectPath(folder, hostApp.root);
     if (existsSync(abs)) ok(`host app at ${displayPath(abs)}`);
     else bad(`host app path ${hostApp.root} no longer exists (config.hostApp.root)`);
   }

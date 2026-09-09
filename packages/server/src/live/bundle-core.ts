@@ -1,8 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { HostApp } from "@velloo/schema";
 import type { BunPlugin } from "bun";
+import { managedProjectContext, resolveProjectPath } from "../project-location.ts";
 
 /**
  * The reusable component-bundling primitive. Given a host root, a set of
@@ -40,8 +41,9 @@ export const EMPTY_MODULE = "export const components = {};\n";
 
 /** Resolve the host app root: explicit config, else the design folder's parent. */
 export function hostAppRootFrom(folderRoot: string, hostApp: HostApp | undefined): string {
-  if (!hostApp?.root) return resolve(folderRoot, "..");
-  return isAbsolute(hostApp.root) ? hostApp.root : resolve(folderRoot, hostApp.root);
+  if (!hostApp?.root)
+    return managedProjectContext(folderRoot)?.appRoot ?? resolve(folderRoot, "..");
+  return resolveProjectPath(folderRoot, hostApp.root);
 }
 
 /** Normalize a tsconfig-style alias map (`{ "@/*": "src/*" }`) to prefix pairs. */

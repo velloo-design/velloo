@@ -60,6 +60,17 @@ Two files define the model: a repo-root **`velloo.json`** names each design fold
 - **Canvas:** http://localhost:7300
 - **MCP server (for your AI agent):** http://localhost:7301/mcp
 
+### Keep designs outside the application repository
+
+Choose managed external storage in the wizard, or run
+`velloo init --external --project web --non-interactive`. The application keeps a
+portable project locator; editable files and a separate Git history live under
+`~/.velloo/designs/`. Open it with `velloo run web` and save a durable checkpoint
+with `velloo folder checkpoint web --message "Approved draft"`.
+
+See [External local design folders](./docs/external-local-design-folders.md) for
+relocation previews, backup, clone rebinding, and removal behavior.
+
 ### MCP context surfaces
 
 Velloo defaults to a compact progressive-disclosure surface: the agent sees

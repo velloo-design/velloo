@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { type FeedbackPrefs, REPO_MANIFEST_FILE, RepoManifestSchema } from "@velloo/schema";
 import { writeJsonAtomic } from "./fs.ts";
+import { managedProjectContext } from "./project-location.ts";
 
 interface FoundRepoManifest {
   /** Absolute path of the velloo.json file. */
@@ -18,7 +19,9 @@ interface FoundRepoManifest {
  * boot over a preference file.
  */
 export async function findRepoManifest(startDir: string): Promise<FoundRepoManifest | null> {
-  let dir = resolve(startDir);
+  let dir = dirname(
+    managedProjectContext(startDir)?.manifestPath ?? join(resolve(startDir), REPO_MANIFEST_FILE),
+  );
   for (;;) {
     const path = join(dir, REPO_MANIFEST_FILE);
     try {

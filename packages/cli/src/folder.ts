@@ -1,8 +1,9 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { isCancel, multiselect, select } from "@clack/prompts";
 import { BoardSchema, isArchived, ScreenSchema } from "@velloo/schema";
+import { managedProjectContext } from "@velloo/server";
 import { findDesignConfig } from "./design-config.ts";
 import { fail } from "./fail.ts";
 import {
@@ -92,6 +93,34 @@ async function manifestProject(
   abort: (message: string) => never,
 ): Promise<string> {
   const folder = repo.folders.get(name) as string;
+  const entry = repo.manifest.projects[name];
+  try {
+    if (typeof entry !== "string") {
+      const context = managedProjectContext(folder);
+      if (
+        !context ||
+        realpathSync(context.manifestPath) !== realpathSync(repo.path) ||
+        context.projectName !== name
+      ) {
+        throw new Error(
+          `Project ${name} is bound to another application. Run \`velloo folder bind ${name} --yes\` here to explicitly rebind it.`,
+        );
+      }
+    } else {
+      const root = realpathSync(repo.dir);
+      const target = existsSync(folder)
+        ? realpathSync(folder)
+        : resolve(root, relative(repo.dir, folder));
+      const rel = relative(root, target);
+      if (rel === ".." || rel.startsWith(`..${sep}`) || /^[A-Za-z]:[\\/]/.test(entry)) {
+        throw new Error(
+          `Legacy external path for ${name}: ${entry}. Pass the design path explicitly to authorize this location, or use \`velloo folder relocate <path> --external\` to create a portable managed locator. The manifest has not been changed.`,
+        );
+      }
+    }
+  } catch (error) {
+    abort((error as Error).message);
+  }
   if (!(await hasDesignConfig(folder))) {
     abort(
       `project ${JSON.stringify(name)} in ${repo.path} points at ${folder}, which is not a velloo design folder (no .design/config.json).`,
@@ -132,6 +161,10 @@ export async function resolveDesignFolder(
     }
     const explicit = resolve(cwd, arg);
     if (await hasDesignConfig(explicit)) return explicit;
+    const explicitRepo = await findManifest(explicit);
+    if (explicitRepo?.dir === explicit && explicitRepo.folders.size) {
+      return resolveDesignFolder(undefined, cmd, { ...opts, cwd: explicit });
+    }
     // App root passed as a path — same as `cd` there with no arg.
     const nested = join(explicit, DEFAULT_FOLDER);
     if (await hasDesignConfig(nested)) return nested;
@@ -179,6 +212,23 @@ export async function resolveDesignFolder(
   abort(
     `no design folder found. Pass one (e.g. \`velloo ${cmd} ./velloo\`), run from a folder that contains a Velloo design, or \`velloo init\` first.`,
   );
+}
+
+export async function resolveDesignLocation(
+  arg: string | undefined,
+  cmd: string,
+  opts: ResolveDesignFolderOptions = {},
+) {
+  const designRoot = await resolveDesignFolder(arg, cmd, opts);
+  const managed = managedProjectContext(designRoot);
+  if (managed) return { designRoot, ...managed };
+  const found = await findManifest(opts.cwd ?? designRoot);
+  return {
+    designRoot,
+    manifestPath: found?.path,
+    appRoot: found?.dir,
+    projectName: [...(found?.folders ?? [])].find(([, path]) => path === designRoot)?.[0],
+  };
 }
 
 export interface ScreenEntry {

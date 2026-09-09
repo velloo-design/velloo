@@ -1,7 +1,13 @@
-import type { Dirent } from "node:fs";
+import { type Dirent, existsSync, realpathSync } from "node:fs";
 import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
+import {
+  managedDesignPath,
+  managedProjectContext,
+  writeJsonAtomic,
+  writeManagedBinding,
+} from "@velloo/server";
 
 /**
  * The repo-root manifest (`velloo.json`) names a repo's design folders so a
@@ -66,7 +72,12 @@ export async function findManifest(startDir: string): Promise<FoundManifest | nu
         throw new Error(`${path} is not a valid velloo manifest: ${issues}`);
       }
       const folders = new Map(
-        Object.entries(result.data.projects).map(([name, rel]) => [name, resolve(dir, rel)]),
+        Object.entries(result.data.projects).map(([name, rel]) => [
+          name,
+          typeof rel === "string"
+            ? resolve(dir, rel.replace(/\\/g, "/"))
+            : managedDesignPath(rel.managed),
+        ]),
       );
       return { path, dir, manifest: result.data, folders };
     }
@@ -84,6 +95,12 @@ export async function findManifest(startDir: string): Promise<FoundManifest | nu
  */
 export function pickProject(found: FoundManifest, cwd: string): string | null {
   const entries = [...found.folders];
+  const appMatches = Object.entries(found.manifest.projects).filter(([, entry]) => {
+    if (typeof entry === "string" || !entry.appRoot || entry.appRoot === ".") return false;
+    const app = resolve(found.dir, entry.appRoot);
+    return cwd === app || cwd.startsWith(app + sep);
+  });
+  if (appMatches.length === 1 && appMatches[0]) return appMatches[0][0];
   const containing = entries.find(([, folder]) => cwd === folder || cwd.startsWith(folder + sep));
   if (containing) return containing[0];
   const under = entries.filter(([, folder]) => folder.startsWith(cwd + sep));
@@ -102,12 +119,16 @@ export async function projectLabel(folder: string): Promise<string | null> {
   const abs = resolve(folder);
   let found: FoundManifest | null;
   try {
-    found = await findManifest(abs);
+    found = await findManifest(managedProjectContext(abs)?.appRoot ?? abs);
   } catch {
     return null;
   }
   if (!found) return null;
-  const entry = [...found.folders].find(([, path]) => path === abs);
+  const entry = [...found.folders].find(
+    ([, path]) =>
+      path === abs ||
+      (existsSync(path) && existsSync(abs) && realpathSync(path) === realpathSync(abs)),
+  );
   if (!entry) return null;
   const rel = relative(found.dir, abs) || ".";
   return `${entry[0]} — ${rel} (in ${found.dir})`;
@@ -136,7 +157,11 @@ export async function unregisterProject(
   if (!found) return { name: null, path: null, removedManifest: false };
   let name: string | null = null;
   for (const [candidate, target] of found.folders) {
-    if (target === abs) name = candidate;
+    if (
+      target === abs ||
+      (existsSync(target) && existsSync(abs) && realpathSync(target) === realpathSync(abs))
+    )
+      name = candidate;
   }
   if (!name) return { name: null, path: found.path, removedManifest: false };
 
@@ -246,6 +271,7 @@ export async function registerProject(
   folder: string,
   appRoot: string,
   requestedName?: string,
+  managedId?: string,
 ): Promise<RegisterResult> {
   if (requestedName && !PROJECT_NAME.test(requestedName)) {
     throw new Error(
@@ -253,13 +279,17 @@ export async function registerProject(
     );
   }
   const abs = resolve(folder);
-  const found = await findManifest(abs);
+  const found = await findManifest(managedId ? appRoot : abs);
   const dir = found ? found.dir : ((await findGitRoot(appRoot)) ?? resolve(appRoot));
   const path = found ? found.path : join(dir, MANIFEST_FILE);
 
-  const projects: Record<string, string> = { ...(found?.manifest.projects ?? {}) };
+  const projects: Manifest["projects"] = { ...(found?.manifest.projects ?? {}) };
   for (const [existing, target] of found?.folders ?? []) {
-    if (target === abs) return { name: existing, path, created: false };
+    if (
+      target === abs ||
+      (existsSync(target) && existsSync(abs) && realpathSync(target) === realpathSync(abs))
+    )
+      return { name: existing, path, created: false };
   }
 
   const add = (folder: string, wanted?: string): string => {
@@ -283,13 +313,24 @@ export async function registerProject(
     }
   }
 
-  const name = add(abs, requestedName);
+  const name = add(abs, requestedName ?? (managedId ? deriveName(appRoot) : undefined));
+  if (managedId)
+    projects[name] = {
+      managed: managedId,
+      appRoot: relative(dir, appRoot).split(sep).join("/") || ".",
+    };
 
   const manifest: Manifest = {
     ...(found?.manifest ?? {}),
     projects,
     ...(defaultProject ? { defaultProject } : {}),
   };
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  if (managedId)
+    await writeManagedBinding(managedId, {
+      manifestPath: path,
+      appRoot: resolve(appRoot),
+      projectName: name,
+    });
+  await writeJsonAtomic(path, manifest);
   return { name, path, created: true };
 }

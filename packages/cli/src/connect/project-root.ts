@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import { dirname, join, parse } from "node:path";
+import { managedProjectContext } from "@velloo/server";
 
 /**
  * Where to write the agent config. An explicit override wins; otherwise
@@ -10,6 +11,8 @@ import { dirname, join, parse } from "node:path";
  */
 export async function resolveProjectRoot(designFolder: string, override?: string): Promise<string> {
   if (override) return override;
+  const managed = managedProjectContext(designFolder);
+  if (managed) return managed.appRoot;
 
   const fallback = dirname(designFolder);
   let dir = fallback;

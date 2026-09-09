@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { containerClasses, parseTailwindContainer, SEMANTIC_SLOTS } from "@velloo/codegen";
 import { z } from "zod";
 import { type DesignFolder, resolveNamedTheme } from "../../design-folder.ts";
+import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { chartLibsInDeps } from "../../theme/chart-libs.ts";
 import {
   addTheme,
@@ -72,11 +73,7 @@ async function readHostPackageJson(
   const candidates: string[] = [];
   const hostRoot = folder.config.hostApp?.root;
   if (hostRoot) {
-    candidates.push(
-      isAbsolute(hostRoot)
-        ? join(hostRoot, "package.json")
-        : join(folder.root, hostRoot, "package.json"),
-    );
+    candidates.push(join(hostAppRootFrom(folder.root, folder.config.hostApp), "package.json"));
   }
   if (cssResolvedPath) {
     let dir = dirname(cssResolvedPath);
@@ -367,9 +364,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         const bases: string[] = isAbsolute(args.cssPath)
           ? [""]
           : [
-              ...(hostRoot
-                ? [isAbsolute(hostRoot) ? hostRoot : join(ctx.folder.root, hostRoot)]
-                : []),
+              ...(hostRoot ? [hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp)] : []),
               join(ctx.folder.root, ".."),
               ctx.folder.root,
             ];

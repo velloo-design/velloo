@@ -34,7 +34,22 @@ export const RepoManifestSchema = z
     $schema: z.string().optional(),
     projects: z.record(
       z.string().regex(PROJECT_NAME, "project names are letters/digits plus . _ -"),
-      z.string().min(1),
+      z.union([
+        z.string().min(1),
+        z
+          .object({
+            managed: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+            appRoot: z
+              .string()
+              .min(1)
+              .refine(
+                (path) => !/^(?:[\\/]|[A-Za-z]:)/.test(path) && !path.split(/[\\/]/).includes(".."),
+                "appRoot must be a portable path inside the manifest repository",
+              )
+              .optional(),
+          })
+          .strict(),
+      ]),
     ),
     defaultProject: z.string().optional(),
     feedback: FeedbackPrefsSchema.optional(),

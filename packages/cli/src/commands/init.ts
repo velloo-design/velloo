@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { confirm, isCancel } from "@clack/prompts";
+import { confirm, isCancel, select } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import {
   BoardSchema,
@@ -12,6 +13,9 @@ import {
   ThemeSchema,
 } from "@velloo/schema";
 import {
+  managedDesignId,
+  managedDesignPath,
+  managedProjectContext,
   writeFeedbackContactOk,
   writeJsonAtomic,
   writeRepoFeedback,
@@ -46,8 +50,9 @@ import {
   runUpgrade,
 } from "../existing-folder.ts";
 import { fail } from "../fail.ts";
-import { existingDesignFolder, hasDesignConfig } from "../folder.ts";
-import { registerProject } from "../manifest.ts";
+import { existingDesignFolder, hasDesignConfig, resolveDesignFolder } from "../folder.ts";
+import { checkpoint, rebaseDesignConfig } from "../managed-folders.ts";
+import { findManifest, pickProject, registerProject } from "../manifest.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 import {
   componentScaffold,
@@ -264,7 +269,10 @@ async function writeScaffold(
     writeJsonAtomic(`${folder}/theme/default.json`, scaffold.theme),
     writeText(`${folder}/.gitignore`, gitignore),
     writeText(`${folder}/assets/.gitkeep`, ""),
-    writeText(`${folder}/README.md`, renderDesignReadme(answers, plan)),
+    writeText(
+      `${folder}/README.md`,
+      renderDesignReadme(answers, plan, managedDesignId(folder) !== null),
+    ),
   ];
   for (const s of scaffold.screens) {
     writes.push(writeJsonAtomic(`${folder}/screens/${s.id}.json`, s));
@@ -533,6 +541,10 @@ export default defineCommand({
       type: "string",
       description: "Design folder, relative to the app root (default: velloo)",
     },
+    external: {
+      type: "boolean",
+      description: "Keep the design in Velloo-managed storage outside the application repository",
+    },
     force: {
       type: "boolean",
       default: false,
@@ -627,15 +639,24 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
 
   // Already a Velloo design here? Don't re-run the whole scaffold wizard —
   // offer the actions that make sense on an existing folder.
-  if (interactive && !cliArgs.force) {
+  if (interactive && !cliArgs.force && !cliArgs.external) {
     // With --add-folder the design-folder arg names the folder being *created*,
     // so the sibling to read defaults from is whichever one the repo already
     // has — not that path.
-    const existing = cliArgs.addFolder
-      ? ((await existingDesignFolder(appRoot)) ?? resolve(appRoot, "velloo"))
-      : resolve(appRoot, cliArgs.designFolder ?? "velloo");
+    const manifest = await findManifest(appRoot);
+    const project = manifest ? pickProject(manifest, appRoot) : null;
+    const registered =
+      project && !cliArgs.designFolder
+        ? await resolveDesignFolder(project, "init", { cwd: appRoot, interactive: true })
+        : null;
+    const existing =
+      registered ??
+      (cliArgs.addFolder
+        ? ((await existingDesignFolder(appRoot)) ?? resolve(appRoot, "velloo"))
+        : resolve(appRoot, cliArgs.designFolder ?? "velloo"));
     if (await hasDesignConfig(existing)) {
-      const facts = await readFolderFacts(existing, appRoot);
+      const contextRoot = managedProjectContext(existing)?.appRoot ?? appRoot;
+      const facts = await readFolderFacts(existing, contextRoot);
       // `velloo folder add` skips the menu — the caller already said what they
       // came for.
       const action = cliArgs.addFolder
@@ -657,9 +678,9 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       }
       if (action !== "another") {
         if (action === "upgrade") await runUpgrade(existing);
-        if (action === "scan") await runScan(existing, appRoot, cliArgs.scanDir);
-        if (action === "theme") await runThemeReimport(existing, appRoot);
-        if (action === "check") await runCheckSetup(existing, appRoot);
+        if (action === "scan") await runScan(existing, contextRoot, cliArgs.scanDir);
+        if (action === "theme") await runThemeReimport(existing, contextRoot);
+        if (action === "check") await runCheckSetup(existing, contextRoot);
         if (action === "open") await runOpenCanvas(existing);
         return;
       }
@@ -673,6 +694,33 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     }
   }
 
+  let external = cliArgs.external === true;
+  let presetFolder = cliArgs.designFolder;
+  if (external && cliArgs.designFolder)
+    fail("init", "Choose --external or --design-folder, not both.");
+  if (interactive && cliArgs.external === undefined && !cliArgs.designFolder) {
+    const storage = await select({
+      message: "Where should the design live?",
+      options: [
+        {
+          value: "repository",
+          label: "Default in repo",
+          hint: secondFolder ? "./velloo-brand/" : "./velloo/",
+        },
+        {
+          value: "external",
+          label: "Default out of repo",
+          hint: "Velloo-managed storage with its own Git history",
+        },
+        { value: "custom", label: "Custom name", hint: "Choose a design folder name or path" },
+      ],
+    });
+    if (isCancel(storage)) return;
+    external = storage === "external";
+    if (storage === "repository") presetFolder = secondFolder ? "velloo-brand" : "velloo";
+  }
+  const managedId = external ? randomUUID() : undefined;
+  const managedFolder = managedId ? managedDesignPath(managedId) : undefined;
   let answers: WizardAnswers;
 
   if (interactive) {
@@ -683,7 +731,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     const result = await runInteractive({
       appRoot,
       secondFolder,
-      ...(cliArgs.addFolder && cliArgs.designFolder ? { presetFolder: cliArgs.designFolder } : {}),
+      ...(managedFolder || presetFolder ? { presetFolder: managedFolder ?? presetFolder } : {}),
       scanDir: cliArgs.scanDir,
       connectEnabled: cliArgs.connect !== false,
       // An explicit --library still wins over what the sibling folder uses.
@@ -745,6 +793,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     }
   }
 
+  if (managedFolder) answers.folder = managedFolder;
   const folder = answers.folder;
   if (!allowNonEmpty && !(await isEmptyOrMissing(folder))) {
     fail(
@@ -771,7 +820,19 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   } catch (err) {
     fail("init", (err as Error).message);
   }
-  await writeScaffold(folder, scaffold, plan, answers);
+  try {
+    await writeScaffold(folder, scaffold, plan, answers);
+    if (managedId) {
+      await rebaseDesignConfig(folder, folder, answers.appRoot, true);
+      await checkpoint(folder, "Initial Velloo design", true);
+    }
+  } catch (error) {
+    if (managedId)
+      throw new Error(
+        `Could not finish the managed design at ${folder}. Existing content was retained. Check Git, write permissions and free disk space before retrying. ${error instanceof Error ? error.message : error}`,
+      );
+    throw error;
+  }
 
   // Echo for non-interactive callers that grep the output for
   // "scaffolded" — keeps the existing CLI test passing.
@@ -781,7 +842,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // same repo stays resolvable. The scaffold already succeeded — a manifest
   // problem is a warning to fix by hand, not a failed init.
   try {
-    const reg = await registerProject(folder, answers.appRoot, cliArgs.project);
+    const reg = await registerProject(folder, answers.appRoot, cliArgs.project, managedId);
     if (reg.created) {
       console.log(
         pc.dim(
@@ -798,6 +859,11 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       await writeFeedbackContactOk(answers.feedback.contactOk === true);
     }
   } catch (err) {
+    if (managedId)
+      fail(
+        "init",
+        `Design retained at ${folder}, but registration failed: ${(err as Error).message}`,
+      );
     console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
   }
   if (importedFrom) {
