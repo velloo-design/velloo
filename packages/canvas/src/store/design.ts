@@ -159,6 +159,12 @@ export interface DesignSlice {
    */
   pruneBoard(boardId: string): Promise<void>;
   /**
+   * Drop deleted screens from local state: the summary list and the loaded
+   * cache. Board deletion takes the screens only it placed, so the initiator
+   * knows which ids went before any broadcast lands.
+   */
+  pruneScreens(screenIds: string[]): void;
+  /**
    * File a board away (or bring it back). Archived boards leave the sidebar's
    * main list but stay on disk and fully editable; archiving the board you're
    * looking at moves the selection to the first remaining live board.
@@ -470,6 +476,26 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       });
       get().setEditingMarkupId(null);
     }
+  },
+
+  pruneScreens(screenIds: string[]) {
+    if (screenIds.length === 0) return;
+    const gone = new Set(screenIds);
+    set((s) => {
+      const screens = Object.fromEntries(Object.entries(s.screens).filter(([id]) => !gone.has(id)));
+      return {
+        screens,
+        design: s.design
+          ? { ...s.design, screens: s.design.screens.filter((sc) => !gone.has(sc.id)) }
+          : s.design,
+        // pruneBoard re-selects right after and picks a screen off the next
+        // board, but it only looks at `currentScreenId` — leaving a deleted id
+        // there would read as "already on a valid screen".
+        ...(s.currentScreenId && gone.has(s.currentScreenId)
+          ? { currentScreenId: null, annotations: [] }
+          : {}),
+      };
+    });
   },
 
   async selectBoard(boardId: string) {

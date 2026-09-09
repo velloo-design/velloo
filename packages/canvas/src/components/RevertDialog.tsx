@@ -78,13 +78,13 @@ export function RevertDialog({ status, onClose }: Props) {
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             disabled={busy}
             onClick={(e) => {
               // Keep the dialog open while the revert runs; close on success.
               e.preventDefault();
               void confirm();
             }}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             {busy ? "Reverting…" : "Revert everything"}
           </AlertDialogAction>

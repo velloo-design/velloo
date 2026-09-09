@@ -245,7 +245,7 @@ export function registerMutationTools(
     "remove_board",
     {
       description:
-        "Delete a board and its notes. Permanent — to file a board away reversibly, prefer update_board { patch: { archived: true } }.",
+        "Delete a board and its notes. Screens no other board places are deleted with it and returned in `removedScreenIds`; screens also framed elsewhere are kept. Permanent — to file a board away reversibly, prefer update_board { patch: { archived: true } }.",
       inputSchema: removeBoardShape,
     },
     async (args) => toMcp(await removeBoard(ctx, args)),

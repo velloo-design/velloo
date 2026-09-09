@@ -214,12 +214,12 @@ export function FontsSection({ theme, onBrowse }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               onClick={() => {
                 const role = confirmRemove;
                 setConfirmRemove(null);
                 if (role) send({ role, remove: true });
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remove
             </AlertDialogAction>

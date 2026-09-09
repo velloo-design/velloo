@@ -895,10 +895,7 @@ export const Frame = memo(function Frame({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={doRemove}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction variant="destructive" onClick={doRemove}>
               Remove
             </AlertDialogAction>
           </AlertDialogFooter>

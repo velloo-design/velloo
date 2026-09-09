@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ICON_MENU_WIDTH } from "../../lib/utils.ts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,7 +154,7 @@ export function FrameHeader({
           </DropdownMenuTrigger>
           {/* Radix portals this to document.body — outside the board's
               pan/zoom transform, so the menu always renders at chrome size. */}
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className={ICON_MENU_WIDTH}>
             <DropdownMenuItem onSelect={onPreview}>
               <Maximize2 />
               Full-screen preview

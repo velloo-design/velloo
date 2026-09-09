@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { type DragEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { type BoardGroupMeta, type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
+import { ICON_MENU_WIDTH } from "../lib/utils.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { AddFrameDialog } from "./AddFrameDialog.tsx";
@@ -292,14 +293,21 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
 
   const confirmDeleteBoard = () => {
     if (!pendingBoardDelete) return;
-    const { id } = pendingBoardDelete;
+    const { id, name } = pendingBoardDelete;
     setPendingBoardDelete(null);
     void (async () => {
       try {
-        await mutate.removeBoard({ boardId: id });
+        const r = await mutate.removeBoard({ boardId: id });
         // The `board-changed` broadcast also reconciles, but pruning here
         // keeps the initiator's sidebar honest even if the WS is down.
+        useCanvas.getState().pruneScreens(r.removedScreenIds);
         await useCanvas.getState().pruneBoard(id);
+        const n = r.removedScreenIds.length;
+        pushToast({
+          kind: "info",
+          message:
+            n > 0 ? `Deleted "${name}" and ${n} screen${n === 1 ? "" : "s"}` : `Deleted "${name}"`,
+        });
       } catch (e) {
         toastError(e, "Could not delete board");
       }
@@ -557,7 +565,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className={ICON_MENU_WIDTH}>
             <DropdownMenuItem disabled={!wsConnected} onSelect={() => openRenameDialog(b)}>
               <Pencil />
               Rename board
@@ -821,7 +829,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                             <MoreHorizontal />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className={ICON_MENU_WIDTH}>
                           <DropdownMenuItem
                             disabled={!wsConnected}
                             onSelect={() => archiveBoard(b, false)}
@@ -1020,7 +1028,9 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteGroup}>Delete group</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={confirmDeleteGroup}>
+              Delete group
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1038,16 +1048,13 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             <AlertDialogTitle>Delete board</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingBoardDelete
-                ? `Delete board "${pendingBoardDelete.name}"? The screens it references stay; only the placements (frames) on this board are removed. You can put it back with ⌘Z.`
+                ? `Delete board "${pendingBoardDelete.name}"? Screens only this board places are deleted with it. Screens another board also places are kept.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteBoard}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction variant="destructive" onClick={confirmDeleteBoard}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1121,7 +1128,7 @@ function GroupHeader({
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className={ICON_MENU_WIDTH}>
           <DropdownMenuItem disabled={disabled} onSelect={onRename}>
             <Pencil />
             Rename group

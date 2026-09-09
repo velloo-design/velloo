@@ -172,11 +172,11 @@ export function TypesetSwitcher({ names, selected, onSelect, onAdd, onRename, on
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               onClick={() => {
                 setConfirmRemove(false);
                 onRemove(selected);
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
             </AlertDialogAction>

@@ -118,10 +118,7 @@ export function SnippetParamsPanel({ snippet, onPatchParams }: SnippetParamsPane
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmRemove}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction variant="destructive" onClick={confirmRemove}>
               Remove
             </AlertDialogAction>
           </AlertDialogFooter>

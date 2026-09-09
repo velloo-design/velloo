@@ -104,7 +104,8 @@ export function designBoard(
       screen,
       x: i * 1600,
       y: 0,
-      viewport: { w: 1440, h: 900 },
+      w: 1440,
+      h: 900,
     })),
     ...overrides,
   } as Board;

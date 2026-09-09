@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const src = join(dirname(fileURLToPath(import.meta.url)), "..");
-const uiDir = join(src, "components", "ui");
+const componentsDir = join(src, "components");
+const uiDir = join(componentsDir, "ui");
 const packages = join(src, "..", "..");
 
 async function uiSources(): Promise<{ file: string; source: string }[]> {
@@ -12,6 +13,19 @@ async function uiSources(): Promise<{ file: string; source: string }[]> {
   return Promise.all(
     files.map(async (file) => ({ file, source: await readFile(join(uiDir, file), "utf8") })),
   );
+}
+
+/** Every chrome component that *uses* the primitives, excluding the copies themselves. */
+async function callSites(): Promise<{ file: string; source: string }[]> {
+  const entries = await readdir(componentsDir, { recursive: true, withFileTypes: true });
+  const out: { file: string; source: string }[] = [];
+  for (const e of entries) {
+    if (!e.isFile() || !e.name.endsWith(".tsx")) continue;
+    const path = join(e.parentPath, e.name);
+    if (!relative(uiDir, path).startsWith("..")) continue;
+    out.push({ file: relative(componentsDir, path), source: await readFile(path, "utf8") });
+  }
+  return out;
 }
 
 describe("the chrome's vendored shadcn", () => {
@@ -97,5 +111,29 @@ describe("the chrome's vendored shadcn", () => {
     for (const id of handEdited) {
       expect(adapted).toContain(id);
     }
+  });
+
+  /**
+   * `AlertDialogAction` renders `<Button asChild>`, and Radix's Slot
+   * *concatenates* the two className strings instead of running them through
+   * tailwind-merge. A hand-rolled `bg-destructive` therefore lands on the
+   * element beside the default variant's `bg-primary` and the stylesheet's
+   * order — not the class list's — picks the winner, so six delete dialogs
+   * asked for a red confirm button and rendered a blue one. `variant` routes
+   * through cva instead, where the variants actually replace each other.
+   *
+   * Scoped to the alert-dialog buttons because they are the `asChild` ones. A
+   * direct `<Button className="…">` merges correctly and is free to compose,
+   * which is what the ghost-plus-destructive-tint icon buttons rely on.
+   */
+  test("takes the Button's destructive variant rather than restyling it", async () => {
+    // Split on JSX opening tags: a chunk runs from one component to the next,
+    // so an action's chunk is its own attributes plus its text label.
+    const restyled = /^(AlertDialogAction|AlertDialogCancel)\b.*?bg-destructive/s;
+    const offenders = (await callSites())
+      .filter(({ source }) => source.split(/<(?=[A-Z])/).some((c) => restyled.test(c)))
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
   });
 });

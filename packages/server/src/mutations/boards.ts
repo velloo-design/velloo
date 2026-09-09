@@ -2,10 +2,16 @@ import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import { type Board, MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import { orderedBoards } from "../design-folder.ts";
 import { resolveGroup } from "./board-groups.ts";
-import type { MutationContext } from "./context.ts";
+import { type MutationContext, withScreenLock } from "./context.ts";
 import { badRequest, boardIdConflict, boardIdExhausted, type MutationError } from "./errors.ts";
 import { getBoard } from "./lookup.ts";
-import { deletePersistedBoard, persistBoard, persistConfig } from "./persist.ts";
+import {
+  deletePersistedBoard,
+  deletePersistedScreen,
+  persistBoard,
+  persistConfig,
+} from "./persist.ts";
+import { screensPlacedOnlyOn } from "./screen-refs.ts";
 import { slugify } from "./slugify.ts";
 
 function boardNameTooLong(name: string): MutationError | null {
@@ -184,6 +190,8 @@ export interface RemoveBoardArgs {
 
 export interface RemoveBoardResult {
   removedBoardId: string;
+  /** Screens deleted with the board because no other board placed them. */
+  removedScreenIds: string[];
 }
 
 export async function removeBoard(
@@ -192,10 +200,22 @@ export async function removeBoard(
 ): Promise<Result<RemoveBoardResult, MutationError>> {
   return DoAsync<RemoveBoardResult, MutationError>(async function* () {
     yield* $(getBoard(ctx, args.boardId));
+    // Screens only this board placed go with it. Nothing references a screen
+    // but a frame, so leaving them behind writes files no surface can reach —
+    // not the canvas, not export, not publish. Resolved before the board is
+    // gone, since the answer depends on its frames.
+    const orphaned = screensPlacedOnlyOn(ctx.folder, args.boardId);
     // No last-board rule: a folder with zero boards is a supported state
     // (the sidebar has an empty state, the MCP instructions have `bareFolder`),
     // so removing the only board is the user's call.
     await deletePersistedBoard(ctx.folder, args.boardId);
+    // Board first, screens after: history unwinds in reverse, so undo restores
+    // the screens before the board that frames them and never lands on a board
+    // whose frames point at files that aren't there yet.
+    for (const screenId of orphaned) {
+      await withScreenLock(ctx.folder, screenId, () => deletePersistedScreen(ctx.folder, screenId));
+      ctx.broadcast({ type: "screen-changed", screenId });
+    }
     // Prune the deleted id from the saved sidebar order so config.json
     // doesn't accumulate dangling ids. Drop the field entirely once
     // nothing's left rather than persisting an empty array.
@@ -209,6 +229,6 @@ export async function removeBoard(
       await persistConfig(ctx.folder, nextConfig);
     }
     ctx.broadcast({ type: "board-changed", boardId: args.boardId });
-    return { removedBoardId: args.boardId };
+    return { removedBoardId: args.boardId, removedScreenIds: orphaned };
   });
 }
