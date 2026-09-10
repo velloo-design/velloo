@@ -121,6 +121,10 @@ afterEach(async () => {
   server.publishedBoards = [];
   server.publishSlots = [];
   useCanvas.setState({ publishedBoardsOpen: false, authStatus: null, publishSlots: [] });
+  // The freshness window lives in the store's module scope, and signing out is
+  // what drops it. Without this a case that counts reads only counts them when
+  // it runs before anything that opened the manager.
+  await useCanvas.getState().refreshPublishSlots();
 });
 
 async function openManager() {

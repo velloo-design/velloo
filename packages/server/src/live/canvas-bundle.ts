@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { helpersComponentsDir } from "@velloo/helpers/paths";
 import type {
   CanvasBundleSpec,
@@ -283,9 +283,32 @@ function hostRuntimePlugin(hostRoot: string): BunPlugin {
       const filter = new RegExp(
         `^(${available.map((name) => name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")).join("|")})(?:/.*)?$`,
       );
-      build.onResolve({ filter }, (args) => ({ path: Bun.resolveSync(args.path, hostRoot) }));
+      build.onResolve({ filter }, (args) => {
+        // An installed package's own dependency is that package's to resolve.
+        // Under an isolated linker (bun's `node_modules/.bun` store, pnpm) the
+        // `@radix-ui/react-compose-refs` that `@radix-ui/react-slot` imports is
+        // linked beside it and nowhere under the host root, so forcing it there
+        // fails every component that reaches radix. React is the exception: it
+        // must stay the host's one copy wherever it is imported from.
+        if (INSTALLED.test(args.importer) && !HOST_SINGLETONS.has(packageName(args.path))) {
+          try {
+            return { path: Bun.resolveSync(args.path, dirname(args.importer)) };
+          } catch {
+            // Not linked beside the importer — a peer dep the host provides.
+          }
+        }
+        return { path: Bun.resolveSync(args.path, hostRoot) };
+      });
     },
   };
+}
+
+const INSTALLED = /[\\/]node_modules[\\/]/;
+const HOST_SINGLETONS = new Set(["react", "react-dom"]);
+
+function packageName(specifier: string): string {
+  const parts = specifier.split("/");
+  return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : (parts[0] ?? specifier);
 }
 
 /**

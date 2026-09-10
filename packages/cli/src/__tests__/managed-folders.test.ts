@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import {
@@ -33,6 +33,12 @@ import { findManifest, projectLabel } from "../manifest.ts";
 import { gitContext } from "../publish/core.ts";
 
 const cli = resolve(import.meta.dir, "../cli.ts");
+
+// Every case spawns the real CLI, and some of them a headless browser through
+// it. Under `bun test --parallel` those queue behind every other worker's, and
+// the 5s default starts tripping.
+setDefaultTimeout(30_000);
+
 let root: string;
 let app: string;
 let previousHome: string | undefined;
@@ -314,7 +320,7 @@ test("command matrix resolves external designs for folder, capture, emit, render
   }
   expect(existsSync(join(app, "render.html"))).toBe(true);
   expect(existsSync(join(app, "export.html"))).toBe(true);
-}, 30000);
+});
 
 test("nested application roots remain portable when a monorepo checkout moves", async () => {
   await init();
