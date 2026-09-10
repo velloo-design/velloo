@@ -21,7 +21,8 @@ export interface DesignDiagnostic {
     | "tailwind/undefined-var"
     | "tailwind/v3"
     | "theme/raw-color"
-    | "render/component-threw";
+    | "render/component-threw"
+    | "render/server-fallback";
   path: number[];
   message: string;
   suggestion?: string | undefined;

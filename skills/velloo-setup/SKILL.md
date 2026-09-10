@@ -76,9 +76,13 @@ live data legitimately differ.
 
 ## 3. Establish component fidelity before adapting anything
 
-Only after theme parity, and only for components used by the screens you're
-about to design, call `component_status { ids: [...] }`. Treat its statuses as
-part of the design brief:
+Only after theme parity, call `component_status { screen: "<id>" }` for each
+screen you're about to design or verify (or `{ ids: [...] }` before a screen
+exists). Check `mounted` first: the mount is all-or-nothing, so a single
+`unavailable` component keeps the whole screen — and every screenshot and
+`compare_to_url` of it — on Velloo's bundled components, whatever the other
+statuses say. Fix or replace the blocking component before trusting any
+`exact`. Treat the statuses as part of the design brief:
 
 - **`exact`** — Velloo compile-checked and selected the app's source file for
   the whole-screen canvas mount. Custom CVA variants and ordinary explicit
@@ -90,8 +94,10 @@ part of the design brief:
 - **`fallback`** — the app file is absent or failed the browser preflight, so a
   bundled provider component or Velloo helper is rendering. Read the returned
   note/errors before deciding whether the visual difference matters.
-- **`unavailable`** — there is no usable canvas source. The canvas renders an
-  explicit labelled placeholder rather than silently inventing the component.
+- **`unavailable`** — there is no usable canvas source, so a screen using it
+  does not mount at all (`mounted: false`); read its errors — a resolution
+  failure usually means the recorded app root is wrong
+  (`velloo folder set-app-root`).
 
 Host-source edits invalidate the canvas bundle automatically. After changing a
 component, wait for the frame to reload and call `component_status` again; do

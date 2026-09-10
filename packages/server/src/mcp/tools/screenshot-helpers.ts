@@ -16,6 +16,7 @@ import {
   type Theme,
   type Viewport,
 } from "@velloo/schema";
+import type { CanvasBundleResult } from "../../live/canvas-bundle.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -26,6 +27,7 @@ import {
   renderPassForScreen,
 } from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
+import type { DesignDiagnostic } from "../diagnostics.ts";
 
 function playwrightMissingMessage(msg: string): string {
   return `screenshot: Playwright is not installed. Run \`${CHROMIUM_INSTALL_CMD}\`, then retry — no server restart needed. Underlying error: ${msg}`;
@@ -94,36 +96,111 @@ export type CanvasBundleFor = (
 ) => Promise<{ url: string; themeOptions: unknown } | undefined>;
 
 /**
+ * How a screen renders in the canvas and in every capture. The browser mount is
+ * all-or-nothing: one component with no source that compiles keeps the WHOLE
+ * screen on the server render, so the per-component fidelity `component_status`
+ * reports holds only when the screen as a whole mounts.
+ */
+export type ScreenMount =
+  /** The adapter has no browser mount, or the screen uses no components. */
+  | { kind: "none" }
+  | { kind: "mounted"; libraryId: string; refs: string[]; bundle: CanvasBundleResult }
+  | {
+      kind: "server";
+      libraryId: string;
+      reason: string;
+      bundle?: CanvasBundleResult;
+    };
+
+export async function screenMount(
+  ctx: MutationContext,
+  canvasBundler: CanvasBundler,
+  screen: Screen,
+): Promise<ScreenMount> {
+  const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
+  if (!provider.canvasBundleSpec) return { kind: "none" };
+  const refs = collectSerializedRefs(serializeTree(screen.tree, { snippets: ctx.folder.snippets }));
+  if (refs.length === 0) return { kind: "none" };
+  const libraryId = libraryIdForScreen(ctx, screen);
+  // See routes/render.ts: an extension ref has no browser-bundle source, so
+  // the screen keeps its SSR render (plus any live-island mounts).
+  const extensionIds = new Set(Object.keys(ctx.folder.config.extensions ?? {}));
+  const extensions = refs.filter((ref) => extensionIds.has(ref));
+  if (extensions.length > 0) {
+    return {
+      kind: "server",
+      libraryId,
+      reason: `it uses the extension${extensions.length === 1 ? "" : "s"} ${extensions.join(", ")}, which ${extensions.length === 1 ? "has" : "have"} no browser-canvas source`,
+    };
+  }
+  const bundle = await canvasBundler.build(libraryId, refs);
+  if (bundle.usable) return { kind: "mounted", libraryId, refs, bundle };
+  const blocked = bundle.diagnostics.filter((entry) => entry.status === "unavailable");
+  const reason = blocked.length
+    ? `${blocked.map((entry) => entry.id).join(", ")} ${blocked.length === 1 ? "has" : "have"} no source that compiles for the browser`
+    : `the browser bundle failed to build: ${bundle.errors[0]?.message ?? "no components resolved"}`;
+  return { kind: "server", libraryId, reason, bundle };
+}
+
+/** The first error of each blocking component, trimmed — enough to act on. */
+function blockingErrors(bundle: CanvasBundleResult | undefined): string[] {
+  return (bundle?.diagnostics ?? [])
+    .filter((entry) => entry.status === "unavailable")
+    .map((entry) => {
+      const first = entry.errors?.[0] ?? entry.note ?? "no browser source";
+      return `${entry.id}: ${first.length > 300 ? `${first.slice(0, 300)}…` : first}`;
+    });
+}
+
+/**
+ * The capture-time warning that the screen is NOT rendering the app's own
+ * components. Without it a screenshot of the server render reads as the app's
+ * components misbehaving — a custom `size="xl"` collapsing to the bundled
+ * Button's height — while `component_status` insists they are `exact`.
+ */
+export async function mountDiagnostics(
+  ctx: MutationContext,
+  canvasBundler: CanvasBundler,
+  screen: Screen,
+): Promise<DesignDiagnostic[]> {
+  const mount = await screenMount(ctx, canvasBundler, screen).catch(() => undefined);
+  if (mount?.kind !== "server") return [];
+  const errors = blockingErrors(mount.bundle);
+  return [
+    {
+      severity: "warning",
+      code: "render/server-fallback",
+      path: [],
+      message:
+        `This screen renders server-side from Velloo's bundled components, not the app's own, because ${mount.reason}. ` +
+        "The browser mount is all-or-nothing, so every component on the screen falls back together — including ones component_status reports as exact." +
+        (errors.length ? ` ${errors.join(" | ")}` : ""),
+      suggestion:
+        "Fix what blocks the listed component (component_status { screen } has the full errors), or replace it; captures will then show the app's components.",
+    },
+  ];
+}
+
+/**
  * A thunk yielding the framework-native canvas-bundle render option (#18) for a
  * screen — the installed-component `mountScreen` URL (root-relative; resolved
  * against the screenshot's `<base href>` like the live bundle) + native theme
- * options — or undefined when the screen's adapter declares no bundle spec OR
- * the build failed (framework not installed). Both keep the capture on SSR;
- * bundles are per-library, so non-default-library screens mount too.
- * Awaits the cached build so a build miss never embeds a dead URL.
+ * options — or undefined when the screen stays on the server render (see
+ * {@link screenMount}). Bundles are per-library, so non-default-library screens
+ * mount too. Awaits the cached build so a build miss never embeds a dead URL.
  */
 export function makeCanvasBundle(
   ctx: MutationContext,
   canvasBundler: CanvasBundler,
 ): CanvasBundleFor {
   return async (screen, theme, dark) => {
+    const mount = await screenMount(ctx, canvasBundler, screen);
+    if (mount.kind !== "mounted") return undefined;
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-    if (!provider.canvasBundleSpec) return undefined;
-    const refs = collectSerializedRefs(
-      serializeTree(screen.tree, { snippets: ctx.folder.snippets }),
-    );
-    if (refs.length === 0) return undefined;
-    // See routes/render.ts: an extension ref has no browser-bundle source, so
-    // the screen keeps its SSR render (plus any live-island mounts).
-    const extensionIds = new Set(Object.keys(ctx.folder.config.extensions ?? {}));
-    if (refs.some((ref) => extensionIds.has(ref))) return undefined;
-    const libraryId = libraryIdForScreen(ctx, screen);
-    const bundle = await canvasBundler.build(libraryId, refs);
-    if (!bundle.usable) return undefined;
     return {
       url:
-        `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}` +
-        `&refs=${encodeURIComponent(refs.join(","))}`,
+        `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(mount.libraryId)}` +
+        `&refs=${encodeURIComponent(mount.refs.join(","))}`,
       themeOptions: provider.themeToNative?.(theme, dark) ?? null,
     };
   };

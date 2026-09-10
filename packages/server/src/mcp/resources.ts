@@ -389,9 +389,11 @@ Diagnostics are **triage signals, not gates.** A deliberate brand gradient or st
 
 One exception is a gate: \`render/component-threw\` (severity \`error\`) means the component at that path threw while rendering, so the canvas shows a diagnostic placeholder where your component should be. A single broken node no longer takes the whole screen down, which is exactly why the diagnostic matters — the screen still renders and still looks built. The message is the component's own, and usually names a parent it has to sit inside: composite families such as Select, Tabs, and Dialog give their parts a context, so \`SelectItem\` needs a \`Select\` above it, not just a \`Box\`.
 
+\`render/server-fallback\` on a \`screenshot\`, \`compare_to_url\` or computed \`inspect\` means that capture is NOT of the app's components. The browser mount is all-or-nothing: one component with no source that compiles keeps the whole screen on Velloo's bundled components, so a custom variant the app defines renders as the bundled default everywhere on it — including components \`component_status\` reports as \`exact\`. Don't tune the design against that capture; fix or replace the component the diagnostic names (\`component_status { screen }\` has the full errors).
+
 ## inspect
 
-Returns SSR'd HTML plus resolved props for a specific node, when you need to verify what actually landed. The node is rendered where it sits, with its real ancestors around it, so a part that needs its parent inspects correctly.`,
+Returns server-rendered HTML plus resolved props for a specific node, when you need to verify what actually landed. The node is rendered where it sits, with its real ancestors around it, so a part that needs its parent inspects correctly. That HTML comes from Velloo's bundled library; where the screen mounts the app's own components, pass \`computed: true\` to measure what the canvas actually shows.`,
   },
 
   art: {

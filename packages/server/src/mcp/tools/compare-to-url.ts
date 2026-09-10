@@ -35,6 +35,7 @@ import {
   framesShorterThan,
   makeCanvasBundle,
   makeLiveUrl,
+  mountDiagnostics,
   regionNode,
   renderForCapture,
 } from "./screenshot-helpers.ts";
@@ -437,7 +438,10 @@ export function registerCompareToUrlTool(
           contentSimilarity,
           heightDelta: result.heightDelta,
         });
-        const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+        const diagnostics = [
+          ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
+          ...(await mountDiagnostics(ctx, canvasBundler, screen)),
+        ];
         const summary = {
           similarity,
           changedRatio: Number(result.changedRatio.toFixed(4)),

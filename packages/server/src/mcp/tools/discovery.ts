@@ -32,6 +32,7 @@ import { resolveLocator } from "../../path.ts";
 import { snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
+import { screenMount } from "./screenshot-helpers.ts";
 
 /**
  * Snippets mark a param required by the *absence* of `default`/`optional`. Agents reliably
@@ -453,13 +454,56 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "component_status",
     {
       description:
-        'Compile-check components for the browser canvas and report each as exact repo source, canvas-adapted, fallback, or unavailable. Pass the component ids as `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. Use before claiming the canvas renders an app component exactly.',
+        'Compile-check components for the browser canvas and report each as exact repo source, canvas-adapted, fallback, or unavailable. Pass `screen` to check exactly the components a screen uses and whether it mounts — the mount is all-or-nothing, so one unavailable component keeps the whole screen (and every capture of it) on Velloo\'s bundled components, whatever the others report. Or pass `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. Use before claiming the canvas renders an app component exactly.',
       inputSchema: {
-        ids: z.array(z.string().min(1)).min(1),
-        library: z.string().min(1).optional(),
+        ids: z.array(z.string().min(1)).min(1).optional(),
+        screen: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Screen id: report the components it uses and whether it mounts"),
+        library: z.string().min(1).optional().describe("With `ids`; a screen names its own"),
       },
     },
-    async ({ ids, library }) => {
+    async ({ ids, screen: screenId, library }) => {
+      if (screenId !== undefined) {
+        const screen = ctx.folder.screens.get(screenId);
+        if (!screen) return errorResult(screenNotFound(screenId));
+        if (!ctx.canvasBundler) {
+          return errorResult({
+            kind: "BadRequest",
+            message: "component_status { screen } needs the canvas daemon's bundler.",
+          });
+        }
+        const mount = await screenMount(ctx, ctx.canvasBundler, screen);
+        if (mount.kind === "none") {
+          return jsonResult({
+            screen: screenId,
+            mounted: false,
+            note: "This screen's library renders server-side only, or the screen uses no components — there is no app mount to report on.",
+            diagnostics: [],
+            errors: [],
+          });
+        }
+        return jsonResult({
+          library: mount.libraryId,
+          screen: screenId,
+          mounted: mount.kind === "mounted",
+          ...(mount.kind === "server"
+            ? {
+                note: `The canvas and every capture render this screen from Velloo's bundled components, not the app's own, because ${mount.reason}. Statuses below describe each component's source; none of them reaches the screen until the blocking ones are fixed or replaced.`,
+              }
+            : {}),
+          diagnostics: mount.bundle?.diagnostics ?? [],
+          errors: mount.bundle?.errors ?? [],
+        });
+      }
+      if (!ids) {
+        return errorResult({
+          kind: "BadRequest",
+          message: 'Pass `screen` (a screen id) or `ids` (component ids), e.g. { screen: "home" }.',
+        });
+      }
       const libraryId = library ?? ctx.folder.config.defaultLibrary;
       const provider = ctx.providers[libraryId] as FrameworkAdapter | undefined;
       if (!provider) {

@@ -16,6 +16,7 @@ import {
   defaultViewport,
   makeCanvasBundle,
   makeLiveUrl,
+  mountDiagnostics,
   renderForCapture,
 } from "./screenshot-helpers.ts";
 
@@ -34,7 +35,7 @@ export function registerInspectTool(
     "inspect",
     {
       description:
-        "Return SSR'd HTML, resolved className list, $ref, and resolved props for the node at path. Use this instead of guessing the rendered output. When path resolves to a snippet instance, pass innerPath to inspect a node *inside* the resolved body (args, $overrides, and $extraClassName applied) — omit it to inspect the body root. Pass `computed: true` to also render the screen in a real browser and report the node's actual geometry and resolved styles — use it instead of predicting which utility class won the cascade.",
+        "Return the node's server-rendered HTML, resolved className list, $ref, and resolved props for the node at path. Use this instead of guessing the rendered output. The HTML comes from Velloo's bundled library; where the screen mounts the app's own components (component_status { screen }), the canvas and captures show those instead, so measure them with `computed: true`. When path resolves to a snippet instance, pass innerPath to inspect a node *inside* the resolved body (args, $overrides, and $extraClassName applied) — omit it to inspect the body root. Pass `computed: true` to also render the screen in a real browser and report the node's actual geometry and resolved styles — use it instead of predicting which utility class won the cascade.",
       inputSchema: {
         screenId: z.string(),
         path: PathSchema,
@@ -102,8 +103,10 @@ export function registerInspectTool(
         });
         const dom = await measureRendered({ html, viewport });
         const node = measuredAt(dom, path);
+        const diagnostics = await mountDiagnostics(ctx, canvasBundler, screen);
         return jsonResult({
           ...result.value,
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
           computed: node ? { viewport, ...node, children: childrenMeasuredAt(dom, path) } : null,
           ...(node
             ? {}

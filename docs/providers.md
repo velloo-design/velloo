@@ -100,8 +100,9 @@ Descriptor metadata worth populating even though it's optional:
 
 ## The canvas fidelity ladder
 
-`component_status` exposes the result for named components. Treat these statuses as a
-public contract, not an internal implementation detail:
+`component_status` exposes the result for named components, or for exactly the components
+one screen uses (`{ screen }`). Treat these statuses as a public contract, not an internal
+implementation detail:
 
 1. **Exact** — the selected module is the app's component source (or the exact installed
    package export for package-based adapters) and passed browser preflight.
@@ -110,8 +111,12 @@ public contract, not an internal implementation detail:
    such as portals and menus that must remain open inline.
 3. **Fallback** — a provider-owned source or Velloo helper is rendering because the app
    file is absent or failed preflight. The diagnostic carries the chosen source and error.
-4. **Unavailable** — no registered source can render; the mount emits an explicit labelled
-   placeholder instead of silently inventing DOM.
+4. **Unavailable** — no registered source can render. The mount is all-or-nothing: rather
+   than client-render a hole, the whole screen keeps its server render (the adapter's
+   bundled components), so every other component's status stops describing what the
+   canvas and captures show. `component_status { screen }` reports `mounted: false` with
+   the blocking ids, and `screenshot` / `compare_to_url` / `inspect { computed }` carry a
+   `render/server-fallback` diagnostic.
 
 Shadcn uses all four outcomes. Ordinary client-safe `components/ui` files are exact,
 compound children are preserved by the whole-screen interpreter, portal/state-heavy

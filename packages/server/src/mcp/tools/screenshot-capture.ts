@@ -32,6 +32,7 @@ import {
   framesShorterThan,
   makeCanvasBundle,
   makeLiveUrl,
+  mountDiagnostics,
   regionNode,
   renderForCapture,
 } from "./screenshot-helpers.ts";
@@ -104,7 +105,10 @@ export function registerScreenshotCaptureTool(
     async ({ screenId, viewport: vp, mode, fullPage, scale, path, theme, diff, resetBaseline }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(`Screen not found: ${screenId}`);
-      const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+      const diagnostics = [
+        ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
+        ...(await mountDiagnostics(ctx, canvasBundler, screen)),
+      ];
       const withDiagnostics = <T extends object>(value: T): T & { diagnostics?: unknown } => ({
         ...value,
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
