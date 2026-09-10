@@ -167,4 +167,50 @@ describe("restricted JSX compiler", () => {
       children: [{ $ref: "Heading" }, { $ref: "Button", props: { children: "Continue" } }],
     });
   });
+
+  test("text beside an element is wrapped rather than rejected", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    // The icon button, written the way every library writes it.
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Button><Icon name="gift" />Rewards</Button>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node).toMatchObject({
+      $ref: "Button",
+      children: [{ $ref: "Icon" }, { $ref: "Text", props: { children: "Rewards" } }],
+    });
+    // No `children` prop: the text lives in the wrapper, not in both places.
+    expect(result.node.props?.children).toBeUndefined();
+  });
+
+  test("wrapping preserves source order and drops formatting whitespace", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      "<Box>Total\n  <Badge>3</Badge>\n  items</Box>",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.children).toMatchObject([
+      { $ref: "Text", props: { children: "Total" } },
+      { $ref: "Badge", props: { children: "3" } },
+      { $ref: "Text", props: { children: "items" } },
+    ]);
+  });
+
+  test("text alone still becomes a children prop, not a wrapper", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(ctx, screen, "<Button>Save</Button>");
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node).toMatchObject({ $ref: "Button", props: { children: "Save" } });
+    expect(result.node.children).toBeUndefined();
+  });
 });

@@ -26,7 +26,7 @@ import { diagnosticsForScreen } from "../diagnostics.ts";
 import { readCaptureDom, styleDiffForRegions } from "./computed.ts";
 import { CompareToUrlOutput } from "./outputs.ts";
 import { errorResult, type McpContent, structuredResult } from "./result.ts";
-import { ThemeNameSchema, ViewportSchema } from "./schemas.ts";
+import { ThemeNameSchema, ViewportArgSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
   captureTimeoutMessage,
@@ -124,6 +124,47 @@ const StoredCaptureSource = z.strictObject({
   captureId: z.string().describe("From list_captures"),
 });
 
+/**
+ * The one interpretive line attached to a similarity score, or null when the
+ * number speaks for itself.
+ *
+ * Two scores get read wrong, at opposite ends. A long single column that drifts
+ * a few pixels cascades that drift downward and tanks the whole-page diff while
+ * the content matches — the agent chases regions that are fine. And a score
+ * near zero has no localizing power at all: the changed area is the whole page,
+ * so the top region spans everything with a null node ref and merely restates
+ * the score. Both readings of that second case are wrong — that the tool is
+ * broken, or that structurally sound work needs tearing down — which is exactly
+ * why the note has to fire hardest where the number is lowest.
+ */
+export function similarityNote(input: {
+  similarity: number;
+  contentSimilarity: number;
+  heightDelta: number;
+}): string | null {
+  const { similarity, contentSimilarity, heightDelta } = input;
+  const heightDiffers = heightDelta !== 0;
+  const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
+  if (heightDominated) {
+    return (
+      `similarity is held down mostly by a ${Math.abs(heightDelta)}px height difference, not by content mismatch — ` +
+      `over the overlapping height the match is ${contentSimilarity}. Small cumulative vertical drift cascades down a long ` +
+      `single column and tanks the whole-page pixel diff; trust contentSimilarity and the per-region node refs here.`
+    );
+  }
+  if (similarity >= 0.3) return null;
+  return (
+    `similarity ${similarity} means these two renders differ structurally, not in detail. At this range the diff cannot localize: ` +
+    `topMismatches will span most of the page with a null node ref, which restates the score rather than naming a cause — do not work through them yet. ` +
+    (heightDiffers
+      ? `The render is ${Math.abs(heightDelta)}px ${heightDelta > 0 ? "taller" : "shorter"} than the page ` +
+        `(${contentSimilarity} over the overlap), which is itself the lead: at this size the gap is whole sections missing, ` +
+        `stacked where the page puts them side by side, or a container a different width — not spacing. `
+      : "") +
+    `Re-read the capture's outline and rects (get_capture) and fix the page-level structure first; topMismatches start earning their keep past ~0.4.`
+  );
+}
+
 export function registerCompareToUrlTool(
   mcp: McpServer,
   ctx: MutationContext,
@@ -154,7 +195,7 @@ export function registerCompareToUrlTool(
         source: z
           .union([LiveUrlSource, StoredCaptureSource])
           .describe("What to diff against: a live page, or a capture already on disk"),
-        viewport: ViewportSchema.optional().describe(
+        viewport: ViewportArgSchema.optional().describe(
           "Render size; defaults to the folder's Desktop preset",
         ),
         mode: z.enum(["light", "dark"]).optional(),
@@ -391,12 +432,11 @@ export function registerCompareToUrlTool(
         const similarity = Number((1 - result.changedRatio).toFixed(4));
         const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
         const heightDiffers = result.heightDelta !== 0;
-        // The headline pixel-diff over the union over-counts a length mismatch:
-        // on a tall single column, a few px of cumulative drift cascades and
-        // sinks `similarity` even when the content matches. Flag it when the
-        // overlap-only score is materially better so the agent trusts the
-        // structural match (and the per-region node refs) over the headline.
-        const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
+        const note = similarityNote({
+          similarity,
+          contentSimilarity,
+          heightDelta: result.heightDelta,
+        });
         const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
         const summary = {
           similarity,
@@ -408,14 +448,7 @@ export function registerCompareToUrlTool(
           /** Velloo render's full content height in CSS px (frame-independent). */
           contentHeight,
           ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
-          ...(!unverified && heightDominated
-            ? {
-                note:
-                  `similarity is held down mostly by a ${Math.abs(result.heightDelta)}px height difference, not by content mismatch — ` +
-                  `over the overlapping height the match is ${contentSimilarity}. Small cumulative vertical drift cascades down a long ` +
-                  `single column and tanks the whole-page pixel diff; trust contentSimilarity and the per-region node refs here.`,
-              }
-            : {}),
+          ...(!unverified && note !== null ? { note } : {}),
           ...(storedPng
             ? {
                 capture: {

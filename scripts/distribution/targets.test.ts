@@ -3,7 +3,7 @@ import { BUN_VERSION, currentRuntimeTarget, RUNTIME_TARGETS, runtimeTarget } fro
 
 describe("official Bun runtime targets", () => {
   test("pins Bun 1.4 and covers npm's macOS, Linux, musl, and Windows matrix", () => {
-    expect(BUN_VERSION).toBe("1.4.0");
+    expect(BUN_VERSION).toBe("1.4.2");
     expect(RUNTIME_TARGETS.map((target) => target.id)).toEqual([
       "darwin-arm64",
       "darwin-x64",

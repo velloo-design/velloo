@@ -23,7 +23,7 @@ import { resolve as resolveLocator } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { diagnosticsForScreen } from "../diagnostics.ts";
 import { errorResult, type McpResult } from "./result.ts";
-import { PathSchema, RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
+import { PathSchema, RenderModeSchema, ThemeNameSchema, ViewportArgSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
   captureTimeoutMessage,
@@ -85,7 +85,7 @@ export function registerScreenshotCaptureTool(
         "Render a screen to PNG and run full class/theme diagnostics. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. The render uses its OWN viewport, not the board frame's, so `framesShorterThanContent` names placements that clip below the fold — resize them with `update_frame`. Guide: velloo://guide/verification.",
       inputSchema: {
         screenId: z.string(),
-        viewport: ViewportSchema.optional().describe(
+        viewport: ViewportArgSchema.optional().describe(
           "Render size; defaults to the folder's Desktop preset",
         ),
         mode: RenderModeSchema,

@@ -32,7 +32,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.2
 
       # npm (for `npm publish`) + the registry .npmrc that reads NODE_AUTH_TOKEN.
       - uses: actions/setup-node@v4

@@ -1,4 +1,4 @@
-export const BUN_VERSION = "1.4.0";
+export const BUN_VERSION = "1.4.2";
 
 export interface RuntimeTarget {
   id: string;
@@ -9,7 +9,7 @@ export interface RuntimeTarget {
 }
 
 /**
- * Exact official Bun 1.4.0 npm packages. x64 uses the baseline builds so
+ * Exact official Bun 1.4.2 npm packages. x64 uses the baseline builds so
  * Velloo also works on CPUs without AVX2.
  */
 export const RUNTIME_TARGETS: readonly RuntimeTarget[] = [

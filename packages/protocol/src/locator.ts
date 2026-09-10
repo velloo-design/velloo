@@ -47,6 +47,20 @@ export const jsonTolerant = <T extends z.ZodTypeAny>(schema: T) =>
   }, schema);
 
 /**
+ * Wrap an array schema so a single entry sent bare is lifted into a
+ * one-element array.
+ *
+ * The bulk verbs take `patches[]` because bulk is the expensive case worth
+ * making cheap — but `add_frame` sits beside `update_frame` taking flat
+ * `w`/`h`, so an agent moving one frame reaches for the singular shape and
+ * gets a reject for its trouble. Like `jsonTolerant` this is a tolerance and
+ * not a second spelling: it stays out of the description, so nobody pays
+ * tokens to learn a form they should not choose deliberately.
+ */
+export const singularTolerant = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === "object" && v !== null && !Array.isArray(v) ? [v] : v), schema);
+
+/**
  * A node address, in the two forms worth advertising.
  *
  * The JSON-stringified path (`"[0,2]"`) that agents building args as JSON

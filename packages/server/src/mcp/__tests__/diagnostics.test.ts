@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Screen } from "@velloo/schema";
+import type { Node, Screen } from "@velloo/schema";
 import { testContext } from "../../testing/design-folder.ts";
-import { renderDiagnostics } from "../diagnostics.ts";
+import { rawColorDiagnostics, renderDiagnostics } from "../diagnostics.ts";
 
 function screenWith(tree: Screen["tree"]): Screen {
   return { id: "home", name: "Home", tree };
@@ -84,5 +84,50 @@ describe("renderDiagnostics", () => {
       children: [{ $ref: "NoSuchComponent", props: {} }],
     });
     expect(renderDiagnostics(ctx, screen)).toEqual([]);
+  });
+});
+
+/**
+ * The audit itself is covered in `dark-mode-audit`; what matters here is what
+ * an agent actually receives when a whole hero section is white-on-photo.
+ */
+describe("rawColorDiagnostics", () => {
+  const hero = (count: number): Node => ({
+    $ref: "Box",
+    props: { className: "relative" },
+    children: Array.from({ length: count }, (_, i) => ({
+      $ref: "Text",
+      $id: `line-${i}`,
+      props: { className: "text-white" },
+    })),
+  });
+
+  test("lists every offender while the list is still a list of things to fix", () => {
+    const out = rawColorDiagnostics(hero(3));
+    expect(out).toHaveLength(3);
+    expect(out.every((d) => d.code === "theme/raw-color")).toBe(true);
+    expect(out.some((d) => d.message.includes("more node(s)"))).toBe(false);
+  });
+
+  test("caps the repetition and names the opt-out once", () => {
+    const out = rawColorDiagnostics(hero(30));
+    // Eight worked examples, then one line that says what to do about the rest.
+    expect(out).toHaveLength(9);
+    const summary = out.at(-1);
+    expect(summary?.message).toContain("22 more node(s)");
+    expect(summary?.message).toContain("data-accent");
+    // Named where it is read: the guide had it, the warning did not.
+    expect(summary?.message).toContain("does not cascade");
+    expect(summary?.suggestion).toBeUndefined();
+  });
+
+  test("an exempted node produces nothing, cap or no cap", () => {
+    const tree: Node = {
+      $ref: "Box",
+      children: [
+        { $ref: "Text", $id: "t", props: { className: "text-white", "data-accent": "ok" } },
+      ],
+    };
+    expect(rawColorDiagnostics(tree)).toEqual([]);
   });
 });

@@ -243,6 +243,38 @@ function issueAt(source: string, offset: number, message: string): JsxIssue {
   };
 }
 
+/**
+ * Lift bare text sitting beside elements into `<Text>`, in place.
+ *
+ * `<Button><Icon />Rewards</Button>` is the most natural way to write an icon
+ * button in every library velloo targets, and it used to be a hard reject: the
+ * design tree has one slot for a component's text, so text and elements could
+ * not both occupy it. Wrapping is the fix the error message asked the caller to
+ * make by hand, and there is only one way to make it — so make it here.
+ *
+ * Only for the genuinely mixed case. Text alone still becomes `props.children`,
+ * which is the cheaper node and what a plain `<Button>Save</Button>` should
+ * stay. Returns the children untouched when the provider has no `Text` to wrap
+ * with, so the original error stands rather than a confusing unknown-component
+ * one taking its place.
+ */
+function wrapMixedText(
+  children: Array<Element | TextNode>,
+  ctx: CompileContext,
+): Array<Element | TextNode> {
+  const hasElement = children.some((child) => "tag" in child);
+  const hasText = children.some((child) => !("tag" in child) && child.text.trim().length > 0);
+  if (!hasElement || !hasText || !ctx.components.has("Text")) return children;
+  return children.flatMap((child) => {
+    if ("tag" in child) return [child];
+    // Whitespace between elements is JSX formatting, not content.
+    if (child.text.trim().length === 0) return [];
+    return [
+      { tag: "Text", attributes: [], children: [child], offset: child.offset } satisfies Element,
+    ];
+  });
+}
+
 function textValue(children: Array<Element | TextNode>): { text?: string; elements: Element[] } {
   const elements = children.filter((child): child is Element => "tag" in child);
   const text = children
@@ -342,7 +374,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
     };
   }
 
-  const { text, elements } = textValue(element.children);
+  const { text, elements } = textValue(wrapMixedText(element.children, ctx));
   if (text && elements.length > 0) {
     return {
       ok: false,

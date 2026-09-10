@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { UpdateFrameBody, UpdatePropsBody } from "@velloo/protocol";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { z } from "zod";
 import type { ActivityEvent } from "../../../activity.ts";
@@ -21,7 +22,7 @@ import { designConfig, designTheme } from "../../../testing/design-folder.ts";
 import type { WatchEvent } from "../../../watcher.ts";
 import { registerDiscoveryTools } from "../discovery.ts";
 import { registerMutationTools } from "../mutations.ts";
-import { jsonTolerant } from "../schemas.ts";
+import { jsonTolerant, ViewportArgSchema } from "../schemas.ts";
 
 /**
  * Guards the trace-mining ergonomics fixes: actionable error hints, JSON-tolerant
@@ -148,6 +149,48 @@ describe("input tolerance + auto-merge", () => {
     ]);
     expect(res.completed).toBe(1);
     expect(res.results[0]?.ok).toBe(true);
+  });
+
+  test("a bulk `patches` accepts one entry sent bare, without the array", () => {
+    // `add_frame` beside it takes flat w/h, so the singular shape is what an
+    // agent reaches for first when it is editing exactly one thing.
+    const one = UpdateFrameBody.parse({
+      boardId: "main",
+      patches: { frameId: "f1", patch: { w: 1440, h: 900 } },
+    });
+    expect(one.patches).toEqual([{ frameId: "f1", patch: { w: 1440, h: 900 } }]);
+
+    const props = UpdatePropsBody.parse({
+      screenId: "landing",
+      patches: { path: [], propPatch: { className: "x" } },
+    });
+    expect(props.patches).toHaveLength(1);
+  });
+
+  test("an update_frame entry accepts its patch fields inline", () => {
+    expect(
+      UpdateFrameBody.parse({ boardId: "main", patches: [{ frameId: "f1", h: 900 }] }).patches,
+    ).toEqual([{ frameId: "f1", patch: { h: 900 } }]);
+    // Both tolerances at once: one flat entry, no array.
+    expect(
+      UpdateFrameBody.parse({ boardId: "main", patches: { frameId: "f1", h: 900 } }).patches,
+    ).toEqual([{ frameId: "f1", patch: { h: 900 } }]);
+  });
+
+  test("the canonical array form is untouched, and a bad entry still fails", () => {
+    const canonical = { boardId: "main", patches: [{ frameId: "f1", patch: { x: 10 } }] };
+    expect(UpdateFrameBody.parse(canonical).patches).toEqual(canonical.patches);
+    // Tolerance is not permissiveness: an unknown patch field still rejects.
+    expect(() =>
+      UpdateFrameBody.parse({ boardId: "main", patches: { frameId: "f1", nope: 1 } }),
+    ).toThrow();
+    expect(() => UpdateFrameBody.parse({ boardId: "main", patches: [] })).toThrow();
+  });
+
+  test("viewport arguments accept the width/height spelling every browser API taught", () => {
+    expect(ViewportArgSchema.parse({ width: 1440, height: 900 })).toEqual({ w: 1440, h: 900 });
+    expect(ViewportArgSchema.parse({ w: 390, h: 844 })).toEqual({ w: 390, h: 844 });
+    expect(() => ViewportArgSchema.parse({ width: 0, height: 900 })).toThrow();
   });
 
   test("update_props merges a single edit + patches instead of rejecting", async () => {

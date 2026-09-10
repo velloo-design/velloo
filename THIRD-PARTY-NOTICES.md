@@ -17,7 +17,7 @@ The most directly redistributed surfaces are:
 - The published CLI bundle (`dist/cli.js` + `dist/chunk-*.js` + the canvas SPA),
   which inlines its pure-JS runtime dependencies rather than installing them
   from npm.
-- Bun 1.4.0, installed from exact official `@oven/bun-*` platform packages for
+- Bun 1.4.2, installed from exact official `@oven/bun-*` platform packages for
   npm users and copied unmodified into the standalone direct-install archives.
   Its complete upstream linked-library notice ships as `BUN-LICENSE.md`.
 
@@ -25,7 +25,7 @@ The most directly redistributed surfaces are:
 
 | Component | License | Copyright | Source |
 |---|---|---|---|
-| Bun 1.4.0 runtime and embedded libraries | MIT; LGPL-2.0 and additional terms detailed in `BUN-LICENSE.md` | Bun and upstream library contributors | https://github.com/oven-sh/bun/tree/bun-v1.4.0 |
+| Bun 1.4.2 runtime and embedded libraries | MIT; LGPL-2.0 and additional terms detailed in `BUN-LICENSE.md` | Bun and upstream library contributors | https://github.com/oven-sh/bun/tree/bun-v1.4.2 |
 | shadcn/ui | MIT | © 2023 shadcn | https://github.com/shadcn-ui/ui |
 | Radix UI (`@radix-ui/*`) | MIT | © 2022 WorkOS | https://github.com/radix-ui/primitives |
 | Lucide (`lucide` / `lucide-react`) | ISC | © 2022 Lucide Contributors (portions from Feather, MIT, © 2013–2017 Cole Bemis) | https://github.com/lucide-icons/lucide |
@@ -62,7 +62,7 @@ The most directly redistributed surfaces are:
 Except for Bun's separately documented linked libraries, the components above
 are distributed under the MIT, ISC, BSD-3-Clause, or Apache-2.0 license. The
 full texts follow; the copyright line of each applies as listed in the table.
-The complete Bun 1.4.0 upstream notice and relinking information is provided in
+The complete Bun 1.4.2 upstream notice and relinking information is provided in
 `BUN-LICENSE.md`. (The Apache-2.0 text also ships as this package's own LICENSE
 file.)
 

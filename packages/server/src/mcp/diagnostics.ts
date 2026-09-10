@@ -51,6 +51,12 @@ function classUses(root: Node, prefix: number[]): ClassUse[] {
 }
 
 /**
+ * How many raw-color warnings are worth listing individually. Past this the
+ * list stops being a set of things to fix and becomes one repeated observation.
+ */
+const RAW_COLOR_LIMIT = 8;
+
+/**
  * Validate the Tailwind classes and theme-flipping behavior of one changed
  * tree. Non-Tailwind providers return no diagnostics: their `sx`/`style`
  * channels are validated by their component/runtime layer instead.
@@ -115,23 +121,50 @@ export async function diagnosticsForTree(
     }
   }
 
-  for (const problem of darkModeAuditTree(root).problems) {
-    diagnostics.push({
-      severity: "warning",
-      code: "theme/raw-color",
-      path: [...prefix, ...problem.path],
-      message: `${problem.ref} uses non-flipping color classes: ${problem.raw.join(", ")}`,
-      ...(Object.keys(problem.suggestions).length
-        ? {
-            suggestion: Object.entries(problem.suggestions)
-              .map(([from, to]) => `${from} → ${to}`)
-              .join(", "),
-          }
-        : {}),
-    });
-  }
+  diagnostics.push(...rawColorDiagnostics(root, prefix));
 
   return diagnostics;
+}
+
+/**
+ * Raw-color warnings, capped, with the opt-out named once at the end.
+ *
+ * One deliberate decision — white text over a photo scrim, a brand gradient —
+ * produces one of these per node beneath it, because the `data-accent` opt-out
+ * deliberately does not cascade. Thirty repetitions of a warning the agent has
+ * already judged and rejected drown the diagnostics that matter, and the
+ * suggestion attached to each (`text-white` → `text-foreground`) would break
+ * the design if taken. The guide documents the opt-out; nothing did at the
+ * point of the warning, which left comply-or-ignore as the visible options.
+ */
+export function rawColorDiagnostics(root: Node, prefix: number[] = []): DesignDiagnostic[] {
+  const problems = darkModeAuditTree(root).problems;
+  const out: DesignDiagnostic[] = problems.slice(0, RAW_COLOR_LIMIT).map((problem) => ({
+    severity: "warning" as const,
+    code: "theme/raw-color" as const,
+    path: [...prefix, ...problem.path],
+    message: `${problem.ref} uses non-flipping color classes: ${problem.raw.join(", ")}`,
+    ...(Object.keys(problem.suggestions).length
+      ? {
+          suggestion: Object.entries(problem.suggestions)
+            .map(([from, to]) => `${from} → ${to}`)
+            .join(", "),
+        }
+      : {}),
+  }));
+  if (problems.length > RAW_COLOR_LIMIT) {
+    out.push({
+      severity: "warning",
+      code: "theme/raw-color",
+      path: [...prefix],
+      message:
+        `${problems.length - RAW_COLOR_LIMIT} more node(s) use non-flipping color classes. ` +
+        `If these are deliberate — text over an image or scrim, a brand accent, chrome tuned for one mode — ` +
+        `set \`data-accent: "ok"\` on each to exempt it, rather than taking a suggestion that would break the design. ` +
+        `The opt-out does not cascade to children.`,
+    });
+  }
+  return out;
 }
 
 /** Every path in the tree holding a node that renders `ref`. */

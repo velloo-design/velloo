@@ -1,7 +1,7 @@
-# Bun 1.4.0 license and linked-library notices
+# Bun 1.4.2 license and linked-library notices
 
-The upstream notice below is vendored from the signed Bun 1.4.0 release:
-<https://github.com/oven-sh/bun/blob/bun-v1.4.0/LICENSE.md>.
+The upstream notice below is vendored from the signed Bun 1.4.2 release:
+<https://github.com/oven-sh/bun/blob/bun-v1.4.2/LICENSE.md>.
 
 ---
 

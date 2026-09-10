@@ -18,6 +18,22 @@ export { InnerPathSchema, jsonTolerant, LocatorSchema as PathSchema } from "@vel
 export { NodeIdSchema as NodeIdInputSchema } from "@velloo/schema";
 export { ViewportSchema };
 
+/**
+ * The viewport as a tool *argument*, which is a looser thing than the viewport
+ * on disk: `{ width, height }` is what an agent writes first, every browser API
+ * having taught it that spelling, and the reject buys nothing. Normalized here
+ * rather than in `@velloo/schema` because `ViewportSchema` is also the persisted
+ * shape — config presets, the publish bundle — and input tolerance has no
+ * business widening a file format.
+ */
+export const ViewportArgSchema = z.preprocess((v) => {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return v;
+  const o = v as Record<string, unknown>;
+  if (o.w !== undefined || o.h !== undefined) return v;
+  const { width, height, ...rest } = o;
+  return width === undefined && height === undefined ? v : { ...rest, w: width, h: height };
+}, ViewportSchema);
+
 /** A named theme to render with (boards pin one). */
 export const ThemeNameSchema = z
   .string()

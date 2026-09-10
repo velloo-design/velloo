@@ -14,6 +14,7 @@ import {
   LocatorOrRootSchema,
   LocatorSchema,
   PatchRecordSchema,
+  singularTolerant,
 } from "./locator.ts";
 
 /**
@@ -70,7 +71,12 @@ const BoardId = z.string().min(1);
 const FrameId = z.string().min(1);
 const SnippetId = z.string().min(1);
 
-const FramePatchSchema = z.object({
+/**
+ * Strict, like every `*Body` here and for the same reason: a misspelled field
+ * in a patch of all-optional fields is otherwise stripped, leaving an empty
+ * patch that writes nothing and reports success.
+ */
+const FramePatchSchema = z.strictObject({
   x: z.number().optional(),
   y: z.number().optional(),
   w: z.number().int().positive().optional(),
@@ -183,6 +189,12 @@ export const PropsPatchEntrySchema = z
  * `path`+`propPatch` OR `patches` pair declared five optional fields where two
  * combinations were legal, so the real contract lived in prose and a runtime
  * check rather than in the schema.
+ *
+ * `singularTolerant` is not that shorthand coming back. It adds no field and
+ * no second legal combination — `patches` stays required with one declared
+ * shape — it only lifts a bare entry object into the array before validation,
+ * the way `jsonTolerant` parses a stringified one. The contract still lives
+ * entirely in the schema.
  */
 /**
  * Names the continuous gesture a write belongs to — a pointer drag on a HUD
@@ -198,7 +210,7 @@ export const GestureSchema = z
 
 export const updatePropsShape = {
   screenId: ScreenId,
-  patches: jsonTolerant(z.array(PropsPatchEntrySchema).min(1)).describe(
+  patches: jsonTolerant(singularTolerant(z.array(PropsPatchEntrySchema).min(1))).describe(
     "One entry per node; length 1 for a single edit",
   ),
   gesture: GestureSchema,
@@ -343,11 +355,28 @@ export const addFrameShape = {
 export const AddFrameBody = z.strictObject(addFrameShape);
 
 /** Single-or-bulk, on the same terms as `update_props`. */
+/**
+ * One frame's edit, tolerating the flat spelling.
+ *
+ * `add_frame` takes `w`/`h` as plain fields, so the shape an agent reaches for
+ * when resizing one frame is `{ frameId, h: 900 }` rather than the nested
+ * `{ frameId, patch: { h: 900 } }`. That asymmetry between the two verbs is
+ * the reject worth absorbing; the nested form remains the documented one.
+ */
+const FramePatchEntrySchema = z.preprocess(
+  (v) => {
+    if (typeof v !== "object" || v === null || Array.isArray(v) || "patch" in v) return v;
+    const { frameId, ...patch } = v as Record<string, unknown>;
+    return Object.keys(patch).length > 0 ? { frameId, patch } : v;
+  },
+  z.object({ frameId: FrameId, patch: FramePatchSchema }),
+);
+
 export const updateFrameShape = {
   boardId: BoardId,
-  patches: jsonTolerant(
-    z.array(z.object({ frameId: FrameId, patch: FramePatchSchema })).min(1),
-  ).describe("One entry per frame; length 1 for a single edit"),
+  patches: jsonTolerant(singularTolerant(z.array(FramePatchEntrySchema).min(1))).describe(
+    "One entry per frame; length 1 for a single edit",
+  ),
 } satisfies z.ZodRawShape;
 export const UpdateFrameBody = z.strictObject(updateFrameShape);
 export type UpdateFrameInput = z.infer<typeof UpdateFrameBody>;

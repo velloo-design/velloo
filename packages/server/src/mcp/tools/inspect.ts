@@ -10,7 +10,7 @@ import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { childrenMeasuredAt, measuredAt } from "./computed.ts";
 import { FindNodesOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
-import { PathSchema, RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
+import { PathSchema, RenderModeSchema, ThemeNameSchema, ViewportArgSchema } from "./schemas.ts";
 import {
   captureTimeoutMessage,
   defaultViewport,
@@ -50,7 +50,7 @@ export function registerInspectTool(
           .describe(
             "Measure the node in a real browser: box geometry and resolved computed styles, plus its direct children's boxes. Costs a render, so it's off by default.",
           ),
-        viewport: ViewportSchema.optional().describe(
+        viewport: ViewportArgSchema.optional().describe(
           "Render size for `computed`; defaults to the folder's Desktop preset",
         ),
         mode: RenderModeSchema.describe("Render variant for `computed`"),

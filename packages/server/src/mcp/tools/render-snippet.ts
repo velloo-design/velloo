@@ -9,7 +9,7 @@ import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { diagnosticsForTree } from "../diagnostics.ts";
 import { errorResult } from "./result.ts";
-import { RenderModeSchema, ThemeNameSchema, ViewportSchema } from "./schemas.ts";
+import { RenderModeSchema, ThemeNameSchema, ViewportArgSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
   captureTimeoutMessage,
@@ -38,7 +38,7 @@ export function registerRenderSnippetTool(
         snippetId: z.string(),
         args: z.record(z.string(), z.unknown()).optional(),
         extraClassName: z.string().optional(),
-        viewport: ViewportSchema.optional().describe("Defaults to 480×640"),
+        viewport: ViewportArgSchema.optional().describe("Defaults to 480×640"),
         mode: RenderModeSchema,
         scale: z.number().min(0.25).max(1).optional(),
         theme: ThemeNameSchema,
