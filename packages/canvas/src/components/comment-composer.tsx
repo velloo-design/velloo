@@ -17,7 +17,7 @@ import { Textarea } from "./ui/textarea.tsx";
  */
 
 /** Screen-space offset from the anchored box to the composer's top-left. */
-export const PIN_GAP = 14;
+const PIN_GAP = 14;
 
 interface Box {
   x: number;
@@ -36,11 +36,7 @@ type Insets = Record<string, { x: number; y: number } | undefined>;
  * whatever happens to be selected — those are two different nodes as often as
  * not, and reading the selection put the composer beside the wrong one.
  */
-export function anchoredBox(
-  anchor: CommentAnchor,
-  frames: Board["frames"],
-  insets: Insets,
-): Box | null {
+function anchoredBox(anchor: CommentAnchor, frames: Board["frames"], insets: Insets): Box | null {
   if (anchor.kind === "board") return { x: anchor.x, y: anchor.y, w: 0, h: 0 };
   const frame = frames.find((candidate) => candidate.id === anchor.frameId);
   if (!frame) return null;

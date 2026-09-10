@@ -53,7 +53,7 @@ type AuthorKind = ThreadMessage["author"]["kind"];
 
 export type CommentStatusFilter = "open" | "resolved" | "all";
 
-export function relativeTime(iso: string): string {
+function relativeTime(iso: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes}m`;
@@ -84,7 +84,7 @@ export interface MessageVoice {
  * and a reviewer's outlined because they are speaking from outside this
  * machine — which is also why theirs is the only one badged.
  */
-export function canvasVoice(message: ThreadMessage): MessageVoice {
+function canvasVoice(message: ThreadMessage): MessageVoice {
   switch (message.author.kind) {
     case "user":
       return { align: "end", variant: "default" };

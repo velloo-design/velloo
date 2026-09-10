@@ -3,6 +3,7 @@ import {
   ArrowUpCircle,
   Coins,
   ExternalLink,
+  FileStack,
   History,
   LogIn,
   LogOut,
@@ -48,6 +49,11 @@ const PLAN_LABEL: Record<string, string> = {
   business: "Business",
   enterprise: "Enterprise",
 };
+
+/** A tier as the product names it, falling back to whatever the cloud sent. */
+export function planLabel(tier: string): string {
+  return PLAN_LABEL[tier] ?? tier;
+}
 
 /**
  * Credit balance for the menu. Micros are the wire unit ($1 = 1_000_000); the
@@ -116,6 +122,7 @@ export function SettingsMenu() {
   const status = useCanvas((s) => s.authStatus);
   const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
+  const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
   const { status: update, upgrading } = useUpdateState();
   const updateReady = Boolean(update?.available && update.upgradable);
 
@@ -139,7 +146,7 @@ export function SettingsMenu() {
   // A token the cloud rejected still has a local email, so the menu can name
   // the account it can no longer use instead of just claiming "signed out".
   const expired = loggedIn && status?.verified === false;
-  const plan = account?.tier ? `${PLAN_LABEL[account.tier] ?? account.tier} plan` : null;
+  const plan = account?.tier ? `${planLabel(account.tier)} plan` : null;
   // Only nudge on a tier the cloud actually reported as free — an absent tier
   // means it didn't say, and guessing would show an upgrade to paid users.
   const upgradeUrl = account?.tier === "free" ? billingUrl(status?.appUrl) : null;
@@ -291,6 +298,17 @@ export function SettingsMenu() {
             <SlidersHorizontal />
             Settings…
           </DropdownMenuItem>
+          {/* Publishing was one-way from the canvas: the board menu made links
+              and nothing here ever showed them again. This is the way back. */}
+          {loggedIn ? (
+            <DropdownMenuItem
+              data-testid="settings-published-boards"
+              onSelect={() => setPublishedBoardsOpen(true)}
+            >
+              <FileStack />
+              Published boards…
+            </DropdownMenuItem>
+          ) : null}
           {loggedIn && status?.appUrl ? (
             <DropdownMenuItem asChild>
               <a

@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  ExternalLink,
   FolderInput,
   FolderPlus,
   Frame as FrameIcon,
@@ -24,9 +25,10 @@ import {
 import { type DragEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { type BoardGroupMeta, type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { ICON_MENU_WIDTH } from "../lib/utils.ts";
-import { useCanvas } from "../store.ts";
+import { latestPublishForBoard, useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { AddFrameDialog } from "./AddFrameDialog.tsx";
+import { publishedWhen } from "./PublishedBoardsDialog.tsx";
 import { Tree } from "./Tree.tsx";
 import {
   AlertDialog,
@@ -138,6 +140,9 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const cursorMode = useCanvas((s) => s.cursorMode);
   const wsConnected = useCanvas((s) => s.wsConnected);
   const protectedShares = useCanvas((s) => protectedSharesAllowed(s.authStatus?.account?.tier));
+  const loggedIn = useCanvas((s) => s.authStatus?.loggedIn ?? false);
+  const publishSlots = useCanvas((s) => s.publishSlots);
+  const refreshPublishSlots = useCanvas((s) => s.refreshPublishSlots);
   const boardsCollapsed = useCanvas((s) => s.boardsCollapsed);
   const treeCollapsed = useCanvas((s) => s.treeCollapsed);
   const toggleBoardsCollapsed = useCanvas((s) => s.toggleBoardsCollapsed);
@@ -349,6 +354,13 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
     if (currentIsArchived) setArchivedOpen(true);
   }, [currentIsArchived]);
 
+  // Read the destinations once the account lands, so the first board menu
+  // already knows whether to offer its publish rather than growing an item a
+  // beat after it opens. Repeats inside the freshness window cost nothing.
+  useEffect(() => {
+    if (loggedIn) void refreshPublishSlots();
+  }, [loggedIn, refreshPublishSlots]);
+
   const archiveBoard = (b: BoardMeta, archived: boolean) => {
     void (async () => {
       try {
@@ -522,6 +534,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const renderBoardRow = (b: BoardMeta) => {
     const active = b.id === currentBoardId;
     const dragging = draggingId === b.id;
+    const latestPublish = latestPublishForBoard(publishSlots, b.id);
     return (
       <li
         key={b.id}
@@ -579,7 +592,10 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
           </div>
         </button>
-        <DropdownMenu>
+        {/* Opening the menu is what re-reads the publish destinations: the
+            "latest publish" item below is the only thing that needs them, and
+            a link taken down elsewhere should stop being offered here. */}
+        <DropdownMenu onOpenChange={(menuOpen) => menuOpen && void refreshPublishSlots()}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -635,6 +651,24 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            {/* Only for a board that has actually shipped a version — the point
+                is to reach what reviewers are looking at, and a publish this
+                board was never part of is someone else's link. */}
+            {latestPublish ? (
+              <DropdownMenuItem asChild>
+                <a
+                  href={latestPublish.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-inherit no-underline"
+                  title={`Published ${publishedWhen(latestPublish.lastPublishedAt)}`}
+                  data-testid="board-latest-publish"
+                >
+                  <ExternalLink />
+                  See latest publish
+                </a>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger disabled={!wsConnected}>
                 <FolderInput />

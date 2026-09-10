@@ -55,8 +55,10 @@ export {
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
 export {
+  type PublishedBoard,
   type PublishRequest,
   type PublishResult,
+  type PublishSlot,
   type PublishState,
   type PublishTargets,
   publish,

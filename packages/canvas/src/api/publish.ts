@@ -1,6 +1,6 @@
-import type { CloudTeam } from "@velloo/protocol";
+import type { BoardLimit, CloudTeam } from "@velloo/protocol";
 import { getJson } from "./discovery.ts";
-import { postJson } from "./http.ts";
+import { postJson, requestJson } from "./http.ts";
 
 export interface PublishResult {
   /** The share URL — stable across publishes, and never carrying a secret. */
@@ -42,6 +42,11 @@ export type PublishState =
       message: string;
       /** Set when the credential is what failed — the dialog offers a sign-in. */
       signInRequired?: "signed-out" | "expired";
+      /**
+       * Set when the plan's published-board slots are all taken. The dialog
+       * offers the published list, because taking one down is the fix.
+       */
+      boardLimit?: BoardLimit;
       warnings: string[];
       finishedAt: string;
     };
@@ -64,21 +69,36 @@ export interface PublishTargets {
   teams: CloudTeam[];
   effectiveTeamId?: string | null;
   provenance?: { repo: string | null; branch: string | null };
-  slots: {
-    slug: string;
-    url: string;
-    title: string;
-    teamId: string | null;
-    latestVersionId: string | null;
-    lastPublishedAt: string | null;
-    context: {
-      boardIds: string[];
-      contextKnown: boolean;
-      repo: string | null;
-      branch: string | null;
-    };
-  }[];
+  slots: PublishSlot[];
   destinationError?: string;
+}
+
+/** An existing link this folder could publish into, and what it last carried. */
+export interface PublishSlot {
+  slug: string;
+  url: string;
+  title: string;
+  teamId: string | null;
+  latestVersionId: string | null;
+  lastPublishedAt: string | null;
+  context: {
+    boardIds: string[];
+    contextKnown: boolean;
+    repo: string | null;
+    branch: string | null;
+  };
+}
+
+/** One link this account has already published, as the manage list shows it. */
+export interface PublishedBoard {
+  slug: string;
+  title: string;
+  url: string;
+  visibility: "public" | "private";
+  passwordProtected: boolean;
+  /** False for a teammate's link: visible here, but not this account's to remove. */
+  canManage: boolean;
+  lastPublishedAt: string | null;
 }
 
 export interface PublishRequest {
@@ -107,5 +127,20 @@ export const publish = {
   /** Drop a settled run so the dialog reopens clean. */
   async reset(): Promise<void> {
     await postJson<{ ok: boolean }>("/api/publish/reset", {});
+  },
+  /** Every link this account has published, newest first. */
+  async published(): Promise<PublishedBoard[]> {
+    const body = await getJson<{ boards: PublishedBoard[] }>(
+      "/api/publish/published",
+      "publishedBoards",
+    );
+    return body.boards;
+  },
+  /** Take a published link down, freeing the plan slot it holds. */
+  async unpublish(slug: string): Promise<void> {
+    await requestJson<{ ok: boolean }>(
+      "DELETE",
+      `/api/publish/published/${encodeURIComponent(slug)}`,
+    );
   },
 };

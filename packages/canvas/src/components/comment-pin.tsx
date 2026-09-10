@@ -45,7 +45,7 @@ export type NodeRectsByFrame = Record<string, Record<string, Box> | undefined>;
  * Where a thread's pin sits in board space, as CSS lengths — or null when it
  * has nowhere to sit: a board-wide thread, or a node whose frame is gone.
  */
-export function commentPinPosition(
+function commentPinPosition(
   thread: CommentThreadView,
   frames: Board["frames"],
   insets: FrameInsets,

@@ -1,5 +1,6 @@
 import type { StateCreator } from "zustand";
 import { type AuthStatus, auth, credentialJustRejected } from "../api/auth.ts";
+import { type PublishSlot, publish } from "../api/publish.ts";
 import type { SignInPrompt } from "../api/sign-in-gate.ts";
 import { pushToast } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
@@ -27,11 +28,28 @@ export interface CloudSlice {
    * bar's Publish, which is the full form over every board.
    */
   publishScope: { id: string; name: string; mode: PublishAccessMode } | null;
+  /** Whether the published-board manager is open. */
+  publishedBoardsOpen: boolean;
+  /**
+   * The links this folder could publish into, as of the last refresh. Cached
+   * rather than fetched per render: each entry names the boards it carries, so
+   * a board row can offer "see the latest publish" without a round trip of its
+   * own — and the cached answer keeps that menu item from appearing a beat
+   * after the menu does.
+   */
+  publishSlots: PublishSlot[];
 
   refreshAuth(): Promise<void>;
   openSignIn(prompt?: SignInPrompt): void;
   closeSignIn(): void;
   setPublishOpen(open: boolean): void;
+  setPublishedBoardsOpen(open: boolean): void;
+  /**
+   * Re-read the publish destinations. Never rejects — a miss just hides a menu
+   * item. Cheap to call: a fetch newer than {@link SLOTS_FRESH_MS} is reused
+   * unless `force`, so opening board menus doesn't hit the cloud each time.
+   */
+  refreshPublishSlots(opts?: { force?: boolean }): Promise<void>;
   publishBoardNow(board: { id: string; name: string }, mode: PublishAccessMode): void;
   /**
    * Open the publish dialog for one board and report back what became of it:
@@ -53,11 +71,44 @@ type PublishAccessMode = "public" | "private" | "password";
 /** Resolvers parked by {@link CloudSlice.publishAndWait}. */
 let publishWaiters: ((published: boolean) => void)[] = [];
 
+/**
+ * The newest publish that carried this board, or null when it has never been
+ * in one. A slot with no version was reserved and never filled, so it is not
+ * something the user can go and look at.
+ */
+export function latestPublishForBoard(slots: PublishSlot[], boardId: string): PublishSlot | null {
+  return (
+    slots
+      .filter((slot) => slot.latestVersionId !== null && slot.context.boardIds.includes(boardId))
+      .sort((left, right) => publishedAt(right.lastPublishedAt) - publishedAt(left.lastPublishedAt))
+      .at(0) ?? null
+  );
+}
+
+const publishedAt = (value: string | null): number => {
+  const parsed = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+};
+
+/**
+ * How long a destinations read stands. Each one is a live cloud call, and the
+ * board menu asks on every open — long enough that browsing menus costs one
+ * request, short enough that a link removed on the cloud's own page stops
+ * being offered here within a browse.
+ */
+const SLOTS_FRESH_MS = 30_000;
+
+let slotsFetchedAt = 0;
+/** The in-flight read, so several menus opening at once share one request. */
+let slotsInFlight: Promise<void> | null = null;
+
 export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (set, get) => ({
   authStatus: null,
   signInPrompt: null,
   publishOpen: false,
   publishScope: null,
+  publishedBoardsOpen: false,
+  publishSlots: [],
 
   async refreshAuth() {
     // A daemon that can't answer is indistinguishable from being logged out for
@@ -97,6 +148,31 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
     set({ publishOpen, publishScope: null });
   },
 
+  setPublishedBoardsOpen(publishedBoardsOpen) {
+    set({ publishedBoardsOpen });
+  },
+
+  refreshPublishSlots({ force = false } = {}) {
+    if (!get().authStatus?.loggedIn) {
+      slotsFetchedAt = 0;
+      set({ publishSlots: [] });
+      return Promise.resolve();
+    }
+    if (!force && Date.now() - slotsFetchedAt < SLOTS_FRESH_MS) return Promise.resolve();
+    if (slotsInFlight && !force) return slotsInFlight;
+    // Signed out, expired, or a cloud that didn't answer all read the same way
+    // here: nothing to point at, so the affordance stays hidden.
+    slotsInFlight = publish
+      .targets()
+      .catch(() => null)
+      .then((targets) => {
+        slotsFetchedAt = Date.now();
+        slotsInFlight = null;
+        set({ publishSlots: targets?.slots ?? [] });
+      });
+    return slotsInFlight;
+  },
+
   publishBoardNow(board, mode) {
     get().settlePublish(false);
     set({ publishScope: { ...board, mode }, publishOpen: true });
@@ -118,5 +194,8 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
     // so a publish used to leave the picker disabled until the panel remounted.
     // Whoever was waiting re-reads it for itself, and shouldn't race this one.
     if (published && waiting.length === 0) void get().refreshCloudComments();
+    // The same run is what puts a board's first link in reach of its menu, so
+    // this read cannot wait out the freshness window.
+    if (published) void get().refreshPublishSlots({ force: true });
   },
 });

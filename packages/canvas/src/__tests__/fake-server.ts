@@ -1,6 +1,12 @@
 import type { StyleChannel } from "@velloo/provider";
 import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
-import type { DesignSummary, FolderConfig, HistoryDepths } from "../api.ts";
+import type {
+  DesignSummary,
+  FolderConfig,
+  HistoryDepths,
+  PublishedBoard,
+  PublishSlot,
+} from "../api.ts";
 
 /**
  * A routed `fetch` standing in for the daemon, so the store slices can be
@@ -75,6 +81,10 @@ export interface FakeServer {
   snippets: Record<string, Snippet>;
   themes: Record<string, Theme>;
   history: HistoryDepths;
+  /** What `/api/publish/targets` offers as update destinations. */
+  publishSlots: PublishSlot[];
+  /** What `/api/publish/published` lists; a DELETE removes from it. */
+  publishedBoards: PublishedBoard[];
   /** Every path requested, in order. */
   readonly calls: string[];
   /** Mutations posted through `/api/mutate/*`, in order. */
@@ -151,6 +161,8 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     snippets: {},
     themes,
     history: { undo: 0, redo: 0 },
+    publishSlots: [],
+    publishedBoards: [],
     calls,
     mutations,
     fail(match, status = 500) {
@@ -164,7 +176,13 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     },
   };
 
-  function route(path: string, search: URLSearchParams): Response {
+  function route(path: string, search: URLSearchParams, method: string): Response {
+    const unpublish = path.match(/^\/api\/publish\/published\/(.+)$/);
+    if (unpublish && method === "DELETE") {
+      const slug = decodeURIComponent(unpublish[1] as string);
+      server.publishedBoards = server.publishedBoards.filter((board) => board.slug !== slug);
+      return json({ ok: true });
+    }
     if (path === "/api/design") return json(server.design);
     if (path === "/api/undo") return json(server.history);
     if (path === "/api/theme/presets") return json({ presets: ["ember", "violet"] });
@@ -215,9 +233,10 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     if (path.startsWith("/api/notes/")) return json({ notes: [] });
     if (path.startsWith("/api/mutate/")) return json({});
     if (path === "/api/publish/targets") {
-      return json({ ready: true, access: "ready", teams: [], slots: [] });
+      return json({ ready: true, access: "ready", teams: [], slots: server.publishSlots });
     }
     if (path === "/api/publish/status") return json({ state: "idle" });
+    if (path === "/api/publish/published") return json({ boards: server.publishedBoards });
     return json({ error: { kind: "not-found" } }, 404);
   }
 
@@ -238,7 +257,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     // A daemon that is down or restarting answers with no envelope at all —
     // which is the path `toApiError` falls back on, and what boot failures see.
     if (failure) return new Response("unavailable", { status: failure.status });
-    return route(url.pathname, url.searchParams);
+    return route(url.pathname, url.searchParams, init?.method ?? "GET");
   }) as unknown as typeof fetch;
 
   return server;

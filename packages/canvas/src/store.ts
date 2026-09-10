@@ -4,6 +4,7 @@
  * annotations) composed into one zustand store — see `store/index.ts`.
  * Consumers keep importing from here.
  */
+export { latestPublishForBoard } from "./store/cloud.ts";
 export { type CanvasState, useCanvas } from "./store/index.ts";
 export { selectedNode } from "./store/selection.ts";
 export type {

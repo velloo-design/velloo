@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  FileStack,
   Lock,
   Share2,
 } from "lucide-react";
@@ -22,7 +23,7 @@ import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { LoadingMark } from "./Loading.tsx";
 import { RenderFailureDialog } from "./RenderFailureDialog.tsx";
-import { billingUrl } from "./SettingsMenu.tsx";
+import { billingUrl, planLabel } from "./SettingsMenu.tsx";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert.tsx";
 import { Button } from "./ui/button.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";
@@ -62,6 +63,7 @@ export function PublishDialog() {
   const open = useCanvas((s) => s.publishOpen);
   const setOpen = useCanvas((s) => s.setPublishOpen);
   const openSignIn = useCanvas((s) => s.openSignIn);
+  const openPublishedBoards = useCanvas((s) => s.setPublishedBoardsOpen);
   const settlePublish = useCanvas((s) => s.settlePublish);
   const design = useCanvas((s) => s.design);
   const scope = useCanvas((s) => s.publishScope);
@@ -356,10 +358,48 @@ export function PublishDialog() {
             </div>
           ) : run.state === "error" ? (
             <div className="flex flex-col gap-3 py-2">
-              <div className="flex items-start gap-2 text-sm text-destructive">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                <span>{run.message}</span>
-              </div>
+              {/* A full plan is not a fault, so it isn't dressed as one: the
+                  refusal used to arrive as red text quoting a status code, when
+                  what the user needed was the list of boards holding the slots. */}
+              {run.boardLimit ? (
+                <>
+                  <Alert role="note" data-testid="board-limit-notice">
+                    <FileStack />
+                    <AlertTitle>
+                      All {run.boardLimit.limit} board slots on the {planLabel(run.boardLimit.tier)}{" "}
+                      plan are in use
+                    </AlertTitle>
+                    <AlertDescription className="text-xs">
+                      Take one of your published boards down to free a slot, or upgrade for more.
+                      Re-publishing an existing link always works — the cap only counts new boards.
+                    </AlertDescription>
+                  </Alert>
+                  {/* Below the Alert, not in its action corner: `AlertAction`
+                      is absolutely positioned for one small button, and two
+                      crowd the title into a wrap. */}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setOpen(false);
+                        openPublishedBoards(true);
+                      }}
+                    >
+                      See published boards
+                    </Button>
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={upgradeUrl} target="_blank" rel="noreferrer">
+                        Upgrade plan
+                      </a>
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-start gap-2 text-sm text-destructive">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <span>{run.message}</span>
+                </div>
+              )}
               {/* A token can be revoked during the minutes a capture pass takes.
                 Losing that work to a dead end, with the fix one click away, is
                 the worst version of this failure. */}

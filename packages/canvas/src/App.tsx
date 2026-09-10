@@ -13,6 +13,7 @@ import { LibraryHome } from "./components/LibraryHome.tsx";
 import { Loading } from "./components/Loading.tsx";
 import { PreviewDialog } from "./components/PreviewDialog.tsx";
 import { PublishDialog } from "./components/PublishDialog.tsx";
+import { PublishedBoardsDialog } from "./components/PublishedBoardsDialog.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { SearchDialog } from "./components/SearchDialog.tsx";
 import { SettingsDialog } from "./components/Settings/SettingsDialog.tsx";
@@ -333,6 +334,7 @@ export function App() {
       <AddFrameDialog boardId={emptyBoardAddFrame} onClose={() => setEmptyBoardAddFrame(null)} />
       <SignInDialog />
       <PublishDialog />
+      <PublishedBoardsDialog />
       <ActivityFeed />
       <Toaster />
     </div>
