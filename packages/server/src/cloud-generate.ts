@@ -20,7 +20,7 @@ import { err, ok, type Result } from "@velloo/result";
 import { svgLooksActive } from "@velloo/schema";
 import { recordGeneratedAssets } from "./assets-store.ts";
 import { type CloudAuth, currentToken, isSecureCloudUrl } from "./cloud.ts";
-import { storeAsset } from "./fs.ts";
+import { pngSize, storeAsset } from "./fs.ts";
 
 /**
  * Hosted asset generation: POST /v1/assets/generate on velloo-cloud,
@@ -159,20 +159,6 @@ const HINTS: Record<number, string> = {
   502: "Retry once.",
   503: NOT_AVAILABLE,
 };
-
-/**
- * A PNG's pixel dimensions, straight out of the IHDR chunk (signature, then a
- * length + "IHDR" tag, then two big-endian uint32s). The agent needs these:
- * `<Image>` fills its parent, so a generated asset dropped in without a
- * matching `aspect` renders at zero height — the one way this whole path can
- * "succeed" and still show nothing.
- */
-function pngSize(bytes: Buffer): { width: number; height: number } | null {
-  if (bytes.length < 24 || bytes.toString("latin1", 12, 16) !== "IHDR") return null;
-  const width = bytes.readUInt32BE(16);
-  const height = bytes.readUInt32BE(20);
-  return width > 0 && height > 0 ? { width, height } : null;
-}
 
 export function formatDollars(micros: number): string {
   const value = micros / 1_000_000;

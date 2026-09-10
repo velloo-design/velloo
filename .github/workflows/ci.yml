@@ -87,7 +87,7 @@ jobs:
 
       - name: Cache Chromium
         id: chromium-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ms-playwright-full-${{ runner.os }}-${{ steps.pw.outputs.pin }}
@@ -113,6 +113,8 @@ jobs:
       # opens under the virtual display.
       - name: Verify both browsers launch
         run: |
+          # JavaScript is intentionally single-quoted.
+          # shellcheck disable=SC2016
           xvfb-run -a bun -e '
             const { chromiumExecutable } = await import("./packages/renderer/src/screenshot.ts");
             const path = await chromiumExecutable();

@@ -13,6 +13,7 @@ import {
 import { z } from "zod";
 import { emitActivity } from "../../activity.ts";
 import { openSession, sessionStatuses } from "../../capture/sessions.ts";
+import { pngSize } from "../../fs.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { errorResult, type McpResult } from "./result.ts";
 
@@ -20,13 +21,63 @@ function jsonResult(value: unknown): McpResult {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
+/** Enough of a file to read a header from; empty when it isn't readable. */
+function readBytes(path: string, length = 32): Buffer {
+  try {
+    return readFileSync(path).subarray(0, length);
+  } catch {
+    return Buffer.alloc(0);
+  }
+}
+
+/**
+ * Nodes the page lays out but a reader cannot see.
+ *
+ * The DOM walker already drops `display: none` and `visibility: hidden`, so
+ * what survives to here is the harder case: `opacity: 0` (a hover-only panel,
+ * a fade-in still waiting on script) and rects that sit outside the captured
+ * page box. Opacity is NOT an inherited property — a child of a transparent
+ * container computes its own `opacity: 1` — so the state has to be propagated
+ * down, which is a single forward pass because the flat list is pre-order and
+ * a parent therefore always precedes its children.
+ *
+ * Without this the *contents* of a hidden container read as ordinary page
+ * copy, which is how a hover-only panel gets ported as a permanent card.
+ */
+function invisibleNodes(dom: DomExtract): { hidden: Set<number>; offscreen: Set<number> } {
+  const hidden = new Set<number>();
+  const offscreen = new Set<number>();
+  for (const n of dom.nodes) {
+    if (n.parent !== null && hidden.has(n.parent)) hidden.add(n.i);
+    else if (n.style.opacity !== undefined && Number(n.style.opacity) === 0) hidden.add(n.i);
+    // A full-page screenshot is viewport-wide, so anything wholly left of, above,
+    // or right of that box is absent from the reference image whatever the DOM
+    // says. `left: -9999px` and a carousel's off-stage slides both land here.
+    const { x, y, w, h } = n.rect;
+    if (x + w <= 0 || y + h <= 0 || x >= dom.viewport.w) offscreen.add(n.i);
+  }
+  return { hidden, offscreen };
+}
+
+interface Outline {
+  lines: string[];
+  shown: number;
+  hiddenCount: number;
+}
+
 /**
  * A readable digest of a DOM extract: the structural spine plus the repeated
  * blocks. The full `dom.json` can run to a thousand nodes, which is evidence
  * to read on demand — not something to push into an agent's context wholesale
  * on every `get_capture`.
+ *
+ * Position and visibility ride along because without them the digest is not
+ * merely thinner than the truth, it contradicts it: a size alone reads as flow
+ * content, so a pill at (819, 909) above a carousel looks like a caption, and
+ * a transparent panel looks like a card.
  */
-function outlineOf(dom: DomExtract, limit = 60): string[] {
+export function outlineOf(dom: DomExtract, limit = 60): Outline {
+  const { hidden, offscreen } = invisibleNodes(dom);
   const lines: string[] = [];
   for (const n of dom.nodes) {
     if (lines.length >= limit) break;
@@ -38,9 +89,18 @@ function outlineOf(dom: DomExtract, limit = 60): string[] {
     const indent = "  ".repeat(Math.min(n.depth, 8));
     const rep = n.repeat ? ` ×${n.repeat.count}` : "";
     const text = n.text ? ` "${n.text.slice(0, 60)}"` : "";
-    lines.push(`${indent}${n.tag}${rep}${text} [${n.rect.w}×${n.rect.h}]`);
+    const flags: string[] = [];
+    // Name the cause on the node that owns it; a descendant carries the bare
+    // marker, so the toggle to look for is the one line without a reason.
+    if (hidden.has(n.i)) {
+      flags.push(Number(n.style.opacity) === 0 ? "HIDDEN(opacity:0)" : "HIDDEN");
+    }
+    if (offscreen.has(n.i)) flags.push("OFFSCREEN");
+    const marks = flags.length ? ` ${flags.join(" ")}` : "";
+    const { x, y, w, h } = n.rect;
+    lines.push(`${indent}${n.tag}${rep}${text} [${w}×${h} @${x},${y}]${marks}`);
   }
-  return lines;
+  return { lines, shown: lines.length, hiddenCount: hidden.size + offscreen.size };
 }
 
 export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void {
@@ -143,7 +203,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "get_capture",
     {
       description:
-        "Read one stored capture: a structural outline of the page with repeated blocks marked (your component candidates), its CSS custom properties as `import_theme`-ready CSS, and the downloaded image assets. `full: true` returns every node with computed styles. Feed the theme CSS to `import_theme` BEFORE composing. Guide: velloo://guide/capture.",
+        "Read one stored capture: a structural outline of the page — every line carrying its rect as `[w×h @x,y]` and a HIDDEN / OFFSCREEN marker where the node lays out but cannot be seen — plus repeated blocks marked (your component candidates), its CSS custom properties as `import_theme`-ready CSS, and the downloaded image assets. `files` gives absolute paths: **open `page.png`, it is the authoritative reference and the outline is a digest of it.** `full: true` returns every node with computed styles. Feed the theme CSS to `import_theme` BEFORE composing. Guide: velloo://guide/capture.",
       inputSchema: {
         captureId: z.string(),
         full: z
@@ -169,6 +229,16 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
       const theme = readJson<ThemeVars>("computed-vars.json");
       const dom = manifest.themeOnly ? null : readJson<DomExtract>("dom.json");
       const assets = readJson<{ assets: Array<{ url: string; file: string }> }>("assets.json");
+      const outline = dom ? outlineOf(dom) : null;
+      // A bare filename is unopenable: the store lives under ~/.velloo, not in
+      // the design folder, so an agent that goes looking for `page.png` from
+      // the project searches the wrong tree. Hand back the paths.
+      const files = manifest.files.map((name) => {
+        const path = join(dir, name);
+        const size = name.endsWith(".png") ? pngSize(readBytes(path)) : null;
+        return { name, path, ...(size ?? {}) };
+      });
+      const screenshot = files.find((f) => f.name === "page.png");
 
       return jsonResult({
         captureId,
@@ -184,20 +254,31 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
               tokenCount: Object.keys(theme.light).length + Object.keys(theme.dark).length,
             }
           : {}),
-        ...(dom
+        ...(dom && outline
           ? full
             ? { documentHeight: dom.documentHeight, nodes: dom.nodes, truncated: dom.truncated }
             : {
                 documentHeight: dom.documentHeight,
-                outline: outlineOf(dom),
+                outline: outline.lines,
+                outlineShown: outline.shown,
                 nodeCount: dom.nodes.length,
                 truncated: dom.truncated,
-                note: "Outline only — pass full: true for every node with computed styles.",
+                note:
+                  `Digest of ${outline.shown} of ${dom.nodes.length} nodes — rects are ` +
+                  `\`[w×h @x,y]\` in page coordinates. ` +
+                  (outline.hiddenCount > 0
+                    ? `${outline.hiddenCount} node(s) are marked HIDDEN or OFFSCREEN: they lay out but do not appear in page.png, so a hover-only or off-stage block is NOT ordinary page content — model it as such or leave it out. `
+                    : "") +
+                  (screenshot
+                    ? `page.png (${screenshot.width}×${screenshot.height}) is the authoritative reference — open it. `
+                    : "") +
+                  `Pass full: true for every node with computed styles.`,
               }
           : {}),
         ...(assets ? { assets: assets.assets } : {}),
-        files: manifest.files,
-        ...(manifest.files.includes("page.png")
+        dir,
+        files,
+        ...(screenshot
           ? {
               verifyWith: `compare_to_url { screenId: "<your screen>", source: { captureId: "${captureId}" } }`,
             }

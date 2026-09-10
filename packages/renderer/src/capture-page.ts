@@ -64,6 +64,35 @@ export interface ThemeVars {
 const MAX_NODES = 1500;
 const MAX_DEPTH = 24;
 const MAX_TEXT = 240;
+const TRANSIENT_SCREENSHOT_ERROR =
+  /Protocol error \(Page\.captureScreenshot\):\s*Unable to capture screenshot/i;
+
+/**
+ * Chromium can occasionally reject the underlying CDP capture while the page
+ * itself is still healthy. A second attempt can succeed once that transient
+ * paint state has cleared. Retry only that exact protocol failure and only
+ * once, so closed pages, timeouts, and persistent capture errors keep surfacing.
+ *
+ * Exported for the focused retry contract test; capturePage is the production
+ * caller.
+ */
+export async function capturePagePng(page: Page, fullPage: boolean): Promise<Buffer> {
+  const screenshot = () =>
+    page.screenshot({
+      fullPage,
+      animations: "disabled",
+      caret: "hide",
+    });
+
+  try {
+    return await screenshot();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!TRANSIENT_SCREENSHOT_ERROR.test(message)) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return await screenshot();
+  }
+}
 
 /**
  * Computed properties worth carrying. Deliberately a short list: the agent is
@@ -368,6 +397,62 @@ const MAX_ASSETS = 40;
 const MAX_ASSET_BYTES = 4 * 1024 * 1024;
 
 /**
+ * Response content type → the extension to save under.
+ *
+ * A CDN that serves images from a query string (`/th?id=…`) gives a pathname
+ * whose last segment carries no extension at all, and the design folder's
+ * asset store admits files by extension only. Velloo used to write those
+ * files itself and then refuse to import them — so the type comes off the
+ * response, which is the authority anyway when a path and a payload disagree.
+ *
+ * Deliberately a subset of what the store accepts: adding one here without a
+ * home there would just move the rejection later. `asset-extensions.test.ts`
+ * in the server package holds the two ends together.
+ */
+export const CAPTURE_ASSET_EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/avif": ".avif",
+  "image/svg+xml": ".svg",
+  "image/x-icon": ".ico",
+  "image/vnd.microsoft.icon": ".ico",
+  "image/bmp": ".bmp",
+  "font/woff": ".woff",
+  "font/woff2": ".woff2",
+  "font/ttf": ".ttf",
+  "font/otf": ".otf",
+};
+
+/**
+ * Give a downloaded asset a name the store will accept: keep the URL's own
+ * basename when it already ends in the right extension, and otherwise append
+ * the one the response's content type implies. Returns null when the type is
+ * one the store would refuse regardless — better to drop it at capture time
+ * than to write a file that can only fail later.
+ */
+export function assetFilename(url: string, contentType: string | undefined): string | null {
+  const base =
+    (new URL(url).pathname.split("/").pop() ?? "asset").replace(/[^A-Za-z0-9._-]/g, "_") || "asset";
+  const dot = base.lastIndexOf(".");
+  // A path that already ends in an accepted extension wins over the header:
+  // appending would give `photo.jpeg.jpg`, and a CDN serving a real PNG as
+  // `application/octet-stream` should not cost us the file.
+  if (dot > 0 && ACCEPTED_EXTENSIONS.has(base.slice(dot).toLowerCase())) return base;
+  const mime = (contentType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  const ext = CAPTURE_ASSET_EXTENSIONS[mime];
+  // Neither the path nor the payload names a type the store admits, and the
+  // store admits by extension — writing this file would only defer the refusal.
+  return ext === undefined ? null : `${base}${ext}`;
+}
+
+const ACCEPTED_EXTENSIONS: ReadonlySet<string> = new Set([
+  ...Object.values(CAPTURE_ASSET_EXTENSIONS),
+  ".jpeg",
+]);
+
+/**
  * Download referenced images through the page's own context, so anything
  * behind the same session cookies comes back rather than 403-ing. Failures are
  * per-asset and never sink a capture.
@@ -387,9 +472,8 @@ async function downloadAssets(
       if (!res.ok()) continue;
       const body = await res.body();
       if (body.byteLength === 0 || body.byteLength > MAX_ASSET_BYTES) continue;
-      const base =
-        (new URL(url).pathname.split("/").pop() ?? "asset").replace(/[^A-Za-z0-9._-]/g, "_") ||
-        "asset";
+      const base = assetFilename(url, res.headers()["content-type"]);
+      if (base === null) continue;
       let file = base;
       let n = 1;
       while (used.has(file)) file = `${n++}-${base}`;
@@ -478,11 +562,7 @@ export async function capturePage(page: Page, opts: CapturePageOptions): Promise
     let assets: Array<{ url: string; file: string; bytes: number }> = [];
 
     if (!opts.themeOnly) {
-      const png = await page.screenshot({
-        fullPage: opts.fullPage ?? true,
-        animations: "disabled",
-        caret: "hide",
-      });
+      const png = await capturePagePng(page, opts.fullPage ?? true);
       writeFileSync(join(dir, "page.png"), png, { mode: 0o600 });
       files.push("page.png");
 

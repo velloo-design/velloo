@@ -19,6 +19,22 @@ export async function writeText(path: string, body: string): Promise<void> {
 }
 
 /**
+ * A PNG's pixel dimensions, straight out of the IHDR chunk (signature, then a
+ * length + "IHDR" tag, then two big-endian uint32s). The agent needs these:
+ * `<Image>` fills its parent, so a generated asset dropped in without a
+ * matching `aspect` renders at zero height — the one way that path can
+ * "succeed" and still show nothing. A capture's `page.png` needs them for a
+ * different reason: its size is the only thing that says whether the reference
+ * is a viewport crop or the whole scrolled page.
+ */
+export function pngSize(bytes: Buffer): { width: number; height: number } | null {
+  if (bytes.length < 24 || bytes.toString("latin1", 12, 16) !== "IHDR") return null;
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+/**
  * Extensions allowed in a design folder's `assets/` store. Restricted to images
  * and fonts so a `.html`/`.js`/`.svg`-that-navigates asset can never be written
  * and later served as active content from the canvas origin.

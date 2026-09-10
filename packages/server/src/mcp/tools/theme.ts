@@ -402,12 +402,18 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         ...(tailwindConfig !== null ? { tailwindConfig } : {}),
       });
       if (!r.ok) return errorResult(r.error);
-      const { changes, warnings, applied } = r.value;
+      const { changes, coverage, warnings, applied } = r.value;
       const container = detectContainer(tailwindConfig);
       const detectedChartLibs = await detectChartLibs(ctx.folder, cssResolvedPath);
       return jsonResult({
         applied,
         changeCount: changes.length,
+        // A change count alone cannot distinguish a clean shadcn import from an
+        // app whose vars matched nothing and parked everything in `palette.*`.
+        coverage: {
+          ...coverage,
+          summary: `${coverage.semantic} of ${coverage.semanticTotal} semantic slots mapped; ${coverage.palette} palette passthrough`,
+        },
         changes,
         warnings,
         ...(container ? { container } : {}),

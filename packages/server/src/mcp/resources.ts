@@ -290,10 +290,14 @@ Tell the user plainly what to do: log in, then hit **Capture page** in the vello
 
 Read each result with \`get_capture\`. You get:
 
-- a structural \`outline\` with repeated blocks marked — a run of identical siblings is ONE component instantiated N times, so build a snippet, not N copies;
-- \`themeCss\`, the page's real custom properties including any dark block, to feed \`import_theme\` BEFORE composing;
+- \`files\`, with an absolute \`path\` each. **\`page.png\` is the authoritative reference — open it.** Everything below is a digest of it, and a digest of a page is not the page: design from the outline alone and you will ship what the outline happened to preserve;
+- a structural \`outline\`, one line per node as \`tag "text" [w×h @x,y]\`. Repeated blocks are marked — a run of identical siblings is ONE component instantiated N times, so build a snippet, not N copies. Read the coordinates, not just the sizes: a 163×40 box is a caption in flow and a pill floating over a carousel, and only \`@x,y\` says which;
+- \`HIDDEN\` / \`OFFSCREEN\` markers on nodes that lay out but do not appear in \`page.png\` — a hover-only panel, a fade-in awaiting script, an off-stage carousel slide. A marked node's *contents* are marked too. Do not build these as ordinary content: a static capture cannot show what they look like when revealed, so either leave them out or say plainly that you modelled rather than designed them;
+- \`themeCss\`, the page's real custom properties including any dark block, to feed \`import_theme\` BEFORE composing. Check that call's \`coverage\` — an app that names its vars on its own convention maps zero semantic slots and leaves your palette untouched while still reporting hundreds of changes;
 - \`fonts\`;
 - downloaded image \`assets\` for \`upload_asset\`.
+
+\`full: true\` returns every node with its computed styles. Reach for it whenever the outline is deciding a layout question for you.
 
 Then **re-express the page with real components — do not transcribe the DOM node-for-node.**
 
@@ -342,6 +346,8 @@ Slots the CSS does not declare keep their current values.
 Given a \`cssPath\`, it also reads the nearby tailwind.config (or an explicit \`tailwindConfigPath\`) and ingests its \`theme.extend\`: brand \`colors\` → \`palette\`, named \`spacing\` → spacing tokens (\`w-icon-rail\`), \`boxShadow\` → \`shadows\` (\`shadow-card\`), \`fontFamily\` → font roles, \`keyframes\` + \`animation\` → \`--animate-*\`. CSS-derived values win over config literals of the same name. It also applies the app's \`container\` config so \`class="container"\` centers/pads/caps to match, reporting the equivalent \`container.suggestedClasses\` if you would rather wrap content explicitly.
 
 **Dry-run by default** — returns the would-be token changes; pass \`apply: true\` to persist.
+
+**Read \`coverage\`, not \`changeCount\`.** They answer different questions. An app whose vars follow its own convention rather than shadcn's (\`--smtc-background-web-page-primary\`) matches no semantic slot at all: every var lands in \`palette.*\`, the call reports hundreds of changes and zero warnings, and \`colors.background\` / \`primary\` / \`card\` / \`border\` stay on whatever the scaffold shipped. \`coverage.summary\` says which happened. When \`semantic\` is 0, the import has given you the app's colors but none of its *roles* — map the slots yourself with \`set_theme { tokens: { "colors.background": "<a palette value>", … } }\` before composing, or the design will render on the starter palette and nothing will tell you.
 
 ## The type ladder
 

@@ -8,7 +8,7 @@ import {
   type ThemeExtend,
 } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
-import { type ColorPair, type Theme, ThemeSchema } from "@velloo/schema";
+import { type ColorPair, ColorsSchema, type Theme, ThemeSchema } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError, themeBadRequest } from "./errors.ts";
@@ -19,9 +19,29 @@ interface ThemeTokenChange {
   to: string;
 }
 
+/**
+ * What the import actually reached, split by the distinction that decides
+ * whether a design will look like the app: a semantic slot themes the whole
+ * canvas, a `palette.*` passthrough themes nothing until something references
+ * it. An app whose custom properties don't follow the shadcn convention
+ * (`--smtc-background-web-page-primary` and friends) maps zero semantic slots
+ * while still producing hundreds of changes, and a bare change count reads as
+ * success — so the split is reported, not left to be inferred.
+ */
+interface ImportThemeCoverage {
+  /** Semantic color slots the stylesheet named, of `semanticTotal` available. */
+  semantic: number;
+  semanticTotal: number;
+  /** Raw brand vars parked in `palette.*`; real, but they do not theme-flip. */
+  palette: number;
+  /** Semantic slots left on their previous values. */
+  unmapped: string[];
+}
+
 export interface ImportThemeCssResult {
   theme: Theme;
   changes: ThemeTokenChange[];
+  coverage: ImportThemeCoverage;
   warnings: string[];
   applied: boolean;
 }
@@ -97,9 +117,15 @@ export async function importThemeCss(
     const from = tokenAt(current, token);
     if (from !== to) changes.push({ token, from, to });
   };
+  // Counted as the merge runs rather than derived from `changes`: a slot the
+  // stylesheet named that already held the same value IS mapped, and would be
+  // invisible in a diff.
+  const semanticSlots = new Set<string>();
+  const paletteNames = new Set<string>();
 
   for (const [slot, value] of Object.entries(parsed.colors)) {
     if (value === undefined) continue;
+    semanticSlots.add(slot);
     (next.colors as Record<string, ColorPair>)[slot] = value as ColorPair;
     for (const [token, to] of pairEntries(`colors.${slot}`, value as ColorPair)) {
       record(token, to);
@@ -109,6 +135,7 @@ export async function importThemeCss(
     next.colorsDark = { ...(next.colorsDark ?? {}) };
     for (const [slot, value] of Object.entries(parsed.colorsDark)) {
       if (value === undefined) continue;
+      semanticSlots.add(slot);
       (next.colorsDark as Record<string, ColorPair>)[slot] = value as ColorPair;
       for (const [token, to] of pairEntries(`colorsDark.${slot}`, value as ColorPair)) {
         record(token, to);
@@ -118,6 +145,7 @@ export async function importThemeCss(
   if (Object.keys(parsed.palette).length > 0) {
     next.palette = { ...(next.palette ?? {}) };
     for (const [name, value] of Object.entries(parsed.palette)) {
+      paletteNames.add(name);
       (next.palette as Record<string, string>)[name] = value;
       record(`palette.${name}`, value);
     }
@@ -125,6 +153,7 @@ export async function importThemeCss(
   if (Object.keys(parsed.paletteDark).length > 0) {
     next.paletteDark = { ...(next.paletteDark ?? {}) };
     for (const [name, value] of Object.entries(parsed.paletteDark)) {
+      paletteNames.add(name);
       (next.paletteDark as Record<string, string>)[name] = value;
       record(`paletteDark.${name}`, value);
     }
@@ -168,6 +197,7 @@ export async function importThemeCss(
           );
           continue;
         }
+        paletteNames.add(name);
         (next.palette as Record<string, string>)[name] = resolved;
         record(`palette.${name}`, resolved);
       }
@@ -219,6 +249,21 @@ export async function importThemeCss(
     if (container.maxWidth !== undefined) record("container.maxWidth", container.maxWidth);
   }
 
+  const semanticTotal = Object.keys(ColorsSchema.shape).length;
+  const coverage: ImportThemeCoverage = {
+    semantic: semanticSlots.size,
+    semanticTotal,
+    palette: paletteNames.size,
+    unmapped: Object.keys(ColorsSchema.shape).filter((slot) => !semanticSlots.has(slot)),
+  };
+  if (semanticSlots.size === 0 && paletteNames.size > 0) {
+    warnings.push(
+      `none of the ${semanticTotal} semantic color slots matched — all ${paletteNames.size} imported colors landed in \`palette.*\`, which does NOT theme the canvas. ` +
+        `This app names its custom properties on its own convention rather than shadcn's (\`--background\`, \`--primary\`, …), so the design will still render on the previous palette. ` +
+        `Map the slots yourself with set_theme { tokens: { "colors.background": "<a palette value>", … } }.`,
+    );
+  }
+
   const validated = ThemeSchema.safeParse(next);
   if (!validated.success) {
     const issue = validated.error.issues[0];
@@ -230,8 +275,8 @@ export async function importThemeCss(
   }
 
   if (!opts.apply) {
-    return ok({ theme: validated.data, changes, warnings, applied: false });
+    return ok({ theme: validated.data, changes, coverage, warnings, applied: false });
   }
   const persisted = await persistNamedTheme(folder, opts.themeName ?? "default", validated.data);
-  return ok({ theme: persisted, changes, warnings, applied: true });
+  return ok({ theme: persisted, changes, coverage, warnings, applied: true });
 }

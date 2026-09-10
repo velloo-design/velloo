@@ -269,4 +269,41 @@ describe("importThemeCss", () => {
     expect(onDisk.palette?.ghost).toBeUndefined();
     expect(r.warnings.some((w) => w.includes("ghost"))).toBe(true);
   });
+
+  test("reports semantic coverage alongside the raw change count", async () => {
+    const r = unwrap(await importThemeCss(ctx, HOST_APP_CSS));
+    expect(r.coverage.semantic).toBeGreaterThan(0);
+    expect(r.coverage.semanticTotal).toBe(12);
+    expect(r.coverage.unmapped).toContain("popover");
+    expect(r.coverage.unmapped).not.toContain("background");
+  });
+
+  test("an app on its own naming convention maps zero slots, and says so", async () => {
+    // Bing's vars, in shape: plenty of them, none matching shadcn's names. The
+    // merge succeeds and reports hundreds of changes, so without this the
+    // caller has no signal that the design will still render on the old palette.
+    const css = `:root {
+      --smtc-background-web-page-primary: #ffffff;
+      --smtc-stroke-web-divider: #e5e5e5;
+      --smtc-fill-web-accent-rest: #174ae4;
+    }`;
+    const r = unwrap(await importThemeCss(ctx, css));
+    expect(r.changes.length).toBeGreaterThan(0);
+    expect(r.coverage.semantic).toBe(0);
+    expect(r.coverage.palette).toBe(3);
+    expect(r.coverage.unmapped).toHaveLength(12);
+    expect(r.warnings.some((w) => w.includes("semantic color slots"))).toBe(true);
+
+    // The scaffold's palette is untouched — which is exactly the danger.
+    const theme = r.theme;
+    expect(theme.colors.background).toBe(sampleTheme.colors.background);
+  });
+
+  test("a slot the stylesheet names but does not change still counts as mapped", async () => {
+    const primary = sampleTheme.colors.primary;
+    const css = `:root { --primary: ${typeof primary === "string" ? primary : primary.DEFAULT}; }`;
+    const r = unwrap(await importThemeCss(ctx, css));
+    expect(r.coverage.semantic).toBe(1);
+    expect(r.coverage.unmapped).not.toContain("primary");
+  });
 });

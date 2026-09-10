@@ -26,6 +26,8 @@ export {
   UnknownSnippetError,
 } from "./build-tree.ts";
 export {
+  assetFilename,
+  CAPTURE_ASSET_EXTENSIONS,
   type CaptureOutcome,
   type CapturePageOptions,
   capturePage,
