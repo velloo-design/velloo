@@ -49,6 +49,49 @@ export function clampPaneWidth(px: number): number {
 }
 
 /**
+ * The width the board keeps for itself before the panes have to take turns.
+ * Two default panes over a 1024px window leave a 384px strip — narrower than
+ * the mobile frame it is meant to be showing, so a canvas in name only.
+ */
+const MIN_CANVAS_WIDTH = 480;
+
+function panesFitTogether(viewportWidth: number, left: number, right: number): boolean {
+  return viewportWidth - left - right >= MIN_CANVAS_WIDTH;
+}
+
+/**
+ * The pane the narrow layout closed, so widening the window can hand it back.
+ * Kept out of the store deliberately: it records how the current arrangement
+ * came about, which is never something the UI renders.
+ */
+let paneClosedByLayout: "left" | "right" | null = null;
+
+type PaneCollapse = { leftPaneCollapsed: boolean; rightPaneCollapsed: boolean };
+type PaneState = Pick<CanvasState, "panesExclusive" | keyof PaneCollapse>;
+
+function paneCollapse(s: PaneState, side: "left" | "right", collapsed: boolean): PaneCollapse {
+  // Closing a pane always stands on its own — both closed is a perfectly good
+  // arrangement, and handing the width straight back to the other pane would
+  // take away the one way to see the whole canvas. Only *opening* one has to
+  // find room, and in a narrow window the only room is the other pane's.
+  const yielding = s.panesExclusive && !collapsed;
+  if (yielding) paneClosedByLayout = side === "left" ? "right" : "left";
+  return side === "left"
+    ? { leftPaneCollapsed: collapsed, rightPaneCollapsed: yielding || s.rightPaneCollapsed }
+    : { leftPaneCollapsed: yielding || s.leftPaneCollapsed, rightPaneCollapsed: collapsed };
+}
+
+/**
+ * The collapse flags that open one pane — its opposite yields when the window
+ * only has room for one. For the call sites that fold an open into a larger
+ * `set` (starting a comment hands the right pane its tab) rather than going
+ * through the setters.
+ */
+export function revealPane(s: PaneState, side: "left" | "right"): PaneCollapse {
+  return paneCollapse(s, side, false);
+}
+
+/**
  * Read a stored `{ name: collapsed }` record — the sections inside the left
  * sidebar and the two side panes both persist this shape, under the same
  * remember-panels gate. Anything missing or malformed reads as expanded.
@@ -71,6 +114,16 @@ function persistCollapsed(key: string, value: Record<string, boolean>) {
   if (typeof localStorage !== "undefined" && readFlag(REMEMBER_PANELS_KEY, true)) {
     localStorage.setItem(key, JSON.stringify(value));
   }
+}
+
+/**
+ * Persist one pane's collapse and leave the other's stored value alone: in the
+ * narrow layout the opposite pane closes because the window made it, which is
+ * not a preference to carry into the next session.
+ */
+function persistPaneCollapsed(side: "left" | "right", collapsed: boolean) {
+  const stored = readCollapsed(PANES_KEY, ["left", "right"]);
+  persistCollapsed(PANES_KEY, { ...stored, [side]: collapsed });
 }
 
 /** Dragged pane widths. Clamped on read too — the bounds can move between releases. */
@@ -156,6 +209,12 @@ export interface ModesSlice {
   leftPaneWidth: number;
   /** Dragged width of the right pane, in px. */
   rightPaneWidth: number;
+  /**
+   * The window has no room for both panes and a canvas worth looking at, so
+   * opening one closes the other. Closing is unaffected: both panes shut is
+   * still allowed. Session-only — a fact about the window, not a preference.
+   */
+  panesExclusive: boolean;
   /** Ctrl/Cmd+K search dialog visibility (session-only, not persisted). */
   searchOpen: boolean;
   /** Export dialog target (session-only); null = closed. */
@@ -177,6 +236,11 @@ export interface ModesSlice {
   /** Commit a dragged width; clamped to `PANE_WIDTH`. */
   setLeftPaneWidth(px: number): void;
   setRightPaneWidth(px: number): void;
+  /**
+   * Re-fit the panes to a window of `viewportWidth`. Narrowing past what
+   * holds both closes the right one; widening back hands it over again.
+   */
+  syncPaneLayout(viewportWidth: number): void;
   setSearchOpen(open: boolean): void;
   setExportTarget(target: ExportTarget | null): void;
   setPreviewTarget(target: PreviewTarget | null): void;
@@ -205,6 +269,7 @@ interface PreviewTarget {
 
 export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (set, get) => ({
   ...readCanvasPrefs(),
+  panesExclusive: false,
   settingsScope: null,
   searchOpen: false,
   exportTarget: null,
@@ -257,6 +322,11 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
       for (const key of CANVAS_PREF_KEYS) localStorage.removeItem(key);
     }
     clearBoardMemory();
+    // Panes back to open — except that a window with room for only one still
+    // has room for only one, so defaults there mean the same pane the narrow
+    // layout would have picked.
+    const exclusive = get().panesExclusive;
+    paneClosedByLayout = exclusive ? "right" : null;
     set({
       appTheme: "system",
       designMode: "light",
@@ -265,7 +335,7 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
       boardsCollapsed: false,
       treeCollapsed: false,
       leftPaneCollapsed: false,
-      rightPaneCollapsed: false,
+      rightPaneCollapsed: exclusive,
       leftPaneWidth: PANE_WIDTH.default,
       rightPaneWidth: PANE_WIDTH.default,
     });
@@ -299,18 +369,14 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
     });
   },
 
-  setLeftPaneCollapsed(leftPaneCollapsed) {
-    set((s) => {
-      persistCollapsed(PANES_KEY, { left: leftPaneCollapsed, right: s.rightPaneCollapsed });
-      return { leftPaneCollapsed };
-    });
+  setLeftPaneCollapsed(collapsed) {
+    persistPaneCollapsed("left", collapsed);
+    set((s) => paneCollapse(s, "left", collapsed));
   },
 
-  setRightPaneCollapsed(rightPaneCollapsed) {
-    set((s) => {
-      persistCollapsed(PANES_KEY, { left: s.leftPaneCollapsed, right: rightPaneCollapsed });
-      return { rightPaneCollapsed };
-    });
+  setRightPaneCollapsed(collapsed) {
+    persistPaneCollapsed("right", collapsed);
+    set((s) => paneCollapse(s, "right", collapsed));
   },
 
   setLeftPaneWidth(px) {
@@ -327,5 +393,36 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
       persistPaneWidths(s.leftPaneWidth, rightPaneWidth);
       return { rightPaneWidth };
     });
+  },
+
+  syncPaneLayout(viewportWidth) {
+    const s = get();
+    const exclusive = !panesFitTogether(viewportWidth, s.leftPaneWidth, s.rightPaneWidth);
+    if (exclusive === s.panesExclusive) return;
+    if (exclusive) {
+      // Two open panes are the only arrangement the shrinking window has to
+      // resolve. One already closed is the user's own answer to a small
+      // canvas, and the closure isn't persisted either way — reopening the
+      // canvas on a wide screen should still find the panes as they were left.
+      const both = !s.leftPaneCollapsed && !s.rightPaneCollapsed;
+      paneClosedByLayout = both ? "right" : null;
+      set({ panesExclusive: true, ...(both && { rightPaneCollapsed: true }) });
+      return;
+    }
+    const closed = paneClosedByLayout;
+    paneClosedByLayout = null;
+    // Hand the pane back only if the arrangement is still the one the narrow
+    // layout left behind — one pane open, the other closed for it. Anything
+    // else the user has since chosen, both panes closed included, is theirs.
+    const swapped = closed === "left" ? s.rightPaneCollapsed : s.leftPaneCollapsed;
+    if (!closed || swapped) {
+      set({ panesExclusive: false });
+      return;
+    }
+    set(
+      closed === "left"
+        ? { panesExclusive: false, leftPaneCollapsed: false }
+        : { panesExclusive: false, rightPaneCollapsed: false },
+    );
   },
 });

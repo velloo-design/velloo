@@ -1,15 +1,34 @@
 import type { CommentThreadView } from "@velloo/schema";
-import { Bot, Check, Cloud, Crosshair, MessageCircle, Plus, RotateCcw, Trash2 } from "lucide-react";
+import {
+  Check,
+  Cloud,
+  Crosshair,
+  MessageCircle,
+  Plus,
+  RotateCcw,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { CloudCommentAvailability, CommentScope } from "../api.ts";
+import { type CloudCommentAvailability, type CommentScope, cloudUnavailableHint } from "../api.ts";
 import { commentNumbers } from "../comment-order.ts";
+import { submitOnModEnter } from "../keys.ts";
 import { useCanvas } from "../store.ts";
 import {
   CommentScopeFilterToggle,
-  CommentTargetPicker,
-  cloudUnavailableHint,
+  CommentTargetToggle,
   LOCAL_COMMENT_SCOPE_HELP,
 } from "./CommentScopeControls.tsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Bubble, BubbleContent } from "./ui/bubble.tsx";
 import { Button } from "./ui/button.tsx";
@@ -20,13 +39,7 @@ import {
   InputGroupButton,
   InputGroupTextarea,
 } from "./ui/input-group.tsx";
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-  MessageGroup,
-  MessageHeader,
-} from "./ui/message.tsx";
+import { Message, MessageContent, MessageGroup, MessageHeader } from "./ui/message.tsx";
 import { NativeSelect, NativeSelectOption } from "./ui/native-select.tsx";
 
 function relativeTime(iso: string): string {
@@ -46,12 +59,6 @@ const DEFAULT_AUTHOR_NAME: Record<AuthorKind, string> = {
   reviewer: "Reviewer",
 };
 
-function AuthorIcon({ kind }: { kind: AuthorKind }) {
-  if (kind === "agent") return <Bot size={12} />;
-  if (kind === "reviewer") return <Cloud size={12} />;
-  return <MessageCircle size={12} />;
-}
-
 /**
  * A thread reads as a conversation, so each voice gets its own surface: yours
  * filled and right-aligned, your agent's muted, and a reviewer's outlined
@@ -64,16 +71,26 @@ const BUBBLE_VARIANT: Record<AuthorKind, "default" | "muted" | "outline"> = {
   reviewer: "outline",
 };
 
-export function ThreadMessages({ messages }: { messages: CommentThreadView["messages"] }) {
+/** What a message that was taken back leaves behind, in the panel and the list. */
+const TOMBSTONE = "Comment deleted";
+
+export function ThreadMessages({
+  messages,
+  onDelete,
+}: {
+  messages: CommentThreadView["messages"];
+  onDelete?: (messageId: string) => void;
+}) {
   return (
     <MessageGroup className="mt-2 gap-3">
       {messages.map((message) => {
         const kind = message.author.kind;
+        const deleted = message.deletedAt !== undefined;
+        // A reviewer wrote from their own browser under their own account, so
+        // theirs isn't ours to take back — the cloud would refuse anyway.
+        const removable = onDelete && !deleted && kind !== "reviewer";
         return (
           <Message key={message.id} align={kind === "user" ? "end" : "start"}>
-            <MessageAvatar className="size-6 min-w-6 text-muted-foreground">
-              <AuthorIcon kind={kind} />
-            </MessageAvatar>
             <MessageContent className="gap-1">
               <MessageHeader className="gap-1.5 px-3">
                 {message.author.displayName ?? DEFAULT_AUTHOR_NAME[kind]}
@@ -83,10 +100,31 @@ export function ThreadMessages({ messages }: { messages: CommentThreadView["mess
                   </Badge>
                 ) : null}
                 <span className="ml-auto font-normal">{relativeTime(message.createdAt)}</span>
+                {removable ? (
+                  <button
+                    type="button"
+                    className="-mr-1 rounded p-0.5 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/message:opacity-100"
+                    title="Delete this comment"
+                    aria-label="Delete this comment"
+                    onClick={() => onDelete(message.id)}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                ) : null}
               </MessageHeader>
-              <Bubble variant={BUBBLE_VARIANT[kind]}>
-                <BubbleContent className="whitespace-pre-wrap">{message.body}</BubbleContent>
-              </Bubble>
+              {deleted ? (
+                // Ghost: no surface, and the row goes flush left, so what's
+                // left reads as a gap in the conversation rather than a turn.
+                <Bubble variant="ghost">
+                  <BubbleContent className="text-xs italic text-muted-foreground">
+                    {TOMBSTONE}
+                  </BubbleContent>
+                </Bubble>
+              ) : (
+                <Bubble variant={BUBBLE_VARIANT[kind]}>
+                  <BubbleContent className="whitespace-pre-wrap">{message.body}</BubbleContent>
+                </Bubble>
+              )}
             </MessageContent>
           </Message>
         );
@@ -95,8 +133,30 @@ export function ThreadMessages({ messages }: { messages: CommentThreadView["mess
   );
 }
 
+/** The opening line, skipping any that were taken back — never a blank row. */
+function threadPreview(thread: CommentThreadView): string {
+  return thread.messages.find((message) => !message.deletedAt)?.body ?? TOMBSTONE;
+}
+
+/** What the user is about to delete, held until they say so a second time. */
+type PendingDelete = { kind: "thread" } | { kind: "message"; id: string };
+
+/**
+ * Deleting is one click and no undo, so the confirmation has to say what is
+ * actually about to happen — which differs by where the thread lives and how
+ * much of it the message is.
+ */
+function deletePrompt(thread: CommentThreadView, pending: PendingDelete): string {
+  if (pending.kind === "thread") return "The conversation and its pin go, for good.";
+  if (thread.scope === "shared")
+    return "Anyone who has already read it will see that something was here, but not what it said.";
+  if (thread.messages.length === 1)
+    return "It's the only comment on this thread, so the thread goes with it.";
+  return "It goes for good. The rest of the thread stays.";
+}
+
 export const MOVE_TO_CLOUD_HELP =
-  "Moving a thread to the cloud republishes the conversation on the published board and removes the local copy.";
+  "Moving a thread to the cloud republishes the conversation on the published board and removes the local copy. A board with no link yet is published first.";
 
 export function CommentThreadListItem({
   thread,
@@ -132,7 +192,7 @@ export function CommentThreadListItem({
           ) : null}
           <span className="ml-auto">{relativeTime(thread.updatedAt)}</span>
         </div>
-        <p className="mt-1 line-clamp-3 text-sm">{thread.messages[0]?.body}</p>
+        <p className="mt-1 line-clamp-3 text-sm">{threadPreview(thread)}</p>
         {thread.messages.length > 1 ? (
           <span className="mt-1 block text-[11px] text-muted-foreground">
             {thread.messages.length} messages
@@ -173,17 +233,23 @@ export function CommentsPanel() {
   const setResolved = useCanvas((state) => state.setCommentResolved);
   const moveToCloud = useCanvas((state) => state.moveCommentToCloud);
   const deleteComment = useCanvas((state) => state.deleteComment);
+  const deleteMessage = useCanvas((state) => state.deleteCommentMessage);
   const enterCommentMode = useCanvas((state) => state.enterCommentMode);
-  const publishBoardNow = useCanvas((state) => state.publishBoardNow);
-  const board = useCanvas((state) =>
-    state.currentBoardId ? state.boards[state.currentBoardId] : undefined,
-  );
   const [boardDraft, setBoardDraft] = useState("");
   const [boardScope, setBoardScope] = useState<CommentScope>("local");
+  const [boardFailure, setBoardFailure] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const active = threads.find((thread) => thread.id === activeId) ?? null;
   const numbers = useMemo(() => commentNumbers(threads), [threads]);
-  const publishBoard = () => board && publishBoardNow({ id: board.id, name: board.name }, "public");
+  // The draft survives a refused post — a cloud comment can lose its publish
+  // and the words are the part that took work.
+  const startThread = () => {
+    setBoardFailure(null);
+    void createBoardComment(boardDraft, boardScope).then((failure) => {
+      setBoardFailure(failure);
+      if (!failure) setBoardDraft("");
+    });
+  };
 
   useEffect(() => {
     if (boardId) void refresh();
@@ -238,8 +304,8 @@ export function CommentsPanel() {
             onResolve={() => void setResolved(active.id, active.status === "open")}
             cloud={cloud}
             onMoveToCloud={() => void moveToCloud(active.id)}
-            onPublish={publishBoard}
             onDelete={() => void deleteComment(active.id)}
+            onDeleteMessage={(messageId) => void deleteMessage(active.id, messageId)}
           />
         ) : threads.length > 0 ? (
           <ul className="divide-y">
@@ -278,32 +344,37 @@ export function CommentsPanel() {
               onChange={(event) => setBoardDraft(event.target.value)}
               placeholder="Start a broad thread about this board…"
               className="min-h-16 text-sm"
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault();
-                  void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""));
-                }
-              }}
+              onKeyDown={submitOnModEnter(startThread)}
             />
-            <InputGroupAddon align="block-end">
-              <CommentTargetPicker
+            {/* Wraps because this row can't widen: the pane's own width is the
+                budget, and a sign-in prompt beside the target toggle is enough
+                to push submit off the edge. */}
+            <InputGroupAddon align="block-end" className="flex-wrap">
+              <CommentTargetToggle
                 scope={boardScope}
                 onChange={setBoardScope}
                 cloud={cloud}
-                onPublish={publishBoard}
+                className="min-w-0 flex-1"
               />
               <InputGroupButton
                 variant="default"
                 className="ml-auto"
                 disabled={!boardDraft.trim()}
-                onClick={() =>
-                  void createBoardComment(boardDraft, boardScope).then(() => setBoardDraft(""))
-                }
+                onClick={startThread}
               >
-                Start thread
+                {boardFailure ? "Try again" : "Start thread"}
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
+          {boardFailure ? (
+            <p
+              className="mt-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive"
+              data-comment-failure
+              role="alert"
+            >
+              {boardFailure}
+            </p>
+          ) : null}
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             Board-wide threads have no canvas pin. {LOCAL_COMMENT_SCOPE_HELP}
           </p>
@@ -322,8 +393,8 @@ function ThreadDetail({
   onResolve,
   cloud,
   onMoveToCloud,
-  onPublish,
   onDelete,
+  onDeleteMessage,
 }: {
   thread: CommentThreadView;
   replyDraft: string;
@@ -333,10 +404,20 @@ function ThreadDetail({
   onResolve(): void;
   cloud: CloudCommentAvailability | undefined;
   onMoveToCloud(): void;
-  onPublish(): void;
   onDelete(): void;
+  onDeleteMessage(messageId: string): void;
 }) {
   const blocked = cloud?.available === false ? cloud.reason : null;
+  // An unpublished board is the one blocker the move itself clears: it opens
+  // the publish flow on the way, so the button stays live and says so.
+  const closed = Boolean(blocked) && blocked !== "unpublished";
+  const [pending, setPending] = useState<PendingDelete | null>(null);
+  const confirmDelete = () => {
+    if (!pending) return;
+    if (pending.kind === "thread") onDelete();
+    else onDeleteMessage(pending.id);
+    setPending(null);
+  };
   return (
     <div className="flex min-h-full flex-col p-3" data-active-comment={thread.id}>
       <div className="flex items-center gap-1">
@@ -355,7 +436,10 @@ function ThreadDetail({
           </span>
         </span>
       </div>
-      <ThreadMessages messages={thread.messages} />
+      <ThreadMessages
+        messages={thread.messages}
+        onDelete={(id) => setPending({ kind: "message", id })}
+      />
       {thread.status === "open" ? (
         <InputGroup className="mt-3">
           <InputGroupTextarea
@@ -364,6 +448,7 @@ function ThreadDetail({
             onChange={(event) => setReplyDraft(event.target.value)}
             placeholder="Reply…"
             className="min-h-16 text-sm"
+            onKeyDown={submitOnModEnter(onReply)}
           />
           <InputGroupAddon align="block-end">
             <InputGroupButton
@@ -391,16 +476,12 @@ function ThreadDetail({
           <Button
             variant="outline"
             size="sm"
-            disabled={cloud === undefined || Boolean(blocked)}
-            title={blocked ? cloudUnavailableHint(blocked) : MOVE_TO_CLOUD_HELP}
+            disabled={cloud === undefined || closed}
+            title={closed && blocked ? cloudUnavailableHint(blocked) : MOVE_TO_CLOUD_HELP}
             onClick={onMoveToCloud}
           >
             <Cloud /> Move to cloud
-          </Button>
-        ) : null}
-        {thread.scope === "local" && blocked === "unpublished" ? (
-          <Button variant="ghost" size="sm" className="col-span-2" onClick={onPublish}>
-            Publish this board to move the thread to the cloud
+            {blocked === "unpublished" ? <TriangleAlert className="text-amber-600" /> : null}
           </Button>
         ) : null}
         {thread.scope === "local" ? (
@@ -408,12 +489,36 @@ function ThreadDetail({
             variant="ghost"
             size="sm"
             className="col-span-2 text-destructive"
-            onClick={onDelete}
+            onClick={() => setPending({ kind: "thread" })}
           >
             <Trash2 /> Delete thread
           </Button>
         ) : null}
       </div>
+
+      <AlertDialog
+        open={pending !== null}
+        onOpenChange={(open) => {
+          if (!open) setPending(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pending?.kind === "thread" ? "Delete thread" : "Delete comment"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pending ? deletePrompt(thread, pending) : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={confirmDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

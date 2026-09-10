@@ -214,6 +214,10 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     if (path.startsWith("/api/annotations/")) return json({ annotations: [] });
     if (path.startsWith("/api/notes/")) return json({ notes: [] });
     if (path.startsWith("/api/mutate/")) return json({});
+    if (path === "/api/publish/targets") {
+      return json({ ready: true, access: "ready", teams: [], slots: [] });
+    }
+    if (path === "/api/publish/status") return json({ state: "idle" });
     return json({ error: { kind: "not-found" } }, 404);
   }
 

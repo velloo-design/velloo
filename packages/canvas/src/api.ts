@@ -20,10 +20,10 @@ export {
 } from "./api/auth.ts";
 export {
   type CloudCommentAvailability,
-  type CloudCommentBlocker,
   type CommentScope,
   type CommentScopeFilter,
   type CommentStatusFilter,
+  cloudUnavailableHint,
   comments,
   signInClears,
 } from "./api/comments.ts";

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 /**
  * Canvas-scope preferences. The one that actually regressed before:
@@ -157,6 +157,91 @@ describe("panel persistence", () => {
       left: true,
       right: true,
     });
+  });
+});
+
+/**
+ * The panes against the window. One too narrow for both plus a canvas makes
+ * them take turns, and widening it back is expected to undo only what the
+ * layout did — never a collapse the user chose for themselves.
+ */
+describe("panes in a window too narrow for both", () => {
+  // Both panes open in a window with room for them, from whatever arrangement
+  // the last test left behind — the narrow layout keeps a memo of its own doing
+  // that only a real widening clears.
+  beforeEach(() => {
+    useCanvas.getState().resetCanvasPrefs();
+    useCanvas.getState().syncPaneLayout(1600);
+  });
+
+  // Never leave a narrow window behind for the suites that assume a plain one.
+  afterEach(() => {
+    useCanvas.getState().syncPaneLayout(1600);
+  });
+
+  test("narrowing closes the right pane, and widening hands it back", () => {
+    useCanvas.getState().syncPaneLayout(700);
+    expect(useCanvas.getState().panesExclusive).toBe(true);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(false);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+
+    useCanvas.getState().syncPaneLayout(1600);
+    expect(useCanvas.getState().panesExclusive).toBe(false);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(false);
+  });
+
+  test("a pane the user had already closed is left as it is, both ways", () => {
+    useCanvas.getState().setRightPaneCollapsed(true);
+    useCanvas.getState().syncPaneLayout(700);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(false);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+
+    useCanvas.getState().syncPaneLayout(1600);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+  });
+
+  test("opening one pane closes the other, but closing one leaves it closed", () => {
+    useCanvas.getState().syncPaneLayout(700);
+    useCanvas.getState().setRightPaneCollapsed(false);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(true);
+
+    // Both shut is an arrangement of its own: all canvas, no chrome.
+    useCanvas.getState().setRightPaneCollapsed(true);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(true);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+
+    useCanvas.getState().setLeftPaneCollapsed(false);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+  });
+
+  test("widening leaves both-closed alone — it was the user's arrangement", () => {
+    useCanvas.getState().syncPaneLayout(700);
+    useCanvas.getState().setLeftPaneCollapsed(true);
+    useCanvas.getState().syncPaneLayout(1600);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(true);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+  });
+
+  test("only the pane the user acted on is remembered for the next session", () => {
+    useCanvas.getState().syncPaneLayout(700);
+    // Closing the right pane was the window's doing, not a preference.
+    expect(storage.has("velloo:panes")).toBe(false);
+
+    useCanvas.getState().setRightPaneCollapsed(false);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(true);
+    expect(JSON.parse(storage.getItem("velloo:panes") as string)).toEqual({
+      left: false,
+      right: false,
+    });
+  });
+
+  test("the threshold follows the panes' own dragged widths", () => {
+    useCanvas.getState().syncPaneLayout(1200);
+    expect(useCanvas.getState().panesExclusive).toBe(false);
+    useCanvas.getState().setLeftPaneWidth(560);
+    useCanvas.getState().setRightPaneWidth(560);
+    useCanvas.getState().syncPaneLayout(1200);
+    expect(useCanvas.getState().panesExclusive).toBe(true);
   });
 });
 

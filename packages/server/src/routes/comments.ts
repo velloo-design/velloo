@@ -89,6 +89,12 @@ export function createCommentsRouter(service: LocalCommentsService): Hono {
     });
   });
 
+  r.delete("/:id/messages/:messageId", (c) =>
+    respond(c, async () => ({
+      thread: await service.deleteMessage(c.req.param("id"), c.req.param("messageId")),
+    })),
+  );
+
   r.delete("/:id", (c) => respond(c, () => service.delete(c.req.param("id"))));
 
   return r;

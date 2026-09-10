@@ -1,5 +1,10 @@
 import type { ErrorOf } from "@velloo/protocol";
-import { type CloudError, describeCloudError } from "@velloo/protocol";
+import {
+  type CloudError,
+  describeCloudError,
+  PRICING_URL,
+  PROTECTED_SHARES_UNAVAILABLE,
+} from "@velloo/protocol";
 
 /**
  * How `velloo publish` can fail.
@@ -65,6 +70,14 @@ export function describePublishError(error: PublishError): string {
       return `no team named or identified by '${error.requested}'`;
     case "TeamAmbiguous":
       return `more than one team is named '${error.requested}'; pass its UUID`;
+    case "HttpFailure":
+      // The plan gate normally stops this before the publish starts; this is
+      // the cloud refusing anyway (a downgrade, or a tier we couldn't read).
+      // The cloud sends no dedicated code for it, only `forbidden`.
+      if (error.status === 403 && /protected shares/i.test(error.detail)) {
+        return `${PROTECTED_SHARES_UNAVAILABLE}. Publish publicly, or upgrade at ${PRICING_URL}`;
+      }
+      return describeCloudError(error);
     default:
       return describeCloudError(error);
   }

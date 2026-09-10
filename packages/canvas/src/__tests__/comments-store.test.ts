@@ -55,7 +55,22 @@ beforeEach(() => {
     const method = init?.method ?? "GET";
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     requests.push({ method, path, ...(body !== undefined && { body }) });
-    if (method === "DELETE") return response({ removedId: threadId, boardId: "main" });
+    if (method === "DELETE") {
+      const messageId = path.match(/\/messages\/([^/]+)$/)?.[1];
+      if (!messageId) return response({ removedId: threadId, boardId: "main" });
+      // The daemon's split: a cloud message leaves a tombstone for whoever
+      // already read it, a local one leaves nothing.
+      thread = {
+        ...thread,
+        messages:
+          thread.scope === "shared"
+            ? thread.messages.map((message) =>
+                message.id === messageId ? { ...message, body: "", deletedAt: now } : message,
+              )
+            : thread.messages.filter((message) => message.id !== messageId),
+      };
+      return response({ thread });
+    }
     if (method === "PATCH") {
       if (body.resolved !== undefined) {
         thread = { ...thread, status: body.resolved ? "resolved" : "open" };
@@ -127,6 +142,8 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = realFetch;
+  // A test that leaves a publish waiting parks a resolver in module state.
+  useCanvas.getState().settlePublish(false);
 });
 
 describe("comment canvas store", () => {
@@ -150,6 +167,44 @@ describe("comment canvas store", () => {
       `POST /api/comments/${threadId}/messages`,
       `PATCH /api/comments/${threadId}`,
     ]);
+  });
+
+  test("taking one message back out of several leaves the conversation standing", async () => {
+    useCanvas.getState().beginComment(anchor);
+    await useCanvas.getState().createPendingComment("Ignore this one");
+    await useCanvas.getState().replyToComment(threadId, "This is the real ask");
+    const first = useCanvas.getState().commentThreads[0]?.messages[0];
+
+    await useCanvas.getState().deleteCommentMessage(threadId, first?.id ?? "");
+    const messages = useCanvas.getState().commentThreads[0]?.messages;
+    // Local, so it left nothing behind — not even a tombstone.
+    expect(messages?.map((message) => message.body)).toEqual(["This is the real ask"]);
+    expect(useCanvas.getState().commentThreads).toHaveLength(1);
+  });
+
+  test("taking back a local thread's only message takes the thread with it", async () => {
+    useCanvas.getState().beginComment(anchor);
+    await useCanvas.getState().createPendingComment("Ignore this one");
+    const first = useCanvas.getState().commentThreads[0]?.messages[0];
+
+    await useCanvas.getState().deleteCommentMessage(threadId, first?.id ?? "");
+    expect(useCanvas.getState().commentThreads).toEqual([]);
+    // A thread with nothing in it is not a thread, so the whole thing goes —
+    // the daemon is asked for the thread, never for an emptying message.
+    expect(requests.at(-1)).toEqual({ method: "DELETE", path: `/api/comments/${threadId}` });
+  });
+
+  test("a cloud message is tombstoned rather than removed", async () => {
+    thread = { ...thread, scope: "shared" };
+    await useCanvas.getState().refreshComments();
+    const first = useCanvas.getState().commentThreads[0]?.messages[0];
+
+    await useCanvas.getState().deleteCommentMessage(threadId, first?.id ?? "");
+    const messages = useCanvas.getState().commentThreads[0]?.messages;
+    expect(messages?.[0]?.body).toBe("");
+    expect(messages?.[0]?.deletedAt).toBeString();
+    // Even as its last message: reviewers keep the thread they replied under.
+    expect(useCanvas.getState().commentThreads).toHaveLength(1);
   });
 
   test("pins a cloud thread when the composer targets the cloud", async () => {
@@ -252,6 +307,74 @@ describe("comment canvas store", () => {
       screenId: "home",
       path: "0",
       options: { frameId: "home-frame", preserveTab: true },
+    });
+  });
+
+  /**
+   * A cloud comment on a board with no link can't just be refused: publishing
+   * is the thing that would make it possible, so posting walks the user
+   * through it and then posts. The publish dialog still asks for confirmation
+   * — this only hands it the board and waits for the verdict.
+   */
+  describe("a cloud comment on an unpublished board", () => {
+    const unpublished = { available: false, reason: "unpublished" } as const;
+
+    test("publishes the board first, then posts the thread", async () => {
+      useCanvas.setState({ cloudComments: unpublished });
+      useCanvas.getState().beginComment(anchor);
+      const posting = useCanvas
+        .getState()
+        .createPendingComment("Reviewers should see this", "shared");
+
+      expect(useCanvas.getState().publishOpen).toBe(true);
+      expect(useCanvas.getState().publishScope).toMatchObject({ id: "main", name: "Main" });
+      expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+      useCanvas.getState().settlePublish(true);
+      expect(await posting).toBeNull();
+      expect(requests.at(-1)).toEqual({
+        method: "POST",
+        path: "/api/comments",
+        body: {
+          boardId: "main",
+          body: "Reviewers should see this",
+          anchor,
+          scope: "shared",
+        },
+      });
+      expect(useCanvas.getState().pendingCommentAnchor).toBeNull();
+    });
+
+    test("a publish closed without one leaves the draft to say why", async () => {
+      useCanvas.setState({ cloudComments: unpublished });
+      useCanvas.getState().beginComment(anchor);
+      const posting = useCanvas
+        .getState()
+        .createPendingComment("Reviewers should see this", "shared");
+
+      // Closing the dialog by hand is the abandon path the composer reports.
+      useCanvas.getState().setPublishOpen(false);
+      expect(await posting).toContain("wasn't published");
+      expect(requests.some((request) => request.method === "POST")).toBe(false);
+      // The pin — and so the words typed against it — survive.
+      expect(useCanvas.getState().pendingCommentAnchor).toEqual(anchor);
+    });
+
+    test("moving a thread there publishes with that thread's board chosen", async () => {
+      useCanvas.setState({ cloudComments: unpublished, commentThreads: [thread] });
+      const moving = useCanvas.getState().moveCommentToCloud(threadId);
+
+      expect(useCanvas.getState().publishScope).toMatchObject({ id: "main" });
+      expect(requests.some((request) => request.method === "PATCH")).toBe(false);
+
+      useCanvas.getState().settlePublish(true);
+      await moving;
+      expect(requests.at(-1)).toEqual({
+        method: "PATCH",
+        path: `/api/comments/${threadId}`,
+        body: { scope: "shared" },
+      });
+      expect(useCanvas.getState().commentThreads[0]?.scope).toBe("shared");
     });
   });
 

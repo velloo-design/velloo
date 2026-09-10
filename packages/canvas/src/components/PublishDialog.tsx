@@ -1,3 +1,4 @@
+import { PRICING_URL, protectedSharesAllowed } from "@velloo/protocol";
 import { AlertTriangle, CircleCheck, Copy, ExternalLink, Eye, EyeOff, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { preflightBoards, type ScreenRenderFailure } from "../api/preflight.ts";
@@ -12,6 +13,7 @@ import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { LoadingMark } from "./Loading.tsx";
 import { RenderFailureDialog } from "./RenderFailureDialog.tsx";
+import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";
 import {
@@ -50,8 +52,15 @@ export function PublishDialog() {
   const open = useCanvas((s) => s.publishOpen);
   const setOpen = useCanvas((s) => s.setPublishOpen);
   const openSignIn = useCanvas((s) => s.openSignIn);
+  const settlePublish = useCanvas((s) => s.settlePublish);
   const design = useCanvas((s) => s.design);
   const scope = useCanvas((s) => s.publishScope);
+  /**
+   * A free plan publishes public links only. The protected controls stay in
+   * the form — disabled, with the plan that unlocks them — so the option is
+   * discoverable instead of either missing or failing after the upload.
+   */
+  const protectedShares = useCanvas((s) => protectedSharesAllowed(s.authStatus?.account?.tier));
 
   const [targets, setTargets] = useState<PublishTargets | null>(null);
   const [run, setRun] = useState<PublishState>({ state: "idle" });
@@ -128,6 +137,14 @@ export function PublishDialog() {
     };
   }, [open, design?.folderName, design?.boards, scope]);
 
+  // A publish that something is waiting on (a cloud comment needs its board to
+  // have a link) hands back the moment the run lands, rather than when the
+  // user gets around to closing the result — the waiting work shouldn't sit
+  // behind a dialog it has no more questions for.
+  useEffect(() => {
+    if (run.state === "done") settlePublish(true);
+  }, [run.state, settlePublish]);
+
   // Poll while the daemon is working.
   useEffect(() => {
     if (!open || run.state !== "running") return;
@@ -170,6 +187,13 @@ export function PublishDialog() {
     }
   }, [destinationSlug, matchingSlots, recommendedSlug]);
 
+  // Derived rather than reset: a board-menu "Private" on a free plan, or a
+  // plan read that lands after the form opened, must not send what the plan
+  // can't honor — and must not wipe the rest of the form either.
+  const effectiveVisibility = protectedShares ? visibility : "public";
+  const effectivePassword = protectedShares ? password : "";
+  const scopeMode = scope ? (protectedShares ? scope.mode : "public") : null;
+
   const buildRequest = (): PublishRequest => {
     const destination: PublishRequest["destination"] = selectedSlot
       ? {
@@ -181,8 +205,8 @@ export function PublishDialog() {
     return {
       boardIds,
       ...(title.trim() ? { title: title.trim() } : {}),
-      visibility,
-      ...(password.length >= 3 ? { password } : {}),
+      visibility: effectiveVisibility,
+      ...(effectivePassword.length >= 3 ? { password: effectivePassword } : {}),
       ...(teamId ? { teamId } : {}),
       destination,
       screenshots,
@@ -227,7 +251,7 @@ export function PublishDialog() {
   const unavailable = run.state === "unavailable";
   // No boards is legitimate — a board-less folder publishes all its screens.
   const nothingSelected = boards.length > 0 && boardIds.length === 0;
-  const passwordMissing = scope?.mode === "password" && password.length < 3;
+  const passwordMissing = scopeMode === "password" && password.length < 3;
 
   return (
     <>
@@ -246,7 +270,7 @@ export function PublishDialog() {
             <DialogTitle>Publish to velloo-cloud</DialogTitle>
             <DialogDescription>
               {scope
-                ? `Sharing “${scope.name}” ${scope.mode === "private" ? "privately" : scope.mode === "password" ? "with password protection" : "publicly"}.`
+                ? `Sharing “${scope.name}” ${scopeMode === "private" ? "privately" : scopeMode === "password" ? "with password protection" : "publicly"}.`
                 : "Share a rendered, commentable copy of these boards by link."}
             </DialogDescription>
           </DialogHeader>
@@ -429,7 +453,7 @@ export function PublishDialog() {
               <div className="grid gap-2">
                 <Label htmlFor="publish-visibility">Visibility</Label>
                 <Select
-                  value={visibility}
+                  value={effectiveVisibility}
                   onValueChange={(v) => setVisibility(v as "public" | "private")}
                 >
                   <SelectTrigger id="publish-visibility">
@@ -437,14 +461,21 @@ export function PublishDialog() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="public">Anyone with the link</SelectItem>
-                    <SelectItem value="private">Only your organization</SelectItem>
+                    <SelectItem value="private" disabled={!protectedShares}>
+                      Only your organization
+                      {protectedShares ? null : <PlanBadge />}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="publish-password">
-                  Password{scope?.mode === "password" ? "" : " (optional)"}
+                <Label
+                  htmlFor="publish-password"
+                  className={protectedShares ? undefined : "text-muted-foreground"}
+                >
+                  Password{scopeMode === "password" ? "" : " (optional)"}
+                  {protectedShares ? null : <PlanBadge />}
                 </Label>
                 <div className="relative">
                   <Input
@@ -453,14 +484,18 @@ export function PublishDialog() {
                     type={showPassword ? "text" : "password"}
                     minLength={3}
                     autoComplete="new-password"
-                    placeholder="3+ characters"
-                    value={password}
+                    placeholder={
+                      protectedShares ? "3+ characters" : "Not available on the free plan"
+                    }
+                    disabled={!protectedShares}
+                    value={effectivePassword}
                     onChange={(e) => setPassword(e.target.value)}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     className="absolute right-0 top-0 h-9 w-9 p-0"
+                    disabled={!protectedShares}
                     onClick={() => setShowPassword((value) => !value)}
                     title={showPassword ? "Hide password" : "Show password"}
                     aria-label={showPassword ? "Hide password" : "Show password"}
@@ -469,10 +504,25 @@ export function PublishDialog() {
                     {showPassword ? <EyeOff /> : <Eye />}
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Anyone with the password can view, signed in or not. Send it separately from the
-                  link.
-                </p>
+                {protectedShares ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Anyone with the password can view, signed in or not. Send it separately from the
+                    link.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Free accounts publish public links. Private and password-protected links come
+                    with Team and Business.{" "}
+                    <a
+                      href={PRICING_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-4"
+                    >
+                      See plans
+                    </a>
+                  </p>
+                )}
               </div>
 
               {targets && targets.teams.length > 1 && teamId ? (
@@ -592,6 +642,15 @@ function describeAccess(result: PublishResult): string {
     : "Anyone with the link.";
 }
 
+/** Marks a control the account's plan doesn't include. */
+export function PlanBadge() {
+  return (
+    <Badge variant="outline" className="ml-auto h-4 px-1.5 text-[10px] font-normal">
+      Team
+    </Badge>
+  );
+}
+
 function Warnings({ messages }: { messages: string[] }) {
   if (messages.length === 0) return null;
   return (
@@ -618,7 +677,7 @@ function HistoryNote({
       <p className="text-xs text-muted-foreground">
         Replaced the previous version — the free plan keeps only the latest.{" "}
         <a
-          href="https://velloo.design/pricing"
+          href={PRICING_URL}
           target="_blank"
           rel="noreferrer"
           className="underline underline-offset-4"

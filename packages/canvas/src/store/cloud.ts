@@ -33,9 +33,25 @@ export interface CloudSlice {
   closeSignIn(): void;
   setPublishOpen(open: boolean): void;
   publishBoardNow(board: { id: string; name: string }, mode: PublishAccessMode): void;
+  /**
+   * Open the publish dialog for one board and report back what became of it:
+   * true once a run has finished, false if the dialog closed without one.
+   *
+   * For the work a publish *unblocks* rather than the publish itself — a cloud
+   * comment cannot exist before its board has a link, so posting one walks
+   * through here first and has to know whether it may carry on. The dialog
+   * still asks for confirmation; the destination is never inferred just
+   * because something was waiting on it.
+   */
+  publishAndWait(board: { id: string; name: string }): Promise<boolean>;
+  /** Hand that verdict over. Called once per wait; later calls do nothing. */
+  settlePublish(published: boolean): void;
 }
 
 type PublishAccessMode = "public" | "private" | "password";
+
+/** Resolvers parked by {@link CloudSlice.publishAndWait}. */
+let publishWaiters: ((published: boolean) => void)[] = [];
 
 export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (set, get) => ({
   authStatus: null,
@@ -73,12 +89,34 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
   },
 
   // Both entry points clear the scope: opening the full form must not inherit
-  // the last board's, and closing must not leave it armed for next time.
+  // the last board's, and closing must not leave it armed for next time. They
+  // also settle any wait — a dialog closed by hand published nothing, and one
+  // reopened for something else is no longer the publish that was waited on.
   setPublishOpen(publishOpen) {
+    get().settlePublish(false);
     set({ publishOpen, publishScope: null });
   },
 
   publishBoardNow(board, mode) {
+    get().settlePublish(false);
     set({ publishScope: { ...board, mode }, publishOpen: true });
+  },
+
+  publishAndWait(board) {
+    set({ publishScope: { ...board, mode: "public" }, publishOpen: true });
+    return new Promise((resolve) => {
+      publishWaiters.push(resolve);
+    });
+  },
+
+  settlePublish(published) {
+    const waiting = publishWaiters;
+    publishWaiters = [];
+    for (const resolve of waiting) resolve(published);
+    // A finished run may have just given this board its first link, which is
+    // the very blocker the comment target reports. Nothing else refreshes it,
+    // so a publish used to leave the picker disabled until the panel remounted.
+    // Whoever was waiting re-reads it for itself, and shouldn't race this one.
+    if (published && waiting.length === 0) void get().refreshCloudComments();
   },
 });

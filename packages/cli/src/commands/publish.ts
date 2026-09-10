@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { isCancel, password, select } from "@clack/prompts";
+import { PRICING_URL, protectedSharesAllowed } from "@velloo/protocol";
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
@@ -13,6 +14,7 @@ import {
 import { defineCommand } from "citty";
 import { checkCloudHealth, defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
+import { fetchAccount } from "../cloud-login.ts";
 import { type CloudPublishSlot, listPublishDestinations } from "../cloud-upload.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, pickBoards, resolveDesignFolder } from "../folder.ts";
@@ -32,7 +34,7 @@ import {
 } from "../publish/core.ts";
 import { describePublishError } from "../publish/errors.ts";
 import { listPublished, removePublished } from "../publish/manage.ts";
-import { resolvePublishPrivacy } from "../publish/privacy.ts";
+import { privacyFlagsError, resolvePublishPrivacy } from "../publish/privacy.ts";
 
 export default defineCommand({
   meta: {
@@ -169,6 +171,15 @@ export default defineCommand({
     }
     if (health.status === "unhealthy") fail("publish", health.detail);
 
+    // The plan decides which access modes exist, so it is read before any
+    // prompt: `--private` on a free plan stops here, not after the board picker.
+    const account = await fetchAccount(baseUrl, token, 5000);
+    const protectedShares = protectedSharesAllowed(
+      account.status === "ok" ? account.account.tier : undefined,
+    );
+    const flagsError = privacyFlagsError(args, protectedShares);
+    if (flagsError) fail("publish", flagsError);
+
     // Board choice is a CLI concern (an interactive multiselect, or --boards);
     // the core just takes ids. A folder with no boards yields [] — every screen.
     const selected = await pickBoards(folder, args.boards, interactive, "publish");
@@ -229,8 +240,8 @@ export default defineCommand({
 
     // Destination failures happen before privacy/password questions or any
     // render work, so --update with no exact slot stops immediately.
-    const privacy = await resolvePublishPrivacy(args, interactive).catch((error: unknown) =>
-      fail("publish", error instanceof Error ? error.message : String(error)),
+    const privacy = await resolvePublishPrivacy(args, interactive, { protectedShares }).catch(
+      (error: unknown) => fail("publish", error instanceof Error ? error.message : String(error)),
     );
     const visibility = privacy.visibility;
     const password = privacy.password ? await readSharePassword() : undefined;
@@ -322,7 +333,7 @@ export default defineCommand({
     if (history && !history.retained && history.pruned > 0) {
       console.log("  replaced the previous version — the free plan keeps only the latest.");
       console.log(
-        "  Upgrade to Team to keep version history and revisit past publishes: https://velloo.design/pricing",
+        `  Upgrade to Team to keep version history and revisit past publishes: ${PRICING_URL}`,
       );
     } else if (history?.retained && history.versions > 1) {
       console.log(

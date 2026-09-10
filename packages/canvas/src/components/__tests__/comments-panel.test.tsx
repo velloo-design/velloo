@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { CommentThreadView } from "@velloo/schema";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cloudUnavailableHint } from "../../api.ts";
 import {
   CommentScopeFilterToggle,
-  CommentTargetPicker,
-  cloudUnavailableHint,
+  CommentTargetToggle,
   LOCAL_COMMENT_SCOPE_HELP,
 } from "../CommentScopeControls.tsx";
 import { CommentThreadListItem, MOVE_TO_CLOUD_HELP, ThreadMessages } from "../CommentsPanel.tsx";
@@ -59,37 +59,42 @@ describe("comments panel affordances", () => {
     expect(html).toContain("Cloud");
   });
 
-  test("disables the cloud target and offers Publish when the board is unpublished", () => {
+  /**
+   * An unpublished board is the one blocker posting clears by itself, so the
+   * cloud target stays pickable and is marked rather than disabled — the whole
+   * point of dropping the separate Publish button.
+   */
+  test("marks the cloud target as needing a publish instead of closing it", () => {
     const html = renderToStaticMarkup(
-      <CommentTargetPicker
-        scope="local"
+      <CommentTargetToggle
+        scope="shared"
         onChange={() => undefined}
         cloud={{ available: false, reason: "unpublished" }}
-        onPublish={() => undefined}
       />,
     );
-    expect(html).toContain('disabled=""');
-    expect(html).toContain("Publish this board to write a cloud comment");
-    expect(html).toContain(">Publish<");
+    expect(html).not.toContain('disabled=""');
+    expect(html).toContain("data-needs-publish");
+    expect(html).toContain("Posting opens the publish flow first");
+    expect(html).not.toContain(">Publish<");
   });
 
-  test("disables the cloud target without a publish escape when signed out", () => {
+  test("closes the cloud target, with a sign-in, when the account is the blocker", () => {
     const html = renderToStaticMarkup(
-      <CommentTargetPicker
+      <CommentTargetToggle
         scope="local"
         onChange={() => undefined}
         cloud={{ available: false, reason: "signed-out" }}
-        onPublish={() => undefined}
       />,
     );
     expect(html).toContain('disabled=""');
     expect(html).toContain("Sign in to velloo cloud");
-    expect(html).not.toContain(">Publish<");
+    expect(html).toContain("Sign in to write cloud comments");
+    expect(html).not.toContain("data-needs-publish");
   });
 
   test("enables the cloud target once the board is published", () => {
     const html = renderToStaticMarkup(
-      <CommentTargetPicker
+      <CommentTargetToggle
         scope="shared"
         onChange={() => undefined}
         cloud={{ available: true, slug: "review", url: "https://review.velloo.dev/" }}
@@ -97,6 +102,7 @@ describe("comments panel affordances", () => {
     );
     expect(html).toContain("Post to the published board at https://review.velloo.dev/");
     expect(html).not.toContain('disabled=""');
+    expect(html).not.toContain("data-needs-publish");
   });
 
   test("marks a reviewer's message as coming from outside the machine", () => {
@@ -165,6 +171,78 @@ describe("comments panel affordances", () => {
     const reviewer = messageOf({ kind: "reviewer" });
     expect(reviewer).toContain('data-align="start"');
     expect(reviewer).toContain('data-variant="outline"');
+  });
+
+  test("a message taken back leaves a tombstone and no body", () => {
+    const html = renderToStaticMarkup(
+      <ThreadMessages
+        onDelete={() => undefined}
+        messages={[
+          {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            author: { kind: "user" },
+            body: "",
+            createdAt: "2026-08-28T10:00:00.000Z",
+            deletedAt: "2026-08-28T10:05:00.000Z",
+          },
+          {
+            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            author: { kind: "user" },
+            body: "What I actually meant",
+            createdAt: "2026-08-28T10:06:00.000Z",
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain("Comment deleted");
+    expect(html).toContain('data-variant="ghost"');
+    expect(html).toContain("What I actually meant");
+    // One delete control, on the message that still has something to delete.
+    expect(html.match(/aria-label="Delete this comment"/g)).toHaveLength(1);
+  });
+
+  test("offers no delete on a reviewer's message — it isn't this account's", () => {
+    const html = renderToStaticMarkup(
+      <ThreadMessages
+        onDelete={() => undefined}
+        messages={[
+          {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            author: { kind: "reviewer", displayName: "jane.reviewer" },
+            body: "Make this headline more direct",
+            createdAt: "2026-08-28T10:00:00.000Z",
+          },
+        ]}
+      />,
+    );
+    expect(html).not.toContain('aria-label="Delete this comment"');
+  });
+
+  test("a thread whose opening message went shows the next one, not a blank row", () => {
+    const row = renderToStaticMarkup(
+      <CommentThreadListItem
+        thread={{
+          ...thread,
+          messages: [
+            {
+              ...(thread.messages[0] as CommentThreadView["messages"][number]),
+              body: "",
+              deletedAt: "2026-08-28T10:05:00.000Z",
+            },
+            {
+              id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              author: { kind: "user" },
+              body: "What I actually meant",
+              createdAt: "2026-08-28T10:06:00.000Z",
+            },
+          ],
+        }}
+        number={1}
+        onOpen={() => undefined}
+        onLocate={() => undefined}
+      />,
+    );
+    expect(row).toContain("What I actually meant");
   });
 
   test("renders the thread-row scope label and Go to control", () => {

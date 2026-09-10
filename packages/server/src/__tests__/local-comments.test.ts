@@ -172,6 +172,64 @@ describe("local comment routes", () => {
     expect(events.every((event) => event.type === "comments-changed")).toBe(true);
   });
 
+  test("deleting one message on a local thread takes it out entirely", async () => {
+    const created = (await (
+      await request("POST", "/api/comments", { boardId: "main", body: "Ignore this one" })
+    ).json()) as { thread: { id: string; messages: { id: string }[] } };
+    const replied = (await (
+      await request("POST", `/api/comments/${created.thread.id}/messages`, {
+        body: "This is the real ask.",
+      })
+    ).json()) as { thread: { messages: { id: string }[] } };
+    const target = replied.thread.messages[0]?.id;
+
+    const response = await request(
+      "DELETE",
+      `/api/comments/${created.thread.id}/messages/${target}`,
+    );
+    expect(response.status).toBe(200);
+    const { thread } = (await response.json()) as {
+      thread: { messages: { body: string; deletedAt?: string }[] };
+    };
+    // Nobody outside this machine ever read it, so there is nothing to be
+    // honest to about the gap — it is simply not there.
+    expect(thread.messages.map((message) => message.body)).toEqual(["This is the real ask."]);
+    expect(thread.messages[0]?.deletedAt).toBeUndefined();
+
+    // And it is gone from the file, not just from the answer.
+    const again = await request("DELETE", `/api/comments/${created.thread.id}/messages/${target}`);
+    expect(again.status).toBe(404);
+  });
+
+  test("a local thread's last message is not the message endpoint's to take", async () => {
+    const created = (await (
+      await request("POST", "/api/comments", { boardId: "main", body: "Only message" })
+    ).json()) as { thread: { id: string; messages: { id: string }[] } };
+
+    const response = await request(
+      "DELETE",
+      `/api/comments/${created.thread.id}/messages/${created.thread.messages[0]?.id}`,
+    );
+    // An empty thread is not a thread. The canvas deletes the whole thing
+    // instead, and the daemon holds the line for anything that doesn't.
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: { message: string } }).error.message).toContain(
+      "delete the thread instead",
+    );
+    expect((await service.get(created.thread.id)).messages).toHaveLength(1);
+  });
+
+  test("deleting a message that isn't in the thread is a 404", async () => {
+    const created = (await (
+      await request("POST", "/api/comments", { boardId: "main", body: "Only message" })
+    ).json()) as { thread: { id: string } };
+    const response = await request(
+      "DELETE",
+      `/api/comments/${created.thread.id}/messages/${crypto.randomUUID()}`,
+    );
+    expect(response.status).toBe(404);
+  });
+
   test("rejects anchors that do not belong to the named board and frame", async () => {
     const response = await request("POST", "/api/comments", {
       boardId: "main",
@@ -335,6 +393,31 @@ describe("cloud comment scope", () => {
           cloudThreads.set(next.id, next);
           return Response.json({ thread: next });
         }
+        const retract = url.pathname.match(/^\/v1\/comment-threads\/([^/]+)\/messages\/([^/]+)$/);
+        if (request.method === "DELETE" && retract?.[1]) {
+          const existing = cloudThreads.get(retract[1]);
+          if (!existing) return new Response("not found", { status: 404 });
+          // The cloud only ever lets you take back your own; a reviewer's is
+          // theirs, and refusing here is what the canvas has to cope with.
+          const target = existing.messages.find((message) => message.id === retract[2]);
+          if (target?.author.kind === "reviewer") {
+            return Response.json(
+              { error: "forbidden", message: "you can only delete your own comments" },
+              {
+                status: 403,
+              },
+            );
+          }
+          const next: CommentThread = {
+            ...existing,
+            messages: existing.messages.map((message) =>
+              message.id === retract[2] ? { ...message, body: "", deletedAt: iso() } : message,
+            ),
+            updatedAt: iso(),
+          };
+          cloudThreads.set(next.id, next);
+          return Response.json({ thread: next });
+        }
         return new Response("not found", { status: 404 });
       },
     });
@@ -418,6 +501,46 @@ describe("cloud comment scope", () => {
     expect(promoted.messages.map((message) => message.author.kind)).toEqual(["user", "agent"]);
     expect(await shared.list("main", "all", "local")).toHaveLength(0);
     await expect(shared.get(local.id)).rejects.toThrow("No such comment thread");
+  });
+
+  test("taking back a message on a cloud thread goes to the cloud, not the local file", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    const thread = await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+    const first = thread.messages[0]?.id ?? "";
+
+    const retracted = await shared.deleteMessage(thread.id, first);
+    expect(retracted.scope).toBe("shared");
+    expect(retracted.messages[0]?.body).toBe("");
+    expect(retracted.messages[0]?.deletedAt).toBeString();
+    // The tombstone came back from the cloud, so it is in the cloud's copy.
+    expect(cloudThreads.get(thread.id)?.messages[0]?.deletedAt).toBeString();
+    expect(await shared.list("main", "all", "local")).toHaveLength(0);
+  });
+
+  test("a reviewer's message is not ours to take back, and the refusal says so", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    const thread = await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+    const reviewer = { ...(thread.messages[0] as CommentThread["messages"][number]) };
+    reviewer.id = crypto.randomUUID();
+    reviewer.author = { kind: "reviewer", displayName: "jane.reviewer" };
+    const stored = cloudThreads.get(thread.id) as CommentThread;
+    cloudThreads.set(thread.id, { ...stored, messages: [...stored.messages, reviewer] });
+
+    await expect(shared.deleteMessage(thread.id, reviewer.id)).rejects.toThrow(
+      "you can only delete your own comments",
+    );
+  });
+
+  test("promoting a thread leaves the messages that were taken back behind", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    const local = await shared.create({ boardId: "main", body: "Ignore this one" });
+    await shared.reply(local.id, { body: "This is the real ask." });
+    await shared.deleteMessage(local.id, local.messages[0]?.id ?? "");
+
+    const promoted = await shared.promoteToShared(local.id);
+    // What reaches the reviewers is what was still there to read. A message
+    // retracted while the thread was local never existed as far as they know.
+    expect(promoted.messages.map((message) => message.body)).toEqual(["This is the real ask."]);
   });
 
   test("an agent replying to a cloud thread is not mistaken for the designer", async () => {

@@ -2,6 +2,7 @@ import type { StateCreator } from "zustand";
 import {
   focusFrame,
   focusRect,
+  focusRectWithPanel,
   iframeRectToBoard,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -26,6 +27,8 @@ let markupEditSavedView: PanZoom | null = null;
 
 const FLIGHT_MS = 450;
 const MARKUP_EDIT_FLIGHT_MS = 280;
+/** Breathing room around an editor the camera is framing, in CSS px. */
+const MARKUP_EDIT_MARGIN = 48;
 const easeInOutCubic = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 function animateCamera(
@@ -56,6 +59,38 @@ function animateCamera(
 
 const boardWrapper = (): HTMLElement | null =>
   document.querySelector<HTMLElement>('[data-velloo-board="true"]');
+
+/** Longest a pane's width transition can hold up a flight, in ms. */
+const LAYOUT_SETTLE_MS = 320;
+
+/**
+ * Run `fly` once the board viewport has stopped changing size.
+ *
+ * Starting a comment draft reveals the comments pane, whose width animates
+ * over ~200ms — so the viewport measured on the frame the draft opens is a
+ * couple of hundred px wider than the one the camera will land in, and the
+ * composer ends up hanging off the right edge. Waiting for two frames at the
+ * same size costs nothing when nothing is animating, which is the usual case.
+ *
+ * Bails if any camera move happens first: the draft closing restores the view,
+ * and a stale flight arriving after that would yank the camera back.
+ */
+function whenViewportSettles(wrapper: HTMLElement, fly: () => void): void {
+  const token = flightToken;
+  const deadline = performance.now() + LAYOUT_SETTLE_MS;
+  let last = `${wrapper.clientWidth}x${wrapper.clientHeight}`;
+  const check = (now: number) => {
+    if (token !== flightToken) return;
+    const size = `${wrapper.clientWidth}x${wrapper.clientHeight}`;
+    if (size === last || now >= deadline) {
+      fly();
+      return;
+    }
+    last = size;
+    requestAnimationFrame(check);
+  };
+  requestAnimationFrame(check);
+}
 
 /** Camera + pointer state: zoom, pan, cursor tool, and reported frame geometry. */
 export interface ViewportSlice {
@@ -107,6 +142,17 @@ export interface ViewportSlice {
    * the prior camera so {@link restoreViewAfterMarkupEdit} can glide back.
    */
   zoomForMarkupEdit(): void;
+  /**
+   * Frame a comment being written: the box it is anchored to, plus the
+   * composer pinned beside it. The composer counter-scales against the board,
+   * so `composer` is its size in *screen* px and the zoom has to leave room
+   * for it before it frames the anchor. Remembers the prior camera the same
+   * way {@link zoomForMarkupEdit} does.
+   */
+  zoomForCommentDraft(
+    anchor: { x: number; y: number; w: number; h: number },
+    composer: { w: number; h: number; gap: number },
+  ): void;
   restoreViewAfterMarkupEdit(): void;
   /**
    * Center a frame of the current board in the visible canvas (search
@@ -214,9 +260,32 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
     animateCamera(set, current, { zoom: 1, pan: next.pan }, MARKUP_EDIT_FLIGHT_MS);
   },
 
+  zoomForCommentDraft(anchor, composer) {
+    if (!markupEditSavedView) markupEditSavedView = { zoom: get().canvasZoom, pan: get().pan };
+    const wrapper = boardWrapper();
+    if (!wrapper) return;
+    whenViewportSettles(wrapper, () => {
+      const view = focusRectWithPanel(
+        anchor,
+        composer,
+        wrapper.clientWidth,
+        wrapper.clientHeight,
+        MARKUP_EDIT_MARGIN,
+      );
+      // Read the camera at departure, not at scheduling: the wait is a few
+      // frames, and a flight that starts from a stale `from` jumps.
+      if (view)
+        animateCamera(set, { zoom: get().canvasZoom, pan: get().pan }, view, MARKUP_EDIT_FLIGHT_MS);
+    });
+  },
+
   restoreViewAfterMarkupEdit() {
     const saved = markupEditSavedView;
     if (!saved) return;
+    // Also abandons a draft flight still waiting on the layout to settle —
+    // a draft closed inside that window shouldn't fly to where it would
+    // have been framed.
+    cancelCameraFlight();
     const current = { zoom: get().canvasZoom, pan: get().pan };
     if (
       Math.abs(current.zoom - saved.zoom) < 0.001 &&

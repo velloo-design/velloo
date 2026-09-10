@@ -9,6 +9,7 @@ import {
   type IntentPrice,
   mutate,
 } from "../api.ts";
+import { submitOnModEnter } from "../keys.ts";
 import { pathFromString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
@@ -383,6 +384,7 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
             rows={4}
             placeholder="Describe subject, style, lighting and mood — these models reward detail."
             className="min-h-0 text-xs"
+            onKeyDown={submitOnModEnter(() => void run())}
           />
 
           <div className="flex gap-2">

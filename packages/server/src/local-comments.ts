@@ -521,6 +521,61 @@ export class LocalCommentsService {
     });
   }
 
+  /**
+   * Take one message back.
+   *
+   * A folder-local thread is a file on this machine that only the person here
+   * and their agent ever read, so a retraction there is just editing your own
+   * notes: the message goes, and nothing marks the gap. A cloud thread has
+   * been read by other people who may have answered it, and erasing a turn
+   * from under them would rewrite a conversation they took part in — so the
+   * cloud keeps the row as a tombstone and drops only the words. It also
+   * holds the identity the owner check needs, which the local file doesn't.
+   */
+  deleteMessage(id: string, messageId: string): Promise<CommentThreadView> {
+    return this.serialized(async () => {
+      const file = await this.read();
+      const index = file.threads.findIndex((candidate) => candidate.id === id);
+      if (index < 0) {
+        if (!this.shared) throw new CommentStoreError("not-found", "No such comment thread.");
+        try {
+          const next = await this.shared.deleteMessage(id, messageId);
+          this.ctxFor().broadcast({
+            type: "comments-changed",
+            boardId: next.boardId,
+            scope: "shared",
+          });
+          return this.view(next);
+        } catch (error) {
+          throw new CommentStoreError(
+            "invalid",
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+      }
+      const current = file.threads[index] as CommentThread;
+      const remaining = current.messages.filter((candidate) => candidate.id !== messageId);
+      if (remaining.length === current.messages.length) {
+        throw new CommentStoreError("not-found", "No such comment.");
+      }
+      if (remaining.length === 0) {
+        throw new CommentStoreError(
+          "invalid",
+          "That is the thread's only comment — delete the thread instead.",
+        );
+      }
+      const next = CommentThreadSchema.parse({
+        ...current,
+        messages: remaining,
+        updatedAt: new Date().toISOString(),
+      });
+      file.threads[index] = next;
+      await this.write(file);
+      this.ctxFor().broadcast({ type: "comments-changed", boardId: next.boardId, scope: "local" });
+      return this.view(next);
+    });
+  }
+
   delete(id: string): Promise<{ removedId: string; boardId: string }> {
     return this.serialized(async () => {
       const file = await this.read();

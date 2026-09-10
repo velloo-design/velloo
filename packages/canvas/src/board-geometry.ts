@@ -128,6 +128,43 @@ export function focusRect(
 }
 
 /**
+ * Camera view that frames a board-space rect *and* a fixed-size panel pinned
+ * to its right — the comment composer, which counter-scales against the board
+ * so its footprint stays in screen px however far the camera pulls back.
+ *
+ * That inversion is why this can't be `focusRect` over a union rect: the
+ * panel's board-space size depends on the zoom being solved for. Instead the
+ * zoom is whatever leaves the panel its screen px and still fits the rect, and
+ * the two are then centered as one block.
+ */
+export function focusRectWithPanel(
+  rect: FrameBox,
+  panel: { w: number; h: number; gap: number },
+  vw: number,
+  vh: number,
+  margin = 48,
+): PanZoom | null {
+  if (vw < 50 || vh < 50) return null;
+  const forRect = Math.max(1, vw - margin * 2 - panel.gap - panel.w);
+  const zoom = Math.max(
+    MIN_ZOOM,
+    Math.min(1, forRect / Math.max(1, rect.w), (vh - margin * 2) / Math.max(1, rect.h)),
+  );
+  const blockW = rect.w * zoom + panel.gap + panel.w;
+  const blockH = Math.max(rect.h * zoom, panel.gap + panel.h);
+  // The panel hangs off the rect's top-right corner, `gap` px along both axes,
+  // so the block's origin is the rect's own — pan puts that origin where the
+  // centered block starts.
+  return {
+    zoom,
+    pan: {
+      x: Math.round((vw - blockW) / 2 - rect.x * zoom),
+      y: Math.round((vh - blockH) / 2 - rect.y * zoom),
+    },
+  };
+}
+
+/**
  * Convert an iframe-viewport rect into board-world coordinates.
  *
  * Iframe rects come from `getBoundingClientRect()`, so scrolling can make

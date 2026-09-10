@@ -17,6 +17,24 @@ export type CloudCommentBlocker = "signed-out" | "expired" | "unpublished" | "un
 export const signInClears = (reason: CloudCommentBlocker): boolean =>
   reason === "signed-out" || reason === "expired";
 
+/**
+ * Why the cloud target is closed, in the words the UI shows. Lives beside the
+ * blocker itself rather than in a component: the store says the same thing
+ * when a cloud comment gives up mid-flight, and one wording is the point.
+ */
+export function cloudUnavailableHint(reason: CloudCommentBlocker): string {
+  switch (reason) {
+    case "signed-out":
+      return "Sign in to velloo cloud to write a cloud comment.";
+    case "expired":
+      return "Your velloo-cloud session has ended — sign in again to write a cloud comment.";
+    case "unpublished":
+      return "Publish this board to write a cloud comment on it.";
+    default:
+      return "This canvas cannot write cloud comments.";
+  }
+}
+
 export const comments = {
   async list(
     boardId: string,
@@ -65,5 +83,9 @@ export const comments = {
   },
   delete(threadId: string): Promise<{ removedId: string; boardId: string }> {
     return requestJson("DELETE", `/api/comments/${encodeURIComponent(threadId)}`);
+  },
+  async deleteMessage(threadId: string, messageId: string): Promise<CommentThreadView> {
+    const path = `/api/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`;
+    return (await requestJson<{ thread: CommentThreadView }>("DELETE", path)).thread;
   },
 };

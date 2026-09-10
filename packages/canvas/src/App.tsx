@@ -59,6 +59,21 @@ function useCloudSession(): void {
   }, []);
 }
 
+/**
+ * The side panes against the window they have to live in: past the width that
+ * holds both plus a canvas, they take turns (see `syncPaneLayout`). Only the
+ * window drives this — a pane's own resize drag deliberately doesn't, or
+ * widening one would fold the pane under the cursor.
+ */
+function usePaneLayout(): void {
+  useEffect(() => {
+    const sync = () => useCanvas.getState().syncPaneLayout(window.innerWidth);
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+}
+
 export function App() {
   const design = useCanvas((s) => s.design);
   const bootError = useCanvas((s) => s.bootError);
@@ -103,6 +118,7 @@ export function App() {
   useUrlState();
   useApplyAppTheme();
   useCloudSession();
+  usePaneLayout();
   // A new velloo announces itself once, then sits as a dot on the account
   // menu — the daemon does the actual checking on its own schedule.
   useEffect(startUpdateWatch, []);

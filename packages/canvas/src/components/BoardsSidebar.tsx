@@ -1,3 +1,4 @@
+import { protectedSharesAllowed } from "@velloo/protocol";
 import { MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
 import {
   Archive,
@@ -26,6 +27,7 @@ import { ICON_MENU_WIDTH } from "../lib/utils.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { AddFrameDialog } from "./AddFrameDialog.tsx";
+import { PlanBadge } from "./PublishDialog.tsx";
 import { Tree } from "./Tree.tsx";
 import {
   AlertDialog,
@@ -126,6 +128,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
   const selectScreen = useCanvas((s) => s.selectScreen);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const wsConnected = useCanvas((s) => s.wsConnected);
+  const protectedShares = useCanvas((s) => protectedSharesAllowed(s.authStatus?.account?.tier));
   const boardsCollapsed = useCanvas((s) => s.boardsCollapsed);
   const treeCollapsed = useCanvas((s) => s.treeCollapsed);
   const toggleBoardsCollapsed = useCanvas((s) => s.toggleBoardsCollapsed);
@@ -602,20 +605,24 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
                   Public
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  disabled={!protectedShares}
                   onSelect={() =>
                     useCanvas.getState().publishBoardNow({ id: b.id, name: b.name }, "private")
                   }
                 >
                   <Lock />
                   Private
+                  {protectedShares ? null : <PlanBadge />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  disabled={!protectedShares}
                   onSelect={() =>
                     useCanvas.getState().publishBoardNow({ id: b.id, name: b.name }, "password")
                   }
                 >
                   <ShieldCheck />
                   Password protected…
+                  {protectedShares ? null : <PlanBadge />}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>

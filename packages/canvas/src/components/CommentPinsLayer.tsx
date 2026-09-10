@@ -3,6 +3,12 @@ import { useMemo } from "react";
 import { commentNumbers } from "../comment-order.ts";
 import { useCanvas } from "../store.ts";
 
+/** Half the pin's own size (`h-7`), in board units — it isn't counter-scaled. */
+const PIN_RADIUS = 14;
+
+const clamp = (value: number, low: number, high: number): number =>
+  Math.min(Math.max(value, low), Math.max(low, high));
+
 export function CommentPinsLayer() {
   const visible = useCanvas((state) => state.markupVisible);
   const threads = useCanvas((state) => state.commentThreads);
@@ -38,8 +44,13 @@ export function CommentPinsLayer() {
               : null;
           const rect = path !== null ? nodeRects[frame.id]?.[path] : undefined;
           const target = rect ?? anchor.bounds;
-          x = frame.x + inset.x + target.x + target.w;
-          y = frame.y + inset.y + target.y;
+          // The pin straddles the node's top-right corner, but it has to stay
+          // inside the frame: a node flush with the top edge would otherwise
+          // put half a pin up in the frame's header, on top of its ⋯ menu.
+          const left = frame.x + inset.x;
+          const top = frame.y + inset.y;
+          x = clamp(left + target.x + target.w, left + PIN_RADIUS, left + frame.w - PIN_RADIUS);
+          y = clamp(top + target.y, top + PIN_RADIUS, top + frame.h - PIN_RADIUS);
         }
         const stale = thread.anchorState.status === "stale";
         const active = activeId === thread.id;

@@ -187,4 +187,14 @@ export class SharedCommentsClient {
       body: JSON.stringify({ resolved }),
     });
   }
+
+  /**
+   * Take back one message. The cloud checks the account behind the token
+   * wrote it — a reviewer's message isn't ours to remove — and answers with
+   * the thread carrying a tombstone where the body was.
+   */
+  deleteMessage(id: string, messageId: string): Promise<CommentThread> {
+    const path = `/v1/comment-threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}`;
+    return this.mutate(path, { method: "DELETE" });
+  }
 }

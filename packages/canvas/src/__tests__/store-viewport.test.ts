@@ -194,6 +194,13 @@ domSuite("framing a frame", () => {
 });
 
 domSuite("the markup-edit soft zoom", () => {
+  // The remembered camera is module state that outlives the store, so a test
+  // that opens an edit and never closes it would hand its view to the next one.
+  afterEach(() => {
+    useCanvas.getState().restoreViewAfterMarkupEdit();
+    settleFlight();
+  });
+
   test("zooms to 100% and glides back to the camera you had", () => {
     mountWrapper();
     useCanvas.setState({ canvasZoom: 0.4, pan: { x: 120, y: 60 } });
@@ -228,6 +235,106 @@ domSuite("the markup-edit soft zoom", () => {
     settleFlight();
     expect(useCanvas.getState().canvasZoom).toBeCloseTo(0.4, 6);
     expect(useCanvas.getState().pan.x).toBeCloseTo(120, 6);
+  });
+
+  /**
+   * A comment draft frames two things at once: the box being commented on, in
+   * board space, and the composer beside it, which counter-scales out of the
+   * board zoom and so measures in screen px. Both have to land whole — the bug
+   * this replaces framed only the composer and left the camera far enough over
+   * that half of it hung off the edge.
+   */
+  const COMPOSER = { w: 384, h: 220, gap: 14 };
+
+  /** Where the anchor and the composer end up on screen, in canvas px. */
+  function draftOnScreen(anchor: { x: number; y: number; w: number; h: number }) {
+    const { zoom, pan } = view();
+    const ax = anchor.x * zoom + pan.x;
+    const ay = anchor.y * zoom + pan.y;
+    return {
+      zoom,
+      anchor: { left: ax, top: ay, right: ax + anchor.w * zoom, bottom: ay + anchor.h * zoom },
+      composer: {
+        left: ax + anchor.w * zoom + COMPOSER.gap,
+        top: ay + COMPOSER.gap,
+        right: ax + anchor.w * zoom + COMPOSER.gap + COMPOSER.w,
+        bottom: ay + COMPOSER.gap + COMPOSER.h,
+      },
+    };
+  }
+
+  function expectOnScreen(
+    seen: { left: number; top: number; right: number; bottom: number },
+    vw = VW,
+    vh = VH,
+  ) {
+    expect(seen.left).toBeGreaterThanOrEqual(0);
+    expect(seen.top).toBeGreaterThanOrEqual(0);
+    expect(seen.right).toBeLessThanOrEqual(vw);
+    expect(seen.bottom).toBeLessThanOrEqual(vh);
+  }
+
+  test("a pin far off-camera brings both the pin and the composer into view", () => {
+    mountWrapper();
+    useCanvas.setState({ canvasZoom: 0.3, pan: { x: 0, y: 0 } });
+    const pin = { x: 2400, y: 1800, w: 0, h: 0 };
+    useCanvas.getState().zoomForCommentDraft(pin, COMPOSER);
+    settleFlight();
+    const seen = draftOnScreen(pin);
+    expect(seen.zoom).toBeCloseTo(1, 6);
+    expectOnScreen(seen.anchor);
+    expectOnScreen(seen.composer);
+  });
+
+  test("a node too wide for the leftover room zooms out instead of hiding one", () => {
+    mountWrapper();
+    useCanvas.setState({ canvasZoom: 1, pan: { x: 0, y: 0 } });
+    const node = { x: 200, y: 100, w: 1440, h: 900 };
+    useCanvas.getState().zoomForCommentDraft(node, COMPOSER);
+    settleFlight();
+    const seen = draftOnScreen(node);
+    expect(seen.zoom).toBeLessThan(1);
+    expectOnScreen(seen.anchor);
+    expectOnScreen(seen.composer);
+  });
+
+  /**
+   * Starting a draft reveals the comments pane, and the pane's width animates
+   * over ~200ms. Framing against the viewport as it stood when the draft
+   * opened left the composer hanging past the right edge — but only on the
+   * first comment of a session, because after that the pane is already open.
+   */
+  test("waits for a revealing pane to finish narrowing the viewport", () => {
+    mountWrapper();
+    useCanvas.setState({ canvasZoom: 1, pan: { x: 0, y: 0 } });
+    const pin = { x: 2400, y: 1800, w: 0, h: 0 };
+    useCanvas.getState().zoomForCommentDraft(pin, COMPOSER);
+    const narrow = VW - 320;
+    Object.defineProperty(wrapper, "clientWidth", { value: narrow, configurable: true });
+    settleFlight();
+    const seen = draftOnScreen(pin);
+    expectOnScreen(seen.anchor, narrow);
+    expectOnScreen(seen.composer, narrow);
+  });
+
+  test("a draft closed before the flight departs doesn't move the camera at all", () => {
+    mountWrapper();
+    useCanvas.setState({ canvasZoom: 0.4, pan: { x: 120, y: 60 } });
+    useCanvas.getState().zoomForCommentDraft({ x: 2400, y: 1800, w: 0, h: 0 }, COMPOSER);
+    useCanvas.getState().restoreViewAfterMarkupEdit();
+    settleFlight();
+    expect(view()).toEqual({ zoom: 0.4, pan: { x: 120, y: 60 } });
+  });
+
+  test("it remembers the camera, so closing the draft glides back", () => {
+    mountWrapper();
+    useCanvas.setState({ canvasZoom: 0.4, pan: { x: 120, y: 60 } });
+    useCanvas.getState().zoomForCommentDraft({ x: 900, y: 700, w: 80, h: 40 }, COMPOSER);
+    settleFlight();
+    useCanvas.getState().restoreViewAfterMarkupEdit();
+    settleFlight();
+    expect(useCanvas.getState().canvasZoom).toBeCloseTo(0.4, 6);
+    expect(useCanvas.getState().pan).toEqual({ x: 120, y: 60 });
   });
 
   test("a camera move outside an edit forgets the saved view", () => {

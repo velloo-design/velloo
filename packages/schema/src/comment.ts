@@ -54,12 +54,24 @@ export const CommentAuthorSchema = z.object({
 });
 export type CommentAuthor = z.infer<typeof CommentAuthorSchema>;
 
-export const CommentMessageSchema = z.object({
-  id: z.uuid(),
-  author: CommentAuthorSchema,
-  body: z.string().trim().min(1).max(4000),
-  createdAt: z.iso.datetime(),
-});
+export const CommentMessageSchema = z
+  .object({
+    id: z.uuid(),
+    author: CommentAuthorSchema,
+    /** Empty only on a tombstone — taking a message back erases what it said. */
+    body: z.string().trim().max(4000),
+    createdAt: z.iso.datetime(),
+    /**
+     * When the author took this message back. The message stays in the thread
+     * so the conversation still reads in order and replies keep their
+     * antecedent; only the body goes.
+     */
+    deletedAt: z.iso.datetime().optional(),
+  })
+  .refine((message) => message.deletedAt !== undefined || message.body.length > 0, {
+    message: "A comment needs something to say",
+    path: ["body"],
+  });
 export type CommentMessage = z.infer<typeof CommentMessageSchema>;
 
 export const CommentOriginSchema = z.discriminatedUnion("kind", [

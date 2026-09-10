@@ -101,12 +101,20 @@ export type PublishedCommentAuthor = z.infer<typeof PublishedCommentAuthorSchema
 export const OwnerAuthorKindSchema = z.enum(["user", "agent"]);
 export type OwnerAuthorKind = z.infer<typeof OwnerAuthorKindSchema>;
 
-export const PublishedCommentMessageSchema = z.object({
-  id: z.uuid(),
-  author: PublishedCommentAuthorSchema,
-  body: z.string().trim().min(1).max(4000),
-  createdAt: z.iso.datetime(),
-});
+export const PublishedCommentMessageSchema = z
+  .object({
+    id: z.uuid(),
+    author: PublishedCommentAuthorSchema,
+    /** Empty only on a tombstone — see `deletedAt`. */
+    body: z.string().trim().max(4000),
+    createdAt: z.iso.datetime(),
+    /** When its author took it back; the row stays, the body doesn't. */
+    deletedAt: z.iso.datetime().optional(),
+  })
+  .refine((message) => message.deletedAt !== undefined || message.body.length > 0, {
+    message: "A comment needs something to say",
+    path: ["body"],
+  });
 export type PublishedCommentMessage = z.infer<typeof PublishedCommentMessageSchema>;
 
 /**

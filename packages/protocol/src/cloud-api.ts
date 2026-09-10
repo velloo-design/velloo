@@ -46,6 +46,23 @@ export const AccountResponseSchema = z.object({
 });
 export type CloudAccount = z.infer<typeof AccountResponseSchema>;
 
+export const PRICING_URL = "https://velloo.design/pricing";
+
+/**
+ * Whether a plan can publish private or password-protected links. Free links
+ * are public only — velloo-cloud refuses the rest with a 403, and this lets a
+ * client say so before the publish rather than after it. An unknown tier (an
+ * older cloud, or `/v1/me` unreachable) stays allowed: the cloud is the
+ * authority, and a wrong "no" would block a paying account.
+ */
+export function protectedSharesAllowed(tier: string | undefined): boolean {
+  return tier !== "free";
+}
+
+/** The one sentence every surface uses for that refusal. */
+export const PROTECTED_SHARES_UNAVAILABLE =
+  "private and password-protected links need a Team or Business plan — free accounts publish public links only";
+
 /** One publish destination the folder could land in. */
 export const PublishSlotSchema = z.object({
   slug: z.string(),

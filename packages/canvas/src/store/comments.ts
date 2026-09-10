@@ -5,11 +5,13 @@ import {
   type CommentScope,
   type CommentScopeFilter,
   type CommentStatusFilter,
+  cloudUnavailableHint,
   comments,
 } from "../api.ts";
 import { iframeRectToBoard } from "../board-geometry.ts";
-import { toastError } from "../toast.ts";
+import { pushToast, toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
+import { revealPane } from "./modes.ts";
 
 export interface CommentsSlice {
   commentThreads: CommentThreadView[];
@@ -29,18 +31,56 @@ export interface CommentsSlice {
   enterCommentMode(): void;
   beginComment(anchor: CommentAnchor): void;
   clearPendingComment(): void;
-  createPendingComment(body: string, scope?: CommentScope): Promise<void>;
-  createBoardComment(body: string, scope?: CommentScope): Promise<void>;
+  /**
+   * Post the pinned draft. Resolves to the reason it couldn't be posted, or
+   * null once it is a thread — a cloud comment walks through the publish
+   * dialog on the way, and a user who backs out of that has a draft still on
+   * screen and deserves to be told why it is still there.
+   */
+  createPendingComment(body: string, scope?: CommentScope): Promise<string | null>;
+  /** The same contract for a board-wide thread, which has no canvas pin. */
+  createBoardComment(body: string, scope?: CommentScope): Promise<string | null>;
   replyToComment(id: string, body: string): Promise<void>;
   setCommentResolved(id: string, resolved: boolean): Promise<void>;
   moveCommentToCloud(id: string): Promise<void>;
   deleteComment(id: string): Promise<void>;
+  /**
+   * Take one message back. A cloud message leaves a tombstone behind for the
+   * people who already read it; a local one leaves nothing, and a local
+   * thread's only message takes the thread with it.
+   */
+  deleteCommentMessage(id: string, messageId: string): Promise<void>;
 }
 
 function replaceThread(threads: CommentThreadView[], next: CommentThreadView): CommentThreadView[] {
   const existing = threads.findIndex((thread) => thread.id === next.id);
   if (existing < 0) return [next, ...threads];
   return threads.map((thread) => (thread.id === next.id ? next : thread));
+}
+
+const PUBLISH_ABANDONED =
+  "This board wasn't published, so a cloud comment has nowhere to live yet. Publish it, or keep the comment local.";
+
+/**
+ * Clear the way for a cloud thread on this board, walking the user through a
+ * publish when the missing piece is the published link itself. Resolves to the
+ * reason the cloud is still out of reach, or null when it isn't.
+ */
+async function reachCloud(get: () => CanvasState, boardId: string): Promise<string | null> {
+  const cloud = get().cloudComments;
+  // Nothing known yet is not a blocker: the daemon refuses a cloud thread it
+  // can't place, and guessing here would open a publish dialog over a board
+  // that may already have a link.
+  if (!cloud || cloud.available) return null;
+  if (cloud.reason !== "unpublished") return cloudUnavailableHint(cloud.reason);
+  const board = get().boards[boardId];
+  if (!board) return PUBLISH_ABANDONED;
+  const published = await get().publishAndWait({ id: board.id, name: board.name });
+  if (!published) return PUBLISH_ABANDONED;
+  // The publish just minted the link this board didn't have; ask for the new
+  // answer rather than posting a thread against the stale one.
+  await get().refreshCloudComments();
+  return get().cloudComments?.available ? null : PUBLISH_ABANDONED;
 }
 
 export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlice> = (
@@ -120,13 +160,13 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
       });
       return;
     }
-    set({
+    set((state) => ({
       activeCommentId,
       pendingCommentAnchor: null,
       rightTab: "comments",
-      rightPaneCollapsed: false,
+      ...revealPane(state, "right"),
       markupVisible: true,
-    });
+    }));
     get().locateComment(activeCommentId);
   },
 
@@ -153,26 +193,26 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   },
 
   enterCommentMode() {
-    set({
+    set((state) => ({
       cursorMode: "comment",
       hover: null,
       pendingCommentAnchor: null,
       activeCommentId: null,
       rightTab: "comments",
-      rightPaneCollapsed: false,
+      ...revealPane(state, "right"),
       markupVisible: true,
-    });
+    }));
   },
 
   beginComment(pendingCommentAnchor) {
-    set({
+    set((state) => ({
       pendingCommentAnchor,
       activeCommentId: null,
       cursorMode: "select",
       rightTab: "comments",
-      rightPaneCollapsed: false,
+      ...revealPane(state, "right"),
       markupVisible: true,
-    });
+    }));
   },
 
   clearPendingComment() {
@@ -182,7 +222,14 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   async createPendingComment(body, scope = "local") {
     const boardId = get().currentBoardId;
     const anchor = get().pendingCommentAnchor;
-    if (!boardId || !anchor || !body.trim()) return;
+    if (!boardId || !anchor || !body.trim()) return "There is nothing to post.";
+    if (scope === "shared") {
+      const blocked = await reachCloud(get, boardId);
+      if (blocked) return blocked;
+      // The publish dialog held the floor for a while; the pin it was opened
+      // for may have been dropped in the meantime.
+      if (get().pendingCommentAnchor !== anchor) return null;
+    }
     try {
       const thread = await comments.create({ boardId, body, anchor, scope });
       set((state) => ({
@@ -190,14 +237,20 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
         activeCommentId: thread.id,
         pendingCommentAnchor: null,
       }));
+      return null;
     } catch (error) {
       toastError(error, "Could not create comment");
+      return "The daemon refused the comment. Its message has the details.";
     }
   },
 
   async createBoardComment(body, scope = "local") {
     const boardId = get().currentBoardId;
-    if (!boardId || !body.trim()) return;
+    if (!boardId || !body.trim()) return "There is nothing to post.";
+    if (scope === "shared") {
+      const blocked = await reachCloud(get, boardId);
+      if (blocked) return blocked;
+    }
     try {
       const thread = await comments.create({ boardId, body, scope });
       set((state) => ({
@@ -206,8 +259,10 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
         pendingCommentAnchor: null,
         rightTab: "comments",
       }));
+      return null;
     } catch (error) {
       toastError(error, "Could not create comment");
+      return "The daemon refused the comment. Its message has the details.";
     }
   },
 
@@ -218,6 +273,22 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
       set((state) => ({ commentThreads: replaceThread(state.commentThreads, thread) }));
     } catch (error) {
       toastError(error, "Could not reply");
+    }
+  },
+
+  async deleteCommentMessage(id, messageId) {
+    const thread = get().commentThreads.find((candidate) => candidate.id === id);
+    // Nothing survives a local thread's last retraction, and an empty thread
+    // is not a thread — take the whole thing rather than leave a husk.
+    if (thread?.scope === "local" && thread.messages.length === 1) {
+      await get().deleteComment(id);
+      return;
+    }
+    try {
+      const thread = await comments.deleteMessage(id, messageId);
+      set((state) => ({ commentThreads: replaceThread(state.commentThreads, thread) }));
+    } catch (error) {
+      toastError(error, "Could not delete comment");
     }
   },
 
@@ -241,6 +312,13 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   },
 
   async moveCommentToCloud(id) {
+    const thread = get().commentThreads.find((candidate) => candidate.id === id);
+    if (!thread) return;
+    const blocked = await reachCloud(get, thread.boardId);
+    if (blocked) {
+      pushToast({ kind: "error", title: "The thread is still local", message: blocked });
+      return;
+    }
     try {
       // Promotion recreates the conversation on the published link, so the
       // thread comes back under a new id and the local one no longer exists.
