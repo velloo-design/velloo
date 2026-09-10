@@ -7,7 +7,7 @@
 }
 @media (max-width: 767px) {
   .ew-route-map img {
-    object-fit: contain !important;
+    object-fit: contain;
     background: #edefe4;
   }
 }

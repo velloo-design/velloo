@@ -691,9 +691,8 @@ async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | nu
 /**
  * The library question — unless it's already decided. A pinned library (the
  * `--library` flag, a scan adoption, or the sibling design folder's choice)
- * is not a default to preselect: MUI and shadcn-upstream aren't both in the
- * wizard's list (`interactive: false` hides MUI), so offering the list would
- * silently drop the pinned answer on the floor. Returns null on cancel.
+ * is already resolved, so don't ask the user to choose it again. Returns null
+ * on cancel.
  */
 async function resolveLibrary(
   ctx: { pinnedLibrary?: LibraryId | undefined; pinnedLibraryReason?: string | undefined },

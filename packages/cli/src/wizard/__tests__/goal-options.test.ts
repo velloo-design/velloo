@@ -56,10 +56,34 @@ describe("start-menu goals", () => {
     ]);
   });
 
-  test("the library list leads with shadcn and ends with no-library", () => {
-    const values = interactiveLibraryChoices().map((c) => c.value);
-    expect(values[0]).toBe("shadcn-upstream");
-    expect(values.at(-1)).toBe("none");
+  test("the library list includes every supported provider in display order", () => {
+    expect(interactiveLibraryChoices()).toEqual([
+      {
+        value: "shadcn-upstream",
+        label: "shadcn",
+        hint: "Real shadcn, Tailwind classes. Recommended.",
+      },
+      {
+        value: "antd",
+        label: "Ant Design",
+        hint: "Real antd v5, inline style objects.",
+      },
+      {
+        value: "chakra",
+        label: "Chakra UI",
+        hint: "Real Chakra v2, sx styling.",
+      },
+      {
+        value: "mui",
+        label: "Material UI",
+        hint: "Real @mui/material, sx styling.",
+      },
+      {
+        value: "none",
+        label: "No library",
+        hint: "Plain Box / Stack / Text primitives.",
+      },
+    ]);
   });
 
   test("no library hint promises to write components into the user's app", () => {

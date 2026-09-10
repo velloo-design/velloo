@@ -39,11 +39,6 @@ export interface WizardProviderEntry {
   label: string;
   /** Hint line next to the label. */
   hint: string;
-  /**
-   * Offered in the interactive select? A false entry (MUI) stays reachable
-   * via `--library` and scan detection only.
-   */
-  interactive: boolean;
   /** Sort position in the interactive select. */
   order: number;
   /**
@@ -94,7 +89,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
   "shadcn-upstream": {
     label: "shadcn",
     hint: "Real shadcn, Tailwind classes. Recommended.",
-    interactive: true,
     order: 0,
     defaultSource: "in-repo",
     asksComponentsSubfolder: true,
@@ -143,7 +137,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
   none: {
     label: "No library",
     hint: "Plain Box / Stack / Text primitives.",
-    interactive: true,
     // Last in the list: the deliberate trivial-end choice, not a default.
     order: 9,
     defaultSource: "binary",
@@ -172,9 +165,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
   mui: {
     label: "Material UI",
     hint: "Real @mui/material, sx styling.",
-    // Not offered in the wizard select — reachable via --library=mui and
-    // scan detection of a MUI host only.
-    interactive: false,
     order: 4,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
@@ -212,7 +202,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
   antd: {
     label: "Ant Design",
     hint: "Real antd v5, inline style objects.",
-    interactive: true,
     order: 2,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
@@ -249,7 +238,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
   chakra: {
     label: "Chakra UI",
     hint: "Real Chakra v2, sx styling.",
-    interactive: true,
     order: 3,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
@@ -300,13 +288,13 @@ export const DEFAULT_LIBRARY_ID: LibraryId = "shadcn-upstream";
 
 /** Choice list for the wizard's "Component library" select. */
 export function interactiveLibraryChoices(): { value: LibraryId; label: string; hint: string }[] {
-  return LIBRARY_IDS.filter((id) => WIZARD_PROVIDERS[id].interactive)
-    .sort((a, b) => WIZARD_PROVIDERS[a].order - WIZARD_PROVIDERS[b].order)
-    .map((id) => ({
+  return LIBRARY_IDS.toSorted((a, b) => WIZARD_PROVIDERS[a].order - WIZARD_PROVIDERS[b].order).map(
+    (id) => ({
       value: id,
       label: WIZARD_PROVIDERS[id].label,
       hint: WIZARD_PROVIDERS[id].hint,
-    }));
+    }),
+  );
 }
 
 /**
