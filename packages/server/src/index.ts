@@ -470,6 +470,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 }
 
 export type {
+  BoardLimitReached,
   CanvasAccount,
   CanvasAuth,
   CanvasAuthStatus,
@@ -477,6 +478,7 @@ export type {
   CanvasLogin,
   CanvasPublish,
   CanvasPublishDestinations,
+  CanvasPublishedBoard,
   CanvasPublishProgress,
   CanvasPublishRequest,
   CanvasPublishResult,
@@ -485,7 +487,7 @@ export type {
   PublishHost,
   SignInRequired,
 } from "./cloud.ts";
-export { asSignInRequired, signInRequired } from "./cloud.ts";
+export { asBoardLimit, asSignInRequired, boardLimitReached, signInRequired } from "./cloud.ts";
 export { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { activeBoards, loadDesignFolder, orderedBoards } from "./design-folder.ts";

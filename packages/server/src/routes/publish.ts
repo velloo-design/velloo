@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { asSignInRequired } from "../cloud.ts";
 import type { PublishRunner } from "../publish-run.ts";
 
@@ -14,9 +14,8 @@ import type { PublishRunner } from "../publish-run.ts";
 export function createPublishRouter(runner?: PublishRunner): Hono {
   const app = new Hono();
 
-  const unavailable = {
-    error: "this server cannot publish — run the canvas through the velloo CLI",
-  };
+  const noPublisher = "this server cannot publish — run the canvas through the velloo CLI";
+  const unavailable = { error: noPublisher };
 
   app.get("/status", (c) => {
     if (!runner) return c.json({ state: "unavailable" as const });
@@ -116,6 +115,45 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       return c.json({ error: "a publish is already running for this folder" }, 409);
     }
     return c.json(started, 202);
+  });
+
+  /**
+   * The account's published links, and taking one down.
+   *
+   * Registered before `/reset` only for readability — they share no prefix.
+   * Both go straight to the cloud rather than through the run state: nothing
+   * is rendered, so there is no long job to poll, and the answer must be live
+   * (the whole point of the list is deciding which board to free).
+   *
+   * A rejected credential keeps its identity through `LoggedOut`, which is the
+   * one kind the canvas acts on instead of printing.
+   */
+  const cloudFail = (c: Context, error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    const kind = asSignInRequired(error) ? "LoggedOut" : "HttpFailure";
+    return c.json({ error: { kind, message } }, 502);
+  };
+
+  const noPublisherFail = (c: Context) =>
+    c.json({ error: { kind: "HttpFailure", message: noPublisher } }, 503);
+
+  app.get("/published", async (c) => {
+    if (!runner) return noPublisherFail(c);
+    try {
+      return c.json({ boards: await runner.published() });
+    } catch (error) {
+      return cloudFail(c, error);
+    }
+  });
+
+  app.delete("/published/:slug", async (c) => {
+    if (!runner) return noPublisherFail(c);
+    try {
+      await runner.unpublish(c.req.param("slug"));
+      return c.json({ ok: true });
+    } catch (error) {
+      return cloudFail(c, error);
+    }
   });
 
   /** Drop a finished run so the dialog reopens clean. */

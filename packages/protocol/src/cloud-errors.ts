@@ -188,6 +188,38 @@ export async function httpFailureFrom(
 }
 
 /**
+ * How many boards a plan may keep published at once, read back out of the
+ * cloud's refusal to create another one.
+ *
+ * Parsing a message is not how a client should learn a rule, but the cloud
+ * sends only `forbidden` for every 403 it raises, and this particular one is
+ * the single publish failure a user can fix themselves — the difference
+ * between "link creation failed (403)" and an offer to take a board down. The
+ * shape is pinned by a test on both sides; a cloud that words it differently
+ * falls back to the generic sentence rather than lying about a number.
+ */
+export function boardLimitFrom(error: CloudError): BoardLimit | null {
+  if (error.kind !== "HttpFailure" || error.status !== 403) return null;
+  const match = /\bthe (\w+) plan is limited to (\d+) active cloud boards\b/.exec(error.detail);
+  if (!match?.[1] || !match[2]) return null;
+  return { tier: match[1], limit: Number(match[2]) };
+}
+
+export interface BoardLimit {
+  tier: string;
+  limit: number;
+}
+
+/**
+ * The core sentence for that refusal. Each surface adds its own way out — the
+ * CLI a pricing URL, the canvas buttons — so the explanation itself is written
+ * once.
+ */
+export function describeBoardLimit({ tier, limit }: BoardLimit): string {
+  return `the ${tier} plan keeps ${limit} board${limit === 1 ? "" : "s"} published at a time — take one down to publish another`;
+}
+
+/**
  * A 5xx is the cloud's trouble, not the user's bundle — say so rather than
  * leaving a bare "internal error".
  */

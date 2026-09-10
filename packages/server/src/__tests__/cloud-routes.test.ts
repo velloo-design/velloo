@@ -10,12 +10,13 @@ import type {
   CanvasAuthStatus,
   CanvasCloudAccess,
   CanvasPublish,
+  CanvasPublishedBoard,
   CanvasPublishProgress,
   CanvasPublishRequest,
   CanvasPublishResult,
   PublishHost,
 } from "../cloud.ts";
-import { signInRequired } from "../cloud.ts";
+import { boardLimitReached, signInRequired } from "../cloud.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
@@ -95,6 +96,8 @@ const post = (app: Hono, path: string, body?: unknown) =>
       body: JSON.stringify(body ?? {}),
     }),
   );
+const del = (app: Hono, path: string) =>
+  app.fetch(new Request(`http://localhost${path}`, { method: "DELETE" }));
 
 describe("/api/auth without a CLI controller", () => {
   test("reports logged out in the full status shape", async () => {
@@ -198,6 +201,9 @@ function fakePublisher(
     access?: CanvasCloudAccess["state"];
     teams?: { id: string; name: string }[];
     destinationsFail?: unknown;
+    published?: CanvasPublishedBoard[];
+    publishedFail?: unknown;
+    unpublishFail?: unknown;
   } = {},
 ) {
   let settle: ((result: CanvasPublishResult) => void) | undefined;
@@ -205,6 +211,7 @@ function fakePublisher(
   let emit: ((progress: CanvasPublishProgress) => void) | undefined;
   let warn: ((message: string) => void) | undefined;
   const requests: CanvasPublishRequest[] = [];
+  const unpublished: string[] = [];
   let hostSeen: PublishHost | undefined;
 
   const publisher: CanvasPublish = {
@@ -213,6 +220,14 @@ function fakePublisher(
     },
     async teams() {
       return opts.teams ?? [];
+    },
+    async published() {
+      if (opts.publishedFail) throw opts.publishedFail;
+      return opts.published ?? [];
+    },
+    async unpublish(slug) {
+      if (opts.unpublishFail) throw opts.unpublishFail;
+      unpublished.push(slug);
     },
     async destinations() {
       if (opts.destinationsFail) throw opts.destinationsFail;
@@ -237,6 +252,7 @@ function fakePublisher(
   return {
     publisher,
     requests,
+    unpublished,
     host: () => hostSeen,
     progress: (progress: CanvasPublishProgress) => emit?.(progress),
     warn: (message: string) => warn?.(message),
@@ -254,6 +270,8 @@ function fakePublisher(
         ...result,
       }),
     explode: (message: string) => fail?.(new Error(message)),
+    /** For the failures that carry more than a sentence — a sign-in, a plan cap. */
+    reject: (error: unknown) => fail?.(error),
   };
 }
 
@@ -483,5 +501,72 @@ describe("/api/publish", () => {
       ).status,
     ).toBe(202);
     expect(fake.requests[0]).toMatchObject({ password: "yes" });
+  });
+
+  // A publish the plan won't allow is the user's to clear, not ours to report,
+  // and the canvas can only offer the published list if the refusal reaches it
+  // as data. It used to arrive as "link creation failed (403): …" and nothing
+  // else, so the one screen that could fix it was unreachable from the failure.
+  test("a full plan reaches the canvas as a board limit, not as red text", async () => {
+    const fake = fakePublisher();
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    await post(app, "/api/publish", { boardIds: [], destination: { mode: "new" } });
+    fake.reject(
+      boardLimitReached(
+        { tier: "free", limit: 3 },
+        "the free plan keeps 3 boards published at a time — take one down to publish another",
+      ),
+    );
+    await settled();
+    expect(await (await get(app, "/api/publish/status")).json()).toMatchObject({
+      state: "error",
+      boardLimit: { tier: "free", limit: 3 },
+    });
+  });
+});
+
+describe("/api/publish/published", () => {
+  const board: CanvasPublishedBoard = {
+    slug: "checkout-review",
+    title: "Checkout review",
+    url: "https://share.velloo.dev/s/checkout-review/",
+    visibility: "public",
+    passwordProtected: false,
+    canManage: true,
+    lastPublishedAt: "2030-01-01T00:00:00.000Z",
+  };
+
+  test("lists what the account has published", async () => {
+    const fake = fakePublisher({ published: [board] });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect(await (await get(app, "/api/publish/published")).json()).toEqual({ boards: [board] });
+  });
+
+  test("taking a board down reaches the publisher by slug", async () => {
+    const fake = fakePublisher({ published: [board] });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    const res = await del(app, "/api/publish/published/checkout-review");
+    expect(res.status).toBe(200);
+    expect(fake.unpublished).toEqual(["checkout-review"]);
+  });
+
+  // The canvas answers `LoggedOut` with a sign-in rather than a toast, so the
+  // kind has to survive the trip even though the sentence is already rendered.
+  test("a rejected credential keeps its identity through the envelope", async () => {
+    const fake = fakePublisher({
+      publishedFail: signInRequired("expired", "velloo-cloud rejected the stored credential"),
+    });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    const res = await get(app, "/api/publish/published");
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: { kind: "LoggedOut", message: "velloo-cloud rejected the stored credential" },
+    });
+  });
+
+  test("without a CLI publisher there is nothing to list or remove", async () => {
+    const app = appWith();
+    expect((await get(app, "/api/publish/published")).status).toBe(503);
+    expect((await del(app, "/api/publish/published/anything")).status).toBe(503);
   });
 });

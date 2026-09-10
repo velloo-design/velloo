@@ -1,4 +1,4 @@
-import type { CloudAccount, CloudTeam } from "@velloo/protocol";
+import type { BoardLimit, CloudAccount, CloudTeam } from "@velloo/protocol";
 import type { ComponentProvider } from "@velloo/provider";
 import type { DesignFolder } from "./design-folder.ts";
 
@@ -182,6 +182,31 @@ export function asSignInRequired(error: unknown): "signed-out" | "expired" | nul
   return marker === "signed-out" || marker === "expired" ? marker : null;
 }
 
+/**
+ * A publish the cloud refused because the plan already has as many boards
+ * published as it allows.
+ *
+ * Marked the same way {@link SignInRequired} is, and for the same reason: it
+ * is the other failure the user can clear on their own, so the canvas needs to
+ * recognize it rather than print it. Carrying the numbers lets it offer the
+ * published-board list instead of a "Back" button.
+ */
+export interface BoardLimitReached {
+  readonly boardLimit: BoardLimit;
+}
+
+export function boardLimitReached(limit: BoardLimit, message: string): Error & BoardLimitReached {
+  return Object.assign(new Error(message), { boardLimit: limit } as const);
+}
+
+/** The plan cap behind a rejection, or null when it was something else. */
+export function asBoardLimit(error: unknown): BoardLimit | null {
+  if (!error || typeof error !== "object") return null;
+  const marker = (error as Partial<BoardLimitReached>).boardLimit;
+  if (!marker || typeof marker.tier !== "string" || typeof marker.limit !== "number") return null;
+  return { tier: marker.tier, limit: marker.limit };
+}
+
 export interface CanvasPublishDestinations {
   effectiveTeamId: string | null;
   provenance: { repo: string | null; branch: string | null };
@@ -229,6 +254,22 @@ export interface CanvasPublishResult {
 }
 
 /**
+ * A link this account has already published. The projection of `GET /v1/links`
+ * the canvas shows: enough to recognize a board and reach it, plus whether
+ * this account may take it down (a teammate's link is visible but not
+ * manageable).
+ */
+export interface CanvasPublishedBoard {
+  slug: string;
+  title: string;
+  url: string;
+  visibility: "public" | "private";
+  passwordProtected: boolean;
+  canManage: boolean;
+  lastPublishedAt: string | null;
+}
+
+/**
  * Publishing to velloo-cloud on the canvas's behalf. Like {@link CanvasAuth}
  * this is implemented by the CLI, which owns both the credential store and the
  * cloud transport — the server contributes the render pipeline and the
@@ -249,6 +290,14 @@ export interface CanvasPublish {
    * rather than letting the first cloud call fail with a status code.
    */
   access(): Promise<CanvasCloudAccess>;
+  /**
+   * Every link this account has published, newest first — not just this
+   * folder's. What the plan's board cap counts is the account's links, so the
+   * list that explains the cap has to be the same one.
+   */
+  published(): Promise<CanvasPublishedBoard[]>;
+  /** Take a published link down, freeing the slot it holds. */
+  unpublish(slug: string): Promise<void>;
   run(
     host: PublishHost,
     request: CanvasPublishRequest,

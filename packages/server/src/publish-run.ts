@@ -1,12 +1,14 @@
+import type { BoardLimit } from "@velloo/protocol";
 import type {
   CanvasCloudAccess,
   CanvasPublish,
   CanvasPublishDestinations,
+  CanvasPublishedBoard,
   CanvasPublishRequest,
   CanvasPublishResult,
   PublishHost,
 } from "./cloud.ts";
-import { asSignInRequired } from "./cloud.ts";
+import { asBoardLimit, asSignInRequired } from "./cloud.ts";
 
 /**
  * One publish at a time per daemon, with progress the canvas can poll.
@@ -40,6 +42,12 @@ export type PublishRunState =
        * capture pass is the worst place to make someone go hunting.
        */
       signInRequired?: "signed-out" | "expired";
+      /**
+       * Set when the cloud refused because the plan's published-board slots
+       * are full. Like `signInRequired` this is a state with a next step —
+       * the dialog offers the published list rather than repeating a refusal.
+       */
+      boardLimit?: BoardLimit;
       warnings: string[];
       finishedAt: string;
     };
@@ -71,6 +79,14 @@ export class PublishRunner {
 
   access(): Promise<CanvasCloudAccess> {
     return this.publisher.access();
+  }
+
+  published(): Promise<CanvasPublishedBoard[]> {
+    return this.publisher.published();
+  }
+
+  unpublish(slug: string): Promise<void> {
+    return this.publisher.unpublish(slug);
   }
 
   /** Begin a publish, or return null when one is already running. */
@@ -117,10 +133,12 @@ export class PublishRunner {
       })
       .catch((err: unknown) => {
         const access = asSignInRequired(err);
+        const boardLimit = asBoardLimit(err);
         this.current = {
           state: "error",
           message: err instanceof Error ? err.message : String(err),
           ...(access ? { signInRequired: access } : {}),
+          ...(boardLimit ? { boardLimit } : {}),
           warnings: this.warnings,
           finishedAt: new Date().toISOString(),
         };

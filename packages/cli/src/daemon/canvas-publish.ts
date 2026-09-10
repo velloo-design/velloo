@@ -1,4 +1,4 @@
-import { type CloudError, describeCloudError } from "@velloo/protocol";
+import { boardLimitFrom, type CloudError, describeCloudError } from "@velloo/protocol";
 import type {
   CanvasAuth,
   CanvasCloudAccess,
@@ -8,8 +8,9 @@ import type {
   CanvasPublishResult,
   PublishHost,
 } from "@velloo/server";
-import { signInRequired } from "@velloo/server";
+import { boardLimitReached, signInRequired } from "@velloo/server";
 import { loadCredential } from "../cloud-credentials.ts";
+import { listPublishedDesigns, unpublishDesign } from "../cloud-published.ts";
 import { listPublishDestinations } from "../cloud-upload.ts";
 import { gitContext, listTeams, PUBLISH_VIEWPORT, publishDesign } from "../publish/core.ts";
 import { describePublishError } from "../publish/errors.ts";
@@ -60,6 +61,12 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
       ? signInRequired("expired", describeCloudError(error))
       : new Error(describeCloudError(error));
 
+  /** Newest first; a link the cloud couldn't date sorts last rather than first. */
+  const publishedAt = (value: string | null): number => {
+    const parsed = value ? Date.parse(value) : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  };
+
   return {
     access,
 
@@ -70,6 +77,33 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
       // A team list the canvas can't fetch is not worth failing the dialog
       // over — it falls back to the default team.
       return listed.ok ? listed.value : [];
+    },
+
+    async published() {
+      const token = await tokenFor();
+      if (!token) throw signInRequired("signed-out", "not signed in to velloo-cloud");
+      const listed = await listPublishedDesigns({ baseUrl: cloudUrl, token });
+      if (!listed.ok) throw rejection(listed.error);
+      return listed.value
+        .map((design) => ({
+          slug: design.slug,
+          title: design.title ?? "",
+          url: design.url,
+          visibility: design.visibility,
+          passwordProtected: design.passwordProtected,
+          canManage: design.canManage,
+          lastPublishedAt: design.lastPublishedAt,
+        }))
+        .sort(
+          (left, right) => publishedAt(right.lastPublishedAt) - publishedAt(left.lastPublishedAt),
+        );
+    },
+
+    async unpublish(slug) {
+      const token = await tokenFor();
+      if (!token) throw signInRequired("signed-out", "not signed in to velloo-cloud");
+      const removed = await unpublishDesign({ baseUrl: cloudUrl, token, slug });
+      if (!removed.ok) throw rejection(removed.error);
     },
 
     async destinations(host) {
@@ -154,13 +188,17 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
           onProgress({ step, message });
         },
       );
-      // A publish dies on the credential often enough to be worth naming: the
-      // token can be revoked during the minutes a capture pass takes.
+      // Two failures are the user's to clear rather than ours to report: a
+      // credential revoked during the minutes a capture pass takes, and a plan
+      // whose board slots are all spoken for. Both keep their identity out of
+      // here so the canvas can offer the fix instead of the sentence.
       if (!published.ok) {
         const reason = describePublishError(published.error);
-        throw published.error.kind === "LoggedOut"
-          ? signInRequired("expired", reason)
-          : new Error(reason);
+        if (published.error.kind === "LoggedOut") throw signInRequired("expired", reason);
+        const limit =
+          published.error.kind === "HttpFailure" ? boardLimitFrom(published.error) : null;
+        if (limit) throw boardLimitReached(limit, reason);
+        throw new Error(reason);
       }
       const outcome = published.value;
 
