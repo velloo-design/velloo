@@ -27,7 +27,6 @@ import { ICON_MENU_WIDTH } from "../lib/utils.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { AddFrameDialog } from "./AddFrameDialog.tsx";
-import { PlanBadge } from "./PublishDialog.tsx";
 import { Tree } from "./Tree.tsx";
 import {
   AlertDialog,
@@ -39,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog.tsx";
+import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog.tsx";
 import {
@@ -70,6 +70,15 @@ function deletedBoardSummary(
   if (snippets > 0) also.push(`${snippets} unused snippet${snippets === 1 ? "" : "s"}`);
   if (also.length === 0) return `Deleted "${name}"`;
   return `Deleted "${name}" and ${also.join(" + ")}`;
+}
+
+/** Marks a menu item the account's plan doesn't include — which paid plan is the billing page's job. */
+function PlanBadge() {
+  return (
+    <Badge variant="outline" className="ml-auto h-4 px-1.5 text-[10px] font-normal">
+      Paid plan
+    </Badge>
+  );
 }
 
 /** Stable empty array so the `archivedBoards` selector doesn't re-render on every store tick. */

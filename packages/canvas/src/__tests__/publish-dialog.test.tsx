@@ -18,6 +18,7 @@ const { useCanvas } = await import("../store.ts");
 const signedInOn = (tier: string): AuthStatus => ({
   loggedIn: true,
   verified: true,
+  appUrl: "http://localhost:7401",
   login: { state: "idle" },
   account: { email: "dev@example.com", tier },
 });
@@ -39,13 +40,16 @@ async function openDialog(
 }
 
 domSuite("publish access follows the account's plan", () => {
-  test("a free plan shows the password field disabled, with where to upgrade", async () => {
+  test("a free plan shows visibility read-only and an upsell instead of the controls", async () => {
     await openDialog("free");
-    const input = $("#publish-password") as HTMLInputElement | null;
-    expect(input).not.toBeNull();
-    expect(input?.disabled).toBe(true);
-    expect(text(document.body)).toContain("Free accounts publish public links");
-    expect($('a[href="https://velloo.design/pricing"]')).not.toBeNull();
+    const visibility = $("#publish-visibility") as HTMLInputElement | null;
+    expect(visibility?.readOnly).toBe(true);
+    expect(visibility?.value).toBe("Anyone with the link");
+    expect($("#publish-password")).toBeNull();
+    const upsell = $('[data-testid="protected-shares-upsell"]');
+    expect(text(upsell)).toContain("Private and password-protected links");
+    // The cloud's own billing page — this cloud's app, not a hardcoded domain.
+    expect(upsell?.querySelector("a")?.getAttribute("href")).toBe("http://localhost:7401/billing");
   });
 
   test("a board-menu Private on a free plan is offered as public, not refused later", async () => {
@@ -65,6 +69,6 @@ domSuite("publish access follows the account's plan", () => {
     await openDialog("team", { id: "main", name: "Main", mode: "private" });
     expect(($("#publish-password") as HTMLInputElement | null)?.disabled).toBe(false);
     expect(text(document.body)).toContain("Sharing “Main” privately.");
-    expect(text(document.body)).not.toContain("Free accounts publish public links");
+    expect($('[data-testid="protected-shares-upsell"]')).toBeNull();
   });
 });

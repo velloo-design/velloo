@@ -15,11 +15,16 @@ export interface PublishPrivacyArgs {
   password?: boolean | undefined;
 }
 
-type ChoosePrivacyMode = (protectedShares: boolean) => Promise<PublishPrivacyMode | symbol>;
+type ChoosePrivacyMode = (
+  protectedShares: boolean,
+  upgradeUrl: string,
+) => Promise<PublishPrivacyMode | symbol>;
 
 interface ResolvePrivacyOptions {
   /** Whether the account's plan allows private/password links (see `protectedSharesAllowed`). */
   protectedShares?: boolean;
+  /** Where to upgrade — the cloud's billing page when known. */
+  upgradeUrl?: string;
   choose?: ChoosePrivacyMode;
 }
 
@@ -28,7 +33,11 @@ interface ResolvePrivacyOptions {
  * so `velloo publish --private` on a free plan stops before the board picker
  * rather than after it. Null when they are fine.
  */
-export function privacyFlagsError(args: PublishPrivacyArgs, protectedShares = true): string | null {
+export function privacyFlagsError(
+  args: PublishPrivacyArgs,
+  protectedShares = true,
+  upgradeUrl = PRICING_URL,
+): string | null {
   if (
     args.visibility !== undefined &&
     args.visibility !== "public" &&
@@ -46,7 +55,7 @@ export function privacyFlagsError(args: PublishPrivacyArgs, protectedShares = tr
   const wantsProtected =
     args.private === true || args.visibility === "private" || args.password === true;
   if (wantsProtected && !protectedShares) {
-    return `${PROTECTED_SHARES_UNAVAILABLE}. Publish with --public, or upgrade at ${PRICING_URL}`;
+    return `${PROTECTED_SHARES_UNAVAILABLE}. Publish with --public, or upgrade at ${upgradeUrl}`;
   }
   return null;
 }
@@ -59,9 +68,13 @@ export function privacyFlagsError(args: PublishPrivacyArgs, protectedShares = tr
 export async function resolvePublishPrivacy(
   args: PublishPrivacyArgs,
   interactive: boolean,
-  { protectedShares = true, choose = promptForPrivacyMode }: ResolvePrivacyOptions = {},
+  {
+    protectedShares = true,
+    upgradeUrl = PRICING_URL,
+    choose = promptForPrivacyMode,
+  }: ResolvePrivacyOptions = {},
 ): Promise<PublishPrivacyChoice> {
-  const invalid = privacyFlagsError(args, protectedShares);
+  const invalid = privacyFlagsError(args, protectedShares, upgradeUrl);
   if (invalid) throw new Error(invalid);
 
   const explicit =
@@ -82,7 +95,7 @@ export async function resolvePublishPrivacy(
     );
   }
 
-  const mode = await choose(protectedShares);
+  const mode = await choose(protectedShares, upgradeUrl);
   if (typeof mode === "symbol") throw new Error("cancelled");
   if (mode !== "public" && !protectedShares) throw new Error(PROTECTED_SHARES_UNAVAILABLE);
   return mode === "private"
@@ -96,12 +109,13 @@ export async function resolvePublishPrivacy(
  */
 async function promptForPrivacyMode(
   protectedShares: boolean,
+  upgradeUrl: string,
 ): Promise<PublishPrivacyMode | symbol> {
   const locked = protectedShares ? {} : { disabled: true, hint: "Team & Business plans" };
   return select({
     message: protectedShares
       ? "Who should be able to view this publish?"
-      : `Who should be able to view this publish? (free plan: public links — ${PRICING_URL})`,
+      : `Who should be able to view this publish? (free plan: public links — upgrade at ${upgradeUrl})`,
     initialValue: "public",
     options: [
       { value: "public", label: "Public", hint: "anyone with the link" },

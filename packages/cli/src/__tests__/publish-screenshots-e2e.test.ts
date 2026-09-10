@@ -240,13 +240,3 @@ test.skipIf(!hasChromium)(
     expect(captured.files.has("screenshots/sales.png")).toBe(false);
   },
 );
-
-test("--no-screenshots publishes without any screenshot files or manifest", async () => {
-  const design = join(tmp, "velloo");
-  await scaffold(design);
-  const { exitCode, stderr } = await runPublish(design, ["--no-screenshots"]);
-  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
-
-  expect(captured.design?.screenshots).toBeUndefined();
-  expect([...captured.files.keys()].some((n) => n.startsWith("screenshots/"))).toBe(false);
-});

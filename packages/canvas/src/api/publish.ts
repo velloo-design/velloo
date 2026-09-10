@@ -90,7 +90,6 @@ export interface PublishRequest {
   password?: string | undefined;
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
   teamId?: string | undefined;
-  screenshots: boolean;
 }
 
 export const publish = {

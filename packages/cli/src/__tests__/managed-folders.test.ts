@@ -475,7 +475,6 @@ test("publish and changed-since use the external design checkpoint and manifest 
       "--new",
       "--slug=managed",
       "--public",
-      "--no-screenshots",
     ]);
     expect(published.code, published.out).toBe(0);
     expect(published.out).toContain("no git remote");

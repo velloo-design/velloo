@@ -75,7 +75,6 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       visibility?: unknown;
       password?: unknown;
       teamId?: unknown;
-      screenshots?: unknown;
       destination?: unknown;
     };
     const boardIds = Array.isArray(body.boardIds)
@@ -109,7 +108,6 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       boardIds,
       visibility,
       destination,
-      screenshots: body.screenshots !== false,
       ...(title ? { title } : {}),
       ...(password ? { password } : {}),
       ...(teamId ? { teamId } : {}),

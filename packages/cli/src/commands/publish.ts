@@ -12,7 +12,7 @@ import {
   TailwindJit,
 } from "@velloo/server";
 import { defineCommand } from "citty";
-import { checkCloudHealth, defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
+import { billingPageUrl, checkCloudHealth, defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { fetchAccount } from "../cloud-login.ts";
 import { type CloudPublishSlot, listPublishDestinations } from "../cloud-upload.ts";
@@ -118,11 +118,6 @@ export default defineCommand({
     },
     w: { type: "string", description: "Viewport width in px (default: 1440)" },
     h: { type: "string", description: "Viewport height in px (default: 900)" },
-    screenshots: {
-      type: "boolean",
-      default: true,
-      description: "Capture PNG previews into the bundle (--no-screenshots to skip)",
-    },
     "changed-since": {
       type: "string",
       description:
@@ -137,9 +132,6 @@ export default defineCommand({
     if (args.list) return listPublished(args);
     if (args.remove) {
       return removePublished({ ...args, design: args.folder, yes: args.yes });
-    }
-    if (args["changed-since"] && args.screenshots === false) {
-      fail("publish", "--changed-since cannot be combined with --no-screenshots");
     }
     const folder = await resolveDesignFolder(args.folder, "publish");
     const baseUrl = args.url ? args.url.replace(/\/+$/, "") : defaultCloudUrl();
@@ -177,7 +169,9 @@ export default defineCommand({
     const protectedShares = protectedSharesAllowed(
       account.status === "ok" ? account.account.tier : undefined,
     );
-    const flagsError = privacyFlagsError(args, protectedShares);
+    // Only a free plan is ever sent anywhere, so only it pays for the lookup.
+    const upgradeUrl = protectedShares ? undefined : await billingPageUrl(baseUrl);
+    const flagsError = privacyFlagsError(args, protectedShares, upgradeUrl);
     if (flagsError) fail("publish", flagsError);
 
     // Board choice is a CLI concern (an interactive multiselect, or --boards);
@@ -240,8 +234,11 @@ export default defineCommand({
 
     // Destination failures happen before privacy/password questions or any
     // render work, so --update with no exact slot stops immediately.
-    const privacy = await resolvePublishPrivacy(args, interactive, { protectedShares }).catch(
-      (error: unknown) => fail("publish", error instanceof Error ? error.message : String(error)),
+    const privacy = await resolvePublishPrivacy(args, interactive, {
+      protectedShares,
+      ...(upgradeUrl ? { upgradeUrl } : {}),
+    }).catch((error: unknown) =>
+      fail("publish", error instanceof Error ? error.message : String(error)),
     );
     const visibility = privacy.visibility;
     const password = privacy.password ? await readSharePassword() : undefined;
@@ -301,7 +298,6 @@ export default defineCommand({
           ...(teamId ? { teamId } : {}),
           provenance,
           viewport,
-          screenshots: args.screenshots !== false,
           ...(screenshotSelection ? { screenshotSelection } : {}),
         },
         report,

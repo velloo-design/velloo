@@ -61,6 +61,11 @@ export async function publishedBoardsUrl(baseUrl: string): Promise<string> {
   return `${await fetchCloudAppUrl(baseUrl)}/boards`;
 }
 
+/** This cloud's billing page — where a free plan upgrades. */
+export async function billingPageUrl(baseUrl: string): Promise<string> {
+  return `${await fetchCloudAppUrl(baseUrl)}/billing`;
+}
+
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 /**

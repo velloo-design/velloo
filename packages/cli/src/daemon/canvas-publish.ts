@@ -130,7 +130,6 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
           ...(request.teamId ? { teamId: request.teamId } : {}),
           provenance: gitContext(host.folder.root),
           viewport: PUBLISH_VIEWPORT,
-          screenshots: request.screenshots,
         },
         (event) => {
           if (event.kind === "warn") {

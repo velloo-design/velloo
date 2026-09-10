@@ -114,7 +114,6 @@ export interface PublishRequest {
   /** Captured before destination selection so matching and upload agree. */
   provenance?: PublishProvenance | undefined;
   viewport: Viewport;
-  screenshots: boolean;
   /** Optional git-diff slice: the full design still publishes, only previews are skipped. */
   screenshotSelection?:
     | {
@@ -466,74 +465,72 @@ export async function publishDesign(
 
   // PNG previews (one per screen, one composite per board, plus a cover) —
   // captured through the same renderScreen → captureScreenshot pipeline the
-  // MCP `screenshot` tool uses. Never fatal: no browser (or screenshots off)
-  // publishes without them.
-  let shots: BundleScreenshots | null = null;
-  if (request.screenshots) {
-    report({ kind: "step", step: "capture", message: "capturing previews" });
-    shots = await withAssetServer(root, liveCode, (baseHref) => {
-      const htmlCache = new Map<string, Promise<string>>();
-      const renderHtml = async (
-        screen: Screen,
-        themeName?: string,
-        scheme: "light" | "dark" = "light",
-      ): Promise<string> => {
-        const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
-        // NUL separates the two halves: no id or theme name can contain it, so
-        // the composite key can't collide the way a printable separator can.
-        const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
-        const cached = htmlCache.get(key);
-        if (cached) return cached;
-        const rendering = renderScreen(screen, theme, {
-          viewport,
-          snapshotCss,
-          registry: registryForScreen(
-            screen,
-            pipeline.providers,
-            pipeline.defaultProvider,
-            config.extensions ?? {},
-          ),
-          renderPass: renderPassForScreen(
-            screen,
-            pipeline.providers,
-            pipeline.defaultProvider,
-            theme,
-          ),
-          snippets: design.snippets,
-          customCss: design.customCss,
-          dark: scheme === "dark",
-          baseHref,
-          ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
-        }).then(({ html }) => html);
-        htmlCache.set(key, rendering);
-        return rendering;
-      };
-      return captureBundleScreenshots({
-        screens,
-        boards,
-        ...(request.screenshotSelection
-          ? {
-              screenIds: request.screenshotSelection.screenIds,
-              boardIds: request.screenshotSelection.boardIds,
-            }
-          : {}),
+  // MCP `screenshot` tool uses. Always captured — they front the link's
+  // unfurl card and emails — but never fatal: with no browser the publish
+  // goes out without them.
+  report({ kind: "step", step: "capture", message: "capturing previews" });
+  const shots: BundleScreenshots | null = await withAssetServer(root, liveCode, (baseHref) => {
+    const htmlCache = new Map<string, Promise<string>>();
+    const renderHtml = async (
+      screen: Screen,
+      themeName?: string,
+      scheme: "light" | "dark" = "light",
+    ): Promise<string> => {
+      const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
+      // NUL separates the two halves: no id or theme name can contain it, so
+      // the composite key can't collide the way a printable separator can.
+      const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
+      const cached = htmlCache.get(key);
+      if (cached) return cached;
+      const rendering = renderScreen(screen, theme, {
         viewport,
-        renderHtml,
-        capture: async (req) =>
-          (
-            await captureScreenshot({
-              html: req.html,
-              viewport: req.viewport,
-              fullPage: req.fullPage,
-              deviceScaleFactor: req.deviceScaleFactor,
-            })
-          ).png,
-        warn: (message) => report({ kind: "warn", message }),
-        progress: (done, total) => report({ kind: "capture", done, total }),
-      });
+        snapshotCss,
+        registry: registryForScreen(
+          screen,
+          pipeline.providers,
+          pipeline.defaultProvider,
+          config.extensions ?? {},
+        ),
+        renderPass: renderPassForScreen(
+          screen,
+          pipeline.providers,
+          pipeline.defaultProvider,
+          theme,
+        ),
+        snippets: design.snippets,
+        customCss: design.customCss,
+        dark: scheme === "dark",
+        baseHref,
+        ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
+      }).then(({ html }) => html);
+      htmlCache.set(key, rendering);
+      return rendering;
+    };
+    return captureBundleScreenshots({
+      screens,
+      boards,
+      ...(request.screenshotSelection
+        ? {
+            screenIds: request.screenshotSelection.screenIds,
+            boardIds: request.screenshotSelection.boardIds,
+          }
+        : {}),
+      viewport,
+      renderHtml,
+      capture: async (req) =>
+        (
+          await captureScreenshot({
+            html: req.html,
+            viewport: req.viewport,
+            fullPage: req.fullPage,
+            deviceScaleFactor: req.deviceScaleFactor,
+          })
+        ).png,
+      warn: (message) => report({ kind: "warn", message }),
+      progress: (done, total) => report({ kind: "capture", done, total }),
     });
-    for (const f of shots?.files ?? []) addFile(f.path, f.bytes, "image/png");
-  }
+  });
+  for (const f of shots?.files ?? []) addFile(f.path, f.bytes, "image/png");
 
   // Designer markup travels with the design so the cloud's board canvas can
   // draw it: node-anchored annotations for the published screens, free

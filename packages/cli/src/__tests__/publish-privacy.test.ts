@@ -65,6 +65,9 @@ describe("publish privacy on a free plan", () => {
       expect(message).toContain("--public");
       expect(message).toContain("velloo.design/pricing");
     }
+    expect(privacyFlagsError({ private: true }, false, "http://localhost:7401/billing")).toContain(
+      "upgrade at http://localhost:7401/billing",
+    );
     expect(privacyFlagsError({ public: true }, false)).toBeNull();
     expect(privacyFlagsError({ private: true }, true)).toBeNull();
   });

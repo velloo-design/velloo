@@ -201,7 +201,6 @@ export interface CanvasPublishRequest {
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
   /** Publish into a team rather than the personal workspace. */
   teamId?: string | undefined;
-  screenshots: boolean;
 }
 
 /** A step the publish reached, for the canvas's progress line. */

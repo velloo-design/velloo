@@ -356,7 +356,6 @@ describe("/api/publish", () => {
       visibility: "private",
       destination: { mode: "new" },
       teamId: "t1",
-      screenshots: true,
     });
     expect(started.status).toBe(202);
     expect(fake.requests[0]).toEqual({
@@ -365,7 +364,6 @@ describe("/api/publish", () => {
       visibility: "private",
       destination: { mode: "new" },
       teamId: "t1",
-      screenshots: true,
     });
     // The daemon lends its own loaded folder rather than reloading one.
     expect(fake.host()?.folder.root).toBe(folder.root);
@@ -451,7 +449,6 @@ describe("/api/publish", () => {
       boardIds: ["ok"],
       visibility: "public",
       destination: { mode: "new" },
-      screenshots: true,
     });
   });
 

@@ -1,5 +1,14 @@
 import { PRICING_URL, protectedSharesAllowed } from "@velloo/protocol";
-import { AlertTriangle, CircleCheck, Copy, ExternalLink, Eye, EyeOff, Share2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CircleCheck,
+  Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Lock,
+  Share2,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { preflightBoards, type ScreenRenderFailure } from "../api/preflight.ts";
 import {
@@ -13,7 +22,8 @@ import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { LoadingMark } from "./Loading.tsx";
 import { RenderFailureDialog } from "./RenderFailureDialog.tsx";
-import { Badge } from "./ui/badge.tsx";
+import { billingUrl } from "./SettingsMenu.tsx";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert.tsx";
 import { Button } from "./ui/button.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";
 import {
@@ -56,11 +66,13 @@ export function PublishDialog() {
   const design = useCanvas((s) => s.design);
   const scope = useCanvas((s) => s.publishScope);
   /**
-   * A free plan publishes public links only. The protected controls stay in
-   * the form — disabled, with the plan that unlocks them — so the option is
-   * discoverable instead of either missing or failing after the upload.
+   * A free plan publishes public links only. The form says so — visibility
+   * read-only, the protected modes offered as an upgrade — rather than letting
+   * the choice fail after the upload.
    */
   const protectedShares = useCanvas((s) => protectedSharesAllowed(s.authStatus?.account?.tier));
+  /** The cloud's own billing page (local, dev or prod), else the public pricing page. */
+  const upgradeUrl = useCanvas((s) => billingUrl(s.authStatus?.appUrl)) ?? PRICING_URL;
 
   const [targets, setTargets] = useState<PublishTargets | null>(null);
   const [run, setRun] = useState<PublishState>({ state: "idle" });
@@ -72,7 +84,6 @@ export function PublishDialog() {
   const [showPassword, setShowPassword] = useState(false);
   /** Null until the teams load, and stays null when there's nothing to choose. */
   const [teamId, setTeamId] = useState<string | null>(null);
-  const [screenshots, setScreenshots] = useState(true);
   const [destinationSlug, setDestinationSlug] = useState("new");
   const [destinationTouched, setDestinationTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,7 +112,6 @@ export function PublishDialog() {
     setPassword("");
     setShowPassword(false);
     setTeamId(null);
-    setScreenshots(true);
     setDestinationSlug("new");
     setDestinationTouched(false);
     setBusy(false);
@@ -209,7 +219,6 @@ export function PublishDialog() {
       ...(effectivePassword.length >= 3 ? { password: effectivePassword } : {}),
       ...(teamId ? { teamId } : {}),
       destination,
-      screenshots,
     };
   };
 
@@ -342,7 +351,7 @@ export function PublishDialog() {
                 {Math.round(run.result.bytes / 1024)} KB
                 {run.result.screenshots > 0 ? ` · ${run.result.screenshots} previews` : ""}
               </p>
-              <HistoryNote history={run.result.history} />
+              <HistoryNote history={run.result.history} upgradeUrl={upgradeUrl} />
               <Warnings messages={run.warnings} />
             </div>
           ) : run.state === "error" ? (
@@ -450,80 +459,87 @@ export function PublishDialog() {
                 )}
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="publish-visibility">Visibility</Label>
-                <Select
-                  value={effectiveVisibility}
-                  onValueChange={(v) => setVisibility(v as "public" | "private")}
-                >
-                  <SelectTrigger id="publish-visibility">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="public">Anyone with the link</SelectItem>
-                    <SelectItem value="private" disabled={!protectedShares}>
-                      Only your organization
-                      {protectedShares ? null : <PlanBadge />}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label
-                  htmlFor="publish-password"
-                  className={protectedShares ? undefined : "text-muted-foreground"}
-                >
-                  Password{scopeMode === "password" ? "" : " (optional)"}
-                  {protectedShares ? null : <PlanBadge />}
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="publish-password"
-                    className="pr-10"
-                    type={showPassword ? "text" : "password"}
-                    minLength={3}
-                    autoComplete="new-password"
-                    placeholder={
-                      protectedShares ? "3+ characters" : "Not available on the free plan"
-                    }
-                    disabled={!protectedShares}
-                    value={effectivePassword}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="absolute right-0 top-0 h-9 w-9 p-0"
-                    disabled={!protectedShares}
-                    onClick={() => setShowPassword((value) => !value)}
-                    title={showPassword ? "Hide password" : "Show password"}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    aria-pressed={showPassword}
-                  >
-                    {showPassword ? <EyeOff /> : <Eye />}
-                  </Button>
-                </div>
-                {protectedShares ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Anyone with the password can view, signed in or not. Send it separately from the
-                    link.
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    Free accounts publish public links. Private and password-protected links come
-                    with Team and Business.{" "}
-                    <a
-                      href={PRICING_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline underline-offset-4"
+              {protectedShares ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="publish-visibility">Visibility</Label>
+                    <Select
+                      value={effectiveVisibility}
+                      onValueChange={(v) => setVisibility(v as "public" | "private")}
                     >
-                      See plans
-                    </a>
-                  </p>
-                )}
-              </div>
+                      <SelectTrigger id="publish-visibility">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">Anyone with the link</SelectItem>
+                        <SelectItem value="private">Only your organization</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="publish-password">
+                      Password{scopeMode === "password" ? "" : " (optional)"}
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="publish-password"
+                        className="pr-10"
+                        type={showPassword ? "text" : "password"}
+                        minLength={3}
+                        autoComplete="new-password"
+                        placeholder="3+ characters"
+                        value={effectivePassword}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="absolute right-0 top-0 h-9 w-9 p-0"
+                        onClick={() => setShowPassword((value) => !value)}
+                        title={showPassword ? "Hide password" : "Show password"}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        aria-pressed={showPassword}
+                      >
+                        {showPassword ? <EyeOff /> : <Eye />}
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Anyone with the password can view, signed in or not. Send it separately from
+                      the link.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="publish-visibility">Visibility</Label>
+                    <Input
+                      id="publish-visibility"
+                      readOnly
+                      value="Anyone with the link"
+                      className="bg-muted/40 text-muted-foreground"
+                    />
+                  </div>
+                  {/* An offer, not an error: `note` keeps screen readers from
+                    announcing it the way the Alert's default `alert` role would. */}
+                  <Alert role="note" data-testid="protected-shares-upsell">
+                    <Lock />
+                    <AlertTitle>Private and password-protected links</AlertTitle>
+                    <AlertDescription className="text-xs">
+                      Share only with your organization, or behind a password. Free accounts publish
+                      public links — upgrade to Team or Business to unlock both.
+                    </AlertDescription>
+                    <AlertAction>
+                      <Button size="xs" variant="secondary" asChild>
+                        <a href={upgradeUrl} target="_blank" rel="noreferrer">
+                          Upgrade
+                        </a>
+                      </Button>
+                    </AlertAction>
+                  </Alert>
+                </>
+              )}
 
               {targets && targets.teams.length > 1 && teamId ? (
                 <div className="grid gap-2">
@@ -542,17 +558,6 @@ export function PublishDialog() {
                   </Select>
                 </div>
               ) : null}
-
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="publish-screenshots"
-                  checked={screenshots}
-                  onCheckedChange={(v) => setScreenshots(v === true)}
-                />
-                <Label htmlFor="publish-screenshots" className="cursor-pointer font-normal">
-                  Capture preview images
-                </Label>
-              </div>
             </div>
           )}
 
@@ -642,15 +647,6 @@ function describeAccess(result: PublishResult): string {
     : "Anyone with the link.";
 }
 
-/** Marks a control the account's plan doesn't include. */
-export function PlanBadge() {
-  return (
-    <Badge variant="outline" className="ml-auto h-4 px-1.5 text-[10px] font-normal">
-      Team
-    </Badge>
-  );
-}
-
 function Warnings({ messages }: { messages: string[] }) {
   if (messages.length === 0) return null;
   return (
@@ -668,8 +664,10 @@ function Warnings({ messages }: { messages: string[] }) {
  */
 function HistoryNote({
   history,
+  upgradeUrl,
 }: {
   history?: { retained: boolean; versions: number; pruned: number } | undefined;
+  upgradeUrl: string;
 }) {
   if (!history) return null;
   if (!history.retained && history.pruned > 0) {
@@ -677,7 +675,7 @@ function HistoryNote({
       <p className="text-xs text-muted-foreground">
         Replaced the previous version — the free plan keeps only the latest.{" "}
         <a
-          href={PRICING_URL}
+          href={upgradeUrl}
           target="_blank"
           rel="noreferrer"
           className="underline underline-offset-4"

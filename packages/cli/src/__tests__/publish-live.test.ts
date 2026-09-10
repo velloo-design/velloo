@@ -204,9 +204,6 @@ async function runPublish(
       "test-token",
       ...destinationArgs,
       "--public",
-      // Screenshot capture has its own suites (publish-screenshots*.test.ts);
-      // skipping it here keeps this wiring test fast and browser-free.
-      "--no-screenshots",
       ...extraArgs,
     ],
     { cwd: resolve(import.meta.dir, "../../../.."), stdout: "pipe", stderr: "pipe" },
