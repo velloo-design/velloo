@@ -43,6 +43,24 @@ export interface GuardedRender {
 const MAX_STAND_INS = 8;
 
 /**
+ * The guard stood in for as many components as it will and the screen still
+ * threw. Rethrowing the last component's own error would read as though that
+ * one component were the whole story, so this names the cap and carries every
+ * failure it saw — the stand-ins it made and the one that tipped it over.
+ */
+export class RenderGuardLimitError extends Error {
+  readonly failures: RenderFailure[];
+  constructor(failures: RenderFailure[], options?: ErrorOptions) {
+    super(
+      `${failures.length} components failed to render — more than the ${MAX_STAND_INS} the guard will stand in for, so the screen was not drawn.`,
+      options,
+    );
+    this.name = "RenderGuardLimitError";
+    this.failures = failures;
+  }
+}
+
+/**
  * Name the component whose render threw by walking the error's stack for the
  * innermost frame that a registry knows. React calls function components
  * directly, so the component's own frame sits between the throw and React's
@@ -129,9 +147,12 @@ export function renderGuarded(
       // Give up on anything a stand-in can't address: an error naming no
       // component, one whose stand-in already failed to settle the render, or a
       // screen broken past the point of being worth another pass.
-      if (componentId === null || failures.length >= MAX_STAND_INS) throw error;
+      if (componentId === null) throw error;
       if (failures.some((failure) => failure.componentId === componentId)) throw error;
       const reason = error instanceof Error ? error.message : String(error);
+      if (failures.length >= MAX_STAND_INS) {
+        throw new RenderGuardLimitError([...failures, { componentId, reason }], { cause: error });
+      }
       failures.push({ componentId, reason });
       active = { ...active, [componentId]: standIn(componentId, reason) };
     }

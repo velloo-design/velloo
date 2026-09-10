@@ -113,6 +113,39 @@ describe("preflightScreens", () => {
       expect(failures[0]?.screenName).toBe("Broken");
       expect(failures[0]?.componentId).toBe("TabsTrigger");
       expect(failures[0]?.reason).toContain("Tabs");
+      expect(failures[0]?.boards).toEqual([{ id: "main", name: "Main" }]);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // Nine parts without their parents: each is containable alone, together
+  // they pass the guard's cap. Every one is still its own fix, so every one is
+  // reported, followed by the screen-level failure.
+  test("past the stand-in cap, lists each component and then the screen", async () => {
+    const { folder, tmp } = await scaffold();
+    try {
+      const refs = [
+        "TabsTrigger",
+        "TabsList",
+        "TabsContent",
+        "AccordionItem",
+        "AccordionContent",
+        "AvatarImage",
+        "AvatarFallback",
+        "PopoverTrigger",
+        "PopoverAnchor",
+      ];
+      const screen = {
+        id: "too-many",
+        name: "Too many",
+        tree: { $ref: "Box", children: refs.map(($ref) => ({ $ref, props: { value: "a" } })) },
+      };
+      const failures = preflightScreens(sourceFor(folder), [screen]);
+      expect(failures).toHaveLength(refs.length + 1);
+      expect(failures.at(-1)?.componentId).toBeNull();
+      expect(failures.at(-1)?.reason).toContain("more than the 8");
+      expect(failures.at(-1)?.boards).toEqual([]);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

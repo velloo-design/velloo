@@ -1,12 +1,13 @@
 import type { ComponentProvider, ComponentRegistry } from "@velloo/provider";
-import { renderBodyGuarded } from "@velloo/renderer";
+import { RenderGuardLimitError, renderBodyGuarded } from "@velloo/renderer";
 import type { Screen } from "@velloo/schema";
 import type { DesignFolder } from "./design-folder.ts";
 import { registryForScreen } from "./extensions/registry.ts";
 
 /**
- * A component that threw while rendering a screen, named with the screen so a
- * caller can say *where* before asking whether to go on.
+ * A component that threw while rendering a screen, named with the screen and
+ * the boards it sits on so a caller can say *where* before asking whether to
+ * go on.
  *
  * The render guard exists so one broken component cannot take a screen down,
  * which means an export or a publish of a broken screen succeeds and produces
@@ -17,6 +18,8 @@ import { registryForScreen } from "./extensions/registry.ts";
 export interface ScreenRenderFailure {
   screenId: string;
   screenName: string;
+  /** Every board with a frame placing the screen; empty for a loose screen. */
+  boards: { id: string; name: string }[];
   /** The component that threw, or null when the whole screen render failed. */
   componentId: string | null;
   reason: string;
@@ -40,6 +43,12 @@ function registryFor(source: PreflightSource): (screen: Screen) => ComponentRegi
     );
 }
 
+function boardsPlacing(folder: DesignFolder, screenId: string): ScreenRenderFailure["boards"] {
+  return [...folder.boards.values()]
+    .filter((board) => board.frames.some((frame) => frame.screen === screenId))
+    .map((board) => ({ id: board.id, name: board.name }));
+}
+
 /**
  * Render each screen far enough to learn which components throw.
  *
@@ -55,13 +64,25 @@ export function preflightScreens(
   const registry = registryFor(source);
   const out: ScreenRenderFailure[] = [];
   for (const screen of screens) {
-    const where = { screenId: screen.id, screenName: screen.name };
+    const where = {
+      screenId: screen.id,
+      screenName: screen.name,
+      boards: boardsPlacing(source.folder, screen.id),
+    };
     try {
       for (const failure of renderBodyGuarded(screen, registry(screen), source.folder.snippets)
         .failures) {
         out.push({ ...where, componentId: failure.componentId, reason: failure.reason });
       }
     } catch (error) {
+      // Past the stand-in cap every failure is still individually known, and
+      // each is its own fix — listing only the one that tipped it would hide
+      // the other eight.
+      if (error instanceof RenderGuardLimitError) {
+        for (const failure of error.failures) {
+          out.push({ ...where, componentId: failure.componentId, reason: failure.reason });
+        }
+      }
       // The guard gave up: an unknown $ref, too many broken components, or a
       // throw it could not pin on one of them. The screen is worse off than a
       // stand-in, not better, so it belongs in the same report.
@@ -111,20 +132,4 @@ export function screensForExportTarget(
     return screen ? [screen] : [];
   }
   return [];
-}
-
-/** One line per failure, for a terminal or a dialog list. */
-export function failureLines(failures: ScreenRenderFailure[]): string[] {
-  return failures.map((failure) =>
-    failure.componentId === null
-      ? `${failure.screenName}: ${failure.reason}`
-      : `${failure.screenName} — ${failure.componentId}: ${failure.reason}`,
-  );
-}
-
-/** "2 components on 1 screen", for a prompt that has to fit on one line. */
-export function failureSummary(failures: ScreenRenderFailure[]): string {
-  const screens = new Set(failures.map((failure) => failure.screenId)).size;
-  const components = failures.length === 1 ? "1 component" : `${failures.length} components`;
-  return `${components} on ${screens === 1 ? "1 screen" : `${screens} screens`}`;
 }

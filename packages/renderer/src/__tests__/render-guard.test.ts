@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Screen, Theme, Viewport } from "@velloo/schema";
 import { registry } from "@velloo/shadcn-snapshot";
-import { renderBody, renderScreen, UnknownComponentError } from "../index.ts";
+import {
+  RenderGuardLimitError,
+  renderBody,
+  renderScreen,
+  UnknownComponentError,
+} from "../index.ts";
 
 const viewport: Viewport = { w: 800, h: 600 };
 const opts = { snapshotCss: "/* stub */", viewport, registry };
@@ -83,6 +88,29 @@ describe("a component that throws", () => {
     ]);
     expect(bodyHtml).toContain('data-velloo-render-error="TabsTrigger"');
     expect(bodyHtml).toContain('data-velloo-render-error="AvatarImage"');
+  });
+
+  test("past the stand-in cap, the error names the cap and carries every failure", async () => {
+    const orphans = [
+      "TabsTrigger",
+      "TabsList",
+      "TabsContent",
+      "AccordionItem",
+      "AccordionContent",
+      "AvatarImage",
+      "AvatarFallback",
+      "PopoverTrigger",
+      "PopoverAnchor",
+    ];
+    const screen = screenWith({
+      $ref: "Box",
+      children: orphans.map(($ref) => ({ $ref, props: { value: "a" } })),
+    });
+    const error = await renderScreen(screen, sampleTheme, opts).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RenderGuardLimitError);
+    const limit = error as RenderGuardLimitError;
+    expect(limit.message).toContain("more than the 8");
+    expect(limit.failures.map((failure) => failure.componentId).sort()).toEqual(orphans.sort());
   });
 
   test("renderBody contains it too — inspect answers instead of throwing", () => {

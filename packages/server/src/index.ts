@@ -538,8 +538,6 @@ export {
 // Pre-flight render check, shared by the export and publish surfaces so a
 // broken component is caught before it ships as a placeholder.
 export {
-  failureLines,
-  failureSummary,
   type PreflightSource,
   preflightScreens,
   type ScreenRenderFailure,

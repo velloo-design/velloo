@@ -104,6 +104,12 @@ jobs:
       # launch needs — and not covered by the browser cache above.
       - name: Install Chromium system dependencies
         run: |
+          # ubuntu-latest also configures Google's Chrome apt repository, but
+          # Playwright installs its own Chromium build and only needs Ubuntu's
+          # system libraries. Ignore that unrelated repository so a transient
+          # Chrome metadata mismatch cannot prevent dependency installation.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+            /etc/apt/sources.list.d/google-chrome.sources
           bun x ${{ steps.pw.outputs.pin }} install-deps chromium
           sudo apt-get install -y xvfb
 

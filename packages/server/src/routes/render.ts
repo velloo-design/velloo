@@ -1,6 +1,7 @@
 import type { FrameworkAdapter } from "@velloo/provider";
 import {
   collectSerializedRefs,
+  RenderGuardLimitError,
   renderScreen,
   resolveSnippetBodyForEdit,
   serializeTree,
@@ -143,12 +144,21 @@ export function createRenderRouter(
               detail: err.message,
               hint: "Check the spelling against list_components, or register it as an extension.",
             }
-          : {
-              title: "This screen didn't render",
-              lede: "A component threw an error the canvas could not pin on a single node, so it could not stand in for it and draw the rest. Every other screen is unaffected.",
-              detail: err instanceof Error ? err.message : String(err),
-              hint: "The message above is the component's own. It usually names the prop or the parent it needs.",
-            };
+          : err instanceof RenderGuardLimitError
+            ? {
+                title: "Too many broken components",
+                lede: "Each of these could have been replaced with a placeholder on its own, but a screen with this many is not worth drawing around. Every other screen is unaffected.",
+                detail: err.failures
+                  .map((failure) => `${failure.componentId}: ${failure.reason}`)
+                  .join("\n"),
+                hint: "Most of these are parts placed without their parent. Fix a few and the rest of the screen draws again.",
+              }
+            : {
+                title: "This screen didn't render",
+                lede: "A component threw an error the canvas could not pin on a single node, so it could not stand in for it and draw the rest. Every other screen is unaffected.",
+                detail: err instanceof Error ? err.message : String(err),
+                hint: "The message above is the component's own. It usually names the prop or the parent it needs.",
+              };
       return c.body(
         renderErrorDocument({ ...page, screenName: screen.name, dark }),
         err instanceof UnknownComponentError ? 422 : 500,

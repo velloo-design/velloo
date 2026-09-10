@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
 import type { Board, Screen } from "@velloo/schema";
 import pc from "picocolors";
+import { copyToClipboard } from "../clipboard.ts";
 import { ensureDaemon } from "../daemon/runtime.ts";
 import { openUrl } from "../open-url.ts";
 import type { WizardAnswers } from "./answers.ts";
@@ -107,25 +108,6 @@ const AGENT_LAUNCHERS = [
   },
 ] as const;
 type AgentLauncher = (typeof AGENT_LAUNCHERS)[number];
-
-/** Best-effort clipboard write via the platform's native CLI. */
-async function copyToClipboard(text: string): Promise<boolean> {
-  const candidates: string[][] =
-    process.platform === "darwin"
-      ? [["pbcopy"]]
-      : process.platform === "win32"
-        ? [["clip"]]
-        : [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]];
-  for (const argv of candidates) {
-    const bin = argv[0];
-    if (!bin || !Bun.which(bin)) continue;
-    const proc = Bun.spawn(argv, { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
-    proc.stdin.write(text);
-    await proc.stdin.end();
-    if ((await proc.exited) === 0) return true;
-  }
-  return false;
-}
 
 /**
  * Print the agent handoff (scan only) and — interactively — offer to start
