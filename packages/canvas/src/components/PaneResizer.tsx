@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { clampPaneWidth, PANE_WIDTH } from "../store/modes.ts";
+import { clampPaneWidth, PANE_WIDTH } from "../pane-width.ts";
 
 interface Props {
   side: "left" | "right";

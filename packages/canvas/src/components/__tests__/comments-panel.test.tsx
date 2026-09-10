@@ -7,7 +7,8 @@ import {
   CommentTargetToggle,
   LOCAL_COMMENT_SCOPE_HELP,
 } from "../CommentScopeControls.tsx";
-import { CommentThreadListItem, MOVE_TO_CLOUD_HELP, ThreadMessages } from "../CommentsPanel.tsx";
+import { MOVE_TO_CLOUD_HELP } from "../CommentsPanel.tsx";
+import { CommentThreadListItem, ThreadMessages } from "../comment-threads.tsx";
 
 const thread: CommentThreadView = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -254,9 +255,82 @@ describe("comments panel affordances", () => {
         onLocate={() => undefined}
       />,
     );
-    expect(row).toContain("#1");
     expect(row).toContain("Local");
     expect(row).toContain("Pinned comment");
     expect(row).toContain('aria-label="Go to comment 1"');
+  });
+
+  test("counts a row's replies rather than its messages", () => {
+    const row = renderToStaticMarkup(
+      <CommentThreadListItem
+        thread={{
+          ...thread,
+          messages: [
+            ...thread.messages,
+            {
+              id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              author: { kind: "agent" },
+              body: "Done",
+              createdAt: "2026-08-28T10:06:00.000Z",
+            },
+          ],
+        }}
+        number={1}
+        onOpen={() => undefined}
+        onLocate={() => undefined}
+      />,
+    );
+    expect(row).toContain(">1</span>");
+    expect(row).not.toContain("2 messages");
+  });
+
+  /**
+   * The row's delete is destructive and unlabelled, so the control's identity
+   * has to survive in the markup — and a cloud thread must not offer one at
+   * all: the daemon refuses to erase a conversation other people have read.
+   */
+  test("offers delete on a local row and none on a cloud row", () => {
+    const local = renderToStaticMarkup(
+      <CommentThreadListItem
+        thread={thread}
+        number={2}
+        onOpen={() => undefined}
+        onLocate={() => undefined}
+        onDelete={() => undefined}
+      />,
+    );
+    expect(local).toContain('aria-label="Delete thread 2"');
+
+    const cloud = renderToStaticMarkup(
+      <CommentThreadListItem
+        thread={{ ...thread, scope: "shared" }}
+        number={2}
+        onOpen={() => undefined}
+        onLocate={() => undefined}
+      />,
+    );
+    expect(cloud).not.toContain("Delete thread");
+  });
+
+  test("marks a resolved row and a row whose target moved", () => {
+    const resolved = renderToStaticMarkup(
+      <CommentThreadListItem
+        thread={{ ...thread, status: "resolved" }}
+        number={1}
+        onOpen={() => undefined}
+        onLocate={() => undefined}
+      />,
+    );
+    expect(resolved).toContain("Resolved");
+
+    const stale = renderToStaticMarkup(
+      <CommentThreadListItem
+        thread={{ ...thread, anchorState: { status: "stale" } }}
+        number={1}
+        onOpen={() => undefined}
+        onLocate={() => undefined}
+      />,
+    );
+    expect(stale).toContain("Target changed");
   });
 });

@@ -1,6 +1,7 @@
 import type { FrameScheme } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import { clearBoardMemory } from "../board-memory.ts";
+import { clampPaneWidth, PANE_WIDTH } from "../pane-width.ts";
 import type { CanvasState } from "./index.ts";
 import type { AppTheme, DesignMode } from "./types.ts";
 
@@ -36,17 +37,6 @@ const LEFT_PANELS_KEY = "velloo:leftPanels";
 const PANES_KEY = "velloo:panes";
 const PANE_WIDTHS_KEY = "velloo:paneWidths";
 const REMEMBER_PANELS_KEY = "velloo:rememberPanels";
-
-/**
- * Side-pane width bounds, in px. The floor is where the inspector's label +
- * control rows stop fitting side by side; the ceiling keeps a pane from
- * crowding out the canvas on a laptop screen.
- */
-export const PANE_WIDTH = { min: 240, max: 560, default: 320 } as const;
-
-export function clampPaneWidth(px: number): number {
-  return Math.min(PANE_WIDTH.max, Math.max(PANE_WIDTH.min, Math.round(px)));
-}
 
 /**
  * The width the board keeps for itself before the panes have to take turns.
