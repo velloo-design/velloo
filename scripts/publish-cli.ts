@@ -6,17 +6,17 @@
  *   bun run cli:release        # prod → get.velloo.design     (bakes api.velloo.ai)
  *   bun run cli:release:dev    # dev  → get.dev.velloo.design (bakes api.dev.velloo.ai)
  *
- * The download host is velloo-cloud itself serving the env's R2 bucket under
- * the `downloads/` prefix (src/routes/downloads.ts). Uploads go through the R2
- * S3 API using the BLOB_* values from the sibling velloo-cloud checkout's
- * `.env.<env>`.
+ * The download host serves the env's bucket under the `downloads/` prefix;
+ * uploads go through its S3 API. CI is the normal caller (release.yml for tags,
+ * dogfood.yml on demand) and passes BLOB_ENDPOINT / BLOB_BUCKET /
+ * BLOB_ACCESS_KEY / BLOB_SECRET_KEY from the GitHub environment. A maintainer
+ * publishing from their own machine puts the same four in a gitignored
+ * `.env.release.<env>` at the repo root instead.
  *
- * Env overrides: VELLOO_CLOUD_DIR (sibling checkout, default ../velloo-cloud),
- * BLOB_ENDPOINT / BLOB_BUCKET / BLOB_ACCESS_KEY / BLOB_SECRET_KEY (skip the
- * env-file read entirely), VELLOO_BUILD_CLOUD_URL (baked cloud default).
+ * Env overrides: VELLOO_BUILD_CLOUD_URL (baked cloud default).
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -39,7 +39,7 @@ const envName = envArg as EnvName;
 const target = ENVS[envName];
 const cloudUrl = process.env.VELLOO_BUILD_CLOUD_URL ?? target.cloudUrl;
 
-/** Minimal KEY=VALUE parser for velloo-cloud's .env.<env> files. */
+/** Minimal KEY=VALUE parser for `.env.release.<env>`. */
 function parseEnvFile(path: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of readFileSync(path, "utf8").split("\n")) {
@@ -65,11 +65,11 @@ function blobConfig(): Record<(typeof BLOB_KEYS)[number], string> {
     source = process.env;
     where = "process env";
   } else {
-    const cloudDir = resolve(repoRoot, process.env.VELLOO_CLOUD_DIR ?? "../velloo-cloud");
-    const envFile = join(cloudDir, `.env.${envName}`);
+    const envFile = join(repoRoot, `.env.release.${envName}`);
     if (!existsSync(envFile)) {
       console.error(
-        `✗ ${envFile} not found — set VELLOO_CLOUD_DIR to the velloo-cloud checkout, or provide ${BLOB_KEYS.join("/")} in the env.`,
+        `✗ no upload credentials — set ${BLOB_KEYS.join(" / ")} in the env, or put them in ${envFile}.\n` +
+          `  Maintainers without them can publish through CI: gh workflow run dogfood.yml -f environment=${envName}`,
       );
       process.exit(1);
     }

@@ -1,0 +1,55 @@
+# Dogfood: publish the current branch to an environment's download host, so
+# testers update with `curl -fsSL https://get[.dev].velloo.design/install.sh | bash`.
+#
+# Trigger: `gh workflow run dogfood.yml -f environment=dev` (or prod), or the
+# Actions tab. Unlike release.yml it doesn't touch npm or cut a GitHub release.
+#
+# Secrets come from the GitHub environment named by the input — BLOB_ENDPOINT,
+# BLOB_BUCKET, BLOB_ACCESS_KEY, BLOB_SECRET_KEY — so the dev and prod buckets
+# never share credentials and prod can require a reviewer.
+name: Dogfood
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Download host to publish to
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dogfood-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Gates
+        run: |
+          bun run typecheck
+          bun run lint
+          bun test --parallel
+
+      - name: Build and publish
+        run: bun scripts/publish-cli.ts ${{ inputs.environment }}
+        env:
+          BLOB_ENDPOINT: ${{ secrets.BLOB_ENDPOINT }}
+          BLOB_BUCKET: ${{ secrets.BLOB_BUCKET }}
+          BLOB_ACCESS_KEY: ${{ secrets.BLOB_ACCESS_KEY }}
+          BLOB_SECRET_KEY: ${{ secrets.BLOB_SECRET_KEY }}

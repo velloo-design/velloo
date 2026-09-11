@@ -52,10 +52,23 @@ and `bun run cli:dev` bakes the dev environment (`https://api.dev.velloo.ai`).
 
 ## Dogfood channel
 
-`bun run cli:release` (prod) / `bun run cli:release:dev` build the bundle with
-the environment's cloud URL baked in and upload `install.sh`, the npm tarball,
-direct archives, and checksums to that environment's R2 bucket
-under `downloads/` — velloo-cloud serves them at `get.velloo.design` /
-`get.dev.velloo.design`. Credentials come from the sibling
-velloo-cloud checkout's `.env.prod` / `.env.dev` (override the checkout with
-`VELLOO_CLOUD_DIR`, or pass `BLOB_*` directly).
+Testers can run unreleased builds from `get.velloo.design` (prod) or
+`get.dev.velloo.design` (dev). A dogfood publish builds the bundle with that
+environment's cloud URL and update channel baked in, then uploads `install.sh`,
+the npm tarball, direct archives, and checksums to the environment's bucket
+under `downloads/`. It never touches npm or GitHub releases.
+
+The normal path is CI, so upload credentials never leave GitHub:
+
+```bash
+gh workflow run dogfood.yml -f environment=dev    # or prod
+```
+
+`dogfood.yml` and `release.yml` read `BLOB_ENDPOINT`, `BLOB_BUCKET`,
+`BLOB_ACCESS_KEY`, and `BLOB_SECRET_KEY` from the GitHub environment of the same
+name (`dev` / `prod`); `NPM_TOKEN` lives on `prod`.
+
+A maintainer holding the credentials can publish from their machine instead:
+`bun run cli:release` (prod) / `bun run cli:release:dev` read the four `BLOB_*`
+values from the environment, or from a gitignored `.env.release.prod` /
+`.env.release.dev` at the repo root.
