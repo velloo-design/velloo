@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  *   2. `<here>/canvas` — packaged layout (canvas SPA sits next to `cli.js`).
  *   3. `<here>/../dist` — dev layout (`packages/canvas/src` → `packages/canvas/dist`).
  *
- * Dev: run `bun --cwd packages/canvas run build` first.
+ * Dev: run `bun run --cwd packages/canvas build` first.
  */
 function resolveCanvasDist(): string {
   const devLayout = join(here, "..", "dist");

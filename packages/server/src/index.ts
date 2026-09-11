@@ -262,7 +262,7 @@ async function serveSpaFallback(): Promise<Response> {
   }
   return new Response(
     "<!doctype html><h1>Velloo canvas not built</h1>" +
-      "<p>Run <code>bun --cwd packages/canvas run build</code> from the repo root.</p>",
+      "<p>Run <code>bun run --cwd packages/canvas build</code> from the repo root.</p>",
     { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
 }

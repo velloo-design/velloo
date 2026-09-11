@@ -15,9 +15,9 @@ Contents:
 ## Re-vendoring
 
 ```bash
-bun --cwd packages/shadcn-snapshot run vendor        # all components + upstream CSS
-bun --cwd packages/shadcn-snapshot run vendor button # or just some
-bun --cwd packages/shadcn-snapshot run build         # regenerate dist/manifest.json
+bun run --cwd packages/shadcn-snapshot vendor        # all components + upstream CSS
+bun run --cwd packages/shadcn-snapshot vendor button # or just some
+bun run --cwd packages/shadcn-snapshot build         # regenerate dist/manifest.json
 ```
 
 The registry serves each style's components with the `cn-*` semantic classes already flattened into Tailwind utilities, so what lands here is the same shape a user's `shadcn add` writes. `vendor.ts` rewrites upstream's `@/registry/…` imports to relative paths and collapses upstream's icon-library-agnostic `<IconPlaceholder>` to lucide. Bump `snapshotVersion` after a pull.

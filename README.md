@@ -143,10 +143,10 @@ You choose when — and whether — to make any of them.
 
 ```bash
 bun install
-bun --cwd packages/shadcn-snapshot run vendor   # re-pull shadcn from upstream (rare)
-bun --cwd packages/shadcn-snapshot run build    # build dist/manifest.json
-bun --cwd packages/canvas run vendor            # re-pull the IDE chrome's copy — same pull
-bun --cwd packages/canvas run build             # build canvas SPA
+bun run --cwd packages/shadcn-snapshot vendor   # re-pull shadcn from upstream (rare)
+bun run --cwd packages/shadcn-snapshot build    # build dist/manifest.json
+bun run --cwd packages/canvas vendor            # re-pull the IDE chrome's copy — same pull
+bun run --cwd packages/canvas build             # build canvas SPA
 bun run typecheck
 bun run velloo init /tmp/velloo-smoke
 bun run velloo run /tmp/velloo-smoke            # canvas at :7300, MCP at :7301

@@ -8,14 +8,20 @@ checks we expect to be green.
 Velloo is a Bun workspaces monorepo, so you need [Bun](https://bun.sh).
 
 ```bash
-bun install
-bun --cwd packages/shadcn-snapshot run build   # build dist/manifest.json
-bun --cwd packages/canvas run build            # build the canvas SPA
+bun install                                    # also builds the snapshot manifest
+bun run --cwd packages/canvas build            # build the canvas SPA
 bun run velloo init /tmp/velloo-smoke
 bun run velloo run /tmp/velloo-smoke           # canvas :7300, MCP :7301
 ```
 
 The screenshot path needs Chromium once: `velloo browser install`.
+
+Optionally, let git run the same checks CI does — lint on commit, the full
+`checks` job on push:
+
+```bash
+git config core.hooksPath .githooks
+```
 
 ## Before you open a PR
 
@@ -24,7 +30,8 @@ Run these and make sure they pass:
 ```bash
 bun run typecheck     # tsc -b
 bun run lint          # biome check .
-bun test
+bun run lint:dead     # knip — unused files, exports, dependencies
+bun run test          # bun test --parallel
 ```
 
 `bun run lint:fix` and `bun run format` fix most style issues automatically.
