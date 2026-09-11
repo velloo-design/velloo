@@ -68,13 +68,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Keyed on the pin in packages/renderer/src/screenshot.ts, so bumping
-      # Playwright fetches a fresh browser and every other run restores one.
+      # The renderer's playwright-core devDependency is the pin the runtime
+      # launches against (screenshot.ts reads the same field), so bumping it
+      # fetches a fresh browser and every other run restores one. An empty
+      # version would install whatever Playwright is latest — a Chromium
+      # revision the pinned runtime can't find.
       - name: Resolve the Playwright pin
         id: pw
         run: |
-          pin=$(grep -o 'playwright@[0-9.]*' packages/renderer/src/screenshot.ts | head -1)
-          echo "pin=$pin" >> "$GITHUB_OUTPUT"
+          version=$(jq -r '.devDependencies["playwright-core"] // empty' packages/renderer/package.json)
+          if [ -z "$version" ]; then
+            echo "no playwright-core devDependency in packages/renderer/package.json" >&2
+            exit 1
+          fi
+          echo "pin=playwright@$version" >> "$GITHUB_OUTPUT"
 
       - name: Cache Chromium
         id: chromium-cache
