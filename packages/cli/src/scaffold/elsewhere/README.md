@@ -2,8 +2,9 @@
 
 The canonical design for `velloo init`: seven travel screens, the journey board
 (including mobile and dark frames), and three tall agentic trip explorations.
-The source was authored in `initial-board/` using Velloo. Preserve screen and
-snippet IDs when bringing canvas edits back into this directory.
+To edit it visually, open `demo-boards/shadcn-upstream/` on the canvas, then bring
+the changes back into this directory — preserving screen and snippet IDs — before
+`bun scripts/refresh-demo-boards.ts` overwrites that folder again.
 
 `elsewhere-sample.ts` includes these JSON documents, styles, image metadata and
 local assets in the CLI bundle. `elsewhere-native.ts` recreates the same design

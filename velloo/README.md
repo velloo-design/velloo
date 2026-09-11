@@ -1,56 +1,27 @@
-# Velloo design folder
+# Velloo's own design folder
 
-This folder is a Velloo design — pure JSON describing screens,
-boards, snippets, and a theme. Velloo renders these with real
-React components from a pinned **shadcn (2026.05.22)** snapshot.
-
-## Quick start
+Velloo designs itself here: explorations for the canvas chrome — header, side
+panes, search, settings, the node HUD, the typography panel, board organization,
+render errors. Its host app is `packages/canvas` (`hostApp.root` in
+`.design/config.json`), so frames render the chrome's real shadcn components.
 
 ```bash
-velloo run .
+velloo run          # from the repo root — starts only this folder
 ```
 
-`velloo run .` prints and opens the canvas URL — it defaults to
-http://localhost:7300, but uses a free port if that's taken. Your AI
-agent drives the design over MCP — wire it once with `velloo connect`,
-and it starts the velloo MCP server itself (no separate server to run).
-
-## Your setup
-
-| | |
-|---|---|
-| Library | shadcn (2026.05.22) |
-| Components | bundled with velloo |
-| App root | .. |
-| Initial content | scanned from your app |
+The framework demos live in `../demo-boards/` and have their own `velloo.json`;
+run `velloo run` there to open them.
 
 ## Layout
 
 ```
-.design/config.json        tool + library declaration
-theme/default.json         color tokens (OKLCH)
+.design/config.json        tool + library declaration, board order and groups
+theme/<name>.json          token sets (OKLCH) — boards pick one
 screens/<id>.json          one composition each (light + dark)
-boards/<id>.json           frame layouts on the canvas
+boards/<id>.json           frame layouts on the canvas (+ <id>.notes.json)
 snippets/<id>.json         reusable subtrees with typed params
-assets/                    generated SVGs / images
+assets/, assets.json       images and their generation metadata
 ```
 
-## Bundled components
-
-The shadcn snapshot lives inside the velloo binary. No files were
-written to your app. When you're ready to bring shadcn into your
-project, run `npx shadcn@latest init` there separately, then
-`velloo theme:export <app>` to align the theme.
-
-## What the AI agent sees
-
-Velloo exposes ~55 MCP tools — discovery (`list_screens`, `list_components`,
-`list_snippets`, `get_theme`), tree mutations (`add_node`, `update_props`,
-`apply_classes`, `move_node`, …), snippets, theme operations (`set_token`,
-`apply_preset`, `derive_palette_from_color`), inspection
-(`inspect`, `inspect_dark_diff`, `screenshot`, `validate_classes`), and
-code emission (`emit_code`, `emit_snippet`, `emit_theme`).
-
-Designs are static by construction — click handlers, routing, and forms
-are no-ops in the canvas. The agent reads the design and writes real
-code into your app via `emit_code`.
+The folder is tool-owned: change it through the canvas or an agent over MCP,
+not by editing the JSON by hand.

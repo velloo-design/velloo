@@ -1,0 +1,10 @@
+{
+  "projects": {
+    "demo-shadcn-upstream": "shadcn-upstream",
+    "demo-mui": "mui",
+    "demo-antd": "antd",
+    "demo-chakra": "chakra",
+    "demo-none": "none"
+  },
+  "defaultProject": "demo-shadcn-upstream"
+}

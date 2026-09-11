@@ -29,18 +29,17 @@
     }
   ],
   "boardOrder": [
-    "board-org",
-    "cloud-published-boards",
-    "gallery-ember-oak",
-    "gallery-quarry",
-    "gallery-wren-field",
     "images",
-    "main",
     "search-explorations",
     "settings-dialog",
     "velloo-header",
     "velloo-left-pane",
-    "velloo-right-pane"
+    "velloo-right-pane",
+    "node-hud",
+    "render-errors",
+    "main",
+    "typography-panel",
+    "board-org"
   ],
   "boardGroups": [
     {
@@ -59,6 +58,6 @@
   },
   "feedback": {
     "enabled": true,
-    "contactOk": true
+    "contactOk": false
   }
 }

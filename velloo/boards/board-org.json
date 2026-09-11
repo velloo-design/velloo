@@ -1,6 +1,7 @@
 {
   "id": "board-org",
   "name": "Board organization explorations",
+  "group": "canvas",
   "frames": [
     {
       "id": "bo-a-groups-1",

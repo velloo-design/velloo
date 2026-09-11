@@ -1,12 +1,6 @@
 {
   "projects": {
-    "velloo": "velloo",
-    "initial-board": "initial-board",
-    "demo-shadcn-upstream": "demo-boards/shadcn-upstream",
-    "demo-mui": "demo-boards/mui",
-    "demo-antd": "demo-boards/antd",
-    "demo-chakra": "demo-boards/chakra",
-    "demo-none": "demo-boards/none"
+    "velloo": "velloo"
   },
   "defaultProject": "velloo"
 }

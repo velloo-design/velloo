@@ -1,4 +1,9 @@
-/** Refresh the runnable framework demos from the exact velloo init scaffold. */
+/**
+ * Refresh the runnable framework demos from the exact velloo init scaffold.
+ * They register in demo-boards/velloo.json rather than the repo root's, so a
+ * bare `velloo run` at the root starts only the product's own design folder
+ * and the same command inside demo-boards/ starts every demo.
+ */
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildDefaultConfig } from "../packages/cli/src/scaffold/default-config.ts";
@@ -11,10 +16,12 @@ const json = async (path: string, value: unknown) => {
   await mkdir(resolve(path, ".."), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 };
-const manifest = JSON.parse(await readFile(resolve(root, "velloo.json"), "utf8"));
+const manifestPath = resolve(root, "demo-boards/velloo.json");
+const manifest = await readFile(manifestPath, "utf8")
+  .then(JSON.parse)
+  .catch(() => ({ projects: {}, defaultProject: "demo-shadcn-upstream" }));
 for (const library of ["shadcn-upstream", "mui", "antd", "chakra", "none"] as const) {
-  const relative = `demo-boards/${library}`;
-  const folder = resolve(root, relative);
+  const folder = resolve(root, "demo-boards", library);
   const { createProvider } = await import(`../packages/provider-${library}/src/index.ts`);
   const provider = createProvider();
   const scaffold = buildElsewhereScaffold(library, buildDefaultTheme());
@@ -48,9 +55,9 @@ for (const library of ["shadcn-upstream", "mui", "antd", "chakra", "none"] as co
   await writeFile(resolve(folder, ".gitignore"), ".design/cache/\n.velloo/\n");
   await writeFile(
     resolve(folder, "README.md"),
-    `# Elsewhere · ${provider.label}\n\nRun from the repo root with \`velloo run demo-${library}\`.\n\nGenerated from the welcome scaffold with \`bun scripts/refresh-demo-boards.ts\`.\nCanvas edits here are local explorations; refresh overwrites the generated sample files.\n`,
+    `# Elsewhere · ${provider.label}\n\nRun from \`demo-boards/\` with \`velloo run demo-${library}\`, or \`velloo run .\` from this folder.\n\nGenerated from the welcome scaffold with \`bun scripts/refresh-demo-boards.ts\`.\nCanvas edits here are local explorations; refresh overwrites the generated sample files.\n`,
   );
-  manifest.projects[`demo-${library}`] = relative;
-  console.log(relative);
+  manifest.projects[`demo-${library}`] = library;
+  console.log(`demo-boards/${library}`);
 }
-await json(resolve(root, "velloo.json"), manifest);
+await json(manifestPath, manifest);
