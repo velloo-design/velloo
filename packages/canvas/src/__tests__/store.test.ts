@@ -117,6 +117,9 @@ describe("setSelection", () => {
     // hit /api/screen/snippet:foo (404) and confuse the boards mode.
     useCanvas.setState({ currentScreenId: "landing", currentBoardId: "marketing" });
 
+    // The store is a module singleton: a serial `bun test` hands it to the next
+    // file, which must get the real action back.
+    const { selectScreen } = useCanvas.getState();
     let selectScreenCalls = 0;
     useCanvas.setState({
       selectScreen: async (_id: string) => {
@@ -124,7 +127,11 @@ describe("setSelection", () => {
       },
     });
 
-    useCanvas.getState().setSelection({ screenId: "snippet:feature-row", path: "" });
+    try {
+      useCanvas.getState().setSelection({ screenId: "snippet:feature-row", path: "" });
+    } finally {
+      useCanvas.setState({ selectScreen });
+    }
     expect(selectScreenCalls).toBe(0);
     expect(useCanvas.getState().selection).toEqual({
       screenId: "snippet:feature-row",
