@@ -1,32 +1,16 @@
 import { PRICING_URL, protectedSharesAllowed } from "@velloo/protocol";
-import {
-  AlertTriangle,
-  CircleCheck,
-  Copy,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  FileStack,
-  Lock,
-  Share2,
-} from "lucide-react";
+import { Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { preflightBoards, type ScreenRenderFailure } from "../api/preflight.ts";
-import {
-  type PublishRequest,
-  type PublishResult,
-  type PublishState,
-  type PublishTargets,
-  publish,
-} from "../api.ts";
+import { type PublishRequest, type PublishState, type PublishTargets, publish } from "../api.ts";
 import { useCanvas } from "../store.ts";
-import { pushToast, toastError } from "../toast.ts";
-import { LoadingMark } from "./Loading.tsx";
+import { toastError } from "../toast.ts";
+import { PublishForm } from "./Publish/PublishForm.tsx";
+import { PublishDone, PublishFailed, PublishRunning } from "./Publish/PublishOutcome.tsx";
+import { canvasLatestMatchingSlot } from "./Publish/slot-matching.ts";
 import { RenderFailureDialog } from "./RenderFailureDialog.tsx";
-import { billingUrl, planLabel } from "./SettingsMenu.tsx";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert.tsx";
+import { billingUrl } from "./SettingsMenu.tsx";
 import { Button } from "./ui/button.tsx";
-import { Checkbox } from "./ui/checkbox.tsx";
 import {
   Dialog,
   DialogContent,
@@ -35,9 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog.tsx";
-import { Input } from "./ui/input.tsx";
-import { Label } from "./ui/label.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
 
 /**
  * Publish boards to velloo-cloud as a share link.
@@ -83,7 +64,6 @@ export function PublishDialog() {
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   /** Never persisted anywhere: typed here, sent once, forgotten on close. */
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   /** Null until the teams load, and stays null when there's nothing to choose. */
   const [teamId, setTeamId] = useState<string | null>(null);
   const [destinationSlug, setDestinationSlug] = useState("new");
@@ -112,7 +92,6 @@ export function PublishDialog() {
     setBoardIds(scope ? [scope.id] : (design?.boards ?? []).map((b) => b.id));
     setVisibility(scope?.mode === "private" ? "private" : "public");
     setPassword("");
-    setShowPassword(false);
     setTeamId(null);
     setDestinationSlug("new");
     setDestinationTouched(false);
@@ -184,9 +163,7 @@ export function PublishDialog() {
     return latest ? [latest] : [];
   }, [targets?.slots, currentSource]);
   const selectedSlot = matchingSlots.find((slot) => slot.slug === destinationSlug) ?? null;
-  const recommendedSlug = useMemo(() => {
-    return matchingSlots[0]?.slug ?? "new";
-  }, [matchingSlots]);
+  const recommendedSlug = matchingSlots[0]?.slug ?? "new";
 
   useEffect(() => {
     if (!destinationTouched) setDestinationSlug(recommendedSlug);
@@ -240,19 +217,6 @@ export function PublishDialog() {
     await startRun(buildRequest());
   };
 
-  const toggleBoard = (id: string, on: boolean) => {
-    setBoardIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id)));
-  };
-
-  const copyLink = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      pushToast({ kind: "success", message: "Share link copied." });
-    } catch {
-      pushToast({ kind: "info", message: url });
-    }
-  };
-
   // `access` names *why* publishing is closed; `ready` is the fallback for a
   // daemon too old to send it, where the only knowable reason is no credential.
   const access =
@@ -263,6 +227,11 @@ export function PublishDialog() {
   // No boards is legitimate — a board-less folder publishes all its screens.
   const nothingSelected = boards.length > 0 && boardIds.length === 0;
   const passwordMissing = scopeMode === "password" && password.length < 3;
+
+  const signInAgain = (opts: { expired: boolean }) => {
+    setOpen(false);
+    openSignIn({ action: "publish these boards", ...(opts.expired ? { expired: true } : {}) });
+  };
 
   return (
     <>
@@ -298,307 +267,54 @@ export function PublishDialog() {
                   ? "Your velloo-cloud session has ended. Sign in again to publish these boards."
                   : "Publishing needs a velloo-cloud account."}
               </p>
-              <Button
-                onClick={() => {
-                  setOpen(false);
-                  openSignIn({ action: "publish these boards", ...(expired ? { expired } : {}) });
-                }}
-                className="self-start"
-              >
+              <Button onClick={() => signInAgain({ expired })} className="self-start">
                 {expired ? "Sign in again…" : "Sign in…"}
               </Button>
             </div>
           ) : run.state === "running" ? (
-            <div className="flex flex-col gap-3 py-4">
-              <div className="flex items-center gap-2 text-sm">
-                <LoadingMark size={16} />
-                <span>{run.message}</span>
-                {run.capture ? (
-                  <span className="text-muted-foreground tabular-nums">
-                    {run.capture.done}/{run.capture.total}
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Capturing previews takes the longest. You can close this — the publish keeps going.
-              </p>
-              <Warnings messages={run.warnings} />
-            </div>
+            <PublishRunning run={run} />
           ) : run.state === "done" ? (
-            <div className="flex flex-col gap-3 py-2">
-              <div className="flex items-center gap-2 text-sm">
-                <CircleCheck size={15} className="text-emerald-600 dark:text-emerald-500" />
-                <span>{run.result.created ? "Published." : "Updated the existing link."}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input readOnly value={run.result.shareUrl} className="font-mono text-xs" />
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  title="Copy link"
-                  onClick={() => void copyLink(run.result.shareUrl)}
-                >
-                  <Copy />
-                </Button>
-                <Button variant="outline" size="icon-sm" title="Open link" asChild>
-                  <a href={run.result.shareUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink />
-                  </a>
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">{describeAccess(run.result)}</p>
-              <p className="text-xs text-muted-foreground">
-                {run.result.boards} board{run.result.boards === 1 ? "" : "s"} · {run.result.screens}{" "}
-                screen{run.result.screens === 1 ? "" : "s"} · {run.result.files} files ·{" "}
-                {Math.round(run.result.bytes / 1024)} KB
-                {run.result.screenshots > 0 ? ` · ${run.result.screenshots} previews` : ""}
-              </p>
-              <HistoryNote history={run.result.history} upgradeUrl={upgradeUrl} />
-              <Warnings messages={run.warnings} />
-            </div>
+            <PublishDone run={run} upgradeUrl={upgradeUrl} />
           ) : run.state === "error" ? (
-            <div className="flex flex-col gap-3 py-2">
-              {/* A full plan is not a fault, so it isn't dressed as one: the
-                  refusal used to arrive as red text quoting a status code, when
-                  what the user needed was the list of boards holding the slots. */}
-              {run.boardLimit ? (
-                <>
-                  <Alert role="note" data-testid="board-limit-notice">
-                    <FileStack />
-                    <AlertTitle>
-                      All {run.boardLimit.limit} board slots on the {planLabel(run.boardLimit.tier)}{" "}
-                      plan are in use
-                    </AlertTitle>
-                    <AlertDescription className="text-xs">
-                      Take one of your published boards down to free a slot, or upgrade for more.
-                      Re-publishing an existing link always works — the cap only counts new boards.
-                    </AlertDescription>
-                  </Alert>
-                  {/* Below the Alert, not in its action corner: `AlertAction`
-                      is absolutely positioned for one small button, and two
-                      crowd the title into a wrap. */}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setOpen(false);
-                        openPublishedBoards(true);
-                      }}
-                    >
-                      See published boards
-                    </Button>
-                    <Button size="sm" variant="outline" asChild>
-                      <a href={upgradeUrl} target="_blank" rel="noreferrer">
-                        Upgrade plan
-                      </a>
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-start gap-2 text-sm text-destructive">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                  <span>{run.message}</span>
-                </div>
-              )}
-              {/* A token can be revoked during the minutes a capture pass takes.
-                Losing that work to a dead end, with the fix one click away, is
-                the worst version of this failure. */}
-              {run.signInRequired ? (
-                <Button
-                  onClick={() => {
-                    setOpen(false);
-                    openSignIn({
-                      action: "publish these boards",
-                      expired: run.signInRequired === "expired",
-                    });
-                  }}
-                  className="self-start"
-                >
-                  Sign in and try again…
-                </Button>
-              ) : null}
-              <Warnings messages={run.warnings} />
-            </div>
+            <PublishFailed
+              run={run}
+              upgradeUrl={upgradeUrl}
+              onSeePublished={() => {
+                setOpen(false);
+                openPublishedBoards(true);
+              }}
+              onSignIn={() => signInAgain({ expired: run.signInRequired === "expired" })}
+            />
           ) : (
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="publish-title">Title</Label>
-                <Input
-                  id="publish-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Board title"
-                />
-              </div>
-
-              {boards.length > 0 ? (
-                <div className="grid gap-2">
-                  <Label>Boards</Label>
-                  <div className="max-h-40 overflow-y-auto rounded-md border">
-                    {boards.map((board) => (
-                      <div
-                        key={board.id}
-                        className="flex items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-accent/50"
-                      >
-                        <Checkbox
-                          id={`publish-board-${board.id}`}
-                          checked={boardIds.includes(board.id)}
-                          onCheckedChange={(v) => toggleBoard(board.id, v === true)}
-                        />
-                        <Label
-                          htmlFor={`publish-board-${board.id}`}
-                          className="flex-1 cursor-pointer truncate font-normal"
-                        >
-                          {board.name}
-                        </Label>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {board.frameCount} frame{board.frameCount === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  This folder has no boards, so every screen is published.
-                </p>
-              )}
-
-              <div className="grid gap-2">
-                <Label htmlFor="publish-destination">Destination</Label>
-                <Select
-                  value={destinationSlug}
-                  onValueChange={(value) => {
-                    setDestinationTouched(true);
-                    setDestinationSlug(value);
-                  }}
-                  disabled={Boolean(targets?.destinationError)}
-                >
-                  <SelectTrigger id="publish-destination">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {matchingSlots.map((slot) => (
-                      <SelectItem key={slot.slug} value={slot.slug}>
-                        Update {slot.title || "Untitled design"}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="new">Create a new link</SelectItem>
-                  </SelectContent>
-                </Select>
-                {targets?.destinationError ? (
-                  <p className="text-xs text-destructive">{targets.destinationError}</p>
-                ) : selectedSlot ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Matches this team, board selection, and source.
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    Creates a separate live URL and keeps existing review links unchanged.
-                  </p>
-                )}
-              </div>
-
-              {protectedShares ? (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="publish-visibility">Visibility</Label>
-                    <Select
-                      value={effectiveVisibility}
-                      onValueChange={(v) => setVisibility(v as "public" | "private")}
-                    >
-                      <SelectTrigger id="publish-visibility">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="public">Anyone with the link</SelectItem>
-                        <SelectItem value="private">Only your organization</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="publish-password">
-                      Password{scopeMode === "password" ? "" : " (optional)"}
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="publish-password"
-                        className="pr-10"
-                        type={showPassword ? "text" : "password"}
-                        minLength={3}
-                        autoComplete="new-password"
-                        placeholder="3+ characters"
-                        value={effectivePassword}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="absolute right-0 top-0 h-9 w-9 p-0"
-                        onClick={() => setShowPassword((value) => !value)}
-                        title={showPassword ? "Hide password" : "Show password"}
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                        aria-pressed={showPassword}
-                      >
-                        {showPassword ? <EyeOff /> : <Eye />}
-                      </Button>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Anyone with the password can view, signed in or not. Send it separately from
-                      the link.
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="publish-visibility">Visibility</Label>
-                    <Input
-                      id="publish-visibility"
-                      readOnly
-                      value="Anyone with the link"
-                      className="bg-muted/40 text-muted-foreground"
-                    />
-                  </div>
-                  {/* An offer, not an error: `note` keeps screen readers from
-                    announcing it the way the Alert's default `alert` role would. */}
-                  <Alert role="note" data-testid="protected-shares-upsell">
-                    <Lock />
-                    <AlertTitle>Private and password-protected links</AlertTitle>
-                    <AlertDescription className="text-xs">
-                      Share only with your organization, or behind a password. Free accounts publish
-                      public links — upgrade to Team or Business to unlock both.
-                    </AlertDescription>
-                    <AlertAction>
-                      <Button size="xs" variant="secondary" asChild>
-                        <a href={upgradeUrl} target="_blank" rel="noreferrer">
-                          Upgrade
-                        </a>
-                      </Button>
-                    </AlertAction>
-                  </Alert>
-                </>
-              )}
-
-              {targets && targets.teams.length > 1 && teamId ? (
-                <div className="grid gap-2">
-                  <Label htmlFor="publish-team">Team</Label>
-                  <Select value={teamId} onValueChange={setTeamId}>
-                    <SelectTrigger id="publish-team">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {targets.teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : null}
-            </div>
+            <PublishForm
+              title={title}
+              onTitleChange={setTitle}
+              boards={boards}
+              boardIds={boardIds}
+              onToggleBoard={(id, on) =>
+                setBoardIds((ids) =>
+                  on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id),
+                )
+              }
+              destinationSlug={destinationSlug}
+              onDestinationChange={(slug) => {
+                setDestinationTouched(true);
+                setDestinationSlug(slug);
+              }}
+              matchingSlots={matchingSlots}
+              selectedSlot={selectedSlot}
+              destinationError={targets?.destinationError}
+              protectedShares={protectedShares}
+              visibility={effectiveVisibility}
+              onVisibilityChange={setVisibility}
+              passwordRequired={scopeMode === "password"}
+              password={effectivePassword}
+              onPasswordChange={setPassword}
+              upgradeUrl={upgradeUrl}
+              teams={targets?.teams ?? []}
+              teamId={teamId}
+              onTeamChange={setTeamId}
+            />
           )}
 
           <DialogFooter>
@@ -624,114 +340,4 @@ export function PublishDialog() {
       </Dialog>
     </>
   );
-}
-
-export function canvasSlotMismatches(
-  slot: PublishTargets["slots"][number],
-  current: {
-    boardIds: string[];
-    teamId: string | null;
-    repo: string | null;
-    branch: string | null;
-  },
-): string[] {
-  const mismatches: string[] = [];
-  if (!slot.context.contextKnown) mismatches.push("board context is unknown");
-  if (slot.teamId !== current.teamId) mismatches.push("team differs");
-  const sorted = (ids: string[]) => [...new Set(ids)].sort();
-  if (JSON.stringify(sorted(slot.context.boardIds)) !== JSON.stringify(sorted(current.boardIds))) {
-    mismatches.push("board selection differs");
-  }
-  if (slot.context.repo !== current.repo) {
-    mismatches.push("repository differs");
-  } else if (current.repo !== null) {
-    if (!slot.context.branch || !current.branch) mismatches.push("branch is unavailable");
-    else if (slot.context.branch !== current.branch) mismatches.push("branch differs");
-  }
-  return mismatches;
-}
-
-export function canvasMatchingSlots(
-  slots: PublishTargets["slots"],
-  current: Parameters<typeof canvasSlotMismatches>[1],
-): PublishTargets["slots"] {
-  return slots.filter((slot) => canvasSlotMismatches(slot, current).length === 0);
-}
-
-export function canvasLatestMatchingSlot(
-  slots: PublishTargets["slots"],
-  current: Parameters<typeof canvasSlotMismatches>[1],
-): PublishTargets["slots"][number] | null {
-  return (
-    canvasMatchingSlots(slots, current).sort(
-      (left, right) =>
-        canvasPublishedAt(right.lastPublishedAt) - canvasPublishedAt(left.lastPublishedAt),
-    )[0] ?? null
-  );
-}
-
-const canvasPublishedAt = (value: string | null): number => {
-  const parsed = value ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
-};
-
-/** What the published link now asks of a visitor, said plainly. */
-function describeAccess(result: PublishResult): string {
-  if (result.visibility === "private") {
-    return result.passwordProtected
-      ? "Your organization, or anyone with the password."
-      : "Anyone signed in at your organization.";
-  }
-  return result.passwordProtected
-    ? "Anyone with the link and the password."
-    : "Anyone with the link.";
-}
-
-function Warnings({ messages }: { messages: string[] }) {
-  if (messages.length === 0) return null;
-  return (
-    <ul className="flex flex-col gap-1 rounded-md border bg-muted/40 p-2 text-[11px] text-muted-foreground">
-      {messages.map((message) => (
-        <li key={message}>{message}</li>
-      ))}
-    </ul>
-  );
-}
-
-/**
- * What a re-publish did to previous versions. The share URL is stable, so a
- * free-plan publish silently replaces what viewers see — worth saying out loud.
- */
-function HistoryNote({
-  history,
-  upgradeUrl,
-}: {
-  history?: { retained: boolean; versions: number; pruned: number } | undefined;
-  upgradeUrl: string;
-}) {
-  if (!history) return null;
-  if (!history.retained && history.pruned > 0) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Replaced the previous version — the free plan keeps only the latest.{" "}
-        <a
-          href={upgradeUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="underline underline-offset-4"
-        >
-          Upgrade to keep history
-        </a>
-        .
-      </p>
-    );
-  }
-  if (history.retained && history.versions > 1) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {history.versions} versions kept — earlier publishes stay pinnable.
-      </p>
-    );
-  }
-  return null;
 }

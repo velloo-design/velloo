@@ -1,5 +1,5 @@
 import type { StateCreator } from "zustand";
-import { notes as notesApi } from "../api.ts";
+import { fetchAnnotations, fetchNotes, notes as notesApi } from "../api.ts";
 import { toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
 import type { AnnotationEntry, CanvasNoteEntry, NoteAttachment } from "./types.ts";
@@ -65,7 +65,6 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
       return;
     }
     try {
-      const { fetchAnnotations } = await import("../api.ts");
       const lists = await Promise.all(screenIds.map((id) => fetchAnnotations(id)));
       set({ annotations: lists.flat() });
       clearVanishedEdit(get);
@@ -78,7 +77,6 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
     const boardId = get().currentBoardId;
     if (!boardId) return;
     try {
-      const { fetchNotes } = await import("../api.ts");
       const notes = await fetchNotes(boardId);
       set({ notes });
       clearVanishedEdit(get);

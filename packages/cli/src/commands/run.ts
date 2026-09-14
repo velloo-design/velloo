@@ -4,6 +4,7 @@ import pc from "picocolors";
 import { daemonRoot, ensureDaemon, isLive, stopDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION } from "../folder.ts";
+import { assertRemoteHostAllowed } from "../host-security.ts";
 import { openUrl } from "../open-url.ts";
 import { createProgress } from "../progress.ts";
 import { shouldStayForeground, waitInForeground } from "../run-foreground.ts";
@@ -46,6 +47,11 @@ export default defineCommand({
       type: "string",
       description: "Bind hostname (default 127.0.0.1)",
     },
+    unsafeAllowRemote: {
+      type: "boolean",
+      default: false,
+      description: "Allow --host outside loopback (unsafe: canvas and MCP have no network auth)",
+    },
     open: {
       type: "boolean",
       default: false,
@@ -59,6 +65,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    assertRemoteHostAllowed(args.host ?? "127.0.0.1", Boolean(args.unsafeAllowRemote));
     const targets = await resolveRunTargets(args.folder, {});
     const preferredPort = args.port ? Number(args.port) : undefined;
     if (preferredPort !== undefined && (!Number.isFinite(preferredPort) || preferredPort < 0)) {
@@ -83,6 +90,7 @@ export default defineCommand({
           // their own ports rather than fighting over one number.
           ...(preferredPort !== undefined && index === 0 ? { preferredPort } : {}),
           host: args.host,
+          unsafeAllowRemote: Boolean(args.unsafeAllowRemote),
           onSpawn: () => {
             spawned++;
             progress.step(`waiting for ${label(target)}`);

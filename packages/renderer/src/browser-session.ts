@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync } from "node:fs";
 import type { Browser, Page } from "playwright-core";
+import { CHROMIUM_FULL_INSTALL_CMD } from "./browser-install.ts";
 import { capturePage, TOOLBAR_TAG } from "./capture-page.ts";
 import type { StorageState } from "./capture-session-state.ts";
 import type { CaptureManifest } from "./capture-store.ts";
 import { capturesDir, readSessionState, writeSessionState } from "./capture-store.ts";
-import { CHROMIUM_FULL_INSTALL_CMD } from "./screenshot.ts";
 
 /**
  * Thrown when no browser can be shown to the user. Distinct from
@@ -32,7 +32,7 @@ export class HeadedBrowserMissingError extends Error {
  * do we fall back to Playwright's own full build, and if that isn't installed
  * either the error says exactly which of the two to get.
  *
- * The pooled browser in `screenshot.ts` is deliberately not reused: it's a
+ * The pooled browser in `browser-pool.ts` is deliberately not reused: it's a
  * long-lived headless singleton shared by every render, and a session that a
  * human keeps open for minutes has nothing in common with that lifecycle.
  */
@@ -351,7 +351,7 @@ export async function startCaptureSession(
 
   const context = await browser.newContext({
     viewport: null,
-    ...(prior ? { storageState: prior as unknown as StorageState } : {}),
+    ...(prior ? { storageState: prior } : {}),
   });
 
   const made: CaptureManifest[] = [];
@@ -489,7 +489,7 @@ export async function startCaptureSession(
     // Persist BEFORE tearing down — storageState() needs a live context.
     if (opts.sessionStatePath) {
       try {
-        const state = (await context.storageState()) as unknown as StorageState;
+        const state: StorageState = await context.storageState();
         writeSessionState(opts.sessionStatePath, state, Array.from(capturedOrigins));
       } catch {
         // No session persisted is a degraded outcome, not a failed session.

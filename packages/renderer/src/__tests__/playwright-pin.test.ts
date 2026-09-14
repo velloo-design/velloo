@@ -6,7 +6,7 @@ import {
   CHROMIUM_FULL_INSTALL_ARGV,
   CHROMIUM_INSTALL_ARGV,
   PLAYWRIGHT_VERSION,
-} from "../screenshot.ts";
+} from "../browser-install.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 

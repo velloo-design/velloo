@@ -1,21 +1,18 @@
 #!/usr/bin/env bun
 /**
- * Build the velloo bundle and publish it to an environment's download host, so
- * testers update with a single command. Run:
+ * Mirror a built release into an environment's download bucket, under the
+ * `downloads/` prefix the download host serves:
  *
- *   bun run cli:release        # prod → get.velloo.design     (bakes api.velloo.ai)
- *   bun run cli:release:dev    # dev  → get.dev.velloo.design (bakes api.dev.velloo.ai)
+ *   bun scripts/publish-cli.ts prod   # → get.velloo.design
+ *   bun scripts/publish-cli.ts dev    # → get.dev.velloo.design
  *
- * The download host serves the env's bucket under the `downloads/` prefix;
- * uploads go through its S3 API. CI is the normal caller (release.yml for tags,
- * dogfood.yml on demand) and passes BLOB_ENDPOINT / BLOB_BUCKET /
- * BLOB_ACCESS_KEY / BLOB_SECRET_KEY from the GitHub environment. A maintainer
- * publishing from their own machine puts the same four in a gitignored
- * `.env.release.<env>` at the repo root instead.
- *
- * Env overrides: VELLOO_BUILD_CLOUD_URL (baked cloud default).
+ * GitHub releases are where the artifacts live; this runs only while the
+ * download host still serves them from its own bucket, and only in CI
+ * (release.yml, dogfood.yml) after `build-release-artifacts.ts`, with
+ * BLOB_ENDPOINT / BLOB_BUCKET / BLOB_ACCESS_KEY / BLOB_SECRET_KEY from the
+ * GitHub environment.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,105 +20,31 @@ const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const version = JSON.parse(readFileSync(join(repoRoot, "packages", "cli", "package.json"), "utf8"))
   .version as string;
 
-const ENVS = {
-  prod: { cloudUrl: "https://api.velloo.ai", getHost: "get.velloo.design" },
-  dev: { cloudUrl: "https://api.dev.velloo.ai", getHost: "get.dev.velloo.design" },
-} as const;
-type EnvName = keyof typeof ENVS;
+const HOSTS = { prod: "get.velloo.design", dev: "get.dev.velloo.design" } as const;
 
-const envArg = process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? "prod";
-const noBuild = process.argv.includes("--no-build");
-if (!(envArg in ENVS)) {
-  console.error(`✗ unknown environment "${envArg}" — expected ${Object.keys(ENVS).join(" | ")}`);
+const envArg = process.argv[2] ?? "";
+if (!(envArg in HOSTS)) {
+  console.error(`✗ unknown environment "${envArg}" — expected ${Object.keys(HOSTS).join(" | ")}`);
   process.exit(1);
 }
-const envName = envArg as EnvName;
-const target = ENVS[envName];
-const cloudUrl = process.env.VELLOO_BUILD_CLOUD_URL ?? target.cloudUrl;
-
-/** Minimal KEY=VALUE parser for `.env.release.<env>`. */
-function parseEnvFile(path: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq <= 0) continue;
-    out[trimmed.slice(0, eq)] = trimmed
-      .slice(eq + 1)
-      .trim()
-      .replace(/^(["'])(.*)\1$/, "$2");
-  }
-  return out;
-}
+const host = HOSTS[envArg as keyof typeof HOSTS];
 
 const BLOB_KEYS = ["BLOB_ENDPOINT", "BLOB_BUCKET", "BLOB_ACCESS_KEY", "BLOB_SECRET_KEY"] as const;
-
-function blobConfig(): Record<(typeof BLOB_KEYS)[number], string> {
-  const fromProcess = BLOB_KEYS.every((k) => process.env[k]);
-  let source: Record<string, string | undefined>;
-  let where: string;
-  if (fromProcess) {
-    source = process.env;
-    where = "process env";
-  } else {
-    const envFile = join(repoRoot, `.env.release.${envName}`);
-    if (!existsSync(envFile)) {
-      console.error(
-        `✗ no upload credentials — set ${BLOB_KEYS.join(" / ")} in the env, or put them in ${envFile}.\n` +
-          `  Maintainers without them can publish through CI: gh workflow run dogfood.yml -f environment=${envName}`,
-      );
-      process.exit(1);
-    }
-    source = parseEnvFile(envFile);
-    where = envFile;
-  }
-  const missing = BLOB_KEYS.filter((k) => !source[k]);
-  if (missing.length > 0) {
-    console.error(`✗ missing ${missing.join(", ")} in ${where}`);
-    process.exit(1);
-  }
-  return Object.fromEntries(BLOB_KEYS.map((k) => [k, source[k] as string])) as Record<
-    (typeof BLOB_KEYS)[number],
-    string
-  >;
+const missing = BLOB_KEYS.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  console.error(
+    `✗ missing ${missing.join(", ")} — this mirror runs in CI with the environment's secrets.`,
+  );
+  process.exit(1);
 }
+const env = (key: (typeof BLOB_KEYS)[number]) => process.env[key] as string;
 
-const blob = blobConfig();
-
-function run(cmd: string[], env?: Record<string, string>): void {
-  const proc = Bun.spawnSync(cmd, {
-    cwd: repoRoot,
-    stdout: "inherit",
-    stderr: "inherit",
-    env: env ? { ...process.env, ...env } : process.env,
-  });
-  if (!proc.success) {
-    console.error(`\n✗ \`${cmd.join(" ")}\` failed (exit ${proc.exitCode}).`);
-    process.exit(proc.exitCode ?? 1);
-  }
-}
-
-// 1. Build the npm package, direct archives, checksums, and the version-baked
-//    installer from one source version.
-if (!noBuild) {
-  run(["bun", join(repoRoot, "scripts", "build-release-artifacts.ts")], {
-    VELLOO_BUILD_CLOUD_URL: cloudUrl,
-    // The channel is what the shipped binaries poll for updates, so it has to
-    // match the host they are being uploaded to.
-    VELLOO_BUILD_CHANNEL: envName === "prod" ? "stable" : envName,
-    VELLOO_DOWNLOAD_BASE: `https://${target.getHost}`,
-  });
-}
-
-// 2. Upload the tarball (stable + versioned) and the installer to the env's
-//    bucket under downloads/ — the app serves them on GET_HOST, deriving
-//    content-type from the filename, so plain puts suffice.
+// The download host derives content-type from the filename, so plain puts suffice.
 const s3 = new Bun.S3Client({
-  endpoint: blob.BLOB_ENDPOINT,
-  bucket: blob.BLOB_BUCKET,
-  accessKeyId: blob.BLOB_ACCESS_KEY,
-  secretAccessKey: blob.BLOB_SECRET_KEY,
+  endpoint: env("BLOB_ENDPOINT"),
+  bucket: env("BLOB_BUCKET"),
+  accessKeyId: env("BLOB_ACCESS_KEY"),
+  secretAccessKey: env("BLOB_SECRET_KEY"),
 });
 
 const artifactDir = join(repoRoot, "release-artifacts");
@@ -137,12 +60,14 @@ const files = readdirSync(artifactDir).filter(
       name.endsWith(".sha256")),
 );
 
-console.log(`\x1b[36m▸\x1b[0m uploading to ${blob.BLOB_BUCKET}/downloads/ (${target.getHost})…`);
+console.log(
+  `\x1b[36m▸\x1b[0m mirroring velloo ${version} to ${env("BLOB_BUCKET")}/downloads/ (${host})…`,
+);
 for (const name of files) {
   if (name === "install.sh") {
     const installer = readFileSync(join(artifactDir, name), "utf8").replaceAll(
       "get.velloo.design",
-      target.getHost,
+      host,
     );
     await s3.write(`downloads/${name}`, installer);
   } else {
@@ -150,15 +75,4 @@ for (const name of files) {
   }
 }
 await s3.write("downloads/velloo.tgz", Bun.file(join(artifactDir, `velloo-${version}.tgz`)));
-
-console.log(
-  [
-    "",
-    `\x1b[32m✓ published velloo ${version}\x1b[0m → ${envName} (${blob.BLOB_BUCKET}/downloads/)`,
-    `  cloud default baked to \x1b[36m${cloudUrl}\x1b[0m`,
-    "",
-    "  Dogfooders update with:",
-    `    \x1b[36mcurl -fsSL https://${target.getHost}/install.sh | bash\x1b[0m`,
-    "",
-  ].join("\n"),
-);
+console.log(`\x1b[32m✓ mirrored velloo ${version}\x1b[0m → ${host}`);

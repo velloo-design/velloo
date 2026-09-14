@@ -4,7 +4,7 @@ import {
   canvasLatestMatchingSlot,
   canvasMatchingSlots,
   canvasSlotMismatches,
-} from "../PublishDialog.tsx";
+} from "../Publish/slot-matching.ts";
 
 const localSlot: PublishTargets["slots"][number] = {
   slug: "local-review",

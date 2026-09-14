@@ -9,7 +9,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { fetchUpdateStatus, runUpgrade, type UpdateStatus } from "./api.ts";
-import { pushToast, toastError } from "./toast.ts";
+import { dismissToast, pushToast, toastError } from "./toast.ts";
 
 /** The daemon answers from a cache it refreshes in the background — poll gently. */
 const POLL_MS = 15 * 60 * 1000;
@@ -139,11 +139,6 @@ export async function upgradeVelloo(): Promise<void> {
     dismissToast(pending);
     set({ upgrading: false });
   }
-}
-
-/** Sonner ids are opaque strings here; dismissal lives with the toast module. */
-function dismissToast(id: string): void {
-  if (id) void import("sonner").then(({ toast }) => toast.dismiss(id));
 }
 
 /** Test seam: reset the module between suites. */

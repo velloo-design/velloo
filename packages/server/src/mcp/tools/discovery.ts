@@ -515,7 +515,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       // Split unknown ids off FIRST, whatever the provider can do. An id that
       // isn't in the library at all otherwise reads identically to a real
       // component the canvas can't mount — so a model asking about a component
-      // the app calls by its own name (sample app's Panel / StatusChip) would be
+      // the app calls by its own name (for example Panel / StatusChip) would be
       // told the canvas is broken rather than that the id is wrong.
       const manifest = await provider.loadManifest().catch(() => []);
       const known = new Set(manifest.map((entry) => entry.id));

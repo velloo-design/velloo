@@ -14,6 +14,7 @@ import {
   stopDaemon,
 } from "../daemon/runtime.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
+import { assertRemoteHostAllowed } from "../host-security.ts";
 import { traceEnabled } from "../trace/env.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
 
@@ -83,12 +84,18 @@ export default defineCommand({
       type: "string",
       description: "Bind hostname (default 127.0.0.1)",
     },
+    unsafeAllowRemote: {
+      type: "boolean",
+      default: false,
+      description: "Allow --host outside loopback (unsafe: canvas and MCP have no network auth)",
+    },
     surface: {
       type: "string",
       description: `Tool surface: ${MCP_SURFACE_MODES.join(", ")} (default guided; env VELLOO_MCP_SURFACE)`,
     },
   },
   async run({ args }) {
+    assertRemoteHostAllowed(args.host ?? "127.0.0.1", Boolean(args.unsafeAllowRemote));
     const folder = await resolveDesignFolder(args.folder, "mcp");
     const preferredPort = args.port ? Number(args.port) : undefined;
     const parsedSurface = parseMcpSurfaceSelection(args.surface ?? process.env.VELLOO_MCP_SURFACE);
@@ -104,6 +111,7 @@ export default defineCommand({
       rec = await ensureDaemon(folder, {
         preferredPort,
         host: args.host,
+        unsafeAllowRemote: Boolean(args.unsafeAllowRemote),
         onSpawn: () => {
           spawned = true;
         },
@@ -149,7 +157,11 @@ export default defineCommand({
       // flow (lockfile → health check → spawn if dead) to find or revive it.
       rediscover: async () => {
         try {
-          const fresh = await ensureDaemon(folder, { preferredPort, host: args.host });
+          const fresh = await ensureDaemon(folder, {
+            preferredPort,
+            host: args.host,
+            unsafeAllowRemote: Boolean(args.unsafeAllowRemote),
+          });
           return withMcpSurfaceUrl(fresh.mcpUrl, surface);
         } catch {
           return null;

@@ -1,44 +1,56 @@
-# Release: publish Velloo, direct archives, and checksums.
+# Release: cut vX.Y.Z from main — npm, a GitHub release carrying the
+# curl-install archives, and a heads-up to the downstream repositories.
+# See RELEASING.md.
 #
-# Trigger: push a tag `vX.Y.Z` whose version matches
-# packages/cli/package.json (see RELEASING.md for the full process).
+# Trigger: `gh workflow run release.yml -f bump=minor`, or Actions → Release.
+# The version is the latest v* tag plus the chosen bump
+# (scripts/release-version.ts); package.json in the repo is never bumped.
 #
-# Required secrets, on the `prod` GitHub environment (dogfood.yml shares it):
-#   NPM_TOKEN — a granular npm access token with read/write on `velloo` and
-#   bypass 2FA enabled. Prefer npm trusted publishing after the first release.
-#   BLOB_ENDPOINT, BLOB_BUCKET, BLOB_ACCESS_KEY, BLOB_SECRET_KEY — the download
-#   bucket served by get.velloo.design.
-#
-# `npm publish --provenance` additionally needs the `id-token: write`
-# permission below (OIDC attestation) and the `repository` field in the
-# published package.json to match this repo — build.ts writes
-# github.com/velloo-design/velloo.
+# Nothing long-lived can publish: npm trusted publishing trades this job's OIDC
+# token for a one-time token (the package trusts velloo-design/velloo,
+# release.yml, environment `prod`), and the release is created with the job's
+# own GITHUB_TOKEN. The `prod` environment holds the job until a maintainer
+# approves it.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Bump from the latest release (pre-1.0, breaking changes bump the minor)
+        type: choice
+        options: [patch, minor, major]
+        required: true
 
-permissions:
-  contents: write # create the GitHub release
-  id-token: write # npm --provenance attestation
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: prod
+    permissions:
+      contents: write # the tag and the GitHub release
+      id-token: write # npm trusted publishing + provenance, artifact attestation
+      attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # the version and the notes come from tags and history
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
 
-      # npm (for `npm publish`) + the registry .npmrc that reads NODE_AUTH_TOKEN.
-      - uses: actions/setup-node@v4
+      # Node 24 ships the npm (11.5.1+) that trusted publishing needs.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
@@ -48,20 +60,29 @@ jobs:
         run: |
           bun run typecheck
           bun run lint
-          bun test --parallel
+          bun run lint:dead
+          bun run mcp:budget
+          bun run test
 
-      - name: Tag matches package version
-        run: |
-          version="$(bun -e 'console.log(require("./packages/cli/package.json").version)')"
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "tag ${GITHUB_REF_NAME} does not match packages/cli version v${version}" >&2
-            exit 1
-          fi
+      - name: Version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: bun scripts/release-version.ts --bump "$BUMP" --write
+
+      - name: Release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bun scripts/release-notes.ts --version "$VERSION" > release-notes.md
 
       - name: Build npm and direct-install artifacts
-        run: bun scripts/build-release-artifacts.ts
         env:
+          VERSION: ${{ steps.version.outputs.version }}
+          VELLOO_BUILD_CHANNEL: stable
           VELLOO_BUILD_CLOUD_URL: https://api.velloo.ai
+        run: |
+          bun scripts/build-release-artifacts.ts
+          cp "release-artifacts/velloo-${VERSION}.tgz" release-artifacts/velloo.tgz
 
       - name: Smoke-test npm global install without scripts or Bun on PATH
         run: bun scripts/package-smoke-test.ts
@@ -69,31 +90,82 @@ jobs:
       - name: Smoke-test curl install and checksum rejection
         run: bun scripts/direct-install-smoke-test.ts
 
-      # Put immutable direct artifacts in place before advancing npm `latest`;
-      # a direct upgrader that sees the new npm version can then fetch it.
-      - name: Publish curl installer and immutable artifacts
-        run: bun scripts/publish-cli.ts prod --no-build
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            release-artifacts/*.tgz
+            release-artifacts/*.tar.gz
+            release-artifacts/install.sh
+
+      - name: Mirror check
+        id: mirror
+        run: echo "enabled=${{ secrets.BLOB_BUCKET != '' }}" >> "$GITHUB_OUTPUT"
+
+      # Before npm, so a direct upgrader that sees the new version can fetch it.
+      - name: Mirror to the download bucket
+        if: steps.mirror.outputs.enabled == 'true'
+        run: bun scripts/publish-cli.ts prod
         env:
           BLOB_ENDPOINT: ${{ secrets.BLOB_ENDPOINT }}
           BLOB_BUCKET: ${{ secrets.BLOB_BUCKET }}
           BLOB_ACCESS_KEY: ${{ secrets.BLOB_ACCESS_KEY }}
           BLOB_SECRET_KEY: ${{ secrets.BLOB_SECRET_KEY }}
 
-      - name: Publish Velloo to npm
-        run: npm publish --provenance --access public
+      - name: Publish to npm
         working-directory: packages/cli/dist
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if npm view "velloo@${VERSION}" version >/dev/null 2>&1; then
+            echo "velloo@${VERSION} is already on npm"
+          else
+            npm publish --provenance --access public
+          fi
 
       - name: Create the GitHub release
-        run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            release-artifacts/*.tgz \
-            release-artifacts/*.tar.gz \
-            release-artifacts/*.sha256 \
-            release-artifacts/SHA256SUMS \
-            release-artifacts/install.sh \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          mapfile -t assets < <(find release-artifacts -maxdepth 1 -type f ! -name '.*' ! -name 'direct-*' | sort)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
+              --notes-file release-notes.md "${assets[@]}"
+          fi
+
+      - name: Downstream check
+        id: downstream
+        run: echo "enabled=${{ vars.DOWNSTREAM_REPOS != '' && vars.RELEASE_APP_CLIENT_ID != '' }}" >> "$GITHUB_OUTPUT"
+
+      # A GitHub App installed on just the downstream repositories: the token
+      # it mints lives for this job and can do nothing but dispatch there.
+      - name: Token for the downstream repositories
+        id: app
+        if: steps.downstream.outputs.enabled == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ vars.DOWNSTREAM_REPOS }}
+          permission-contents: write
+
+      # The release is out by now; a downstream hiccup shouldn't mark it failed.
+      - name: Notify downstream repositories
+        if: steps.downstream.outputs.enabled == 'true' && steps.app.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REPOS: ${{ vars.DOWNSTREAM_REPOS }}
+        run: |
+          for repo in ${REPOS//,/ }; do
+            gh api "repos/${GITHUB_REPOSITORY_OWNER}/${repo}/dispatches" \
+              -f event_type=velloo-release \
+              -f "client_payload[version]=${VERSION}" \
+              -f "client_payload[tag]=v${VERSION}"
+          done

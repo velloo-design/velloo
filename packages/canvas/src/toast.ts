@@ -37,6 +37,11 @@ export function pushToast(input: {
   return String(id);
 }
 
+/** Take down a toast by the id `pushToast` returned. An empty id is a no-op. */
+export function dismissToast(id: string): void {
+  if (id) sonner.dismiss(id);
+}
+
 /**
  * Report a failed action.
  *

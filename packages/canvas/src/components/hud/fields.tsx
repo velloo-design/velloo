@@ -16,7 +16,8 @@ import type { Choice } from "../../hud/control-set.ts";
 import type { WriteContext } from "../../hud/use-control-write.ts";
 import type { Origin } from "../../hud/values.ts";
 import { ColorWheel, HexInput, type Hsv, hexToHsv, hsvToHex } from "../color-picker.tsx";
-import { IconGrid, LUCIDE } from "../IconPicker.tsx";
+import { IconGrid } from "../IconPicker.tsx";
+import { resolveGlyph, useLucideGlyphs } from "../lucide-glyphs.ts";
 import { Empty, EmptyDescription } from "../ui/empty.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select.tsx";
@@ -540,7 +541,8 @@ export function IconField({
   onChange(next: string): void;
 }) {
   const [open, setOpen] = useState(false);
-  const Glyph = value ? LUCIDE[value] : undefined;
+  const glyphs = useLucideGlyphs();
+  const Glyph = resolveGlyph(glyphs, value);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger

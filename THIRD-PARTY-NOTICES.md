@@ -25,6 +25,7 @@ The most directly redistributed surfaces are:
 
 | Component | License | Copyright | Source |
 |---|---|---|---|
+| Poppins Bold (`packages/canvas/public/fonts/poppins-700.woff2`) | SIL Open Font License 1.1 (full text alongside the font) | © 2020 The Poppins Project Authors | https://github.com/itfoundry/Poppins |
 | Bun 1.4.2 runtime and embedded libraries | MIT; LGPL-2.0 and additional terms detailed in `BUN-LICENSE.md` | Bun and upstream library contributors | https://github.com/oven-sh/bun/tree/bun-v1.4.2 |
 | shadcn/ui | MIT | © 2023 shadcn | https://github.com/shadcn-ui/ui |
 | Radix UI (`@radix-ui/*`) | MIT | © 2022 WorkOS | https://github.com/radix-ui/primitives |
@@ -59,12 +60,15 @@ The most directly redistributed surfaces are:
 
 ## License texts
 
-Except for Bun's separately documented linked libraries, the components above
-are distributed under the MIT, ISC, BSD-3-Clause, or Apache-2.0 license. The
-full texts follow; the copyright line of each applies as listed in the table.
-The complete Bun 1.4.2 upstream notice and relinking information is provided in
-`BUN-LICENSE.md`. (The Apache-2.0 text also ships as this package's own LICENSE
-file.)
+Poppins is distributed under the SIL Open Font License 1.1; its copyright
+notice and full license text ship beside the font as
+`packages/canvas/public/fonts/OFL-1.1.txt` and are copied into release
+artifacts with the canvas. Except for Poppins and Bun's separately documented
+linked libraries, the components above are distributed under the MIT, ISC,
+BSD-3-Clause, or Apache-2.0 license. The full texts follow; the copyright line
+of each applies as listed in the table. The complete Bun 1.4.2 upstream notice
+and relinking information is provided in `BUN-LICENSE.md`. (The Apache-2.0
+text also ships as this package's own LICENSE file.)
 
 ### MIT License
 

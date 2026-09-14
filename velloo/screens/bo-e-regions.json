@@ -438,7 +438,7 @@
             "$ref": "Box",
             "props": {
               "className": "shrink-0 border-t border-zinc-200 px-4 py-2 text-[11px] text-zinc-400",
-              "children": "shadcn snapshot 2026.05.22"
+              "children": "shadcn snapshot 2026.09.03"
             }
           }
         ]

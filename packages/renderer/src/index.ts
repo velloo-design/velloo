@@ -6,6 +6,17 @@ export {
   buildBoardComposite,
 } from "./board-composite.ts";
 export {
+  BrowserMissingError,
+  CHROMIUM_DEPS_INSTALL_ARGV,
+  CHROMIUM_DEPS_INSTALL_CMD,
+  CHROMIUM_FULL_INSTALL_ARGV,
+  CHROMIUM_FULL_INSTALL_CMD,
+  CHROMIUM_INSTALL_ARGV,
+  CHROMIUM_INSTALL_CMD,
+  chromiumExecutable,
+} from "./browser-install.ts";
+export { closePooledBrowser, isCaptureTimeout, MAX_CONCURRENT_RENDERS } from "./browser-pool.ts";
+export {
   type CaptureSessionHandle,
   type CaptureSessionOptions,
   featuresMeanPopup,
@@ -65,6 +76,7 @@ export {
   writeCaptureManifest,
   writeSessionState,
 } from "./capture-store.ts";
+export { type ScreenshotCompareOptions, screenshotCompareBuffer } from "./compare-capture.ts";
 export { buildDocument, type DocumentOptions } from "./document.ts";
 export {
   CHILD_MESSAGE_TYPES,
@@ -76,6 +88,7 @@ export {
   PROTOCOL_VERSION,
 } from "./iframe-protocol.ts";
 export { LIVE_RUNTIME } from "./live-runtime.ts";
+export { type PdfPageOptions, pdfDeckBuffer, pdfPageBuffer } from "./pdf-capture.ts";
 export {
   type GuardedRender,
   type RenderFailure,
@@ -90,34 +103,13 @@ export {
   renderScreen,
 } from "./render-to-html.ts";
 export {
-  BrowserMissingError,
   type CaptureNodeRect,
   type CaptureResult,
-  CHROMIUM_DEPS_INSTALL_ARGV,
-  CHROMIUM_DEPS_INSTALL_CMD,
-  CHROMIUM_FULL_INSTALL_ARGV,
-  CHROMIUM_FULL_INSTALL_CMD,
-  CHROMIUM_INSTALL_ARGV,
-  CHROMIUM_INSTALL_CMD,
   captureScreenshot,
-  captureUrlScreenshot,
-  chromiumExecutable,
-  classifyCapture,
-  closePooledBrowser,
-  isCaptureTimeout,
-  MAX_CONCURRENT_RENDERS,
   measureRendered,
-  type PdfPageOptions,
-  pdfDeckBuffer,
-  pdfPageBuffer,
-  type ScreenshotCompareOptions,
   type ScreenshotOptions,
   screenshot,
   screenshotBuffer,
-  screenshotCompareBuffer,
-  type UrlCaptureResult,
-  type UrlCookie,
-  type UrlScreenshotOptions,
 } from "./screenshot.ts";
 export {
   cropPng,
@@ -137,3 +129,10 @@ export {
   serializeTree,
 } from "./serialize-tree.ts";
 export { themeToCss } from "./theme-to-css.ts";
+export {
+  captureUrlScreenshot,
+  classifyCapture,
+  type UrlCaptureResult,
+  type UrlCookie,
+  type UrlScreenshotOptions,
+} from "./url-capture.ts";

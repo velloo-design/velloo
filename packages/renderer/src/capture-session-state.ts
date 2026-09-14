@@ -1,4 +1,4 @@
-import type { UrlCookie } from "./screenshot.ts";
+import type { UrlCookie } from "./url-capture.ts";
 
 /**
  * A Playwright storage-state document, trimmed to the parts we persist.

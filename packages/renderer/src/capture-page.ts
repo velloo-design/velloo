@@ -131,7 +131,7 @@ const STYLE_PROPS = [
   "boxShadow",
   "opacity",
   "zIndex",
-] as const;
+] as const satisfies readonly (keyof CSSStyleDeclaration)[];
 
 /**
  * Walk the rendered page into a flat, bounded node list with computed styles.
@@ -157,7 +157,7 @@ export async function extractDom(
 ): Promise<DomExtract> {
   return page.evaluate(
     ({ props, maxNodes, maxDepth, maxText, toolbar }) => {
-      const nodes: Array<Record<string, unknown>> = [];
+      const nodes: DomNode[] = [];
       let truncated = false;
 
       const ownText = (el: Element): string => {
@@ -195,12 +195,12 @@ export async function extractDom(
 
         const style: Record<string, string> = {};
         for (const p of props) {
-          const v = cs[p as unknown as number] ?? (cs as unknown as Record<string, string>)[p];
+          const v: unknown = cs[p];
           if (typeof v === "string" && v !== "" && v !== "none" && v !== "normal") style[p] = v;
         }
 
         const i = nodes.length;
-        const entry: Record<string, unknown> = {
+        const entry: DomNode = {
           i,
           parent,
           depth,
@@ -261,10 +261,10 @@ export async function extractDom(
         ),
         nodes,
         truncated,
-      } as unknown as DomExtract;
+      };
     },
     {
-      props: STYLE_PROPS as unknown as string[],
+      props: STYLE_PROPS,
       maxNodes: limits.maxNodes,
       maxDepth: limits.maxDepth,
       maxText: limits.maxText,
@@ -323,7 +323,7 @@ async function extractThemeVars(page: Page): Promise<ThemeVars> {
         }
         const nested = (rule as CSSGroupingRule).cssRules;
         if (nested && nested.length > 0) {
-          const cond = (rule as unknown as { conditionText?: string }).conditionText ?? "";
+          const cond = rule instanceof CSSConditionRule ? rule.conditionText : "";
           walkRules(nested, intoDark || /prefers-color-scheme\s*:\s*dark/i.test(cond));
         }
       }

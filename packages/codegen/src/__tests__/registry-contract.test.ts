@@ -5,7 +5,7 @@ import { REGISTRY } from "../component-registry.ts";
 
 /**
  * Every component a shipping provider can render must be emittable.
- * This is the seam the sample app dogfood (2026-06-11) found broken: the
+ * This is the seam a production-like dogfood session found broken: the
  * snapshot grew to ~35 shadcn primitives but codegen's REGISTRY kept
  * the original 12, so screens rendered + audited green and then failed
  * emit_code with UnknownComponent. Renders-green-but-can't-emit is the

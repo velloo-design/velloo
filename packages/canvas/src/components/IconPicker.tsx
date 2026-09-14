@@ -1,5 +1,5 @@
-import * as Lucide from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { resolveGlyph, useLucideGlyphs } from "./lucide-glyphs.ts";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
@@ -9,10 +9,6 @@ interface Props {
   options: string[];
   onChange(name: string): void;
 }
-
-// Unavoidable cast: lucide's namespace has thousands of icon exports (forwardRef
-// exotics, indistinguishable from helper exports at runtime) and no Record-typed index.
-export const LUCIDE = Lucide as unknown as Record<string, React.ComponentType<Lucide.LucideProps>>;
 
 /**
  * Typeahead-over-grid icon picker. The input filters the lucide list
@@ -24,7 +20,8 @@ const MAX_VISIBLE = 80;
 
 export function IconPicker({ value, options, onChange }: Props) {
   const [open, setOpen] = useState(false);
-  const Resolved = value ? LUCIDE[value] : undefined;
+  const glyphs = useLucideGlyphs();
+  const Resolved = resolveGlyph(glyphs, value);
 
   return (
     <div className="flex items-center gap-2">
@@ -67,6 +64,7 @@ export function IconGrid({
 }) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const glyphs = useLucideGlyphs();
 
   useEffect(() => {
     const id = requestAnimationFrame(() => inputRef.current?.focus());
@@ -96,7 +94,7 @@ export function IconGrid({
           </div>
         ) : (
           filtered.map((name) => {
-            const Icon = LUCIDE[name];
+            const Icon = resolveGlyph(glyphs, name);
             if (!Icon) return null;
             const active = name === value;
             return (

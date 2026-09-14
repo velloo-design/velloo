@@ -159,7 +159,7 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
   "libraries": {
     "shadcn": {
       "id": "shadcn-upstream",
-      "version": "2026.05.22",
+      "version": "2026.09.03",
       "source": "binary",
       "componentsPath": "binary"
     },
@@ -317,7 +317,7 @@ How do users customize when the components are baked in?
 
 - **Per-instance className** (`apply_classes`) and **per-instance props** (`update_props`) handle most needs.
 - **Snippets** are the supported "your version of a primitive" layer. A snippet wraps one or more components with typed params; every instance stays in sync.
-- A **shared-components mode** (a future direction, not yet in the format — see below) would be the escape hatch when neither of those is enough.
+- **Host-app extensions** are the escape hatch when neither is enough: the folder declares the component's import path and prop contract, and the canvas bundles that real component as a live island.
 
 ### Editing a snippet body
 
@@ -328,26 +328,6 @@ The renderer ships two snippet routes: `/api/render/snippet/:id` wraps the snipp
 ### Stateful components
 
 Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-mode behavior** declarations: most are placeable with stub providers; a few are documented as not-renderable in canvas. These declarations live in the manifest (embedded alongside the components).
-
-## Future direction: shared-components mode
-
-> **Not implemented.** Nothing below exists in the current format: the v2 `library.source` enum has no `shared:<path>` value (a config claiming one is rejected), and there is no `--experimental-shared` init flag. This section records the design intent.
-
-The design folder consuming provider-embedded components is the supported model. But for users with an existing app, the canvas rendering a vendored copy of `button.tsx` while `apps/web/components/ui` holds the real one invites drift. The envisioned opt-in mode would let the design folder point at the user's app components instead: the canvas would mount components from the user's app folder directly — no edits in the design folder, no copies, one source of truth. (The live-island extension mechanism already exercises a narrow slice of this: bundling a real host component into the canvas.)
-
-The mode would ship gated as experimental because the failure modes are real and not all in Velloo's control. The supported behavior is *good error reporting* — never silent failure — so the user knows exactly what to fix:
-
-| Failure | Diagnostic |
-|---|---|
-| Component imports `'use server'` | "`button.tsx` is a server component; cannot render in the canvas. Move client-only logic into a `*.client.tsx` wrapper, or fall back to embedded mode." |
-| Component requires a runtime provider not stubbed by Velloo | Names the missing provider, links to the contract doc, suggests either stubbing locally or falling back to embedded mode. |
-| Component imports from `@/lib/auth` (or any app-internal path) that fails to resolve | Names the path, shows the import chain, suggests configuring a stub. |
-| User edits a component, Tailwind class no longer compiles | Names the class, the file, the line, and suggests `validate_classes` to verify next time. |
-| Manifest regeneration fails (prop types unparseable) | Names the file, the prop, the parser error; offers to skip the affected component with a manifest stub. |
-
-The contract is the same as default mode (canvas-safe). The cost is operational: every component change in the user's app potentially affects the canvas. The benefit is no drift. Users who reach for this mode are explicitly trading safety for cohesion, and Velloo's job is to make the trade transparent.
-
-Default mode users see no traces of this in their flow — it's a flag, not a tier, and it's not on the user-facing pitch.
 
 ### Framework adapters
 
@@ -379,8 +359,6 @@ What `emit_code` produces (per screen):
 - No automatic import paths or prettier pass — the agent picks the right import path for the user's app (using `config.codegen.componentsAlias` as a hint) and runs the user's existing prettier/eslint as part of writing the file
 
 The board layout (frame positions, sizes, groups) is **not** part of `emit_code` — it's canvas-only data. The agent emits one screen at a time and writes one file at a time, in the user's app structure.
-
-Reference corpus (15–20 hand-curated `(screen.json, ideal page.tsx)` pairs) is retained as a **quality measure on the agent loop**, not a snapshot test on emit output. Test setup: feed the screen via MCP to a real agent, point it at a sample app, score the resulting file against the reference. Not yet built.
 
 Drift detection is cut for `emit_code` — there's no longer a "last emit" file in the user's app to drift from. It survives only as a guard for `emit_theme`, which still writes Tailwind config and globals directly. The `velloo theme:export` CLI uses the same diff path and colorizes output for terminal display.
 

@@ -24,6 +24,7 @@
     "fonts:build": "bun packages/schema/scripts/build-font-catalog.ts",
     "fonts:check": "bun packages/schema/scripts/build-font-catalog.ts --check",
     "mcp:budget": "bun packages/server/scripts/mcp-token-budget.ts --check",
+    "verify": "bun run typecheck && bun run lint && bun run lint:dead && bun run mcp:budget && bun run test",
     "velloo": "bun packages/cli/src/cli.ts",
     "cli:build": "bun packages/cli/build.ts",
     "direct:build": "bun scripts/build-direct-artifact.ts",
@@ -34,8 +35,8 @@
     "cli:watch": "bun scripts/cli-watch.ts",
     "cli:dev": "VELLOO_BUILD_CLOUD_URL=https://api.dev.velloo.ai bun scripts/cli-install.ts",
     "cli:prod": "VELLOO_BUILD_CLOUD_URL=https://api.velloo.ai bun scripts/cli-install.ts",
-    "cli:release": "bun scripts/publish-cli.ts",
-    "cli:release:dev": "bun scripts/publish-cli.ts dev"
+    "release:version": "bun scripts/release-version.ts",
+    "release:notes": "bun scripts/release-notes.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { classifyCapture } from "../screenshot.ts";
+import { classifyCapture } from "../url-capture.ts";
 
 describe("classifyCapture", () => {
   test("same page (trailing slash / query / hash ignored) is not a redirect", () => {

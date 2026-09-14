@@ -78,7 +78,7 @@ export interface BatchResult {
  * entry with `as never`, so it accepted literally any object and handed it
  * straight to an impl. The same mutations were schema-validated over HTTP and
  * by their own MCP tools — batch alone skipped it, and the resulting crashes
- * (a missing `propPatch` reaching `Object.entries`, sample app dogfood 2026-06-11)
+ * (a missing `propPatch` reaching `Object.entries`, found during dogfooding)
  * were patched one hand-written guard at a time. Each entry now carries the
  * shared schema from `@velloo/protocol` instead.
  */

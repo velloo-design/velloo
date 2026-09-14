@@ -139,7 +139,7 @@ function jsonForScript(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

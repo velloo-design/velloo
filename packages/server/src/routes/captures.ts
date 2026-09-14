@@ -79,7 +79,7 @@ export function createCapturesRouter(folder: () => DesignFolder): Hono {
     const { root, folderId } = rootOf();
     try {
       const body = readFileSync(join(captureDir(root, id, folderId), ...parts));
-      return c.body(body as unknown as ArrayBuffer, 200, {
+      return c.body(new Uint8Array(body), 200, {
         "Content-Type": contentType(parts[parts.length - 1] ?? ""),
         "Cache-Control": "no-store",
       });

@@ -376,7 +376,7 @@ const RADIX_NAMESPACES = [
  * Without this, every fallback-rendered component fails to compile from the
  * installed binary (which has no node_modules of its own to walk up into) and the
  * client mount silently never engages on an ordinary app. None of the eval
- * fixtures — sample restaurant app, sample app, shadcn-admin — carry `radix-ui`.
+ * real-world fixtures carry `radix-ui`.
  *
  * The unified package is itself only a re-export barrel, so synthesize that shape
  * from whichever scoped packages the host actually has.

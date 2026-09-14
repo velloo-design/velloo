@@ -211,7 +211,10 @@ const TRACKING_CHOICES: readonly Choice[] = [
 ];
 
 /** A theme colour slot is either a bare CSS colour or a DEFAULT/foreground pair. */
-type ColorSlot = string | { DEFAULT?: string; foreground?: string } | undefined;
+type ColorSlot =
+  | string
+  | { DEFAULT?: string | undefined; foreground?: string | undefined }
+  | undefined;
 
 /**
  * The CSS colour a style token actually paints, read from the *design* theme.
@@ -233,7 +236,7 @@ export function resolveColorToken(
   if (!theme) return null;
   // `primary/10` is the token at an opacity; the opacity isn't part of the name.
   const bare = token.split("/")[0] ?? token;
-  const colors = theme.colors as unknown as Record<string, ColorSlot>;
+  const colors: Readonly<Record<string, ColorSlot>> = theme.colors;
 
   const direct = colors[bare];
   if (typeof direct === "string") return direct;

@@ -84,7 +84,8 @@ Before considering anything done:
 bun run typecheck    # tsc -b across the workspace
 bun run lint         # biome check .
 bun run lint:dead    # knip — unused files, exports, dependencies
-bun test             # ~1860 tests across ~200 files, ~10s (--parallel)
+bun run mcp:budget   # MCP boot context stays within the guided/full budgets
+bun test             # ~2500 tests across ~240 files, ~20s (--parallel)
 ```
 
 `lint:dead` is expected to print nothing. If an export is only reachable from
@@ -101,8 +102,8 @@ Chromium build — the capture-session suite drives a *headed* browser, which th
 
 The repo's hooks (`.githooks/`, enabled with `git config core.hooksPath .githooks`)
 run this list for you: `pre-commit` runs the lint, and
-`pre-push` runs the whole `checks` job — typecheck, lint, knip, the canvas
-build, and the suite under `--randomize`. Either can be skipped for one
+`pre-push` runs the whole `checks` job — typecheck, lint, knip, the MCP context
+budget, the canvas build, and the suite under `--randomize`. Either can be skipped for one
 invocation with `--no-verify`.
 
 Prefer `bun run test` over a bare `bun test`: the canvas DOM suites need one

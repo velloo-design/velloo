@@ -10,8 +10,8 @@ import type { MutationContext } from "../mutations/index.ts";
 /**
  * `component_status` is the tool an agent is told to consult before claiming
  * the canvas renders an app component exactly, so its answers have to be
- * unambiguous. The sample app eval caught the gap this guards: a model asked about
- * the app's OWN component names (Panel, StatusChip, Manifest) and got the same
+ * unambiguous. A production-like evaluation caught the gap this guards: a
+ * model asked about the app's OWN component names (Panel, StatusChip, Manifest) and got the same
  * `unavailable` it would get for a broken library component, which reads as
  * "the canvas is broken" rather than "those are not library ids".
  */

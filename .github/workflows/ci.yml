@@ -3,6 +3,9 @@
 # hide a real failure in the fast one.
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -18,9 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
 
@@ -37,6 +40,9 @@ jobs:
       # entry and the next reader stops reading it.
       - name: Dead code
         run: bun run lint:dead
+
+      - name: MCP context budget
+        run: bun run mcp:budget
 
       # `typecheck` covers the canvas's TypeScript but never runs Vite, so a
       # broken plugin, a missing asset or a bad import path would surface at
@@ -59,9 +65,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
 
@@ -69,7 +75,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       # The renderer's playwright-core devDependency is the pin the runtime
-      # launches against (screenshot.ts reads the same field), so bumping it
+      # launches against (browser-install.ts reads the same field), so bumping it
       # fetches a fresh browser and every other run restores one. An empty
       # version would install whatever Playwright is latest — a Chromium
       # revision the pinned runtime can't find.
@@ -85,7 +91,7 @@ jobs:
 
       - name: Cache Chromium
         id: chromium-cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
           key: ms-playwright-full-${{ runner.os }}-${{ steps.pw.outputs.pin }}
@@ -120,7 +126,7 @@ jobs:
           # JavaScript is intentionally single-quoted.
           # shellcheck disable=SC2016
           xvfb-run -a bun -e '
-            const { chromiumExecutable } = await import("./packages/renderer/src/screenshot.ts");
+            const { chromiumExecutable } = await import("./packages/renderer/src/browser-install.ts");
             const path = await chromiumExecutable();
             if (!path) { console.error("no Chromium found — the e2e suites would all skip"); process.exit(1); }
             console.log("chromium:", path);
@@ -144,9 +150,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
 

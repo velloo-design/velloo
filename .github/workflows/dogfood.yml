@@ -1,53 +1,96 @@
-# Dogfood: publish the current branch to an environment's download host, so
-# testers update with `curl -fsSL https://get[.dev].velloo.design/install.sh | bash`.
+# Dev channel: every push to main that passes CI publishes as the rolling `dev`
+# prerelease on GitHub — the build get.dev.velloo.design and the dev update
+# channel serve. Testers install it with
+# `curl -fsSL https://get.dev.velloo.design/install.sh | bash`.
 #
-# Trigger: `gh workflow run dogfood.yml -f environment=dev` (or prod), or the
-# Actions tab. Unlike release.yml it doesn't touch npm or cut a GitHub release.
+# It runs after CI rather than beside it, so only a green main ships, and
+# never touches npm. Re-publish by hand with `gh workflow run dogfood.yml`.
 #
-# Secrets come from the GitHub environment named by the input — BLOB_ENDPOINT,
-# BLOB_BUCKET, BLOB_ACCESS_KEY, BLOB_SECRET_KEY — so the dev and prod buckets
-# never share credentials and prod can require a reviewer.
-name: Dogfood
+# The `dev` environment should allow deployments from `main` only. Its BLOB_*
+# secrets are optional: while they exist the build is also mirrored into the
+# download host's own bucket.
+name: Dev channel
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Download host to publish to
-        type: choice
-        options: [dev, prod]
-        default: dev
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
-  group: dogfood-${{ inputs.environment }}
-  cancel-in-progress: false
+  group: dev-channel
+  cancel-in-progress: true
 
 jobs:
   publish:
+    # Only a push to main that went green — not a scheduled or PR run of CI.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: ${{ inputs.environment }}
+    environment: dev
+    permissions:
+      contents: write # the rolling `dev` release and its tag
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0 # the version counts commits since the last release tag
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Gates
-        run: |
-          bun run typecheck
-          bun run lint
-          bun test --parallel
+      - name: Version
+        id: version
+        run: bun scripts/release-version.ts --dev --write
 
-      - name: Build and publish
-        run: bun scripts/publish-cli.ts ${{ inputs.environment }}
+      - name: Build
+        run: |
+          bun scripts/build-release-artifacts.ts
+          cp "release-artifacts/velloo-${{ steps.version.outputs.version }}.tgz" release-artifacts/velloo.tgz
+        env:
+          VELLOO_BUILD_CHANNEL: dev
+          VELLOO_BUILD_CLOUD_URL: https://api.dev.velloo.ai
+
+      - name: Publish the dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          notes="Rolling build of \`main\` at ${SHA}, replaced on every green push. Not for production use.
+
+          Install: \`curl -fsSL https://get.dev.velloo.design/install.sh | bash\`"
+          if gh release view dev >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/dev" -f sha="$SHA" -F force=true >/dev/null
+            gh release edit dev --prerelease --title "Dev build ${VERSION}" --notes "$notes"
+          else
+            gh release create dev --prerelease --target "$SHA" --title "Dev build ${VERSION}" --notes "$notes"
+          fi
+          mapfile -t assets < <(find release-artifacts -maxdepth 1 -type f ! -name '.*' ! -name 'direct-*' | sort)
+          gh release upload dev "${assets[@]}" --clobber
+          # The previous build's versioned files would otherwise pile up.
+          keep=$(printf '%s\n' "${assets[@]##*/}")
+          gh release view dev --json assets --jq '.assets[].name' | while read -r name; do
+            grep -qxF "$name" <<<"$keep" || gh release delete-asset dev "$name" --yes
+          done
+
+      - name: Mirror check
+        id: mirror
+        run: echo "enabled=${{ secrets.BLOB_BUCKET != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Mirror to the download bucket
+        if: steps.mirror.outputs.enabled == 'true'
+        run: bun scripts/publish-cli.ts dev
         env:
           BLOB_ENDPOINT: ${{ secrets.BLOB_ENDPOINT }}
           BLOB_BUCKET: ${{ secrets.BLOB_BUCKET }}

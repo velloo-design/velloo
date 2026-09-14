@@ -9,7 +9,19 @@ build
 .DS_Store
 .env
 .env.local
-.env.release.*
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+.netrc
+credentials.json
+service-account*.json
+.aws/
+.gcp/
 
 # Velloo design folder caches
 **/.design/cache/
@@ -24,3 +36,8 @@ build
 
 # Local agent worktree checkouts — nested repos, never part of a commit
 .claude/worktrees/
+.claude/settings.local.json
+
+# Editor / agent MCP wiring is per-machine — `velloo connect` writes it.
+.mcp.json
+.cursor/

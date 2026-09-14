@@ -138,4 +138,4 @@ Mirror `packages/server/src/__tests__/mui-render.test.ts`: an SSR render smoke o
 registry, theme projection asserting real light *and* dark values, `emit_code` producing
 native idiom + imports from `codegenModule`, `emitNativeTheme` output, and overlay
 canvas-safety (pinned open, no escaping portals). Add a framework-native task to the
-model-evaluation harness for end-to-end agent validation.
+end-to-end model-evaluation harness.

@@ -1,5 +1,6 @@
 import { parseSocketFrame } from "@velloo/protocol";
 import { setApiConnected } from "./api/connection.ts";
+import { fetchSnippet } from "./api.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
@@ -83,7 +84,6 @@ export function connectWs(): () => void {
           state.snippetFocus === payload.snippetId
         ) {
           void (async () => {
-            const { fetchSnippet } = await import("./api.ts");
             try {
               const s = await fetchSnippet(payload.snippetId);
               useCanvas.getState().setSyntheticScreen(`snippet:${payload.snippetId}`, {

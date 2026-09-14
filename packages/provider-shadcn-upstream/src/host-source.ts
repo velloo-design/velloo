@@ -4,7 +4,7 @@ import { join } from "node:path";
 /**
  * Whether `source` exports a binding named `id`.
  *
- * Apps routinely rename shadcn primitives when they fork them — sample app's
+ * Apps routinely rename shadcn primitives when they fork them — a local
  * `card.tsx` exports `Panel`, its `badge.tsx` exports `StatusChip`. The family
  * FILE is still there and still compiles, so file-existence alone wrongly reads
  * as "the app has this component": the canvas would import it, `pick` would

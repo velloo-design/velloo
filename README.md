@@ -47,7 +47,7 @@ cd ~/code/my-shadcn-app
 velloo init
 ```
 
-The interactive wizard creates the design folder (default `velloo/`) and wires up your AI agent — **Claude Code** (`.mcp.json` + the `velloo-design` skill) and **Cursor** (`.cursor/mcp.json` + a project rule); restart the agent so it loads the new config. **Start from scratch** (pick a component library + a sample or blank board) or **scan what you have**: scan detects your shadcn + Tailwind versions, imports your real theme from `globals.css`, and builds one screen per route, so the canvas opens in your brand colors. `init` never writes into your app's source — it only creates the design folder (plus the agent config).
+The interactive wizard creates the design folder (default `velloo/`) and wires up your chosen AI agent. It supports Claude Code, Cursor, Codex, Continue, opencode, Droid, Cline, Gemini CLI, Windsurf, and VS Code/Copilot, using each client's native MCP configuration and guidance format; restart the agent so it loads the new config. **Start from scratch** (pick a component library + a sample or blank board) or **scan what you have**: scan detects your shadcn + Tailwind versions, imports your real theme from `globals.css`, and builds one screen per route, so the canvas opens in your brand colors. `init` never writes into your app's source — it only creates the design folder (plus the agent config).
 
 Then start it:
 

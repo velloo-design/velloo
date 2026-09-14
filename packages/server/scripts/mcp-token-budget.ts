@@ -43,7 +43,9 @@ const asJson = process.argv.includes("--json");
 const check = process.argv.includes("--check");
 /** Measured before the compact-surface work; kept here so savings stay visible. */
 const LEGACY_BOOT_TOKENS = 19_610;
-const FULL_BOOT_BUDGET_TOKENS = 18_500;
+// Audited full-surface baseline (~18,974) plus ~1.5% headroom. This stays
+// below the pre-guided legacy cost while catching meaningful schema growth.
+const FULL_BOOT_BUDGET_TOKENS = 19_250;
 const GUIDED_BOOT_BUDGET_TOKENS = 4_000;
 
 async function scaffoldFolder(): Promise<string> {

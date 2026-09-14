@@ -39,7 +39,7 @@ export const AccountResponseSchema = z.object({
   tier: z.string().optional(),
   /**
    * Pay-as-you-go credit balance in micros ($1 = 1_000_000). Null when the
-   * cloud couldn't price it (account service briefly down) — distinct from
+   * cloud couldn't price it (its account service briefly down) — distinct from
    * absent, which is a cloud that reports no balance at all.
    */
   creditMicros: z.number().nullable().optional(),
