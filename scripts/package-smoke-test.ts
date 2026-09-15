@@ -20,7 +20,7 @@ const prefix = await mkdtemp(join(tmpdir(), "velloo-package-smoke-"));
 const node = Bun.which("node");
 if (!node) throw new Error("Node is required to smoke-test the npm launcher");
 
-function run(command: string[], env = process.env): Bun.SpawnSyncReturns<Uint8Array> {
+function run(command: string[], env = process.env): Bun.SyncSubprocess<"pipe", "pipe"> {
   return Bun.spawnSync(command, { cwd: repoRoot, stdout: "pipe", stderr: "pipe", env });
 }
 

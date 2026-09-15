@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun"]
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "packages/*/scripts/**/*.ts",
+    "packages/*/build.ts",
+    "packages/*/vendor.ts",
+    "packages/cli/src/scaffold/assets.d.ts"
+  ]
+}

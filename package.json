@@ -12,7 +12,7 @@
   "scripts": {
     "postinstall": "bun packages/shadcn-snapshot/build.ts",
     "build": "bun --filter='*' run build",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:dead": "knip",

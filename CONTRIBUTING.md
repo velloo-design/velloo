@@ -28,7 +28,7 @@ git config core.hooksPath .githooks
 Run these and make sure they pass:
 
 ```bash
-bun run typecheck     # tsc -b
+bun run typecheck     # tsc -b, then the scripts/build/vendor files
 bun run lint          # biome check .
 bun run lint:dead     # knip — unused files, exports, dependencies
 bun run test          # bun test --parallel

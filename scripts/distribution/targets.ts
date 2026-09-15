@@ -80,7 +80,11 @@ export function runtimeTarget(id: string): RuntimeTarget {
 export function currentRuntimeTarget(): RuntimeTarget {
   const cpu = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : process.arch;
   let id = `${process.platform}-${cpu}`;
-  if (process.platform === "linux" && !process.report?.getReport().header.glibcVersionRuntime) {
+  // Node types the report as a bare `object`; glibc builds carry this field, musl builds don't.
+  const report = process.report?.getReport() as
+    | { header?: { glibcVersionRuntime?: string } }
+    | undefined;
+  if (process.platform === "linux" && !report?.header?.glibcVersionRuntime) {
     id += "-musl";
   }
   return runtimeTarget(id);

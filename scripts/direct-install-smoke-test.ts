@@ -27,7 +27,7 @@ function install(
   downloadBase: string,
   home: string,
   bin: string,
-): Bun.SpawnSyncReturns<Uint8Array> {
+): Bun.SyncSubprocess<"pipe", "pipe"> {
   return Bun.spawnSync(["bash", join(repoRoot, "scripts", "install.sh")], {
     cwd: repoRoot,
     stdout: "pipe",

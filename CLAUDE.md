@@ -81,7 +81,7 @@ The cleanest packages (`schema`, `result`, `provider`) have no internal runtime 
 Before considering anything done:
 
 ```bash
-bun run typecheck    # tsc -b across the workspace
+bun run typecheck    # tsc -b across the workspace + tsconfig.scripts.json
 bun run lint         # biome check .
 bun run lint:dead    # knip — unused files, exports, dependencies
 bun run mcp:budget   # MCP boot context stays within the guided/full budgets

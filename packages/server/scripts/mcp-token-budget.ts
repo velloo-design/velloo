@@ -98,7 +98,7 @@ async function measure(ctx: MutationContext, selection: McpSurfaceSelection) {
   registerDiscoveryTools(mcp, ctx);
   registerComposeTool(mcp, ctx);
   registerMutationTools(mcp, ctx);
-  registerInspectTool(mcp, ctx);
+  registerInspectTool(mcp, ctx, stub(), stub(), stub());
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
   // Registers screenshot + compare_to_url + render_snippet.
@@ -156,9 +156,8 @@ async function main(): Promise<void> {
     const folder = await loadDesignFolder(tmp);
     const ctx: MutationContext = {
       folder,
-      providers: { "shadcn-react": provider },
+      providers: { [provider.id]: provider },
       defaultProvider: provider,
-      provider,
       broadcast: () => {},
     };
     const [guided, full] = await Promise.all([

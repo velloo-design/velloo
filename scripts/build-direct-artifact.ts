@@ -69,7 +69,7 @@ run([
 ]);
 
 const runtimePackageDir = join(app, "node_modules", ...target.packageName.split("/"));
-const runtimeBinary = join(runtimePackageDir, "bin", target.os === "win32" ? "bun.exe" : "bun");
+const runtimeBinary = join(runtimePackageDir, "bin", "bun");
 if (!existsSync(runtimeBinary)) {
   throw new Error(
     `npm did not install ${target.packageName}; make sure optional dependencies are enabled`,
