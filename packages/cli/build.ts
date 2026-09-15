@@ -397,7 +397,7 @@ const manifest = {
   description:
     "Local-first, code-shaped design canvas — your AI agent designs with your real components, in your repo",
   license: "Apache-2.0",
-  homepage: "https://github.com/velloo-design/velloo#readme",
+  homepage: "https://velloo.design",
   repository: { type: "git", url: "git+https://github.com/velloo-design/velloo.git" },
   bugs: { url: "https://github.com/velloo-design/velloo/issues" },
   keywords: [
