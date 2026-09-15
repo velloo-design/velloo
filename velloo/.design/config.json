@@ -29,7 +29,6 @@
     }
   ],
   "boardOrder": [
-    "images",
     "search-explorations",
     "settings-dialog",
     "velloo-header",
