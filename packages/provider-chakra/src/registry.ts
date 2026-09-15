@@ -16,6 +16,7 @@ import {
   CardHeader,
   Checkbox,
   Container,
+  chakra,
   Divider,
   Flex,
   Grid,
@@ -59,7 +60,15 @@ import {
   Tr,
   VStack,
 } from "@chakra-ui/react";
-import { helpersRegistry } from "@velloo/helpers";
+import {
+  Gradient as VellooGradient,
+  Icon as VellooIcon,
+  Image as VellooImage,
+  Layer as VellooLayer,
+  Placeholder as VellooPlaceholder,
+  Prose as VellooProse,
+  SVG as VellooSVG,
+} from "@velloo/helpers";
 import type { ComponentRegistry } from "@velloo/provider";
 import {
   Drawer,
@@ -89,15 +98,26 @@ import {
   Tooltip,
 } from "./overlays.ts";
 
-const REUSED_HELPER_IDS = [
-  "Icon",
-  "Image",
-  "Placeholder",
-  "SVG",
-  "Layer",
-  "Gradient",
-  "Prose",
-] as const;
+// `chakra()` makes sx resolve through the same theme/runtime as native Chakra
+// primitives while preserving each helper's Velloo-specific behavior.
+const helperRegistry: ComponentRegistry = {
+  Icon: chakra(VellooIcon),
+  Image: chakra(VellooImage, {
+    // Velloo's fill-mode Image owns a wrapper. Keep layout styles (including
+    // width/height) on that root, and let ordinary Chakra `objectFit` /
+    // `objectPosition` values flow through to the actual child image.
+    baseStyle: {
+      objectFit: "cover",
+      objectPosition: "50% 50%",
+      "& > img": { objectFit: "inherit", objectPosition: "inherit" },
+    },
+  }),
+  Placeholder: chakra(VellooPlaceholder),
+  SVG: chakra(VellooSVG),
+  Layer: chakra(VellooLayer),
+  Gradient: chakra(VellooGradient),
+  Prose: chakra(VellooProse),
+};
 
 /**
  * The runtime registry for chakra-native folders: design `$ref` ids → real
@@ -201,9 +221,7 @@ export const registry: ComponentRegistry = {
   PopoverHeader,
   PopoverTrigger,
   Tooltip,
-  // Framework-neutral velloo helpers chakra has no equivalent for — chiefly
-  // `Icon` (lucide; @chakra-ui/icons isn't surfaced) + imagery/composition
-  // helpers. Reused verbatim from `@velloo/helpers`, like provider-mui. They
-  // size via props (`Icon size`), not Tailwind — the JIT is off on a chakra folder.
-  ...helpersRegistry(REUSED_HELPER_IDS),
+  // Framework-neutral behavior, wrapped so Chakra's sx channel styles the
+  // helper root just like it styles Box/Button/Card.
+  ...helperRegistry,
 };

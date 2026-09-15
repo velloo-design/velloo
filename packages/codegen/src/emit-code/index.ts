@@ -298,8 +298,11 @@ export async function emitCode(
       snippetIRs.push(snippetR);
     }
 
-    // A non-shadcn target (MUI) or a no-CSS-framework folder has no shadcn
-    // components to `npx shadcn add` and no velloo helpers to materialize.
+    // A native target or no-CSS-framework folder has no shadcn components to
+    // install. Native targets can still use Velloo composition helpers (Image,
+    // Gradient, Layer, SVG), which must remain explicit in the implementation
+    // plan even though their authored style prop is sx/style rather than a
+    // Tailwind className.
     const native = options.target !== undefined || Boolean(options.inlineStyle);
     return {
       screen: { id: screen.id, name: screen.name },
@@ -309,7 +312,7 @@ export async function emitCode(
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
       componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
-      helpersToMaterialize: native ? [] : helpersToMaterialize(meta.components),
+      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
     };
   });
@@ -375,7 +378,7 @@ export async function emitSnippet(
       })),
       jsx: body,
       componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
-      helpersToMaterialize: native ? [] : helpersToMaterialize(meta.components),
+      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
     };
   });

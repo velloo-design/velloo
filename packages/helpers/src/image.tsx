@@ -96,13 +96,14 @@ export function Image({
     <div
       data-slot="image-wrapper"
       className={cn("relative overflow-hidden", aspectClass, treatmentClass, className)}
+      style={style}
     >
       <img
         src={src}
         alt={alt}
         data-slot="image"
         className="absolute inset-0 h-full w-full object-cover"
-        style={objectPosition ? { ...style, objectPosition } : style}
+        style={objectPosition ? { objectPosition } : undefined}
         {...rest}
       />
     </div>

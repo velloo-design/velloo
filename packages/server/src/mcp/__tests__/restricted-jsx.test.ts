@@ -124,6 +124,30 @@ describe("restricted JSX compiler", () => {
     expect(result.issues[0]?.message).toContain("JSON literals");
   });
 
+  test("accepts JSX-style data objects without executing JavaScript", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      "<Card style={{ opacity: 0.8, padding: '12px', nested: { display: 'grid', }, }} />",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props?.style).toEqual({
+      opacity: 0.8,
+      padding: "12px",
+      nested: { display: "grid" },
+    });
+
+    const executable = await compileRestrictedJsx(
+      ctx,
+      screen,
+      "<Card style={{ color: token() }} />",
+    );
+    expect(executable.ok).toBe(false);
+  });
+
   test("unknown tags return nearby component names", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");

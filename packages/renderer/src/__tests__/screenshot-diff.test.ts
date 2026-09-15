@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { PNG } from "pngjs";
-import { cropPng, diffPngs, sideBySidePng, unionRegion } from "../screenshot-diff.ts";
+import { cropPng, diffPngs, resizePng, sideBySidePng, unionRegion } from "../screenshot-diff.ts";
 
 /** Solid-color PNG with optional painted rectangles. */
 function synth(
@@ -99,6 +99,14 @@ describe("cropPng / unionRegion", () => {
         { x: 100, y: 50, w: 30, h: 10 },
       ]),
     ).toEqual({ x: 10, y: 10, w: 120, h: 50 });
+  });
+});
+
+describe("resizePng", () => {
+  test("normalizes a non-integer source scale to exact comparison dimensions", () => {
+    const out = PNG.sync.read(resizePng(synth(300, 150), 200, 100));
+    expect(out.width).toBe(200);
+    expect(out.height).toBe(100);
   });
 });
 

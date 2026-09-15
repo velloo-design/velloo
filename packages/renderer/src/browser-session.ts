@@ -445,7 +445,11 @@ export async function startCaptureSession(
     } catch {
       // about:blank and friends — nothing to scope.
     }
-    const { manifest } = await capturePage(page, { capturesRoot: root, themeOnly });
+    const { manifest } = await capturePage(page, {
+      capturesRoot: root,
+      themeOnly,
+      sessionId,
+    });
     made.push(manifest);
     opts.onCapture?.(manifest);
     return manifest;

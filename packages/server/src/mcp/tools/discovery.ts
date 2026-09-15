@@ -8,6 +8,7 @@ import {
   type Manifest,
   UNGROUPED_LABEL,
 } from "@velloo/provider";
+import { collectSerializedRefs, serializeTree } from "@velloo/renderer";
 import {
   DEFAULT_TYPESET_NAME,
   isComponentNode,
@@ -27,6 +28,7 @@ import {
 } from "../../design-folder.ts";
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts";
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { resolveLocator } from "../../path.ts";
 import { snippetJsxTags } from "../restricted-jsx.ts";
@@ -454,7 +456,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "component_status",
     {
       description:
-        'Compile-check components for the browser canvas and report each as exact repo source, canvas-adapted, fallback, or unavailable. Pass `screen` to check exactly the components a screen uses and whether it mounts — the mount is all-or-nothing, so one unavailable component keeps the whole screen (and every capture of it) on Velloo\'s bundled components, whatever the others report. Or pass `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. Use before claiming the canvas renders an app component exactly.',
+        'Report how components render: exact host source, canvas-adapted source, a real bundled framework adapter, fallback, or unavailable. Pass `screen` to check exactly the components a screen uses and whether it client-mounts host source. Or pass `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. `renderable` describes whether Velloo can render it; `hostMount` is the separate host-app browser-mount capability.',
       inputSchema: {
         ids: z.array(z.string().min(1)).min(1).optional(),
         screen: z
@@ -477,6 +479,29 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         }
         const mount = await screenMount(ctx, ctx.canvasBundler, screen);
         if (mount.kind === "none") {
+          const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
+          const libraryId = libraryIdForScreen(ctx, screen);
+          if (!provider.canvasBundleSpec) {
+            const manifest = await provider.loadManifest().catch(() => []);
+            const known = new Set(manifest.map((entry) => entry.id));
+            const refs = collectSerializedRefs(
+              serializeTree(screen.tree, { snippets: ctx.folder.snippets }),
+            ).filter((id) => known.has(id));
+            return jsonResult({
+              library: libraryId,
+              screen: screenId,
+              renderable: true,
+              renderSource: "bundled-adapter",
+              hostMount: { supported: false, mounted: false },
+              note: "This screen renders through Velloo's bundled framework adapter using the real library runtime. Host-app client mounting is not supported by this adapter; that does not make its components unusable.",
+              diagnostics: refs.map((id) => ({
+                id,
+                status: "bundled",
+                note: "Rendered by the real library through Velloo's bundled adapter.",
+              })),
+              errors: [],
+            });
+          }
           return jsonResult({
             screen: screenId,
             mounted: false,
@@ -531,12 +556,14 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       if (!provider.canvasBundleSpec || !ctx.canvasBundler) {
         return jsonResult({
           library: libraryId,
-          usable: false,
+          renderable: true,
+          renderSource: "bundled-adapter",
+          hostMount: { supported: false, mounted: false },
           diagnostics: [
             ...recognized.map((id) => ({
               id,
-              status: "fallback",
-              note: "This provider renders through its bundled SSR adapter; repo-backed canvas mounting is unavailable.",
+              status: "bundled",
+              note: "Rendered by the real library through Velloo's bundled adapter; host-app client mounting is unavailable.",
             })),
             ...unknownDiagnostics,
           ],

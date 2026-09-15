@@ -74,6 +74,43 @@ export interface CaptureManifest {
   nodeCount: number;
   /** A theme-only capture carries computed vars but no page render. */
   themeOnly: boolean;
+  /**
+   * Versioned capture metadata. Absent means a legacy v1 capture, whose
+   * geometry can still be inferred from `viewport` + the PNG header.
+   */
+  captureVersion?: 2;
+  kind?: "page" | "theme";
+  /** Session that produced this capture, when it came from the headed workflow. */
+  sessionId?: string;
+  /** Hash of the browser state verified on both sides of the screenshot. */
+  stateId?: string;
+  geometry?: CaptureGeometry;
+  stability?: CaptureStability;
+}
+
+export interface CaptureGeometry {
+  viewportCss: { width: number; height: number };
+  documentCssHeight: number;
+  scrollCss: { x: number; y: number };
+  devicePixelRatio: number;
+  screenshot?: {
+    mode: "full-page" | "viewport";
+    bitmapWidth: number;
+    bitmapHeight: number;
+  };
+  replay?: {
+    format: "mhtml";
+    cssHeight: number;
+    fidelity: "best-effort";
+  };
+}
+
+export interface CaptureStability {
+  status: "stable" | "unstable" | "not-applicable";
+  attempts: number;
+  /** Present when the page changed during the final capture attempt. */
+  beforeStateId?: string;
+  afterStateId?: string;
 }
 
 const MANIFEST = "capture.json";

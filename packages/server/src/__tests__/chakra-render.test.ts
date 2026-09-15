@@ -103,6 +103,34 @@ describe("chakra adapter SSR", () => {
     expect(manifest.find((c) => c.id === "Icon")).toBeDefined();
   });
 
+  test("Velloo helpers use Chakra's sx channel on their root", async () => {
+    const imageScreen: Screen = {
+      id: "image",
+      name: "Image",
+      tree: {
+        $ref: "Image",
+        props: {
+          src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+          sx: { width: "123px", height: "45px", objectFit: "contain" },
+        },
+      },
+    };
+    const { html, bodyHtml } = await renderScreen(imageScreen, theme, {
+      viewport: { w: 400, h: 200 },
+      snapshotCss: "",
+      registry: chakra.registry,
+      renderPass: chakra.renderPass?.(theme),
+    });
+    expect(bodyHtml).toContain("vchakra-");
+    expect(html).toContain("width:123px");
+    expect(html).toContain("height:45px");
+    expect(html).toContain("object-fit:contain");
+    expect(html).toContain("object-fit:inherit");
+    const image = (await chakra.loadManifest()).find((entry) => entry.id === "Image");
+    expect(image?.props.some((prop) => prop.name === "sx")).toBe(true);
+    expect(image?.props.some((prop) => prop.name === "className")).toBe(false);
+  });
+
   test("catalog() reports every manifest component installed from @chakra-ui/react", async () => {
     const catalog = (await chakra.catalog?.()) ?? [];
     expect(catalog.length).toBeGreaterThan(50);
@@ -197,6 +225,10 @@ describe("chakra adapter SSR", () => {
         children: [
           { $ref: "Heading", props: { size: "lg", children: "Hi" } },
           { $ref: "Icon", props: { name: "ArrowRight", size: 18 } },
+          {
+            $ref: "Image",
+            props: { src: "assets/hero.png", sx: { width: "100%", objectFit: "contain" } },
+          },
         ],
       },
     };
@@ -208,6 +240,9 @@ describe("chakra adapter SSR", () => {
     // Icon (a velloo helper) lowers to the lucide JSX tag, NOT a chakra import.
     expect(result.jsx).toContain("<ArrowRight");
     expect(result.iconsUsed).toContain("ArrowRight");
+    expect(result.jsx).toContain('<Image src="assets/hero.png"');
+    expect(result.jsx).toContain('sx={{ width: "100%", objectFit: "contain" }}');
+    expect(result.helpersToMaterialize).toContain("Image");
     // No shadcn install plan on a native framework.
     expect(result.componentsToInstall).toEqual([]);
   });

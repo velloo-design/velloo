@@ -40,6 +40,144 @@ class ParseFailure extends Error {
   }
 }
 
+/**
+ * Data-only JSX brace parser. It intentionally accepts the ergonomic subset
+ * people write in JSX objects (bare keys, single quotes, trailing commas) but
+ * has no grammar for identifiers as values, member access, calls, functions,
+ * spreads, or templates. Nothing is evaluated.
+ */
+class DataLiteralParser {
+  private pos = 0;
+
+  constructor(private readonly source: string) {}
+
+  parse(): unknown {
+    const value = this.value();
+    this.ws();
+    if (this.pos !== this.source.length) throw new Error("unexpected token");
+    return value;
+  }
+
+  private value(): unknown {
+    this.ws();
+    const char = this.source[this.pos];
+    if (char === "{") return this.object();
+    if (char === "[") return this.array();
+    if (char === '"' || char === "'") return this.string();
+    const tail = this.source.slice(this.pos);
+    for (const [token, value] of [
+      ["true", true],
+      ["false", false],
+      ["null", null],
+    ] as const) {
+      if (tail.startsWith(token) && !/[A-Za-z0-9_$]/.test(tail[token.length] ?? "")) {
+        this.pos += token.length;
+        return value;
+      }
+    }
+    const number = tail.match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
+    if (number) {
+      this.pos += number[0].length;
+      return Number(number[0]);
+    }
+    throw new Error("expected a data literal");
+  }
+
+  private object(): Record<string, unknown> {
+    this.pos++;
+    const out: Record<string, unknown> = {};
+    this.ws();
+    if (this.take("}")) return out;
+    for (;;) {
+      this.ws();
+      const char = this.source[this.pos];
+      const key = char === '"' || char === "'" ? this.string() : this.identifier();
+      if (key === "__proto__" || key === "prototype" || key === "constructor") {
+        throw new Error("unsafe object key");
+      }
+      this.ws();
+      if (!this.take(":")) throw new Error("expected colon");
+      out[key] = this.value();
+      this.ws();
+      if (this.take("}")) return out;
+      if (!this.take(",")) throw new Error("expected comma");
+      this.ws();
+      if (this.take("}")) return out;
+    }
+  }
+
+  private array(): unknown[] {
+    this.pos++;
+    const out: unknown[] = [];
+    this.ws();
+    if (this.take("]")) return out;
+    for (;;) {
+      out.push(this.value());
+      this.ws();
+      if (this.take("]")) return out;
+      if (!this.take(",")) throw new Error("expected comma");
+      this.ws();
+      if (this.take("]")) return out;
+    }
+  }
+
+  private identifier(): string {
+    const match = this.source.slice(this.pos).match(/^[A-Za-z_$][A-Za-z0-9_$]*/);
+    if (!match) throw new Error("expected object key");
+    this.pos += match[0].length;
+    return match[0];
+  }
+
+  private string(): string {
+    const quote = this.source[this.pos];
+    if (quote !== '"' && quote !== "'") throw new Error("expected string");
+    this.pos++;
+    let out = "";
+    while (this.pos < this.source.length) {
+      const char = this.source[this.pos++];
+      if (char === quote) return out;
+      if (char !== "\\") {
+        out += char;
+        continue;
+      }
+      const escaped = this.source[this.pos++];
+      if (escaped === undefined) throw new Error("unfinished escape");
+      const simple: Record<string, string> = {
+        b: "\b",
+        f: "\f",
+        n: "\n",
+        r: "\r",
+        t: "\t",
+        "\\": "\\",
+        '"': '"',
+        "'": "'",
+        "/": "/",
+      };
+      if (escaped === "u") {
+        const hex = this.source.slice(this.pos, this.pos + 4);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) throw new Error("invalid unicode escape");
+        out += String.fromCharCode(Number.parseInt(hex, 16));
+        this.pos += 4;
+      } else if (simple[escaped] !== undefined) {
+        out += simple[escaped];
+      } else {
+        throw new Error("invalid escape");
+      }
+    }
+    throw new Error("unclosed string");
+  }
+
+  private ws(): void {
+    while (/\s/.test(this.source[this.pos] ?? "")) this.pos++;
+  }
+
+  private take(value: string): boolean {
+    if (!this.source.startsWith(value, this.pos)) return false;
+    this.pos += value.length;
+    return true;
+  }
+}
+
 class Parser {
   private pos = 0;
 
@@ -180,7 +318,7 @@ class Parser {
         if (escaped) escaped = false;
         else if (char === "\\") escaped = true;
         else if (char === quoteChar) quoteChar = null;
-      } else if (char === '"') {
+      } else if (char === '"' || char === "'") {
         quoteChar = char;
       } else if (char === "{") {
         depth += 1;
@@ -191,10 +329,10 @@ class Parser {
           this.pos += 1;
           if (!raw) throw new ParseFailure("Empty JSX expression", start);
           try {
-            return JSON.parse(raw) as unknown;
+            return new DataLiteralParser(raw).parse();
           } catch {
             throw new ParseFailure(
-              "Brace values must be JSON literals; identifiers, calls, template strings, and functions are not executed",
+              "Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed); identifiers as values, calls, template strings, spreads, and functions are not executed",
               contentStart,
             );
           }

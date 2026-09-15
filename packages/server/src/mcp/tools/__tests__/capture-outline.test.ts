@@ -94,4 +94,18 @@ describe("outlineOf", () => {
     expect(outline.shown).toBe(60);
     expect(outline.hiddenCount).toBe(1);
   });
+
+  test("samples long documents spatially instead of stopping above the fold", () => {
+    const nodes = Array.from({ length: 100 }, (_, i) =>
+      node(i, {
+        tag: "section",
+        text: `Section ${i}`,
+        rect: { x: 0, y: i * 100, w: 1280, h: 80 },
+      }),
+    );
+    const dom = { ...extract(nodes), documentHeight: 10_000 };
+    const outline = outlineOf(dom, 20);
+    expect(outline.lines.some((line) => line.includes("Section 90"))).toBe(true);
+    expect(outline.coverage.toY).toBeGreaterThan(9_000);
+  });
 });

@@ -77,14 +77,7 @@ function ui(
   };
 }
 
-const className: PropDescriptor = {
-  name: "className",
-  type: "string | undefined",
-  optional: true,
-  control: "string",
-};
-
-/** A reused framework-neutral velloo helper (source "velloo") — styled via className, not sx. */
+/** Reused helpers still honor the screen adapter's native sx channel. */
 function helper(
   id: string,
   props: PropDescriptor[],
@@ -95,7 +88,7 @@ function helper(
     id,
     category: "ui",
     source: "velloo",
-    props: [...props, className],
+    props: [...props, sx],
     designModeNotes: notes,
     example,
   };

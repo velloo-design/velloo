@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { FrameworkAdapter } from "@velloo/provider";
+import { createProvider as createChakraProvider } from "@velloo/provider-chakra";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { DesignFolder } from "../design-folder.ts";
 import { registerDiscoveryTools } from "../mcp/tools/discovery.ts";
@@ -15,17 +17,16 @@ import type { MutationContext } from "../mutations/index.ts";
  * `unavailable` it would get for a broken library component, which reads as
  * "the canvas is broken" rather than "those are not library ids".
  */
-async function fixture() {
+async function fixture(provider: FrameworkAdapter = createShadcnProvider(), libraryId = "shadcn") {
   const mcp = new McpServer({ name: "component-status-test", version: "0.0.0" });
-  const provider = createShadcnProvider();
   const folder = {
     root: "/tmp/nonexistent",
-    config: { defaultLibrary: "shadcn", libraries: {}, extensions: {} },
+    config: { defaultLibrary: libraryId, libraries: {}, extensions: {} },
     snippets: new Map(),
   } as unknown as DesignFolder;
   const ctx = {
     folder,
-    providers: { shadcn: provider },
+    providers: { [libraryId]: provider },
     defaultProvider: provider,
     broadcast: () => undefined,
   } as unknown as MutationContext;
@@ -39,6 +40,9 @@ async function fixture() {
       const res = await client.callTool({ name: "component_status", arguments: { ids } });
       const text = (res.content as { type: string; text: string }[])[0]?.text ?? "{}";
       return JSON.parse(text) as {
+        renderable?: boolean;
+        renderSource?: string;
+        hostMount?: { supported: boolean; mounted: boolean };
         diagnostics: { id: string; status: string; note?: string }[];
       };
     },
@@ -68,5 +72,14 @@ describe("component_status", () => {
     const byId = new Map(diagnostics.map((d) => [d.id, d.status]));
     expect(byId.get("Panel")).toBe("unknown");
     expect(byId.get("Button")).not.toBe("unknown");
+  });
+
+  test("a bundled Chakra adapter is renderable, not an unusable fallback", async () => {
+    const { status } = await fixture(createChakraProvider(), "chakra");
+    const result = await status(["Button", "Image"]);
+    expect(result.renderable).toBe(true);
+    expect(result.renderSource).toBe("bundled-adapter");
+    expect(result.hostMount).toEqual({ supported: false, mounted: false });
+    expect(result.diagnostics.map((entry) => entry.status)).toEqual(["bundled", "bundled"]);
   });
 });

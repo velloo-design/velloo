@@ -59,7 +59,9 @@ export {
   withinRegistrableDomain,
 } from "./capture-session-state.ts";
 export {
+  type CaptureGeometry,
   type CaptureManifest,
+  type CaptureStability,
   captureDir,
   capturesDir,
   deleteCapture,
@@ -119,6 +121,7 @@ export {
   diffPngs,
   downscalePng,
   pngSize,
+  resizePng,
   sideBySidePng,
   unionRegion,
 } from "./screenshot-diff.ts";

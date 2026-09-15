@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { type CaptureManifest, newCaptureId, writeCaptureManifest } from "./capture-store.ts";
+import { pngSize } from "./screenshot-diff.ts";
 
 /**
  * The injected toolbar's custom element. It lives in the page's DOM, so every
@@ -61,7 +63,7 @@ export interface ThemeVars {
   fonts: string[];
 }
 
-const MAX_NODES = 1500;
+const MAX_NODES = 20_000;
 const MAX_DEPTH = 24;
 const MAX_TEXT = 240;
 const TRANSIENT_SCREENSHOT_ERROR =
@@ -514,12 +516,100 @@ export interface CapturePageOptions {
   /** Capture only the theme custom properties — no screenshot, DOM, or assets. */
   themeOnly?: boolean;
   fullPage?: boolean;
+  /** Headed browser session that produced this capture. */
+  sessionId?: string;
 }
 
 export interface CaptureOutcome {
   manifest: CaptureManifest;
   dir: string;
   themeVars: ThemeVars;
+}
+
+interface PageState {
+  id: string;
+  viewport: { w: number; h: number };
+  documentHeight: number;
+  scroll: { x: number; y: number };
+  devicePixelRatio: number;
+}
+
+/**
+ * Compact visual-state fingerprint used to verify that a page did not mutate
+ * between the screenshot and DOM extract. Full-page screenshotting can wake
+ * lazy content, so a changed first attempt is retried against the newly
+ * materialized state instead of silently mixing two representations.
+ */
+async function pageState(page: Page): Promise<PageState> {
+  const value = await page.evaluate((toolbar) => {
+    const height = Math.max(
+      document.documentElement?.scrollHeight ?? 0,
+      document.body?.scrollHeight ?? 0,
+    );
+    // Fold every visible element into a compact in-page fingerprint. Returning
+    // the whole visual tree twice would make a large capture even larger, while
+    // sampling could miss the exact lazy-loaded region this guard exists for.
+    let visualHash = 0x811c9dc5;
+    const mix = (part: string): void => {
+      for (let i = 0; i < part.length; i++) {
+        visualHash ^= part.charCodeAt(i);
+        visualHash = Math.imul(visualHash, 0x01000193);
+      }
+    };
+    const els = document.body ? Array.from(document.body.querySelectorAll("*")) : [];
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      if (!el || el.tagName.toLowerCase() === toolbar) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden") continue;
+      const r = el.getBoundingClientRect();
+      const text = Array.from(el.childNodes)
+        .filter((n) => n.nodeType === 3)
+        .map((n) => n.textContent ?? "")
+        .join("")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 80);
+      mix(
+        `${el.tagName}|${Math.round(r.x + scrollX)},${Math.round(r.y + scrollY)},${Math.round(r.width)},${Math.round(r.height)}|${text}|${el.getAttribute("src") ?? ""}|${cs.opacity}|${cs.color}|${cs.backgroundColor}|${cs.font}|${cs.transform}`,
+      );
+    }
+    return {
+      url: location.href,
+      title: document.title,
+      viewport: { w: innerWidth, h: innerHeight },
+      documentHeight: height,
+      scroll: { x: scrollX, y: scrollY },
+      devicePixelRatio,
+      elementCount: els.length,
+      visualHash: visualHash >>> 0,
+    };
+  }, TOOLBAR_TAG);
+  const id = createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 20);
+  return {
+    id,
+    viewport: value.viewport,
+    documentHeight: value.documentHeight,
+    scroll: value.scroll,
+    devicePixelRatio: value.devicePixelRatio,
+  };
+}
+
+async function settleInteractivePage(page: Page): Promise<void> {
+  await page.waitForLoadState("load", { timeout: 5_000 }).catch(() => undefined);
+  await page
+    .evaluate(() =>
+      Promise.race([
+        document.fonts.ready,
+        new Promise((resolve) => setTimeout(resolve, 2_000)),
+      ]).then(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      ),
+    )
+    .catch(() => undefined);
 }
 
 /**
@@ -549,32 +639,43 @@ export async function capturePage(page: Page, opts: CapturePageOptions): Promise
   try {
     // Read straight from the page: a theme-only capture has no DOM extract to
     // borrow it from, and a manifest without a viewport can't be diffed later.
-    const viewport = await page
-      .evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }))
-      .catch(() => ({ w: 0, h: 0 }));
-    const themeVars = await extractThemeVars(page);
-    writeFileSync(join(dir, "computed-vars.json"), `${JSON.stringify(themeVars, null, 2)}\n`, {
-      mode: 0o600,
-    });
-    files.push("computed-vars.json");
-
+    await settleInteractivePage(page);
+    const initialState = await pageState(page).catch(() => null);
+    const viewport = initialState?.viewport ?? { w: 0, h: 0 };
+    let themeVars: ThemeVars | null = null;
     let dom: DomExtract | null = null;
     let assets: Array<{ url: string; file: string; bytes: number }> = [];
 
+    let png: Buffer | null = null;
+    let mhtml: string | null = null;
+    let beforeState = initialState;
+    let afterState = initialState;
+    let attempts = 0;
+
     if (!opts.themeOnly) {
-      const png = await capturePagePng(page, opts.fullPage ?? true);
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        attempts = attempt;
+        await settleInteractivePage(page);
+        beforeState = await pageState(page);
+        themeVars = await extractThemeVars(page);
+        png = await capturePagePng(page, opts.fullPage ?? true);
+        dom = await extractDom(
+          page,
+          { maxNodes: MAX_NODES, maxDepth: MAX_DEPTH, maxText: MAX_TEXT },
+          TOOLBAR_TAG,
+        );
+        mhtml = await captureMhtml(page);
+        afterState = await pageState(page);
+        if (beforeState.id === afterState.id) break;
+      }
+      if (!png || !dom || !themeVars || !beforeState || !afterState) {
+        throw new Error("capture transaction did not produce a screenshot and DOM extract");
+      }
       writeFileSync(join(dir, "page.png"), png, { mode: 0o600 });
       files.push("page.png");
-
-      dom = await extractDom(
-        page,
-        { maxNodes: MAX_NODES, maxDepth: MAX_DEPTH, maxText: MAX_TEXT },
-        TOOLBAR_TAG,
-      );
       writeFileSync(join(dir, "dom.json"), `${JSON.stringify(dom, null, 2)}\n`, { mode: 0o600 });
       files.push("dom.json");
 
-      const mhtml = await captureMhtml(page);
       if (mhtml) {
         writeFileSync(join(dir, "snapshot.mhtml"), mhtml, { mode: 0o600 });
         files.push("snapshot.mhtml");
@@ -588,8 +689,19 @@ export async function capturePage(page: Page, opts: CapturePageOptions): Promise
         });
         files.push("assets.json");
       }
+    } else {
+      themeVars = await extractThemeVars(page);
     }
 
+    if (!themeVars) throw new Error("capture transaction did not produce theme evidence");
+    writeFileSync(join(dir, "computed-vars.json"), `${JSON.stringify(themeVars, null, 2)}\n`, {
+      mode: 0o600,
+    });
+    files.unshift("computed-vars.json");
+
+    const screenshotSize = png ? pngSize(png) : null;
+    const finalState = afterState ?? initialState;
+    const stable = Boolean(beforeState && afterState && beforeState.id === afterState.id);
     const manifest: CaptureManifest = {
       id,
       url: page.url(),
@@ -601,6 +713,52 @@ export async function capturePage(page: Page, opts: CapturePageOptions): Promise
       assetCount: assets.length,
       nodeCount: dom?.nodes.length ?? 0,
       themeOnly: opts.themeOnly === true,
+      captureVersion: 2,
+      kind: opts.themeOnly ? "theme" : "page",
+      ...(opts.sessionId ? { sessionId: opts.sessionId } : {}),
+      ...(stable && finalState ? { stateId: finalState.id } : {}),
+      ...(finalState
+        ? {
+            geometry: {
+              viewportCss: {
+                width: finalState.viewport.w,
+                height: finalState.viewport.h,
+              },
+              documentCssHeight: dom?.documentHeight ?? finalState.documentHeight,
+              scrollCss: finalState.scroll,
+              devicePixelRatio: finalState.devicePixelRatio,
+              ...(screenshotSize
+                ? {
+                    screenshot: {
+                      mode:
+                        opts.fullPage === false ? ("viewport" as const) : ("full-page" as const),
+                      bitmapWidth: screenshotSize.width,
+                      bitmapHeight: screenshotSize.height,
+                    },
+                  }
+                : {}),
+              ...(files.includes("snapshot.mhtml")
+                ? {
+                    replay: {
+                      format: "mhtml" as const,
+                      cssHeight: dom?.documentHeight ?? finalState.documentHeight,
+                      fidelity: "best-effort" as const,
+                    },
+                  }
+                : {}),
+            },
+          }
+        : {}),
+      stability: opts.themeOnly
+        ? { status: "not-applicable", attempts: 0 }
+        : stable
+          ? { status: "stable", attempts }
+          : {
+              status: "unstable",
+              attempts,
+              ...(beforeState ? { beforeStateId: beforeState.id } : {}),
+              ...(afterState ? { afterStateId: afterState.id } : {}),
+            },
     };
     writeCaptureManifest(dir, manifest);
     return { manifest, dir, themeVars };

@@ -270,6 +270,38 @@ export function downscalePng(png: Buffer, factor: number): Buffer {
   return PNG.sync.write(out);
 }
 
+/** Resize to exact bitmap dimensions for non-integer display scale factors. */
+export function resizePng(png: Buffer, width: number, height: number): Buffer {
+  const src = PNG.sync.read(png);
+  const outWidth = Math.max(1, Math.round(width));
+  const outHeight = Math.max(1, Math.round(height));
+  if (src.width === outWidth && src.height === outHeight) return png;
+  const out = new PNG({ width: outWidth, height: outHeight });
+  for (let y = 0; y < outHeight; y++) {
+    const sy = Math.max(0, Math.min(src.height - 1, ((y + 0.5) * src.height) / outHeight - 0.5));
+    const y0 = Math.floor(sy);
+    const y1 = Math.min(src.height - 1, y0 + 1);
+    const fy = sy - y0;
+    for (let x = 0; x < outWidth; x++) {
+      const sx = Math.max(0, Math.min(src.width - 1, ((x + 0.5) * src.width) / outWidth - 0.5));
+      const x0 = Math.floor(sx);
+      const x1 = Math.min(src.width - 1, x0 + 1);
+      const fx = sx - x0;
+      const dst = (y * outWidth + x) << 2;
+      for (let channel = 0; channel < 4; channel++) {
+        const a = src.data[(y0 * src.width + x0) * 4 + channel] ?? 0;
+        const b = src.data[(y0 * src.width + x1) * 4 + channel] ?? 0;
+        const c = src.data[(y1 * src.width + x0) * 4 + channel] ?? 0;
+        const d = src.data[(y1 * src.width + x1) * 4 + channel] ?? 0;
+        const top = a + (b - a) * fx;
+        const bottom = c + (d - c) * fx;
+        out.data[dst + channel] = Math.round(top + (bottom - top) * fy);
+      }
+    }
+  }
+  return PNG.sync.write(out);
+}
+
 /** Pixel dimensions of an encoded PNG. */
 export function pngSize(png: Buffer): { width: number; height: number } {
   const p = PNG.sync.read(png);

@@ -2,15 +2,20 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  type CaptureGeometry,
+  type CaptureManifest,
   captureDir,
   captureScreenshot,
   captureUrlScreenshot,
   classifyCapture,
+  cropPng,
+  type DomExtract,
   diffPngs,
   downscalePng,
   isSafeCaptureId,
   pngSize,
   readCaptureManifest,
+  resizePng,
   sideBySidePng,
   type UrlCaptureResult,
   type UrlCookie,
@@ -45,6 +50,59 @@ const URL_CACHE_CAP = 20;
 /** Cap the URL-capture cache's total PNG bytes (~64MB) against unbounded growth. */
 const URL_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const DEFAULT_URL_CACHE_TTL_MS = 300_000; // 5 min
+
+export function storedCaptureRaster(
+  png: Buffer,
+  manifest: CaptureManifest,
+  fullPage: boolean,
+): { ok: true; png: Buffer } | { ok: false; message: string } {
+  const screenshotMode = manifest.geometry?.screenshot?.mode;
+  if (fullPage && screenshotMode === "viewport") {
+    return {
+      ok: false,
+      message: `capture "${manifest.id}" contains only its viewport. Pass fullPage: false or make a full-page capture.`,
+    };
+  }
+  if (!fullPage && screenshotMode !== "viewport") {
+    const size = pngSize(png);
+    const viewportWidth = manifest.geometry?.viewportCss.width ?? manifest.viewport.w;
+    const viewportHeight = manifest.geometry?.viewportCss.height ?? manifest.viewport.h;
+    const scale = viewportWidth > 0 ? size.width / viewportWidth : 1;
+    const scroll = manifest.geometry?.scrollCss ?? { x: 0, y: 0 };
+    return {
+      ok: true,
+      png: cropPng(
+        png,
+        {
+          x: Math.round(scroll.x * scale),
+          y: Math.round(scroll.y * scale),
+          w: Math.round(viewportWidth * scale),
+          h: Math.round(viewportHeight * scale),
+        },
+        0,
+      ),
+    };
+  }
+  return { ok: true, png };
+}
+
+export function storedCaptureDom(
+  dom: DomExtract,
+  geometry: CaptureGeometry | undefined,
+  fullPage: boolean,
+): DomExtract {
+  if (fullPage || !geometry) return dom;
+  const { x, y } = geometry.scrollCss;
+  return {
+    ...dom,
+    viewport: { w: geometry.viewportCss.width, h: geometry.viewportCss.height },
+    documentHeight: geometry.viewportCss.height,
+    nodes: dom.nodes.map((node) => ({
+      ...node,
+      rect: { ...node.rect, x: node.rect.x - x, y: node.rect.y - y },
+    })),
+  };
+}
 
 /** Mirrors the renderer's {@link UrlCookie} — `satisfies` keeps the two in lockstep. */
 const UrlCookieSchema = z.object({
@@ -240,6 +298,8 @@ export function registerCompareToUrlTool(
       let storedPng: Buffer | null = null;
       let storedFinalUrl = "";
       let storedViewport: Viewport | null = null;
+      let storedGeometry: CaptureGeometry | undefined;
+      let storedStateId: string | undefined;
       if (captureId !== undefined) {
         if (!isSafeCaptureId(captureId)) return errorResult(`Invalid captureId: ${captureId}`);
         const folderId = ctx.folder.config.folderId;
@@ -254,6 +314,11 @@ export function registerCompareToUrlTool(
             `compare_to_url: capture "${captureId}" is theme-only, so there's no page render to diff against. Capture the page itself in a capture session.`,
           );
         }
+        if (manifest.stability?.status === "unstable") {
+          return errorResult(
+            `compare_to_url: capture "${captureId}" changed while its screenshot and outline were being recorded. Re-capture the page once it has settled; Velloo will not present mixed states as a frozen reference.`,
+          );
+        }
         try {
           storedPng = readFileSync(
             join(captureDir(ctx.folder.root, captureId, folderId), "page.png"),
@@ -262,7 +327,12 @@ export function registerCompareToUrlTool(
           return errorResult(`compare_to_url: capture "${captureId}" is missing its page.png.`);
         }
         storedFinalUrl = manifest.finalUrl || manifest.url;
+        storedGeometry = manifest.geometry;
+        storedStateId = manifest.stateId;
         if (manifest.viewport.w > 0) storedViewport = manifest.viewport;
+        const raster = storedCaptureRaster(storedPng, manifest, fullPage !== false);
+        if (!raster.ok) return errorResult(`compare_to_url: ${raster.message}`);
+        storedPng = raster.png;
       } else {
         // The server navigates this URL in a real browser — restrict to http(s)
         // so `file://`, `chrome://`, and other local schemes can't be rasterized
@@ -289,13 +359,23 @@ export function registerCompareToUrlTool(
       // was asked for. Snapping the scale to a power of two keeps that ratio a
       // whole number, which is what makes the box downsample exact.
       let captureDownscale = 1;
+      let captureResize: { width: number; height: number } | null = null;
       if (storedPng && storedViewport) {
         const requested = scale ?? 0.5;
         scaleFactor = [1, 0.5, 0.25].reduce((best, s) =>
           Math.abs(s - requested) < Math.abs(best - requested) ? s : best,
         );
-        const dpr = Math.max(1, Math.round(pngSize(storedPng).width / storedViewport.w));
-        captureDownscale = Math.max(1, Math.round(dpr / scaleFactor));
+        const storedSize = pngSize(storedPng);
+        const sourceScale = storedSize.width / storedViewport.w;
+        const ratio = sourceScale / scaleFactor;
+        if (Number.isInteger(ratio) && ratio >= 1) {
+          captureDownscale = ratio;
+        } else {
+          captureResize = {
+            width: Math.round(storedSize.width / ratio),
+            height: Math.round(storedSize.height / ratio),
+          };
+        }
         viewport = { w: storedViewport.w, h: storedViewport.h || defaults.h };
       }
 
@@ -356,7 +436,9 @@ export function registerCompareToUrlTool(
           }),
           storedPng
             ? Promise.resolve<UrlCaptureResult>({
-                png: downscalePng(storedPng, captureDownscale),
+                png: captureResize
+                  ? resizePng(storedPng, captureResize.width, captureResize.height)
+                  : downscalePng(storedPng, captureDownscale),
                 finalUrl: storedFinalUrl,
                 authWall: false,
                 pageError: null,
@@ -396,11 +478,14 @@ export function registerCompareToUrlTool(
         // there. Reasoning from class strings to resolved styles is the part
         // that can't be checked, so measure both sides with the same walker
         // and report the properties that actually disagree.
-        const referenceDom =
+        const rawReferenceDom =
           urlCapture.dom ??
           (captureId !== undefined
             ? readCaptureDom(ctx.folder.root, captureId, ctx.folder.config.folderId)
             : null);
+        const referenceDom = rawReferenceDom
+          ? storedCaptureDom(rawReferenceDom, storedGeometry, fullPage !== false)
+          : null;
         const styleDiff =
           velloo.dom && referenceDom
             ? styleDiffForRegions(regions, velloo.dom, referenceDom, scaleFactor)
@@ -432,11 +517,13 @@ export function registerCompareToUrlTool(
         const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
         const similarity = Number((1 - result.changedRatio).toFixed(4));
         const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
-        const heightDiffers = result.heightDelta !== 0;
+        const bitmapHeightDelta = result.heightDelta;
+        const heightDelta = Number((bitmapHeightDelta / scaleFactor).toFixed(2));
+        const heightDiffers = heightDelta !== 0;
         const note = similarityNote({
           similarity,
           contentSimilarity,
-          heightDelta: result.heightDelta,
+          heightDelta,
         });
         const diagnostics = [
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
@@ -447,8 +534,10 @@ export function registerCompareToUrlTool(
           changedRatio: Number(result.changedRatio.toFixed(4)),
           /** Similarity over only the overlapping height — height delta normalized out. */
           ...(heightDiffers ? { contentSimilarity } : {}),
-          /** velloo render height minus URL capture height, image px. */
-          heightDelta: result.heightDelta,
+          /** Velloo render height minus reference height, normalized to CSS px. */
+          heightDelta,
+          /** Raw raster delta retained for diagnostics. */
+          bitmapHeightDelta,
           /** Velloo render's full content height in CSS px (frame-independent). */
           contentHeight,
           ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
@@ -458,6 +547,8 @@ export function registerCompareToUrlTool(
                 capture: {
                   id: captureId,
                   url: storedFinalUrl,
+                  ...(storedGeometry ? { geometry: storedGeometry } : {}),
+                  ...(storedStateId ? { stateId: storedStateId } : {}),
                   note: "diffed against a stored browser capture — already past any login and frozen, so similarity reflects your design changes only.",
                 },
               }

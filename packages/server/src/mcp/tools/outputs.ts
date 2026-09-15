@@ -100,8 +100,10 @@ export const CompareToUrlOutput = z.looseObject({
   changedRatio: z.number(),
   /** Similarity over the overlapping height only; present when heights differ. */
   contentSimilarity: z.number().optional(),
-  /** Velloo render height minus capture height, image px. */
+  /** Velloo render height minus capture height, normalized to CSS px. */
   heightDelta: z.number(),
+  /** Raw Velloo-minus-capture height in bitmap pixels. */
+  bitmapHeightDelta: z.number().optional(),
   /** Velloo render's full content height in CSS px, frame-independent. */
   contentHeight: z.number(),
   /** The worst regions, ranked, each naming the node responsible. Fix in order. */
