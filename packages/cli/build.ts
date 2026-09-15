@@ -413,7 +413,10 @@ const manifest = {
     "local-first",
     "bun",
   ],
-  bin: { velloo: "./launcher.cjs" },
+  // npm 11+ rejects a leading `./` here during `npm publish`, even though
+  // installing the pre-packed tarball accepts it. Keep the registry-facing
+  // form so npm does not silently strip the executable entry.
+  bin: { velloo: "launcher.cjs" },
   engines: { node: ">=18" },
   files: [
     "cli.js",

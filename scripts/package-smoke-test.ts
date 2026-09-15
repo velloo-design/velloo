@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -25,6 +25,17 @@ function run(command: string[], env = process.env): Bun.SyncSubprocess<"pipe", "
 }
 
 try {
+  // Installing Bun's tarball alone does not exercise npm's publish-time
+  // package.json normalizer. In particular, npm 11+ strips a bin target that
+  // starts with `./` while still exiting successfully. Assert the registry-safe
+  // spelling before the registry can accept a package without its CLI.
+  const publishManifest = JSON.parse(
+    readFileSync(join(repoRoot, "packages", "cli", "dist", "package.json"), "utf8"),
+  );
+  if (publishManifest.bin?.velloo !== "launcher.cjs") {
+    throw new Error('publishable package must declare bin.velloo as "launcher.cjs"');
+  }
+
   const install = run([
     "npm",
     "install",
