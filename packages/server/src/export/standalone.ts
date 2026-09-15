@@ -121,7 +121,7 @@ async function inlineGoogleFonts(html: string, warnings: string[]): Promise<stri
     }
     return html
       .replace(
-        /\s*<link rel="preconnect" href="https:\/\/fonts\.[^"]*"(?: crossorigin)?\s*\/>/g,
+        /\n[ \t]*<link rel="preconnect" href="https:\/\/fonts\.[^"]*"(?: crossorigin)? ?\/>/g,
         "",
       )
       .replace(linkMatch[0], `<style data-velloo-fonts>${css}</style>`);

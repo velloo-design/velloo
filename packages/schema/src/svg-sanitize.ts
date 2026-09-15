@@ -35,6 +35,17 @@ export function svgLooksActive(markup: string): boolean {
  * rejection; the two agree on what counts as "active".
  */
 export function sanitizeSvgMarkup(markup: string): string {
+  // Repeat to a fixpoint: one removal can splice a new tag together
+  // (`<scr<set>ipt>` becomes `<script>` once `<set>` is gone).
+  let current = markup;
+  for (;;) {
+    const next = sanitizeOnce(current);
+    if (next === current) return next;
+    current = next;
+  }
+}
+
+function sanitizeOnce(markup: string): string {
   return (
     markup
       // Drop <script>/<foreignObject> elements wholesale, including their contents.

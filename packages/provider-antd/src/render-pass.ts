@@ -29,6 +29,15 @@ export function makeRenderPass(theme: VellooTheme, dark = false): RenderPass {
       ),
     // `plain: true` returns bare CSS text; strip <style> wrappers defensively
     // anyway — the RenderPass contract returns CSS, not markup.
-    css: () => extractStyle(cache, { plain: true }).replace(/<\/?style[^>]*>/g, ""),
+    css: () => stripStyleTags(extractStyle(cache, { plain: true })),
   };
+}
+
+function stripStyleTags(css: string): string {
+  let current = css;
+  for (;;) {
+    const next = current.replace(/<\/?style[^>]*>/gi, "");
+    if (next === current) return next;
+    current = next;
+  }
 }

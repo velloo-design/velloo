@@ -69,7 +69,12 @@ export function findFrame(
 
 /** Filesystem-safe artifact stem from a design name/id. */
 export function exportFilename(name: string, ext: ExportFormat): string {
-  const stem = name.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "export";
+  const dashed = name.replace(/[^\w.-]+/g, "-");
+  let start = 0;
+  let end = dashed.length;
+  while (start < end && dashed[start] === "-") start++;
+  while (end > start && dashed[end - 1] === "-") end--;
+  const stem = dashed.slice(start, end) || "export";
   return `${stem}.${ext}`;
 }
 

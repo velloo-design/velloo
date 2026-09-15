@@ -61,6 +61,12 @@ describe("sanitizeSvgMarkup", () => {
     expect(svgLooksActive(out)).toBe(false);
   });
 
+  test("a tag spliced together by an earlier removal is removed too", () => {
+    const out = sanitizeSvgMarkup("<svg><scr<set>ipt>alert(1)</scr<set>ipt></svg>");
+    expect(out).not.toContain("<script");
+    expect(svgLooksActive(out)).toBe(false);
+  });
+
   test("leaves legitimate static SVG untouched", () => {
     const clean = '<path d="M0 0h24v24H0z" fill="currentColor"/><circle cx="12" cy="12" r="4"/>';
     expect(sanitizeSvgMarkup(clean)).toBe(clean);

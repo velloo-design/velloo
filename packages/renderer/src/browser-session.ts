@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import type { Browser, Page } from "playwright-core";
 import { CHROMIUM_FULL_INSTALL_CMD } from "./browser-install.ts";
@@ -336,7 +337,7 @@ export interface CaptureSessionHandle {
 export async function startCaptureSession(
   opts: CaptureSessionOptions,
 ): Promise<CaptureSessionHandle> {
-  const sessionId = `cs_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const sessionId = `cs_${Date.now().toString(36)}${randomBytes(3).toString("hex")}`;
   const root = capturesDir(opts.folderRoot, opts.folderId);
   mkdirSync(root, { recursive: true, mode: 0o700 });
 

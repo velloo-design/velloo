@@ -156,7 +156,7 @@ describe("script policy on rendered documents", () => {
     expect(csp).not.toContain("unsafe-inline");
 
     const html = await res.text();
-    const scripts = [...html.matchAll(/<script\b([^>]*)>/g)].map((m) => m[1] ?? "");
+    const scripts = [...html.matchAll(/<script\b([^>]*)>/gi)].map((m) => m[1] ?? "");
     expect(scripts.length).toBeGreaterThan(0);
     for (const attrs of scripts) expect(attrs).toContain(`nonce="${nonce}"`);
   });
