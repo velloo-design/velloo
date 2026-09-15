@@ -8,7 +8,7 @@
  * Rebuilds the canvas + bundles the CLI, then installs the tarball with npm
  * like a real end user. npm selects the matching official Bun runtime package.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -52,4 +52,26 @@ if (prodUrl) {
     `  Cloud default baked to \x1b[36m${prodUrl}\x1b[0m — run \`bun run cli:install\` to revert to local.`,
   );
 }
-console.log(`  Make sure ${binDir} is on your PATH, then run:  velloo --help`);
+// An earlier install from another channel (the direct installer's
+// ~/.local/bin, a Homebrew formula) can sit ahead of npm's bin on PATH, and
+// then every `velloo` — including the one agents spawn — is the stale build.
+const installed = join(binDir, "velloo");
+const resolved = Bun.which("velloo");
+const same = (a: string, b: string): boolean => {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return false;
+  }
+};
+if (!resolved) {
+  console.log(`  Make sure ${binDir} is on your PATH, then run:  velloo --help`);
+} else if (!same(resolved, installed)) {
+  console.log(
+    `\n\x1b[33m⚠ \`velloo\` on your PATH is ${resolved}, not this build.\x1b[0m\n` +
+      `  It comes earlier on PATH than ${binDir}, so your shell and your agents keep running it.\n` +
+      `  Remove it (e.g. \`rm ${resolved}\`) or put ${binDir} first, then check \`velloo --version\`.`,
+  );
+} else {
+  console.log("  Run:  velloo --help");
+}
