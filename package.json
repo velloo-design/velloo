@@ -25,6 +25,7 @@
     "fonts:check": "bun packages/schema/scripts/build-font-catalog.ts --check",
     "notices:build": "bun scripts/third-party-notices.ts",
     "notices:check": "bun scripts/third-party-notices.ts --check",
+    "codeql": "bun scripts/codeql.ts",
     "mcp:budget": "bun packages/server/scripts/mcp-token-budget.ts --check",
     "verify": "bun run typecheck && bun run lint && bun run lint:dead && bun run mcp:budget && bun run test",
     "velloo": "bun packages/cli/src/cli.ts",

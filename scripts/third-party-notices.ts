@@ -144,14 +144,20 @@ const COPYRIGHT =
 function copyrightLines(text: string): string[] {
   const found: string[] = [];
   for (const raw of text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").split(/\r?\n/)) {
-    const holder = COPYRIGHT.exec(raw)?.[1]
-      ?.replace(/<[^>]*>/g, "")
-      .replace(/[<>]/g, "")
+    const match = COPYRIGHT.exec(raw)?.[1];
+    if (match === undefined) continue;
+    let untagged = match;
+    let previous: string;
+    do {
+      previous = untagged;
+      untagged = untagged.replace(/<[^>]*>/g, "");
+    } while (untagged !== previous);
+    const holder = untagged
       .replace(/^(\(c\)|©)\s*/i, "")
       .replace(/\s*all rights reserved\.?/i, "")
       .replace(/\s+/g, " ")
       .replace(/[\s.,;]+$/, "");
-    if (holder === undefined || holder === "" || found.includes(`© ${holder}`)) continue;
+    if (holder === "" || found.includes(`© ${holder}`)) continue;
     found.push(`© ${holder}`);
   }
   return found;
