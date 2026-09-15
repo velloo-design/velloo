@@ -69,15 +69,12 @@ async function runWithArgs(args: string[]) {
 }
 
 describe("cli error presentation", () => {
-  test.each(["run", "mcp", "__daemon"])(
-    "%s refuses a non-loopback bind without the explicit unsafe flag",
-    async (command) => {
-      const { exitCode, stderr } = await runWithArgs([command, tmp, "--host", "0.0.0.0"]);
-      expect(exitCode).toBe(1);
-      expect(stderr).toContain("--unsafe-allow-remote");
-      expect(stderr).toContain("unauthenticated canvas and MCP endpoints");
-    },
-  );
+  test.each(["run", "mcp", "__daemon"])("%s refuses a non-loopback bind", async (command) => {
+    const { exitCode, stderr } = await runWithArgs([command, tmp, "--host", "0.0.0.0"]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("refusing to bind");
+    expect(stderr).toContain("only serve loopback");
+  });
 
   test("a crafted error (schema-version gate) prints one clean line, no stack", async () => {
     const folder = await writeV1Folder();

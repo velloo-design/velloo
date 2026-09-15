@@ -16,7 +16,7 @@ import { CURRENT_SCHEMA_VERSION, schemaVersionOf } from "@velloo/schema";
 import { writeJsonAtomic } from "@velloo/server";
 import { z } from "zod";
 import { defaultCloudUrl } from "../cloud.ts";
-import { assertRemoteHostAllowed } from "../host-security.ts";
+import { assertLoopbackHost } from "../host-security.ts";
 import { TOOL_VERSION } from "../version.ts";
 
 /**
@@ -266,15 +266,9 @@ export async function listDaemons(): Promise<DaemonRecord[]> {
  * `bun cli.ts __daemon …`; from the compiled binary it's `velloo __daemon …`
  * (the entry script isn't a real file on disk).
  */
-function daemonSpawnCmd(
-  root: string,
-  preferredPort: number | undefined,
-  host: string,
-  unsafeAllowRemote: boolean,
-): string[] {
+function daemonSpawnCmd(root: string, preferredPort: number | undefined, host: string): string[] {
   const args = ["__daemon", root, "--host", host];
   if (preferredPort !== undefined) args.push("--port", String(preferredPort));
-  if (unsafeAllowRemote) args.push("--unsafe-allow-remote");
   const entry = Bun.main;
   return existsSync(entry) ? [process.execPath, entry, ...args] : [process.execPath, ...args];
 }
@@ -289,7 +283,6 @@ function spawnDetached(
   root: string,
   preferredPort: number | undefined,
   host: string,
-  unsafeAllowRemote: boolean,
 ): SpawnedDaemon {
   mkdirSync(cacheDir(root), { recursive: true });
   let logStart = 0;
@@ -299,7 +292,7 @@ function spawnDetached(
     // first spawn — no log yet
   }
   const log = openSync(logPath(root), "a");
-  const proc = Bun.spawn(daemonSpawnCmd(root, preferredPort, host, unsafeAllowRemote), {
+  const proc = Bun.spawn(daemonSpawnCmd(root, preferredPort, host), {
     stdin: "ignore",
     stdout: log,
     stderr: log,
@@ -381,8 +374,6 @@ export interface EnsureOptions {
   /** Preferred canvas port when *spawning* a fresh daemon (ignored if one exists). */
   preferredPort?: number | undefined;
   host?: string | undefined;
-  /** Explicit opt-in required when host is not loopback. */
-  unsafeAllowRemote?: boolean | undefined;
   /**
    * Called when this call spawns a *fresh* daemon (vs. attaching to a live one).
    * Lets a caller report whether daemon-time settings — e.g. the trace env var —
@@ -403,7 +394,7 @@ export async function ensureDaemon(
   const root = daemonRoot(folder);
   assertFolderFormatCurrent(root);
   const host = opts.host ?? "127.0.0.1";
-  assertRemoteHostAllowed(host, opts.unsafeAllowRemote);
+  assertLoopbackHost(host);
   mkdirSync(cacheDir(root), { recursive: true }); // mutex + lockfile live here
   const deadline = Date.now() + HEALTHY_TIMEOUT_MS + 5000;
 
@@ -423,12 +414,7 @@ export async function ensureDaemon(
           if (daemonMatchesRuntime(again)) return again;
           await stopDaemon(root);
         }
-        const spawned = spawnDetached(
-          root,
-          opts.preferredPort,
-          host,
-          opts.unsafeAllowRemote ?? false,
-        );
+        const spawned = spawnDetached(root, opts.preferredPort, host);
         opts.onSpawn?.();
         return await waitForHealthy(root, spawned);
       } finally {

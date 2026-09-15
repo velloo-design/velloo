@@ -1,5 +1,3 @@
-const REMOTE_HOST_FLAG = "--unsafe-allow-remote";
-
 /** True only for hostnames that bind exclusively to this machine. */
 export function isLoopbackHost(host: string): boolean {
   const normalized = host
@@ -11,15 +9,18 @@ export function isLoopbackHost(host: string): boolean {
   const octets = normalized.split(".");
   return octets.length === 4 && octets[0] === "127" && octets.every((part) => /^\d+$/.test(part));
 }
+
 /**
- * Velloo's canvas and mutation-capable MCP endpoints do not authenticate local
- * callers. Binding them to a network interface therefore requires a conscious,
- * conspicuous opt-in at every process boundary that can start a daemon.
+ * Velloo's canvas and mutation-capable MCP endpoints do not authenticate
+ * callers, and the server rejects any request whose Host or Origin is not
+ * loopback. A network bind would expose nothing usable and invite a false sense
+ * of access, so it is refused outright at every process boundary that can start
+ * a daemon.
  */
-export function assertRemoteHostAllowed(host: string, unsafeAllowRemote = false): void {
-  if (isLoopbackHost(host) || unsafeAllowRemote) return;
+export function assertLoopbackHost(host: string): void {
+  if (isLoopbackHost(host)) return;
   throw new Error(
-    `refusing to bind unauthenticated canvas and MCP endpoints to ${JSON.stringify(host)}; ` +
-      `use ${REMOTE_HOST_FLAG} only on a trusted network`,
+    `refusing to bind ${JSON.stringify(host)}: the canvas and MCP endpoints have no authentication ` +
+      "and only serve loopback (use 127.0.0.1, localhost or ::1)",
   );
 }

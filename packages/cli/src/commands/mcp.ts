@@ -14,7 +14,7 @@ import {
   stopDaemon,
 } from "../daemon/runtime.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
-import { assertRemoteHostAllowed } from "../host-security.ts";
+import { assertLoopbackHost } from "../host-security.ts";
 import { traceEnabled } from "../trace/env.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
 
@@ -82,12 +82,7 @@ export default defineCommand({
     },
     host: {
       type: "string",
-      description: "Bind hostname (default 127.0.0.1)",
-    },
-    unsafeAllowRemote: {
-      type: "boolean",
-      default: false,
-      description: "Allow --host outside loopback (unsafe: canvas and MCP have no network auth)",
+      description: "Loopback bind hostname: 127.0.0.1 (default), localhost or ::1",
     },
     surface: {
       type: "string",
@@ -95,7 +90,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    assertRemoteHostAllowed(args.host ?? "127.0.0.1", Boolean(args.unsafeAllowRemote));
+    assertLoopbackHost(args.host ?? "127.0.0.1");
     const folder = await resolveDesignFolder(args.folder, "mcp");
     const preferredPort = args.port ? Number(args.port) : undefined;
     const parsedSurface = parseMcpSurfaceSelection(args.surface ?? process.env.VELLOO_MCP_SURFACE);
@@ -111,7 +106,6 @@ export default defineCommand({
       rec = await ensureDaemon(folder, {
         preferredPort,
         host: args.host,
-        unsafeAllowRemote: Boolean(args.unsafeAllowRemote),
         onSpawn: () => {
           spawned = true;
         },
@@ -160,7 +154,6 @@ export default defineCommand({
           const fresh = await ensureDaemon(folder, {
             preferredPort,
             host: args.host,
-            unsafeAllowRemote: Boolean(args.unsafeAllowRemote),
           });
           return withMcpSurfaceUrl(fresh.mcpUrl, surface);
         } catch {

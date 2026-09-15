@@ -23,7 +23,7 @@ import {
   removeLock,
   writeLock,
 } from "../daemon/runtime.ts";
-import { assertRemoteHostAllowed } from "../host-security.ts";
+import { assertLoopbackHost } from "../host-security.ts";
 import { TOOL_VERSION } from "../version.ts";
 
 /** No canvas tabs and no agents for this long → the daemon exits. */
@@ -50,12 +50,11 @@ export default defineCommand({
     folder: { type: "positional", required: true, description: "Design folder (absolute)" },
     port: { type: "string", description: "Preferred canvas port" },
     host: { type: "string", description: "Bind hostname (default 127.0.0.1)" },
-    unsafeAllowRemote: { type: "boolean", default: false },
   },
   async run({ args }) {
     const root = daemonRoot(args.folder);
     const host = args.host ?? "127.0.0.1";
-    assertRemoteHostAllowed(host, Boolean(args.unsafeAllowRemote));
+    assertLoopbackHost(host);
     const cloudUrl = defaultCloudUrl();
     const cred = await loadCredential(cloudUrl);
     // `token` is the boot-time snapshot; `resolveToken` re-reads ~/.velloo on
