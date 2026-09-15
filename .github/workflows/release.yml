@@ -62,6 +62,7 @@ jobs:
           bun run lint
           bun run lint:dead
           bun run mcp:budget
+          bun run notices:check
           bun run test
 
       - name: Version

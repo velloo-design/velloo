@@ -42,7 +42,8 @@ or the MCP surface bump the **minor**; everything else bumps the **patch**.
    (or Actions → Release → Run workflow).
 3. **Approve** the `prod` deployment when GitHub asks.
 4. `release.yml` then:
-   - runs the gates (typecheck, lint, tests),
+   - runs the gates (typecheck, lint, tests, and `bun run notices:check`, which
+     fails when `THIRD-PARTY-NOTICES.md` is stale or a dependency's license is unreviewed),
    - computes the version and writes the release notes,
    - builds the npm package and direct archives with the hosted cloud baked in,
      and smoke-tests both installs,
