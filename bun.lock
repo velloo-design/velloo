@@ -50,6 +50,7 @@
       },
       "dependencies": {
         "@clack/prompts": "1.7.0",
+        "@velloo/canvas": "workspace:*",
         "@velloo/codegen": "workspace:*",
         "@velloo/protocol": "workspace:*",
         "@velloo/provider": "workspace:*",
@@ -261,7 +262,6 @@
         "@modelcontextprotocol/sdk": "1.30.0",
         "@tailwindcss/node": "4.3.3",
         "@tailwindcss/oxide": "4.3.3",
-        "@velloo/canvas": "workspace:*",
         "@velloo/codegen": "workspace:*",
         "@velloo/helpers": "workspace:*",
         "@velloo/protocol": "workspace:*",

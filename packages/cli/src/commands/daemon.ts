@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { canvasDistPath } from "@velloo/canvas";
 import {
   type CanvasAuth,
   type CanvasPublish,
@@ -96,6 +97,7 @@ export default defineCommand({
         port: canvasPort,
         host,
         mcp: { transport: "http", port: 0 },
+        canvasDist: canvasDistPath,
         cloud,
         auth,
         publish,
@@ -109,6 +111,7 @@ export default defineCommand({
         port: 0,
         host,
         mcp: { transport: "http", port: 0 },
+        canvasDist: canvasDistPath,
         cloud,
         auth,
         publish,

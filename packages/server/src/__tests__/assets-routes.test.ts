@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { canvasDistPath } from "@velloo/canvas";
 import { assetPathFromSrc } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { createApp } from "../app.ts";
@@ -320,7 +319,10 @@ describe("POST /api/assets/generate", () => {
 });
 
 describe("serving /assets/*", () => {
-  const serve = (path: string) => serveNonApi(new Request(`http://localhost${path}`), tmp);
+  /** A stand-in canvas build: its bundles share the /assets/ namespace with the folder's. */
+  const canvasDist = () => join(tmp, "canvas-dist");
+  const serve = (path: string) =>
+    serveNonApi(new Request(`http://localhost${path}`), tmp, canvasDist());
 
   test("an existing asset is served with its own content type", async () => {
     await mkdir(join(tmp, "assets"), { recursive: true });
@@ -342,11 +344,11 @@ describe("serving /assets/*", () => {
   test("the canvas's OWN bundles still resolve under /assets/", async () => {
     // /assets/ is a shared namespace — Vite emits the SPA's JS/CSS there. A
     // 404 raised before the dist handler took the whole canvas down.
-    const dist = join(canvasDistPath, "assets");
-    const bundle = (await readdir(dist).catch(() => []))[0];
-    if (!bundle) return; // canvas not built in this environment
-    const res = await serve(`/assets/${bundle}`);
+    await mkdir(join(canvasDist(), "assets"), { recursive: true });
+    await writeFile(join(canvasDist(), "assets/index-abc123.js"), "export {}", "utf8");
+    const res = await serve("/assets/index-abc123.js");
     expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/javascript");
   });
 
   test("an encoded path escaping the asset store is a 404, not a file read", async () => {
@@ -358,6 +360,8 @@ describe("serving /assets/*", () => {
   });
 
   test("a non-asset route still reaches the SPA", async () => {
+    await mkdir(canvasDist(), { recursive: true });
+    await writeFile(join(canvasDist(), "index.html"), "<!doctype html>", "utf8");
     const res = await serve("/some/board");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/html");

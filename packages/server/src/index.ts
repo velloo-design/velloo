@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { extname, join, sep } from "node:path";
-import { canvasDistPath } from "@velloo/canvas";
 import { keyframesToCss } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import {
@@ -79,6 +78,12 @@ export interface ServerOptions {
    * this velloo was installed). Omit ⇒ the canvas offers no upgrade.
    */
   updates?: CanvasUpdates | undefined;
+  /**
+   * Directory holding the built canvas SPA, resolved by the CLI (which owns
+   * the canvas dependency). Omit ⇒ `/` answers with a "canvas not built" page,
+   * which is all an MCP-only server needs.
+   */
+  canvasDist?: string | undefined;
 }
 
 export interface ServerHandle {
@@ -105,14 +110,11 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-async function serveStatic(req: Request): Promise<Response | null> {
+async function serveStatic(req: Request, canvasDist: string): Promise<Response | null> {
   const url = new URL(req.url);
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const fsPath = join(canvasDistPath, requested);
-  if (
-    !(fsPath === canvasDistPath || fsPath.startsWith(canvasDistPath + sep)) ||
-    !existsSync(fsPath)
-  )
+  const fsPath = join(canvasDist, requested);
+  if (!(fsPath === canvasDist || fsPath.startsWith(canvasDist + sep)) || !existsSync(fsPath))
     return null;
   const file = Bun.file(fsPath);
   if (!(await file.exists())) return null;
@@ -236,11 +238,15 @@ export async function serveFolderAsset(req: Request, folderRoot: string): Promis
  * indistinguishable from a corrupt file, and which makes any existence check
  * (a deleted asset, a typo'd src) silently succeed.
  */
-export async function serveNonApi(req: Request, folderRoot: string): Promise<Response> {
+export async function serveNonApi(
+  req: Request,
+  folderRoot: string,
+  canvasDist: string | undefined,
+): Promise<Response> {
   const assetResponse = await serveFolderAsset(req, folderRoot);
   if (assetResponse) return assetResponse;
 
-  const staticResponse = await serveStatic(req);
+  const staticResponse = canvasDist ? await serveStatic(req, canvasDist) : null;
   if (staticResponse) return staticResponse;
 
   if (new URL(req.url).pathname.startsWith("/assets/")) {
@@ -250,14 +256,13 @@ export async function serveNonApi(req: Request, folderRoot: string): Promise<Res
     });
   }
 
-  if (req.method === "GET") return serveSpaFallback();
+  if (req.method === "GET") return serveSpaFallback(canvasDist);
   return new Response("Not found", { status: 404 });
 }
 
-async function serveSpaFallback(): Promise<Response> {
-  const indexPath = join(canvasDistPath, "index.html");
-  const file = Bun.file(indexPath);
-  if (await file.exists()) {
+async function serveSpaFallback(canvasDist: string | undefined): Promise<Response> {
+  const file = canvasDist ? Bun.file(join(canvasDist, "index.html")) : null;
+  if (file && (await file.exists())) {
     return new Response(file, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
   return new Response(
@@ -394,7 +399,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       // Static reads only need the rebinding guard: headless screenshot pages
       // fetch fonts and images from here with an opaque `Origin: null`.
       if (!hostIsLoopback(url.host)) return new Response("forbidden", { status: 403 });
-      return serveNonApi(req, folder.root);
+      return serveNonApi(req, folder.root, opts.canvasDist);
     },
     websocket: {
       open(ws: ServerWebSocket<unknown>) {

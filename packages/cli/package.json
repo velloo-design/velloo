@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@clack/prompts": "1.7.0",
+    "@velloo/canvas": "workspace:*",
     "@velloo/codegen": "workspace:*",
     "@velloo/protocol": "workspace:*",
     "@velloo/provider": "workspace:*",
