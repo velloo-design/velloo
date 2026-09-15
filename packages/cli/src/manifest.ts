@@ -1,12 +1,14 @@
 import { type Dirent, existsSync, realpathSync } from "node:fs";
 import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
 import {
-  managedDesignPath,
-  managedProjectContext,
+  type LocalDesign,
+  localDesignOf,
+  localDesignsAt,
   writeJsonAtomic,
-  writeManagedBinding,
+  writeLocalDesign,
 } from "@velloo/server";
 
 /**
@@ -64,6 +66,15 @@ export async function findManifest(startDir: string): Promise<FoundManifest | nu
       } catch (err) {
         throw new Error(`${path} is not valid JSON: ${(err as Error).message}`);
       }
+      const projects = (parsed as { projects?: unknown } | null)?.projects;
+      for (const [name, entry] of Object.entries(
+        projects && typeof projects === "object" ? projects : {},
+      )) {
+        if (entry && typeof entry === "object" && "managed" in entry)
+          throw new Error(
+            `${path}: project "${name}" is a managed design locator, which velloo.json no longer holds — a design outside the repository is recorded only on the machine that has it. Remove the entry, then run \`velloo folder bind <design folder>\` from this checkout.`,
+          );
+      }
       const result = ManifestSchema.safeParse(parsed);
       if (!result.success) {
         const issues = result.error.issues
@@ -74,9 +85,7 @@ export async function findManifest(startDir: string): Promise<FoundManifest | nu
       const folders = new Map(
         Object.entries(result.data.projects).map(([name, rel]) => [
           name,
-          typeof rel === "string"
-            ? resolve(dir, rel.replace(/\\/g, "/"))
-            : managedDesignPath(rel.managed),
+          resolve(dir, rel.replace(/\\/g, "/")),
         ]),
       );
       return { path, dir, manifest: result.data, folders };
@@ -88,38 +97,69 @@ export async function findManifest(startDir: string): Promise<FoundManifest | nu
 }
 
 /**
+ * The projects visible from a directory: the committed `velloo.json` above it
+ * and the local designs this machine records for a checkout containing it,
+ * merged into one name space. Null when there are neither.
+ */
+export interface ProjectSet {
+  repo: FoundManifest | null;
+  local: LocalDesign[];
+  /** Project name → absolute design folder, both kinds. */
+  folders: Map<string, string>;
+  defaultProject: string | undefined;
+}
+
+export async function findProjects(cwd: string): Promise<ProjectSet | null> {
+  const repo = await findManifest(cwd);
+  const local = localDesignsAt(cwd);
+  if (!repo && local.length === 0) return null;
+  const folders = new Map(repo?.folders ?? []);
+  for (const design of local) {
+    const clash = folders.get(design.projectName);
+    if (clash !== undefined)
+      throw new Error(
+        `Project "${design.projectName}" names both ${clash} (in ${repo?.path ?? "another local design"}) and the local design ${design.designRoot}. Remove one with \`velloo folder remove\`, or rename the velloo.json entry.`,
+      );
+    folders.set(design.projectName, design.designRoot);
+  }
+  return { repo, local, folders, defaultProject: repo?.manifest.defaultProject };
+}
+
+/**
  * Pick the project `cwd` implies, or null when only a human (or
  * defaultProject) can disambiguate. Containment beats everything: standing
- * inside a project's folder — or inside a directory that holds exactly one
- * project (an app dir in a monorepo) — is an unambiguous choice.
+ * inside a local design's application, inside a project's folder, or inside a
+ * directory that holds exactly one project (an app dir in a monorepo) is an
+ * unambiguous choice.
  */
-export function pickProject(found: FoundManifest, cwd: string): string | null {
-  const entries = [...found.folders];
-  const appMatches = Object.entries(found.manifest.projects).filter(([, entry]) => {
-    if (typeof entry === "string" || !entry.appRoot || entry.appRoot === ".") return false;
-    const app = resolve(found.dir, entry.appRoot);
-    return cwd === app || cwd.startsWith(app + sep);
-  });
-  if (appMatches.length === 1 && appMatches[0]) return appMatches[0][0];
+export function pickProject(projects: ProjectSet, cwd: string): string | null {
+  const entries = [...projects.folders];
+  const appMatches = projects.local.filter(
+    (design) =>
+      resolve(design.appRoot) !== resolve(design.root) && isWithin(resolve(design.appRoot), cwd),
+  );
+  if (appMatches.length === 1 && appMatches[0]) return appMatches[0].projectName;
   const containing = entries.find(([, folder]) => cwd === folder || cwd.startsWith(folder + sep));
   if (containing) return containing[0];
   const under = entries.filter(([, folder]) => folder.startsWith(cwd + sep));
   if (under.length === 1 && under[0]) return under[0][0];
   if (entries.length === 1 && entries[0]) return entries[0][0];
-  return found.manifest.defaultProject ?? null;
+  return projects.defaultProject ?? null;
 }
 
 /**
- * Describe a design folder in manifest terms for display: when an
- * enclosing `velloo.json` registers it, "name — rel/path (in /repo/root)";
- * null otherwise (callers fall back to the raw path). Display-only, so a
- * broken manifest degrades to the fallback instead of failing the caller.
+ * Describe a design folder in project terms for display: "name — rel/path
+ * (in /repo/root)" for a `velloo.json` entry, "name — /path (local, for
+ * /checkout)" for a local design; null otherwise (callers fall back to the
+ * raw path). Display-only, so a broken manifest degrades to the fallback.
  */
 export async function projectLabel(folder: string): Promise<string | null> {
   const abs = resolve(folder);
+  const local = localDesignOf(abs);
+  if (local) return `${local.projectName} — ${abs} (local, for ${local.root})`;
   let found: FoundManifest | null;
   try {
-    found = await findManifest(managedProjectContext(abs)?.appRoot ?? abs);
+    found = await findManifest(abs);
   } catch {
     return null;
   }
@@ -180,42 +220,45 @@ export async function unregisterProject(
   return { name, path: found.path, removedManifest: false };
 }
 
-/** Walk up from `start` for a `.git` entry (dir, or file for worktrees). */
 /**
  * Where a new `velloo.json` for this folder goes: the git root, else the
  * nearest directory holding both the app and the design folder.
  */
-async function manifestDirFor(folder: string, appRoot: string, managed: boolean): Promise<string> {
+async function manifestDirFor(folder: string, appRoot: string): Promise<string> {
   const git = await findGitRoot(appRoot);
   if (git) return git;
   let dir = resolve(appRoot);
-  if (managed) return dir;
   while (!isWithin(dir, folder) && dirname(dir) !== dir) dir = dirname(dir);
   return dir;
 }
 
 /**
- * The directory a `velloo.json` would anchor for a folder that doesn't exist
- * yet — init asks about agent wiring before anything is written.
+ * The checkout a new design belongs to: the `velloo.json` already above where
+ * init ran, else the git root, else where init ran (or the app itself, when
+ * it sits outside that). A design folder outside it becomes a local design.
  */
-export async function prospectiveManifestDir(folder: string, appRoot: string): Promise<string> {
-  try {
-    const found = await findManifest(folder);
-    if (found) return found.dir;
-  } catch {
-    // Registration reports a broken manifest; the prompt only needs a guess.
-  }
-  return manifestDirFor(resolve(folder), appRoot, false);
+export async function checkoutRoot(appRoot: string, launchRoot: string): Promise<string> {
+  const found = await findManifest(launchRoot).catch(() => null);
+  if (found) return found.dir;
+  const git = await findGitRoot(appRoot);
+  if (git) return git;
+  return isWithin(resolve(launchRoot), resolve(appRoot)) ? resolve(launchRoot) : resolve(appRoot);
 }
 
-function isWithin(parent: string, child: string): boolean {
+export function isWithin(parent: string, child: string): boolean {
   const rel = relative(parent, child);
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
+/**
+ * Walk up from `start` for a `.git` entry (dir, or file for worktrees),
+ * stopping below the home directory: a repository there is a dotfiles
+ * checkout, and a design folder made in a plain directory must not join it.
+ */
 export async function findGitRoot(start: string): Promise<string | null> {
+  const home = homedir();
   let dir = resolve(start);
-  while (true) {
+  while (dir !== home) {
     try {
       await stat(join(dir, ".git"));
       return dir;
@@ -226,6 +269,7 @@ export async function findGitRoot(start: string): Promise<string | null> {
     if (parent === dir) return null;
     dir = parent;
   }
+  return null;
 }
 
 /** Directories a repo scan should never descend into. */
@@ -303,17 +347,13 @@ export async function registerProject(
   folder: string,
   appRoot: string,
   requestedName?: string,
-  managedId?: string,
 ): Promise<RegisterResult> {
-  if (requestedName && !PROJECT_NAME.test(requestedName)) {
-    throw new Error(
-      `invalid --project ${JSON.stringify(requestedName)} — names are letters/digits plus . _ -`,
-    );
-  }
+  checkProjectName(requestedName);
   const abs = resolve(folder);
-  const found = await findManifest(managedId ? appRoot : abs);
-  const dir = found ? found.dir : await manifestDirFor(abs, appRoot, managedId !== undefined);
+  const found = await findManifest(abs);
+  const dir = found ? found.dir : await manifestDirFor(abs, appRoot);
   const path = found ? found.path : join(dir, MANIFEST_FILE);
+  const localNames = new Set(localDesignsAt(dir).map((design) => design.projectName));
 
   const projects: Manifest["projects"] = { ...(found?.manifest.projects ?? {}) };
   for (const [existing, target] of found?.folders ?? []) {
@@ -326,7 +366,8 @@ export async function registerProject(
 
   const add = (folder: string, wanted?: string): string => {
     let name = wanted ?? deriveName(folder);
-    for (let n = 2; name in projects; n++) name = `${wanted ?? deriveName(folder)}-${n}`;
+    for (let n = 2; name in projects || localNames.has(name); n++)
+      name = `${wanted ?? deriveName(folder)}-${n}`;
     projects[name] = relative(dir, folder) || ".";
     return name;
   };
@@ -348,27 +389,54 @@ export async function registerProject(
   // A folder beside the app rather than inside it (init run from a monorepo
   // root for `frontend/`) is named for the app — "chainlit" says nothing.
   const outsideApp = !isWithin(resolve(appRoot), abs);
-  const name = add(
-    abs,
-    requestedName ?? (managedId || outsideApp ? deriveName(appRoot) : undefined),
-  );
-  if (managedId)
-    projects[name] = {
-      managed: managedId,
-      appRoot: relative(dir, appRoot).split(sep).join("/") || ".",
-    };
+  const name = add(abs, requestedName ?? (outsideApp ? deriveName(appRoot) : undefined));
 
   const manifest: Manifest = {
     ...(found?.manifest ?? {}),
     projects,
     ...(defaultProject ? { defaultProject } : {}),
   };
-  if (managedId)
-    await writeManagedBinding(managedId, {
-      manifestPath: path,
-      appRoot: resolve(appRoot),
-      projectName: name,
-    });
   await writeJsonAtomic(path, manifest);
   return { name, path, created: true };
+}
+
+function checkProjectName(name: string | undefined): void {
+  if (name && !PROJECT_NAME.test(name)) {
+    throw new Error(
+      `invalid --project ${JSON.stringify(name)} — names are letters/digits plus . _ -`,
+    );
+  }
+}
+
+export interface LocalRegistration {
+  id: string;
+  root: string;
+  appRoot: string;
+  /** A folder the user chose; omitted for managed storage. */
+  designPath?: string | undefined;
+  requestedName?: string | undefined;
+}
+
+/**
+ * Record a local design for a checkout on this machine. Nothing is written
+ * into the checkout. The name avoids every project the checkout already sees;
+ * an explicitly requested name that is taken is refused instead.
+ */
+export async function registerLocalDesign(opts: LocalRegistration): Promise<string> {
+  checkProjectName(opts.requestedName);
+  const existing = localDesignsAt(opts.root).find((design) => design.id === opts.id);
+  const taken = new Set((await findProjects(opts.root))?.folders.keys() ?? []);
+  if (existing) taken.delete(existing.projectName);
+  const base = opts.requestedName ?? existing?.projectName ?? deriveName(opts.appRoot);
+  if (opts.requestedName && taken.has(base))
+    throw new Error(`project "${base}" already exists for ${opts.root} — pick another --project.`);
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+  await writeLocalDesign(opts.id, {
+    root: opts.root,
+    appRoot: opts.appRoot,
+    projectName: name,
+    ...(opts.designPath ? { designPath: opts.designPath } : {}),
+  });
+  return name;
 }

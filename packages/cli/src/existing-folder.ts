@@ -20,7 +20,7 @@ import {
 import { installChromiumInteractive } from "./browser-setup.ts";
 import { globallyWiredAgents } from "./connect/index.ts";
 import { daemonRoot, ensureDaemon, stopDaemon } from "./daemon/runtime.ts";
-import { findManifest, registerProject } from "./manifest.ts";
+import { findProjects, registerProject } from "./manifest.ts";
 import { findMuiTheme, importThemeFromMui } from "./scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "./scaffold/import-theme.ts";
 import { detectHost } from "./scan/detect.ts";
@@ -79,7 +79,7 @@ export async function readFolderFacts(folder: string, appRoot: string): Promise<
   const library = libraries[defaultLibrary]?.id ?? Object.values(libraries)[0]?.id ?? "unknown";
   let project: string | undefined;
   try {
-    const manifest = await findManifest(appRoot);
+    const manifest = await findProjects(appRoot);
     if (manifest) {
       for (const [name, path] of manifest.folders) {
         if (resolve(path) === resolve(folder)) project = name;

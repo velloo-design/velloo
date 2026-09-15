@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { isCancel, select } from "@clack/prompts";
 import { managedDesignPath, writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
@@ -8,8 +8,8 @@ import pc from "picocolors";
 import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
 import { PROJECT_AGENT_IDS } from "../connect/index.ts";
 import { fail } from "../fail.ts";
-import { checkpoint, rebaseDesignConfig } from "../managed-folders.ts";
-import { registerProject } from "../manifest.ts";
+import { rebaseDesignConfig } from "../managed-folders.ts";
+import { checkoutRoot, isWithin, registerLocalDesign, registerProject } from "../manifest.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
 import { detectHost } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
@@ -35,6 +35,7 @@ import {
 import { applyAgentWiring, NOT_WIRED, printWired } from "./init/agent-wiring.ts";
 import { offerExistingFolderActions } from "./init/existing.ts";
 import {
+  displayPath,
   printExitInstructions,
   printScreenshotReadiness,
   printSummary,
@@ -195,6 +196,8 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   let presetFolder = cliArgs.designFolder;
   if (external && cliArgs.designFolder)
     fail("init", "Choose --external or --design-folder, not both.");
+  const candidateId = randomUUID();
+  const candidateFolder = managedDesignPath(candidateId);
   if (interactive && cliArgs.external === undefined && !cliArgs.designFolder) {
     const storage = await select({
       message: "Where should the design live?",
@@ -207,7 +210,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         {
           value: "external",
           label: "Default out of repo",
-          hint: "Velloo-managed storage with its own Git history",
+          hint: `${displayPath(dirname(candidateFolder))}/ — not version-controlled`,
         },
         { value: "custom", label: "Custom name", hint: "Choose a design folder name or path" },
       ],
@@ -216,12 +219,20 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     external = storage === "external";
     if (storage === "repository") presetFolder = secondFolder ? "velloo-brand" : "velloo";
   }
-  const managedId = external ? randomUUID() : undefined;
-  const managedFolder = managedId ? managedDesignPath(managedId) : undefined;
+  const managedId = external ? candidateId : undefined;
+  const managedFolder = managedId ? candidateFolder : undefined;
   let answers: WizardAnswers;
 
   if (interactive) {
     console.log(pc.dim(`  App root: ${appRoot}  (the app this design targets)`));
+    if (managedFolder)
+      console.log(
+        pc.dim(
+          `  Design:   ${displayPath(managedFolder)}  (outside the repo, not version-controlled)`,
+        ),
+      );
+    else if (presetFolder)
+      console.log(pc.dim(`  Design:   ${displayPath(resolve(launchRoot, presetFolder))}`));
     if (launchRoot !== appRoot)
       console.log(pc.dim(`  Design folder and agent config go under ${launchRoot}.`));
     console.log("");
@@ -320,16 +331,18 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   } catch (err) {
     fail("init", (err as Error).message);
   }
+  // A design outside the checkout — managed storage or a path that lands
+  // outside it — is a local design: recorded on this machine, never in the
+  // committed velloo.json, which must not point outside its repository.
+  const root = await checkoutRoot(answers.appRoot, launchRoot);
+  const localId = managedId ?? (isWithin(root, folder) ? undefined : randomUUID());
   try {
-    await writeScaffold(folder, scaffold, plan, answers);
-    if (managedId) {
-      await rebaseDesignConfig(folder, folder, answers.appRoot, true);
-      await checkpoint(folder, "Initial Velloo design", true);
-    }
+    await writeScaffold(folder, scaffold, plan, answers, localId !== undefined);
+    if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
   } catch (error) {
-    if (managedId)
+    if (localId)
       throw new Error(
-        `Could not finish the managed design at ${folder}. Existing content was retained. Check Git, write permissions and free disk space before retrying. ${error instanceof Error ? error.message : error}`,
+        `Could not finish the design at ${folder}. Existing content was retained. Check write permissions and free disk space before retrying. ${error instanceof Error ? error.message : error}`,
       );
     throw error;
   }
@@ -338,17 +351,32 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // "scaffolded" — keeps the existing CLI test passing.
   console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
 
-  // Name the folder in the repo manifest so a second design folder in the
-  // same repo stays resolvable. The scaffold already succeeded — a manifest
-  // problem is a warning to fix by hand, not a failed init.
+  // Name the folder so a second design folder for the same repo stays
+  // resolvable. The scaffold already succeeded — a manifest problem is a
+  // warning to fix by hand, not a failed init.
   try {
-    const reg = await registerProject(folder, answers.appRoot, cliArgs.project, managedId);
-    if (reg.created) {
+    if (localId) {
+      const name = await registerLocalDesign({
+        id: localId,
+        root,
+        appRoot: answers.appRoot,
+        ...(managedId ? {} : { designPath: folder }),
+        requestedName: cliArgs.project,
+      });
       console.log(
         pc.dim(
-          `  Registered as project "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
+          `  Recorded as local design "${name}" for ${displayPath(root)} — on this machine only; nothing was added to the repository.`,
         ),
       );
+    } else {
+      const reg = await registerProject(folder, answers.appRoot, cliArgs.project);
+      if (reg.created) {
+        console.log(
+          pc.dim(
+            `  Registered as project "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
+          ),
+        );
+      }
     }
     // Whether the tool exists is a repo decision, written now that a manifest
     // is guaranteed to exist (a folder outside any repo has nowhere higher to
@@ -359,7 +387,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       await writeFeedbackContactOk(answers.feedback.contactOk === true);
     }
   } catch (err) {
-    if (managedId)
+    if (localId)
       fail(
         "init",
         `Design retained at ${folder}, but registration failed: ${(err as Error).message}`,
@@ -382,10 +410,19 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // the agent for scans.
   let wireOutcome = NOT_WIRED;
   if (cliArgs.connect !== false) {
+    // The non-interactive default wires project configs, which a local design
+    // never writes; editing someone's global agent config unasked is not a
+    // default either, so it waits for an explicit `velloo connect`.
     const wiring = interactive
       ? answers.agentWiring
-      : { agents: PROJECT_AGENT_IDS, manual: false, preWired: [] };
+      : localId
+        ? undefined
+        : { agents: PROJECT_AGENT_IDS, manual: false, preWired: [] };
     if (wiring) wireOutcome = await applyAgentWiring(folder, wiring);
+    else if (localId && !interactive)
+      console.log(
+        pc.dim("  Agents not wired: a local design uses global configs — run `velloo connect`."),
+      );
   }
   printWired(wireOutcome);
   await printScreenshotReadiness(interactive);

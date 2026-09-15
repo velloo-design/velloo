@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
-import { cancel, select, text } from "@clack/prompts";
+import { cancel, log, select, text } from "@clack/prompts";
 import { type AgentWiring, askAgentWiring } from "../connect/index.ts";
 import { isDesignFolderSync, isEmptyOrMissingSync } from "../folder.ts";
-import { prospectiveManifestDir } from "../manifest.ts";
+import { checkoutRoot, isWithin } from "../manifest.ts";
 import { discoverScanRoots } from "../scan/index.ts";
 import type { GoalMode, WizardAnswers } from "./answers.ts";
 import {
@@ -159,6 +159,14 @@ export async function runInteractive(
     }));
   if (isAborted(folderInput)) return cancelled();
   const folder = resolve(folderBase, folderInput || folderDefault);
+  const root = await checkoutRoot(ctx.appRoot, folderBase);
+  const local = !isWithin(root, folder);
+  // Managed storage already said this when it was picked; a typed path that
+  // lands outside the checkout is the case worth pointing out.
+  if (local && !ctx.presetFolder)
+    log.info(
+      `${folder} is outside ${root}, so it will be a local design: recorded only on this machine, not in velloo.json, and not version-controlled by this repo.`,
+    );
 
   // Agent wiring is asked up front (config before content) but only applied
   // after the scaffold is written — cancelling anywhere below touches no files.
@@ -168,7 +176,8 @@ export async function runInteractive(
     // the folder is registered.
     const wiring = await askAgentWiring({
       skipWhenCovered: true,
-      projectRoot: await prospectiveManifestDir(folder, ctx.appRoot),
+      projectRoot: root,
+      globalOnly: local,
     });
     if (wiring === null) return cancelled();
     agentWiring = wiring;

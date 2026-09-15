@@ -3,13 +3,14 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { isCancel, multiselect, select } from "@clack/prompts";
 import { BoardSchema, isArchived, ScreenSchema } from "@velloo/schema";
-import { managedProjectContext } from "@velloo/server";
+import { listLocalDesigns, localDesignOf } from "@velloo/server";
 import { findDesignConfig } from "./design-config.ts";
 import { fail } from "./fail.ts";
 import {
   discoverDesignFolders,
-  type FoundManifest,
   findManifest,
+  findProjects,
+  type ProjectSet,
   pickProject,
 } from "./manifest.ts";
 
@@ -30,7 +31,7 @@ export const FOLDER_ARG_DESCRIPTION =
  */
 export async function existingDesignFolder(appRoot: string): Promise<string | null> {
   try {
-    const found = await findManifest(appRoot);
+    const found = await findProjects(appRoot);
     for (const folder of found?.folders.values() ?? []) {
       if (await hasDesignConfig(folder)) return folder;
     }
@@ -86,47 +87,42 @@ export interface ResolveDesignFolderOptions {
   cwd?: string | undefined;
 }
 
-/** A manifest entry must point at a real design folder — fail loud on a stale path. */
-async function manifestProject(
-  repo: FoundManifest,
+/**
+ * A project must point at a real design folder — fail loud on a stale path.
+ * A `velloo.json` entry must also stay inside its repository: the file is
+ * committed, and a cloned repo must not be able to aim Velloo elsewhere.
+ */
+async function projectFolder(
+  projects: ProjectSet,
   name: string,
   abort: (message: string) => never,
 ): Promise<string> {
-  const folder = repo.folders.get(name) as string;
-  const entry = repo.manifest.projects[name];
-  try {
-    if (typeof entry !== "string") {
-      const context = managedProjectContext(folder);
-      if (
-        !context ||
-        realpathSync(context.manifestPath) !== realpathSync(repo.path) ||
-        context.projectName !== name
-      ) {
-        throw new Error(
-          `Project ${name} is bound to another application. Run \`velloo folder bind ${name} --yes\` here to explicitly rebind it.`,
-        );
-      }
-    } else {
-      const root = realpathSync(repo.dir);
-      const target = existsSync(folder)
-        ? realpathSync(folder)
-        : resolve(root, relative(repo.dir, folder));
-      const rel = relative(root, target);
-      if (rel === ".." || rel.startsWith(`..${sep}`) || /^[A-Za-z]:[\\/]/.test(entry)) {
-        throw new Error(
-          `Legacy external path for ${name}: ${entry}. Pass the design path explicitly to authorize this location, or use \`velloo folder relocate <path> --external\` to create a portable managed locator. The manifest has not been changed.`,
-        );
-      }
+  const folder = projects.folders.get(name) as string;
+  const local = projects.local.find((design) => design.projectName === name);
+  const repo = projects.repo;
+  if (!local && repo) {
+    const entry = repo.manifest.projects[name] as string;
+    const root = realpathSync(repo.dir);
+    const target = existsSync(folder)
+      ? realpathSync(folder)
+      : resolve(root, relative(repo.dir, folder));
+    const rel = relative(root, target);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || /^[A-Za-z]:[\\/]/.test(entry)) {
+      abort(
+        `project ${JSON.stringify(name)} in ${repo.path} points outside the repository (${entry}), which velloo.json cannot authorize. Pass the design path explicitly, or run \`velloo folder bind ${entry}\` here to keep it as a local design on this machine.`,
+      );
     }
-  } catch (error) {
-    abort((error as Error).message);
   }
   if (!(await hasDesignConfig(folder))) {
     abort(
-      `project ${JSON.stringify(name)} in ${repo.path} points at ${folder}, which is not a velloo design folder (no .design/config.json).`,
+      `project ${JSON.stringify(name)} ${local ? "(a local design)" : `in ${repo?.path}`} points at ${folder}, which is not a velloo design folder (no .design/config.json).`,
     );
   }
   return folder;
+}
+
+function projectsLabel(projects: ProjectSet): string {
+  return projects.repo?.path ?? "this checkout's local designs";
 }
 
 /**
@@ -148,21 +144,25 @@ export async function resolveDesignFolder(
   const abort: (message: string) => never = opts.onFail ?? ((m) => fail(cmd, m));
   const cwd = resolve(opts.cwd ?? ".");
 
-  let repo: FoundManifest | null = null;
+  let projects: ProjectSet | null = null;
   try {
-    repo = await findManifest(cwd);
+    projects = await findProjects(cwd);
   } catch (err) {
     abort((err as Error).message);
   }
 
   if (arg) {
-    if (repo && !arg.includes(sep) && repo.folders.has(arg)) {
-      return manifestProject(repo, arg, abort);
+    if (projects && !arg.includes(sep) && projects.folders.has(arg)) {
+      return projectFolder(projects, arg, abort);
     }
     const explicit = resolve(cwd, arg);
     if (await hasDesignConfig(explicit)) return explicit;
-    const explicitRepo = await findManifest(explicit);
-    if (explicitRepo?.dir === explicit && explicitRepo.folders.size) {
+    const explicitProjects = await findProjects(explicit).catch(() => null);
+    if (
+      explicitProjects?.folders.size &&
+      (explicitProjects.repo?.dir === explicit ||
+        explicitProjects.local.some((design) => resolve(design.root) === explicit))
+    ) {
       return resolveDesignFolder(undefined, cmd, { ...opts, cwd: explicit });
     }
     // App root passed as a path — same as `cd` there with no arg.
@@ -170,9 +170,9 @@ export async function resolveDesignFolder(
     if (await hasDesignConfig(nested)) return nested;
     // A bare name that matches nothing is a typo'd project, not a folder path —
     // suggest the real names even for commands that require a config.
-    if (repo && !arg.includes(sep)) {
+    if (projects && !arg.includes(sep)) {
       abort(
-        `unknown project ${JSON.stringify(arg)} — ${repo.path} lists: ${[...repo.folders.keys()].join(", ")}. Pass a project name or a folder path.`,
+        `unknown project ${JSON.stringify(arg)} — ${projectsLabel(projects)} lists: ${[...projects.folders.keys()].join(", ")}. Pass a project name or a folder path.`,
       );
     }
     if (opts.requireConfig) {
@@ -181,26 +181,27 @@ export async function resolveDesignFolder(
     return explicit;
   }
 
-  if (repo && repo.folders.size > 0) {
+  if (projects && projects.folders.size > 0) {
     // Standing inside a design folder beats the manifest — you cd'd here.
     if (await hasDesignConfig(cwd)) return cwd;
-    const picked = pickProject(repo, cwd);
-    if (picked) return manifestProject(repo, picked, abort);
-    const names = [...repo.folders.keys()];
+    const picked = pickProject(projects, cwd);
+    if (picked) return projectFolder(projects, picked, abort);
+    const names = [...projects.folders.keys()];
     if (opts.interactive && process.stdin.isTTY) {
+      const set = projects;
       const chosen = await select<string>({
         message: "Which project?",
         options: names.map((n) => ({
           value: n,
           label: n,
-          hint: relative(cwd, repo.folders.get(n) as string),
+          hint: relative(cwd, set.folders.get(n) as string),
         })),
       });
       if (isCancel(chosen)) abort("cancelled.");
-      return manifestProject(repo, chosen as string, abort);
+      return projectFolder(projects, chosen as string, abort);
     }
     abort(
-      `${repo.path} lists several projects: ${names.join(", ")}. Pass one (e.g. \`velloo ${cmd} ${names[0]}\`) or set "defaultProject".`,
+      `${projectsLabel(projects)} lists several projects: ${names.join(", ")}. Pass one (e.g. \`velloo ${cmd} ${names[0]}\`)${projects.repo ? ` or set "defaultProject"` : ""}.`,
     );
   }
 
@@ -210,8 +211,21 @@ export async function resolveDesignFolder(
   const found = await findDesignConfig(cwd);
   if (found) return found.folder;
   abort(
-    `no design folder found. Pass one (e.g. \`velloo ${cmd} ./velloo\`), run from a folder that contains a Velloo design, or \`velloo init\` first.`,
+    `no design folder found. Pass one (e.g. \`velloo ${cmd} ./velloo\`), run from a folder that contains a Velloo design, or \`velloo init\` first.${movedCheckoutHint()}`,
   );
+}
+
+/**
+ * Local designs are keyed by their checkout's path, so moving the checkout
+ * leaves them behind. Name them when nothing else resolved.
+ */
+function movedCheckoutHint(): string {
+  const orphans = listLocalDesigns().filter((design) => !existsSync(design.root));
+  if (orphans.length === 0) return "";
+  const lines = orphans.map(
+    (design) => `\n  ${design.projectName} — ${design.designRoot} (was for ${design.root})`,
+  );
+  return `\nLocal designs whose checkout moved:${lines.join("")}\nRun \`velloo folder bind <design folder>\` from the new checkout.`;
 }
 
 export async function resolveDesignLocation(
@@ -220,8 +234,14 @@ export async function resolveDesignLocation(
   opts: ResolveDesignFolderOptions = {},
 ) {
   const designRoot = await resolveDesignFolder(arg, cmd, opts);
-  const managed = managedProjectContext(designRoot);
-  if (managed) return { designRoot, ...managed };
+  const local = localDesignOf(designRoot);
+  if (local)
+    return {
+      designRoot,
+      manifestPath: undefined,
+      appRoot: local.appRoot,
+      projectName: local.projectName,
+    };
   const found = await findManifest(opts.cwd ?? designRoot);
   return {
     designRoot,

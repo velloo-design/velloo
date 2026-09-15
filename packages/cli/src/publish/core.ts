@@ -22,7 +22,7 @@ import {
   type DesignFolder,
   LiveBundler,
   liveExtensions,
-  managedProjectContext,
+  localDesignOf,
   orderedBoards,
   registryForScreen,
   renderPassForScreen,
@@ -32,6 +32,7 @@ import { z } from "zod";
 import { withAssetServer } from "../asset-server.ts";
 import { checkCloudHealth } from "../cloud.ts";
 import { type CloudPublishSlot, uploadLinkBundle } from "../cloud-upload.ts";
+import { designGitEnv } from "../design-git.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
 import {
   bundleInvalid,
@@ -209,7 +210,7 @@ export const PUBLISH_VIEWPORT: Viewport = { w: 1440, h: 900 };
 
 /** The default link title for a folder — its directory name. */
 function defaultPublishTitle(folderRoot: string): string {
-  return `${managedProjectContext(folderRoot)?.projectName ?? folderRoot.split("/").filter(Boolean).pop()} designs`;
+  return `${localDesignOf(folderRoot)?.projectName ?? folderRoot.split("/").filter(Boolean).pop()} designs`;
 }
 
 /**
@@ -263,16 +264,16 @@ export function reportProvenance(git: PublishProvenance, report: PublishReporter
  * ours by default, so a non-git folder would spray `fatal: not a git
  * repository` through the publish output instead of the note we report.
  */
-const GIT_PROBE: ExecFileSyncOptionsWithStringEncoding = {
-  encoding: "utf8",
-  stdio: ["ignore", "pipe", "ignore"],
-};
+function gitProbe(folder: string): ExecFileSyncOptionsWithStringEncoding {
+  return { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], env: designGitEnv(folder) };
+}
 
 function gitCommitSha(folder: string): string | null {
   try {
-    const dirty = execFileSync("git", ["-C", folder, "status", "--porcelain"], GIT_PROBE);
+    const probe = gitProbe(folder);
+    const dirty = execFileSync("git", ["-C", folder, "status", "--porcelain"], probe);
     if (dirty.trim().length > 0) return null;
-    return execFileSync("git", ["-C", folder, "rev-parse", "HEAD"], GIT_PROBE).trim();
+    return execFileSync("git", ["-C", folder, "rev-parse", "HEAD"], probe).trim();
   } catch {
     return null;
   }
@@ -308,9 +309,10 @@ export function normalizeRemote(url: string): string | null {
  * non-git folder, detached HEAD, or missing remote publishes without them.
  */
 export function gitContext(folder: string): PublishProvenance {
+  const probe = gitProbe(folder);
   const run = (args: string[]): string | null => {
     try {
-      return execFileSync("git", ["-C", folder, ...args], GIT_PROBE).trim() || null;
+      return execFileSync("git", ["-C", folder, ...args], probe).trim() || null;
     } catch {
       return null;
     }

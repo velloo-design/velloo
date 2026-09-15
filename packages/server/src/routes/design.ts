@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { type Manifest, type StyleChannel, styleChannelOf } from "@velloo/provider";
 import { isArchived } from "@velloo/schema";
@@ -8,7 +9,7 @@ import { activeBoards, type DesignFolder, orderedBoards } from "../design-folder
 import type { MutationContext } from "../mutations/index.ts";
 import { findSnippetInstances } from "../mutations/snippet-instances.ts";
 import { unusedSnippetIds } from "../mutations/snippet-refs.ts";
-import { managedProjectContext } from "../project-location.ts";
+import { localDesignOf } from "../project-location.ts";
 
 /**
  * The design folder's read surface: the summary the canvas boots from plus
@@ -18,18 +19,21 @@ import { managedProjectContext } from "../project-location.ts";
 /**
  * Nearest enclosing git repo's directory name — the design folder is often a
  * subdirectory (e.g. `<repo>/velloo`), and the tab title should read the repo.
- * Falls back to the design folder's own basename outside a repo.
+ * Falls back to the design folder's own basename outside a repo. The walk
+ * stops below the home directory, whose repository would be a dotfiles one.
  */
 function projectNameFor(root: string): string {
-  const managed = managedProjectContext(root);
-  if (managed) return managed.projectName;
+  const local = localDesignOf(root);
+  if (local) return local.projectName;
+  const home = homedir();
   let dir = root;
-  for (;;) {
+  while (dir !== home) {
     if (existsSync(join(dir, ".git"))) return basename(dir);
     const parent = dirname(dir);
-    if (parent === dir) return basename(root);
+    if (parent === dir) break;
     dir = parent;
   }
+  return basename(root);
 }
 
 /**

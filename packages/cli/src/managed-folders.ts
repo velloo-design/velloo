@@ -1,20 +1,20 @@
-import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { cp, lstat, mkdir, readdir, readFile, rm } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { ConfigSchema, type RepoManifest } from "@velloo/schema";
 import {
+  hostAppRootFrom,
   loadDesignFolder,
   managedDesignId,
   managedDesignPath,
-  managedProjectContext,
+  removeLocalDesign,
   resolveProjectPath,
   writeJsonAtomic,
-  writeManagedBinding,
+  writeLocalDesign,
 } from "@velloo/server";
 import { daemonRoot, stopDaemon } from "./daemon/runtime.ts";
-import { findManifest } from "./manifest.ts";
+import { findProjects, isWithin } from "./manifest.ts";
 
 function physicalDestination(path: string): string {
   if (lstatSync(path, { throwIfNoEntry: false })) return realpathSync(path);
@@ -23,55 +23,6 @@ function physicalDestination(path: string): string {
 }
 
 const RUNTIME = [".design/cache", ".velloo", "node_modules"];
-
-function git(folder: string, args: string[]): string {
-  try {
-    return execFileSync("git", ["-C", folder, ...args], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-  } catch (error) {
-    throw new Error(
-      `Git operation failed in ${folder}. Install Git and check repository permissions and identity, then retry. Design files were retained. ${error instanceof Error ? error.message : error}`,
-    );
-  }
-}
-
-export async function checkpoint(
-  folder: string,
-  message: string,
-  initialize = false,
-): Promise<string> {
-  if (!message.trim()) throw new Error("A checkpoint needs a non-empty message (--message).");
-  await loadDesignFolder(folder, { preferences: false });
-  const gitEntry = await lstat(join(folder, ".git")).catch(() => null);
-  if (gitEntry && !gitEntry.isDirectory())
-    throw new Error(
-      "Standalone design history must have its own .git directory, not a linked worktree or symlink.",
-    );
-  if (initialize) {
-    git(folder, ["init", "--initial-branch=main"]);
-    const path = join(folder, ".gitignore");
-    const existing = await readFile(path, "utf8").catch(() => "");
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(
-      path,
-      `${existing}\n# Machine-only Velloo state\n/.design/cache/\n/.velloo/\n/node_modules/\n.DS_Store\n`,
-    );
-  }
-  if (!existsSync(join(folder, ".git")))
-    throw new Error(`No standalone Git history in ${folder}. Relocate it with --external first.`);
-  git(folder, ["add", "--all", "--", "."]);
-  const identity = git(folder, ["config", "--list"]).split("\n");
-  const defaults = [
-    ...(identity.some((s) => s.startsWith("user.name=")) ? [] : ["-c", "user.name=Velloo"]),
-    ...(identity.some((s) => s.startsWith("user.email="))
-      ? []
-      : ["-c", "user.email=design@velloo.local"]),
-  ];
-  git(folder, [...defaults, "commit", "--allow-empty", "-m", message]);
-  return git(folder, ["rev-parse", "HEAD"]);
-}
 
 /** Rebase just filesystem references; every design object and identity stays intact. */
 export async function rebaseDesignConfig(
@@ -134,14 +85,27 @@ async function fingerprint(folder: string): Promise<string> {
 export interface RelocationPlan {
   source: string;
   destination: string;
+  /** The checkout the design belongs to. */
+  root: string;
   appRoot: string;
-  manifestPath: string;
   projectName: string;
-  managedId?: string;
-  before: string;
-  manifest: RepoManifest;
+  /** The source's local design record, when it is one. */
+  sourceLocalId?: string | undefined;
+  /** Where the destination is recorded: a local design, or (absent) velloo.json. */
+  destinationLocal?: { id: string; designPath?: string | undefined } | undefined;
+  manifestPath: string;
+  /** The manifest as read, or null when there is none — checked before writing. */
+  before: string | null;
+  /** The manifest to write; null removes the file, undefined leaves it alone. */
+  manifest: RepoManifest | null | undefined;
 }
 
+/**
+ * Plan moving a design between the repository, managed storage (`external`)
+ * and a chosen directory (`to`, inside or outside the repository). Inside the
+ * repository a design is a `velloo.json` entry; anywhere else it is a local
+ * design recorded only on this machine.
+ */
 export async function planRelocation(
   source: string,
   cwd: string,
@@ -150,40 +114,32 @@ export async function planRelocation(
 ): Promise<RelocationPlan> {
   if (Boolean(to) === external)
     throw new Error("Choose exactly one destination: --external or --to <path>.");
-  const found = await findManifest(cwd);
-  if (!found)
-    throw new Error("Run relocation from the application's directory containing velloo.json.");
-  const entries = [...found.folders].filter(
-    ([, path]) =>
-      path === source || (existsSync(path) && realpathSync(path) === realpathSync(source)),
-  );
-  if (entries.length !== 1 || !entries[0])
-    throw new Error(
-      "The source must have exactly one project registration in velloo.json before relocation.",
-    );
-  const name = entries[0][0];
+  const projects = await findProjects(cwd);
   const physicalSource = realpathSync(source);
-  const physicalRepo = realpathSync(found.dir);
-  const sourceGit = await lstat(join(source, ".git")).catch(() => null);
-  if (sourceGit && !sourceGit.isDirectory())
+  const local = projects?.local.find((design) => realOr(design.designRoot) === physicalSource);
+  const entries = [...(projects?.repo?.folders ?? [])].filter(
+    ([, path]) => existsSync(path) && realpathSync(path) === physicalSource,
+  );
+  if (!local && entries.length !== 1)
     throw new Error(
-      "Cannot relocate a design with linked .git metadata. Use a standalone design repository first.",
+      "Run relocation from the checkout the design belongs to; the source must be one of its projects.",
     );
-  if (physicalSource === physicalRepo)
+  const repo = projects?.repo ?? null;
+  const root = local?.root ?? (repo?.dir as string);
+  const name = local?.projectName ?? (entries[0]?.[0] as string);
+  const physicalRoot = realpathSync(root);
+  if (physicalSource === physicalRoot)
     throw new Error(
       "Cannot relocate the application repository itself. Use a separate design directory.",
     );
   if (external && managedDesignId(source))
-    throw new Error("This design already uses managed external storage.");
-  const id = external ? randomUUID() : undefined;
-  const destination = id ? managedDesignPath(id) : resolve(found.dir, to ?? "");
-  const rel = relative(found.dir, destination);
+    throw new Error("This design already lives in managed storage.");
+
+  const destination = external
+    ? managedDesignPath(local?.id ?? randomUUID())
+    : resolve(cwd, to ?? "");
   const physicalTarget = physicalDestination(destination);
-  const physicalRel = relative(physicalRepo, physicalTarget);
-  if (!external && (physicalRel === ".." || physicalRel.startsWith(`..${sep}`)))
-    throw new Error(
-      "--to must be inside the application repository; use --external for managed storage.",
-    );
+  const inRepo = !external && isWithin(physicalRoot, physicalTarget);
   if (
     physicalTarget === physicalSource ||
     physicalTarget.startsWith(physicalSource + sep) ||
@@ -194,22 +150,52 @@ export async function planRelocation(
     throw new Error(
       `Destination is occupied: ${destination}. Choose a new path; nothing was changed.`,
     );
+
+  const manifestPath = repo?.path ?? join(root, "velloo.json");
+  const before = repo ? await readFile(repo.path, "utf8") : null;
+  let manifest: RepoManifest | null | undefined;
+  if (inRepo) {
+    const rel = relative(physicalRoot, physicalTarget).split(sep).join("/") || ".";
+    manifest = {
+      ...(repo?.manifest ?? {}),
+      projects: { ...(repo?.manifest.projects ?? {}), [name]: rel },
+    };
+  } else if (repo && name in repo.manifest.projects) {
+    const { [name]: _moved, ...rest } = repo.manifest.projects;
+    const { defaultProject, ...others } = repo.manifest;
+    manifest =
+      Object.keys(rest).length === 0 && !others.feedback
+        ? null
+        : {
+            ...others,
+            projects: rest,
+            ...(defaultProject && defaultProject !== name ? { defaultProject } : {}),
+          };
+  }
+  const config = ConfigSchema.parse(
+    JSON.parse(await readFile(join(source, ".design/config.json"), "utf8")),
+  );
   return {
     source,
     destination,
-    appRoot: managedProjectContext(source)?.appRoot ?? found.dir,
-    manifestPath: found.path,
+    root,
+    appRoot: local?.appRoot ?? hostAppRootFrom(source, config.hostApp),
     projectName: name,
-    ...(id ? { managedId: id } : {}),
-    before: await readFile(found.path, "utf8"),
-    manifest: {
-      ...found.manifest,
-      projects: {
-        ...found.manifest.projects,
-        [name]: id ? { managed: id } : rel.split(sep).join("/"),
-      },
-    },
+    sourceLocalId: local?.id,
+    destinationLocal: inRepo
+      ? undefined
+      : {
+          id: local?.id ?? (external ? basename(destination) : randomUUID()),
+          ...(external ? {} : { designPath: destination }),
+        },
+    manifestPath,
+    before,
+    manifest,
   };
+}
+
+function realOr(path: string): string {
+  return existsSync(path) ? realpathSync(path) : resolve(path);
 }
 
 export async function relocateDesign(plan: RelocationPlan): Promise<void> {
@@ -232,21 +218,34 @@ export async function relocateDesign(plan: RelocationPlan): Promise<void> {
       });
     if ((await fingerprint(plan.destination)) !== original)
       throw new Error("Copied content did not match the source.");
-    await rebaseDesignConfig(plan.source, plan.destination, plan.appRoot, Boolean(plan.managedId));
+    await rebaseDesignConfig(
+      plan.source,
+      plan.destination,
+      plan.appRoot,
+      plan.destinationLocal !== undefined,
+    );
     await loadDesignFolder(plan.destination, { preferences: false });
-    if (plan.managedId)
-      await checkpoint(plan.destination, "Relocate design to managed storage", true);
     if ((await fingerprint(plan.source)) !== original)
       throw new Error("The source changed during relocation. Close editors and retry.");
-    if ((await readFile(plan.manifestPath, "utf8")) !== plan.before)
+    const current = await readFile(plan.manifestPath, "utf8").catch(() => null);
+    if (current !== plan.before)
       throw new Error("The manifest changed during relocation. Review it and retry.");
-    if (plan.managedId)
-      await writeManagedBinding(plan.managedId, {
+    if (plan.destinationLocal) {
+      if (plan.sourceLocalId && plan.sourceLocalId !== plan.destinationLocal.id)
+        await removeLocalDesign(plan.sourceLocalId);
+      await writeLocalDesign(plan.destinationLocal.id, {
+        root: plan.root,
         appRoot: plan.appRoot,
-        manifestPath: plan.manifestPath,
         projectName: plan.projectName,
+        ...(plan.destinationLocal.designPath
+          ? { designPath: plan.destinationLocal.designPath }
+          : {}),
       });
-    await writeJsonAtomic(plan.manifestPath, plan.manifest);
+    } else if (plan.sourceLocalId) {
+      await removeLocalDesign(plan.sourceLocalId);
+    }
+    if (plan.manifest === null) await rm(plan.manifestPath, { force: true });
+    else if (plan.manifest) await writeJsonAtomic(plan.manifestPath, plan.manifest);
     committed = true;
   } finally {
     if (!committed) await rm(plan.destination, { recursive: true, force: true });

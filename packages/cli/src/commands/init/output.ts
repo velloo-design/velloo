@@ -1,4 +1,5 @@
-import { join, relative } from "node:path";
+import { homedir } from "node:os";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { confirm, isCancel } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import pc from "picocolors";
@@ -19,6 +20,14 @@ import type { InstallPlan } from "../../wizard/provider-registry.ts";
 import { stackById } from "../../wizard/stacks.ts";
 import type { WireOutcome } from "./agent-wiring.ts";
 
+/** An absolute path as a person reads it: `~/…` under the home directory. */
+export function displayPath(path: string): string {
+  const home = homedir();
+  const rel = relative(home, path);
+  if (rel === "") return "~";
+  return rel.startsWith("..") || isAbsolute(rel) ? path : `~${sep}${rel}`;
+}
+
 export function printSummary(
   folder: string,
   scaffold: Scaffold,
@@ -33,7 +42,7 @@ export function printSummary(
 
   console.log("");
   console.log(pc.green("✓ Velloo is installed and ready to use."));
-  console.log(pc.dim(`  Scaffolded ${folder}`));
+  console.log(pc.dim(`  Scaffolded ${displayPath(folder)}`));
   console.log("");
   if (scaffold.screens.length > 0) {
     console.log(
@@ -83,7 +92,10 @@ export function printExitInstructions(folder: string | undefined, outcome: WireO
       `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas; o open, b background, q stop)")}`,
     );
     console.log("");
-    const readme = join(relative(process.cwd(), folder) || ".", "README.md");
+    // A design outside the working directory (managed storage) reads better
+    // absolute than as a climb of `../`.
+    const rel = relative(process.cwd(), folder);
+    const readme = join(rel.startsWith("..") ? displayPath(folder) : rel || ".", "README.md");
     console.log(`  ${pc.dim("Open")} ${pc.cyan(readme)} ${pc.dim("for the full guide.")}`);
   } else {
     console.log(

@@ -9,7 +9,7 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
-import { managedDesignId, writeJsonAtomic, writeText } from "@velloo/server";
+import { writeJsonAtomic, writeText } from "@velloo/server";
 import { buildDefaultConfig } from "../../scaffold/default-config.ts";
 import {
   componentScaffold,
@@ -135,6 +135,8 @@ export async function writeScaffold(
   scaffold: Scaffold,
   plan: InstallPlan,
   answers: WizardAnswers,
+  /** A local design outside the checkout — its README names the app symbolically. */
+  local = false,
 ): Promise<void> {
   // Point the live-island bundler at the host app. `scanRoot` is the primary
   // app root (the app itself, even when nested under a monorepo `appRoot`);
@@ -212,10 +214,7 @@ export async function writeScaffold(
     writeJsonAtomic(`${folder}/theme/default.json`, scaffold.theme),
     writeText(`${folder}/.gitignore`, gitignore),
     writeText(`${folder}/assets/.gitkeep`, ""),
-    writeText(
-      `${folder}/README.md`,
-      renderDesignReadme(answers, plan, managedDesignId(folder) !== null),
-    ),
+    writeText(`${folder}/README.md`, renderDesignReadme(answers, plan, local)),
   ];
   for (const s of scaffold.screens) {
     writes.push(writeJsonAtomic(`${folder}/screens/${s.id}.json`, s));

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigSchema, RepoManifestSchema } from "@velloo/schema";
+import { ConfigSchema } from "@velloo/schema";
 import { designConfig, designTheme } from "@velloo/server/testing";
 import {
   applyAppRootChange,
@@ -130,7 +130,7 @@ test("paths outside the old application are left alone", async () => {
   expect(change.from).toBe(app);
 });
 
-test("a managed design moves its manifest entry, leaving project: paths to follow", async () => {
+test("a local design moves only its machine record, leaving project: paths to follow", async () => {
   const { repo, app } = await monorepo();
   const designsHome = join(root, "designs");
   const previous = process.env.VELLOO_DESIGNS_HOME;
@@ -145,37 +145,29 @@ test("a managed design moves its manifest entry, leaving project: paths to follo
       }),
     );
     await mkdir(join(designsHome, ".locations"), { recursive: true });
-    const manifestPath = join(repo, "velloo.json");
-    await writeJson(manifestPath, { projects: { web: { managed: id, appRoot: "." } } });
     await writeJson(join(designsHome, ".locations", `${id}.json`), {
-      manifestPath,
+      root: repo,
       appRoot: repo,
       projectName: "web",
     });
 
-    expect((await recordedAppRoot(folder)).kind).toBe("managed");
+    expect((await recordedAppRoot(folder)).kind).toBe("local");
     const change = await planAppRootChange(folder, app);
-    expect(change.manifest).toEqual({
-      path: manifestPath,
-      project: "web",
-      to: "packages/web",
-    });
+    expect(change.local).toEqual({ id, root: repo, project: "web" });
     // `project:` already means "under the application root", so nothing in the
     // design config needs rewriting for it to follow.
     expect(change.rewritten).toEqual([]);
 
     await applyAppRootChange(folder, change);
-    const manifest = RepoManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
-    const entry = manifest.projects.web;
-    expect(typeof entry === "string" ? null : entry?.appRoot).toBe("packages/web");
     expect((await recordedAppRoot(folder)).path).toBe(app);
+    expect(existsSync(join(repo, "velloo.json"))).toBe(false);
   } finally {
     if (previous === undefined) delete process.env.VELLOO_DESIGNS_HOME;
     else process.env.VELLOO_DESIGNS_HOME = previous;
   }
 });
 
-test("a managed application root must stay inside the manifest repository", async () => {
+test("a local design's application root must stay inside its checkout", async () => {
   const { repo } = await monorepo();
   const designsHome = join(root, "designs");
   const previous = process.env.VELLOO_DESIGNS_HOME;
@@ -184,15 +176,13 @@ test("a managed application root must stay inside the manifest repository", asyn
     const id = "eeeeffff11112222";
     const folder = await designFolder(join(designsHome, id));
     await mkdir(join(designsHome, ".locations"), { recursive: true });
-    const manifestPath = join(repo, "velloo.json");
-    await writeJson(manifestPath, { projects: { web: { managed: id, appRoot: "." } } });
     await writeJson(join(designsHome, ".locations", `${id}.json`), {
-      manifestPath,
+      root: repo,
       appRoot: repo,
       projectName: "web",
     });
 
-    await expect(planAppRootChange(folder, root)).rejects.toThrow(/inside the manifest repository/);
+    await expect(planAppRootChange(folder, root)).rejects.toThrow(/inside the design's checkout/);
   } finally {
     if (previous === undefined) delete process.env.VELLOO_DESIGNS_HOME;
     else process.env.VELLOO_DESIGNS_HOME = previous;

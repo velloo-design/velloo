@@ -231,26 +231,6 @@ export async function loadDesignFolder(
 }
 
 /**
- * Re-read the entire folder from disk into the existing DesignFolder object
- * (in place, so every closure holding the reference sees the fresh state).
- * Used after out-of-band rewrites — git revert-all — where per-file reloads
- * can't know what changed. The HistoryManager instance is kept; callers
- * decide whether to clear it.
- */
-export async function reloadDesignFolder(folder: DesignFolder): Promise<void> {
-  const fresh = await loadDesignFolder(folder.root);
-  folder.config = fresh.config;
-  folder.theme = fresh.theme;
-  folder.customCss = fresh.customCss;
-  folder.themes = fresh.themes;
-  folder.screens = fresh.screens;
-  folder.boards = fresh.boards;
-  folder.snippets = fresh.snippets;
-  folder.annotations = fresh.annotations;
-  folder.notes = fresh.notes;
-}
-
-/**
  * Board `[id, board]` entries in display order: ids listed in
  * `config.boardOrder` first (in that sequence), then any remaining boards
  * in their loaded (filename) order. Stale ids in `boardOrder` — boards

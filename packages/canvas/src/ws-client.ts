@@ -115,8 +115,8 @@ export function connectWs(): () => void {
         // dialog is open; reload it so the dialog isn't showing stale values.
         if (useCanvas.getState().folderConfig) void useCanvas.getState().loadFolderConfig();
       } else if (payload.type === "folder-reloaded") {
-        // Out-of-band rewrite of the whole folder (git revert-all): drop
-        // every cache and boot again.
+        // Host component source changed under every frame: drop every
+        // cache and boot again.
         void useCanvas.getState().reloadAll();
       } else if (payload.type === "reload-error") {
         pushToast({

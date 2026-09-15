@@ -108,7 +108,7 @@ export function CanvasPane() {
       <div className="mt-4 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
         <Info className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="text-[11.5px] text-muted-foreground">
-          Signing in, credits, and reverting live in the account menu, top right.
+          Signing in and credits live in the account menu, top right.
         </span>
       </div>
     </>

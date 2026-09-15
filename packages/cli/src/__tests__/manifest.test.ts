@@ -3,7 +3,13 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveDesignFolder } from "../folder.ts";
-import { findManifest, pickProject, projectLabel, registerProject } from "../manifest.ts";
+import {
+  findManifest,
+  findProjects,
+  pickProject,
+  projectLabel,
+  registerProject,
+} from "../manifest.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 
 let tmp: string;
@@ -342,7 +348,7 @@ describe("pickProject", () => {
       projects: { web: "apps/web/velloo", site: "apps/site/velloo" },
       defaultProject: "web",
     });
-    const found = await findManifest(tmp);
+    const found = await findProjects(tmp);
     if (!found) throw new Error("manifest not found");
     expect(pickProject(found, join(tmp, "apps/site/velloo/screens"))).toBe("site");
     expect(pickProject(found, tmp)).toBe("web");

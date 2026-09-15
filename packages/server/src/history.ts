@@ -136,13 +136,4 @@ export class HistoryManager {
   truncateUndoTo(undoDepth: number): void {
     while (this.undoStack.length > undoDepth) this.undoStack.pop();
   }
-
-  /**
-   * Drop both stacks — after an out-of-band rewrite of the folder (git
-   * revert-all) every snapshot references state that no longer exists.
-   */
-  clear(): void {
-    this.undoStack.length = 0;
-    this.redoStack.length = 0;
-  }
 }

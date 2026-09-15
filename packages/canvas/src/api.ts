@@ -63,7 +63,6 @@ export {
   type PublishTargets,
   publish,
 } from "./api/publish.ts";
-export { fetchRevertStatus, type RevertStatus, revertAll } from "./api/revert.ts";
 export {
   fetchSearch,
   type SearchBoardHit,

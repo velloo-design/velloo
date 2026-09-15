@@ -36,9 +36,6 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.pathname === "/api/auth/status") {
     return Response.json({ loggedIn: false, verified: null, login: { state: "idle" } });
   }
-  if (url.pathname === "/api/revert/status") {
-    return Response.json({ available: false, reason: "no repo", files: [] });
-  }
   throw new Error(`unexpected fetch: ${url.pathname}`);
 }) as typeof fetch;
 afterAll(() => {

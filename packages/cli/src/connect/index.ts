@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { isCancel, log, multiselect, select } from "@clack/prompts";
+import { localDesignOf } from "@velloo/server";
 import pc from "picocolors";
 import {
   AGENTS,
@@ -22,7 +23,7 @@ import { designFolderReference, resolveProjectRoot } from "./project-root.ts";
 import { installSkills, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 
-export { AGENT_IDS, PROJECT_AGENT_IDS } from "./agents.ts";
+export { AGENT_IDS, GLOBAL_AGENT_IDS, PROJECT_AGENT_IDS } from "./agents.ts";
 export { refreshAgentArtifacts } from "./refresh.ts";
 
 /** Default velloo MCP endpoint for `--http` connections — matches `velloo mcp --http`. */
@@ -103,9 +104,12 @@ export async function askAgentWiring(opts?: {
    * common case when adding a second design folder to a wired repo.
    */
   projectRoot?: string;
+  /** Offer global configs only — a local design writes nothing into its checkout. */
+  globalOnly?: boolean;
 }): Promise<AgentWiring | null> {
   const preWired = await globallyWiredAgents();
-  const projectWired = opts?.projectRoot ? await projectWiredAgents(opts.projectRoot) : [];
+  const projectWired =
+    opts?.projectRoot && !opts.globalOnly ? await projectWiredAgents(opts.projectRoot) : [];
   const detected = detectInstalledAgents();
   const fallback = detected.length === 0;
   const wanted = fallback ? GLOBAL_AGENT_IDS : detected;
@@ -137,7 +141,15 @@ export async function askAgentWiring(opts?: {
   // everything is covered (`velloo connect` re-run) the full set stays on offer.
   const targets = missing.length > 0 ? missing : wanted;
   const names = targets.map(baseLabel).join(", ");
-  const projectTargets = targets.map(projectVariantOf).filter((id): id is string => Boolean(id));
+  const projectTargets = opts?.globalOnly
+    ? []
+    : targets.map(projectVariantOf).filter((id): id is string => Boolean(id));
+  if (opts?.globalOnly)
+    log.info(
+      pc.dim(
+        "This design lives outside the repository, so only global agent configs are offered — nothing is written into the checkout.",
+      ),
+    );
 
   const mode = await select<"global" | "project" | "choose" | "manual" | "skip">({
     message: "Wire the velloo MCP into your coding agents?",
@@ -174,7 +186,14 @@ export async function askAgentWiring(opts?: {
   if (mode === "project") return { agents: projectTargets, manual: false, preWired };
 
   const picked = await pickAgents({
-    exclude: opts?.skipWhenCovered ? preWired : [],
+    exclude: [
+      ...(opts?.skipWhenCovered ? preWired : []),
+      ...(opts?.globalOnly
+        ? Object.values(AGENTS)
+            .filter((agent) => agent.scope === "project")
+            .map((agent) => agent.id)
+        : []),
+    ],
     // Tick what this machine and this repo already carry, on top of what's
     // installed — re-selecting a wired agent is an idempotent merge, so the
     // safe default is "everything that's already true stays true".
@@ -340,6 +359,20 @@ export interface ConnectResult {
   cursorRules?: CursorRulesResult | undefined;
   /** Requested agent ids that aren't recognized. */
   unknownAgents: string[];
+  /** Project-scoped agent ids refused because the design is local. */
+  projectScoped: string[];
+}
+
+/** Project-scoped agents a local design cannot use, with the global ids to use instead. */
+export function localDesignScopeProblem(folder: string, agents: string[]): string | null {
+  if (!localDesignOf(folder)) return null;
+  const refused = agents.filter((id) => AGENTS[id]?.scope === "project");
+  if (refused.length === 0) return null;
+  const globals = refused
+    .map((id) => `${id}-global`)
+    .filter((id) => AGENTS[id])
+    .join(", ");
+  return `${refused.join(", ")} ${refused.length === 1 ? "writes" : "write"} into the checkout, and ${folder} is a local design outside it — only global configs are allowed${globals ? ` (use ${globals})` : ""}.`;
 }
 
 /** Wire the velloo MCP server into one or more AI coding agents' configs. */
@@ -347,6 +380,9 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   const transport = opts.transport ?? "stdio";
   const homeDir = opts.homeDir ?? homedir();
   const projectRoot = await resolveProjectRoot(opts.designFolder, opts.projectRoot);
+  // A local design leaves no trace in its checkout: no project configs, and
+  // no guidance files (skills, Cursor rule) that only project scope reads.
+  const local = localDesignOf(opts.designFolder) !== null;
 
   // stdio: project-scoped configs pin the folder relative to the project root
   // (the cwd the agent spawns `velloo mcp` from); global configs omit it so a
@@ -377,10 +413,15 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
 
   const configs: WriteResult[] = [];
   const unknownAgents: string[] = [];
+  const projectScoped: string[] = [];
   for (const id of opts.agents) {
     const agent = AGENTS[id];
     if (!agent) {
       unknownAgents.push(id);
+      continue;
+    }
+    if (local && agent.scope === "project") {
+      projectScoped.push(id);
       continue;
     }
     configs.push(await writeAgentConfig(projectRoot, agent, connectionFor(agent), homeDir));
@@ -403,6 +444,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
       : undefined;
   const skills =
     opts.installSkill &&
+    !local &&
     hasAny(
       "opencode",
       "opencode-global",
@@ -420,7 +462,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
       ? ((await installGeminiExtension(homeDir)) ?? undefined)
       : undefined;
   const cursorRules =
-    opts.installSkill && hasFamily("cursor")
+    opts.installSkill && !local && hasFamily("cursor")
       ? await installCursorRules(projectRoot, opts.designFolder)
       : undefined;
 
@@ -433,5 +475,6 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
     geminiExtension,
     cursorRules,
     unknownAgents,
+    projectScoped,
   };
 }

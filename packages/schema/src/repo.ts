@@ -28,28 +28,16 @@ const PROJECT_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
  *
  * Design settings still live in each folder's `.design/config.json`; nothing
  * here duplicates that contract.
+ *
+ * Every project is a path to a design folder inside the repository. A design
+ * kept outside it is recorded only on the machine that has it, never here.
  */
 export const RepoManifestSchema = z
   .object({
     $schema: z.string().optional(),
     projects: z.record(
       z.string().regex(PROJECT_NAME, "project names are letters/digits plus . _ -"),
-      z.union([
-        z.string().min(1),
-        z
-          .object({
-            managed: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
-            appRoot: z
-              .string()
-              .min(1)
-              .refine(
-                (path) => !/^(?:[\\/]|[A-Za-z]:)/.test(path) && !path.split(/[\\/]/).includes(".."),
-                "appRoot must be a portable path inside the manifest repository",
-              )
-              .optional(),
-          })
-          .strict(),
-      ]),
+      z.string().min(1),
     ),
     defaultProject: z.string().optional(),
     feedback: FeedbackPrefsSchema.optional(),

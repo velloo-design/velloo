@@ -1,8 +1,14 @@
-import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, realpathSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { confirm, isCancel } from "@clack/prompts";
-import { loadDesignFolder, managedDesignId, writeManagedBinding } from "@velloo/server";
+import {
+  loadDesignFolder,
+  localDesignOf,
+  managedDesignId,
+  removeLocalDesign,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import {
@@ -19,8 +25,16 @@ import {
   resolveDesignFolder,
   resolveDesignLocation,
 } from "../folder.ts";
-import { checkpoint, planRelocation, relocateDesign } from "../managed-folders.ts";
-import { findManifest, unregisterProject } from "../manifest.ts";
+import { planRelocation, relocateDesign } from "../managed-folders.ts";
+import {
+  checkoutRoot,
+  findManifest,
+  findProjects,
+  isWithin,
+  registerLocalDesign,
+  unregisterProject,
+} from "../manifest.ts";
+import { displayPath } from "./init/output.ts";
 import { runInit } from "./init.ts";
 
 /**
@@ -49,7 +63,7 @@ const list = defineCommand({
   meta: { name: "list", description: "List the repo's design folders" },
   async run() {
     const cwd = resolve(".");
-    const found = await findManifest(cwd).catch((err: unknown) => {
+    const found = await findProjects(cwd).catch((err: unknown) => {
       fail("folder", (err as Error).message);
     });
     if (!found || found.folders.size === 0) {
@@ -60,12 +74,18 @@ const list = defineCommand({
       return;
     }
 
+    const base = found.repo?.dir ?? found.local[0]?.root ?? cwd;
+    const localNames = new Set(found.local.map((design) => design.projectName));
     const rows: { name: string; path: string; boards: number; state: string; live: boolean }[] = [];
     for (const [name, folder] of found.folders) {
       const live = await hasDesignConfig(folder);
       rows.push({
         name,
-        path: relative(found.dir, folder) || ".",
+        // A local design is somewhere only this machine knows about — say so,
+        // since nobody else cloning the repo will see it.
+        path: localNames.has(name)
+          ? `${displayPath(folder)} (local)`
+          : relative(base, folder) || ".",
         boards: live ? await countJson(join(folder, "boards"), ".notes.json") : 0,
         state: live ? await daemonState(folder) : pc.yellow("missing"),
         live,
@@ -73,9 +93,9 @@ const list = defineCommand({
     }
     const width = Math.max(...rows.map((r) => r.name.length));
     const pathWidth = Math.max(...rows.map((r) => r.path.length));
-    console.log(`velloo folder: ${rows.length} in ${found.dir}`);
+    console.log(`velloo folder: ${rows.length} in ${base}`);
     for (const row of rows) {
-      const marker = row.name === found.manifest.defaultProject ? pc.cyan("●") : " ";
+      const marker = row.name === found.defaultProject ? pc.cyan("●") : " ";
       const boards = row.live ? `${row.boards} board${row.boards === 1 ? "" : "s"}` : "—";
       console.log(
         `  ${marker} ${pc.bold(row.name.padEnd(width))}  ${pc.dim(row.path.padEnd(pathWidth))}  ${boards.padEnd(9)}  ${row.state}`,
@@ -127,7 +147,7 @@ const remove = defineCommand({
     },
     deleteContent: {
       type: "boolean",
-      description: "Also delete external design content and its standalone Git history",
+      description: "Also delete external design content",
     },
     yes: {
       type: "boolean",
@@ -141,7 +161,10 @@ const remove = defineCommand({
       requireConfig: true,
       cwd,
     });
-    const keepContent = managedDesignId(folder) !== null && args.deleteContent !== true;
+    // A local design's folder is outside the checkout — often one the user
+    // picked — so removing the project forgets it rather than deleting it.
+    const local = localDesignOf(folder);
+    const keepContent = local !== null && args.deleteContent !== true;
     const interactive = Boolean(process.stdin.isTTY);
     if (!interactive && args.yes !== true) {
       fail("folder", "refusing to delete a design folder without --yes");
@@ -160,7 +183,7 @@ const remove = defineCommand({
       const approved = await confirm({
         message: keepContent
           ? "Remove this project registration and retain its external content?"
-          : "Delete this design folder and any standalone Git history it contains?",
+          : "Delete this design folder and everything in it?",
         initialValue: false,
       });
       if (isCancel(approved) || !approved) {
@@ -175,9 +198,11 @@ const remove = defineCommand({
     const stopped = await stopDaemon(daemonRoot(folder));
     if (stopped) console.log(pc.dim("  Stopped its canvas."));
 
-    const dropped = await unregisterProject(folder, cwd);
+    const dropped = local ? null : await unregisterProject(folder, cwd);
+    if (local) await removeLocalDesign(local.id);
     if (!keepContent) await rm(folder, { recursive: true, force: true });
     console.log(`velloo folder: ${keepContent ? "retained content at" : "removed"} ${folder}`);
+    if (local) console.log(pc.dim(`  Forgot the local design "${local.projectName}".`));
     if (dropped?.name) {
       console.log(
         pc.dim(
@@ -193,12 +218,17 @@ const remove = defineCommand({
 const relocate = defineCommand({
   meta: {
     name: "relocate",
-    description: "Preview moving a design between repository and managed storage; --yes applies",
+    description:
+      "Preview moving a design between the repository, managed storage and another directory; --yes applies",
   },
   args: {
     folder: { type: "positional", required: false, description: FOLDER_ARG_DESCRIPTION },
-    external: { type: "boolean", description: "Move to managed external storage" },
-    to: { type: "string", description: "New directory inside the application repository" },
+    external: { type: "boolean", description: "Move to managed storage (a local design)" },
+    to: {
+      type: "string",
+      description:
+        "New directory — inside the repository it goes in velloo.json, outside it is local",
+    },
     yes: { type: "boolean", description: "Apply the displayed relocation" },
   },
   async run({ args }) {
@@ -208,9 +238,12 @@ const relocate = defineCommand({
       resolve("."),
       args.to,
       args.external === true,
-    );
+    ).catch((err: unknown) => fail("folder", (err as Error).message));
+    const recorded = plan.destinationLocal
+      ? "a local design on this machine (not in velloo.json)"
+      : `velloo.json → ${plan.manifest?.projects[plan.projectName]}`;
     console.log(
-      `Source: ${plan.source}\nDestination: ${plan.destination}\nManifest: ${plan.manifestPath}\nProject ${plan.projectName}: ${JSON.stringify(plan.manifest.projects[plan.projectName])}`,
+      `Source: ${plan.source}\nDestination: ${plan.destination}\nProject ${plan.projectName}: ${recorded}`,
     );
     if (!args.yes) {
       console.log("Preview only. Add --yes to apply relocation.");
@@ -226,35 +259,53 @@ const relocate = defineCommand({
 const bind = defineCommand({
   meta: {
     name: "bind",
-    description: "Explicitly bind a restored managed design to this application checkout",
+    description: "Attach a design folder outside this checkout to it, on this machine only",
   },
   args: {
-    project: {
+    design: {
       type: "positional",
       required: true,
-      description: "Managed project name in velloo.json",
+      description: "The design folder (in managed storage or anywhere outside the checkout)",
     },
-    yes: { type: "boolean", description: "Confirm the local application binding" },
+    project: { type: "string", description: "Project name (default: its current one)" },
+    yes: { type: "boolean", description: "Confirm the local binding" },
   },
   async run({ args }) {
-    const found = await findManifest(resolve("."));
-    const entry = found?.manifest.projects[args.project];
-    if (!found || !entry || typeof entry === "string")
-      fail("folder", "Choose a managed project in this application's velloo.json.");
-    const folder = found.folders.get(args.project) as string;
-    console.log(`Design: ${folder}\nApplication: ${found.dir}\nProject: ${args.project}`);
+    const cwd = resolve(".");
+    const folder = resolve(args.design);
+    if (!(await hasDesignConfig(folder)))
+      fail("folder", `${folder} is not a velloo design folder (no .design/config.json).`);
+    const root = await checkoutRoot(cwd, cwd);
+    if (isWithin(root, folder))
+      fail(
+        "folder",
+        `${folder} is inside this checkout (${root}); a design here belongs in velloo.json — see \`velloo folder add\`.`,
+      );
+    const existing = localDesignOf(folder);
+    // Keep the design aimed at the same app within the checkout, so a moved
+    // monorepo still resolves `apps/web`.
+    const appRoot = existing ? join(root, relative(existing.root, existing.appRoot)) : root;
+    const repo = await findManifest(cwd).catch(() => null);
+    const legacy = [...(repo?.folders ?? [])].find(
+      ([, path]) => existsSync(path) && realpathSync(path) === realpathSync(folder),
+    )?.[0];
+    console.log(`Design: ${folder}\nCheckout: ${root}\nApplication: ${appRoot}`);
+    if (legacy) console.log(`velloo.json: drops "${legacy}", which cannot point outside the repo`);
     if (!args.yes) {
       console.log("Preview only. Add --yes to confirm this local binding.");
       return;
     }
     await loadDesignFolder(folder, { preferences: false });
     await stopDaemon(daemonRoot(folder));
-    await writeManagedBinding(entry.managed, {
-      manifestPath: found.path,
-      appRoot: resolve(found.dir, entry.appRoot ?? "."),
-      projectName: args.project,
-    });
-    console.log("Local binding saved.");
+    if (legacy) await unregisterProject(folder, cwd);
+    const name = await registerLocalDesign({
+      id: existing?.id ?? managedDesignId(folder) ?? randomUUID(),
+      root,
+      appRoot: existsSync(appRoot) ? appRoot : root,
+      ...(managedDesignId(folder) ? {} : { designPath: folder }),
+      requestedName: args.project ?? existing?.projectName ?? legacy,
+    }).catch((err: unknown) => fail("folder", (err as Error).message));
+    console.log(`Bound "${name}" to ${root} on this machine.`);
   },
 });
 
@@ -301,12 +352,8 @@ const setAppRoot = defineCommand({
       console.log(
         pc.yellow(`  ! no package.json there — codegen and live islands will not resolve`),
       );
-    if (change.manifest)
-      console.log(
-        pc.dim(
-          `  ${change.manifest.path}: projects.${change.manifest.project}.appRoot → ${change.manifest.to}`,
-        ),
-      );
+    if (change.local)
+      console.log(pc.dim(`  local design "${change.local.project}": appRoot → ${change.to}`));
     for (const r of change.rewritten) console.log(pc.dim(`  ${r.field}: ${r.from} → ${r.to}`));
     if (!args.yes) {
       console.log("Preview only. Add --yes to apply.");
@@ -318,21 +365,6 @@ const setAppRoot = defineCommand({
     await stopDaemon(daemonRoot(folder));
     await applyAppRootChange(folder, change);
     console.log(`velloo folder: application root is now ${change.to}`);
-  },
-});
-
-const checkpointCommand = defineCommand({
-  meta: {
-    name: "checkpoint",
-    description: "Save a named durable Git checkpoint of a managed design",
-  },
-  args: {
-    folder: { type: "positional", required: false, description: FOLDER_ARG_DESCRIPTION },
-    message: { type: "string", required: true, description: "Checkpoint name" },
-  },
-  async run({ args }) {
-    const folder = await resolveDesignFolder(args.folder, "folder", { requireConfig: true });
-    console.log(`Checkpoint saved: ${await checkpoint(folder, args.message)}`);
   },
 });
 
@@ -348,7 +380,6 @@ export default defineCommand({
     relocate,
     bind,
     "set-app-root": setAppRoot,
-    checkpoint: checkpointCommand,
   },
   // Bare `velloo folder` is the question "what have I got?" — answer it
   // rather than printing usage.
