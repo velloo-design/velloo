@@ -32,7 +32,7 @@ my-product/
         └── marketing.notes.json   # sidecar: markdown notes for this board
 ```
 
-**Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Pulse sample ships three boards: Marketing, App, Playground.
+**Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Elsewhere sample (`packages/cli/src/scaffold/elsewhere/`) ships two boards: the journey itself and an agentic trip-creation exploration.
 
 **Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Markdown notes are board-scoped at `boards/<boardId>.notes.json` — free-positioned by default, or carrying an `attachment` naming the frame, screen and node they anchor to. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
 
@@ -65,7 +65,7 @@ A node is one of:
 - `{ $snippet: SnippetId, $id?, args?, $extraClassName? }` — instance of a reusable subtree defined in `snippets/`. `$extraClassName` merges into the body's root element at render time
 - `{ $param: ParamName }` — placeholder, valid only inside a snippet body; substituted at render time
 
-**Stable ids.** Component and snippet-instance nodes may carry an optional `$id` — a stable anchor that survives sibling insertions and deletions. Ids match `/^[a-zA-Z][a-zA-Z0-9_-]*$/` and are unique within a screen tree (validated at persist time; conflicts surface as a typed `IdConflict` error). Agents address `$id`-bearing nodes via the locator form `"@id"` in any path-accepting tool (`update_props`, `apply_classes`, `move_node`, `remove_node`, `inspect`, `set_node_id`, …).
+**Stable ids.** Component and snippet-instance nodes may carry an optional `$id` — a stable anchor that survives sibling insertions and deletions. Ids match `/^[a-zA-Z][a-zA-Z0-9_-]*$/` and are unique within a screen tree (validated at persist time; conflicts surface as a typed `IdConflict` error). Agents address `$id`-bearing nodes via the locator form `"@id"` in any path-accepting tool (`update_props`, `move_node`, `remove_node`, `inspect`, `set_node_id`, …).
 
 Inside snippet bodies, two control forms are recognized anywhere a value appears:
 
@@ -243,7 +243,7 @@ Every MCP surface dispatches to the same registered native handlers, and agent e
 
 The canvas shows the signed-in account, signs in, and publishes boards — but **`@velloo/server` never reads `~/.velloo`**. It stays credential-blind so an embedder can host the canvas without inheriting the CLI's identity. Everything it needs is *injected* into `createServer` by the daemon (which is the CLI, and does own `~/.velloo`).
 
-The server *does* call velloo-cloud — `generate_asset`, `pull_comments`, `send_feedback` — but only ever with an injected `CloudAuth`, and never with a credential it went looking for. `CloudAuth` carries both a boot-time `token` and an optional `resolveToken()`; every call goes through `currentToken(cloud)`, which prefers the live read. That matters because the daemon snapshots the credential once at startup: without it, a user who signs in *after* hitting the paywall stays logged out to the MCP tools until they restart the server — exactly the flow a metered feature provokes. A `resolveToken` that throws (a credentials file mid-write) falls back to the snapshot rather than failing a call the old token could still serve.
+The server *does* call velloo-cloud — `generate_asset`, `list_comment_threads` (its `shared` scope refreshes threads left on published links), `send_feedback` — but only ever with an injected `CloudAuth`, and never with a credential it went looking for. `CloudAuth` carries both a boot-time `token` and an optional `resolveToken()`; every call goes through `currentToken(cloud)`, which prefers the live read. That matters because the daemon snapshots the credential once at startup: without it, a user who signs in *after* hitting the paywall stays logged out to the MCP tools until they restart the server — exactly the flow a metered feature provokes. A `resolveToken` that throws (a credentials file mid-write) falls back to the snapshot rather than failing a call the old token could still serve.
 
 The two canvas-facing capabilities are injected the same way:
 
@@ -307,7 +307,7 @@ At that size the catalog needs structure to be usable, so `build.ts` also derive
 
 ### Tailwind is a canvas concern, not a provider concern
 
-**Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the shared `@velloo/helpers` sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. The `validate_classes` MCP tool answers "does this candidate compile under the active JIT?" before an agent commits to a `shadow-[…]` / `bg-[…]` form.
+**Tailwind is JIT-compiled at server runtime** against the active provider's `componentsDir` + the shared `@velloo/helpers` sources + the design folder's screens. Any utility Tailwind supports renders, including arbitrary-value classes. Tree writes, `screenshot` and `emit_code` answer "does this candidate compile under the active JIT?" through their `diagnostics` (`tailwind/invalid-class`, `tailwind/undefined-var`), so a `shadow-[…]` / `bg-[…]` form that doesn't compile is flagged at the node that uses it.
 
 Tailwind v4 stays embedded in the velloo binary regardless of which provider is active. Per-instance styling goes through the screen's **style channel** (`update_props`'s `style`): Tailwind `className` for shadcn/no-lib, an `sx` object for MUI, an inline `style` object for none/none — authored natively at design time, never translated at emit time. Codegen serializes whatever the channel holds (`className="…"` / `sx={{…}}` / `style={{…}}`). The provider declares its own `@theme` block via `styleEntryPath`; it does not bring its own Tailwind major.
 
@@ -315,7 +315,7 @@ Tailwind v4 stays embedded in the velloo binary regardless of which provider is 
 
 How do users customize when the components are baked in?
 
-- **Per-instance className** (`apply_classes`) and **per-instance props** (`update_props`) handle most needs.
+- **Per-instance styling and props** (`update_props`'s `style` and `propPatch`) handle most needs.
 - **Snippets** are the supported "your version of a primitive" layer. A snippet wraps one or more components with typed params; every instance stays in sync.
 - **Host-app extensions** are the escape hatch when neither is enough: the folder declares the component's import path and prop contract, and the canvas bundles that real component as a live island.
 
@@ -338,11 +338,11 @@ Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**,
 Unified tokens (single source) → adapters per framework.
 
 - **Token tree:** colors, typography (font family roles + **typesets**), spacing scale, radius, shadows.
-- **Typesets:** typography is three rhythm controls (`size` / `leading` / `flow`) plus font roles, not a hand-listed scale. The h1–h6 / body / lead / small / caption ladder derives from them through the one ratio table in [`@velloo/schema/typeset`](../packages/schema/src/typeset.ts). That module has two output modes over the same ratios — CSS custom properties (`typesetCss`, for every channel that renders through a stylesheet) and concrete numbers (`typesetScale`, for the native framework themes that get serialized into codegen artifacts) — so the canvas, the emitted CSS, the MUI/antd/chakra themes, and the `Heading`/`Text` components cannot drift apart. `set_typeset` is the MCP surface; `Prose` wraps a content region in a `.typeset` (optionally a named preset).
+- **Typesets:** typography is three rhythm controls (`size` / `leading` / `flow`) plus font roles, not a hand-listed scale. The h1–h6 / body / lead / small / caption ladder derives from them through the one ratio table in [`@velloo/schema/typeset`](../packages/schema/src/typeset.ts). That module has two output modes over the same ratios — CSS custom properties (`typesetCss`, for every channel that renders through a stylesheet) and concrete numbers (`typesetScale`, for the native framework themes that get serialized into codegen artifacts) — so the canvas, the emitted CSS, the MUI/antd/chakra themes, and the `Heading`/`Text` components cannot drift apart. `set_theme`'s `typeset` channel is the MCP surface; `Prose` wraps a content region in a `.typeset` (optionally a named preset).
 - **Shadcn adapter:** maps tokens to shadcn CSS-variable conventions (`--primary`, `--primary-foreground`, …).
 - **Color generation:** OKLCH lightness scales for accessibility — *not* HSL.
 - **Theme operations** are MCP tools; the agent is the primary author of themes (`set_theme` for tokens/fonts/typeset/customCss and palette reseeding, `import_theme`, `score_theme_contrast`).
-- **Preset library** ships 12 curated presets — `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum`. Each is a complete token tree so `apply_preset` swaps wholesale.
+- **Preset library** ships 12 curated presets — `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum`. Each is a complete token tree so `set_theme { from: { preset } }` swaps wholesale.
 - **Contrast scoring** is built in: `score_theme_contrast` returns ratio + tier (`AAA` / `AA` / `AAlarge` / `Fail`) for every salient pair (`foreground/background`, `primary/primary-foreground`, etc.). The canvas's theme panel renders this inline.
 
 `velloo theme:export ./apps/web/` writes `tailwind.config.ts` and `globals.css` in **diff mode** — shows changes, user applies manually. Never auto-overwrites user files.
@@ -366,7 +366,7 @@ Drift detection is cut for `emit_code` — there's no longer a "last emit" file 
 
 The default path is **offline and free**: the agent authors SVG/raster art itself and stores it with `upload_asset` (writes to `assets/`, returns a `/assets/<name>` URL for `<Image src>`), or bulk-imports existing files by path with `import_assets`. Nothing here calls an external API, and a folder that never generates never leaves the machine.
 
-`generate_asset` is the **one deliberate exception** — hosted, pay-as-you-go generation through velloo-cloud for the art an agent genuinely cannot author: photography, textured illustration, true vector logos, background removal. It is registered unconditionally (like `pull_comments`), and every unavailable path — logged out, feature off, out of credits, cloud unreachable — returns an agent-facing message that names the free local alternative rather than failing.
+`generate_asset` is the **one deliberate exception** — hosted, pay-as-you-go generation through velloo-cloud for the art an agent genuinely cannot author: photography, textured illustration, true vector logos, background removal. It is registered unconditionally (like the comment-thread tools), and every unavailable path — logged out, feature off, out of credits, cloud unreachable — returns an agent-facing message that names the free local alternative rather than failing.
 
 The client carries **no model names and no prices**. The caller states an *intent* — `photo`, `illustration`, `graphic`, `texture`, `icon`, `vector`, `mark`, `edit`, `cutout`, `upscale` — and velloo-cloud maps it to a model and a price. That seam is deliberate: upstream model quality and pricing churn constantly, so swapping the model behind `photo` must not require a velloo release. Only the intent *names* are a contract; an unknown one comes back as a 400 listing the live catalogue.
 

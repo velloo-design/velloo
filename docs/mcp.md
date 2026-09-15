@@ -2,7 +2,7 @@
 
 > Velloo's MCP tool surface for AI agents. Token-efficient by construction.
 
-Designed for token efficiency: every tool is scoped, typed, and operates on small JSON. Compared to Penpot's `execute_code` (raw JS over the entire Plugin API) or Paper's `write_html` (HTML literals), each operation here is a single structural mutation with predictable cost.
+Designed for token efficiency: every tool is scoped, typed, and operates on small JSON, so each operation is a single structural mutation with predictable cost.
 
 A typical screen is 30–80 nodes, ~2–4 KB of JSON. The agent can `get_screen`, plan multiple ops, and apply them in a tight loop with low token spend per turn.
 
@@ -31,22 +31,21 @@ What holds the remaining budget:
 
 ### Shape rules
 
-The surface holds itself to four rules. Each replaced a contract that used to live in prose or a runtime check:
+The surface holds itself to seven rules. Each replaced a contract that used to live in prose or a runtime check:
 
-1. **One name per field.** `props`/`propPatch` were the same field under two names, aliased in both directions, so neither was canonical. `add_node` takes `props` (it sets initial props); `update_props` takes `propPatch` (it patches).
+1. **One name per field.** `props`/`propPatch` were the same field under two names, aliased in both directions, so neither was canonical. `add_screen`'s `tree` and `compose`'s JSX set initial props; `update_props` takes `propPatch` (it patches).
 2. **No dual forms.** `update_props` and `update_frame` take `patches` only — a length-1 array is the single-node case. The old single-or-bulk pair declared five optional fields where two combinations were legal, and rejected the rest at runtime with prose. `screenshot`/`compare_to_url` likewise take a `viewport` object, not a flat `w`/`h` that silently outranked it.
 3. **Every `*Body` is a `z.strictObject`.** An undeclared argument fails loudly with the valid keys on every surface. This used to differ: MCP rewrapped shapes as strict at registration while `batch` and the HTTP routes parsed a lenient `z.object`, so the same typo was a hard error standalone and a silent no-op inside a batch.
 4. **camelCase parameters, `list`/`get`/`add`/`update`/`remove` verbs, one noun per resource.** Every list returns `{ <resource>: [...] }`, never a bare array; every get returns the resource unwrapped.
 5. **Mutual exclusion is structural, not prose.** `compare_to_url`'s `source` is a union of a live-URL branch and a stored-capture branch, with auth, settling and caching nested inside the URL branch — those four are meaningless against a capture, which arrives already authenticated and frozen.
-
-7. **A schema states what an agent must choose, not what it must know.** The two are not the same, and conflating them is expensive. `batch` advertises its tool set as an enum but leaves `args` loose: a discriminated union over the real bodies was built and measured at **+3,800 boot tokens**, 19% of the surface, to restate eighteen schemas `tools/list` already carries — and it bought no correctness, since `runBatch` validates every entry against the same body and reports which tool and which field. The same test applies to tolerances: a locator accepts `"[0,2]"` at runtime but does not advertise it, because no agent should choose that spelling.
-6. **One error shape, and every failure uses it.** A failure is `isError` plus a JSON `{ kind, … }` — never prose, never an `{ ok: false }` body that an agent reads as success. `mcp/__tests__/tool-policy.test.ts` sweeps the surface for it. (A JSON-RPC `-32602` from the SDK's own argument validation is a protocol error, not a tool result, and is outside this rule.)
+6. **A schema states what an agent must choose, not what it must know.** The two are not the same, and conflating them is expensive. `batch` advertises its tool set as an enum but leaves `args` loose: a discriminated union over the real bodies was built and measured at **+3,800 boot tokens**, 19% of the surface, to restate eighteen schemas `tools/list` already carries — and it bought no correctness, since `runBatch` validates every entry against the same body and reports which tool and which field. The same test applies to tolerances: a locator accepts `"[0,2]"` at runtime but does not advertise it, because no agent should choose that spelling.
+7. **One error shape, and every failure uses it.** A failure is `isError` plus a JSON `{ kind, … }` — never prose, never an `{ ok: false }` body that an agent reads as success. `mcp/__tests__/tool-policy.test.ts` sweeps the surface for it. (A JSON-RPC `-32602` from the SDK's own argument validation is a protocol error, not a tool result, and is outside this rule.)
 
 ### Annotations and output schemas
 
 Every registered tool carries MCP behavioural annotations, classified in one table — `mcp/tool-policy.ts` — and applied by patching `registerTool` once, before any tool registers (the same hook that rewraps input shapes as strict). ~26 tools are pure reads, so a host can auto-approve them and prompt only on writes. The table states only what differs from the MCP defaults (`readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: false`, `openWorldHint: true`) — an omitted hint is not a missing hint, and every byte is paid by every session. `tool-policy.test.ts` fails in both directions: a registered tool with no classification, and a classification for a tool that no longer exists.
 
-`outputSchema` (plus `structuredContent`) is declared only by the five tools an agent reads as *data* rather than as confirmation: `audit`, `find_nodes`, `list_components`, `emit_code`, `compare_to_url`. Each schema is a `looseObject`, since the SDK validates `structuredContent` and an unexpected field must never turn a good result into a protocol error. The bar for adding one is that the tool's description gets *shorter* because the schema now says it. `screenshot` deliberately has none: its result is a five-way union (baseline established / no visual change / cropped diff / full diff / plain capture) whose branches share almost nothing.
+`outputSchema` (plus `structuredContent`) is declared only by the four tools an agent reads as *data* rather than as confirmation: `find_nodes`, `list_components`, `emit_code`, `compare_to_url`. Each schema is a `looseObject`, since the SDK validates `structuredContent` and an unexpected field must never turn a good result into a protocol error. The bar for adding one is that the tool's description gets *shorter* because the schema now says it. `screenshot` deliberately has none: its result is a five-way union (baseline established / no visual change / cropped diff / full diff / plain capture) whose branches share almost nothing.
 
 ### Resources
 
@@ -56,7 +55,7 @@ Every registered tool carries MCP behavioural annotations, classified in one tab
 | `velloo://guide/snippets` | Params, node slots, `$if`, structural variance, the edit recipes |
 | `velloo://guide/theme` | Tokens, presets, fonts, the type ladder, importing an app's stylesheet |
 | `velloo://guide/boards` | Frames vs viewports, sidebar groups, archived boards, board-pinned themes |
-| `velloo://guide/verification` | screenshot modes, diffing, audit, inspect |
+| `velloo://guide/verification` | screenshot modes, diffing, automatic diagnostics, inspect |
 | `velloo://guide/porting` | Code-to-design: re-expressing an app, fidelity checking, known gaps |
 | `velloo://guide/capture` | Reaching pages behind a login |
 | `velloo://guide/extensions` | Registering the app's own components, live islands |
@@ -72,11 +71,9 @@ Every registered tool carries MCP behavioural annotations, classified in one tab
 | `list_boards` | `includeFrames?, includeArchived?` | `{ boards: [{ id, name, frameCount, group?, frames?, groups?, archivedAt? }] }` — `group` names the sidebar group the board is filed under (absent ⇒ ungrouped); `includeFrames` embeds each board's full frame list, `includeArchived` also lists boards the user archived |
 | `get_board` | `boardId` | `{ id, name, frames: [...], groups: [...] }` — frame placement on the named board |
 | `component_status` | `ids?, screen?, library?` | Compile-checks components for the browser mount: `{ library, usable, diagnostics: [{ id, status: exact \| adapted \| fallback \| unavailable \| unknown, importPath?, note?, errors? }], errors }`. With `screen`, checks exactly that screen's refs and returns `mounted` — one `unavailable` component keeps the whole screen on the server render, which a per-id call cannot show |
-| `list_components` | `filter?, mode?: "index" \| "summary" \| "full", kind?, unusedOnly?` | Index mode (default) returns `{ snapshotVersion, groups: [{ group, label, families: [{ id, pieces?, designModeNotes? }] }], totals, unavailableInDesign?, notInstalledInApp? }`; summary and full modes return `{ snapshotVersion, components: [...] }`, summary carrying prop names only. `kind` narrows to library, extension or snippet. A snippet no screen reaches (directly or through another snippet) is flagged `unused`; `unusedOnly` lists only those |
-| `install_component` | `componentId, screenId?` | The existing-project flow's "is this component available + install it if not." Resolves the active library's catalog: an already-present component (every shipped library bundles its whole set, so the common case) returns `{ installed: true, importPath }` — just `$ref` it; an uninstalled one routes to the adapter's installer (shadcn-upstream's per-component fetch); an unknown id errors with the catalog. `screenId` picks the library; omitted ⇒ folder default |
-| `list_snippets` | — | `[{ id, name, params }]` |
-| `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`) |
-| `get_theme` | — | full token tree |
+| `list_components` | `filter?, mode?: "index" \| "summary" \| "full", kind?, unusedOnly?` | A component the host app doesn't have yet never blocks design: `installedInApp` is host status only, and `emit_code`'s `componentsToInstall` carries the install plan at handoff. Index mode (default) returns `{ snapshotVersion, groups: [{ group, label, families: [{ id, pieces?, designModeNotes? }] }], totals, unavailableInDesign?, notInstalledInApp? }`; summary and full modes return `{ snapshotVersion, components: [...] }`, summary carrying prop names only. `kind` narrows to library, extension or snippet. A snippet no screen reaches (directly or through another snippet) is flagged `unused`; `unusedOnly` lists only those |
+| `get_snippet` | `snippetId` | full snippet JSON (`{ id, name, params, tree }`). List snippets with `list_components { kind: "snippet" }` — each entry carries its `snippetId`, and its `id` is the PascalCase `compose` tag |
+| `get_theme` | `theme?` | full token tree (named theme; default `"default"`) |
 | `list_annotations` | `screenId` | Designer-authored markdown annotations on a screen. Each carries a `target: { locator }` and a `resolved` path (null when the targeted node has been removed — treat as low-priority). Read-only: agents can act on annotations but not create or edit them |
 | `list_notes` | `boardId` | Board markdown notes, free-positioned or attached to a node (`attachment`). Writable via `add_note` / `update_note` / `remove_note` |
 | `find_nodes` | `screenId, ref?, snippetId?, id?, classContains?, prop?, propValue?, limit?` | Query a screen tree for matching nodes (filters AND together). Returns `{ matches: [{ path, kind, ref, id?, className?, textPreview?, childCount }], total }` — locate targets for path-accepting tools without fetching and walking the whole tree |
@@ -85,17 +82,19 @@ Every registered tool carries MCP behavioural annotations, classified in one tab
 
 A screen has one tree. Path-accepting tools target nodes within that screen's tree.
 
+**Building trees goes through `compose`.** The lower-level encodings `add_node`, `instantiate_snippet` and `set_screen_tree` are not MCP tools — not standalone, and not inside `batch` (its `tool` enum excludes them). They remain on the canvas's HTTP mutation API (`/api/mutate/*`), and `compose` lowers onto them.
+
 | Tool | Args |
 |---|---|
-| `add_node` | `screenId, parentPath, componentRef, id?, props?, children?, index?` — `children` accepts full subtrees so an agent can build a feature card in one call. Pass `id` for a stable `@id` anchor |
+| `compose` | `screenId, mode: "append" \| "replace", jsx, parentPath?, index?` — build with restricted JSX: `append` adds one subtree under `parentPath` (default `[]`, the root) at `index`; `replace` swaps the whole screen tree and takes neither. Tags resolve across the screen's library, extensions, and PascalCase snippet names (a snippet tag becomes a `$snippet` instance). Nested tags, literal text, quoted props and JSON literals in braces; no JavaScript executes. `vellooId` sets a stable `$id`. Compile errors carry line/column; results carry `propWarnings` / `diagnostics` when there is something to fix. Targets real screens only — edit a snippet body with `update_snippet` |
 | `update_props` | `screenId, patches: [{ path, propPatch?, style? }]` — one entry per node, applied in one atomic write (one lock, one broadcast); length 1 for a single edit. `propPatch` shallow-merges props (null removes a key); `style` is the framework-native **`StyleChannel`** — a Tailwind `className` string for shadcn, an `sx` object for MUI, an inline `style` object for none/none. Object channels merge shallowly (an inner `null` drops that key); `style: null` clears. An entry may carry either or both; one that carries neither is rejected |
 | `update_snippet_instance` | `screenId, path, argPatch?, extraClassName?, innerPath?, propPatch?` — edit ONE snippet instance from either side: `argPatch`/`extraClassName` change what the caller passes in, `innerPath`+`propPatch` patch a node inside just this instance's body (innerPath = `"@id"` of a body node (preferred), a dotted index path, or `""` for the body root). Both compose in one call. `emit_code` inlines an overridden instance |
 | `move_node` | `screenId, fromPath, toParent, toIndex?` |
 | `remove_node` | `screenId, path` |
 | `inspect` | `screenId, path, innerPath?, computed?, viewport?, mode?, theme?` — returns SSR'd HTML, resolved className list, `$ref`, and resolved props for the node. When `path` resolves to a snippet instance the body is rendered with its args / `$overrides` / `$extraClassName` applied; `innerPath` (`"@id"`, dotted index, or "" for the body root — the same scheme as `update_snippet_instance`) drills into one body node. Omitting `innerPath` on an instance inspects the body root and returns a `note` on how to drill in. `computed: true` additionally renders the screen in a real browser and returns the node's resolved box and computed styles plus its direct children's boxes (`{ rect, style, tag, class, children }`) — what the node rendered *as*, rather than what its classes said it should. It costs a render, so it is opt-in; a node inside a snippet body isn't separately addressable in the render and returns `computed: null` with a note saying so |
-| `audit` | `screenId?` OR `snippetId?` (exactly one), `theme?` — dark-mode audit; coverage + per-node problems with token suggestions. With a named theme that has no `colorsDark`, the result flags coverage as informational |
 | `set_node_id` | `screenId, path, id` — assign / rename / clear (`id: null`) a node's stable `$id` anchor. Per-screen uniqueness is enforced; collisions return `IdConflict` |
-| `validate_classes` | `classes: string[]` — answers "do these Tailwind candidates compile under the active JIT?" Useful before reaching for arbitrary `shadow-[...]` / `bg-[...]` forms. Theme-aware (knows the folder's `palette` + `custom_css`). A class that compiles but references a CSS var that the design system never declares stays `valid: true` and carries a `warning` — it paints a runtime fallback, not the intended token (e.g. an imported `palette` value left pointing at an undefined var) |
+
+**Diagnostics replace the old checker tools.** Tree writes (`compose`, `update_props`, `add_screen`, snippet writes, `batch`), `screenshot`, `compare_to_url` and `emit_code` return an advisory `diagnostics` array when something needs fixing: `tailwind/invalid-class` (a class that doesn't compile under the JIT), `tailwind/undefined-var` (compiles, but references a CSS var the theme never declares), `tailwind/v3`, `theme/raw-color` (won't theme-flip; `data-accent` on the node exempts it), `render/component-threw`, `render/server-fallback`. See `velloo://guide/verification`.
 
 ### Screen lifecycle
 
@@ -147,11 +146,11 @@ Board notes carrying markdown-lite guidance — tour steps, review remarks, hand
 | `upload_asset` | `filename, data (base64), overwrite?` — writes into `assets/`, served at `/assets/<name>`; the agent authors SVG/raster art itself (max 5MB) |
 | `import_assets` | `paths: string[], baseDir?, overwrite?` — bulk-import existing image/SVG files into `assets/` BY PATH (no base64). Globs (`../gen/*.png`) expand relative to `baseDir` (default: server cwd). Max 5MB each; missing/oversized/non-image entries are reported per-entry, never failing the batch |
 | `generate_asset` | `prompt, intent, aspect?, count?, reference?, filename?` — hosted, **pay-as-you-go** generation via velloo-cloud (requires `velloo login`). `intent` says what the art is FOR and the server picks the model: `photo`, `illustration`, `graphic` (legible text), `texture`, `icon`, `vector` (true SVG), `mark` (geometric SVG, cheapest), `edit`, `cutout`, `upscale`. `count` 1–4 returns variants (**each charged**, stored as `<stem>-1`, `<stem>-2`, …). `reference` takes folder asset paths — required by `edit`/`cutout`/`upscale`, optional style guidance for the text-to-image intents. Decodes results into `assets/` (same store + naming as `upload_asset`) and returns each `/assets/<name>` URL; SVG intents also return inline markup for `<SVG content>`. The result reports the exact cost + remaining balance — relay both. Failures (logged out, out of credits, rate-limited, generation disabled) come back as clear messages naming the free local alternative |
-| `batch` | `calls: [{ tool: enum, args }], atomic?` — multi-mutation envelope. The batchable set is an enum in the schema; `args` stays loose and is validated by `runBatch` against the same protocol body the standalone tool uses. Atomic by default: first error rolls back every touched resource (disk + memory + undo history) and reports `rolledBack: true`. `atomic: false` keeps completed work |
+| `batch` | `calls: [{ tool: enum, args }], atomic?` — multi-mutation envelope (1–100 calls). The batchable set is an enum in the schema; `args` stays loose and is validated by `runBatch` against the same protocol body the standalone tool uses. Atomic by default: first error rolls back every touched resource (disk + memory + undo history) and reports `rolledBack: true`. `atomic: false` keeps completed work |
 
 ### Extensions
 
-Extensions register wholly new components the active library doesn't have — the app's custom `DataTable`, a brand `Hero`, a bespoke chart. Folder-global; a same-id extension shadows the library component. `add_extension` is core; `update_extension` / `remove_extension` live in the `lifecycle` hidden family.
+Extensions register wholly new components the active library doesn't have — the app's custom `DataTable`, a brand `Hero`, a bespoke chart. Folder-global; a same-id extension shadows the library component. 
 
 | Tool | Args | Notes |
 |---|---|---|
@@ -171,7 +170,7 @@ Frames are placements of screens on a chosen board. Multiple frames of the same 
 
 ### Snippets
 
-Snippets are named reusable subtrees with typed parameters. A snippet lives in `design/snippets/<id>.json`; screens reference it with a `$snippet` node and pass `args` for each declared param. Inside the snippet body, `$param` placeholder nodes substitute their argument value at render time, and `$if` branches pick `then` / `else` based on the truthiness of a named arg.
+Snippets are named reusable subtrees with typed parameters. A snippet lives in `snippets/<id>.json` in the design folder; screens reference it with a `$snippet` node and pass `args` for each declared param. Inside the snippet body, `$param` placeholder nodes substitute their argument value at render time, and `$if` branches pick `then` / `else` based on the truthiness of a named arg.
 
 `params` is `[{ name, type, default?, enum?, min?, max?, step?, description? }]` where `type` is one of:
 
@@ -188,7 +187,8 @@ Snippets are named reusable subtrees with typed parameters. A snippet lives in `
 | `add_snippet` | `id?, name, params, tree` | `tree` may contain `$param` placeholder nodes and `$if` branches |
 | `update_snippet` | `snippetId, patch` | Sparse patch on `name`, `params`, `tree`, or `innerPatch` (`{ innerPath, propPatch }` — patch one body node's props in place, the definition-level counterpart of `update_snippet_instance`; shared by all instances, no full-tree resend). All screens referencing the snippet rebroadcast |
 | `remove_snippet` | `snippetId` | Refuses if any screen instantiates it; returns the referencing screenIds so the agent can clean up first |
-| `instantiate_snippet` | `screenId, parentPath, snippetId, args, id?, extraClassName?, overrides?, index?` | Adds a `$snippet` node — opaque from outside. Pass `id` for a stable anchor; `extraClassName` to layer one-off Tailwind classes onto the snippet body's root; `overrides` (`{ "<innerSelector>": { props } }`, same field `update_snippet_instance` patches) to set per-instance interior props — the active nav item, a red badge — at placement, no follow-up call |
+
+Place an instance with `compose`, using the snippet's PascalCase tag and its args as props; tweak one instance afterwards with `update_snippet_instance`.
 
 ### Visual feedback threads
 
@@ -204,12 +204,12 @@ Persistent app state, never repo files. Every open thread is work addressed to t
 
 | Tool | Args | Notes |
 |---|---|---|
-| `set_theme` | `theme?, tokens?, fonts?, typeset?, customCss?, from?` | One verb for the whole token document; pass any combination of channels. `tokens` patches dot-paths (`colors.primary.DEFAULT`); `fonts` declares roles (each becomes `--font-<role>` + a `font-<role>` utility, `google` loads the family in design mode); `typeset` sets the rhythm (`size`/`leading`/`flow` plus font roles) the whole h1–h6 ladder derives from; `customCss` replaces `theme/custom.css` wholesale (read it back from `get_theme`); `from` reseeds the palette — `{ preset }` for one of the 12 shipped presets, `{ seedColor }` for an OKLCH ramp with contrast auto-adjusted to WCAG AA — and applies BEFORE the other channels, so one call can preset-then-override. The full theme is schema-validated after each patch |
+| `set_theme` | `theme?, tokens?, from?, fonts?, typeset?, customCss?` | One verb for the whole token document; pass any combination of channels. `tokens` patches dot-paths (`colors.primary.DEFAULT`); `fonts` declares roles (each becomes `--font-<role>` + a `font-<role>` utility, `google` loads the family in design mode); `typeset` is an array of `{ name?, renameTo?, remove?, size?, leading?, flow?, fontBody?, fontHeading?, fontMono? }` setting the rhythm the whole h1–h6 ladder derives from (a non-default `name` is a preset a `Prose` region opts into); `customCss` replaces `theme/custom.css` wholesale (read it back from `get_theme`); `from` reseeds the palette — `{ preset }` for one of the 12 shipped presets, `{ seedColor }` for an OKLCH ramp with contrast auto-adjusted to WCAG AA — and applies BEFORE the other channels, so one call can preset-then-override. The full theme is schema-validated after each patch |
 | `add_theme` | `name, from?, overwrite?` — clone a named theme to `theme/<name>.json`; boards pin it via `update_board { patch: { theme } }`, renders/screenshots via their `theme` param |
 | `list_themes` | — | named themes + which boards use each |
 | `update_theme` | `name, renameTo` | Rename a named theme, repointing every board that pinned it (the response lists them). Token edits go through `set_theme`'s `theme` param |
 | `remove_theme` | `name` | Delete a named theme. Refuses while a board still pins it, naming those boards — repoint or unpin first. The default theme cannot be removed |
-| `score_theme_contrast` | `mode?` | Score WCAG contrast ratios for the active theme's salient color pairs in both light and dark palettes (each result carries `mode`); pass `mode` to score one. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset to confirm accessibility before shipping |
+| `score_theme_contrast` | `mode?, theme?` | Score WCAG contrast ratios for the active theme's salient color pairs in both light and dark palettes (each result carries `mode`); pass `mode` to score one. Returns `{ summary, results: [{ label, fg, bg, ratio, tier: "AAA" \| "AA" \| "AAlarge" \| "Fail" }] }`. Use after a derive / preset to confirm accessibility before shipping |
 | `import_theme` | `css?` OR `cssPath?`, `theme?`, `apply?` | Code-to-design: seed the theme from a host app's stylesheet. Parses shadcn-convention `:root`/`.dark` custom props (raw HSL triplets or any CSS color) and Tailwind v4 `@theme` `--color-*` vars (var() indirection resolved), plus `--radius` and `--font-*` roles. With a `cssPath`, also ingests the nearby tailwind.config `theme.extend` — brand `colors`→palette, named `spacing`→spacing tokens (so `w-icon-rail`/`h-header` resolve), `boxShadow`→shadows, `fontFamily`→font roles, `keyframes`+`animation`→`--animate-*`. Undeclared slots keep their current values. Dry-run by default — returns `changes: [{ token, from, to }]`; `apply: true` persists |
 
 ### Visualization
@@ -234,13 +234,19 @@ Captures are stored **outside the design folder** (under `~/.velloo/captures/<fo
 
 The loop for an authenticated app: `start_capture_session` → user logs in and captures → `get_capture` → `import_theme` with its `themeCss` → re-express the page with real components (**do not transcribe the DOM**) → `compare_to_url { captureId }`.
 
+### Product feedback
+
+| Tool | Args | Notes |
+|---|---|---|
+| `send_feedback` | `body` | Free-text feedback about **Velloo itself** (a confusing instruction, a missing capability, a misbehaving tool) — never about the user's design, and never containing design content, code or file paths. Registered only when the folder opted into feedback and a cloud client is configured. The agent shows the user the exact `body` and gets their go-ahead first; capped per session. Sent anonymously unless the user opted into contact, but needs a signed-in session either way; a failure's `reason` says whether to sign in, retry later, or carry on |
+
 ### Codegen and export
 
 | Tool | Args |
 |---|---|
-| `emit_code` | `screenId, componentsAlias?` — returns a structured JSX-shaped intermediate representation intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). Emits the screen framework's native idiom: shadcn → library ids + Tailwind classes; MUI → `<Component sx={{…}} />` importing from `@mui/material`. `componentsAlias` overrides the per-folder default. **Not paste-ready output.** |
+| `emit_code` | `screenId, componentsAlias?` — returns a structured JSX-shaped intermediate representation, plus `componentsToInstall` (the host-app components the screen uses that the app doesn't have yet — the install plan) and `diagnostics`, intended for the agent to read and transform into the user's app code (using their conventions, routing, providers). Emits the screen framework's native idiom: shadcn → library ids + Tailwind classes; MUI → `<Component sx={{…}} />` importing from `@mui/material`. `componentsAlias` overrides the per-folder default. **Not paste-ready output.** |
 | `emit_snippet` | `snippetId, componentsAlias?` — same idea, scoped to a single snippet. Returns PascalCase component name, typed params, JSX body |
-| `emit_theme` | `outputDir, apply?: boolean, cssOnly?: boolean, themePath?` — emits the active framework's theme artifact: shadcn → Tailwind v4 `globals.css` (+ optional `tailwind.config.ts`); MUI → a `createTheme(...)` module at `themePath` (default `theme.ts`). Defaults to dry-run; set `apply: true` to write. Direct user-facing artifact; agent does not need to transform it |
+| `emit_theme` | `outputDir, cssPath?, themePath?, apply?: boolean, cssOnly?: boolean, theme?` — emits the active framework's theme artifact plus a framework-neutral DTCG `tokens.json`: shadcn → Tailwind `globals.css` at `cssPath` (default `app/globals.css`); MUI → a `createTheme(...)` module at `themePath` (default `theme.ts`). `theme` names the theme to emit. Defaults to dry-run; set `apply: true` to write. Direct user-facing artifact; agent does not need to transform it |
 
 ## Path addressing
 
@@ -249,7 +255,7 @@ Every path-accepting tool accepts a **locator** — either of:
 - **Path array** — integer indices from the screen tree root. `[0, 2, 1]` = first child, third grandchild, second great-grandchild. Cheap to serialize and unambiguous, but brittle: a sibling insertion above shifts every later path.
 - **`@id` reference** — the string `"@hero-cta"` resolves to whichever node carries `$id: "hero-cta"`. Stable across sibling insertions and deletions.
 
-Agents assign ids two ways: pass `id: "hero-cta"` when creating a node (`add_node`, `instantiate_snippet`) or call `set_node_id` later. Per-screen uniqueness is enforced at persist time; collisions surface as `IdConflict`.
+Agents assign ids two ways: set `vellooId="hero-cta"` on a tag when building with `compose`, or call `set_node_id` later. Per-screen uniqueness is enforced at persist time; collisions surface as `IdConflict`.
 
 Edits return the resolved path of the affected node so the agent can chain operations without a re-read.
 
@@ -257,26 +263,26 @@ Edits return the resolved path of the affected node so the agent can chain opera
 
 ### Editing a snippet body
 
-Every tree mutation also accepts a virtualized `screenId` of the form `"snippet:<snippetId>"`. The mutation layer routes those writes through the snippet's body — same impl, same path semantics, same error model. So:
+Every path-based tree mutation also accepts a virtualized `screenId` of the form `"snippet:<snippetId>"`. The mutation layer routes those writes through the snippet's body — same impl, same path semantics, same error model. So:
 
 - `update_props({ screenId: "snippet:feature-row", path: [0], propPatch: { className: "p-6" } })` patches the snippet body's root node.
-- `add_node({ screenId: "snippet:feature-row", parentPath: [], componentRef: "Icon", props: { name: "Sparkles" }, id: "leading-icon" })` adds a child to the body's root and assigns a stable id.
-- `move_node`, `remove_node`, `set_node_id`, `instantiate_snippet`, `update_snippet_instance`, and `update_props`'s bulk `patches` form all work the same way.
+- `move_node`, `remove_node`, `set_node_id`, `update_snippet_instance`, and `update_props`'s bulk `patches` form all work the same way.
+- `compose` is the exception: it targets real screens only. To add nodes to a snippet body, patch its `tree` through `update_snippet`.
 
 Two things to know:
 
 - Edits broadcast as `snippet-changed` (not `screen-changed`), and the `update_snippet` lock guards them so a body edit and a wholesale `update_snippet` can't race.
-- `$param` refs and `$if` branches are not `ComponentNode`s — `add_node` can't insert them. To add a `$param` placeholder or `$if` branch, use `update_snippet` with a patched `tree`.
+- `$param` refs and `$if` branches are not `ComponentNode`s — no path-based mutation inserts them. To add a `$param` placeholder or `$if` branch, use `update_snippet` with a patched `tree`.
 
 The canvas's snippet editor view uses exactly this surface — the Inspector targets `screenId: "snippet:<id>"` for every mutation it commits.
 
 ### Locator-aware tools
 
-`add_node`, `update_props` (single and `patches` bulk), `move_node`, `remove_node`, `inspect`, `instantiate_snippet`, `update_snippet_instance`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.
+`compose` (`parentPath`), `update_props` (`patches`), `move_node`, `remove_node`, `inspect`, `update_snippet_instance`, `set_node_id` — every `path`/`parentPath`/`fromPath`/`toParent` field accepts either a path array or an `@id` string. `set_node_id` targets `ComponentNode` and `SnippetInstance` — param refs can't carry ids.
 
 ## Advisory prop warnings
 
-`add_node`, `update_props`, and `add_screen` validate props against the active library's manifest after the mutation succeeds and attach a `propWarnings: string[]` field to the result when something looks off — a typo'd prop name (with nearest-known suggestions), an enum value outside the declared set, or a boolean/number type mismatch. Warnings never fail the mutation: DOM passthrough props (`data-*`, `aria-*`, `className`, …) are exempt, components that declare no manifest props skip validation entirely, and `$param`/`$if` substitution values are ignored. Treat a warning as "this will probably render wrong" and self-correct in the same turn.
+`compose`, `update_props`, and `add_screen` validate props against the active library's manifest after the mutation succeeds and attach a `propWarnings: string[]` field to the result when something looks off — a typo'd prop name (with nearest-known suggestions), an enum value outside the declared set, or a boolean/number type mismatch. Warnings never fail the mutation: DOM passthrough props (`data-*`, `aria-*`, `className`, …) are exempt, components that declare no manifest props skip validation entirely, and `$param`/`$if` substitution values are ignored. Treat a warning as "this will probably render wrong" and self-correct in the same turn.
 
 ## Error model
 
@@ -300,7 +306,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `FrameIdConflict` | `add_frame` id collides with an existing frame on that board |
 | `BadRequest` | Zod validation failed at the route boundary; carries the issue list |
 | `SnippetNotFound` | The named snippet doesn't exist |
-| `SnippetParamMismatch` | `args` to `instantiate_snippet` don't match the declared `params` (missing required, unknown extras, type mismatch) |
+| `SnippetParamMismatch` | A snippet instance's `args` (its props in `compose`) don't match the declared `params` (missing required, unknown extras, type mismatch) |
 | `SnippetCycle` | Snippet body would reference itself (directly or transitively) |
 | `SnippetInUse` | `remove_snippet` refuses while anything still instantiates it; splits the referencers into `screenIds[]` and `snippetIds[]` (other snippets whose body embeds this one) |
 | `SnippetIdConflict` | `add_snippet` id collides with an existing snippet |
@@ -317,7 +323,7 @@ Server returns the standard MCP `initialize` response with surface-specific `ins
 Guided sessions receive the compact dispatch contract, the rule to request one exact schema only when needed, and the pointer to the `velloo://guide/*` resources. Full sessions receive the complete native-tool guidance, summarized below:
 
 - **What Velloo is.** A pinned shadcn snapshot embedded in the binary; the design folder ships pure data. Designs are static — click handlers, routing, and forms are no-op.
-- **First-pass discovery.** Before composing screens, call `list_components` (the default index groups 292 components into ~66 families and costs about a fifth of a per-component list; `filter` to a family for its prop names), `get_theme`, `list_snippets`, and `list_boards`. For an overview of an existing screen, use `get_screen mode: "outline"` (compact `ref + $id + classSnippet` tree) before pulling the full JSON.
+- **First-pass discovery.** Before composing screens, call `list_components` (the default index groups 292 components into ~66 families and costs about a fifth of a per-component list; `filter` to a family for its prop names), `get_theme`, `list_components { kind: "snippet" }`, and `list_boards`. For an overview of an existing screen, use `get_screen mode: "outline"` (compact `ref + $id + classSnippet` tree) before pulling the full JSON.
 
 ### Grouping a library too large to read linearly
 
@@ -345,10 +351,10 @@ already say what `Field` accepts; only a note says that a label + control +
 help-text stack is what it is *for* — which matters most for the families that
 postdate most models' training data.
 - **Velloo is the design source; you are the bridge to code.** When asked to implement, call `emit_code` (per screen) or `emit_snippet` and write the real file in the user's stack — Velloo's output is IR, not finished JSX.
-- **Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`) over raw Tailwind palette colors so designs auto-flip under `screenshot mode: "dark"` and survive theme changes. Use raw palette only for *intentional* accent colors that should not theme-flip — and mark those nodes with `data-accent: "ok"` so `inspect_dark_diff` exempts them.
-- **`inspect_dark_diff` is a triage signal, not a gate.** Read the per-node `problems[]` and decide; the coverage number is a guide, not a target.
-- **Use `add_node`'s `children` array** to land whole subtrees in one call. The bulk forms (`update_props` / `update_frame` with `patches`) collapse N round-trips into one persist + one undo entry; `batch` covers multi-tool sequences atomically.
-- **Use `@id` locators** for anchors you reference more than once. Pass `id: "hero-cta"` to `add_node` / `instantiate_snippet`, or call `set_node_id` to retroactively name a node. Ids survive sibling insertions.
+- **Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`) over raw Tailwind palette colors so designs auto-flip under `screenshot mode: "dark"` and survive theme changes. Use raw palette only for *intentional* accent colors that should not theme-flip — and mark those nodes with `data-accent: "ok"` so the `theme/raw-color` diagnostic exempts them.
+- **`diagnostics` are a triage signal, not a gate.** Read each entry's path and message and decide.
+- **Use `compose`** to land whole subtrees in one call. The bulk forms (`update_props` / `update_frame` with `patches`) collapse N round-trips into one persist + one undo entry; `batch` covers multi-tool sequences atomically.
+- **Use `@id` locators** for anchors you reference more than once. Set `vellooId="hero-cta"` in `compose`, or call `set_node_id` to retroactively name a node. Ids survive sibling insertions.
 - **Snippet instances are opaque.** Design for variation up-front: boolean params + `$if`, `enum` params for full-className swaps, `node` params for slot composition, `extraClassName` for one-off per-instance tweaks.
 - **Always call `render_snippet` after `add_snippet`** — `$param` wiring bugs and `$if` truthy-coercion mistakes are silent at definition time and only surface at instantiation.
 - **One tree per screen.** Viewport size is a property of each `frame` placement. Different viewport renderings of the same screen → multiple frames pointing at the same screen (edits sync). Different layouts per breakpoint → separate screens with their own frames.

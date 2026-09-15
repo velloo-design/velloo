@@ -5,5 +5,6 @@ Use the velloo-design skill (or the velloo MCP tools directly) to design: {{args
 
 Work through the velloo MCP tools — they own the design folder; never edit its
 JSON by hand. Give the user the canvas URL up front so they can watch, and
-verify with `screenshot mode: "compare"` plus `audit` before calling it done.
+verify with `screenshot mode: "compare"` and resolve its `diagnostics` before
+calling it done.
 """

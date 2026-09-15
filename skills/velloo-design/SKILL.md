@@ -36,20 +36,21 @@ reference — read them; this skill is the workflow on top.
 
 1. **Discover before composing.** Call `list_components` (`mode: "summary"`
    first — the full schema is large; full mode carries a working `example` per
-   component), `get_theme`, and `list_snippets`. Reuse existing snippets before
+   component), `get_theme`, and `list_components kind: "snippet"`. Reuse existing snippets before
    defining new ones.
 2. **Prefer semantic theme tokens** (`bg-background`, `bg-card`, `text-foreground`,
    `text-muted-foreground`, `border-border`, `bg-primary`, `bg-accent`) over raw
    palette colors (`bg-zinc-900`, `text-white`). Semantic tokens auto-flip in
    dark mode and survive theme changes; raw palette colors render identically in
    both. Use raw palette only for an *intentional* accent that should not flip —
-   and mark that node `data-accent: "ok"` so `audit` exempts it.
-3. **Build with `children` subtrees, not node-by-node.** `add_node` takes a full
-   subtree in one call. For repeated structure (list rows, cards, nav items),
-   define a **snippet** with typed params once (`add_snippet`), then
-   `instantiate_snippet` per occurrence. `batch` runs many mutations atomically
-   in one round-trip.
-4. **Think in ids.** Pass `id:` at creation and address nodes as `"@id"` in
+   and mark that node `data-accent: "ok"` so the raw-color diagnostic exempts it.
+3. **Build whole subtrees, not node-by-node.** `compose` takes a full subtree
+   as restricted JSX in one call (`mode: "append"` under a parent, or
+   `"replace"` for the whole screen). For repeated structure (list rows, cards,
+   nav items), define a **snippet** with typed params once (`add_snippet`), then
+   place it in `compose` by its PascalCase tag, args as props. `batch` runs many
+   mutations atomically in one round-trip.
+4. **Think in ids.** Set `vellooId` at creation and address nodes as `"@id"` in
    later calls — number paths shift when siblings move.
 
 ### Snippet params — pick the right type
@@ -76,12 +77,14 @@ that renders as text). *Where* the ref goes depends on the type:
 - **`screenshot mode: "compare"`** renders light + dark side by side — the fastest
   check that the design adapts. `screenshot diff: true` compares against your last
   capture (zero change costs no image). Pass `scale: 0.5` for layout checks.
-- **`audit`** flags color classes that won't theme-flip. It's a triage signal, not
-  a gate: read the per-node `problems[]` and decide. `data-accent` nodes are exempt.
+- **`diagnostics`** come back on writes, `screenshot`, and `emit_code`:
+  `theme/raw-color` flags color classes that won't theme-flip. It's a triage
+  signal, not a gate: read each entry and decide. `data-accent` nodes are exempt.
 - **`score_theme_contrast`** scores light AND dark palettes — run it after any theme
   edit; dark is where contrast usually breaks.
-- **`validate_classes`** is free — run it on arbitrary-value classes (`shadow-[…]`,
-  `grid-cols-[…]`) before relying on them.
+- **`tailwind/invalid-class`** diagnostics name arbitrary-value classes
+  (`shadow-[…]`, `grid-cols-[…]`) that don't compile — fix those before relying
+  on them.
 
 Icon names accept PascalCase (`ArrowRight`) or kebab-case (`arrow-right`); a name
 that matches no lucide icon renders a `?` fallback and the mutation result carries

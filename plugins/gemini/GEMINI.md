@@ -15,14 +15,14 @@ Ground rules:
 - **Designs are static.** Click handlers, routing, forms, and data fetching
   are no-ops on the canvas; they get written by hand at implementation time.
 - **Discover before composing:** `list_components` (mode "summary" first),
-  `get_theme`, `list_snippets`, `list_boards`.
+  `get_theme`, `list_components` (kind "snippet"), `list_boards`.
 - **Prefer semantic theme tokens** (`bg-background`, `text-foreground`,
   `bg-primary`, …) over raw palette colors — they adapt to dark mode and
   theme changes.
-- **Build in big strokes:** `add_node` takes full subtrees; `batch` groups
-  mutations; repeated structure becomes a snippet (`add_snippet` +
-  `instantiate_snippet`).
-- **Verify:** `screenshot mode: "compare"` (light + dark), `audit`,
+- **Build in big strokes:** `compose` takes full subtrees as restricted JSX;
+  `batch` groups mutations; repeated structure becomes a snippet
+  (`add_snippet`, then placed in `compose` by its tag).
+- **Verify:** `screenshot mode: "compare"` (light + dark), its `diagnostics`,
   `score_theme_contrast`, and `compare_to_url` against a running app.
 - The user can watch on the live canvas — `velloo run` prints its URL.
 

@@ -51,7 +51,8 @@ buttons (all variants + states), inputs, selects, cards, nav, tables, badges,
 empty states, toasts, dialogs. One screen, sectioned by kind.
 
 This board *is* the audit. Anything that looks wrong here is a token bug, not a
-component bug. Run `audit` to flag color classes that won't theme-flip and fix
+component bug. Read the `theme/raw-color` diagnostics (on writes and `screenshot`)
+for color classes that won't theme-flip and fix
 them to semantic tokens (mark intentional fixed accents `data-accent: "ok"`).
 
 ## 3. Patterns — snippets with typed params

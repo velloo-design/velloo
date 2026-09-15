@@ -23,7 +23,7 @@ routing, handlers, and data are yours to add.
 - The velloo MCP tools come from your MCP config (`velloo mcp`); the server's
   `initialize` instructions are the authoritative tool reference.
 - Scope the work: `list_screens` / `list_boards` for what exists,
-  `get_screen mode: "outline"` for a quick structure read, `list_snippets`
+  `get_screen mode: "outline"` for a quick structure read, `list_components kind: "snippet"`
   for the reusable pieces, `get_theme` for the token model.
 - Read the app first: the router (Next/Vite/Astro/Remix), where components
   live, the components import alias, how pages fetch data, and whether the
