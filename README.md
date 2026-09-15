@@ -164,12 +164,13 @@ folder-taking command accepts a project name or a path, and resolves through
 
 `Ctrl-C` stops the server.
 
-**Keeping designs out of the app repo** is a first-class option — pick managed
-external storage in the wizard, or
-`velloo init --external --project web --non-interactive`. The app keeps a
-portable locator while editable files and a separate Git history live under
-`~/.velloo/designs/`. See
-[External local design folders](./docs/external-local-design-folders.md).
+**Keeping designs out of the app repo** is a first-class option — pick "Default
+out of repo" in the wizard, give a path outside the repo, or run
+`velloo init --external --project web --non-interactive`. The design is recorded
+only on your machine: nothing is written into the repo, the files live under
+`~/.velloo/designs/` (or where you chose) outside version control, and agents are
+wired through global configs. See
+[Local designs outside the repository](./docs/external-local-design-folders.md).
 
 **Choosing an MCP surface.** Velloo defaults to a compact progressive-disclosure
 surface: the agent sees `call_velloo`, `run_velloo_plan`, and `operation_schema`
@@ -204,7 +205,7 @@ You choose when — and whether — to use any of them.
 | [docs/mcp.md](./docs/mcp.md) | The MCP tool surface agents talk to |
 | [docs/providers.md](./docs/providers.md) | Adding a framework adapter |
 | [docs/css-class-channel.md](./docs/css-class-channel.md) | How styling is routed per framework |
-| [docs/external-local-design-folders.md](./docs/external-local-design-folders.md) | Managed storage, relocation, backup, standalone history |
+| [docs/external-local-design-folders.md](./docs/external-local-design-folders.md) | Local designs outside the repo: storage, agents, relocation, binding |
 
 ## Contributing
 

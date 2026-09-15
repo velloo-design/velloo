@@ -304,8 +304,8 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     }
     // A live extension was added/updated/removed — rebuild the bundle and
     // bump its version so the iframe re-fetches, and rescan Tailwind so the
-    // new host component's utility classes compile. A folder-wide reload
-    // (git revert-all) may have touched any of that, so it invalidates too.
+    // new host component's utility classes compile. A host-source change
+    // may have touched any of that, so it invalidates too.
     if (e.type === "config-changed" || e.type === "folder-reloaded") {
       bundler.invalidate();
       canvasBundler.invalidate();
@@ -555,13 +555,15 @@ export {
   screensForExportTarget,
 } from "./preflight.ts";
 export {
+  type LocalDesign,
+  listLocalDesigns,
+  localDesignOf,
+  localDesignsAt,
   managedDesignId,
   managedDesignPath,
-  managedProjectContext,
-  type ProjectContext,
-  readManagedBinding,
+  removeLocalDesign,
   resolveProjectPath,
-  writeManagedBinding,
+  writeLocalDesign,
 } from "./project-location.ts";
 export { createServerProviderLoader, resolveProviders } from "./providers.ts";
 export {

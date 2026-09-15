@@ -14,22 +14,21 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { RepoManifestSchema } from "@velloo/schema";
 import {
   hostAppRootFrom,
   loadDesignFolder,
+  localDesignOf,
   managedDesignPath,
-  managedProjectContext,
   readRepoFeedback,
   resolveProjectPath,
   writeRepoFeedback,
 } from "@velloo/server";
-import { createRevertRouter } from "../../../server/src/routes/revert.ts";
 import { connect } from "../connect/index.ts";
 import { resolveProjectRoot } from "../connect/project-root.ts";
 import { resolveDesignFolder, resolveDesignLocation } from "../folder.ts";
-import { checkpoint, planRelocation, relocateDesign } from "../managed-folders.ts";
+import { planRelocation, relocateDesign } from "../managed-folders.ts";
 import { findManifest, projectLabel } from "../manifest.ts";
+import { changedPreviewsSince } from "../publish/changed-previews.ts";
 import { gitContext } from "../publish/core.ts";
 
 const cli = resolve(import.meta.dir, "../cli.ts");
@@ -97,106 +96,150 @@ async function init(external = true) {
 }
 
 function git(folder: string, ...args: string[]) {
-  return execFileSync("git", ["-C", folder, ...args], { encoding: "utf8" }).trim();
+  return execFileSync(
+    "git",
+    ["-C", folder, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  ).trim();
 }
 
-test("external init creates portable locator, a validated initial commit, and both roots", async () => {
+test("external init records the design on this machine only, without Git", async () => {
   const folder = await init();
-  const manifest = await findManifest(app);
-  if (!manifest) throw new Error("Missing test manifest");
-  const entry = manifest.manifest.projects.web;
-  expect(typeof entry).toBe("object");
-  expect(JSON.stringify(manifest.manifest)).not.toContain(root);
+  expect(existsSync(join(app, "velloo.json"))).toBe(false);
+  expect(localDesignOf(folder)).toMatchObject({ root: app, appRoot: app, projectName: "web" });
   expect(folder.startsWith(app)).toBe(false);
   expect(await resolveDesignLocation(undefined, "test", { cwd: app, onFail })).toMatchObject({
     designRoot: folder,
     appRoot: app,
-    manifestPath: join(app, "velloo.json"),
     projectName: "web",
   });
+  expect(await resolveDesignFolder("web", "test", { cwd: join(app), onFail })).toBe(folder);
   expect(await resolveDesignFolder(app, "test", { cwd: root, onFail })).toBe(folder);
   expect(await resolveProjectRoot(folder)).toBe(app);
   const design = await loadDesignFolder(folder);
   expect(hostAppRootFrom(folder, design.config.hostApp)).toBe(app);
   expect(design.config.hostApp?.root).toBe("project:.");
-  expect(git(folder, "rev-parse", "--show-toplevel")).toBe(folder);
-  expect(git(folder, "status", "--porcelain")).toBe("");
-  expect(git(folder, "log", "-1", "--format=%s")).toBe("Initial Velloo design");
-  expect(gitContext(folder).repo).toBeNull();
+  expect(existsSync(join(folder, ".git"))).toBe(false);
   expect(await projectLabel(folder)).toContain("web");
 });
 
-test("host references and feedback follow the originating application manifest", async () => {
+test("a managed design never borrows a repository from above its storage", async () => {
+  const folder = await init();
+  const design = await loadDesignFolder(folder);
+  git(root, "init", "-q", "--initial-branch=dotfiles");
+  git(root, "remote", "add", "origin", "https://github.com/acme/dotfiles");
+  git(root, "commit", "-q", "--allow-empty", "-m", "dotfiles");
+  expect(gitContext(folder)).toEqual({ repo: null, branch: null });
+  expect(() =>
+    changedPreviewsSince(folder, "HEAD", [...design.screens.values()], design.snippets, [
+      ...design.boards.values(),
+    ]),
+  ).toThrow("not in a git repository");
+});
+
+test("a custom path outside the checkout becomes a local design that run resolves", async () => {
+  const result = await command([
+    "init",
+    "--non-interactive",
+    "--no-connect",
+    "--library=none",
+    "--start=blank",
+    "--project=coda",
+    "--design-folder=../codaaaa",
+  ]);
+  expect(result.code, result.out).toBe(0);
+  expect(result.out).toContain('local design "coda"');
+  const folder = join(app, "..", "codaaaa");
+  expect(existsSync(join(app, "velloo.json"))).toBe(false);
+  expect(localDesignOf(folder)).toMatchObject({ root: app, projectName: "coda" });
+  expect(await resolveDesignFolder(undefined, "run", { cwd: app, onFail })).toBe(folder);
+  expect((await loadDesignFolder(folder)).config.hostApp?.root).toBe("project:.");
+});
+
+test("host references and feedback stay with the local design, never the checkout", async () => {
   const folder = await init();
   await mkdir(join(app, "apps/admin"), { recursive: true });
   expect(resolveProjectPath(folder, "project:apps\\admin")).toBe(join(app, "apps/admin"));
   expect(hostAppRootFrom(folder, { root: "project:apps/admin" })).toBe(join(app, "apps/admin"));
-  await writeRepoFeedback(folder, { enabled: true, contactOk: true });
-  expect(await readRepoFeedback(folder)).toEqual({ enabled: true });
-  expect((await loadDesignFolder(folder)).config.feedback?.enabled).toBe(true);
-  expect(await readFile(join(app, "velloo.json"), "utf8")).not.toContain("contactOk");
+  // The checkout's velloo.json is a committed file; a local design never writes it.
+  await writeFile(join(app, "velloo.json"), JSON.stringify({ projects: {} }));
+  expect(await writeRepoFeedback(folder, { enabled: true })).toBeNull();
+  expect(await readRepoFeedback(folder)).toBeNull();
+  expect(await readFile(join(app, "velloo.json"), "utf8")).not.toContain("feedback");
 });
 
-test("agent configs and guidance use the project name in the application checkout", async () => {
+test("agents are wired globally for a local design, and nothing lands in the checkout", async () => {
   const folder = await init();
-  const result = await connect({
+  const home = join(root, "home");
+  const refused = await connect({
     designFolder: folder,
     agents: ["cursor"],
     installSkill: true,
-    homeDir: join(root, "home"),
+    homeDir: home,
   });
-  expect(result.projectRoot).toBe(app);
-  const config = JSON.parse(await readFile(join(app, ".cursor/mcp.json"), "utf8"));
-  expect(config.mcpServers.velloo.args).toEqual(["mcp", "web"]);
-  const guidance = await readFile(join(app, ".cursor/rules/velloo.mdc"), "utf8");
-  expect(guidance).toContain("velloo run web");
-  expect(guidance).not.toContain(root);
+  expect(refused.projectScoped).toEqual(["cursor"]);
+  expect(refused.configs).toEqual([]);
+  const wired = await connect({
+    designFolder: folder,
+    agents: ["cursor-global"],
+    installSkill: true,
+    homeDir: home,
+  });
+  expect(wired.projectScoped).toEqual([]);
+  const config = JSON.parse(await readFile(join(home, ".cursor/mcp.json"), "utf8"));
+  expect(config.mcpServers.velloo.args).toEqual(["mcp"]);
+  expect(await readdir(app)).toEqual(["package.json"]);
+  const explicit = await command(["connect", "web", "--agent=cursor"]);
+  expect(explicit.code).toBe(1);
+  expect(explicit.out).toContain("cursor-global");
 });
 
-test("a clone cannot claim an existing local binding until explicitly rebound", async () => {
+test("a clone sees no local design until it is bound there", async () => {
   const folder = await init();
   const clone = join(root, "clone");
   await cp(app, clone, { recursive: true });
-  await expect(resolveDesignFolder("web", "test", { cwd: clone, onFail })).rejects.toThrow(
-    "bound to another application",
-  );
-  const result = await command(["folder", "bind", "web", "--yes"], clone);
+  await expect(
+    resolveDesignFolder("web", "test", { cwd: clone, onFail, requireConfig: true }),
+  ).rejects.toThrow("not a velloo design folder");
+  const result = await command(["folder", "bind", folder, "--yes"], clone);
   expect(result.code, result.out).toBe(0);
   expect(await resolveDesignFolder("web", "test", { cwd: clone, onFail })).toBe(folder);
   expect(await resolveProjectRoot(folder)).toBe(clone);
 });
 
-test("missing mappings, malformed ids, missing content and ambiguous projects fail actionably", async () => {
-  expect(
-    RepoManifestSchema.safeParse({ projects: { web: { managed: "../../escape" } } }).success,
-  ).toBe(false);
-  expect(
-    RepoManifestSchema.safeParse({ projects: { web: { managed: "C:\\external" } } }).success,
-  ).toBe(false);
+test("old managed locators, moved checkouts, missing content and ambiguity fail actionably", async () => {
   const folder = await init();
   await writeFile(
     join(app, "velloo.json"),
-    JSON.stringify({ projects: { web: { managed: "unknown_id" } } }),
+    JSON.stringify({ projects: { web: { managed: basename(folder) } } }),
   );
   await expect(resolveDesignFolder("web", "test", { cwd: app, onFail })).rejects.toThrow(
     "folder bind",
   );
-  await writeFile(
-    join(app, "velloo.json"),
-    JSON.stringify({
-      projects: { web: { managed: folder.split("/").pop() }, second: { managed: "unknown_id" } },
-    }),
+  await rm(join(app, "velloo.json"));
+
+  const moved = join(root, "moved");
+  await rename(app, moved);
+  await expect(resolveDesignFolder(undefined, "test", { cwd: moved, onFail })).rejects.toThrow(
+    "checkout moved",
   );
-  await expect(resolveDesignFolder(undefined, "test", { cwd: app, onFail })).rejects.toThrow(
-    "several projects",
+  await rename(moved, app);
+
+  // An in-repo folder asking for the same name is renamed rather than shadowing it.
+  await init(false);
+  expect(Object.keys((await findManifest(app))?.manifest.projects ?? {})).toEqual(["web-2"]);
+  expect(await resolveDesignFolder("web", "test", { cwd: app, onFail })).toBe(folder);
+  expect(await resolveDesignFolder("web-2", "test", { cwd: app, onFail })).toBe(
+    join(app, "velloo"),
   );
+
   await rm(folder, { recursive: true });
   await expect(resolveDesignFolder("web", "test", { cwd: app, onFail })).rejects.toThrow(
     "no .design/config.json",
   );
 });
 
-test("manifest-supplied legacy escaping paths require an explicit path and are not rewritten", async () => {
+test("a velloo.json path outside the repository needs an explicit path, or bind", async () => {
   const folder = await init(false);
   const outside = join(root, "legacy");
   await rename(folder, outside);
@@ -207,6 +250,10 @@ test("manifest-supplied legacy escaping paths require an explicit path and are n
   );
   expect(await resolveDesignFolder(outside, "test", { cwd: app, onFail })).toBe(outside);
   expect(await readFile(join(app, "velloo.json"), "utf8")).toBe(text);
+  const bound = await command(["folder", "bind", outside, "--yes"]);
+  expect(bound.code, bound.out).toBe(0);
+  expect(existsSync(join(app, "velloo.json"))).toBe(false);
+  expect(await resolveDesignFolder("web", "test", { cwd: app, onFail })).toBe(outside);
 });
 
 test("managed symlinks cannot redirect a locator outside managed storage", async () => {
@@ -217,32 +264,42 @@ test("managed symlinks cannot redirect a locator outside managed storage", async
   expect(() => managedDesignPath(basename(folder))).toThrow("symbolic link");
 });
 
-test("relocation in both directions preserves design identity, assets, app paths and default choice", async () => {
+test("relocation between the repository, managed storage and a chosen directory keeps the design", async () => {
   const source = await init(false);
   const configBefore = JSON.parse(await readFile(join(source, ".design/config.json"), "utf8"));
   await writeFile(join(source, "assets/original.bin"), new Uint8Array([0, 4, 255]));
-  const found = await findManifest(app);
-  if (!found) throw new Error("Missing test manifest");
-  await writeFile(found.path, JSON.stringify({ ...found.manifest, defaultProject: "web" }));
   const preview = await command(["folder", "relocate", "web", "--external"]);
   expect(preview.code, preview.out).toBe(0);
   expect(preview.out).toContain("Preview only");
+  expect(preview.out).toContain("local design");
   expect(existsSync(source)).toBe(true);
+
   const plan = await planRelocation(source, app, undefined, true);
   await relocateDesign(plan);
   expect(existsSync(source)).toBe(false);
+  // Its only project left, so the committed manifest goes with it.
+  expect(existsSync(join(app, "velloo.json"))).toBe(false);
+  expect(localDesignOf(plan.destination)?.projectName).toBe("web");
   expect(await resolveDesignFolder(undefined, "test", { cwd: app, onFail })).toBe(plan.destination);
   expect((await loadDesignFolder(plan.destination)).config.folderId).toBe(configBefore.folderId);
   expect(new Uint8Array(await readFile(join(plan.destination, "assets/original.bin")))).toEqual(
     new Uint8Array([0, 4, 255]),
   );
-  const back = await planRelocation(plan.destination, app, "design-restored", false);
+
+  const chosen = join(root, "elsewhere");
+  const aside = await planRelocation(plan.destination, app, chosen, false);
+  await relocateDesign(aside);
+  expect(localDesignOf(chosen)).toMatchObject({ id: basename(plan.destination), root: app });
+  expect(hostAppRootFrom(chosen, (await loadDesignFolder(chosen)).config.hostApp)).toBe(app);
+
+  const back = await planRelocation(chosen, app, "design-restored", false);
   await relocateDesign(back);
   const restored = await loadDesignFolder(back.destination);
   expect(restored.config.folderId).toBe(configBefore.folderId);
   expect(hostAppRootFrom(back.destination, restored.config.hostApp)).toBe(app);
-  expect((await findManifest(app))?.manifest.defaultProject).toBe("web");
-  expect(existsSync(join(back.destination, ".git"))).toBe(true);
+  expect(localDesignOf(back.destination)).toBeNull();
+  expect((await findManifest(app))?.manifest.projects).toEqual({ web: "design-restored" });
+  expect(existsSync(join(back.destination, ".git"))).toBe(false);
 });
 
 test("occupied destinations, invalid designs, and a changed manifest preserve the source", async () => {
@@ -261,42 +318,12 @@ test("occupied destinations, invalid designs, and a changed manifest preserve th
   expect(existsSync(next.destination)).toBe(false);
 });
 
-test("checkpoints exclude runtime and revert restores only the standalone design", async () => {
-  const folder = await init();
-  await mkdir(join(folder, ".design/cache"), { recursive: true });
-  await writeFile(join(folder, ".design/cache/runtime.json"), "runtime");
-  await writeFile(join(app, "application.txt"), "uncommitted application work");
-  await writeFile(join(folder, "assets/checkpoint.txt"), "saved");
-  const sha = await checkpoint(folder, "Approved draft");
-  expect(git(folder, "rev-parse", "HEAD")).toBe(sha);
-  expect(git(folder, "ls-files")).not.toContain("runtime.json");
-  await writeFile(join(folder, "assets/checkpoint.txt"), "modified");
-  await writeFile(join(folder, "assets/untracked.txt"), "discard");
-  const design = await loadDesignFolder(folder);
-  const router = createRevertRouter(
-    () => design,
-    () => {},
-  );
-  const response = await router.request("/", { method: "POST" });
-  expect(response.status).toBe(200);
-  expect(await readFile(join(folder, "assets/checkpoint.txt"), "utf8")).toBe("saved");
-  expect(existsSync(join(folder, "assets/untracked.txt"))).toBe(false);
-  expect(existsSync(join(folder, ".design/cache/runtime.json"))).toBe(true);
-  expect(await readFile(join(app, "application.txt"), "utf8")).toBe("uncommitted application work");
-  await writeFile(join(folder, "screens/broken.json"), "{");
-  await expect(checkpoint(folder, "Invalid")).rejects.toThrow();
-  expect(git(folder, "rev-parse", "HEAD")).toBe(sha);
-  expect(existsSync(join(folder, "screens/broken.json"))).toBe(true);
-});
-
-test("removing an external registration retains its design and history", async () => {
+test("removing a local design forgets it and retains its content", async () => {
   const folder = await init();
   const result = await command(["folder", "remove", "web", "--yes"]);
   expect(result.code, result.out).toBe(0);
-  expect(existsSync(join(app, "velloo.json"))).toBe(false);
   expect(existsSync(join(folder, ".design/config.json"))).toBe(true);
-  expect(existsSync(join(folder, ".git"))).toBe(true);
-  expect(() => managedProjectContext(folder)).toThrow("manifest");
+  expect(localDesignOf(folder)).toBeNull();
 });
 
 test("command matrix resolves external designs for folder, capture, emit, render, export, theme and upgrade", async () => {
@@ -312,7 +339,6 @@ test("command matrix resolves external designs for folder, capture, emit, render
     ["export", screen, "--folder=web", "--to=export.html", "--yes"],
     ["theme:export", "--folder=web", `--to=${app}`],
     ["upgrade", "web", "--no-skills"],
-    ["folder", "checkpoint", "web", "--message=CLI checkpoint"],
   ];
   for (const args of commands) {
     const result = await command(args);
@@ -322,7 +348,8 @@ test("command matrix resolves external designs for folder, capture, emit, render
   expect(existsSync(join(app, "export.html"))).toBe(true);
 });
 
-test("nested application roots remain portable when a monorepo checkout moves", async () => {
+test("nested application roots follow a monorepo checkout that moves", async () => {
+  await mkdir(join(app, ".git"));
   await init();
   const nested = join(app, "apps/admin");
   await mkdir(nested, { recursive: true });
@@ -340,12 +367,10 @@ test("nested application roots remain portable when a monorepo checkout moves", 
   const folder = await resolveDesignFolder(undefined, "test", { cwd: nested, onFail });
   // Agents are opened at the repo root, not inside the nested app.
   expect(await resolveProjectRoot(folder)).toBe(app);
-  expect((await findManifest(app))?.manifest.projects.admin).toMatchObject({
-    appRoot: "apps/admin",
-  });
+  expect(localDesignOf(folder)).toMatchObject({ root: app, appRoot: nested });
   const clone = join(root, "new-checkout");
   await cp(app, clone, { recursive: true });
-  const bound = await command(["folder", "bind", "admin", "--yes"], clone);
+  const bound = await command(["folder", "bind", folder, "--yes"], clone);
   expect(bound.code, bound.out).toBe(0);
   expect(await resolveProjectRoot(folder)).toBe(clone);
   expect(hostAppRootFrom(folder, (await loadDesignFolder(folder)).config.hostApp)).toBe(
@@ -423,17 +448,19 @@ test("external daemon restarts, agent stdio launch attaches, and out-of-band edi
   }
 }, 45000);
 
-test("publish and changed-since use the external design checkpoint and manifest project title", async () => {
+test("publish and changed-since use a repository the user keeps in the managed design", async () => {
   const folder = await init();
-  const { changedPreviewsSince } = await import("../publish/changed-previews.ts");
+  git(folder, "init", "-q", "--initial-branch=main");
+  git(folder, "add", "--all");
+  git(folder, "commit", "-q", "-m", "Version one");
   const original = await loadDesignFolder(folder);
   const screen = [...original.screens.values()][0];
   if (!screen) throw new Error("Missing sample screen");
   await writeFile(
     join(folder, `screens/${screen.id}.json`),
-    JSON.stringify({ ...screen, name: "Checkpoint version" }),
+    JSON.stringify({ ...screen, name: "Second version" }),
   );
-  await checkpoint(folder, "Version two");
+  git(folder, "commit", "-q", "-am", "Version two");
   const selection = changedPreviewsSince(
     folder,
     "HEAD~1",
@@ -519,20 +546,21 @@ test("application path aliases share one binding and still allow relocation", as
   expect(existsSync(join(app, "restored/.design/config.json"))).toBe(true);
 });
 
-test("relocation rejects destination aliases into the source or outside the repository", async () => {
+test("relocation sees through destination aliases into the source or outside the repository", async () => {
   const source = await init(false);
   await symlink(source, join(app, "source-alias"));
   await expect(planRelocation(source, app, "source-alias/nested", false)).rejects.toThrow(
     "contain each other",
   );
   await symlink(root, join(app, "outside-alias"));
-  await expect(planRelocation(source, app, "outside-alias/new", false)).rejects.toThrow(
-    "inside the application repository",
-  );
+  // A path that only looks inside the repository is outside it, so it is local.
+  const plan = await planRelocation(source, app, "outside-alias/new", false);
+  expect(plan.destinationLocal).toBeDefined();
+  expect(plan.manifest).toBeNull();
   expect(existsSync(source)).toBe(true);
 });
 
-test("missing Git retains newly scaffolded content and reports initialization failure", async () => {
+test("external init succeeds without Git installed", async () => {
   const result = await command(
     [
       "init",
@@ -546,16 +574,27 @@ test("missing Git retains newly scaffolded content and reports initialization fa
     app,
     { PATH: join(root, "no-executables") },
   );
-  expect(result.code).toBe(1);
-  expect(result.out).toContain("Git operation failed");
-  expect(result.out).toContain("content was retained");
-  expect(result.out).not.toContain("installed and ready");
+  expect(result.code, result.out).toBe(0);
   expect(existsSync(join(app, "velloo.json"))).toBe(false);
   const storage = join(root, "user-data/designs");
-  const entries = await readdir(storage);
+  const entries = (await readdir(storage)).filter((name) => !name.startsWith("."));
   expect(entries).toHaveLength(1);
   const id = entries[0];
-  if (!id) throw new Error("Expected retained design");
+  if (!id) throw new Error("Expected a managed design");
   expect(existsSync(join(storage, id, ".design/config.json"))).toBe(true);
-  expect(existsSync(join(storage, id, "theme/default.json"))).toBe(true);
+  expect(existsSync(join(storage, id, ".git"))).toBe(false);
+});
+
+test("a plain directory inside a home-directory repository gets its own manifest", async () => {
+  git(root, "init", "-q");
+  const plain = join(root, "mydesign");
+  await mkdir(plain);
+  const result = await command(
+    ["init", "--non-interactive", "--no-connect", "--library=none", "--start=blank"],
+    plain,
+    { HOME: root },
+  );
+  expect(result.code, result.out).toBe(0);
+  expect(existsSync(join(plain, "velloo.json"))).toBe(true);
+  expect(existsSync(join(root, "velloo.json"))).toBe(false);
 });

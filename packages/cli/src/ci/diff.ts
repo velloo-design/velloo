@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import type { Screen, Snippet } from "@velloo/schema";
+import { designGitEnv } from "../design-git.ts";
 
 /**
  * Changed-screen detection for `publish --changed-since`: diff the design
@@ -214,7 +215,18 @@ function git(repo: string, args: string[]): string {
 }
 
 export function resolveGitContext(designFolder: string, base: string, head: string): GitContext {
-  const repoRoot = git(designFolder, ["rev-parse", "--show-toplevel"]).trim();
+  let repoRoot: string;
+  try {
+    repoRoot = execFileSync("git", ["-C", designFolder, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: designGitEnv(designFolder),
+    }).trim();
+  } catch {
+    throw new Error(
+      `design folder ${designFolder} is not in a git repository, so there are no refs to compare`,
+    );
+  }
   // realpath both sides: git prints physical paths, so a symlinked cwd
   // (macOS /tmp → /private/tmp) would otherwise look "outside the repo".
   const designRel = relative(realpathSync(repoRoot), realpathSync(resolve(designFolder)));

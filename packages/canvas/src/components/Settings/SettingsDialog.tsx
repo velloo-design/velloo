@@ -26,7 +26,7 @@ import { FolderPane } from "./FolderPane.tsx";
  *
  * The rail is the scope switcher *and* the explanation of where each setting
  * lives: the whole point is that a user can tell, at a glance, which of these
- * their teammates will see. Account, credits, and revert stay in the top-bar
+ * their teammates will see. Account and credits stay in the top-bar
  * menu — they belong to the person, not the folder.
  */
 

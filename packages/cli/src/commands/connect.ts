@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { localDesignOf } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import {
@@ -6,6 +7,8 @@ import {
   askAgentWiring,
   connect,
   DEFAULT_MCP_URL,
+  GLOBAL_AGENT_IDS,
+  localDesignScopeProblem,
   MANUAL_AGENT_ID,
   manualSetupText,
   PROJECT_AGENT_IDS,
@@ -68,13 +71,19 @@ export default defineCommand({
     // question), falling back to the project defaults when there's no TTY.
     let agents: string[];
     let manual = false;
+    const local = localDesignOf(folder) !== null;
     if (args.agent) {
       agents = args.agent
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
+      const problem = localDesignScopeProblem(folder, agents);
+      if (problem) fail("connect", problem);
     } else if (interactive) {
-      const wiring = await askAgentWiring({ projectRoot: await resolveProjectRoot(folder) });
+      const wiring = await askAgentWiring({
+        projectRoot: await resolveProjectRoot(folder),
+        globalOnly: local,
+      });
       if (wiring === null) fail("connect", "cancelled.");
       if (wiring.agents.length === 0 && !wiring.manual) {
         console.log(pc.dim("No agents selected — nothing wired."));
@@ -83,7 +92,7 @@ export default defineCommand({
       manual = wiring.manual;
       agents = wiring.agents;
     } else {
-      agents = PROJECT_AGENT_IDS;
+      agents = local ? GLOBAL_AGENT_IDS : PROJECT_AGENT_IDS;
     }
     // `--agent manual` also just prints the config — no files written.
     if (agents.includes(MANUAL_AGENT_ID)) {

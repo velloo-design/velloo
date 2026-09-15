@@ -2,13 +2,13 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { isCancel, select } from "@clack/prompts";
-import { ConfigSchema, RepoManifestSchema } from "@velloo/schema";
+import { ConfigSchema } from "@velloo/schema";
 import {
+  localDesignOf,
   managedDesignId,
-  readManagedBinding,
   resolveProjectPath,
   writeJsonAtomic,
-  writeManagedBinding,
+  writeLocalDesign,
 } from "@velloo/server";
 import { findGitRoot, findManifest } from "./manifest.ts";
 import { discoverScanRoots } from "./scan/discover.ts";
@@ -25,10 +25,9 @@ import { discoverScanRoots } from "./scan/discover.ts";
  * Where it lives depends on the folder's kind, so the two shapes are read and
  * written through this one module:
  *
- *   - **managed** (external storage) — the manifest entry's `appRoot` plus the
- *     machine-local binding. Design paths are stored as `project:` references,
- *     which mean "relative to the application root" and therefore follow it
- *     with no rewriting at all.
+ *   - **local** (outside the checkout) — the machine-local record's `appRoot`.
+ *     Design paths are stored as `project:` references, which mean "relative
+ *     to the application root" and therefore follow it with no rewriting.
  *   - **in-repo** — `config.hostApp.root`, stored relative to the design
  *     folder. Nothing expresses "the app root" symbolically, so the paths that
  *     were *under* the old root are re-anchored onto the new one.
@@ -37,10 +36,12 @@ export interface RecordedAppRoot {
   /** Absolute path currently recorded. */
   path: string;
   /** How the folder stores it, which decides what a change has to write. */
-  kind: "managed" | "in-repo";
-  /** Managed design id, when `kind` is "managed". */
-  managedId?: string;
-  /** Project name in the repo manifest, when the folder is registered. */
+  kind: "local" | "in-repo";
+  /** Local design id, when `kind` is "local". */
+  localId?: string;
+  /** The checkout a local design belongs to. */
+  checkout?: string;
+  /** Project name, when the folder is registered. */
   projectName?: string;
   /** Absolute path of the manifest that registers it, when there is one. */
   manifestPath?: string;
@@ -74,20 +75,19 @@ async function readConfig(folder: string) {
 /**
  * What application the folder currently points at. Deliberately tolerant of a
  * root that has gone missing: that is precisely the state this exists to
- * repair, and `managedProjectContext` throws on it.
+ * repair.
  */
 export async function recordedAppRoot(designFolder: string): Promise<RecordedAppRoot> {
   const folder = resolve(designFolder);
-  const managedId = managedDesignId(folder);
-  if (managedId) {
-    const binding = readManagedBinding(managedId);
-    const path = resolve(binding.appRoot);
+  const local = localDesignOf(folder);
+  if (local) {
+    const path = resolve(local.appRoot);
     return {
       path,
-      kind: "managed",
-      managedId,
-      projectName: binding.projectName,
-      manifestPath: binding.manifestPath,
+      kind: "local",
+      localId: local.id,
+      checkout: local.root,
+      projectName: local.projectName,
       ...appShape(path),
     };
   }
@@ -123,8 +123,8 @@ export interface AppRootChange {
   to: string;
   /** Config paths re-anchored onto the new root: field → old → new. */
   rewritten: { field: string; from: string; to: string }[];
-  /** Manifest `projects.<name>.appRoot`, when the change touched one. */
-  manifest?: { path: string; project: string; to: string };
+  /** The local design record, when the folder is one — the only thing that changes. */
+  local?: { id: string; root: string; project: string };
 }
 
 /**
@@ -140,23 +140,15 @@ export async function planAppRootChange(
   const to = resolve(newRoot);
   const change: AppRootChange = { from: current.path, to, rewritten: [] };
 
-  if (current.kind === "managed") {
-    if (!current.manifestPath || !current.projectName) {
-      throw new Error(`${folder} is a managed design with no manifest binding to update.`);
-    }
-    const manifestDir = resolve(current.manifestPath, "..");
-    if (!isUnder(manifestDir, to)) {
+  if (current.kind === "local" && current.localId && current.checkout && current.projectName) {
+    if (!isUnder(current.checkout, to)) {
       throw new Error(
-        `An application root must live inside the manifest repository (${manifestDir}). ${to} is outside it.`,
+        `An application root must live inside the design's checkout (${current.checkout}). ${to} is outside it.`,
       );
     }
     // `project:` paths already mean "under the application root", so they
     // follow the move; only the pointer to the root itself changes.
-    change.manifest = {
-      path: current.manifestPath,
-      project: current.projectName,
-      to: toPosix(relative(manifestDir, to)),
-    };
+    change.local = { id: current.localId, root: current.checkout, project: current.projectName };
     return change;
   }
 
@@ -196,26 +188,14 @@ export async function applyAppRootChange(
   change: AppRootChange,
 ): Promise<void> {
   const folder = resolve(designFolder);
-  const managedId = managedDesignId(folder);
 
-  if (change.manifest) {
-    const { path, project, to } = change.manifest;
-    const manifest = RepoManifestSchema.parse(JSON.parse(await readFile(path, "utf8")));
-    const entry = manifest.projects[project];
-    if (!entry || typeof entry === "string") {
-      throw new Error(`${path} no longer registers a managed project named "${project}".`);
-    }
-    manifest.projects[project] = { ...entry, appRoot: to };
-    // The manifest and the binding are cross-checked on every load, so the
-    // binding has to move with the entry or the folder stops opening at all.
-    await writeJsonAtomic(path, manifest);
-    if (managedId) {
-      await writeManagedBinding(managedId, {
-        manifestPath: path,
-        appRoot: change.to,
-        projectName: project,
-      });
-    }
+  if (change.local) {
+    await writeLocalDesign(change.local.id, {
+      root: change.local.root,
+      appRoot: change.to,
+      projectName: change.local.project,
+      ...(managedDesignId(folder) ? {} : { designPath: folder }),
+    });
     return;
   }
 

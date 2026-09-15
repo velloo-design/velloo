@@ -6,8 +6,8 @@ import { z } from "zod";
  * This union is the wire contract, not an internal detail: the server emits it
  * and the canvas dispatches on it, so it lives here rather than beside the
  * watcher that happens to produce most of the variants. Some are emitted by
- * other server paths entirely (`folder-reloaded` by the revert route,
- * `reload-error` by the reload pipeline).
+ * other server paths entirely (`folder-reloaded` by the host-source
+ * watcher, `reload-error` by the reload pipeline).
  */
 export type WatchEvent =
   | { type: "screen-changed"; screenId: string }
@@ -25,9 +25,9 @@ export type WatchEvent =
    */
   | { type: "config-changed" }
   /**
-   * The whole folder was rewritten out-of-band (git revert-all) and
-   * reloaded server-side. Clients drop every cache and refetch. Emitted
-   * by the revert route, never by the watcher itself.
+   * Host component source changed, so any rendered frame may be stale.
+   * Clients drop every cache and refetch. Emitted by the host-source
+   * watcher, never by the design-folder watcher.
    */
   | { type: "folder-reloaded" }
   /**

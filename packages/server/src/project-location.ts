@@ -1,23 +1,61 @@
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
-import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { writeJsonAtomic } from "./fs.ts";
 
+/**
+ * Local designs: design folders that live outside the checkout they design
+ * for — in Velloo's managed storage or at a path the user chose. They are
+ * deliberately absent from the committed `velloo.json`: the location means
+ * nothing to anyone else, and a repository must not be able to point Velloo
+ * at a directory outside itself. The only authority for "this checkout has a
+ * design over there" is a record on this machine, under
+ * `<storage>/.locations/<id>.json`, written by `init`, `relocate` or `bind`.
+ */
+
 const ID = /^[A-Za-z0-9_-]{8,64}$/;
-const BindingSchema = z.object({
-  manifestPath: z.string().min(1),
+const PROJECT_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
+
+const RecordSchema = z.object({
+  /** The checkout the design belongs to — where commands and agents run. */
+  root: z.string().min(1),
+  /** The application inside `root` the design targets. */
   appRoot: z.string().min(1),
-  projectName: z.string().min(1),
+  projectName: z.string().regex(PROJECT_NAME),
+  /** A folder the user chose; absent means managed storage (`<storage>/<id>`). */
+  designPath: z.string().min(1).optional(),
 });
-export type ProjectContext = z.infer<typeof BindingSchema>;
+type LocalDesignRecord = z.infer<typeof RecordSchema>;
+
+export interface LocalDesign {
+  id: string;
+  root: string;
+  appRoot: string;
+  projectName: string;
+  /** Absolute design folder. */
+  designRoot: string;
+}
 
 function storageRoot(): string {
   return resolve(process.env.VELLOO_DESIGNS_HOME ?? join(homedir(), ".velloo", "designs"));
 }
 
-/** Identifiers never contain a path. A manifest cannot choose where we write. */
+function locationsDir(): string {
+  return join(storageRoot(), ".locations");
+}
+
+function realOr(path: string): string {
+  return existsSync(path) ? realpathSync(path) : resolve(path);
+}
+
+function within(parent: string, child: string): boolean {
+  const rel = relative(realOr(parent), realOr(child));
+  return rel === "" || (!rel.startsWith("..") && !/^(?:[\\/]|[A-Za-z]:)/.test(rel));
+}
+
+/** Where managed storage keeps a design. Identifiers never contain a path. */
 export function managedDesignPath(id: string): string {
   if (!ID.test(id)) throw new Error(`Invalid managed design identifier: ${JSON.stringify(id)}`);
   const folder = join(storageRoot(), id);
@@ -29,87 +67,88 @@ export function managedDesignPath(id: string): string {
   return folder;
 }
 
-function bindingPath(id: string): string {
-  managedDesignPath(id);
-  return join(storageRoot(), ".locations", `${id}.json`);
-}
-
+/** The id of a folder sitting directly in managed storage, registered or not. */
 export function managedDesignId(folder: string): string | null {
   const abs = resolve(folder);
-  const parent = dirname(abs);
-  const root = storageRoot();
-  if (
-    parent !== root &&
-    (!existsSync(parent) || !existsSync(root) || realpathSync(parent) !== realpathSync(root))
-  )
-    return null;
+  if (realOr(dirname(abs)) !== realOr(storageRoot())) return null;
   const id = basename(abs);
-  if (!ID.test(id)) return null;
-  managedDesignPath(id);
-  return id;
+  return ID.test(id) ? id : null;
 }
 
-export function readManagedBinding(id: string): ProjectContext {
-  const path = bindingPath(id);
+/** Every local design recorded on this machine; unreadable records are skipped. */
+export function listLocalDesigns(): LocalDesign[] {
+  let names: string[];
   try {
-    return BindingSchema.parse(JSON.parse(readFileSync(path, "utf8")));
-  } catch (error) {
-    throw new Error(
-      `Missing or malformed local mapping ${path}. Restore the design under ${managedDesignPath(id)}, then run \`velloo folder bind <project> --yes\` from its application repository. ${error instanceof Error ? error.message : error}`,
-    );
-  }
-}
-
-export async function writeManagedBinding(id: string, context: ProjectContext): Promise<void> {
-  try {
-    await writeJsonAtomic(bindingPath(id), BindingSchema.parse(context));
-  } catch (error) {
-    throw new Error(
-      `Could not save the local binding for ${id}. Check write permissions and free space in ${storageRoot()}, then retry. Design content was retained. ${error instanceof Error ? error.message : error}`,
-    );
-  }
-}
-
-/** Binding is local authority; a clone with the same id cannot claim another app's design. */
-export function managedProjectContext(folder: string): ProjectContext | null {
-  const id = managedDesignId(folder);
-  if (!id) return null;
-  const context = readManagedBinding(id);
-  let manifest: RepoManifest;
-  try {
-    manifest = RepoManifestSchema.parse(JSON.parse(readFileSync(context.manifestPath, "utf8")));
+    names = readdirSync(locationsDir()).filter((name) => name.endsWith(".json"));
   } catch {
-    throw new Error(
-      `Application manifest ${context.manifestPath} is missing or malformed. Restore it or run \`velloo folder bind <project> --yes\` from the moved application.`,
-    );
+    return [];
   }
-  const entry = manifest.projects[context.projectName];
-  if (
-    !entry ||
-    typeof entry === "string" ||
-    entry.managed !== id ||
-    resolve(context.appRoot) !== resolve(dirname(context.manifestPath), entry.appRoot ?? ".")
-  ) {
-    throw new Error(
-      `Stale local mapping for ${folder}: ${context.manifestPath} no longer registers ${context.projectName}. Restore the registration or explicitly bind the project.`,
-    );
+  const out: LocalDesign[] = [];
+  for (const name of names.sort()) {
+    const id = name.slice(0, -".json".length);
+    if (!ID.test(id)) continue;
+    try {
+      const record = RecordSchema.parse(
+        JSON.parse(readFileSync(join(locationsDir(), name), "utf8")),
+      );
+      out.push({
+        id,
+        root: record.root,
+        appRoot: record.appRoot,
+        projectName: record.projectName,
+        designRoot: record.designPath ?? managedDesignPath(id),
+      });
+    } catch {
+      // A record from an older format or a hand edit: `folder bind` rewrites it.
+    }
   }
-  if (!existsSync(context.appRoot))
-    throw new Error(
-      `Application root ${context.appRoot} is missing. Move or restore the application, then bind its project again.`,
-    );
-  return context;
+  return out;
 }
 
-/** `project:` paths are portable references into the locally bound application. */
+/** Local designs whose checkout contains `dir`. */
+export function localDesignsAt(dir: string): LocalDesign[] {
+  return listLocalDesigns().filter((design) => within(design.root, dir));
+}
+
+/** The record for a design folder, when it is a local design on this machine. */
+export function localDesignOf(folder: string): LocalDesign | null {
+  const target = realOr(folder);
+  return listLocalDesigns().find((design) => realOr(design.designRoot) === target) ?? null;
+}
+
+export async function writeLocalDesign(id: string, record: LocalDesignRecord): Promise<void> {
+  if (!ID.test(id)) throw new Error(`Invalid local design identifier: ${JSON.stringify(id)}`);
+  try {
+    await writeJsonAtomic(
+      join(locationsDir(), `${id}.json`),
+      RecordSchema.parse({
+        ...record,
+        root: resolve(record.root),
+        appRoot: resolve(record.appRoot),
+        ...(record.designPath ? { designPath: resolve(record.designPath) } : {}),
+      }),
+    );
+  } catch (error) {
+    throw new Error(
+      `Could not save the local design record ${id}. Check write permissions and free space in ${storageRoot()}, then retry. Design content was retained. ${error instanceof Error ? error.message : error}`,
+    );
+  }
+}
+
+export async function removeLocalDesign(id: string): Promise<void> {
+  if (!ID.test(id)) return;
+  await rm(join(locationsDir(), `${id}.json`), { force: true });
+}
+
+/** `project:` paths are portable references into the design's application. */
 export function resolveProjectPath(folder: string, path: string): string {
   if (!path.startsWith("project:")) return resolve(folder, path);
-  const context = managedProjectContext(folder);
-  if (!context)
+  const design = localDesignOf(folder);
+  if (!design)
     throw new Error(
-      `Project-relative reference ${path} has no application binding for ${folder}. Run velloo folder bind from the application repository.`,
+      `Project-relative reference ${path} has no application on this machine for ${folder}. Run \`velloo folder bind ${folder}\` from the application checkout.`,
     );
   const rel = path.slice("project:".length);
   if (/^(?:[\\/]|[A-Za-z]:)/.test(rel)) throw new Error(`Invalid project-relative path: ${path}`);
-  return resolve(context.appRoot, rel.replace(/\\/g, "/"));
+  return resolve(design.appRoot, rel.replace(/\\/g, "/"));
 }

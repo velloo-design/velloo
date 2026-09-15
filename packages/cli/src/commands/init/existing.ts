@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { managedProjectContext } from "@velloo/server";
+import { localDesignOf } from "@velloo/server";
 import pc from "picocolors";
 import { askAgentWiring } from "../../connect/index.ts";
 import { resolveProjectRoot } from "../../connect/project-root.ts";
@@ -14,7 +14,7 @@ import {
   runUpgrade,
 } from "../../existing-folder.ts";
 import { existingDesignFolder, hasDesignConfig, resolveDesignFolder } from "../../folder.ts";
-import { findManifest, pickProject } from "../../manifest.ts";
+import { findProjects, pickProject } from "../../manifest.ts";
 import type { InitCliArgs } from "../../wizard/args.ts";
 import { applyAgentWiring, NOT_WIRED, printWired } from "./agent-wiring.ts";
 import { printExitInstructions } from "./output.ts";
@@ -41,8 +41,8 @@ export async function offerExistingFolderActions(
   // With --add-folder the design-folder arg names the folder being *created*,
   // so the sibling to read defaults from is whichever one the repo already
   // has — not that path.
-  const manifest = await findManifest(appRoot);
-  const project = manifest ? pickProject(manifest, appRoot) : null;
+  const projects = await findProjects(appRoot);
+  const project = projects ? pickProject(projects, appRoot) : null;
   const registered =
     project && !cliArgs.designFolder
       ? await resolveDesignFolder(project, "init", { cwd: appRoot, interactive: true })
@@ -54,7 +54,7 @@ export async function offerExistingFolderActions(
       : resolve(appRoot, cliArgs.designFolder ?? "velloo"));
   if (!(await hasDesignConfig(existing))) return { kind: "none" };
 
-  const contextRoot = managedProjectContext(existing)?.appRoot ?? appRoot;
+  const contextRoot = localDesignOf(existing)?.appRoot ?? appRoot;
   const facts = await readFolderFacts(existing, contextRoot);
   // `velloo folder add` skips the menu — the caller already said what they
   // came for.
@@ -67,6 +67,7 @@ export async function offerExistingFolderActions(
     const wiring = await askAgentWiring({
       skipWhenCovered: true,
       projectRoot: await resolveProjectRoot(existing),
+      globalOnly: localDesignOf(existing) !== null,
     });
     const wireOutcome = wiring ? await applyAgentWiring(existing, wiring) : NOT_WIRED;
     printWired(wireOutcome);

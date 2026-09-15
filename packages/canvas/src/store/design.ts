@@ -188,8 +188,8 @@ export interface DesignSlice {
    */
   resyncAfterReconnect(): Promise<void>;
   /**
-   * Full reload after an out-of-band rewrite of the design folder (git
-   * revert-all): drop every cached board/screen and boot again, keeping the
+   * Full reload after host component source changed: drop every cached
+   * board/screen and boot again, keeping the
    * current board/screen only if they still exist.
    */
   reloadAll(): Promise<void>;

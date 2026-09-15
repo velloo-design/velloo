@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { type FeedbackPrefs, REPO_MANIFEST_FILE, RepoManifestSchema } from "@velloo/schema";
 import { writeJsonAtomic } from "./fs.ts";
-import { managedProjectContext } from "./project-location.ts";
+import { localDesignOf } from "./project-location.ts";
 
 interface FoundRepoManifest {
   /** Absolute path of the velloo.json file. */
@@ -17,11 +17,14 @@ interface FoundRepoManifest {
  * keeps walking; a malformed one reads as absent here — the CLI's resolver
  * owns failing loudly on a broken manifest, and the daemon must not refuse to
  * boot over a preference file.
+ *
+ * A local design has no repo manifest: its checkout's `velloo.json` is a
+ * committed file, and a design that lives only on this machine keeps its
+ * preferences in its own config instead.
  */
 export async function findRepoManifest(startDir: string): Promise<FoundRepoManifest | null> {
-  let dir = dirname(
-    managedProjectContext(startDir)?.manifestPath ?? join(resolve(startDir), REPO_MANIFEST_FILE),
-  );
+  if (localDesignOf(startDir)) return null;
+  let dir = resolve(startDir);
   for (;;) {
     const path = join(dir, REPO_MANIFEST_FILE);
     try {

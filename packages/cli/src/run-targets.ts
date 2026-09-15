@@ -1,9 +1,9 @@
 import { resolve, sep } from "node:path";
 import { hasDesignConfig, resolveDesignFolder } from "./folder.ts";
-import { findManifest } from "./manifest.ts";
+import { findProjects } from "./manifest.ts";
 
 export interface RunTarget {
-  /** Manifest project name, when the folder is registered. */
+  /** Project name, when the folder is registered. */
   name: string | undefined;
   folder: string;
 }
@@ -12,12 +12,11 @@ export interface RunTarget {
  * Which folders `velloo run` should start.
  *
  * An explicit argument always means exactly one folder — naming a project or
- * a path is how you say "just this one". Bare `velloo run` in a repo whose
- * `velloo.json` lists several projects starts them all, because a repo's
- * design folders are siblings of one work session, and only starting one of
- * them silently hides the rest (the same way a manifest naming one folder
- * hides the others). Standing inside a design folder still wins: you cd'd
- * there, so that's the one you meant.
+ * a path is how you say "just this one". Bare `velloo run` in a checkout with
+ * several projects (its `velloo.json` entries plus its local designs) starts
+ * them all, because a repo's design folders are siblings of one work session,
+ * and only starting one of them silently hides the rest. Standing inside a
+ * design folder still wins: you cd'd there, so that's the one you meant.
  */
 export async function resolveRunTargets(
   arg: string | undefined,
@@ -34,9 +33,9 @@ export async function resolveRunTargets(
   };
   if (arg) return single();
 
-  let found: Awaited<ReturnType<typeof findManifest>>;
+  let found: Awaited<ReturnType<typeof findProjects>>;
   try {
-    found = await findManifest(cwd);
+    found = await findProjects(cwd);
   } catch {
     return single(); // a broken manifest is resolveDesignFolder's error to report
   }
@@ -48,7 +47,7 @@ export async function resolveRunTargets(
 
   const targets: RunTarget[] = [];
   for (const [name, folder] of found.folders) {
-    if (typeof found.manifest.projects[name] !== "string" || (await hasDesignConfig(folder)))
+    if (await hasDesignConfig(folder))
       targets.push({
         name,
         folder: await resolveDesignFolder(name, "run", { cwd, requireConfig: true }),
@@ -60,7 +59,7 @@ export async function resolveRunTargets(
   if (targets.length === 1) return targets;
 
   // The default project leads, so `--open` and `o` hit the expected canvas.
-  const defaultProject = found.manifest.defaultProject;
+  const defaultProject = found.defaultProject;
   if (defaultProject) {
     targets.sort((a, b) => (a.name === defaultProject ? -1 : b.name === defaultProject ? 1 : 0));
   }
@@ -69,7 +68,7 @@ export async function resolveRunTargets(
 
 async function projectNameFor(folder: string, cwd: string): Promise<string | undefined> {
   try {
-    const found = await findManifest(cwd);
+    const found = await findProjects(cwd);
     if (!found) return undefined;
     for (const [name, path] of found.folders) if (path === folder) return name;
   } catch {
