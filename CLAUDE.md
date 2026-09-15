@@ -96,7 +96,8 @@ and don't let the report grow a permanent baseline.
 Other test entry points: `bun run test:changed` (only what your diff touches — the
 fast inner loop), `bun run test:order` (`--randomize`, catches tests that only pass
 in declaration order), and `bun run test:e2e` (`VELLOO_E2E=1`, adds the Playwright
-suites). CI runs `test:e2e` in its own job, under a virtual display and the full
+suites). `bun run codeql` runs GitHub's code-scanning suite locally (~30s; needs
+`brew install --cask codeql`) and hides findings already dismissed on GitHub. CI runs `test:e2e` in its own job, under a virtual display and the full
 Chromium build — the capture-session suite drives a *headed* browser, which the
 `--only-shell` install `velloo browser install` uses cannot open.
 

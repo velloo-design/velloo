@@ -134,18 +134,20 @@ function scanBlocks(
   matches: (prelude: string) => boolean,
   into: Map<string, string>,
 ): void {
-  const open = /([^{};]+)\{/g;
-  let m = open.exec(css);
-  while (m !== null) {
-    const prelude = (m[1] as string).trim();
-    if (matches(prelude)) {
-      const start = m.index + (m[0] as string).length - 1;
-      const end = matchBrace(css, start);
-      if (end > start) collectDeclarations(css.slice(start + 1, end), into);
+  // Every `{` opens a block whose prelude runs back to the previous `{`, `}`
+  // or `;` — nested blocks included, since the scan never skips a body.
+  let preludeStart = 0;
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i];
+    if (ch === "{" && i > preludeStart && matches(css.slice(preludeStart, i).trim())) {
+      const end = matchBrace(css, i);
+      if (end > i) collectDeclarations(css.slice(i + 1, end), into);
     }
-    m = open.exec(css);
+    if (ch === "{" || ch === "}" || ch === ";") preludeStart = i + 1;
   }
 }
+
+const DARK_SCHEME = /prefers-color-scheme\s*:\s*dark/;
 
 /**
  * Pull `@media (prefers-color-scheme: dark)` bodies out of the sheet: their
@@ -156,17 +158,23 @@ function scanBlocks(
 function splitDarkMedia(css: string): { css: string; darkVars: Map<string, string> } {
   const darkVars = new Map<string, string>();
   let out = css;
-  const media = /@media[^{}]*prefers-color-scheme\s*:\s*dark[^{}]*\{/g;
-  let m = media.exec(css);
-  while (m !== null) {
-    const start = m.index + (m[0] as string).length - 1;
+  let from = 0;
+  for (;;) {
+    const at = css.indexOf("@media", from);
+    if (at === -1) break;
+    // The prelude ends at the first brace; a `}` first means no block here.
+    let start = at;
+    while (start < css.length && css[start] !== "{" && css[start] !== "}") start++;
+    // Resume past the scanned prelude either way: any later `@media` inside it
+    // shares the same brace and a shorter prelude, so it can't match either.
+    from = start + 1;
+    if (css[start] !== "{" || !DARK_SCHEME.test(css.slice(at, start))) continue;
     const end = matchBrace(css, start);
     if (end > start) {
       const body = css.slice(start + 1, end);
       scanBlocks(body, (p) => p.startsWith(":root") || p === "*", darkVars);
-      out = out.slice(0, m.index) + " ".repeat(end + 1 - m.index) + out.slice(end + 1);
+      out = out.slice(0, at) + " ".repeat(end + 1 - at) + out.slice(end + 1);
     }
-    m = media.exec(css);
   }
   return { css: out, darkVars };
 }

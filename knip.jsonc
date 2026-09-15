@@ -1,5 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  // System tools a script shells out to; installed outside the workspace.
+  "ignoreBinaries": ["codeql"],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts"]
