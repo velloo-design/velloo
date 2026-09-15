@@ -139,6 +139,42 @@ describe("comments panel affordances", () => {
   });
 
   /**
+   * The cloud stamps the account's name on every owner-side message, and the
+   * designer and their agent share that account — so on the canvas the name
+   * can't tell them apart, and the voice has to.
+   */
+  test("names the owner's voices on a cloud thread rather than their shared account", () => {
+    const html = renderToStaticMarkup(
+      <ThreadMessages
+        messages={[
+          {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            author: { kind: "reviewer", displayName: "jane.reviewer" },
+            body: "Make this headline more direct",
+            createdAt: "2026-08-28T10:00:00.000Z",
+          },
+          {
+            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            author: { kind: "user", displayName: "Rodrigo Silveira" },
+            body: "On it",
+            createdAt: "2026-08-28T10:01:00.000Z",
+          },
+          {
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            author: { kind: "agent", displayName: "Rodrigo Silveira" },
+            body: "Rewritten",
+            createdAt: "2026-08-28T10:02:00.000Z",
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain("jane.reviewer");
+    expect(html).toContain("You");
+    expect(html).toContain("Agent");
+    expect(html).not.toContain("Rodrigo Silveira");
+  });
+
+  /**
    * The three voices have to stay visually distinct, and the distinction is
    * carried entirely by data attributes the bubble variants key off — so a
    * wrong variant is invisible in a content assertion but obvious here.

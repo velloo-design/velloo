@@ -61,7 +61,7 @@ function relativeTime(iso: string): string {
   return `${Math.floor(minutes / 1440)}d`;
 }
 
-/** Only used when the message carries no name of its own — a folder-local one. */
+/** Only used when neither the voice nor the message names the author. */
 const DEFAULT_AUTHOR_NAME: Record<AuthorKind, string> = {
   user: "You",
   agent: "Agent",
@@ -76,6 +76,8 @@ export interface MessageVoice {
   align: "start" | "end";
   variant: "default" | "muted" | "outline";
   badge?: string | undefined;
+  /** Overrides the message's own name, for a reader its account name misleads. */
+  name?: string | undefined;
 }
 
 /**
@@ -83,13 +85,18 @@ export interface MessageVoice {
  * gets its own surface: yours filled and right-aligned, your agent's muted,
  * and a reviewer's outlined because they are speaking from outside this
  * machine — which is also why theirs is the only one badged.
+ *
+ * The owner's two voices are named by kind, not by the message: a cloud
+ * message carries the account's name, and the designer and their agent write
+ * under the same account, so that name would put the agent's words in the
+ * designer's mouth.
  */
 function canvasVoice(message: ThreadMessage): MessageVoice {
   switch (message.author.kind) {
     case "user":
-      return { align: "end", variant: "default" };
+      return { align: "end", variant: "default", name: DEFAULT_AUTHOR_NAME.user };
     case "agent":
-      return { align: "start", variant: "muted" };
+      return { align: "start", variant: "muted", name: DEFAULT_AUTHOR_NAME.agent };
     case "reviewer":
       return { align: "start", variant: "outline", badge: "Reviewer" };
   }
@@ -120,12 +127,12 @@ export function ThreadMessages({
       {messages.map((message) => {
         const deleted = message.deletedAt !== undefined;
         const removable = onDelete && !deleted && canDelete(message);
-        const { align, variant, badge } = voice(message);
+        const { align, variant, badge, name } = voice(message);
         return (
           <Message key={message.id} align={align}>
             <MessageContent className="gap-1">
               <MessageHeader className="gap-1.5 px-3">
-                {message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
+                {name ?? message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
                 {badge ? (
                   <Badge variant="outline" className="px-1 py-0 text-[9px] uppercase">
                     {badge}
