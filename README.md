@@ -1,40 +1,68 @@
 <div align="center">
 
-<img src="./.github/assets/velloo-mark-512.png" alt="Velloo" width="96" height="96">
-
-# Velloo
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/velloo-lockup-dark.png">
+    <img src="./.github/assets/velloo-lockup.png" alt="Velloo" width="205">
+  </picture>
+</h1>
 
 **Design like a developer. Build like a designer.**
 
-Design and code, finally the same shape.
+A local, agent-driven design canvas for React apps. Your coding agent redesigns
+a real screen; you direct the work visually; the result goes back into your app.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-FFAB1F.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![npm](https://img.shields.io/npm/v/velloo.svg?color=FFAB1F)](https://www.npmjs.com/package/velloo)
+[![CI](https://github.com/velloo-design/velloo/actions/workflows/ci.yml/badge.svg)](https://github.com/velloo-design/velloo/actions/workflows/ci.yml)
+[![Discussions](https://img.shields.io/github/discussions/velloo-design/velloo?color=FFAB1F)](https://github.com/velloo-design/velloo/discussions)
+
+[Quickstart](#quickstart) · [Documentation](./docs) · [Contributing](./CONTRIBUTING.md) · [Discussions](https://github.com/velloo-design/velloo/discussions) · [velloo.design](https://velloo.design)
 
 </div>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/walkthrough-dark.gif">
+    <img src="./.github/assets/walkthrough.gif" alt="A coding agent designs an approval inbox in Velloo: three directions, a refinement, canvas and Velloo Cloud comments it resolves, and the implemented screen" width="100%">
+  </picture>
+</p>
+
 ---
 
-Velloo is a **local, agent-driven canvas for redesigning an existing React screen**. Your AI coding agent creates real screens, explores alternatives, and checks the result visually against the running app. You direct the work on the canvas, then carry the chosen direction back into your application in its own conventions.
+## What is Velloo?
 
-Designs stay beside your code as readable JSON. The local workflow needs no account; when a review benefits from other people, publish a board into a lightweight team workspace or send an external share link. Teammates and outside reviewers can comment on the result, and those comments return to the local canvas for the agent to resolve.
+You have a React screen that works and looks wrong. Redesigning it today means
+rebuilding it somewhere it isn't — a Figma file, a throwaway prototype, a chat
+window full of JSX you paste and repair.
 
-No Figma seats. No paste-ready JSX you babysit. No translation tax.
+Velloo puts the canvas next to your code instead. Your AI agent recreates the
+screen as real components, explores alternatives, and checks its work visually
+against the running app. You steer from the canvas: pick a direction, comment on
+a frame, reject a variant. When a direction wins, the agent carries it back into
+your application in your conventions.
 
-See [`docs/`](./docs) for the architecture and the MCP reference.
+Designs live beside your code as readable JSON, in your repo or in a separate
+one. The whole loop is local and needs no account. When a review benefits from
+other people, publish a board to a team workspace or send an external link;
+comments come back to the local canvas for the agent to resolve.
+
+**No Figma seats. No paste-ready JSX you babysit. No translation tax.**
+
+> **Status:** early and moving fast. The design-folder format is versioned and
+> migrated by `velloo upgrade`, but expect rough edges and breaking changes
+> before 1.0. Bug reports and design feedback are very welcome.
 
 ## Quickstart
 
-Install Velloo globally with npm. The package selects an exact official Bun
-platform package with no install scripts; you do not need to install or manage
-Bun yourself:
+Install the CLI. The npm package pulls an exact official Bun platform binary
+with no install scripts — you don't install or manage Bun yourself:
 
 ```bash
-npm install -g velloo
+npm install -g velloo          # or: pnpm add -g velloo
 ```
 
-pnpm works too: `pnpm add -g velloo`.
-
-Or use the standalone installer (macOS and Linux):
+Prefer a standalone install (macOS and Linux)?
 
 ```bash
 curl -fsSL https://get.velloo.design/install.sh | bash
@@ -44,116 +72,191 @@ Then, from inside your app:
 
 ```bash
 cd ~/code/my-shadcn-app
-velloo init
+velloo init                    # interactive wizard
+velloo run velloo              # the design folder it just created
 ```
 
-The interactive wizard creates the design folder (default `velloo/`) and wires up your chosen AI agent. It supports Claude Code, Cursor, Codex, Continue, opencode, Droid, Cline, Gemini CLI, Windsurf, and VS Code/Copilot, using each client's native MCP configuration and guidance format; restart the agent so it loads the new config. **Start from scratch** (pick a component library + a sample or blank board) or **scan what you have**: scan detects your shadcn + Tailwind versions, imports your real theme from `globals.css`, and builds one screen per route, so the canvas opens in your brand colors. `init` never writes into your app's source — it only creates the design folder (plus the agent config).
+- **Canvas** → http://localhost:7300
+- **MCP server** (for your agent) → http://localhost:7301/mcp
 
-Then start it:
+Restart your agent so it picks up the new MCP config, then point it at a real
+screen:
 
-```bash
-velloo run velloo      # the design folder you just created
-```
+> "Open the `velloo` design folder, recreate `/settings/billing` on a new board,
+> then show me three takes on the plan-comparison section."
 
-Two files define the model: a repo-root **`velloo.json`** names each design folder as a project (`init` registers it — several can coexist in a monorepo), and **`.design/config.json`** marks a directory as a design folder. Every folder-taking command (`run`, `stop`, `publish`, `emit`, …) accepts a project name or a path, and resolves via `velloo.json` when you pass nothing.
+That's the loop. The agent builds on the canvas, screenshots its own work, and
+you react to pixels instead of to a diff.
 
-- **Canvas:** http://localhost:7300
-- **MCP server (for your AI agent):** http://localhost:7301/mcp
+### What `init` does
 
-### Keep designs outside the application repository
+The wizard creates the design folder (default `velloo/`) and wires up your agent
+— Claude Code, Cursor, Codex, Continue, opencode, Droid, Cline, Gemini CLI,
+Windsurf, and VS Code/Copilot, each through its native MCP configuration and
+guidance format. You can **start from scratch** (component library + a sample or
+blank board) or **scan what you have**: scanning detects your shadcn and Tailwind
+versions, imports your real theme from `globals.css`, and builds one screen per
+route, so the canvas opens in your brand colors.
 
-Choose managed external storage in the wizard, or run
-`velloo init --external --project web --non-interactive`. The application keeps a
-portable project locator; editable files and a separate Git history live under
-`~/.velloo/designs/`. Open it with `velloo run web` and save a durable checkpoint
-with `velloo folder checkpoint web --message "Approved draft"`.
+`init` never writes into your app's source. It only creates the design folder
+and the agent config.
 
-See [External local design folders](./docs/external-local-design-folders.md) for
-relocation previews, backup, clone rebinding, and removal behavior.
+## Features
 
-### MCP context surfaces
+- **Existing-screen redesign.** Start from a React route or a captured
+  authenticated page, recreate a faithful baseline, explore alternatives, and
+  compare against the running product at the same viewport.
+- **Real components, not approximations.** Components come from a
+  `ComponentProvider`, so the design folder stays pure data. For shadcn,
+  client-safe files from your app mount directly in the canvas; portal- and
+  state-heavy families are explicitly adapted; compile failures fall back per
+  component with diagnostics.
+- **Five React adapters.** shadcn + Tailwind, Material UI, Ant Design, Chakra
+  UI, and no-library React each render and emit through their own adapter.
+- **Visual verification.** The agent inspects rendered nodes, takes screenshots,
+  diffs against a live URL, and fixes what it sees instead of guessing from code.
+- **Board → Screen → Frame.** One design folder holds many boards; frames that
+  share a screen stay in sync, so a mobile and a desktop frame are one edit.
+- **A real MCP surface.** Discovery, focused tree mutations, themes, screenshots,
+  comparison, comments, and agent-consumed implementation IR — plus bundled
+  skills for brand, design systems, logos, and design-to-code.
+- **Optional collaboration.** Create a team, publish a board, share externally,
+  and pull review comments back into the local canvas.
 
-Velloo defaults to a compact progressive-disclosure surface: the agent sees
-`call_velloo`, `run_velloo_plan`, and `operation_schema`, plus an enum naming the
-available native operations. It pays for one native schema only when it needs
-that schema; failed calls include the exact correction schema automatically.
+## Requirements
 
-Clients that do better with conventional function schemas can advertise every
-native tool directly instead:
-
-```bash
-velloo mcp --surface full
-```
-
-Both surfaces carry the whole operation catalogue. Steering an agent toward a
-particular workflow is the job of a skill or a `velloo://guide/*` resource, not
-of a narrowed tool set — an allow-list chosen before the session can't know that
-the code-to-design run will end on a comment thread, and the surface is fixed
-once the session starts.
-
-HTTP clients use the printed query-bearing URL. MCP configuration can also set
-`VELLOO_MCP_SURFACE`. The shared canvas daemon remains one writer; each MCP
-session independently selects its public tool surface.
-
-`Ctrl-C` stops the server. Velloo periodically checks for a newer release without delaying commands and prints a small notice when one is available; the canvas shows the same news as a toast and a dot on the account menu, with an **Update velloo** entry that runs it. `velloo upgrade` does both halves: it updates the installation through whatever channel installed it (npm-global, the standalone installer, or Homebrew), then migrates the design folder you are standing in to the current on-disk format — with the newly installed binary, since only it knows the format it migrates towards. Run it from anywhere without a design folder and it just updates the installation. `velloo upgrade --check` reports both without changing anything.
+| | |
+|---|---|
+| **OS** | macOS (arm64, x64) and Linux (arm64, x64; glibc and musl). Windows via WSL. |
+| **Runtime** | None to install — the CLI ships its own Bun. |
+| **Your app** | React. shadcn + Tailwind gets the deepest integration; MUI, Ant Design, Chakra, and no-library folders are supported. |
+| **Screenshots** | Optional headless Chromium, one command away (below). |
 
 ### Screenshots — the one optional extra
 
-A headless Chromium is used for exactly two things: your agent's `screenshot` tool (so it can *see* a design) and `velloo render <screen> --to=out.png`. The canvas, editing, `velloo publish`, `velloo emit`, and everything else work without it. Install it anytime (one-time, ~150 MB):
+A headless Chromium is used for exactly two things: your agent's `screenshot`
+tool (so it can *see* a design) and `velloo render <screen> --to=out.png`. The
+canvas, editing, `publish`, `emit`, and everything else work without it. Install
+it anytime (one-time, ~150 MB):
 
 ```bash
 velloo browser install
 ```
 
-If a screenshot fails, run exactly that command, then retry. Ports busy? Pass `--port` / `--mcp-port` to `velloo run`.
+If a screenshot ever fails, run exactly that command and retry.
 
-## What it does
+## CLI essentials
 
-- **Existing-screen redesign.** Start from one React route or captured authenticated page, recreate a faithful baseline, explore alternatives, and compare the result with the running product at the same viewport.
-- **Board + Screen + Frame** mental model. A design folder hosts many boards; frames sharing a screen stay in sync.
-- **Current React adapters.** shadcn + Tailwind, Material UI, Ant Design, Chakra UI, and no-library React folders each render and emit through their implemented adapter.
-- **Visual verification.** The agent can inspect rendered nodes, take screenshots, compare with a live URL or authenticated capture, and resolve visible differences instead of guessing from code.
-- **MCP surface for agents.** Discovery, focused tree mutations, themes, screenshots, comparison, comments, and agent-consumed implementation IR.
-- **Components come from a `ComponentProvider`.** The design folder stays pure data. For shadcn, client-safe files in the app are mounted directly in the canvas; portal/state-heavy families are explicitly adapted, and compile failures fall back per component with diagnostics. Snippets remain the editable composition layer for app-specific patterns.
-- **Optional collaboration.** Create an organization/team, invite a teammate, publish a board into that team, share externally, and bring review comments back to the local canvas.
+Two files define the model: a repo-root **`velloo.json`** names each design
+folder as a project (several can coexist in a monorepo), and
+**`.design/config.json`** marks a directory as a design folder. Every
+folder-taking command accepts a project name or a path, and resolves through
+`velloo.json` when you pass nothing.
+
+| Command | What it does |
+|---|---|
+| `velloo init` | Create a design folder and wire up your agent |
+| `velloo run [folder]` | Start the canvas + MCP daemon (`--port` / `--mcp-port` if 7300/7301 are busy) |
+| `velloo folder list\|add\|remove` | Manage the repo's design folders |
+| `velloo emit` / `velloo render` | Implementation IR for your agent / a PNG of a screen |
+| `velloo publish` | Publish a board for review (`--list`, `--remove`) |
+| `velloo upgrade` | Update the install *and* migrate the folder format (`--check` to preview) |
+
+`Ctrl-C` stops the server.
+
+**Keeping designs out of the app repo** is a first-class option — pick managed
+external storage in the wizard, or
+`velloo init --external --project web --non-interactive`. The app keeps a
+portable locator while editable files and a separate Git history live under
+`~/.velloo/designs/`. See
+[External local design folders](./docs/external-local-design-folders.md).
+
+**Choosing an MCP surface.** Velloo defaults to a compact progressive-disclosure
+surface: the agent sees `call_velloo`, `run_velloo_plan`, and `operation_schema`
+and pays for a native schema only when it needs one. Clients that do better with
+conventional function schemas can use `velloo mcp --surface full`. Both surfaces
+carry the whole operation catalogue. See [docs/mcp.md](./docs/mcp.md).
 
 ## Local-first by default
 
-The local tool is free, complete, account-free, and telemetry-free. The CLI makes one anonymous infrastructure request outside the solo loop: at most daily, a detached check reads the public npm release version and caches it locally; it sends no project or account data and can be disabled with `VELLOO_DISABLE_UPDATE_CHECK=1`. Product cloud calls remain optional and opt-in, and every one is gated behind an explicit `velloo login`:
+The local tool is free, complete, account-free, and telemetry-free.
 
-- `velloo login` / `velloo publish` — publish boards to a personal or team workspace and create an external review link (`--list` what you've published, `--remove` to take one down)
-- `velloo folder` — the repo's design folders: `list`, `add` another, `remove` one
-- comment tools — read and resolve local, team, and external-review feedback on the canvas
-- `generate_asset` — hosted image/SVG generation, metered against your image-generation credit balance
-- `send_feedback` — agent-side product feedback, registered only when enabled in the folder config
+The CLI makes exactly one anonymous request outside the solo loop: at most daily,
+a detached check reads the public npm release version and caches it locally. It
+sends no project or account data, and `VELLOO_DISABLE_UPDATE_CHECK=1` turns it
+off. Everything else that touches the network is opt-in and gated behind an
+explicit `velloo login`:
 
-You choose when — and whether — to make any of them.
+- `velloo login` / `velloo publish` — publish boards to a personal or team
+  workspace and create external review links
+- comment tools — read and resolve team and external-review feedback
+- `generate_asset` — hosted image/SVG generation, metered against your credits
+- `send_feedback` — agent-side product feedback, only when enabled in the folder
+  config
 
-## Repo layout
+You choose when — and whether — to use any of them.
 
-- `packages/schema` — Zod schemas + TS types for the design folder format
-- `packages/shadcn-snapshot` — pinned shadcn SSR fallback + canvas-safe adaptations, embedded in the binary
-- `packages/renderer` — design JSON → HTML (and PNG via Playwright)
-- `packages/codegen` — agent-consumed IR + theme emitters
-- `packages/server` — HTTP + MCP + mutations + theme + watcher
-- `packages/canvas` — Vite/React canvas UI
-- `packages/cli` — `velloo` CLI (citty)
+## Documentation
 
-## Local dev
+| | |
+|---|---|
+| [docs/architecture.md](./docs/architecture.md) | Design-folder format, providers, renderer, codegen, canvas daemon |
+| [docs/mcp.md](./docs/mcp.md) | The MCP tool surface agents talk to |
+| [docs/providers.md](./docs/providers.md) | Adding a framework adapter |
+| [docs/css-class-channel.md](./docs/css-class-channel.md) | How styling is routed per framework |
+| [docs/external-local-design-folders.md](./docs/external-local-design-folders.md) | Managed storage, relocation, backup, standalone history |
+
+## Contributing
+
+Contributions are welcome — bug reports, adapters, docs, and design feedback
+alike. [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers setup and the checks we
+expect to be green; [`CLAUDE.md`](./CLAUDE.md) explains the repo's architecture
+invariants before you change anything load-bearing.
+
+The short version:
 
 ```bash
-bun install
-bun run --cwd packages/shadcn-snapshot vendor   # re-pull shadcn from upstream (rare)
-bun run --cwd packages/shadcn-snapshot build    # build dist/manifest.json
-bun run --cwd packages/canvas vendor            # re-pull the IDE chrome's copy — same pull
-bun run --cwd packages/canvas build             # build canvas SPA
-bun run typecheck
+bun install                                 # also builds the snapshot manifest
+bun run --cwd packages/canvas build         # build the canvas SPA
 bun run velloo init /tmp/velloo-smoke
-bun run velloo run /tmp/velloo-smoke            # canvas at :7300, MCP at :7301
+bun run velloo run /tmp/velloo-smoke        # canvas :7300, MCP :7301
+bun run verify                              # typecheck + lint + knip + tests
 ```
 
-The Playwright screenshot path requires `velloo browser install` once.
+Good first issues are labelled
+[`good first issue`](https://github.com/velloo-design/velloo/labels/good%20first%20issue).
+
+### Repo layout
+
+Velloo is a Bun-workspaces monorepo with one-way dependencies:
+
+| Package | Responsibility |
+|---|---|
+| `packages/schema` | Zod schemas + TS types for the on-disk design-folder format |
+| `packages/protocol` | The wire contract: mutation arguments, typed errors, watch events |
+| `packages/provider` | The `ComponentProvider` / `FrameworkAdapter` interface |
+| `packages/provider-*` | shadcn, MUI, Ant Design, Chakra, and no-library adapters |
+| `packages/shadcn-snapshot` | Pinned canvas-safe shadcn fallback, embedded in the binary |
+| `packages/renderer` | Design JSON → HTML (and PNG via Playwright) |
+| `packages/codegen` | Agent-consumed IR + theme emitters |
+| `packages/server` | HTTP + MCP + mutations + theme + watcher |
+| `packages/canvas` | Vite/React canvas UI |
+| `packages/cli` | The `velloo` binary |
+
+## Community and support
+
+- **Questions, ideas, show-and-tell** →
+  [Discussions](https://github.com/velloo-design/velloo/discussions)
+- **Bugs and feature requests** →
+  [open an issue](https://github.com/velloo-design/velloo/issues/new/choose)
+- **Security issues** → [`SECURITY.md`](./SECURITY.md) — please don't file a
+  public issue
+- **Ground rules** → [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
 
 ## License
 
-Velloo is open source under the Apache License 2.0. The **Velloo** name and the interlinked-frames mark are trademarks and are not covered by the code license — fork the code freely, but do not ship a derivative under the Velloo name or logo.
+Velloo is open source under the [Apache License 2.0](./LICENSE).
+
+The **Velloo** name and the interlinked-frames mark are trademarks and are not
+covered by the code license — fork the code freely, but don't ship a derivative
+under the Velloo name or logo. See [`TRADEMARK.md`](./TRADEMARK.md).
