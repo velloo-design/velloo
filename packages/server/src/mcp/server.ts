@@ -221,7 +221,7 @@ function buildMcpServer(
   const mcp = new McpServer(MCP_SERVER_INFO, {
     instructions: buildInstructions(
       feedbackEnabled,
-      assetOrigin?.replace(/\/+$/, ""),
+      assetOrigin && trimTrailingSlashes(assetOrigin),
       intro,
       openComments,
       hostTailwindMajor,
@@ -283,6 +283,12 @@ function isInitializeRequest(body: unknown): boolean {
     (m) =>
       m && typeof m === "object" && (m as { method?: string | undefined }).method === "initialize",
   );
+}
+
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === "/") end--;
+  return url.slice(0, end);
 }
 
 function sendJson(res: ServerResponse, status: number, value: unknown): void {
@@ -390,7 +396,7 @@ export async function createMcpServer(
     } catch (err) {
       console.error("velloo mcp: handler failed:", err);
       if (!res.headersSent) {
-        sendJson(res, 500, { error: String(err) });
+        sendJson(res, 500, { error: "internal error" });
       }
     }
   });

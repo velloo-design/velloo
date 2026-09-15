@@ -134,7 +134,7 @@ describe("/api/render/:screenId", () => {
     const skeleton = body
       // The canvas injects its selection runtime into every frame; it is the
       // renderer's business, not this screen's.
-      .replace(/<script[\s\S]*?<\/script>/g, "")
+      .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, "")
       .replace(/\s(?:class|style)="[^"]*"/g, "")
       .replace(/></g, ">\n<")
       .trim();

@@ -5,7 +5,7 @@ export type Shell = "zsh" | "bash" | "fish";
 export const SHELLS: Shell[] = ["zsh", "bash", "fish"];
 
 /** zsh `_describe` entries delimit on `:` — escape it in names (theme:export). */
-const zshName = (name: string) => name.replace(/:/g, "\\:");
+const zshName = (name: string) => name.replace(/\\/g, "\\\\").replace(/:/g, "\\:");
 
 function zshScript(specs: CommandSpec[]): string {
   const commandLines = specs.map((c) => `    '${zshName(c.name)}:${c.description}'`).join("\n");

@@ -146,11 +146,11 @@ function copyrightLines(text: string): string[] {
   for (const raw of text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").split(/\r?\n/)) {
     const holder = COPYRIGHT.exec(raw)?.[1]
       ?.replace(/<[^>]*>/g, "")
+      .replace(/[<>]/g, "")
       .replace(/^(\(c\)|©)\s*/i, "")
       .replace(/\s*all rights reserved\.?/i, "")
       .replace(/\s+/g, " ")
-      .replace(/[\s.,;]+$/, "")
-      .replace(/\|/g, "\\|");
+      .replace(/[\s.,;]+$/, "");
     if (holder === undefined || holder === "" || found.includes(`© ${holder}`)) continue;
     found.push(`© ${holder}`);
   }
@@ -407,7 +407,7 @@ const problems = sorted
 
 // ── rendering ───────────────────────────────────────────────────────────────
 
-const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\s+/g, " ");
+const cell = (text: string): string => text.replace(/[\\|]/g, "\\$&").replace(/\s+/g, " ");
 
 const PREAMBLE = `# Third-Party Notices
 

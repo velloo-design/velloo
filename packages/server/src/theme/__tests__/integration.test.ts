@@ -352,6 +352,12 @@ describe("setTokens (bulk)", () => {
     expect(await diskTheme()).toEqual(before);
   });
 
+  test("a prototype-chain segment is refused before it is walked", async () => {
+    const r = await setTokens(ctx, [{ path: "palette.__proto__.polluted", value: "#ff0000" }]);
+    expect(r.ok).toBe(false);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
   test("the palette passthrough still takes any name", async () => {
     const r = await setTokens(ctx, [{ path: "palette.brand-ink", value: "#123456" }]);
     expect(r.ok).toBe(true);

@@ -91,7 +91,18 @@ function isColorish(value: string): boolean {
 }
 
 function stripComments(css: string): string {
-  return css.replace(/\/\*[\s\S]*?\*\//g, "");
+  // A scan, not /\/\*[\s\S]*?\*\//g: that regex goes quadratic on an
+  // unterminated comment followed by many `/*`.
+  let out = "";
+  let from = 0;
+  for (;;) {
+    const open = css.indexOf("/*", from);
+    if (open === -1) return out + css.slice(from);
+    const close = css.indexOf("*/", open + 2);
+    if (close === -1) return out + css.slice(from);
+    out += css.slice(from, open);
+    from = close + 2;
+  }
 }
 
 /** Index of the brace matching the `{` at `open` (or -1 when unbalanced). */
@@ -166,7 +177,7 @@ function resolveVars(value: string, scopes: Array<Map<string, string>>, depth = 
   if (depth > 4) return null;
   let unresolved = false;
   const replaced = value.replace(
-    /var\(\s*--([a-zA-Z0-9-]+)\s*(?:,\s*([^()]*))?\)/g,
+    /var\(\s*--([a-zA-Z0-9-]+)\s*(?:,([^()]*))?\)/g,
     (_, name: string, fallback: string | undefined) => {
       for (const scope of scopes) {
         const v = scope.get(name);

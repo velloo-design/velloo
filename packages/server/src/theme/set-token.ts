@@ -9,6 +9,8 @@ export interface TokenEntry {
   value: string | number;
 }
 
+const UNSAFE_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+
 /**
  * Apply one dot-path write to a plain theme object in place, creating
  * intermediate objects as needed. Returns a failure reason, or null.
@@ -20,7 +22,9 @@ function applyPath(
 ): string | null {
   if (!path) return "path is required";
   const segments = path.split(".");
-  if (segments.some((s) => s === "")) return `bad path: ${JSON.stringify(path)}`;
+  if (segments.some((s) => s === "" || UNSAFE_SEGMENTS.has(s))) {
+    return `bad path: ${JSON.stringify(path)}`;
+  }
   let cursor: Record<string, unknown> = target;
   for (let i = 0; i < segments.length - 1; i++) {
     const k = segments[i] as string;
