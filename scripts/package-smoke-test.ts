@@ -35,6 +35,9 @@ try {
   if (publishManifest.bin?.velloo !== "launcher.cjs") {
     throw new Error('publishable package must declare bin.velloo as "launcher.cjs"');
   }
+  if (publishManifest.homepage !== "https://velloo.design") {
+    throw new Error('publishable package must link its homepage to "https://velloo.design"');
+  }
 
   const install = run([
     "npm",
