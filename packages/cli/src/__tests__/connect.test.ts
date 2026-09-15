@@ -3,6 +3,8 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "../connect/index.ts";
+import { agentRootCandidates } from "../connect/project-root.ts";
+import { registerProject } from "../manifest.ts";
 
 let tmp: string;
 let design: string;
@@ -106,6 +108,31 @@ describe("connect", () => {
     });
     expect(r.projectRoot).toBe(tmp);
     expect(r.configs[0]?.path).toBe(join(tmp, ".mcp.json"));
+  });
+
+  test("a registered folder wires at the velloo.json root, named by project", async () => {
+    // A monorepo whose app has its own package.json: the agent is opened at
+    // the repo root, so that's where the config has to be.
+    await mkdir(join(tmp, ".git"), { recursive: true });
+    await writeFile(join(tmp, "package.json"), "{}");
+    const app = join(tmp, "frontend");
+    await mkdir(app, { recursive: true });
+    await writeFile(join(app, "package.json"), "{}");
+    for (const folder of [join(tmp, "velloo"), join(app, "velloo")]) {
+      await rm(join(tmp, "velloo.json"), { force: true });
+      await mkdir(folder, { recursive: true });
+      await registerProject(folder, app);
+      const r = await connect({
+        designFolder: folder,
+        agents: ["claude-code"],
+        installSkill: false,
+      });
+      expect(r.projectRoot).toBe(tmp);
+      const cfg = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
+      expect(cfg.mcpServers.velloo).toEqual({ command: "velloo", args: ["mcp", "frontend"] });
+    }
+    // Earlier versions wired the nested folder at the app; upgrade still finds it.
+    expect(await agentRootCandidates(join(app, "velloo"))).toEqual([tmp, app]);
   });
 
   test("falls back to the design folder's parent when no package.json exists", async () => {

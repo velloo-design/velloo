@@ -1,6 +1,6 @@
 import { type Dirent, existsSync, realpathSync } from "node:fs";
 import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
 import {
   managedDesignPath,
@@ -181,6 +181,38 @@ export async function unregisterProject(
 }
 
 /** Walk up from `start` for a `.git` entry (dir, or file for worktrees). */
+/**
+ * Where a new `velloo.json` for this folder goes: the git root, else the
+ * nearest directory holding both the app and the design folder.
+ */
+async function manifestDirFor(folder: string, appRoot: string, managed: boolean): Promise<string> {
+  const git = await findGitRoot(appRoot);
+  if (git) return git;
+  let dir = resolve(appRoot);
+  if (managed) return dir;
+  while (!isWithin(dir, folder) && dirname(dir) !== dir) dir = dirname(dir);
+  return dir;
+}
+
+/**
+ * The directory a `velloo.json` would anchor for a folder that doesn't exist
+ * yet — init asks about agent wiring before anything is written.
+ */
+export async function prospectiveManifestDir(folder: string, appRoot: string): Promise<string> {
+  try {
+    const found = await findManifest(folder);
+    if (found) return found.dir;
+  } catch {
+    // Registration reports a broken manifest; the prompt only needs a guess.
+  }
+  return manifestDirFor(resolve(folder), appRoot, false);
+}
+
+function isWithin(parent: string, child: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
 export async function findGitRoot(start: string): Promise<string | null> {
   let dir = resolve(start);
   while (true) {
@@ -280,7 +312,7 @@ export async function registerProject(
   }
   const abs = resolve(folder);
   const found = await findManifest(managedId ? appRoot : abs);
-  const dir = found ? found.dir : ((await findGitRoot(appRoot)) ?? resolve(appRoot));
+  const dir = found ? found.dir : await manifestDirFor(abs, appRoot, managedId !== undefined);
   const path = found ? found.path : join(dir, MANIFEST_FILE);
 
   const projects: Manifest["projects"] = { ...(found?.manifest.projects ?? {}) };
@@ -313,7 +345,13 @@ export async function registerProject(
     }
   }
 
-  const name = add(abs, requestedName ?? (managedId ? deriveName(appRoot) : undefined));
+  // A folder beside the app rather than inside it (init run from a monorepo
+  // root for `frontend/`) is named for the app — "chainlit" says nothing.
+  const outsideApp = !isWithin(resolve(appRoot), abs);
+  const name = add(
+    abs,
+    requestedName ?? (managedId || outsideApp ? deriveName(appRoot) : undefined),
+  );
   if (managedId)
     projects[name] = {
       managed: managedId,

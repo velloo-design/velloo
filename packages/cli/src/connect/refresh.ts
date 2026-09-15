@@ -25,7 +25,7 @@ export interface RefreshResult {
  * agent the user never connected — that stays `velloo connect`.
  */
 export async function refreshAgentArtifacts(opts: {
-  projectRoot: string;
+  projectRoots: string[];
   designFolder: string;
   homeDir?: string;
 }): Promise<RefreshResult> {
@@ -37,10 +37,12 @@ export async function refreshAgentArtifacts(opts: {
     if (plugin) refreshed.push(`claude plugin (${plugin.marketplaceDir})`);
   }
 
-  const skillsDir = join(opts.projectRoot, ".agents", "skills");
-  if (existsSync(skillsDir)) {
-    const skills = await installSkills(opts.projectRoot);
-    if (skills.length > 0) refreshed.push(`${skills.length} skills (${skillsDir})`);
+  for (const projectRoot of opts.projectRoots) {
+    const skillsDir = join(projectRoot, ".agents", "skills");
+    if (existsSync(skillsDir)) {
+      const skills = await installSkills(projectRoot);
+      if (skills.length > 0) refreshed.push(`${skills.length} skills (${skillsDir})`);
+    }
   }
 
   if (existsSync(join(homeDir, ".velloo", "gemini-extension"))) {
@@ -48,10 +50,12 @@ export async function refreshAgentArtifacts(opts: {
     if (ext) refreshed.push(`gemini extension (${ext.dir})`);
   }
 
-  const cursorRule = join(opts.projectRoot, ".cursor", "rules", "velloo.mdc");
-  if (existsSync(cursorRule)) {
-    const rules = await installCursorRules(opts.projectRoot, opts.designFolder);
-    if (rules.installed && rules.path) refreshed.push(`cursor rule (${rules.path})`);
+  for (const projectRoot of opts.projectRoots) {
+    const cursorRule = join(projectRoot, ".cursor", "rules", "velloo.mdc");
+    if (existsSync(cursorRule)) {
+      const rules = await installCursorRules(projectRoot, opts.designFolder);
+      if (rules.installed && rules.path) refreshed.push(`cursor rule (${rules.path})`);
+    }
   }
 
   return { refreshed };

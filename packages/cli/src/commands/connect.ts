@@ -34,7 +34,7 @@ export default defineCommand({
     projectRoot: {
       type: "string",
       description:
-        "Where to write the config (default: nearest package.json above the design folder, else its parent)",
+        "Where to write the config (default: the velloo.json root that registers the folder, else the nearest package.json above it)",
     },
     http: {
       type: "boolean",

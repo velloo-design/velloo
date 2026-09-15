@@ -137,6 +137,9 @@ export default defineCommand({
  */
 export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   let appRoot = resolve(cliArgs.folder ?? ".");
+  // Where init was run. Choosing a nested app below moves the app root, not
+  // the design: the folder and the agent wiring stay where the user works.
+  const launchRoot = appRoot;
   const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
   const allowNonEmpty = cliArgs.force;
   // True when the user chose "Create another design folder" — the wizard's
@@ -218,12 +221,15 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   let answers: WizardAnswers;
 
   if (interactive) {
-    console.log(pc.dim(`  App root: ${appRoot}  (where Velloo will be installed)`));
+    console.log(pc.dim(`  App root: ${appRoot}  (the app this design targets)`));
+    if (launchRoot !== appRoot)
+      console.log(pc.dim(`  Design folder and agent config go under ${launchRoot}.`));
     console.log("");
     const inheritedLibrary =
       inherited.library && isValidLibraryId(inherited.library) ? inherited.library : undefined;
     const result = await runInteractive({
       appRoot,
+      folderBase: launchRoot,
       secondFolder,
       ...(managedFolder || presetFolder ? { presetFolder: managedFolder ?? presetFolder } : {}),
       scanDir: cliArgs.scanDir,

@@ -2,7 +2,7 @@ import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { refreshAgentArtifacts } from "../connect/index.ts";
-import { resolveProjectRoot } from "../connect/project-root.ts";
+import { agentRootCandidates } from "../connect/project-root.ts";
 import { daemonRoot, stopDaemon } from "../daemon/runtime.ts";
 import { fail } from "../fail.ts";
 import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
@@ -157,8 +157,8 @@ async function migrateFolder(
     // installed; wiring something new stays `velloo connect`.
     if (opts.skills && !dryRun) {
       progress.step("refreshing agent guidance");
-      const projectRoot = await resolveProjectRoot(folder);
-      ({ refreshed } = await refreshAgentArtifacts({ projectRoot, designFolder: folder }));
+      const projectRoots = await agentRootCandidates(folder);
+      ({ refreshed } = await refreshAgentArtifacts({ projectRoots, designFolder: folder }));
     }
     progress.succeed(dryRun ? "upgrade check complete" : "upgrade complete");
   } catch (error) {

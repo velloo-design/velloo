@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { cancel, select, text } from "@clack/prompts";
 import { type AgentWiring, askAgentWiring } from "../connect/index.ts";
 import { isDesignFolderSync, isEmptyOrMissingSync } from "../folder.ts";
+import { prospectiveManifestDir } from "../manifest.ts";
 import { discoverScanRoots } from "../scan/index.ts";
 import type { GoalMode, WizardAnswers } from "./answers.ts";
 import {
@@ -117,15 +118,21 @@ export async function runInteractive(
     secondFolder?: boolean | undefined;
     /** Design-folder path already chosen by the caller — skips the prompt. */
     presetFolder?: string | undefined;
+    /**
+     * What a relative design-folder path resolves against — the directory init
+     * was run in, which differs from `appRoot` when a nested app was picked.
+     */
+    folderBase?: string | undefined;
   },
 ): Promise<InteractiveOutcome> {
   // A second design folder in the same repo can't reuse the default name, and
   // "velloo-2" reads worse than a purpose name — suggest one they'll rename.
   const folderDefault = ctx.secondFolder ? "velloo-brand" : "velloo";
+  const folderBase = ctx.folderBase ?? ctx.appRoot;
   // `velloo folder add <path>` already answered this — validate the path the
   // way the prompt would, so a bad one fails the same from either entry point.
   if (ctx.presetFolder) {
-    const problem = folderPathProblem(resolve(ctx.appRoot, ctx.presetFolder), ctx.presetFolder);
+    const problem = folderPathProblem(resolve(folderBase, ctx.presetFolder), ctx.presetFolder);
     if (problem) {
       cancel(problem);
       return cancelled();
@@ -147,19 +154,22 @@ export async function runInteractive(
       validate(value) {
         const raw = (value || folderDefault).trim();
         if (raw === "") return "Path can't be empty.";
-        return folderPathProblem(resolve(ctx.appRoot, raw), raw);
+        return folderPathProblem(resolve(folderBase, raw), raw);
       },
     }));
   if (isAborted(folderInput)) return cancelled();
-  const folder = resolve(ctx.appRoot, folderInput || folderDefault);
+  const folder = resolve(folderBase, folderInput || folderDefault);
 
   // Agent wiring is asked up front (config before content) but only applied
   // after the scaffold is written — cancelling anywhere below touches no files.
   let agentWiring: AgentWiring | undefined;
   if (ctx.connectEnabled) {
-    // Nothing is written yet, so the app root stands in for the project root
-    // a later `connect` would resolve.
-    const wiring = await askAgentWiring({ skipWhenCovered: true, projectRoot: ctx.appRoot });
+    // Nothing is written yet, so predict the root `connect` will resolve once
+    // the folder is registered.
+    const wiring = await askAgentWiring({
+      skipWhenCovered: true,
+      projectRoot: await prospectiveManifestDir(folder, ctx.appRoot),
+    });
     if (wiring === null) return cancelled();
     agentWiring = wiring;
   }

@@ -250,6 +250,21 @@ describe("registerProject", () => {
     expect(reg.name).toBe("web-2");
   });
 
+  test("a folder beside a nested app is named for the app", async () => {
+    await mkdir(join(tmp, ".git"), { recursive: true });
+    const reg = await registerProject(join(tmp, "velloo"), join(tmp, "frontend"));
+    expect(reg).toEqual({ name: "frontend", path: join(tmp, "velloo.json"), created: true });
+    const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
+    expect(manifest.projects).toEqual({ frontend: "velloo" });
+  });
+
+  test("without a git root, the manifest holds both the app and a folder beside it", async () => {
+    const folder = join(tmp, "velloo");
+    await makeDesignFolder(folder);
+    const reg = await registerProject(folder, join(tmp, "frontend"));
+    expect(reg.path).toBe(join(tmp, "velloo.json"));
+  });
+
   test("no git root lands the manifest at the app root; --project overrides the name", async () => {
     const appRoot = join(tmp, "standalone");
     const folder = join(appRoot, "velloo");

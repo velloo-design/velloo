@@ -87,7 +87,7 @@ export interface WizardAnswers {
    * scan flow.
    */
   scanRoot: string;
-  /** Absolute path to the design folder being created (under `appRoot`). */
+  /** Absolute path to the design folder being created (under the directory init ran in). */
   folder: string;
   library: LibraryId;
   source: LibrarySource;

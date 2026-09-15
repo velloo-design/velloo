@@ -338,7 +338,8 @@ test("nested application roots remain portable when a monorepo checkout moves", 
   ]);
   expect(added.code, added.out).toBe(0);
   const folder = await resolveDesignFolder(undefined, "test", { cwd: nested, onFail });
-  expect(await resolveProjectRoot(folder)).toBe(nested);
+  // Agents are opened at the repo root, not inside the nested app.
+  expect(await resolveProjectRoot(folder)).toBe(app);
   expect((await findManifest(app))?.manifest.projects.admin).toMatchObject({
     appRoot: "apps/admin",
   });
@@ -346,7 +347,7 @@ test("nested application roots remain portable when a monorepo checkout moves", 
   await cp(app, clone, { recursive: true });
   const bound = await command(["folder", "bind", "admin", "--yes"], clone);
   expect(bound.code, bound.out).toBe(0);
-  expect(await resolveProjectRoot(folder)).toBe(join(clone, "apps/admin"));
+  expect(await resolveProjectRoot(folder)).toBe(clone);
   expect(hostAppRootFrom(folder, (await loadDesignFolder(folder)).config.hostApp)).toBe(
     join(clone, "apps/admin"),
   );
