@@ -36,6 +36,18 @@ function originHostname(origin: string | null | undefined): string | null {
 }
 
 /**
+ * True when the `Host` header names loopback. This alone defeats DNS rebinding,
+ * which is the only way a foreign page can *read* a same-origin response. It is
+ * the right check for static reads (assets, the SPA) that a headless screenshot
+ * page loads with an opaque `Origin: null`; anything that mutates or streams
+ * state needs the full {@link requestIsLocal}.
+ */
+export function hostIsLoopback(host: string | null | undefined): boolean {
+  const hostname = hostHeaderHostname(host);
+  return hostname !== null && LOOPBACK_HOSTS.has(hostname);
+}
+
+/**
  * True when a request is a genuine local one: loopback `Host`, and (if the
  * browser sent an `Origin`) a loopback origin too. A missing Host, a non-loopback
  * Host, a present-but-non-loopback Origin, or a malformed/`null` Origin all fail.
@@ -44,8 +56,7 @@ export function requestIsLocal(headers: {
   host: string | null | undefined;
   origin: string | null | undefined;
 }): boolean {
-  const host = hostHeaderHostname(headers.host);
-  if (!host || !LOOPBACK_HOSTS.has(host)) return false;
+  if (!hostIsLoopback(headers.host)) return false;
   if (headers.origin != null) {
     const origin = originHostname(headers.origin);
     if (!origin || !LOOPBACK_HOSTS.has(origin)) return false;

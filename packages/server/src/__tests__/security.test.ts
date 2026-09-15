@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { requestIsLocal } from "../security.ts";
+import { hostIsLoopback, requestIsLocal } from "../security.ts";
 
 describe("requestIsLocal", () => {
   test("allows loopback Host with no Origin (CLI probe, tests)", () => {
@@ -30,5 +30,18 @@ describe("requestIsLocal", () => {
     expect(requestIsLocal({ host: undefined, origin: undefined })).toBe(false);
     expect(requestIsLocal({ host: "localhost:7300", origin: "null" })).toBe(false);
     expect(requestIsLocal({ host: "localhost:7300", origin: "not a url" })).toBe(false);
+  });
+});
+
+describe("hostIsLoopback", () => {
+  test("accepts loopback hosts with or without a port", () => {
+    expect(hostIsLoopback("localhost:7300")).toBe(true);
+    expect(hostIsLoopback("127.0.0.1")).toBe(true);
+    expect(hostIsLoopback("[::1]:7300")).toBe(true);
+  });
+
+  test("rejects a rebinding Host and a missing one", () => {
+    expect(hostIsLoopback("attacker.com:7300")).toBe(false);
+    expect(hostIsLoopback(undefined)).toBe(false);
   });
 });

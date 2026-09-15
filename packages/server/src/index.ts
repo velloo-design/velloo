@@ -37,7 +37,7 @@ import {
 import type { MutationContext } from "./mutations/index.ts";
 import { resolveProviders } from "./providers.ts";
 import { PublishRunner } from "./publish-run.ts";
-import { requestIsLocal } from "./security.ts";
+import { hostIsLoopback, requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
 import type { CanvasUpdates } from "./updates.ts";
@@ -391,6 +391,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         return app.fetch(req);
       }
 
+      // Static reads only need the rebinding guard: headless screenshot pages
+      // fetch fonts and images from here with an opaque `Origin: null`.
+      if (!hostIsLoopback(url.host)) return new Response("forbidden", { status: 403 });
       return serveNonApi(req, folder.root);
     },
     websocket: {

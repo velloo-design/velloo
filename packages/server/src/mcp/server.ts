@@ -17,6 +17,7 @@ import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { LocalCommentsService } from "../local-comments.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { requestIsLocal } from "../security.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { MCP_SERVER_INFO } from "../version.ts";
 import { registerGuideResources } from "./resources.ts";
@@ -298,6 +299,12 @@ export async function createMcpServer(
   const sessions = new Map<string, Session>();
 
   const httpServer: HttpServer = createHttpServer(async (req, res) => {
+    // The same loopback guard the canvas API applies. Without it a DNS-rebound
+    // page is same-origin with this port and reaches every mutating tool.
+    if (!requestIsLocal({ host: req.headers.host, origin: req.headers.origin })) {
+      sendJson(res, 403, { error: "forbidden: request is not from a local origin" });
+      return;
+    }
     if (!req.url?.startsWith("/mcp")) {
       sendJson(res, 404, { error: "expected /mcp" });
       return;

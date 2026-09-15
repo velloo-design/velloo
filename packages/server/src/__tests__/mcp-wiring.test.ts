@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { request as httpRequest } from "node:http";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -313,5 +314,56 @@ describe("the HTTP transport", () => {
     const client = await connect("full");
     expect(handle.sessions()).toBe(before + 1);
     await client.close();
+  });
+});
+
+describe("the HTTP MCP loopback guard", () => {
+  /** Raw request so the test controls the forbidden `Host` header a browser would send. */
+  function post(headers: Record<string, string>): Promise<number> {
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "guard-test", version: "0" },
+      },
+    });
+    return new Promise((resolveStatus, reject) => {
+      const req = httpRequest(
+        {
+          host: "127.0.0.1",
+          port: handle.port,
+          path: "/mcp",
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            ...headers,
+          },
+        },
+        (res) => {
+          res.resume();
+          resolveStatus(res.statusCode ?? 0);
+        },
+      );
+      req.on("error", reject);
+      req.end(body);
+    });
+  }
+
+  test("rejects a DNS-rebound request whose Host is not loopback", async () => {
+    expect(await post({ host: `attacker.example:${handle.port}` })).toBe(403);
+  });
+
+  test("rejects a cross-origin browser request", async () => {
+    expect(
+      await post({ host: `127.0.0.1:${handle.port}`, origin: "https://attacker.example" }),
+    ).toBe(403);
+  });
+
+  test("accepts a local client", async () => {
+    expect(await post({ host: `127.0.0.1:${handle.port}` })).toBe(200);
   });
 });
