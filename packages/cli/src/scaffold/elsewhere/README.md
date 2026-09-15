@@ -2,7 +2,8 @@
 
 The canonical design for `velloo init`: seven travel screens, the journey board
 (including mobile and dark frames), and three tall agentic trip explorations.
-To edit it visually, open `demo-boards/shadcn-upstream/` on the canvas, then bring
+To edit it visually, generate the demos with `bun scripts/refresh-demo-boards.ts`,
+open `demo-boards/shadcn-upstream/` on the canvas, then bring
 the changes back into this directory — preserving screen and snippet IDs — before
 `bun scripts/refresh-demo-boards.ts` overwrites that folder again.
 
