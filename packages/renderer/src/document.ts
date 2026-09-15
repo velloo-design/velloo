@@ -53,6 +53,12 @@ export interface DocumentOptions {
    * exact installed version over it (restoring the SSR on any failure).
    */
   canvasBundle?: { url: string; tree: unknown; themeOptions: unknown } | undefined;
+  /**
+   * CSP nonce stamped on every inline script. The server pairs it with a
+   * `script-src 'self' 'nonce-…'` header so markup a design smuggles past the
+   * SVG sanitizer cannot run in the canvas origin.
+   */
+  scriptNonce?: string | undefined;
 }
 
 /**
@@ -76,16 +82,18 @@ export function buildDocument(opts: DocumentOptions): string {
     liveBundleUrl,
     canvasBundle,
     selectionRing,
+    scriptNonce,
   } = opts;
-  const runtime = includeRuntime ? `<script>${IFRAME_RUNTIME}</script>` : "";
+  const script = scriptNonce ? `<script nonce="${escapeHtml(scriptNonce)}">` : "<script>";
+  const runtime = includeRuntime ? `${script}${IFRAME_RUNTIME}</script>` : "";
   const live = liveBundleUrl
-    ? `<script>${LIVE_RUNTIME.replace("__VELLOO_LIVE_BUNDLE_URL__", JSON.stringify(liveBundleUrl))}</script>`
+    ? `${script}${LIVE_RUNTIME.replace("__VELLOO_LIVE_BUNDLE_URL__", JSON.stringify(liveBundleUrl))}</script>`
     : "";
   // The installed-component client mount (#18): the SSR body becomes the
   // fallback inside #velloo-ssr; the runtime mounts the bundle over it.
   const canvas = canvasBundle
     ? `<script type="application/json" id="velloo-canvas-data">${jsonForScript({ tree: canvasBundle.tree, themeOptions: canvasBundle.themeOptions })}</script>` +
-      `<script>${CANVAS_RUNTIME.replace("__VELLOO_CANVAS_BUNDLE_URL__", JSON.stringify(canvasBundle.url))}</script>`
+      `${script}${CANVAS_RUNTIME.replace("__VELLOO_CANVAS_BUNDLE_URL__", JSON.stringify(canvasBundle.url))}</script>`
     : "";
   const body = canvasBundle ? `<div id="velloo-ssr">${bodyHtml}</div>` : bodyHtml;
   const fontLinks =

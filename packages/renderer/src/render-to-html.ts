@@ -106,6 +106,8 @@ export interface RenderOptions {
    * off — the canvas draws that chrome in the parent. See DocumentOptions.
    */
   selectionRing?: boolean | undefined;
+  /** CSP nonce for the document's inline scripts. See DocumentOptions. */
+  scriptNonce?: string | undefined;
 }
 
 /**
@@ -157,6 +159,7 @@ export async function renderScreen(
     canvasBundle,
     ...(options.includeRuntime !== undefined ? { includeRuntime: options.includeRuntime } : {}),
     ...(options.selectionRing !== undefined ? { selectionRing: options.selectionRing } : {}),
+    ...(options.scriptNonce !== undefined ? { scriptNonce: options.scriptNonce } : {}),
   });
 
   return { html, bodyHtml, themeCss, failures };

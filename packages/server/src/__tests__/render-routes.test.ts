@@ -144,6 +144,31 @@ describe("local-only guard", () => {
   });
 });
 
+describe("script policy on rendered documents", () => {
+  test("every inline script carries the nonce the CSP header allows", async () => {
+    const res = await app.fetch(new Request("http://localhost/api/render/snippet-body/stat-card"));
+    expect(res.status).toBe(200);
+    const csp = res.headers.get("content-security-policy") ?? "";
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+    expect(nonce).toBeDefined();
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).not.toContain("unsafe-inline");
+
+    const html = await res.text();
+    const scripts = [...html.matchAll(/<script\b([^>]*)>/g)].map((m) => m[1] ?? "");
+    expect(scripts.length).toBeGreaterThan(0);
+    for (const attrs of scripts) expect(attrs).toContain(`nonce="${nonce}"`);
+  });
+
+  test("each response gets a fresh nonce", async () => {
+    const url = "http://localhost/api/render/snippet/stat-card";
+    const a = (await app.fetch(new Request(url))).headers.get("content-security-policy");
+    const b = (await app.fetch(new Request(url))).headers.get("content-security-policy");
+    expect(a).not.toBe(b);
+  });
+});
+
 describe("/api/render/snippet/:id (preview route)", () => {
   test("wraps the snippet in a centering Card so library previews don't pin top-left", async () => {
     const res = await app.fetch(new Request("http://localhost/api/render/snippet/stat-card"));

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { FrameworkAdapter } from "@velloo/provider";
 import {
   collectSerializedRefs,
@@ -24,6 +25,18 @@ import {
 } from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { renderErrorDocument } from "./render-error.ts";
+
+/**
+ * Rendered documents are same-origin with the canvas, whose `/api/*` routes are
+ * unauthenticated, and they inline design-authored SVG behind a sanitizer. The
+ * policy only allows same-origin scripts (the live and canvas bundles) and the
+ * inline runtimes carrying this response's nonce, so a sanitizer bypass has
+ * nothing to execute. Styles, fonts and images stay unrestricted: designs load
+ * Google Fonts and remote imagery.
+ */
+function renderCsp(nonce: string): string {
+  return `script-src 'self' 'nonce-${nonce}'; object-src 'none'; base-uri 'self'`;
+}
 
 /**
  * Render a screen as standalone HTML. The viewport size for responsive Tailwind
@@ -113,6 +126,11 @@ export function createRenderRouter(
     const f = ctx.folder;
     const owner = opts.libraryOf ?? screen;
     const dark = c.req.query("mode") === "dark";
+    const nonce = randomBytes(16).toString("base64");
+    const headers = {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": renderCsp(nonce),
+    };
     try {
       const snapshotCss = await jit.build();
       const theme = themeByName(f, c.req.query("theme"));
@@ -130,8 +148,9 @@ export function createRenderRouter(
         ...(opts.withBundles ? { liveBundleUrl: liveBundleUrl(ctx) } : {}),
         ...(canvasBundle ? { canvasBundle } : {}),
         ...(opts.selectionRing ? { selectionRing: true } : {}),
+        scriptNonce: nonce,
       });
-      return c.body(html, 200, { "Content-Type": "text/html; charset=utf-8" });
+      return c.body(html, 200, headers);
     } catch (err) {
       // The frame is an iframe, so its only way of saying anything is a
       // document. Statuses stay as they were — the canvas reads them — but the
@@ -162,7 +181,7 @@ export function createRenderRouter(
       return c.body(
         renderErrorDocument({ ...page, screenName: screen.name, dark }),
         err instanceof UnknownComponentError ? 422 : 500,
-        { "Content-Type": "text/html; charset=utf-8" },
+        headers,
       );
     }
   };
