@@ -16,6 +16,11 @@ import {
   updateStatus,
   upgradeInstalledVelloo,
 } from "../update.ts";
+import { PACKAGE_VERSION } from "../version.ts";
+
+const [PACKAGE_MAJOR = 0, PACKAGE_MINOR = 0, PACKAGE_PATCH = 0] =
+  PACKAGE_VERSION.split(".").map(Number);
+const AVAILABLE_VERSION = `${PACKAGE_MAJOR}.${PACKAGE_MINOR}.${PACKAGE_PATCH + 1}`;
 
 let root: string;
 let originalEnv: NodeJS.ProcessEnv;
@@ -24,7 +29,9 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "velloo-update-test-"));
   originalEnv = { ...process.env };
   process.env.VELLOO_UPDATE_CACHE = join(root, "update.json");
-  process.env.VELLOO_UPDATE_URL = "data:application/json,%7B%22version%22%3A%220.2.0%22%7D";
+  process.env.VELLOO_UPDATE_URL = `data:application/json,${encodeURIComponent(
+    JSON.stringify({ version: AVAILABLE_VERSION }),
+  )}`;
   process.env.VELLOO_LOCAL_RELEASE = join(root, "local-release.json");
 });
 
@@ -99,10 +106,10 @@ describe("version updates", () => {
   });
 
   test("fetches and caches a release without network access", async () => {
-    expect(await fetchLatestVersion()).toBe("0.2.0");
+    expect(await fetchLatestVersion()).toBe(AVAILABLE_VERSION);
     await refreshUpdateCache();
     const cached = JSON.parse(await readFile(process.env.VELLOO_UPDATE_CACHE as string, "utf8"));
-    expect(cached.latest).toBe("0.2.0");
+    expect(cached.latest).toBe(AVAILABLE_VERSION);
     expect(cached.checkedAt).toBeNumber();
   });
 
@@ -117,7 +124,7 @@ describe("version updates", () => {
     process.env.VELLOO_INSTALL_METHOD = "direct";
     await writeFile(
       process.env.VELLOO_UPDATE_CACHE as string,
-      JSON.stringify({ checkedAt: now, latest: "0.2.0" }),
+      JSON.stringify({ checkedAt: now, latest: AVAILABLE_VERSION }),
     );
     const error = spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -163,7 +170,7 @@ describe("version updates", () => {
     process.env.VELLOO_INSTALL_METHOD = "direct";
     const available = await updateStatus({ refresh: true });
     expect(available.available).toBe(true);
-    expect(available.latest).toBe("0.2.0");
+    expect(available.latest).toBe(AVAILABLE_VERSION);
     expect(available.upgradable).toBe(true);
 
     process.env.VELLOO_INSTALL_METHOD = "source";
@@ -188,7 +195,7 @@ describe("version updates", () => {
 
     const outcome = await upgradeInstalledVelloo();
     expect(outcome.upgraded).toBe(true);
-    expect(await readFile(marker, "utf8")).toBe("install -g velloo@0.2.0\n");
+    expect(await readFile(marker, "utf8")).toBe(`install -g velloo@${AVAILABLE_VERSION}\n`);
   });
 
   test("points a dev-channel npm upgrade at that channel's tarball, not the registry", async () => {
@@ -308,7 +315,9 @@ describe("version updates", () => {
       processResult.exited,
     ]);
     expect(code).toBe(0);
-    expect(stdout).toContain("0.1.0 → 0.2.0 is available (direct installation");
+    expect(stdout).toContain(
+      `${PACKAGE_VERSION} → ${AVAILABLE_VERSION} is available (direct installation`,
+    );
     // …and the same run reports the on-disk format, which is the half that was
     // silently skipped before: a bare `velloo upgrade` only touched the binary.
     expect(stdout).toContain("would migrate");
