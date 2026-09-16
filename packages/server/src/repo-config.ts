@@ -1,22 +1,12 @@
-import { readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { type FeedbackPrefs, REPO_MANIFEST_FILE, RepoManifestSchema } from "@velloo/schema";
+import type { FeedbackPrefs } from "@velloo/schema";
+import { type FoundRepoManifest, readRepoManifest } from "./designs.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import { localDesignOf } from "./project-location.ts";
 
-interface FoundRepoManifest {
-  /** Absolute path of the velloo.json file. */
-  path: string;
-  /** Directory holding it — the repo root, as far as velloo is concerned. */
-  dir: string;
-  manifest: ReturnType<typeof RepoManifestSchema.parse>;
-}
-
 /**
- * Walk up from `startDir` for the repo-root `velloo.json`. A missing file
- * keeps walking; a malformed one reads as absent here — the CLI's resolver
- * owns failing loudly on a broken manifest, and the daemon must not refuse to
- * boot over a preference file.
+ * The repo-root `velloo.json` for preference reads. A malformed one reads as
+ * absent here — the CLI's resolver owns failing loudly on a broken manifest,
+ * and the daemon must not refuse to boot over a preference file.
  *
  * A local design has no repo manifest: its checkout's `velloo.json` is a
  * committed file, and a design that lives only on this machine keeps its
@@ -24,20 +14,7 @@ interface FoundRepoManifest {
  */
 export async function findRepoManifest(startDir: string): Promise<FoundRepoManifest | null> {
   if (localDesignOf(startDir)) return null;
-  let dir = resolve(startDir);
-  for (;;) {
-    const path = join(dir, REPO_MANIFEST_FILE);
-    try {
-      const parsed = RepoManifestSchema.safeParse(JSON.parse(await readFile(path, "utf8")));
-      if (parsed.success) return { path, dir, manifest: parsed.data };
-      return null;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") return null;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
+  return readRepoManifest(startDir);
 }
 
 /**
@@ -53,7 +30,7 @@ export async function readRepoFeedback(startDir: string): Promise<FeedbackPrefs 
 }
 
 /**
- * Persist feedback consent at the repo root, leaving the projects map alone.
+ * Persist feedback consent at the repo root, leaving the designs list alone.
  * Returns the file written, or null when there's no manifest to write into —
  * a folder outside any registered repo keeps its answer in its own config.
  *
@@ -67,6 +44,10 @@ export async function writeRepoFeedback(
 ): Promise<string | null> {
   const found = await findRepoManifest(startDir);
   if (!found) return null;
+  if (found.legacy)
+    throw new Error(
+      `${found.path} is in the pre-designs format — run \`velloo upgrade\` to migrate it first.`,
+    );
   await writeJsonAtomic(found.path, {
     ...found.manifest,
     feedback: { enabled: feedback.enabled },

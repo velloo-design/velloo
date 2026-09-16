@@ -198,7 +198,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     if (path === "/api/config") {
       return json({
         root: "/tmp/design",
-        folderName: "design",
+        designName: "design",
         schemaVersion: 2,
         toolVersion: "test",
         folderId: null,

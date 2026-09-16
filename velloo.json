@@ -1,6 +1,4 @@
 {
-  "projects": {
-    "velloo": "velloo"
-  },
-  "defaultProject": "velloo"
+  "designs": ["velloo"],
+  "defaultDesign": "velloo"
 }

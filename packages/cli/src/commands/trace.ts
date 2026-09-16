@@ -1,8 +1,8 @@
 import { writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { defineCommand } from "citty";
+import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
 import { loadTape, renderReport } from "../trace/report.ts";
 import { serveLiveReport } from "../trace/serve.ts";
@@ -17,7 +17,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     dir: {
       type: "string",
@@ -54,7 +54,7 @@ export default defineCommand({
     // its .velloo/trace.
     const root = args.dir
       ? resolve(args.dir)
-      : join(await resolveDesignFolder(args.folder, "trace"), TRACE_SUBDIR);
+      : join(await resolveDesign(args.folder, "trace"), TRACE_SUBDIR);
 
     if (args.watch) {
       // Live mode: follow the newest tape (or a pinned --session). Unlike the

@@ -2,19 +2,20 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { cp, lstat, mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { ConfigSchema, type RepoManifest } from "@velloo/schema";
+import { APP_PATH_PREFIX, ConfigSchema, type RepoManifest } from "@velloo/schema";
 import {
   hostAppRootFrom,
   loadDesignFolder,
   managedDesignId,
   managedDesignPath,
+  recordedDesignName,
   removeLocalDesign,
-  resolveProjectPath,
+  resolveAppPath,
   writeJsonAtomic,
   writeLocalDesign,
 } from "@velloo/server";
 import { daemonRoot, stopDaemon } from "./daemon/runtime.ts";
-import { findProjects, isWithin } from "./manifest.ts";
+import { findDesigns, isWithin, withoutDesign } from "./manifest.ts";
 
 function physicalDestination(path: string): string {
   if (lstatSync(path, { throwIfNoEntry: false })) return realpathSync(path);
@@ -36,7 +37,7 @@ export async function rebaseDesignConfig(
   );
   const rebase = (path: string) => {
     if (path === "binary" || path.startsWith("~/")) return path;
-    const abs = resolveProjectPath(source, path);
+    const abs = resolveAppPath(source, path);
     const withinDesign = relative(source, abs);
     if (
       withinDesign === "" ||
@@ -46,7 +47,7 @@ export async function rebaseDesignConfig(
     )
       return withinDesign.split(sep).join("/") || ".";
     return external
-      ? `project:${relative(appRoot, abs).split(sep).join("/") || "."}`
+      ? `${APP_PATH_PREFIX}${relative(appRoot, abs).split(sep).join("/") || "."}`
       : relative(destination, abs).split(sep).join("/") || ".";
   };
   config.hostApp = config.hostApp
@@ -88,9 +89,13 @@ export interface RelocationPlan {
   /** The checkout the design belongs to. */
   root: string;
   appRoot: string;
-  projectName: string;
+  designName: string;
   /** The source's local design record, when it is one. */
   sourceLocalId?: string | undefined;
+  /** The source's velloo.json path, when it is a repository design. */
+  sourceManifestPath?: string | undefined;
+  /** The destination's velloo.json path, when it lands in the repository. */
+  destinationManifestPath?: string | undefined;
   /** Where the destination is recorded: a local design, or (absent) velloo.json. */
   destinationLocal?: { id: string; designPath?: string | undefined } | undefined;
   manifestPath: string;
@@ -114,19 +119,20 @@ export async function planRelocation(
 ): Promise<RelocationPlan> {
   if (Boolean(to) === external)
     throw new Error("Choose exactly one destination: --external or --to <path>.");
-  const projects = await findProjects(cwd);
+  const designs = await findDesigns(cwd);
   const physicalSource = realpathSync(source);
-  const local = projects?.local.find((design) => realOr(design.designRoot) === physicalSource);
-  const entries = [...(projects?.repo?.folders ?? [])].filter(
-    ([, path]) => existsSync(path) && realpathSync(path) === physicalSource,
-  );
-  if (!local && entries.length !== 1)
+  const local = designs?.local.find((design) => realOr(design.designRoot) === physicalSource);
+  const repo = designs?.repo ?? null;
+  const index =
+    repo?.folders.findIndex((path) => existsSync(path) && realpathSync(path) === physicalSource) ??
+    -1;
+  if (!local && index === -1)
     throw new Error(
-      "Run relocation from the checkout the design belongs to; the source must be one of its projects.",
+      "Run relocation from the checkout the design belongs to; the source must be one of its designs.",
     );
-  const repo = projects?.repo ?? null;
   const root = local?.root ?? (repo?.dir as string);
-  const name = local?.projectName ?? (entries[0]?.[0] as string);
+  const name = recordedDesignName(source);
+  if (!name) throw new Error(`${source} has no design name — run \`velloo upgrade\` first.`);
   const physicalRoot = realpathSync(root);
   if (physicalSource === physicalRoot)
     throw new Error(
@@ -154,23 +160,17 @@ export async function planRelocation(
   const manifestPath = repo?.path ?? join(root, "velloo.json");
   const before = repo ? await readFile(repo.path, "utf8") : null;
   let manifest: RepoManifest | null | undefined;
+  let destinationManifestPath: string | undefined;
+  if (repo?.legacy)
+    throw new Error(`${repo.path} is in the pre-designs format — run \`velloo upgrade\` first.`);
   if (inRepo) {
-    const rel = relative(physicalRoot, physicalTarget).split(sep).join("/") || ".";
-    manifest = {
-      ...(repo?.manifest ?? {}),
-      projects: { ...(repo?.manifest.projects ?? {}), [name]: rel },
-    };
-  } else if (repo && name in repo.manifest.projects) {
-    const { [name]: _moved, ...rest } = repo.manifest.projects;
-    const { defaultProject, ...others } = repo.manifest;
-    manifest =
-      Object.keys(rest).length === 0 && !others.feedback
-        ? null
-        : {
-            ...others,
-            projects: rest,
-            ...(defaultProject && defaultProject !== name ? { defaultProject } : {}),
-          };
+    destinationManifestPath = relative(physicalRoot, physicalTarget).split(sep).join("/") || ".";
+    const designs = [...(repo?.manifest.designs ?? [])];
+    if (index === -1) designs.push(destinationManifestPath);
+    else designs[index] = destinationManifestPath;
+    manifest = { ...(repo?.manifest ?? {}), designs };
+  } else if (repo && index !== -1) {
+    manifest = withoutDesign(repo.manifest, index, name);
   }
   const config = ConfigSchema.parse(
     JSON.parse(await readFile(join(source, ".design/config.json"), "utf8")),
@@ -180,8 +180,10 @@ export async function planRelocation(
     destination,
     root,
     appRoot: local?.appRoot ?? hostAppRootFrom(source, config.hostApp),
-    projectName: name,
+    designName: name,
     sourceLocalId: local?.id,
+    sourceManifestPath: index === -1 ? undefined : repo?.manifest.designs[index],
+    destinationManifestPath,
     destinationLocal: inRepo
       ? undefined
       : {
@@ -236,7 +238,6 @@ export async function relocateDesign(plan: RelocationPlan): Promise<void> {
       await writeLocalDesign(plan.destinationLocal.id, {
         root: plan.root,
         appRoot: plan.appRoot,
-        projectName: plan.projectName,
         ...(plan.destinationLocal.designPath
           ? { designPath: plan.destinationLocal.designPath }
           : {}),

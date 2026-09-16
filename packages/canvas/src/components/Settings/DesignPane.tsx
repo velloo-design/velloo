@@ -1,6 +1,6 @@
 import type { ViewportPreset } from "@velloo/schema";
 import { Check, Copy, Monitor, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { config, type FolderConfig } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
@@ -33,16 +33,17 @@ function presetIcon(w: number) {
 }
 
 /**
- * Folder scope — everything stored in the design folder's `config.json`.
+ * Design scope — everything stored in the design's `config.json`.
  * Every control writes through a config mutation the moment it settles
  * (blur for text, change for pickers), so there is no Save button and no
  * dirty state to reconcile against an agent editing the same file.
  */
-export function FolderPane({ cfg }: { cfg: FolderConfig }) {
+export function DesignPane({ cfg }: { cfg: FolderConfig }) {
   const boards = useCanvas((s) => s.design?.boards ?? []);
   const screens = useCanvas((s) => s.design?.screens ?? []);
   const reload = useCanvas((s) => s.loadFolderConfig);
 
+  const nameId = useId();
   const boardId = useId();
   const screenId = useId();
   const aliasId = useId();
@@ -61,7 +62,27 @@ export function FolderPane({ cfg }: { cfg: FolderConfig }) {
 
   return (
     <>
-      <SectionLabel>Opens on</SectionLabel>
+      <SectionLabel>Design</SectionLabel>
+      <SettingRows>
+        <SettingRow
+          label="Name"
+          description="What velloo commands, agents and the canvas call this design. Unique in this repo."
+          htmlFor={nameId}
+        >
+          <DesignNameField
+            id={nameId}
+            value={cfg.designName}
+            onCommit={(name) =>
+              run("Could not rename the design", async () => {
+                await config.designName(name);
+                pushToast({ kind: "success", message: `Renamed to "${name}"` });
+              })
+            }
+          />
+        </SettingRow>
+      </SettingRows>
+
+      <SectionLabel className="mt-5">Opens on</SectionLabel>
       <SettingRows>
         <SettingRow
           label="Board"
@@ -288,6 +309,47 @@ function CopyableId({ id }: { id: string }) {
  * Text input that only reports upward once the user is done — on blur or
  * Enter — so a per-keystroke mutation storm never reaches the folder.
  */
+function DesignNameField({
+  id,
+  value,
+  onCommit,
+}: {
+  id: string;
+  value: string;
+  onCommit: (name: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const stored = useRef(value);
+  stored.current = value;
+  // Adopt the stored value when it changes underneath us: an agent or CLI rename.
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const next = draft.trim();
+    // A name can't be cleared — an empty field just snaps back.
+    if (next === "" || next === value) {
+      setDraft(value);
+      return;
+    }
+    // A refused rename leaves the stored name unchanged, so nothing above
+    // re-renders the field with it — snap back to whatever is stored now.
+    void onCommit(next).finally(() => setDraft(stored.current));
+  };
+  return (
+    <Input
+      id={id}
+      value={draft}
+      spellCheck={false}
+      className="h-8 w-[252px] font-mono text-[12.5px]"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") setDraft(value);
+      }}
+    />
+  );
+}
+
 function AliasField({
   id,
   value,

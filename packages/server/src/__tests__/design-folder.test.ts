@@ -15,6 +15,7 @@ import {
 const config = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
   toolVersion: "test",
+  name: "test",
   libraries: {
     default: {
       id: "shadcn-upstream",

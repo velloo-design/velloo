@@ -130,7 +130,7 @@ test("paths outside the old application are left alone", async () => {
   expect(change.from).toBe(app);
 });
 
-test("a local design moves only its machine record, leaving project: paths to follow", async () => {
+test("a local design moves only its machine record, leaving app: paths to follow", async () => {
   const { repo, app } = await monorepo();
   const designsHome = join(root, "designs");
   const previous = process.env.VELLOO_DESIGNS_HOME;
@@ -140,21 +140,20 @@ test("a local design moves only its machine record, leaving project: paths to fo
     const folder = await designFolder(
       join(designsHome, id),
       designConfig({
-        hostApp: { root: "project:." },
-        library: { source: "in-repo", componentsPath: "project:src/components" },
+        hostApp: { root: "app:." },
+        library: { source: "in-repo", componentsPath: "app:src/components" },
       }),
     );
     await mkdir(join(designsHome, ".locations"), { recursive: true });
     await writeJson(join(designsHome, ".locations", `${id}.json`), {
       root: repo,
       appRoot: repo,
-      projectName: "web",
     });
 
     expect((await recordedAppRoot(folder)).kind).toBe("local");
     const change = await planAppRootChange(folder, app);
-    expect(change.local).toEqual({ id, root: repo, project: "web" });
-    // `project:` already means "under the application root", so nothing in the
+    expect(change.local).toEqual({ id, root: repo });
+    // `app:` already means "under the application root", so nothing in the
     // design config needs rewriting for it to follow.
     expect(change.rewritten).toEqual([]);
 
@@ -179,7 +178,6 @@ test("a local design's application root must stay inside its checkout", async ()
     await writeJson(join(designsHome, ".locations", `${id}.json`), {
       root: repo,
       appRoot: repo,
-      projectName: "web",
     });
 
     await expect(planAppRootChange(folder, root)).rejects.toThrow(/inside the design's checkout/);

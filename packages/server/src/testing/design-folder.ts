@@ -43,6 +43,7 @@ export function designConfig(overrides: DesignConfigOverrides = {}): Config {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     toolVersion: "0.1.0",
+    name: "test",
     libraries: libraries ?? { default: { ...DEFAULT_LIBRARY, ...library } },
     defaultLibrary: "default",
     viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],

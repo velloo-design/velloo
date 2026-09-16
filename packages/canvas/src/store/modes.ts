@@ -175,7 +175,7 @@ const CANVAS_PREF_KEYS = [
 ];
 
 /** Which scope the settings dialog is showing. */
-export type SettingsScope = "folder" | "board" | "canvas";
+export type SettingsScope = "design" | "board" | "canvas";
 
 /** Persisted UI modes: app chrome theme, design light/dark, sidebar panel collapse. */
 export interface ModesSlice {

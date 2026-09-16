@@ -29,6 +29,7 @@ export {
 export {
   updateCodegen,
   updateDefaults,
+  updateDesignName,
   updateFeedback,
   updateViewportPresets,
 } from "./api/config.ts";

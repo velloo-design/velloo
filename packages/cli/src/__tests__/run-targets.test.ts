@@ -16,9 +16,12 @@ afterEach(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
-async function makeDesignFolder(path: string): Promise<void> {
+async function makeDesignFolder(path: string, name: string): Promise<void> {
   await mkdir(join(path, ".design"), { recursive: true });
-  await writeFile(join(path, ".design", "config.json"), JSON.stringify(buildDefaultConfig()));
+  await writeFile(
+    join(path, ".design", "config.json"),
+    JSON.stringify(buildDefaultConfig({ name })),
+  );
 }
 
 async function writeManifest(manifest: unknown): Promise<void> {
@@ -26,64 +29,64 @@ async function writeManifest(manifest: unknown): Promise<void> {
 }
 
 describe("resolveRunTargets", () => {
-  test("a bare run in a multi-project repo starts every project", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
-    await makeDesignFolder(join(tmp, "brand"));
-    await writeManifest({ projects: { app: "velloo", brand: "brand" } });
+  test("a bare run in a multi-design repo starts every design", async () => {
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    await makeDesignFolder(join(tmp, "brand"), "brand");
+    await writeManifest({ designs: ["velloo", "brand"] });
     const targets = await resolveRunTargets(undefined, { cwd: tmp });
     expect(targets.map((t) => t.name)).toEqual(["app", "brand"]);
   });
 
-  test("the default project leads, so `o` and --open hit the expected canvas", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
-    await makeDesignFolder(join(tmp, "brand"));
-    await writeManifest({ projects: { app: "velloo", brand: "brand" }, defaultProject: "brand" });
+  test("the default design leads, so `o` and --open hit the expected canvas", async () => {
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    await makeDesignFolder(join(tmp, "brand"), "brand");
+    await writeManifest({ designs: ["velloo", "brand"], defaultDesign: "brand" });
     expect((await resolveRunTargets(undefined, { cwd: tmp })).map((t) => t.name)).toEqual([
       "brand",
       "app",
     ]);
   });
 
-  test("naming a project runs only that one", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
-    await makeDesignFolder(join(tmp, "brand"));
-    await writeManifest({ projects: { app: "velloo", brand: "brand" } });
+  test("naming a design runs only that one", async () => {
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    await makeDesignFolder(join(tmp, "brand"), "brand");
+    await writeManifest({ designs: ["velloo", "brand"] });
     const targets = await resolveRunTargets("brand", { cwd: tmp });
     expect(targets).toEqual([{ name: "brand", folder: join(tmp, "brand") }]);
   });
 
   test("passing a path runs only that folder", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
-    await makeDesignFolder(join(tmp, "brand"));
-    await writeManifest({ projects: { app: "velloo", brand: "brand" } });
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    await makeDesignFolder(join(tmp, "brand"), "brand");
+    await writeManifest({ designs: ["velloo", "brand"] });
     const targets = await resolveRunTargets("./brand", { cwd: tmp });
     expect(targets.map((t) => t.folder)).toEqual([join(tmp, "brand")]);
   });
 
   test("standing inside a design folder runs that one", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
-    await makeDesignFolder(join(tmp, "brand"));
-    await writeManifest({ projects: { app: "velloo", brand: "brand" } });
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    await makeDesignFolder(join(tmp, "brand"), "brand");
+    await writeManifest({ designs: ["velloo", "brand"] });
     const targets = await resolveRunTargets(undefined, { cwd: join(tmp, "brand", "screens") });
     expect(targets.map((t) => t.name)).toEqual(["brand"]);
   });
 
-  test("a single-project manifest behaves exactly as before", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
-    await writeManifest({ projects: { app: "velloo" } });
+  test("a single-design manifest behaves exactly as before", async () => {
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    await writeManifest({ designs: ["velloo"] });
     expect((await resolveRunTargets(undefined, { cwd: tmp })).map((t) => t.name)).toEqual(["app"]);
   });
 
-  test("a project whose folder has gone is skipped, not started", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
-    await writeManifest({ projects: { app: "velloo", ghost: "gone" } });
+  test("a design whose folder has gone is skipped, not started", async () => {
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    await writeManifest({ designs: ["velloo", "gone"] });
     expect((await resolveRunTargets(undefined, { cwd: tmp })).map((t) => t.name)).toEqual(["app"]);
   });
 
   test("no manifest keeps the ./velloo convention", async () => {
-    await makeDesignFolder(join(tmp, "velloo"));
+    await makeDesignFolder(join(tmp, "velloo"), "app");
     const targets = await resolveRunTargets(undefined, { cwd: tmp });
     expect(targets.map((t) => t.folder)).toEqual([join(tmp, "velloo")]);
-    expect(targets[0]?.name).toBeUndefined();
+    expect(targets[0]?.name).toBe("app");
   });
 });

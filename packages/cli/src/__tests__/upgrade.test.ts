@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
@@ -58,6 +58,41 @@ async function legacyFolder(): Promise<string> {
 }
 
 describe("upgradeFolder", () => {
+  test("a v3 repo takes its names from the old velloo.json map, which becomes a designs list", async () => {
+    const repo = await mkdtemp(join(tmpdir(), "velloo-upgrade-repo-"));
+    const web = await legacyFolder();
+    const site = await legacyFolder();
+    const webIn = join(repo, "apps/web/velloo");
+    const siteIn = join(repo, "apps/site/velloo");
+    await mkdir(join(repo, "apps/web"), { recursive: true });
+    await mkdir(join(repo, "apps/site"), { recursive: true });
+    await rename(web, webIn);
+    await rename(site, siteIn);
+    await writeFile(
+      join(repo, "velloo.json"),
+      JSON.stringify({
+        projects: { web: "apps/web/velloo", site: "apps/site/velloo" },
+        defaultProject: "site",
+      }),
+    );
+
+    const result = await upgradeFolder(webIn);
+    expect(result.changedFiles).toContain(join(repo, "velloo.json"));
+    expect(JSON.parse(await readFile(join(webIn, ".design/config.json"), "utf8")).name).toBe("web");
+    expect(JSON.parse(await readFile(join(repo, "velloo.json"), "utf8"))).toEqual({
+      designs: ["apps/web/velloo", "apps/site/velloo"],
+      defaultDesign: "site",
+    });
+    // The sibling isn't migrated yet, but its name was saved before the map went.
+    const siteConfig = JSON.parse(await readFile(join(siteIn, ".design/config.json"), "utf8"));
+    expect(siteConfig.schemaVersion).toBe(1);
+    expect(siteConfig.name).toBe("site");
+    await upgradeFolder(siteIn);
+    expect(JSON.parse(await readFile(join(siteIn, ".design/config.json"), "utf8")).name).toBe(
+      "site",
+    );
+  });
+
   test("migrates a legacy folder to the current version on disk", async () => {
     const root = await legacyFolder();
     const result = await upgradeFolder(root);

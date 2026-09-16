@@ -19,7 +19,7 @@ import {
   installClaudePlugin,
   installGeminiExtension,
 } from "./plugin.ts";
-import { designFolderReference, resolveProjectRoot } from "./project-root.ts";
+import { designArgumentFor, resolveProjectRoot } from "./project-root.ts";
 import { installSkills, type SkillResult } from "./skill.ts";
 import { type WriteResult, writeAgentConfig } from "./write-config.ts";
 
@@ -384,14 +384,15 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   // no guidance files (skills, Cursor rule) that only project scope reads.
   const local = localDesignOf(opts.designFolder) !== null;
 
-  // stdio: project-scoped configs pin the folder relative to the project root
-  // (the cwd the agent spawns `velloo mcp` from); global configs omit it so a
-  // single entry resolves the folder per-project from the cwd. GUI apps
+  // stdio: configs name no design when the checkout lists it — `velloo mcp`
+  // resolves it from the cwd the agent spawns it in, and the session can
+  // switch designs, so a pinned name would only go stale on a rename. An
+  // unlisted folder is pinned by its path from the project root. GUI apps
   // (Claude Desktop) get neither the user's shell PATH nor a meaningful cwd:
   // `velloo`'s `#!/usr/bin/env bun` shebang would fail to find bun, and a
   // cwd-resolved folder would resolve nowhere — so wire the absolute bun +
   // cli script and pin the design folder absolutely.
-  const designRel = await designFolderReference(projectRoot, opts.designFolder);
+  const designArg = await designArgumentFor(projectRoot, opts.designFolder);
   const connectionFor = (agent: AgentTarget): McpConnection => {
     if (transport === "http") return { transport: "http", url: opts.mcpUrl ?? DEFAULT_MCP_URL };
     if (agent.gui) {
@@ -407,7 +408,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
     return {
       transport: "stdio",
       command: "velloo",
-      args: agent.scope === "project" ? ["mcp", designRel] : ["mcp"],
+      args: agent.scope === "project" && designArg ? ["mcp", designArg] : ["mcp"],
     };
   };
 

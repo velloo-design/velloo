@@ -21,7 +21,8 @@ beforeAll(async () => {
   const writeJson = (path: string, value: unknown) =>
     writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   await writeJson(join(tmp, ".design/config.json"), {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    name: "test",
     toolVersion: "0.1.0",
     libraries: {
       default: {

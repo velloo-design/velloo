@@ -21,6 +21,8 @@ export type McpResult = {
    * block stays: it is what a text-only agent actually reads.
    */
   structuredContent?: Record<string, unknown> | undefined;
+  /** Out-of-band data for the transport, not the agent (see `SWITCH_DESIGN_META`). */
+  _meta?: Record<string, unknown> | undefined;
 };
 
 /** The discriminant every typed error union shares (MutationError, ThemeError, CodegenError). */

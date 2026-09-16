@@ -5,8 +5,10 @@ import type {
   JSONRPCError,
   JSONRPCMessage,
   JSONRPCRequest,
+  JSONRPCResultResponse,
 } from "@modelcontextprotocol/sdk/types.js";
 import { isJSONRPCRequest, isJSONRPCResponse } from "@modelcontextprotocol/sdk/types.js";
+import { SWITCH_DESIGN_META, type SwitchDesignDirective } from "./designs.ts";
 
 export interface StdioMcpProxyHandle {
   close(): Promise<void>;
@@ -19,6 +21,13 @@ export interface StdioMcpProxyOptions {
    * Return null when no live daemon could be found or brought up.
    */
   rediscover?: (() => Promise<string | null>) | undefined;
+  /**
+   * Bring up (or find) the daemon for another design and return its MCP URL —
+   * what a `switch_design` result asks for. Once it succeeds, `rediscover`
+   * must find *that* design's daemon: the session now belongs to it. Absent ⇒
+   * a switch directive is refused.
+   */
+  switchTo?: ((root: string) => Promise<{ url: string } | { error: string }>) | undefined;
   /** Fires when either side closes (agent disconnects, daemon drops). */
   onExit?: (() => void) | undefined;
   /**
@@ -66,12 +75,25 @@ export async function runStdioMcpProxy(
   // Ids of replayed initializes — their responses answer nobody on stdio.
   const reinitIds = new Set<string>();
   let reinitSeq = 0;
+  // What a replayed initialize answered, for a switch that hands the agent the
+  // new design's instructions.
+  const reinitResults = new Map<string, JSONRPCResultResponse["result"]>();
   let reconnecting: Promise<boolean> | null = null;
+  // While a switch rebinds the session, agent messages wait so none of them
+  // lands on the design being left.
+  let switching: Promise<void> | null = null;
+  const held: JSONRPCMessage[] = [];
 
   const wire = (transport: StreamableHTTPClientTransport): StreamableHTTPClientTransport => {
     transport.onmessage = (msg) => {
       if (isJSONRPCResponse(msg) && typeof msg.id === "string" && reinitIds.has(msg.id)) {
         reinitIds.delete(msg.id);
+        reinitResults.set(msg.id, msg.result);
+        return;
+      }
+      const directive = isJSONRPCResponse(msg) ? switchDirective(msg) : null;
+      if (directive && isJSONRPCResponse(msg)) {
+        performSwitch(msg, directive);
         return;
       }
       void stdio.send(msg).catch(() => undefined);
@@ -96,33 +118,101 @@ export async function runStdioMcpProxy(
   };
 
   /**
-   * Build a transport onto a freshly discovered daemon and establish a session
-   * on it. `replayInit` is false when the failed message is itself the
-   * initialize — re-sending it after a replay would double-initialize.
+   * Build a transport onto `url` and establish a session on it, then swap it
+   * in. `replayInit` is false when the failed message is itself the initialize
+   * — re-sending it after a replay would double-initialize. Resolves to the
+   * replayed initialize's result (null when none was replayed), or false.
    */
-  const reconnect = async (replayInit: boolean): Promise<boolean> => {
-    if (!opts.rediscover) return false;
-    const url = await opts.rediscover().catch(() => null);
-    if (!url || closing) return false;
+  const bind = async (
+    url: string,
+    replayInit: boolean,
+  ): Promise<JSONRPCResultResponse["result"] | null | false> => {
     const next = wire(new StreamableHTTPClientTransport(new URL(url)));
+    let initResult: JSONRPCResultResponse["result"] | null = null;
     try {
       await next.start();
       if (replayInit && initRequest) {
         const reinitId = `velloo-reinit-${++reinitSeq}`;
         reinitIds.add(reinitId);
         await next.send({ ...initRequest, id: reinitId });
+        initResult = reinitResults.get(reinitId) ?? null;
+        reinitResults.delete(reinitId);
         await next.send({ jsonrpc: "2.0", method: "notifications/initialized" });
       }
     } catch (err) {
-      console.error("velloo mcp: reconnect to respawned canvas daemon failed:", err);
+      console.error("velloo mcp: connecting to the canvas daemon failed:", err);
       await next.close().catch(() => undefined);
       return false;
     }
     const prev = http;
     http = next; // swap before closing so prev.onclose sees it's not active
+    // End the old session explicitly, so a daemon this session left can count
+    // it gone and idle out; a crashed one simply fails to answer.
+    await prev.terminateSession().catch(() => undefined);
     await prev.close().catch(() => undefined);
+    return initResult;
+  };
+
+  const reconnect = async (replayInit: boolean): Promise<boolean> => {
+    if (!opts.rediscover) return false;
+    const url = await opts.rediscover().catch(() => null);
+    if (!url || closing) return false;
+    if ((await bind(url, replayInit)) === false) return false;
     console.error(`velloo mcp: reconnected to the canvas daemon at ${url}`);
     return true;
+  };
+
+  /**
+   * Carry the session to another design's daemon. The `switch_design` response
+   * that asked for it is held, then answered here: with the new design's
+   * instructions on success, or an error that leaves the session where it was.
+   */
+  const performSwitch = (response: JSONRPCResultResponse, directive: SwitchDesignDirective) => {
+    const run = async () => {
+      const reply = (result: Record<string, unknown>) =>
+        stdio.send({ jsonrpc: "2.0", id: response.id, result }).catch(() => undefined);
+      const failed = (message: string) =>
+        reply({
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ kind: "DesignSwitchFailed", name: directive.name, message }),
+            },
+          ],
+        });
+      if (!opts.switchTo) {
+        await failed("this connection can't move to another design");
+        return;
+      }
+      const target = await opts
+        .switchTo(directive.root)
+        .catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }));
+      if ("error" in target) {
+        await failed(target.error);
+        return;
+      }
+      const init = await bind(target.url, true);
+      if (init === false) {
+        await failed(`the canvas daemon for "${directive.name}" did not accept the session`);
+        return;
+      }
+      const instructions = (init as { instructions?: unknown } | null)?.instructions;
+      await reply({
+        content: [
+          { type: "text", text: JSON.stringify({ kind: "DesignSwitched", name: directive.name }) },
+          ...(typeof instructions === "string" ? [{ type: "text", text: instructions }] : []),
+        ],
+      });
+      await stdio
+        .send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" })
+        .catch(() => undefined);
+      console.error(`velloo mcp: switched to design "${directive.name}" at ${target.url}`);
+    };
+    switching = run().finally(() => {
+      switching = null;
+      for (const msg of held.splice(0)) void forward(msg);
+    });
   };
 
   const reconnectOnce = (replayInit: boolean): Promise<boolean> => {
@@ -170,6 +260,10 @@ export async function runStdioMcpProxy(
 
   stdio.onmessage = (msg: JSONRPCMessage) => {
     if (isJSONRPCRequest(msg) && msg.method === "initialize") initRequest = msg;
+    if (switching) {
+      held.push(msg);
+      return;
+    }
     void forward(msg);
   };
   stdio.onclose = () => void close();
@@ -178,4 +272,12 @@ export async function runStdioMcpProxy(
   await http.start();
   await stdio.start();
   return { close };
+}
+
+function switchDirective(response: JSONRPCResultResponse): SwitchDesignDirective | null {
+  const meta = (response.result as { _meta?: Record<string, unknown> } | undefined)?._meta;
+  const directive = meta?.[SWITCH_DESIGN_META] as Partial<SwitchDesignDirective> | undefined;
+  return typeof directive?.name === "string" && typeof directive.root === "string"
+    ? { name: directive.name, root: directive.root }
+    : null;
 }

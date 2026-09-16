@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "../connect/index.ts";
 import { agentRootCandidates } from "../connect/project-root.ts";
-import { registerProject } from "../manifest.ts";
+import { registerDesign } from "../manifest.ts";
+import { buildDefaultConfig } from "../scaffold/default-config.ts";
 
 let tmp: string;
 let design: string;
@@ -110,7 +111,7 @@ describe("connect", () => {
     expect(r.configs[0]?.path).toBe(join(tmp, ".mcp.json"));
   });
 
-  test("a registered folder wires at the velloo.json root, named by project", async () => {
+  test("a listed design wires at the velloo.json root, without pinning its name", async () => {
     // A monorepo whose app has its own package.json: the agent is opened at
     // the repo root, so that's where the config has to be.
     await mkdir(join(tmp, ".git"), { recursive: true });
@@ -120,8 +121,12 @@ describe("connect", () => {
     await writeFile(join(app, "package.json"), "{}");
     for (const folder of [join(tmp, "velloo"), join(app, "velloo")]) {
       await rm(join(tmp, "velloo.json"), { force: true });
-      await mkdir(folder, { recursive: true });
-      await registerProject(folder, app);
+      await mkdir(join(folder, ".design"), { recursive: true });
+      await writeFile(
+        join(folder, ".design", "config.json"),
+        JSON.stringify(buildDefaultConfig({ name: "frontend" })),
+      );
+      await registerDesign(folder, app);
       const r = await connect({
         designFolder: folder,
         agents: ["claude-code"],
@@ -129,7 +134,9 @@ describe("connect", () => {
       });
       expect(r.projectRoot).toBe(tmp);
       const cfg = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
-      expect(cfg.mcpServers.velloo).toEqual({ command: "velloo", args: ["mcp", "frontend"] });
+      // `velloo mcp` finds a listed design from the agent's cwd, and a pinned
+      // name would go stale the moment the design is renamed.
+      expect(cfg.mcpServers.velloo).toEqual({ command: "velloo", args: ["mcp"] });
     }
     // Earlier versions wired the nested folder at the app; upgrade still finds it.
     expect(await agentRootCandidates(join(app, "velloo"))).toEqual([tmp, app]);

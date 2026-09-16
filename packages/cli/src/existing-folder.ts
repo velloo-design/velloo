@@ -20,7 +20,7 @@ import {
 import { installChromiumInteractive } from "./browser-setup.ts";
 import { globallyWiredAgents } from "./connect/index.ts";
 import { daemonRoot, ensureDaemon, stopDaemon } from "./daemon/runtime.ts";
-import { findProjects, registerProject } from "./manifest.ts";
+import { findDesigns, registerDesign } from "./manifest.ts";
 import { findMuiTheme, importThemeFromMui } from "./scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "./scaffold/import-theme.ts";
 import { detectHost } from "./scan/detect.ts";
@@ -62,8 +62,8 @@ export interface FolderFacts {
   pendingMigrations: string[];
   /** Recorded toolVersion differs from this binary — agent artifacts may be stale. */
   toolVersionStale: boolean;
-  /** Project name in the repo's velloo.json, when registered. */
-  project: string | undefined;
+  /** The design's name, when the checkout lists it. */
+  design: string | undefined;
 }
 
 async function readConfig(folder: string): Promise<Record<string, unknown>> {
@@ -77,14 +77,10 @@ export async function readFolderFacts(folder: string, appRoot: string): Promise<
   const libraries = (config.libraries ?? {}) as Record<string, { id?: string | undefined }>;
   const defaultLibrary = typeof config.defaultLibrary === "string" ? config.defaultLibrary : "";
   const library = libraries[defaultLibrary]?.id ?? Object.values(libraries)[0]?.id ?? "unknown";
-  let project: string | undefined;
+  let design: string | undefined;
   try {
-    const manifest = await findProjects(appRoot);
-    if (manifest) {
-      for (const [name, path] of manifest.folders) {
-        if (resolve(path) === resolve(folder)) project = name;
-      }
-    }
+    const designs = await findDesigns(appRoot);
+    design = designs?.designs.find((d) => resolve(d.root) === resolve(folder))?.name;
   } catch {
     // A broken manifest is the `check setup` action's problem, not the menu's.
   }
@@ -94,7 +90,7 @@ export async function readFolderFacts(folder: string, appRoot: string): Promise<
     schemaVersion: schemaVersionOf(config),
     pendingMigrations: planMigration(config).applied,
     toolVersionStale: config.toolVersion !== TOOL_VERSION,
-    project,
+    design,
   };
 }
 
@@ -140,7 +136,7 @@ export function factsLine(facts: FolderFacts, folder: string): string {
       ? `format v${facts.schemaVersion} → v${CURRENT_SCHEMA_VERSION}`
       : `format v${facts.schemaVersion} (current)`,
   ];
-  if (facts.project) parts.push(`project "${facts.project}"`);
+  if (facts.design) parts.push(`design "${facts.design}"`);
   return parts.join(" · ");
 }
 
@@ -337,8 +333,8 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
     ok(`agent skills current (velloo ${TOOL_VERSION})`);
   }
 
-  if (facts.project) ok(`registered in velloo.json as "${facts.project}"`);
-  else bad("not registered in velloo.json — commands must name the path");
+  if (facts.design) ok(`listed as design "${facts.design}"`);
+  else bad("not listed in velloo.json — commands must name the path");
 
   // The application root is the one recorded fact `init` takes from the
   // directory it happened to be run in, so it is the one most likely to be
@@ -359,12 +355,16 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
   if (browser) ok("browser installed (screenshots + publish)");
   else bad(`no browser for screenshots — install with \`${CHROMIUM_INSTALL_CMD}\``);
 
-  if (!facts.project) {
-    const go = await confirm({ message: "Register this folder in velloo.json?" });
+  if (!facts.design) {
+    const go = await confirm({ message: "List this design in velloo.json?" });
     if (!isCancel(go) && go) {
-      const reg = await registerProject(folder, appRoot);
-      if (reg.created) log.success(`Registered as project "${reg.name}".`);
-      else log.info("Already registered.");
+      try {
+        const reg = await registerDesign(folder, appRoot);
+        if (reg.created) log.success(`Listed design "${reg.name}" in velloo.json.`);
+        else log.info("Already listed.");
+      } catch (err) {
+        log.warn((err as Error).message);
+      }
     }
   }
   if (app && !app.looksLikeApp) await repairAppRoot(folder, app.path);
@@ -378,7 +378,7 @@ async function repairAppRoot(folder: string, current: string): Promise<void> {
   const target = await promptAppRootChoice(current);
   if (!target) {
     log.info(
-      `No other application found in this repo — \`velloo folder set-app-root --to <path>\`.`,
+      `No other application found in this repo — \`velloo design set-app-root --to <path>\`.`,
     );
     return;
   }

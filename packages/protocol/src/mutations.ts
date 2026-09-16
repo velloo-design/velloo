@@ -627,6 +627,11 @@ export const updateCodegenShape = {
 } satisfies z.ZodRawShape;
 export const UpdateCodegenBody = z.strictObject(updateCodegenShape);
 
+export const updateDesignNameShape = {
+  name: z.string(),
+} satisfies z.ZodRawShape;
+export const UpdateDesignNameBody = z.strictObject(updateDesignNameShape);
+
 export const updateFeedbackShape = {
   enabled: z.boolean().optional(),
   contactOk: z.boolean().optional(),

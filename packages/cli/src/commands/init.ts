@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { dirname, relative, resolve } from "node:path";
-import { isCancel, select } from "@clack/prompts";
+import { isCancel, log, select, text } from "@clack/prompts";
+import { designNameIssue } from "@velloo/schema";
 import { managedDesignPath, writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { defineCommand } from "citty";
@@ -9,7 +10,13 @@ import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
 import { PROJECT_AGENT_IDS } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 import { rebaseDesignConfig } from "../managed-folders.ts";
-import { checkoutRoot, isWithin, registerLocalDesign, registerProject } from "../manifest.ts";
+import {
+  checkoutRoot,
+  chooseDesignName,
+  isWithin,
+  registerDesign,
+  registerLocalDesign,
+} from "../manifest.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
 import { detectHost } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
@@ -122,17 +129,16 @@ export default defineCommand({
       description:
         "Your app's stack — sets the emitted import alias: nextjs | vite | astro (@/components/ui) | remix (~/components/ui)",
     },
-    project: {
+    name: {
       type: "string",
-      description:
-        "Project name to register in the repo's velloo.json (default: derived from the folder path)",
+      description: "The design's name (default: derived from its folder, or the app it designs)",
     },
   },
   run: ({ args }) => runInit(args as InitCliArgs),
 });
 
 /**
- * The init flow, callable outside the command — `velloo folder add` runs
+ * The init flow, callable outside the command — `velloo design add` runs
  * exactly this with the design folder already chosen, so there is one
  * scaffold path rather than a second, drifting copy.
  */
@@ -179,7 +185,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // the repo holds UI apps and this directory is not one of them.
   if (interactive && !cliArgs.folder) {
     // A scan hiccup must not block scaffolding: the prompt is a courtesy, and
-    // `folder set-app-root` fixes afterwards what this would have prevented.
+    // `design set-app-root` fixes afterwards what this would have prevented.
     const candidates = await appRootIsNotAnApp(appRoot).catch(() => null);
     if (candidates) {
       console.log(
@@ -221,6 +227,17 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   }
   const managedId = external ? candidateId : undefined;
   const managedFolder = managedId ? candidateFolder : undefined;
+  // Managed storage names its folder with an id, which says nothing — so the
+  // design's name has to come from the user rather than the path.
+  let promptedName: string | undefined;
+  if (interactive && managedFolder && !cliArgs.name) {
+    promptedName = await promptDesignName(
+      managedFolder,
+      appRoot,
+      await checkoutRoot(appRoot, launchRoot),
+    );
+    if (promptedName === undefined) return;
+  }
   let answers: WizardAnswers;
 
   if (interactive) {
@@ -336,8 +353,20 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // committed velloo.json, which must not point outside its repository.
   const root = await checkoutRoot(answers.appRoot, launchRoot);
   const localId = managedId ?? (isWithin(root, folder) ? undefined : randomUUID());
+  let name: string;
   try {
-    await writeScaffold(folder, scaffold, plan, answers, localId !== undefined);
+    name = await chooseDesignName({
+      folder,
+      appRoot: answers.appRoot,
+      storage: localId ? (managedId ? "managed" : "chosen") : "repository",
+      checkout: localId ? root : undefined,
+      requested: cliArgs.name ?? promptedName,
+    });
+  } catch (err) {
+    fail("init", (err as Error).message);
+  }
+  try {
+    await writeScaffold(folder, scaffold, plan, answers, name, localId !== undefined);
     if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
   } catch (error) {
     if (localId)
@@ -351,17 +380,16 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // "scaffolded" — keeps the existing CLI test passing.
   console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
 
-  // Name the folder so a second design folder for the same repo stays
+  // Record where the design is so a second one for the same repo stays
   // resolvable. The scaffold already succeeded — a manifest problem is a
   // warning to fix by hand, not a failed init.
   try {
     if (localId) {
-      const name = await registerLocalDesign({
+      await registerLocalDesign({
         id: localId,
         root,
         appRoot: answers.appRoot,
         ...(managedId ? {} : { designPath: folder }),
-        requestedName: cliArgs.project,
       });
       console.log(
         pc.dim(
@@ -369,11 +397,11 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         ),
       );
     } else {
-      const reg = await registerProject(folder, answers.appRoot, cliArgs.project);
+      const reg = await registerDesign(folder, answers.appRoot);
       if (reg.created) {
         console.log(
           pc.dim(
-            `  Registered as project "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
+            `  Listed design "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
           ),
         );
       }
@@ -429,4 +457,30 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   await promptShellCompletions(interactive);
   await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
   printExitInstructions(folder, wireOutcome);
+}
+
+/**
+ * Ask what to call a design whose folder can't name it. Suggests the app's name
+ * (made unique), and asks again when the answer is taken. Undefined on cancel.
+ */
+async function promptDesignName(
+  folder: string,
+  appRoot: string,
+  checkout: string,
+): Promise<string | undefined> {
+  const request = { folder, appRoot, storage: "managed" as const, checkout };
+  const suggestion = await chooseDesignName(request).catch(() => undefined);
+  for (;;) {
+    const answer = await text({
+      message: "Name this design",
+      ...(suggestion ? { placeholder: suggestion, initialValue: suggestion } : {}),
+      validate: (value) => designNameIssue((value ?? "").trim()) ?? undefined,
+    });
+    if (isCancel(answer)) return undefined;
+    try {
+      return await chooseDesignName({ ...request, requested: answer.trim() });
+    } catch (err) {
+      log.warn((err as Error).message);
+    }
+  }
 }

@@ -16,8 +16,8 @@ export interface DesignSummary {
   defaultLibrary?: string | null;
   /** Count of folder-global extensions for sidebar headcount. */
   extensionsCount?: number;
-  /** Basename of the design folder — browser tab title prefix. */
-  folderName?: string;
+  /** The design's name — browser tab title prefix. */
+  designName?: string;
   theme: { name: string };
   defaultScreen: string | null;
   defaultBoard: string | null;

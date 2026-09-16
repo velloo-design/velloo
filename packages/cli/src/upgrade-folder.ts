@@ -1,7 +1,19 @@
+import { existsSync, realpathSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { CURRENT_SCHEMA_VERSION, planMigration, schemaVersionOf } from "@velloo/schema";
-import { loadDesignFolder } from "@velloo/server";
+import { join, resolve } from "node:path";
+import {
+  CURRENT_SCHEMA_VERSION,
+  normalizeRepoManifest,
+  planMigration,
+  schemaVersionOf,
+} from "@velloo/schema";
+import {
+  type FoundRepoManifest,
+  loadDesignFolder,
+  localDesignOf,
+  readRepoManifest,
+  recordedDesignName,
+} from "@velloo/server";
 import { TOOL_VERSION } from "./version.ts";
 
 type RawObject = Record<string, unknown>;
@@ -73,10 +85,18 @@ export async function upgradeFolder(
   const configPath = join(folder, ".design", "config.json");
   const rawConfig: unknown = JSON.parse(await readFile(configPath, "utf8"));
   const from = schemaVersionOf(rawConfig);
-  const run = planMigration(rawConfig);
+  const manifest = await readRepoManifest(folder).catch(() => null);
+  const run = planMigration(rawConfig, { name: legacyNameOf(folder, manifest) });
+  const manifestFiles = manifest?.legacy ? [manifest.path] : [];
 
   if (run.applied.length === 0) {
-    return { from, to: CURRENT_SCHEMA_VERSION, applied: [], changedFiles: [] };
+    if (manifest?.legacy && !opts.dryRun) await migrateManifest(manifest);
+    return {
+      from,
+      to: CURRENT_SCHEMA_VERSION,
+      applied: [],
+      changedFiles: manifestFiles,
+    };
   }
 
   const rewrites = [
@@ -95,7 +115,11 @@ export async function upgradeFolder(
   // The upgrade run is the natural moment to refresh the recorded tool version.
   const nextConfig = { ...run.config, toolVersion: TOOL_VERSION };
 
-  const changedFiles = [join(".design", "config.json"), ...rewrites.map((r) => r.rel)];
+  const changedFiles = [
+    join(".design", "config.json"),
+    ...rewrites.map((r) => r.rel),
+    ...manifestFiles,
+  ];
   if (opts.dryRun) {
     return { from, to: CURRENT_SCHEMA_VERSION, applied: run.applied, changedFiles };
   }
@@ -104,10 +128,52 @@ export async function upgradeFolder(
   for (const r of rewrites) {
     await writeFile(join(folder, r.rel), r.next, "utf8");
   }
+  if (manifest?.legacy) await migrateManifest(manifest);
 
   // Full-folder validation: parse everything with the current schemas so the
   // user learns NOW if the migrated folder has any other problem.
   await loadDesignFolder(folder);
 
   return { from, to: CURRENT_SCHEMA_VERSION, applied: run.applied, changedFiles };
+}
+
+/** The name a pre-v4 registration gave the folder, if any. */
+function legacyNameOf(folder: string, manifest: FoundRepoManifest | null): string | undefined {
+  const local = localDesignOf(folder);
+  if (local) return local.legacyName;
+  const target = realOr(folder);
+  for (const [path, name] of manifest?.legacyNames ?? []) {
+    if (realOr(path) === target) return name;
+  }
+  return undefined;
+}
+
+function realOr(path: string): string {
+  return existsSync(path) ? realpathSync(path) : resolve(path);
+}
+
+/**
+ * Rewrite a pre-v4 `velloo.json` (`projects` map) to the `designs` list. The
+ * map's keys were the only record of each design's name, so every listed
+ * folder that doesn't carry one yet gets it first — including folders not yet
+ * migrated, whose own upgrade then keeps it.
+ */
+async function migrateManifest(manifest: FoundRepoManifest): Promise<void> {
+  for (const [path, name] of manifest.legacyNames) {
+    if (recordedDesignName(path)) continue;
+    const configPath = join(path, ".design", "config.json");
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await readFile(configPath, "utf8"));
+    } catch {
+      continue; // a stale entry: nothing to name
+    }
+    if (isObject(raw))
+      await writeFile(configPath, `${JSON.stringify({ ...raw, name }, null, 2)}\n`);
+  }
+  const raw = JSON.parse(await readFile(manifest.path, "utf8")) as RawObject;
+  await writeFile(
+    manifest.path,
+    `${JSON.stringify(normalizeRepoManifest(raw).manifest, null, 2)}\n`,
+  );
 }

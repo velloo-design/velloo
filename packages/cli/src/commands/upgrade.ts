@@ -1,48 +1,40 @@
+import { resolve } from "node:path";
 import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { refreshAgentArtifacts } from "../connect/index.ts";
 import { agentRootCandidates } from "../connect/project-root.ts";
 import { daemonRoot, stopDaemon } from "../daemon/runtime.ts";
+import { checkoutDesigns, DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { createProgress } from "../progress.ts";
 import { installedVellooBin } from "../release.ts";
 import { type UpgradeOutcome, upgradeInstalledVelloo } from "../update.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
 
 /**
- * The design folder this upgrade should migrate, or null when the command was
- * run somewhere that simply has no design in it.
- *
- * An explicit argument still has to name a real folder — a typo must not be
- * silently downgraded to "binary only". Without one, resolution failing is the
- * ordinary case of upgrading velloo from anywhere at all.
+ * The designs this upgrade should migrate. An explicit argument names one, and
+ * still has to be real — a typo must not be silently downgraded to "binary
+ * only". Without one, every design in the checkout: a new velloo can't open any
+ * design left on the old format, so upgrading only the one the directory
+ * happens to pick would strand the rest. Outside any design, none.
  */
-async function targetFolder(arg: string | undefined): Promise<string | null> {
-  if (arg) return resolveDesignFolder(arg, "upgrade", { requireConfig: true });
-  try {
-    return await resolveDesignFolder(undefined, "upgrade", {
-      requireConfig: true,
-      onFail: () => {
-        throw new Error("no design folder here");
-      },
-    });
-  } catch {
-    return null;
-  }
+async function targetFolders(arg: string | undefined): Promise<string[]> {
+  if (arg) return [await resolveDesign(arg, "upgrade", { requireConfig: true })];
+  return checkoutDesigns(resolve("."));
 }
 
 export default defineCommand({
   meta: {
     name: "upgrade",
-    description: "Upgrade Velloo and migrate the design folder to the current format",
+    description:
+      "Upgrade Velloo and migrate designs to the current format — every design in this checkout, or the one named",
   },
   args: {
     folder: {
       type: "positional",
       required: false,
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     "dry-run": {
       type: "boolean",
@@ -62,7 +54,8 @@ export default defineCommand({
     "folder-only": {
       type: "boolean",
       default: false,
-      description: "Migrate the design folder with this Velloo, without self-upgrading first",
+      description:
+        "Migrate the design folder with this Velloo, without self-upgrading first (same as `velloo design upgrade`)",
     },
     skills: {
       type: "boolean",
@@ -73,7 +66,7 @@ export default defineCommand({
   },
   async run({ args }) {
     const dryRun = args["dry-run"] || args.check;
-    const folder = args["binary-only"] ? null : await targetFolder(args.folder);
+    const folders = args["binary-only"] ? [] : await targetFolders(args.folder);
 
     let outcome: UpgradeOutcome | null = null;
     if (!args["folder-only"]) {
@@ -84,48 +77,51 @@ export default defineCommand({
         // With a folder to migrate, an installation velloo can't replace (a
         // source checkout, an unmarked install) is a note, not a failure —
         // the folder migration is the half that still has work to do.
-        if (!folder) fail("upgrade", message);
+        if (folders.length === 0) fail("upgrade", message);
         console.log(pc.dim(`velloo: skipping the self-upgrade — ${message}`));
       }
     }
 
-    if (!folder) return;
+    if (folders.length === 0) return;
 
     // The running process is the OLD binary: it can only migrate to the schema
     // version it was compiled with. Hand the folder half to the build that was
-    // just installed, which is the one that knows the newer format.
+    // just installed, which is the one that knows the newer format — one run
+    // per design, named by path so it needn't re-resolve anything.
     if (outcome?.upgraded) {
       const bin = installedVellooBin();
       if (bin) {
-        const argv = [
-          bin,
-          "upgrade",
-          folder,
-          "--folder-only",
-          ...(args.skills ? [] : ["--no-skills"]),
-        ];
-        const code = await Bun.spawn(argv, {
-          stdin: "inherit",
-          stdout: "inherit",
-          stderr: "inherit",
-          env: { ...process.env, VELLOO_DISABLE_UPDATE_CHECK: "1" },
-        }).exited;
-        if (code !== 0) fail("upgrade", `the upgraded velloo could not migrate ${folder}`);
+        for (const folder of folders) {
+          const argv = [
+            bin,
+            "upgrade",
+            folder,
+            "--folder-only",
+            ...(args.skills ? [] : ["--no-skills"]),
+          ];
+          const code = await Bun.spawn(argv, {
+            stdin: "inherit",
+            stdout: "inherit",
+            stderr: "inherit",
+            env: { ...process.env, VELLOO_DISABLE_UPDATE_CHECK: "1" },
+          }).exited;
+          if (code !== 0) fail("upgrade", `the upgraded velloo could not migrate ${folder}`);
+        }
         return;
       }
       console.log(
         pc.dim(
-          `velloo: could not locate the upgraded velloo — run \`velloo upgrade ${folder}\` again to migrate the folder.`,
+          `velloo: could not locate the upgraded velloo — run \`velloo upgrade\` again to migrate ${folders.length === 1 ? "the design" : "the designs"}.`,
         ),
       );
       return;
     }
 
-    await migrateFolder(folder, { dryRun, skills: args.skills });
+    for (const folder of folders) await migrateFolder(folder, { dryRun, skills: args.skills });
   },
 });
 
-async function migrateFolder(
+export async function migrateFolder(
   folder: string,
   opts: { dryRun: boolean; skills: boolean },
 ): Promise<void> {
@@ -170,6 +166,8 @@ async function migrateFolder(
 
   if (result.applied.length === 0) {
     console.log(`velloo: ${folder} is already at schema version ${CURRENT_SCHEMA_VERSION}.`);
+    for (const file of result.changedFiles)
+      console.log(`  ${dryRun ? "~" : "✓"} ${file} (designs list format)`);
   } else {
     const verb = dryRun ? "would migrate" : "migrated";
     console.log(`velloo: ${verb} ${folder} from schema version ${result.from} to ${result.to}:`);

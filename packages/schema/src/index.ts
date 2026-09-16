@@ -77,9 +77,11 @@ export {
 export { pascalizeIconName } from "./icon-name.ts";
 export { type ResourceId, ResourceIdSchema } from "./ids.ts";
 export {
+  APP_PATH_PREFIX,
   CURRENT_SCHEMA_VERSION,
   FOLDER_MIGRATIONS,
   type FolderMigration,
+  type MigrationContext,
   type MigrationRun,
   planMigration,
   schemaVersionOf,
@@ -97,11 +99,17 @@ export {
   type SnippetInstance,
 } from "./node.ts";
 export {
+  DesignNameSchema,
+  designNameIssue,
   type FeedbackPrefs,
   FeedbackPrefsSchema,
+  isDesignName,
+  type NormalizedRepoManifest,
+  normalizeRepoManifest,
   REPO_MANIFEST_FILE,
   type RepoManifest,
   RepoManifestSchema,
+  toDesignName,
 } from "./repo.ts";
 export { type Screen, ScreenSchema } from "./screen.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";

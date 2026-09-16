@@ -16,8 +16,8 @@ import { billingPageUrl, checkCloudHealth, defaultCloudUrl, publishedBoardsUrl }
 import { loadCredential } from "../cloud-credentials.ts";
 import { fetchAccount } from "../cloud-login.ts";
 import { type CloudPublishSlot, listPublishDestinations } from "../cloud-upload.ts";
+import { DESIGN_ARG_DESCRIPTION, pickBoards, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, pickBoards, resolveDesignFolder } from "../folder.ts";
 import { confirmRenderFailures } from "../preflight-gate.ts";
 import { createProgress, type Progress } from "../progress.ts";
 import { changedPreviewsSince } from "../publish/changed-previews.ts";
@@ -40,13 +40,13 @@ export default defineCommand({
   meta: {
     name: "publish",
     description:
-      "Publish the design folder as a velloo-cloud share link (the cloud renders it). --list shows what you've published; --remove takes one down",
+      "Publish the design folder as a velloo-cloud share link, or manage the links you've already published",
   },
   args: {
     folder: {
       type: "positional",
       required: false,
-      description: `${FOLDER_ARG_DESCRIPTION}. With --remove, the share URL to take down instead`,
+      description: `${DESIGN_ARG_DESCRIPTION}. With --remove, the share URL to take down instead`,
     },
     list: {
       type: "boolean",
@@ -133,7 +133,7 @@ export default defineCommand({
     if (args.remove) {
       return removePublished({ ...args, design: args.folder, yes: args.yes });
     }
-    const folder = await resolveDesignFolder(args.folder, "publish");
+    const folder = await resolveDesign(args.folder, "publish");
     const baseUrl = args.url ? args.url.replace(/\/+$/, "") : defaultCloudUrl();
     const token =
       args.token ?? process.env.VELLOO_CLOUD_TOKEN ?? (await loadCredential(baseUrl))?.token;

@@ -24,9 +24,14 @@
  *       `letterSpacing` records are gone and `typography` parses strictly, so
  *       a v2 theme file is now a hard validation failure rather than dead
  *       weight — hence the version gate.
+ *   4 — designs carry their own `name` (formerly the `velloo.json` project
+ *       key or a local record's `projectName`), and app-relative paths use the
+ *       `app:` prefix instead of `project:`.
  */
 
-export const CURRENT_SCHEMA_VERSION = 3;
+import { isDesignName, toDesignName } from "./repo.ts";
+
+export const CURRENT_SCHEMA_VERSION = 4;
 
 /**
  * Read the format version off a raw (unvalidated) config object. Historical
@@ -41,18 +46,31 @@ export function schemaVersionOf(rawConfig: unknown): number {
 
 type RawObject = Record<string, unknown>;
 
+/**
+ * Facts a pure migration can't read for itself. The CLI's upgrade supplies
+ * them from the files around the folder.
+ */
+export interface MigrationContext {
+  /** The design's name as its registration recorded it. */
+  name?: string | undefined;
+}
+
 export interface FolderMigration {
   /** Migrates from exactly this version to `from + 1`. */
   from: number;
   /** One-line, user-facing description (printed by `velloo upgrade`). */
   summary: string;
   /** Transform the raw config.json object (already shallow-cloned). */
-  config?(raw: RawObject): RawObject;
+  config?(raw: RawObject, context: MigrationContext): RawObject;
   /** Transform one annotation entry from a `screens/<id>.annotations.json` sidecar. */
   annotation?(raw: RawObject): RawObject;
   /** Transform one `theme/<name>.json` document. */
   theme?(raw: RawObject): RawObject;
 }
+
+/** Prefix of a path resolved from the design's application root. */
+export const APP_PATH_PREFIX = "app:";
+const LEGACY_APP_PREFIX = "project:";
 
 /** Library id assigned to a legacy single-library config when it is promoted. */
 const LEGACY_LIBRARY_KEY = "default";
@@ -194,6 +212,41 @@ export const FOLDER_MIGRATIONS: FolderMigration[] = [
       return { ...raw, typography: next };
     },
   },
+  {
+    from: 3,
+    summary: "the design's name moves into its config; `project:` paths become `app:`",
+    config(raw, context) {
+      const out: RawObject = { ...raw, schemaVersion: 4 };
+      if (typeof out.name !== "string" || !isDesignName(out.name)) {
+        out.name = (context.name && toDesignName(context.name)) ?? "design";
+      }
+      const toApp = (path: unknown) =>
+        typeof path === "string" && path.startsWith(LEGACY_APP_PREFIX)
+          ? `${APP_PATH_PREFIX}${path.slice(LEGACY_APP_PREFIX.length)}`
+          : path;
+      const hostApp = asObject(out.hostApp);
+      if (hostApp) out.hostApp = { ...hostApp, root: toApp(hostApp.root) };
+      const hostApps = asObject(out.hostApps);
+      if (hostApps) {
+        out.hostApps = Object.fromEntries(
+          Object.entries(hostApps).map(([key, app]) => {
+            const entry = asObject(app);
+            return [key, entry ? { ...entry, root: toApp(entry.root) } : app];
+          }),
+        );
+      }
+      const libraries = asObject(out.libraries);
+      if (libraries) {
+        out.libraries = Object.fromEntries(
+          Object.entries(libraries).map(([key, lib]) => {
+            const entry = asObject(lib);
+            return [key, entry ? { ...entry, componentsPath: toApp(entry.componentsPath) } : lib];
+          }),
+        );
+      }
+      return out;
+    },
+  },
 ];
 
 export interface MigrationRun {
@@ -216,7 +269,7 @@ export interface MigrationRun {
  * (version > current) — the caller should tell the user to upgrade velloo —
  * or when the chain has a gap (a bug in this module).
  */
-export function planMigration(rawConfig: unknown): MigrationRun {
+export function planMigration(rawConfig: unknown, context: MigrationContext = {}): MigrationRun {
   const from = schemaVersionOf(rawConfig);
   if (from > CURRENT_SCHEMA_VERSION) {
     throw new Error(
@@ -231,7 +284,7 @@ export function planMigration(rawConfig: unknown): MigrationRun {
   }
   let config = { ...((rawConfig ?? {}) as RawObject) };
   for (const step of steps) {
-    if (step.config) config = step.config(config);
+    if (step.config) config = step.config(config, context);
   }
   // Even a no-step run normalizes the version field so `upgrade` is idempotent.
   config.schemaVersion = CURRENT_SCHEMA_VERSION;

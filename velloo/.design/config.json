@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "toolVersion": "0.1.0",
   "folderId": "ad1bf0c9-b546-498d-8a42-66b8d57d997d",
   "libraries": {
@@ -58,5 +58,6 @@
   "feedback": {
     "enabled": true,
     "contactOk": false
-  }
+  },
+  "name": "velloo"
 }

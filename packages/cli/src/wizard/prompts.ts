@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { cancel, log, select, text } from "@clack/prompts";
 import { type AgentWiring, askAgentWiring } from "../connect/index.ts";
-import { isDesignFolderSync, isEmptyOrMissingSync } from "../folder.ts";
+import { isDesignFolderSync, isEmptyOrMissingSync } from "../design.ts";
 import { checkoutRoot, isWithin } from "../manifest.ts";
 import { discoverScanRoots } from "../scan/index.ts";
 import type { GoalMode, WizardAnswers } from "./answers.ts";
@@ -15,7 +15,7 @@ import { isAborted, subtitled, subtitledText, type WizardContext } from "./promp
 
 /**
  * Why this path can't hold a new design folder, or undefined when it can.
- * Shared by the wizard's prompt and the preset path `velloo folder add` passes.
+ * Shared by the wizard's prompt and the preset path `velloo design add` passes.
  */
 function folderPathProblem(abs: string, shown: string): string | undefined {
   if (isDesignFolderSync(abs))
@@ -129,7 +129,7 @@ export async function runInteractive(
   // "velloo-2" reads worse than a purpose name — suggest one they'll rename.
   const folderDefault = ctx.secondFolder ? "velloo-brand" : "velloo";
   const folderBase = ctx.folderBase ?? ctx.appRoot;
-  // `velloo folder add <path>` already answered this — validate the path the
+  // `velloo design add <path>` already answered this — validate the path the
   // way the prompt would, so a bad one fails the same from either entry point.
   if (ctx.presetFolder) {
     const problem = folderPathProblem(resolve(folderBase, ctx.presetFolder), ctx.presetFolder);

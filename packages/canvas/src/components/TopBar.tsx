@@ -81,12 +81,14 @@ export function TopBar() {
   const setPublishOpen = useCanvas((s) => s.setPublishOpen);
 
   const currentScreen = design?.screens.find((s) => s.id === currentScreenId);
-  const crumbs =
+  const place =
     view === "library"
       ? ["Library", ...(libraryItem ? [libraryItem.id] : [])]
       : currentScreen
         ? [currentScreen.name]
         : [];
+  // The design leads the trail: a repo can hold several, each on its own canvas.
+  const crumbs = [...(design?.designName ? [design.designName] : []), ...place];
   const isDesignDark = designMode === "dark";
   const hasDarkPalette = Boolean(theme?.colorsDark);
 
@@ -155,7 +157,9 @@ export function TopBar() {
                   // The separator is its own <li>, so it's a sibling of the
                   // item rather than nested inside it — an <li> cannot contain
                   // an <li>, and the trail is a list to a screen reader.
-                  <Fragment key={crumb}>
+                  // Positional keys: the design and a screen may share a name.
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the trail is rebuilt whole on every change
+                  <Fragment key={index}>
                     <BreadcrumbSeparator className="[&>svg]:size-3" />
                     <BreadcrumbItem>
                       {index === crumbs.length - 1 ? (

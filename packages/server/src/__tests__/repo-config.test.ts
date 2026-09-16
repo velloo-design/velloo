@@ -26,7 +26,8 @@ async function scaffold(configPatch: Record<string, unknown> = {}) {
   await mkdir(join(folder, "boards"), { recursive: true });
   await mkdir(join(folder, "screens"), { recursive: true });
   await writeJson(join(folder, ".design/config.json"), {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    name: "test",
     toolVersion: "0.1.0",
     libraries: {
       default: { id: "shadcn-upstream", version: "t", source: "binary", componentsPath: "binary" },
@@ -69,7 +70,7 @@ describe("feedback consent lives at the repo root", () => {
   test("a folder in a repo reads the repo's answer, not its own config", async () => {
     await scaffold();
     await writeJson(join(repo, "velloo.json"), {
-      projects: { app: "velloo" },
+      designs: ["velloo"],
       feedback: { enabled: true },
     });
     const { design } = await context();
@@ -81,7 +82,7 @@ describe("feedback consent lives at the repo root", () => {
     // into being contacted.
     await scaffold({ feedback: { enabled: true, contactOk: true } });
     await writeJson(join(repo, "velloo.json"), {
-      projects: { app: "velloo" },
+      designs: ["velloo"],
       feedback: { enabled: true, contactOk: true },
     });
     const { design } = await context();
@@ -90,7 +91,7 @@ describe("feedback consent lives at the repo root", () => {
 
   test("contactOk comes from this machine and never lands in a committed file", async () => {
     await scaffold();
-    await writeJson(join(repo, "velloo.json"), { projects: { app: "velloo" } });
+    await writeJson(join(repo, "velloo.json"), { designs: ["velloo"] });
     const { ctx } = await context();
     unwrap(await updateFeedback(ctx, { enabled: true, contactOk: true }));
 
@@ -108,7 +109,7 @@ describe("feedback consent lives at the repo root", () => {
   test("the repo answer wins over a stale folder-level one", async () => {
     await scaffold({ feedback: { enabled: true, contactOk: true } });
     await writeJson(join(repo, "velloo.json"), {
-      projects: { app: "velloo" },
+      designs: ["velloo"],
       feedback: { enabled: false },
     });
     const { design } = await context();
@@ -117,22 +118,22 @@ describe("feedback consent lives at the repo root", () => {
 
   test("a folder written before the move keeps its own answer", async () => {
     await scaffold({ feedback: { enabled: true, contactOk: false } });
-    await writeJson(join(repo, "velloo.json"), { projects: { app: "velloo" } });
+    await writeJson(join(repo, "velloo.json"), { designs: ["velloo"] });
     const { design } = await context();
     expect(design.config.feedback).toEqual({ enabled: true, contactOk: false });
   });
 
   test("update_feedback writes velloo.json and leaves the folder config alone", async () => {
     await scaffold();
-    await writeJson(join(repo, "velloo.json"), { projects: { app: "velloo" } });
+    await writeJson(join(repo, "velloo.json"), { designs: ["velloo"] });
     const { ctx } = await context();
     const result = unwrap(await updateFeedback(ctx, { enabled: true, contactOk: true }));
     expect(result).toEqual({ enabled: true, contactOk: true });
 
     const manifest = JSON.parse(await readFile(join(repo, "velloo.json"), "utf8"));
     expect(manifest.feedback).toEqual({ enabled: true });
-    // The projects map survives the write.
-    expect(manifest.projects).toEqual({ app: "velloo" });
+    // The designs list survives the write.
+    expect(manifest.designs).toEqual(["velloo"]);
     const config = JSON.parse(await readFile(join(folder, ".design/config.json"), "utf8"));
     expect(config.feedback).toBeUndefined();
     // Every reader goes through folder.config, so the in-memory copy moves too.
@@ -146,7 +147,7 @@ describe("feedback consent lives at the repo root", () => {
     folder = second;
     await scaffold();
     folder = first;
-    await writeJson(join(repo, "velloo.json"), { projects: { app: "velloo", brand: "brand" } });
+    await writeJson(join(repo, "velloo.json"), { designs: ["velloo", "brand"] });
 
     const { ctx } = await context();
     unwrap(await updateFeedback(ctx, { enabled: true, contactOk: false }));
@@ -158,7 +159,7 @@ describe("feedback consent lives at the repo root", () => {
 
   test("contactOk survives switching the tool off and on", async () => {
     await scaffold();
-    await writeJson(join(repo, "velloo.json"), { projects: { app: "velloo" } });
+    await writeJson(join(repo, "velloo.json"), { designs: ["velloo"] });
     const { ctx } = await context();
     unwrap(await updateFeedback(ctx, { enabled: true, contactOk: true }));
     unwrap(await updateFeedback(ctx, { enabled: false }));

@@ -9,7 +9,7 @@ import {
 } from "@velloo/provider";
 import type { Config, HostApp, Library } from "@velloo/schema";
 import { hostAppRootFrom } from "./live/bundle-core.ts";
-import { resolveProjectPath } from "./project-location.ts";
+import { resolveAppPath } from "./project-location.ts";
 
 /**
  * Build the loader the server uses to resolve `Library` → provider.
@@ -71,7 +71,7 @@ function resolveUpstreamCacheDir(library: Library, folderRoot: string | undefine
   }
   if (isAbsolute(path)) return library.source === "in-repo" || existsSync(path) ? path : null;
   if (!folderRoot) return null;
-  const abs = resolveProjectPath(folderRoot, path);
+  const abs = resolveAppPath(folderRoot, path);
   return library.source === "in-repo" || existsSync(abs) ? abs : null;
 }
 

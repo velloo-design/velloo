@@ -52,7 +52,7 @@ const [SignInDialog, PreviewDialog, SettingsDialog] = await Promise.all([
 const { App } = await import("../App.tsx");
 const activity = await import("../components/ActivityFeed.tsx");
 const { NodeHud } = await import("../components/hud/NodeHud.tsx");
-const { FolderPane } = await import("../components/Settings/FolderPane.tsx");
+const { DesignPane } = await import("../components/Settings/DesignPane.tsx");
 const { BoardPane } = await import("../components/Settings/BoardPane.tsx");
 const { CanvasPane } = await import("../components/Settings/CanvasPane.tsx");
 
@@ -275,7 +275,7 @@ domSuite("the settings panes render against a real folder config", () => {
   });
 
   for (const [name, Pane] of [
-    ["FolderPane", FolderPane],
+    ["DesignPane", DesignPane],
     ["BoardPane", BoardPane],
   ] as const) {
     test(name, async () => {

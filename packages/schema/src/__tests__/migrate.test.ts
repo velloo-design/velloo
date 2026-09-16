@@ -167,7 +167,7 @@ describe("planMigration 2 → 3", () => {
 
   test("a v1 folder gets the typeset step too, not just the library one", () => {
     const run = planMigration(legacyConfig);
-    expect(run.applied).toHaveLength(2);
+    expect(run.applied).toHaveLength(3);
     const typography = (run.theme(v2Theme) as { typography: Record<string, unknown> }).typography;
     expect(typography.fontSize).toBeUndefined();
     expect(typography.typesets).toBeDefined();
@@ -177,6 +177,38 @@ describe("planMigration 2 → 3", () => {
     const once = planMigration({ schemaVersion: 2 }).theme(v2Theme);
     const twice = planMigration({ schemaVersion: 2 }).theme(once as Record<string, unknown>);
     expect(twice).toEqual(once);
+  });
+});
+
+describe("planMigration 3 → 4", () => {
+  test("the registration's name moves into the config", () => {
+    const run = planMigration({ schemaVersion: 3 }, { name: "web" });
+    expect(run.config.name).toBe("web");
+    expect(run.config.schemaVersion).toBe(4);
+  });
+
+  test("an existing valid name is kept; none at all falls back", () => {
+    expect(planMigration({ schemaVersion: 3, name: "kept" }, { name: "web" }).config.name).toBe(
+      "kept",
+    );
+    expect(planMigration({ schemaVersion: 3 }).config.name).toBe("design");
+  });
+
+  test("project: paths become app: paths everywhere a config holds one", () => {
+    const run = planMigration({
+      schemaVersion: 3,
+      hostApp: { root: "project:." },
+      hostApps: { admin: { root: "project:apps/admin" }, web: { root: "../web" } },
+      libraries: { default: { id: "none", componentsPath: "project:src/ui" } },
+    });
+    expect(run.config.hostApp).toEqual({ root: "app:." });
+    expect(run.config.hostApps).toEqual({
+      admin: { root: "app:apps/admin" },
+      web: { root: "../web" },
+    });
+    expect(
+      (run.config.libraries as Record<string, { componentsPath: string }>).default?.componentsPath,
+    ).toBe("app:src/ui");
   });
 });
 

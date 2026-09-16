@@ -14,7 +14,8 @@ function ctxOf(): MutationContext {
   const folder: DesignFolder = {
     root: "/tmp",
     config: {
-      schemaVersion: 3,
+      schemaVersion: 4,
+      name: "test",
       toolVersion: "test",
       libraries: {
         default: {

@@ -11,7 +11,7 @@ import { postMutate } from "./http.ts";
 export interface FolderConfig {
   /** Absolute path to the design folder, shown so the dialog names what it edits. */
   root: string;
-  folderName: string;
+  designName: string;
   schemaVersion: number;
   toolVersion: string;
   folderId: string | null;
@@ -55,6 +55,9 @@ export const config = {
       "update_defaults",
       args,
     );
+  },
+  designName(name: string) {
+    return postMutate<{ name: string }>("update_design_name", { name });
   },
   codegen(args: { componentsAlias: string | null }) {
     return postMutate<{ componentsAlias: string | null }>("update_codegen", args);

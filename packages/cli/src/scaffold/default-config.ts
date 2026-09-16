@@ -3,6 +3,8 @@ import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { TOOL_VERSION } from "../version.ts";
 
 interface DefaultConfigOpts {
+  /** The design's name. Tests that don't care get a placeholder. */
+  name?: string | undefined;
   /** Library declaration. Defaults to shadcn-upstream on the snapshot runtime. */
   library?: Library | undefined;
   /** Default screen id to focus on first load. */
@@ -43,6 +45,7 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     toolVersion: TOOL_VERSION,
+    name: opts.name ?? "design",
     // Stable cloud identity: share links carry it server-side, so any clone
     // of the folder finds its published links (and their comments) by id.
     folderId: crypto.randomUUID(),

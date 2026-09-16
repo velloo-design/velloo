@@ -10,7 +10,8 @@ import { createUndoRouter } from "../../routes/undo.ts";
 import { type MutationContext, moveFrame } from "../index.ts";
 
 const sampleConfig = {
-  schemaVersion: 3,
+  schemaVersion: 4,
+  name: "test",
   toolVersion: "0.1.0",
   libraries: {
     default: {

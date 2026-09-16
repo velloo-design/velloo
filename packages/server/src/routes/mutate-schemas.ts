@@ -29,6 +29,7 @@ export {
   UpdateBoardGroupBody,
   UpdateCodegenBody,
   UpdateDefaultsBody,
+  UpdateDesignNameBody,
   UpdateFeedbackBody,
   UpdateFrameBody,
   UpdateNoteBody,

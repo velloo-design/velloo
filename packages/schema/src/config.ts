@@ -2,7 +2,7 @@ import { z } from "zod";
 import { BoardGroupSchema } from "./board.ts";
 import { ExtensionSchema } from "./extension.ts";
 import { CURRENT_SCHEMA_VERSION } from "./migrate.ts";
-import { FeedbackPrefsSchema } from "./repo.ts";
+import { DesignNameSchema, FeedbackPrefsSchema } from "./repo.ts";
 
 export const ViewportPresetSchema = z.object({
   name: z.string().min(1),
@@ -82,6 +82,13 @@ export const ConfigSchema = z
   .object({
     schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
     toolVersion: z.string().min(1),
+    /**
+     * The design's name — what commands, `velloo.json`'s `defaultDesign`, the
+     * canvas title and agents call it. Lives here, not in the manifest, so a
+     * design carries its identity wherever it is stored. Unique among the
+     * designs of one checkout.
+     */
+    name: DesignNameSchema,
     /**
      * Stable folder identity for velloo-cloud (a UUID). Published share links
      * carry it server-side, so every clone of the folder finds its links (and

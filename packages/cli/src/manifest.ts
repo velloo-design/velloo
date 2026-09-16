@@ -1,223 +1,125 @@
 import { type Dirent, existsSync, realpathSync } from "node:fs";
-import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { type RepoManifest, RepoManifestSchema } from "@velloo/schema";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { ConfigSchema, designNameIssue, type RepoManifest, toDesignName } from "@velloo/schema";
 import {
-  type LocalDesign,
+  type DesignSet,
+  type FoundRepoManifest,
+  findDesigns as findDesignsLenient,
   localDesignOf,
-  localDesignsAt,
+  readRepoManifest,
+  recordedDesignName,
   writeJsonAtomic,
   writeLocalDesign,
 } from "@velloo/server";
 
 /**
- * The repo-root manifest (`velloo.json`) names a repo's design folders so a
- * monorepo can hold several and commands can resolve them deterministically.
- * It is a pure pointer file — design settings stay in each folder's
- * `.design/config.json`; nothing here duplicates that contract.
+ * The write side of a checkout's designs. Reading — the merged list of
+ * `velloo.json` paths and this machine's local designs, and picking one — lives
+ * in `@velloo/server`'s `designs.ts`, which the daemon shares. A design's name
+ * is in its own config; `velloo.json` only says where the repository's designs
+ * are.
  */
 const MANIFEST_FILE = "velloo.json";
 
 /** The conventional design-folder name, when a repo has no manifest yet. */
 const DEFAULT_FOLDER_NAME = "velloo";
 
-const PROJECT_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
+/** The repo manifest above `startDir`; throws on a broken one. */
+export function findManifest(startDir: string): Promise<FoundRepoManifest | null> {
+  return readRepoManifest(startDir, { strict: true });
+}
 
-/**
- * The manifest shape lives in `@velloo/schema` because the daemon reads it
- * too — feedback consent is a repo preference, so both halves of velloo have
- * to agree on the file. Re-exported here so the CLI's callers don't need to
- * know that.
- */
-const ManifestSchema = RepoManifestSchema;
+/** The designs visible from `cwd`; throws on a broken manifest. */
+export function findDesigns(cwd: string): Promise<DesignSet | null> {
+  return findDesignsLenient(cwd, { strict: true });
+}
 
-type Manifest = RepoManifest;
+function sameFolder(a: string, b: string): boolean {
+  return a === b || (existsSync(a) && existsSync(b) && realpathSync(a) === realpathSync(b));
+}
 
-export interface FoundManifest {
-  /** Absolute path of the velloo.json file. */
-  path: string;
-  /** Directory holding it — project paths resolve against this. */
-  dir: string;
-  manifest: Manifest;
-  /** Project name → absolute design-folder path. */
-  folders: Map<string, string>;
+/** Refuse to write a manifest still in the pre-designs shape — see `FoundRepoManifest.legacy`. */
+function assertCurrent(found: FoundRepoManifest): void {
+  if (found.legacy)
+    throw new Error(
+      `${found.path} is in the pre-designs format (\`projects\`) — run \`velloo upgrade\` to migrate it first.`,
+    );
 }
 
 /**
- * Walk up from `startDir` for a `velloo.json`. A missing file keeps walking;
- * a present-but-broken one throws with the path — a typo'd manifest silently
- * falling back to convention would resolve the wrong folder.
+ * Describe a design for display: "name — rel/path (in /repo/root)" for a
+ * repository design, "name — /path (local, for /checkout)" for a local one;
+ * null otherwise (callers fall back to the raw path). Display-only, so a broken
+ * manifest degrades to the fallback.
  */
-export async function findManifest(startDir: string): Promise<FoundManifest | null> {
-  let dir = resolve(startDir);
-  while (true) {
-    const path = join(dir, MANIFEST_FILE);
-    let raw: string | null = null;
-    try {
-      raw = await readFile(path, "utf8");
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    }
-    if (raw !== null) {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch (err) {
-        throw new Error(`${path} is not valid JSON: ${(err as Error).message}`);
-      }
-      const projects = (parsed as { projects?: unknown } | null)?.projects;
-      for (const [name, entry] of Object.entries(
-        projects && typeof projects === "object" ? projects : {},
-      )) {
-        if (entry && typeof entry === "object" && "managed" in entry)
-          throw new Error(
-            `${path}: project "${name}" is a managed design locator, which velloo.json no longer holds — a design outside the repository is recorded only on the machine that has it. Remove the entry, then run \`velloo folder bind <design folder>\` from this checkout.`,
-          );
-      }
-      const result = ManifestSchema.safeParse(parsed);
-      if (!result.success) {
-        const issues = result.error.issues
-          .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
-          .join("; ");
-        throw new Error(`${path} is not a valid velloo manifest: ${issues}`);
-      }
-      const folders = new Map(
-        Object.entries(result.data.projects).map(([name, rel]) => [
-          name,
-          resolve(dir, rel.replace(/\\/g, "/")),
-        ]),
-      );
-      return { path, dir, manifest: result.data, folders };
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-}
-
-/**
- * The projects visible from a directory: the committed `velloo.json` above it
- * and the local designs this machine records for a checkout containing it,
- * merged into one name space. Null when there are neither.
- */
-export interface ProjectSet {
-  repo: FoundManifest | null;
-  local: LocalDesign[];
-  /** Project name → absolute design folder, both kinds. */
-  folders: Map<string, string>;
-  defaultProject: string | undefined;
-}
-
-export async function findProjects(cwd: string): Promise<ProjectSet | null> {
-  const repo = await findManifest(cwd);
-  const local = localDesignsAt(cwd);
-  if (!repo && local.length === 0) return null;
-  const folders = new Map(repo?.folders ?? []);
-  for (const design of local) {
-    const clash = folders.get(design.projectName);
-    if (clash !== undefined)
-      throw new Error(
-        `Project "${design.projectName}" names both ${clash} (in ${repo?.path ?? "another local design"}) and the local design ${design.designRoot}. Remove one with \`velloo folder remove\`, or rename the velloo.json entry.`,
-      );
-    folders.set(design.projectName, design.designRoot);
-  }
-  return { repo, local, folders, defaultProject: repo?.manifest.defaultProject };
-}
-
-/**
- * Pick the project `cwd` implies, or null when only a human (or
- * defaultProject) can disambiguate. Containment beats everything: standing
- * inside a local design's application, inside a project's folder, or inside a
- * directory that holds exactly one project (an app dir in a monorepo) is an
- * unambiguous choice.
- */
-export function pickProject(projects: ProjectSet, cwd: string): string | null {
-  const entries = [...projects.folders];
-  const appMatches = projects.local.filter(
-    (design) =>
-      resolve(design.appRoot) !== resolve(design.root) && isWithin(resolve(design.appRoot), cwd),
-  );
-  if (appMatches.length === 1 && appMatches[0]) return appMatches[0].projectName;
-  const containing = entries.find(([, folder]) => cwd === folder || cwd.startsWith(folder + sep));
-  if (containing) return containing[0];
-  const under = entries.filter(([, folder]) => folder.startsWith(cwd + sep));
-  if (under.length === 1 && under[0]) return under[0][0];
-  if (entries.length === 1 && entries[0]) return entries[0][0];
-  return projects.defaultProject ?? null;
-}
-
-/**
- * Describe a design folder in project terms for display: "name — rel/path
- * (in /repo/root)" for a `velloo.json` entry, "name — /path (local, for
- * /checkout)" for a local design; null otherwise (callers fall back to the
- * raw path). Display-only, so a broken manifest degrades to the fallback.
- */
-export async function projectLabel(folder: string): Promise<string | null> {
+export async function designLabel(folder: string): Promise<string | null> {
   const abs = resolve(folder);
+  const name = recordedDesignName(abs);
   const local = localDesignOf(abs);
-  if (local) return `${local.projectName} — ${abs} (local, for ${local.root})`;
-  let found: FoundManifest | null;
+  if (local)
+    return `${name ?? local.legacyName ?? basename(abs)} — ${abs} (local, for ${local.root})`;
+  let found: FoundRepoManifest | null;
   try {
     found = await findManifest(abs);
   } catch {
     return null;
   }
-  if (!found) return null;
-  const entry = [...found.folders].find(
-    ([, path]) =>
-      path === abs ||
-      (existsSync(path) && existsSync(abs) && realpathSync(path) === realpathSync(abs)),
-  );
-  if (!entry) return null;
+  const entry = found?.folders.find((path) => sameFolder(path, abs));
+  if (!found || !entry) return null;
   const rel = relative(found.dir, abs) || ".";
-  return `${entry[0]} — ${rel} (in ${found.dir})`;
+  return `${name ?? found.legacyNames.get(entry) ?? basename(abs)} — ${rel} (in ${found.dir})`;
 }
 
 export interface UnregisterResult {
-  /** Project name that was removed, or null when the folder wasn't registered. */
+  /** Name of the design that was removed, or null when the folder wasn't listed. */
   name: string | null;
   /** Manifest path, when there was one. */
   path: string | null;
-  /** True when the manifest went away entirely (its last project left). */
+  /** True when the manifest went away entirely (its last design left). */
   removedManifest: boolean;
 }
 
 /**
- * Drop a design folder from the repo manifest. When its last project goes the
- * file goes with it: a manifest with no projects shadows the `./velloo`
- * convention while naming nothing, which is worse than having no manifest.
+ * Drop a design folder from the repo manifest. When its last design goes the
+ * file goes with it — unless it still carries repo preferences: a manifest
+ * listing nothing shadows the `./velloo` convention while naming nothing.
  */
-export async function unregisterProject(
-  folder: string,
-  appRoot: string,
-): Promise<UnregisterResult> {
+export async function unregisterDesign(folder: string, cwd: string): Promise<UnregisterResult> {
   const abs = resolve(folder);
-  const found = await findManifest(appRoot);
+  const found = await findManifest(cwd);
   if (!found) return { name: null, path: null, removedManifest: false };
-  let name: string | null = null;
-  for (const [candidate, target] of found.folders) {
-    if (
-      target === abs ||
-      (existsSync(target) && existsSync(abs) && realpathSync(target) === realpathSync(abs))
-    )
-      name = candidate;
-  }
-  if (!name) return { name: null, path: found.path, removedManifest: false };
-
-  const { [name]: _dropped, ...projects } = found.manifest.projects;
-  if (Object.keys(projects).length === 0) {
+  const index = found.folders.findIndex((path) => sameFolder(path, abs));
+  if (index === -1) return { name: null, path: found.path, removedManifest: false };
+  assertCurrent(found);
+  const name = recordedDesignName(abs) ?? basename(abs);
+  const manifest = withoutDesign(found.manifest, index, name);
+  if (manifest === null) {
     await rm(found.path, { force: true });
     return { name, path: found.path, removedManifest: true };
   }
-  const manifest: Manifest = {
-    ...found.manifest,
-    projects,
-    ...(found.manifest.defaultProject === name ? { defaultProject: undefined } : {}),
-  };
-  if (manifest.defaultProject === undefined) delete manifest.defaultProject;
-  await writeFile(found.path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await writeJsonAtomic(found.path, manifest);
   return { name, path: found.path, removedManifest: false };
+}
+
+/**
+ * The manifest without its `index`th design, or null when nothing worth keeping
+ * is left. `name` clears a `defaultDesign` that pointed at it.
+ */
+export function withoutDesign(
+  manifest: RepoManifest,
+  index: number,
+  name: string,
+): RepoManifest | null {
+  const designs = manifest.designs.filter((_, i) => i !== index);
+  const { defaultDesign, ...rest } = manifest;
+  if (designs.length === 0 && !rest.feedback) return null;
+  return {
+    ...rest,
+    designs,
+    ...(defaultDesign && defaultDesign !== name ? { defaultDesign } : {}),
+  };
 }
 
 /**
@@ -317,95 +219,153 @@ export async function discoverDesignFolders(root: string, maxDepth = 3): Promise
   return out.sort();
 }
 
-function deriveName(folder: string): string {
-  // `apps/web/velloo` should read as project "web", not "velloo" — the
-  // default folder name says nothing about which app it designs.
+function deriveName(folder: string, manifestDir?: string): string {
+  // `apps/web/velloo` should read as design "web", not "velloo" — the default
+  // folder name says nothing about which app it designs. At the manifest's own
+  // level the parent is the whole repo, whose name says even less, and
+  // siblings like `brand/` are named for their folders too.
   const base = basename(folder);
-  const candidate = base === "velloo" || base === "." ? basename(dirname(folder)) : base;
-  const sanitized = candidate
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^[^a-z0-9]+/, "");
-  return sanitized || "app";
+  const nested = base === DEFAULT_FOLDER_NAME && dirname(folder) !== manifestDir;
+  return toDesignName(nested ? basename(dirname(folder)) : base) ?? "app";
+}
+
+export interface NameRequest {
+  /** The design folder being created or registered. */
+  folder: string;
+  /** The application it designs. */
+  appRoot: string;
+  /**
+   * Where it is recorded: `repository` (a `velloo.json` path), `chosen` (a local
+   * design at a path the user picked) or `managed` (a local design in storage).
+   */
+  storage: "repository" | "chosen" | "managed";
+  /** The checkout, for a local design. */
+  checkout?: string | undefined;
+  /** An explicit `--name`; refused rather than suffixed when it is taken. */
+  requested?: string | undefined;
+}
+
+/**
+ * The name a new design gets: an explicit request, else one derived from its
+ * folder (or, where the folder name says nothing, its application), made
+ * unique among the checkout's designs with a `-2`, `-3` suffix.
+ */
+export async function chooseDesignName(request: NameRequest): Promise<string> {
+  const folder = resolve(request.folder);
+  const issue = request.requested === undefined ? null : designNameIssue(request.requested);
+  if (issue) throw new Error(`invalid --name ${JSON.stringify(request.requested)} — ${issue}`);
+  const taken = await takenNames(request, folder);
+  if (request.requested) {
+    const holder = taken.get(request.requested);
+    if (holder)
+      throw new Error(
+        `a design named "${request.requested}" already exists at ${holder} — pick another --name.`,
+      );
+    return request.requested;
+  }
+  let base: string;
+  if (request.storage === "repository") {
+    const found = await findManifest(folder).catch(() => null);
+    const dir = found?.dir ?? (await manifestDirFor(folder, request.appRoot));
+    // The folder's own name — `admin/` is design "admin" — except the generic
+    // `velloo/`, which says nothing and takes its app's name when nested in one.
+    base = deriveName(folder, dir);
+  } else {
+    // A folder the user chose is named for itself; managed storage (a UUID)
+    // and a generic `velloo` folder are named for the app they design.
+    const chosen = request.storage === "chosen" && basename(folder) !== DEFAULT_FOLDER_NAME;
+    base = deriveName(chosen ? folder : request.appRoot);
+  }
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+  return name;
+}
+
+/** Name → folder for every design the new one must not collide with. */
+async function takenNames(request: NameRequest, folder: string): Promise<Map<string, string>> {
+  const from = request.checkout ?? dirname(folder);
+  const taken = new Map<string, string>();
+  const set = await findDesigns(from).catch(() => null);
+  for (const design of set?.designs ?? []) {
+    if (!sameFolder(design.root, folder)) taken.set(design.name, design.root);
+  }
+  // Designs sitting in a repo with no manifest yet are adopted when it is
+  // created, so their names are spoken for too.
+  if (!set?.repo) {
+    const root = request.checkout ?? (await findGitRoot(request.appRoot)) ?? dirname(folder);
+    for (const sibling of await discoverDesignFolders(root)) {
+      const name = recordedDesignName(sibling);
+      if (name && !sameFolder(sibling, folder)) taken.set(name, sibling);
+    }
+  }
+  return taken;
+}
+
+/** Set a design's name in its config. Callers check uniqueness and stop its daemon. */
+export async function writeDesignName(folder: string, name: string): Promise<void> {
+  const path = join(folder, ".design", "config.json");
+  const config = ConfigSchema.parse(JSON.parse(await readFile(path, "utf8")));
+  await writeJsonAtomic(path, { ...config, name });
 }
 
 export interface RegisterResult {
+  /** The design's name. */
   name: string;
-  /** Absolute path of the manifest that now lists the project. */
+  /** Absolute path of the manifest that now lists the design. */
   path: string;
-  /** False when the folder was already registered (no write happened). */
+  /** False when the folder was already listed (no write happened). */
   created: boolean;
 }
 
 /**
- * Record a design folder as a project in the repo's `velloo.json` — an
- * existing manifest above the folder wins, else one is created at the git
- * root (or the app root outside a repo). Re-registering the same folder is a
- * no-op that keeps its existing name.
+ * List a design folder in the repo's `velloo.json` — an existing manifest above
+ * the folder wins, else one is created at the git root (or the app root outside
+ * a repo). Re-registering a listed folder is a no-op. The folder must already
+ * carry its name, and that name must be free.
  */
-export async function registerProject(
-  folder: string,
-  appRoot: string,
-  requestedName?: string,
-): Promise<RegisterResult> {
-  checkProjectName(requestedName);
+export async function registerDesign(folder: string, appRoot: string): Promise<RegisterResult> {
   const abs = resolve(folder);
+  const name = recordedDesignName(abs);
+  if (!name) throw new Error(`${abs} has no design name — run \`velloo upgrade ${abs}\` first.`);
   const found = await findManifest(abs);
   const dir = found ? found.dir : await manifestDirFor(abs, appRoot);
   const path = found ? found.path : join(dir, MANIFEST_FILE);
-  const localNames = new Set(localDesignsAt(dir).map((design) => design.projectName));
+  if (found?.folders.some((target) => sameFolder(target, abs)))
+    return { name, path, created: false };
+  if (found) assertCurrent(found);
 
-  const projects: Manifest["projects"] = { ...(found?.manifest.projects ?? {}) };
-  for (const [existing, target] of found?.folders ?? []) {
-    if (
-      target === abs ||
-      (existsSync(target) && existsSync(abs) && realpathSync(target) === realpathSync(abs))
-    )
-      return { name: existing, path, created: false };
-  }
+  const set = await findDesigns(dir);
+  const clash = set?.designs.find((d) => d.name === name && !sameFolder(d.root, abs));
+  if (clash)
+    throw new Error(
+      `a design named "${name}" already exists at ${clash.root} — rename one with \`velloo design rename\`.`,
+    );
 
-  const add = (folder: string, wanted?: string): string => {
-    let name = wanted ?? deriveName(folder);
-    for (let n = 2; name in projects || localNames.has(name); n++)
-      name = `${wanted ?? deriveName(folder)}-${n}`;
-    projects[name] = relative(dir, folder) || ".";
-    return name;
-  };
-
+  const designs = [...(found?.manifest.designs ?? [])];
+  const rel = (target: string) => relative(dir, target).split("\\").join("/") || ".";
   // Creating the manifest for the first time: adopt the design folders that
   // are already here, or they'd be shadowed the moment this file exists.
-  let defaultProject = found?.manifest.defaultProject;
+  let defaultDesign = found?.manifest.defaultDesign;
   if (!found) {
     for (const sibling of await discoverDesignFolders(dir)) {
       if (sibling === abs) continue;
-      const name = add(sibling);
+      designs.push(rel(sibling));
       // The conventional `<root>/velloo` was what every command resolved to
       // before the manifest existed — keep it the default so nothing else
       // changes behaviour on the day a second folder appears.
-      if (sibling === join(dir, DEFAULT_FOLDER_NAME)) defaultProject = name;
+      if (sibling === join(dir, DEFAULT_FOLDER_NAME))
+        defaultDesign = recordedDesignName(sibling) ?? undefined;
     }
   }
+  designs.push(rel(abs));
 
-  // A folder beside the app rather than inside it (init run from a monorepo
-  // root for `frontend/`) is named for the app — "chainlit" says nothing.
-  const outsideApp = !isWithin(resolve(appRoot), abs);
-  const name = add(abs, requestedName ?? (outsideApp ? deriveName(appRoot) : undefined));
-
-  const manifest: Manifest = {
+  const manifest: RepoManifest = {
     ...(found?.manifest ?? {}),
-    projects,
-    ...(defaultProject ? { defaultProject } : {}),
+    designs,
+    ...(defaultDesign ? { defaultDesign } : {}),
   };
   await writeJsonAtomic(path, manifest);
   return { name, path, created: true };
-}
-
-function checkProjectName(name: string | undefined): void {
-  if (name && !PROJECT_NAME.test(name)) {
-    throw new Error(
-      `invalid --project ${JSON.stringify(name)} — names are letters/digits plus . _ -`,
-    );
-  }
 }
 
 export interface LocalRegistration {
@@ -414,29 +374,13 @@ export interface LocalRegistration {
   appRoot: string;
   /** A folder the user chose; omitted for managed storage. */
   designPath?: string | undefined;
-  requestedName?: string | undefined;
 }
 
-/**
- * Record a local design for a checkout on this machine. Nothing is written
- * into the checkout. The name avoids every project the checkout already sees;
- * an explicitly requested name that is taken is refused instead.
- */
-export async function registerLocalDesign(opts: LocalRegistration): Promise<string> {
-  checkProjectName(opts.requestedName);
-  const existing = localDesignsAt(opts.root).find((design) => design.id === opts.id);
-  const taken = new Set((await findProjects(opts.root))?.folders.keys() ?? []);
-  if (existing) taken.delete(existing.projectName);
-  const base = opts.requestedName ?? existing?.projectName ?? deriveName(opts.appRoot);
-  if (opts.requestedName && taken.has(base))
-    throw new Error(`project "${base}" already exists for ${opts.root} — pick another --project.`);
-  let name = base;
-  for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+/** Record a local design for a checkout on this machine. Nothing is written into the checkout. */
+export async function registerLocalDesign(opts: LocalRegistration): Promise<void> {
   await writeLocalDesign(opts.id, {
     root: opts.root,
     appRoot: opts.appRoot,
-    projectName: name,
     ...(opts.designPath ? { designPath: opts.designPath } : {}),
   });
-  return name;
 }

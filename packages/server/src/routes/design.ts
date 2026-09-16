@@ -1,7 +1,5 @@
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { type Manifest, type StyleChannel, styleChannelOf } from "@velloo/provider";
 import { isArchived } from "@velloo/schema";
 import { Hono } from "hono";
@@ -9,32 +7,11 @@ import { activeBoards, type DesignFolder, orderedBoards } from "../design-folder
 import type { MutationContext } from "../mutations/index.ts";
 import { findSnippetInstances } from "../mutations/snippet-instances.ts";
 import { unusedSnippetIds } from "../mutations/snippet-refs.ts";
-import { localDesignOf } from "../project-location.ts";
 
 /**
  * The design folder's read surface: the summary the canvas boots from plus
  * per-resource reads (screen, board, snippets) and the components manifest.
  */
-
-/**
- * Nearest enclosing git repo's directory name — the design folder is often a
- * subdirectory (e.g. `<repo>/velloo`), and the tab title should read the repo.
- * Falls back to the design folder's own basename outside a repo. The walk
- * stops below the home directory, whose repository would be a dotfiles one.
- */
-function projectNameFor(root: string): string {
-  const local = localDesignOf(root);
-  if (local) return local.projectName;
-  const home = homedir();
-  let dir = root;
-  while (dir !== home) {
-    if (existsSync(join(dir, ".git"))) return basename(dir);
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return basename(root);
-}
 
 /**
  * The snippet list both read surfaces serve. `unused` rides along because the
@@ -73,8 +50,8 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
       // selector in the Library tab.
       libraries,
       defaultLibrary: f.config.defaultLibrary ?? null,
-      /** Enclosing repo (or design-folder) name — the browser tab title prefix. */
-      folderName: projectNameFor(f.root),
+      /** The design's name — the browser tab title prefix. */
+      designName: f.config.name,
       theme: { name: f.theme.name },
       defaultScreen: f.config.defaultScreen ?? null,
       defaultBoard: f.config.defaultBoard ?? null,
@@ -136,7 +113,7 @@ export function createConfigRouter(ctxFor: () => MutationContext): Hono {
     const cfg = f.config;
     return c.json({
       root: f.root,
-      folderName: projectNameFor(f.root),
+      designName: cfg.name,
       schemaVersion: cfg.schemaVersion,
       toolVersion: cfg.toolVersion,
       folderId: cfg.folderId ?? null,
