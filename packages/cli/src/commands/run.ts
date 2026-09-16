@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import { daemonRoot, ensureDaemon, isLive, stopDaemon } from "../daemon/runtime.ts";
 import { DESIGN_ARG_DESCRIPTION } from "../design.ts";
+import { designWithFolder } from "../design-label.ts";
 import { fail } from "../fail.ts";
 import { assertLoopbackHost } from "../host-security.ts";
 import { openUrl } from "../open-url.ts";
@@ -14,10 +15,6 @@ import { traceEnabled } from "../trace/env.ts";
 /** The design's name when it has one, else the folder's own basename. */
 function label(target: RunTarget): string {
   return target.name ?? basename(target.folder);
-}
-
-function labelWidth(running: { target: RunTarget }[]): number {
-  return Math.max(...running.map(({ target }) => label(target).length));
 }
 
 function printBackgroundStay(folderArg: string): void {
@@ -112,12 +109,16 @@ export default defineCommand({
       rec: Awaited<ReturnType<typeof ensureDaemon>>;
     };
     if (running.length === 1) {
+      console.log(`velloo: design ${designWithFolder(first.target.folder, first.target.name)}`);
       console.log(`velloo: canvas at ${first.rec.canvasUrl}`);
     } else {
       console.log("velloo: canvases");
-      for (const { target, rec } of running) {
-        console.log(`  ${pc.bold(label(target).padEnd(labelWidth(running)))}  ${rec.canvasUrl}`);
-      }
+      const rows = running.map(({ target, rec }) => ({
+        design: designWithFolder(target.folder, target.name),
+        url: rec.canvasUrl,
+      }));
+      const width = Math.max(...rows.map((row) => row.design.length));
+      for (const row of rows) console.log(`  ${pc.bold(row.design.padEnd(width))}  ${row.url}`);
     }
 
     // The recorder lives in the daemon and reads VELLOO_TRACE at spawn time, so
