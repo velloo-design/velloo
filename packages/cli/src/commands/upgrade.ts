@@ -1,9 +1,11 @@
 import { resolve } from "node:path";
 import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
+import { recordedDesignName } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { refreshAgentArtifacts } from "../connect/index.ts";
 import { agentRootCandidates } from "../connect/project-root.ts";
+import { repinAgentConfigs } from "../connect/repin.ts";
 import { daemonRoot, stopDaemon } from "../daemon/runtime.ts";
 import { checkoutDesigns, DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
@@ -146,7 +148,18 @@ export async function migrateFolder(
   }
 
   let refreshed: string[] = [];
+  let repinned: string[] = [];
   try {
+    // Not guidance but wiring that 0.1.0 got wrong: a config pinning the design
+    // by name stops starting the agent's MCP server once the design is renamed.
+    const name = recordedDesignName(folder);
+    if (!dryRun && name) {
+      repinned = await repinAgentConfigs({
+        projectRoots: await agentRootCandidates(folder),
+        designFolder: folder,
+        names: [name],
+      });
+    }
     // The skills and the plugin ship with the binary, so a new velloo means new
     // guidance — and a stale skill is worse than a missing one, since it keeps
     // confidently describing tools that changed underneath it. Refresh what's
@@ -174,6 +187,12 @@ export async function migrateFolder(
     for (const step of result.applied) console.log(`  - ${step}`);
     for (const file of result.changedFiles) console.log(`  ${dryRun ? "~" : "✓"} ${file}`);
     if (!dryRun) console.log("velloo: folder validated against the current schemas.");
+  }
+
+  if (repinned.length > 0) {
+    console.log("");
+    console.log(pc.green("✓ Agent MCP configs now find the design without naming it:"));
+    for (const path of repinned) console.log(`    ${pc.cyan(path)}`);
   }
 
   if (refreshed.length > 0) {

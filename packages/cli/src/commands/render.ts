@@ -53,7 +53,7 @@ export default defineCommand({
       // to its containing design folder (blind ../.. broke on nested paths and
       // failed cryptically inside the pipeline).
       if (args.folder) {
-        folder = await resolveDesign(args.folder, "render");
+        folder = await resolveDesign(args.folder, "render", { designFlag: "--folder" });
       } else {
         const found = await findDesignConfig(screenPath);
         if (!found) {
@@ -65,7 +65,7 @@ export default defineCommand({
         folder = found.folder;
       }
     } else {
-      folder = await resolveDesign(args.folder, "render");
+      folder = await resolveDesign(args.folder, "render", { designFlag: "--folder" });
       screenPath = (await pickScreen(folder, screenArg, interactive, "render")).path;
     }
 

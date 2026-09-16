@@ -38,6 +38,17 @@ bun run test          # bun test --parallel
 
 ## Pull requests
 
+PR titles follow [Conventional Commits](https://www.conventionalcommits.org/):
+`type(scope): description`, for example `fix(cli): keep canvases running through
+a rename`. PRs are squash-merged, so the title becomes the commit on `main` and a
+line in the release notes; the **PR title** check fails until it parses.
+
+- **Types:** `feat`, `fix`, `perf`, `refactor`, `revert` appear in the release
+  notes; `build`, `chore`, `ci`, `docs`, `style`, `test` are left out.
+- **Breaking changes:** add `!` before the colon (`feat(cli)!: …`), or a
+  `BREAKING CHANGE:` line in the PR description. Either puts the change under
+  "Breaking changes" in the release notes.
+
 - Keep PRs focused — one logical change per PR.
 - Explain the what and the why; link an issue if there is one.
 - Update `docs/` when behavior changes.

@@ -21,6 +21,8 @@ import {
   promptAppRootChoice,
   recordedAppRoot,
 } from "../app-root.ts";
+import { agentRootCandidates } from "../connect/project-root.ts";
+import { repinAgentConfigs } from "../connect/repin.ts";
 import { daemonRoot, isLive, readLock, stopDaemon } from "../daemon/runtime.ts";
 import {
   checkoutDesigns,
@@ -35,6 +37,7 @@ import {
   findDesigns,
   findManifest,
   isWithin,
+  manifestListing,
   registerLocalDesign,
   unregisterDesign,
   writeDesignName,
@@ -76,9 +79,19 @@ const list = defineCommand({
       const only = await resolveDesign(undefined, "design list", {
         requireConfig: true,
         cwd,
-        onFail: () => fail("design list", "no designs here — `velloo init` creates one."),
+        takesDesign: false,
+        onFail: (message) => fail("design list", message),
       });
       const name = recordedDesignName(only) ?? "(unnamed)";
+      // A velloo/ folder a project above lists is that project's design, not a
+      // lone one waiting for its first velloo.json.
+      const owner = await manifestListing(only).catch(() => null);
+      if (owner && owner.dir !== cwd) {
+        console.log(
+          `velloo design: "${name}" (${relative(cwd, only) || only}) is listed in \`${relative(cwd, owner.path)}\`. Run \`velloo design list\` from \`${relative(cwd, owner.dir) || "."}\` to see that project's designs.`,
+        );
+        return;
+      }
       console.log(`velloo design: 1 design (no velloo.json yet)`);
       console.log(
         `  ${pc.dim("1")}  ${pc.bold(name)}  ${relative(cwd, only) || only}  ${await daemonState(only)}`,
@@ -394,6 +407,16 @@ const rename = defineCommand({
         console.log(pc.dim(`  velloo.json defaultDesign → "${newName}"`));
     }
     console.log(`velloo design: renamed ${previous ? `"${previous}" ` : ""}to "${newName}".`);
+    // An agent config that named the design would stop connecting now.
+    const repinned = previous
+      ? await repinAgentConfigs({
+          projectRoots: await agentRootCandidates(folder),
+          designFolder: folder,
+          names: [previous],
+        }).catch(() => [])
+      : [];
+    for (const path of repinned)
+      console.log(pc.dim(`  ${relative(cwd, path) || path}: no longer names the design`));
   },
 });
 

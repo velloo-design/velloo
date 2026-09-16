@@ -98,7 +98,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folderRoot = await resolveDesign(args.folder, "theme:export");
+    const folderRoot = await resolveDesign(args.folder, "theme:export", { designFlag: "--folder" });
     const themePath = args.theme ? resolve(args.theme) : join(folderRoot, "theme", "default.json");
     const outDir = isAbsolute(args.to) ? args.to : resolve(args.to);
 

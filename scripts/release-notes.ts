@@ -28,15 +28,32 @@ const TITLES: Record<Section, string> = {
 const SKIP = new Set(["chore", "ci", "test", "build", "style", "docs"]);
 const KNOWN = new Set(["feat", "fix", "perf", "refactor", "revert"]);
 
+/** Every Conventional Commits type a PR title may use — see check-pr-title.ts. */
+export const CONVENTIONAL_TYPES: ReadonlySet<string> = new Set([...KNOWN, ...SKIP]);
+
+export interface ConventionalSubject {
+  type: string;
+  scope: string | undefined;
+  breaking: boolean;
+  description: string;
+}
+
+/** `type(scope)!: description`, or null for a subject in no conventional form. */
+export function parseSubject(subject: string): ConventionalSubject | null {
+  const match = /^(\w+)(?:\(([^)]+)\))?(!)?:\s+(.+)$/.exec(subject);
+  if (!match?.[1] || !match[4]) return null;
+  return { type: match[1], scope: match[2], breaking: Boolean(match[3]), description: match[4] };
+}
+
 export function releaseNotes(
   commits: Commit[],
   opts: { version?: string | undefined; previous: string | null; repo: string },
 ): string {
   const sections = new Map<Section, string[]>();
   for (const commit of commits) {
-    const match = /^(\w+)(?:\(([^)]+)\))?(!)?:\s+(.+)$/.exec(commit.subject);
-    const type = match?.[1]?.toLowerCase();
-    const breaking = Boolean(match?.[3]) || /^BREAKING[ -]CHANGE:/m.test(commit.body);
+    const parsed = parseSubject(commit.subject);
+    const type = parsed?.type.toLowerCase();
+    const breaking = Boolean(parsed?.breaking) || /^BREAKING[ -]CHANGE:/m.test(commit.body);
     if (type && SKIP.has(type) && !breaking) continue;
     const section: Section = breaking
       ? "breaking"
@@ -44,8 +61,8 @@ export function releaseNotes(
         ? type
         : "other";
     const text =
-      match && type && KNOWN.has(type)
-        ? `${match[2] ? `**${match[2]}:** ` : ""}${match[4]}`
+      parsed && type && KNOWN.has(type)
+        ? `${parsed.scope ? `**${parsed.scope}:** ` : ""}${parsed.description}`
         : commit.subject;
     const items = sections.get(section) ?? [];
     items.push(`- ${text} (${commit.sha.slice(0, 7)})`);

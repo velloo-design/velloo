@@ -268,6 +268,44 @@ describe("resolveDesign with a manifest", () => {
   });
 });
 
+describe("resolveDesign one directory too deep", () => {
+  test("names the project above instead of suggesting a second init", async () => {
+    await writeManifest(tmp, { designs: ["apps/web/velloo", "brand"] });
+    await makeDesignFolder(join(tmp, "apps/web/velloo"), "web");
+    await makeDesignFolder(join(tmp, "brand"), "brand");
+    const src = join(tmp, "apps/web/src");
+    await mkdir(src, { recursive: true });
+    const failure = resolveDesign(undefined, "run", { cwd: src, onFail });
+    await expect(failure).rejects.toThrow("`../../../velloo.json` lists");
+    await expect(resolveDesign(undefined, "run", { cwd: src, onFail })).rejects.toThrow(
+      "run from `../../..`, or pass a design folder (e.g. `velloo run ../velloo`)",
+    );
+    await expect(resolveDesign(undefined, "run", { cwd: src, onFail })).rejects.not.toThrow(
+      "velloo init",
+    );
+  });
+
+  test("a design name from the project above says where it is listed", async () => {
+    await writeManifest(tmp, { designs: ["apps/web/velloo"] });
+    await makeDesignFolder(join(tmp, "apps/web/velloo"), "web");
+    const web = join(tmp, "apps/web");
+    await expect(
+      resolveDesign("web", "design rename", { cwd: web, onFail, requireConfig: true }),
+    ).rejects.toThrow(
+      'design "web" is listed in `../../velloo.json`, and commands only read the directory they run in. Run from `../..`, or pass its folder (`velloo`) instead of its name.',
+    );
+  });
+
+  test("a command that takes the design as a flag shows the flag", async () => {
+    await writeManifest(tmp, { designs: ["web", "brand"] });
+    await makeDesignFolder(join(tmp, "web"), "web");
+    await makeDesignFolder(join(tmp, "brand"), "brand");
+    await expect(
+      resolveDesign(undefined, "emit", { cwd: tmp, onFail, designFlag: "--folder" }),
+    ).rejects.toThrow("`velloo emit --folder=brand`");
+  });
+});
+
 describe("resolveDesign without a manifest (legacy chain)", () => {
   test("./velloo, then the cwd itself — never a folder above", async () => {
     await makeDesignFolder(join(tmp, "velloo"), "velloo");

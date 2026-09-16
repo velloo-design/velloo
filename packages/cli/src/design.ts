@@ -88,6 +88,13 @@ export interface ResolveDesignOptions {
   /** Resolution base (default: process.cwd()) — injectable so tests avoid chdir. */
   cwd?: string | undefined;
   /**
+   * How the command takes a design, for the examples in its errors: as a
+   * positional (default) or behind a flag such as `--folder`.
+   */
+  designFlag?: string | undefined;
+  /** False for a command that takes no design (`design list`): its errors show no example. */
+  takesDesign?: boolean | undefined;
+  /**
    * The design's number in `velloo design list` — a short handle for a name
    * with spaces or emoji. Numbers follow the list's name order, so they shift
    * when a design is added, removed or renamed.
@@ -209,6 +216,17 @@ export async function resolveDesign(
     // App root passed as a path — same as `cd` there with no arg.
     const nested = join(explicit, DEFAULT_FOLDER);
     if (await hasDesignConfig(nested)) return nested;
+    // A bare name with no velloo.json here may name a design a project above
+    // lists — say where, rather than reporting a folder that was never meant.
+    if (!set && !arg.includes(sep)) {
+      const above = await enclosingProject(cwd);
+      const match = above?.designs.find((d) => d.name === arg);
+      if (above && match) {
+        abort(
+          `design ${JSON.stringify(arg)} is listed in \`${shortPath(cwd, above.label)}\`, and commands only read the directory they run in. Run from \`${shortPath(cwd, above.dir)}\`, or pass its folder (\`${quoteArg(shortPath(cwd, match.root))}\`) instead of its name.`,
+        );
+      }
+    }
     // A bare name that matches nothing is a typo'd design, not a folder path —
     // suggest the real names even for commands that require a config.
     if (set && !arg.includes(sep)) {
@@ -245,7 +263,7 @@ export async function resolveDesign(
     // it needs to be, so the example runs as printed.
     const example = cmd.startsWith("design ")
       ? `velloo ${cmd} --id 1\` for ${quoteArg(names[0] ?? "")}, as numbered by \`velloo design list`
-      : `velloo ${cmd} ${quoteArg(names[0] ?? "")}`;
+      : `velloo ${cmd} ${designExample(opts, names[0] ?? "")}`;
     abort(
       `${designsLabel(set)} lists several designs: ${names.join(", ")}. Pass one (e.g. \`${example}\`)${set.repo ? ` or set "defaultDesign"` : ""}.`,
     );
@@ -254,9 +272,67 @@ export async function resolveDesign(
   if (await hasDesignConfig(cwd)) return cwd;
   const here = join(cwd, DEFAULT_FOLDER);
   if (await hasDesignConfig(here)) return here;
+  const takesDesign = opts.takesDesign !== false;
+  const above = await enclosingProject(cwd);
+  if (above) {
+    // The design nearest to where the command ran makes the likeliest example.
+    const nearest = [...above.designs].sort(
+      (a, b) => relative(cwd, a.root).length - relative(cwd, b.root).length,
+    )[0];
+    const example =
+      takesDesign && nearest
+        ? `, or pass a design folder (e.g. \`velloo ${cmd} ${designExample(opts, relative(cwd, nearest.root))}\`)`
+        : "";
+    abort(
+      `no velloo.json or design folder here. \`${shortPath(cwd, above.label)}\` lists ${above.designs.map((d) => JSON.stringify(d.name)).join(", ")}, and commands only read the directory they run in: run from \`${shortPath(cwd, above.dir)}\`${example}.`,
+    );
+  }
+  const example = takesDesign
+    ? `, pass a design folder or a velloo.json path (e.g. \`velloo ${cmd} ${designExample(opts, "apps/web")}\`)`
+    : "";
   abort(
-    `no velloo.json or design folder in ${cwd}. Run from the directory that has your velloo.json, pass a design folder or a velloo.json path (e.g. \`velloo ${cmd} apps/web\`), or \`velloo init\` here.${movedCheckoutHint(cwd)}`,
+    `no velloo.json or design folder in ${cwd}. Run from the directory that has your velloo.json${example}, or \`velloo init\` here.${movedCheckoutHint(cwd)}`,
   );
+}
+
+/** A path as short as it can be read: relative to `cwd` when that is shorter. */
+function shortPath(cwd: string, path: string): string {
+  const rel = relative(cwd, path);
+  return rel !== "" && rel.length < path.length ? rel : path;
+}
+
+/** How to pass `design` to a command, quoted to run as printed. */
+function designExample(opts: ResolveDesignOptions, design: string): string {
+  return opts.designFlag ? `${opts.designFlag}=${quoteArg(design)}` : quoteArg(design);
+}
+
+interface EnclosingProject {
+  /** The directory whose velloo.json or local records hold the designs. */
+  dir: string;
+  /** How to name it in a message: its velloo.json path, or the directory. */
+  label: string;
+  designs: DesignEntry[];
+}
+
+/**
+ * The nearest project above `cwd` that has designs. Never used to resolve a
+ * design — a parent project is a different one — only to tell someone who ran
+ * a command one directory too deep where their designs are, instead of
+ * suggesting an `init` that would create a second, duplicate project.
+ */
+async function enclosingProject(cwd: string): Promise<EnclosingProject | null> {
+  const here = resolve(cwd);
+  for (let dir = dirname(here); dir !== here; ) {
+    const set = await findDesigns(dir).catch(() => null);
+    const designs = set?.designs.filter((d) => d.exists && !d.outsideRepo) ?? [];
+    if (set && designs.length > 0) {
+      return { dir, label: set.repo?.path ?? `${dir} (local designs)`, designs };
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
 }
 
 /**
