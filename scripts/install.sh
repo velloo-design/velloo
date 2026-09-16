@@ -12,10 +12,20 @@ DOWNLOAD_BASE="${VELLOO_DOWNLOAD_BASE:-@VELLOO_DOWNLOAD_BASE@}"
 INSTALL_ROOT="${VELLOO_HOME:-$HOME/.velloo}"
 BIN_DIR="${VELLOO_BIN_DIR:-$HOME/.local/bin}"
 
-note() { printf '\033[36m%s\033[0m\n' "$*"; }
-ok() { printf '\033[32m%s\033[0m\n' "$*"; }
-warn() { printf '\033[33m%s\033[0m\n' "$*"; }
-err() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+# Colour only for a person at a terminal, and never under NO_COLOR (no-color.org).
+colour_out=0
+colour_err=0
+if [ -z "${NO_COLOR:-}" ]; then
+  [ -t 1 ] && colour_out=1
+  [ -t 2 ] && colour_err=1
+fi
+paint() {
+  if [ "$1" = 1 ]; then printf '\033[%sm%s\033[0m\n' "$2" "$3"; else printf '%s\n' "$3"; fi
+}
+note() { paint "$colour_out" 36 "$*"; }
+ok() { paint "$colour_out" 32 "$*"; }
+warn() { paint "$colour_out" 33 "$*"; }
+err() { paint "$colour_err" 31 "$*" >&2; }
 die() { err "velloo install: $*"; exit 1; }
 
 tilde() {
@@ -87,6 +97,7 @@ else
   die "SHA-256 verification requires shasum or sha256sum"
 fi
 [ -n "$expected" ] && [ "$expected" = "$actual" ] || die "artifact checksum mismatch"
+note "Checksum verified (SHA-256 ${actual:0:12}…)."
 
 mkdir -p "$INSTALL_ROOT/versions" "$BIN_DIR"
 payload="$tmp/payload"
