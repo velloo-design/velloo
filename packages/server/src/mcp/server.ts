@@ -20,6 +20,12 @@ import type { MutationContext } from "../mutations/index.ts";
 import { requestIsLocal } from "../security.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { MCP_SERVER_INFO } from "../version.ts";
+import {
+  designsInstruction,
+  parseMcpSessionUrl,
+  type SessionDesigns,
+  sessionDesigns,
+} from "./designs.ts";
 import { registerGuideResources } from "./resources.ts";
 import {
   applyMcpToolSurface,
@@ -33,6 +39,7 @@ import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
 import { registerCommentTools } from "./tools/comments.ts";
 import { registerComposeTool } from "./tools/compose.ts";
+import { registerDesignTools } from "./tools/designs.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
@@ -149,6 +156,7 @@ export function buildInstructions(
   hostTailwindMajor: 3 | 4 | null = null,
   bareFolder = false,
   surface: McpSurfaceSelection = { mode: "full" },
+  designs: SessionDesigns | null = null,
 ): string {
   const parts = [
     ...intro,
@@ -160,6 +168,8 @@ export function buildInstructions(
       "",
     );
   }
+  // Which design, of several, comes before anything about how to work on it.
+  if (designs) parts.unshift(...designsInstruction(designs), "");
   if (hostTailwindMajor === 3) {
     parts.push(
       "",
@@ -199,6 +209,7 @@ function buildMcpServer(
   assetOrigin?: string,
   cloud?: CloudAuth,
   surface: McpSurfaceSelection = DEFAULT_MCP_SURFACE,
+  designs: SessionDesigns | null = null,
 ): McpServer {
   // Opt-in AND reachable: with no cloud configured the tool could never do
   // anything, so neither it nor its instruction paragraph is worth a session's
@@ -227,6 +238,7 @@ function buildMcpServer(
       hostTailwindMajor,
       bareFolder,
       surface,
+      designs,
     ),
   });
   // Installed before policy and tracing: native registrations flow through all
@@ -259,6 +271,7 @@ function buildMcpServer(
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
+  if (designs) registerDesignTools(mcp, ctx, designs);
   toolSurface.finish();
   // Long-form guides live here rather than in tool descriptions: fetched on
   // demand, so a session pays one listing line instead of the whole manual.
@@ -353,6 +366,11 @@ export async function createMcpServer(
             opts.assetOrigin,
             opts.cloud,
             parsedSurface.selection,
+            await sessionDesigns(
+              ctx.folder.root,
+              ctx.folder.config.name,
+              parseMcpSessionUrl(req.url),
+            ),
           );
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
@@ -463,6 +481,11 @@ export async function createStdioMcpServer(
     opts.assetOrigin,
     opts.cloud,
     opts.surface ?? DEFAULT_MCP_SURFACE,
+    // In-process stdio has no proxy to carry the session to another daemon.
+    await sessionDesigns(ctx.folder.root, ctx.folder.config.name, {
+      switchable: false,
+      pick: undefined,
+    }),
   );
   const transport = new StdioServerTransport();
   await server.connect(transport);

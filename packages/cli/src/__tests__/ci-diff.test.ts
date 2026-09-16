@@ -82,7 +82,7 @@ async function scaffold(at: string): Promise<void> {
   await mkdir(join(dir, "screens"), { recursive: true });
   await mkdir(join(dir, "snippets"), { recursive: true });
   await mkdir(join(dir, "assets"), { recursive: true });
-  await writeFile(join(dir, ".design", "config.json"), JSON.stringify({ schemaVersion: 3 }));
+  await writeFile(join(dir, ".design", "config.json"), JSON.stringify({ schemaVersion: 4 }));
   await writeFile(join(dir, "theme", "default.json"), JSON.stringify({ name: "default" }));
   await writeFile(join(dir, "screens", "home.json"), screenJson("home", "bg-background"));
   await writeFile(join(dir, "screens", "about.json"), screenJson("about", "p-4"));

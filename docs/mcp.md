@@ -62,6 +62,15 @@ Every registered tool carries MCP behavioural annotations, classified in one tab
 | `velloo://guide/art` | Authoring assets vs paying to generate them |
 | `velloo://guide/comments` | Working the user's visual feedback threads |
 
+### Designs
+
+Registered only when the session's checkout has more than one design (see `packages/server/src/mcp/designs.ts`); a single-design session sees neither tool nor the instruction line naming the design. One daemon serves one design, so `switch_design` is carried out by the stdio proxy (`velloo mcp`): the daemon answers with a `_meta["velloo/switchDesign"]` directive, and the proxy brings up the other design's daemon, replays `initialize` there, and replaces the result with that design's instructions, then sends `notifications/tools/list_changed`. Agent messages sent meanwhile wait. A session with no proxy in front (`velloo mcp --http`) gets `list_designs` only, and is told to reconnect with `velloo mcp <name>`. `run_velloo_plan` refuses `switch_design` — it would retarget the rest of the plan.
+
+| Tool | Args | Returns |
+|---|---|---|
+| `list_designs` | — | `{ designs: [{ name, path, current, local, library?, boards, screens }] }` — `path` is repo-relative for a repository design, absolute for a local one |
+| `switch_design` | `name` | Through the proxy: `{ kind: "DesignSwitched", name }` plus the new design's instructions. Errors: `UnknownDesign` (with `designs`), `DesignSwitchFailed` (the other design's daemon could not be reached — the message names the fix, such as `velloo upgrade`; the session stays put) |
+
 ### Discovery
 
 | Tool | Args | Returns |

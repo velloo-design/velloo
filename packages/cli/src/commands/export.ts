@@ -24,8 +24,8 @@ import { defineCommand } from "citty";
 import { withAssetServer } from "../asset-server.ts";
 import { captureWithBrowserSetup } from "../browser-setup.ts";
 import { loadPipeline } from "../ci/render.ts";
+import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { confirmRenderFailures } from "../preflight-gate.ts";
 
 /**
@@ -52,7 +52,7 @@ export default defineCommand({
     },
     folder: {
       type: "string",
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     to: {
       type: "string",
@@ -84,7 +84,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesignFolder(args.folder, "export");
+    const folder = await resolveDesign(args.folder, "export");
     const pipeline = await loadPipeline(folder);
     const design = pipeline.design;
 

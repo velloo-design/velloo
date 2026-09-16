@@ -8,9 +8,9 @@ import { defineCommand } from "citty";
 import { withAssetServer } from "../asset-server.ts";
 import { captureWithBrowserSetup } from "../browser-setup.ts";
 import { loadPipeline } from "../ci/render.ts";
+import { DESIGN_ARG_DESCRIPTION, pickScreen, resolveDesign } from "../design.ts";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, pickScreen, resolveDesignFolder } from "../folder.ts";
 import { createProgress } from "../progress.ts";
 
 export default defineCommand({
@@ -26,7 +26,7 @@ export default defineCommand({
     },
     folder: {
       type: "string",
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     to: {
       type: "string",
@@ -53,7 +53,7 @@ export default defineCommand({
       // to its containing design folder (blind ../.. broke on nested paths and
       // failed cryptically inside the pipeline).
       if (args.folder) {
-        folder = await resolveDesignFolder(args.folder, "render");
+        folder = await resolveDesign(args.folder, "render");
       } else {
         const found = await findDesignConfig(screenPath);
         if (!found) {
@@ -65,7 +65,7 @@ export default defineCommand({
         folder = found.folder;
       }
     } else {
-      folder = await resolveDesignFolder(args.folder, "render");
+      folder = await resolveDesign(args.folder, "render");
       screenPath = (await pickScreen(folder, screenArg, interactive, "render")).path;
     }
 

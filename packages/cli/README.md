@@ -16,7 +16,8 @@ The `velloo` binary. Citty-based.
   installer, or Homebrew) *and* migrate the design folder to the current schema
   version. Outside a design folder it updates the installation alone; `--check`
   reports both without writing, and `--binary-only` / `--folder-only` run one
-  half. Contributors: `bun run cli:build` records the build it just packed, and
+  half — `velloo design upgrade [folder]` is the folder half on its own, for
+  migrating one of several folders. Contributors: `bun run cli:build` records the build it just packed, and
   `velloo upgrade` then installs it over the global one.
 - **`velloo browser install`** — install the optional headless browser used for screenshots.
 

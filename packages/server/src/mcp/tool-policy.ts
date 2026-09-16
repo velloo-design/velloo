@@ -41,6 +41,7 @@ const remote = { destructiveHint: false } as const;
 export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   // Discovery and inspection.
   find_nodes: read,
+  list_designs: read,
   get_board: read,
   get_capture: read,
   get_comment_thread: read,
@@ -77,6 +78,9 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   move_node: set,
   set_node_id: set,
   remove_node: destroy,
+
+  // Which design the session works on. Local: the proxy only rebinds its connection.
+  switch_design: set,
 
   // Screens and boards.
   add_screen: create,

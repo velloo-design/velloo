@@ -38,11 +38,9 @@ export function renderDesignReadme(
   lines.push("|---|---|");
   lines.push(`| Library | ${plan.summary.name} |`);
   lines.push(
-    `| Components | ${external && plan.pendingUpstream ? `project:${plan.pendingUpstream.relative}` : plan.summary.location} |`,
+    `| Components | ${external && plan.pendingUpstream ? `app:${plan.pendingUpstream.relative}` : plan.summary.location} |`,
   );
-  lines.push(
-    `| App root | ${external ? "project:. (local application binding)" : answers.appRoot} |`,
-  );
+  lines.push(`| App root | ${external ? "app:. (local application binding)" : answers.appRoot} |`);
   const contentLabel =
     answers.initialContent === "sample"
       ? "Welcome sample"

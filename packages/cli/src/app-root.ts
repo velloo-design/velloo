@@ -6,7 +6,8 @@ import { ConfigSchema } from "@velloo/schema";
 import {
   localDesignOf,
   managedDesignId,
-  resolveProjectPath,
+  recordedDesignName,
+  resolveAppPath,
   writeJsonAtomic,
   writeLocalDesign,
 } from "@velloo/server";
@@ -26,7 +27,7 @@ import { discoverScanRoots } from "./scan/discover.ts";
  * written through this one module:
  *
  *   - **local** (outside the checkout) — the machine-local record's `appRoot`.
- *     Design paths are stored as `project:` references, which mean "relative
+ *     Design paths are stored as `app:` references, which mean "relative
  *     to the application root" and therefore follow it with no rewriting.
  *   - **in-repo** — `config.hostApp.root`, stored relative to the design
  *     folder. Nothing expresses "the app root" symbolically, so the paths that
@@ -41,8 +42,8 @@ export interface RecordedAppRoot {
   localId?: string;
   /** The checkout a local design belongs to. */
   checkout?: string;
-  /** Project name, when the folder is registered. */
-  projectName?: string;
+  /** The design's name. */
+  designName?: string;
   /** Absolute path of the manifest that registers it, when there is one. */
   manifestPath?: string;
   /** False when `path` no longer exists on disk. */
@@ -87,7 +88,6 @@ export async function recordedAppRoot(designFolder: string): Promise<RecordedApp
       kind: "local",
       localId: local.id,
       checkout: local.root,
-      projectName: local.projectName,
       ...appShape(path),
     };
   }
@@ -97,17 +97,13 @@ export async function recordedAppRoot(designFolder: string): Promise<RecordedApp
   // No `hostApp` at all is the pre-live-islands default the bundler still
   // assumes: the design folder's parent.
   const path =
-    recorded && !isSentinel(recorded)
-      ? resolveProjectPath(folder, recorded)
-      : resolve(folder, "..");
+    recorded && !isSentinel(recorded) ? resolveAppPath(folder, recorded) : resolve(folder, "..");
   const found = await findManifest(folder).catch(() => null);
-  const projectName = found
-    ? [...found.folders].find(([, p]) => resolve(p) === folder)?.[0]
-    : undefined;
+  const designName = recordedDesignName(folder);
   return {
     path,
     kind: "in-repo",
-    ...(projectName ? { projectName } : {}),
+    ...(designName ? { designName } : {}),
     ...(found ? { manifestPath: found.path } : {}),
     ...appShape(path),
   };
@@ -124,12 +120,12 @@ export interface AppRootChange {
   /** Config paths re-anchored onto the new root: field → old → new. */
   rewritten: { field: string; from: string; to: string }[];
   /** The local design record, when the folder is one — the only thing that changes. */
-  local?: { id: string; root: string; project: string };
+  local?: { id: string; root: string };
 }
 
 /**
  * Plan the change without writing it, so callers can show it first — the same
- * preview-then-`--yes` shape `folder relocate` and `folder bind` use.
+ * preview-then-`--yes` shape `design move` and `design bind` use.
  */
 export async function planAppRootChange(
   designFolder: string,
@@ -140,22 +136,22 @@ export async function planAppRootChange(
   const to = resolve(newRoot);
   const change: AppRootChange = { from: current.path, to, rewritten: [] };
 
-  if (current.kind === "local" && current.localId && current.checkout && current.projectName) {
+  if (current.kind === "local" && current.localId && current.checkout) {
     if (!isUnder(current.checkout, to)) {
       throw new Error(
         `An application root must live inside the design's checkout (${current.checkout}). ${to} is outside it.`,
       );
     }
-    // `project:` paths already mean "under the application root", so they
+    // `app:` paths already mean "under the application root", so they
     // follow the move; only the pointer to the root itself changes.
-    change.local = { id: current.localId, root: current.checkout, project: current.projectName };
+    change.local = { id: current.localId, root: current.checkout };
     return change;
   }
 
   const config = await readConfig(folder);
   const reanchor = (field: string, stored: string): string | undefined => {
     if (isSentinel(stored)) return undefined;
-    const abs = resolveProjectPath(folder, stored);
+    const abs = resolveAppPath(folder, stored);
     // Only paths that were expressed against the old application follow it.
     // Anything else points somewhere the correction says nothing about.
     if (!isUnder(current.path, abs)) return undefined;
@@ -193,7 +189,6 @@ export async function applyAppRootChange(
     await writeLocalDesign(change.local.id, {
       root: change.local.root,
       appRoot: change.to,
-      projectName: change.local.project,
       ...(managedDesignId(folder) ? {} : { designPath: folder }),
     });
     return;

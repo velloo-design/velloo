@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "@velloo/result";
 import { type Config, type ViewportPreset, ViewportPresetSchema } from "@velloo/schema";
+import { designRenameConflict, followDesignRename } from "../designs.ts";
 import { writeRepoFeedback } from "../repo-config.ts";
 import { readFeedbackContactOk, writeFeedbackContactOk } from "../user-prefs.ts";
 import type { MutationContext } from "./context.ts";
@@ -120,6 +121,32 @@ export async function updateDefaults(
     defaultBoard: saved.defaultBoard ?? null,
     defaultScreen: saved.defaultScreen ?? null,
   });
+}
+
+export interface UpdateDesignNameArgs {
+  name: string;
+}
+
+export interface UpdateDesignNameResult {
+  name: string;
+}
+
+/**
+ * Rename the design. The name lives in its own config, so this is a config
+ * write — plus `velloo.json`'s `defaultDesign`, when that named it.
+ */
+export async function updateDesignName(
+  ctx: MutationContext,
+  args: UpdateDesignNameArgs,
+): Promise<Result<UpdateDesignNameResult, MutationError>> {
+  const name = args.name.trim();
+  const previous = ctx.folder.config.name;
+  if (name === previous) return ok({ name });
+  const conflict = await designRenameConflict(ctx.folder.root, name);
+  if (conflict) return err(badRequest(conflict));
+  const saved = await commit(ctx, { ...ctx.folder.config, name });
+  await followDesignRename(ctx.folder.root, previous, name);
+  return ok({ name: saved.name });
 }
 
 export interface UpdateCodegenArgs {

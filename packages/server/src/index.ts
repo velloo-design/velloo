@@ -500,6 +500,20 @@ export { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments
 export type { DesignFolder } from "./design-folder.ts";
 export { activeBoards, loadDesignFolder, orderedBoards } from "./design-folder.ts";
 export {
+  type DesignEntry,
+  type DesignPick,
+  type DesignPickReason,
+  type DesignSet,
+  designRenameConflict,
+  designsFor,
+  type FoundRepoManifest,
+  findDesigns,
+  followDesignRename,
+  pickDesign,
+  readRepoManifest,
+  recordedDesignName,
+} from "./designs.ts";
+export {
   type ExportFormat,
   type ExportMode,
   type ExportOptions,
@@ -524,6 +538,7 @@ export { writeJsonAtomic, writeText } from "./fs.ts";
 export { hostAppRootFrom } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { LocalCommentsService, localCommentsPath } from "./local-comments.ts";
+export { type McpSessionOptions, withMcpSessionUrl } from "./mcp/designs.ts";
 export {
   type FormatGateUpgradeResult,
   runStdioFormatGate,
@@ -562,7 +577,7 @@ export {
   managedDesignId,
   managedDesignPath,
   removeLocalDesign,
-  resolveProjectPath,
+  resolveAppPath,
   writeLocalDesign,
 } from "./project-location.ts";
 export { createServerProviderLoader, resolveProviders } from "./providers.ts";

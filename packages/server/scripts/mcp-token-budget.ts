@@ -17,6 +17,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { loadDesignFolder } from "../src/design-folder.ts";
+import type { SessionDesigns } from "../src/mcp/designs.ts";
 import { registerGuideResources } from "../src/mcp/resources.ts";
 import { buildInstructions } from "../src/mcp/server.ts";
 import { applyMcpToolSurface, type McpSurfaceSelection } from "../src/mcp/surface.ts";
@@ -26,6 +27,7 @@ import { registerBatchTool } from "../src/mcp/tools/batch.ts";
 import { registerCaptureTools } from "../src/mcp/tools/captures.ts";
 import { registerCommentTools } from "../src/mcp/tools/comments.ts";
 import { registerComposeTool } from "../src/mcp/tools/compose.ts";
+import { registerDesignTools } from "../src/mcp/tools/designs.ts";
 import { registerDiscoveryTools } from "../src/mcp/tools/discovery.ts";
 import { registerEmitTools } from "../src/mcp/tools/emit.ts";
 import { registerExtensionTools } from "../src/mcp/tools/extensions.ts";
@@ -47,6 +49,18 @@ const LEGACY_BOOT_TOKENS = 19_610;
 // below the pre-guided legacy cost while catching meaningful schema growth.
 const FULL_BOOT_BUDGET_TOKENS = 19_250;
 const GUIDED_BOOT_BUDGET_TOKENS = 4_000;
+/**
+ * What a session in a checkout with several designs adds on top: the design
+ * instruction and `list_designs`/`switch_design`. Single-design sessions — the
+ * ones the budgets above measure — pay none of it.
+ */
+const MULTI_DESIGN_INCREMENT_TOKENS = 250;
+const MULTI_DESIGNS: SessionDesigns = {
+  current: "web",
+  names: ["admin", "brand", "web"],
+  switchable: true,
+  pick: undefined,
+};
 
 async function scaffoldFolder(): Promise<string> {
   const tmp = join(tmpdir(), `velloo-budget-${Date.now()}`);
@@ -56,7 +70,8 @@ async function scaffoldFolder(): Promise<string> {
   const writeJson = (p: string, v: unknown) =>
     writeFile(p, `${JSON.stringify(v, null, 2)}\n`, "utf8");
   await writeJson(join(tmp, ".design/config.json"), {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    name: "test",
     toolVersion: "0.1.0",
     libraries: {
       default: {
@@ -88,7 +103,11 @@ async function scaffoldFolder(): Promise<string> {
   return tmp;
 }
 
-async function measure(ctx: MutationContext, selection: McpSurfaceSelection) {
+async function measure(
+  ctx: MutationContext,
+  selection: McpSurfaceSelection,
+  designs: SessionDesigns | null = null,
+) {
   const mcp = new McpServer({ name: "velloo", version: "0.1.0" });
   const surface = applyMcpToolSurface(mcp, selection);
   applyToolPolicy(mcp);
@@ -111,6 +130,7 @@ async function measure(ctx: MutationContext, selection: McpSurfaceSelection) {
   registerCommentTools(mcp, stub());
   registerFeedbackTool(mcp, ctx, { url: "" });
   registerGenerateTools(mcp, ctx, { url: "" });
+  if (designs) registerDesignTools(mcp, ctx, designs);
   surface.finish();
   registerGuideResources(mcp);
 
@@ -129,7 +149,7 @@ async function measure(ctx: MutationContext, selection: McpSurfaceSelection) {
   const { resources } = await client.listResources();
   const resourceTotal = tokens(JSON.stringify(resources));
 
-  const instructions = buildInstructions(false, undefined, [], 0, null, false, selection);
+  const instructions = buildInstructions(false, undefined, [], 0, null, false, selection, designs);
   const instrTokens = tokens(instructions);
   const boot = instrTokens + toolTotal + resourceTotal;
   const savings = LEGACY_BOOT_TOKENS - boot;
@@ -160,13 +180,25 @@ async function main(): Promise<void> {
       defaultProvider: provider,
       broadcast: () => {},
     };
-    const [guided, full] = await Promise.all([
+    const [guided, full, guidedMulti, fullMulti] = await Promise.all([
       measure(ctx, { mode: "guided" }),
       measure(ctx, { mode: "full" }),
+      measure(ctx, { mode: "guided" }, MULTI_DESIGNS),
+      measure(ctx, { mode: "full" }, MULTI_DESIGNS),
     ]);
+    const increments = {
+      guided: guidedMulti.boot - guided.boot,
+      full: fullMulti.boot - full.boot,
+    };
 
     if (asJson) {
-      console.log(JSON.stringify({ defaultSurface: "guided", guided, full }, null, 2));
+      console.log(
+        JSON.stringify(
+          { defaultSurface: "guided", guided, full, severalDesigns: increments },
+          null,
+          2,
+        ),
+      );
     } else {
       for (const result of [guided, full]) {
         const budget =
@@ -182,6 +214,9 @@ async function main(): Promise<void> {
         console.log(`budget:            ~${budget} tokens`);
       }
       console.log(
+        `\nseveral designs add: ~${increments.guided} guided / ~${increments.full} full tokens (budget ~${MULTI_DESIGN_INCREMENT_TOKENS})`,
+      );
+      console.log(
         `\ndefault guided saving: ~${guided.savings} tokens (${guided.savingsPercent}%) vs legacy`,
       );
     }
@@ -189,6 +224,13 @@ async function main(): Promise<void> {
       throw new Error(
         `guided MCP boot context ~${guided.boot} exceeds ~${GUIDED_BOOT_BUDGET_TOKENS}`,
       );
+    }
+    for (const [surface, added] of Object.entries(increments)) {
+      if (check && added > MULTI_DESIGN_INCREMENT_TOKENS) {
+        throw new Error(
+          `several designs add ~${added} ${surface} MCP boot tokens, over ~${MULTI_DESIGN_INCREMENT_TOKENS}`,
+        );
+      }
     }
     if (check && full.boot > FULL_BOOT_BUDGET_TOKENS) {
       throw new Error(`full MCP boot context ~${full.boot} exceeds ~${FULL_BOOT_BUDGET_TOKENS}`);

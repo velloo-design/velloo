@@ -17,9 +17,7 @@ const json = async (path: string, value: unknown) => {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 };
 const manifestPath = resolve(root, "demo-boards/velloo.json");
-const manifest = await readFile(manifestPath, "utf8")
-  .then(JSON.parse)
-  .catch(() => ({ projects: {}, defaultProject: "demo-shadcn-upstream" }));
+const manifest = { designs: [] as string[], defaultDesign: "demo-shadcn-upstream" };
 for (const library of ["shadcn-upstream", "mui", "antd", "chakra", "none"] as const) {
   const folder = resolve(root, "demo-boards", library);
   const { createProvider } = await import(`../packages/provider-${library}/src/index.ts`);
@@ -30,6 +28,7 @@ for (const library of ["shadcn-upstream", "mui", "antd", "chakra", "none"] as co
     .then(JSON.parse)
     .catch(() => undefined);
   const config = buildDefaultConfig({
+    name: `demo-${library}`,
     library: { id: library, version: provider.version, source: "binary", componentsPath: "binary" },
     defaultBoard: "main",
     defaultScreen: "elsewhere-discover",
@@ -57,7 +56,7 @@ for (const library of ["shadcn-upstream", "mui", "antd", "chakra", "none"] as co
     resolve(folder, "README.md"),
     `# Elsewhere · ${provider.label}\n\nRun from \`demo-boards/\` with \`velloo run demo-${library}\`, or \`velloo run .\` from this folder.\n\nGenerated from the welcome scaffold with \`bun scripts/refresh-demo-boards.ts\`.\nCanvas edits here are local explorations; refresh overwrites the generated sample files.\n`,
   );
-  manifest.projects[`demo-${library}`] = library;
+  manifest.designs.push(library);
   console.log(`demo-boards/${library}`);
 }
 await json(manifestPath, manifest);

@@ -176,7 +176,15 @@ export function applyMcpToolSurface(
           const content: McpContent[] = [];
           let failedAt: number | null = null;
           for (const [index, call] of calls.entries()) {
-            const result = await invoke(call.operation, call.arguments, extra);
+            // A switch retargets every call after it, and the plan's results
+            // would silently describe two designs — it has to stand alone.
+            const result =
+              call.operation === "switch_design"
+                ? errorResult({
+                    kind: "SwitchDesignInPlan",
+                    message: "Call switch_design on its own, then plan against the new design.",
+                  })
+                : await invoke(call.operation, call.arguments, extra);
             content.push({
               type: "text",
               text: JSON.stringify({

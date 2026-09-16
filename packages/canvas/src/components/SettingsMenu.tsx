@@ -32,7 +32,7 @@ import {
  * first name; signed out it stays a plain "Settings" button, because there is
  * no identity to show and the menu is then mostly the way in to signing up.
  *
- * The menu itself holds Settings… (the folder/board/canvas dialog) and the
+ * The menu itself holds Settings… (the design/board/canvas dialog) and the
  * account block — identity, credits, upgrade, sign-out. App theme moved into the
  * dialog's Canvas scope, alongside the other per-browser preferences.
  *
@@ -277,7 +277,7 @@ export function SettingsMenu() {
         {/* The folder/board/canvas settings live in their own dialog; the
               rest of this menu is the account surface. Settings sits next to
               the cloud link because both are "go somewhere", not "do something". */}
-        <DropdownMenuItem onSelect={() => setSettingsScope("folder")}>
+        <DropdownMenuItem onSelect={() => setSettingsScope("design")}>
           <SlidersHorizontal />
           Settings…
         </DropdownMenuItem>

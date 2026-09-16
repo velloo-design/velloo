@@ -1,6 +1,6 @@
 # Local designs outside the repository
 
-A project can keep its editable design outside the application repository —
+A design can live outside the application repository —
 in Velloo-managed storage, or in a directory you choose. Such a **local design**
 exists only on the machine that has it: nothing about it is written into the
 checkout, it is **not version-controlled** unless you put it under Git yourself,
@@ -14,7 +14,7 @@ the existing publish flow.
 repository, and only those: a location outside it means nothing to anyone else,
 and a repository you cloned must not be able to point Velloo at a directory
 outside itself. So the only record that "this checkout has a design over there"
-is a file on your machine, written by `init`, `folder relocate` or `folder bind`.
+is a file on your machine, written by `init`, `design move` or `design bind`.
 
 ## Create and open
 
@@ -26,16 +26,17 @@ detected and becomes a local design too; the wizard says so before continuing.
 For scripts:
 
 ```sh
-velloo init --external --project web --non-interactive
-velloo init --design-folder ../coda-designs --project coda --non-interactive
-velloo folder add --external --project explorations --non-interactive
+velloo init --external --name web --non-interactive
+velloo init --design-folder ../coda-designs --name coda --non-interactive
+velloo design add --external --name explorations --non-interactive
 velloo run web
 ```
 
 The checkout is the `velloo.json` directory above where init ran, else the Git
 root, else the directory init ran in. From anywhere inside it, `velloo run`, `mcp`
-and every other folder-taking command see its local designs alongside its
-`velloo.json` projects, as one set of project names.
+and every other design-taking command see its local designs alongside its
+`velloo.json` designs, as one set of design names. A design's name lives in its
+own `.design/config.json`, wherever the design is stored.
 
 ## What lives where
 
@@ -44,14 +45,14 @@ and every other folder-taking command see its local designs alongside its
 | Application repository | Application source only — no Velloo files for a local design |
 | `~/.velloo/designs/<id>/` | A managed design: JSON, boards, notes, snippets, themes, assets and README |
 | A directory you chose | A custom-path local design, same contents |
-| `~/.velloo/designs/.locations/<id>.json` | The machine record: checkout, application root, project name, and the folder when it is not in managed storage |
+| `~/.velloo/designs/.locations/<id>.json` | The machine record: checkout, application root, and the folder when it is not in managed storage |
 | Design `.design/cache/` and `.velloo/` | Ignored daemon state, caches and debug traces |
 
 `VELLOO_DESIGNS_HOME` overrides the storage root (and with it `.locations`) for
 portable installations and isolated tests. Keep it consistent across CLI and
 agent processes.
 
-The config uses `project:<relative-path>` for references into the application,
+The config uses `app:<relative-path>` for references into the application,
 including host apps and in-repository component sources; the machine record
 resolves them. Feedback preferences stay in the design's own config.
 
@@ -68,9 +69,11 @@ install.
 A global entry runs `velloo mcp` with no folder: each agent session starts its own
 server, which resolves the design from the directory the agent was opened in. Two
 agents in two checkouts get their own designs. Two agents in the same checkout
-resolve the same way — inside a project's folder or application, that project;
-otherwise the only project, or `defaultProject`. When a checkout has several
-projects and nothing picks one, the server fails to start and names them.
+resolve the same way — inside a design's folder or application, that design;
+otherwise the only design, or `defaultDesign`. When a checkout has several
+designs and nothing picks one, the session opens the first by name and tells the
+agent to confirm with you; in a checkout with several designs the agent can list
+them and `switch_design` to another without restarting.
 
 ## Version control
 
@@ -92,22 +95,22 @@ Run these from the checkout. The first invocation prints source, destination and
 where the design will be recorded. Add `--yes` to apply:
 
 ```sh
-velloo folder relocate web --external              # into managed storage
-velloo folder relocate web --to ../web-designs     # outside the repo: local
-velloo folder relocate web --to designs/web        # inside the repo: velloo.json
-velloo folder relocate web --to designs/web --yes
+velloo design move web --external              # into managed storage
+velloo design move web --to ../web-designs     # outside the repo: local
+velloo design move web --to designs/web        # inside the repo: velloo.json
+velloo design move web --to designs/web --yes
 ```
 
 Moving out of the repository removes the `velloo.json` entry (and the file, when
-it was the only project) and writes the machine record; moving in does the
+it was the only design) and writes the machine record; moving in does the
 reverse. Close external editors first. Velloo stops the daemon, copies content,
 checks copied bytes, rebases application references and validates the result
 before updating either record. Occupied destinations, nested source/destination
 paths and symlink content are refused; a symlink that only looks like it is inside
 the repository is treated as outside. A copy, validation or manifest failure
 retains the original source. If cleanup fails afterwards, the message identifies
-both recoverable copies. Project name and folder identity are preserved; a
-`defaultProject` that named the design is dropped when it leaves `velloo.json`.
+both recoverable copies. The design's name and folder identity are preserved; a
+`defaultDesign` that named it is dropped when it leaves `velloo.json`.
 
 Restart the canvas with `velloo run web` after relocating.
 
@@ -118,12 +121,12 @@ so after moving or cloning the checkout, or restoring a design on another machin
 attach it from the checkout:
 
 ```sh
-velloo folder bind ~/.velloo/designs/<id>
-velloo folder bind ../coda-designs --yes
+velloo design bind ~/.velloo/designs/<id>
+velloo design bind ../coda-designs --yes
 ```
 
 Binding validates the design, stops its daemon, and records it for this checkout,
-keeping its project name and its application's place within the checkout (so a
+keeping its name (or the one `--name` gives it) and its application's place within the checkout (so a
 monorepo's `apps/web` still resolves). A design has one checkout at a time; bind
 it again to move it. When no design resolves, commands name any local designs
 whose checkout no longer exists.
@@ -134,15 +137,15 @@ entry is refused, unless you pass the design's path explicitly for one invocatio
 A manifest that still holds an old `{ "managed": "<id>" }` entry is refused with
 the same instruction — remove the entry, then bind the folder.
 
-To *change* which application a design points at, use `folder set-app-root`:
+To *change* which application a design points at, use `design set-app-root`:
 
 ```sh
-velloo folder set-app-root web --to packages/triagem/web
-velloo folder set-app-root web --to packages/triagem/web --yes
+velloo design set-app-root web --to packages/triagem/web
+velloo design set-app-root web --to packages/triagem/web --yes
 ```
 
 The command previews before it applies. A local design changes only its machine
-record — `project:` paths already mean "under the application root", so they
+record — `app:` paths already mean "under the application root", so they
 follow it — and the new root must be inside its checkout. An in-repo design has
 no such symbolic form, so the paths that were *under* the old root (`hostApp.root`,
 `hostApps[*].root`, an `in-repo` library's `componentsPath`) are re-anchored onto
@@ -153,24 +156,24 @@ not one.
 ## Remove and diagnose
 
 ```sh
-velloo folder remove web --yes                  # forget the local design, keep its files
-velloo folder remove web --delete-content --yes # also delete the files
+velloo design remove web --yes                  # forget the local design, keep its files
+velloo design remove web --delete-content --yes # also delete the files
 ```
 
 In-repository designs keep their original delete behavior.
 
-- **No design found after moving the checkout:** run `velloo folder bind <design
-  folder>` from the new location; the error lists the designs whose checkout moved.
-- **`velloo.json` path outside the repository:** run `velloo folder bind <path>`
+- **No design found after moving the checkout:** run `velloo design bind <design
+  folder>` from the new location; inside a project, the error lists the designs whose checkout moved.
+- **`velloo.json` path outside the repository:** run `velloo design bind <path>`
   to keep it as a local design, or relocate it into the repository.
 - **Missing design content:** restore the whole design folder from backup, then
   bind it.
-- **Several projects:** pass a project name, run from inside the project's folder
-  or application, or set `defaultProject` for the `velloo.json` ones.
-- **The same project name in `velloo.json` and a local design:** remove one with
-  `velloo folder remove`, or rename the `velloo.json` entry.
+- **Several designs:** pass a design name, run from inside the design's folder
+  or application, or set `defaultDesign` in `velloo.json`.
+- **Two designs with the same name:** pass one by path, and rename it with
+  `velloo design rename <path> <new-name>`.
 - **Broken host reference:** restore the application directory or correct the
-  `project:` reference with `folder set-app-root`.
+  `app:` reference with `design set-app-root`.
 - **`--changed-since` reports no git repository:** the design folder is not in
   one. Publish without it, or put the design folder under Git yourself.
 - **Filesystem permission or storage failure:** ensure storage and the checkout
@@ -184,7 +187,7 @@ storage and a custom path outside the checkout), resolution, relocation in every
 direction, binding after a clone or move, legacy and old managed entries, removal,
 context and feedback, global-only agent wiring, daemon restart, MCP stdio launch,
 file watcher reload, status, stop, capture listing, HTML render/export, emit,
-theme export and folder upgrade. It also checks that init works without Git, that
+theme export and design upgrade. It also checks that init works without Git, that
 a local design never borrows a repository from above it, and that publishing and
 changed-since use a repository you create in the design folder. Browser-dependent
 screenshot and capture tests remain in `bun run test:e2e`.

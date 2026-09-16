@@ -26,7 +26,8 @@ function fakeProvider(id: string): ComponentProvider {
 
 function baseConfig(over: Partial<Config>): Config {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    name: "test",
     toolVersion: "test",
     viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
     ...over,

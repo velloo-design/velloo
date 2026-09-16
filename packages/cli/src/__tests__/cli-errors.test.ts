@@ -115,11 +115,11 @@ describe("cli error presentation", () => {
   }, 30_000);
 
   test("run quotes a daemon that dies at boot instead of the blind health timeout", async () => {
-    // Passes the pre-spawn format gate (v2) but the daemon dies loading the
+    // Passes the pre-spawn format gate but the daemon dies loading the
     // folder — theme/default.json is missing.
     const folder = join(tmp, "velloo-broken");
     await mkdir(join(folder, ".design"), { recursive: true });
-    await writeFile(join(folder, ".design", "config.json"), JSON.stringify({ schemaVersion: 3 }));
+    await writeFile(join(folder, ".design", "config.json"), JSON.stringify({ schemaVersion: 4 }));
     const { exitCode, stderr } = await runRun(folder);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("exited during startup");

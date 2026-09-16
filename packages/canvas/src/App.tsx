@@ -126,8 +126,8 @@ export function App() {
 
   // Browser tab: `<repo> · <board> - velloo` (middle-dot between repo/board).
   useEffect(() => {
-    document.title = formatBrowserTitle(design?.folderName, currentBoard?.name);
-  }, [design?.folderName, currentBoard?.name]);
+    document.title = formatBrowserTitle(design?.designName, currentBoard?.name);
+  }, [design?.designName, currentBoard?.name]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

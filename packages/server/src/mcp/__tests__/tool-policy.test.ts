@@ -14,6 +14,7 @@ import { registerBatchTool } from "../tools/batch.ts";
 import { registerCaptureTools } from "../tools/captures.ts";
 import { registerCommentTools } from "../tools/comments.ts";
 import { registerComposeTool } from "../tools/compose.ts";
+import { registerDesignTools } from "../tools/designs.ts";
 import { registerDiscoveryTools } from "../tools/discovery.ts";
 import { registerEmitTools } from "../tools/emit.ts";
 import { registerExtensionTools } from "../tools/extensions.ts";
@@ -63,7 +64,8 @@ beforeAll(async () => {
   const writeJson = (p: string, v: unknown) =>
     writeFile(p, `${JSON.stringify(v, null, 2)}\n`, "utf8");
   await writeJson(join(tmp, ".design/config.json"), {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    name: "test",
     toolVersion: "0.1.0",
     libraries: {
       default: {
@@ -121,6 +123,13 @@ beforeAll(async () => {
   registerCommentTools(mcp, stub());
   registerFeedbackTool(mcp, ctx, { url: "https://cloud.invalid" });
   registerGenerateTools(mcp, ctx, { url: "https://cloud.invalid" });
+  // Registered only in a multi-design session; the table still has to name them.
+  registerDesignTools(mcp, ctx, {
+    current: "test",
+    names: ["other", "test"],
+    switchable: true,
+    pick: undefined,
+  });
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: "policy-test", version: "0.0.0" });

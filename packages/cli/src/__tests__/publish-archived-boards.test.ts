@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { type DesignFolder, loadDesignFolder } from "@velloo/server";
 import { designConfig, designTheme } from "@velloo/server/testing";
 
-import { pickBoards } from "../folder.ts";
+import { pickBoards } from "../design.ts";
 import { selectBoards } from "../publish/core.ts";
 
 /**

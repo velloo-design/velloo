@@ -135,6 +135,7 @@ export async function writeScaffold(
   scaffold: Scaffold,
   plan: InstallPlan,
   answers: WizardAnswers,
+  name: string,
   /** A local design outside the checkout — its README names the app symbolically. */
   local = false,
 ): Promise<void> {
@@ -169,6 +170,7 @@ export async function writeScaffold(
   const stack = stackById(answers.stack);
   const hostAliases = componentAliases(stack?.alias, answers.componentsRelative);
   const config = buildDefaultConfig({
+    name,
     library: plan.library,
     defaultScreen: defaultScreenForScaffold(scaffold),
     defaultBoard: scaffold.boards[0]?.id,

@@ -1,8 +1,8 @@
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { daemonRoot, listDaemons, stopDaemon } from "../daemon/runtime.ts";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
-import { projectLabel } from "../manifest.ts";
+import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
+import { designLabel } from "../manifest.ts";
 
 export default defineCommand({
   meta: {
@@ -13,7 +13,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     all: {
       type: "boolean",
@@ -35,7 +35,7 @@ export default defineCommand({
       return;
     }
 
-    const folder = await resolveDesignFolder(args.folder, "stop");
+    const folder = await resolveDesign(args.folder, "stop");
     const root = daemonRoot(folder);
     if (await stopDaemon(root)) {
       console.log(`velloo: stopped canvas for ${root}`);
@@ -55,7 +55,7 @@ export default defineCommand({
       ),
     );
     for (const d of others) {
-      console.log(pc.dim(`    ${d.canvasUrl}  ${(await projectLabel(d.root)) ?? d.root}`));
+      console.log(pc.dim(`    ${d.canvasUrl}  ${(await designLabel(d.root)) ?? d.root}`));
     }
   },
 });

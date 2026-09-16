@@ -1,8 +1,8 @@
 import { existsSync, realpathSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { dirname, join, parse, relative, resolve } from "node:path";
-import { localDesignOf } from "@velloo/server";
-import { type FoundManifest, findManifest } from "../manifest.ts";
+import { type FoundRepoManifest, localDesignOf } from "@velloo/server";
+import { findDesigns, findManifest } from "../manifest.ts";
 
 /**
  * Where to write the agent config. An explicit override wins; then the
@@ -16,25 +16,29 @@ export async function resolveProjectRoot(designFolder: string, override?: string
   const local = localDesignOf(designFolder);
   if (local) return local.root;
   const registered = await registeringManifest(designFolder);
-  if (registered) return registered.found.dir;
+  if (registered) return registered.dir;
   return nearestPackageRoot(designFolder);
 }
 
 /**
- * How an agent config under `projectRoot` names the design folder. A project
- * name resolves through `velloo.json` from any cwd inside the repo, so it
- * survives the agent being opened in a subdirectory; a path only resolves
- * from `projectRoot` itself, so it is the fallback for unregistered folders.
+ * The design argument an agent config under `projectRoot` has to carry, or
+ * null when `velloo mcp` finds the design without one. A design the checkout
+ * lists resolves from the agent's working directory — and a session can switch
+ * designs — so pinning its name would only go stale on a rename or a move. A
+ * folder the checkout doesn't list can only be named by its path.
  */
-export async function designFolderReference(
+export async function designArgumentFor(
   projectRoot: string,
   designFolder: string,
-): Promise<string> {
-  const local = localDesignOf(designFolder);
-  if (local) return local.projectName;
-  const registered = await registeringManifest(designFolder);
-  if (registered && isUnder(registered.found.dir, resolve(projectRoot))) return registered.name;
+): Promise<string | null> {
+  const set = await findDesigns(projectRoot).catch(() => null);
+  const target = realOr(designFolder);
+  if (set?.designs.some((d) => !d.outsideRepo && realOr(d.root) === target)) return null;
   return relative(projectRoot, designFolder) || ".";
+}
+
+function realOr(path: string): string {
+  return existsSync(path) ? realpathSync(path) : resolve(path);
 }
 
 /**
@@ -50,11 +54,9 @@ export async function agentRootCandidates(designFolder: string): Promise<string[
   return [...new Set(roots)];
 }
 
-async function registeringManifest(
-  designFolder: string,
-): Promise<{ found: FoundManifest; name: string } | null> {
+async function registeringManifest(designFolder: string): Promise<FoundRepoManifest | null> {
   const abs = resolve(designFolder);
-  let found: FoundManifest | null;
+  let found: FoundRepoManifest | null;
   try {
     found = await findManifest(abs);
   } catch {
@@ -63,11 +65,10 @@ async function registeringManifest(
   }
   if (!found) return null;
   const real = existsSync(abs) ? realpathSync(abs) : abs;
-  for (const [name, folder] of found.folders) {
-    if (folder === abs || (existsSync(folder) && realpathSync(folder) === real))
-      return { found, name };
-  }
-  return null;
+  const listed = found.folders.some(
+    (folder) => folder === abs || (existsSync(folder) && realpathSync(folder) === real),
+  );
+  return listed ? found : null;
 }
 
 async function nearestPackageRoot(designFolder: string): Promise<string> {
@@ -85,9 +86,4 @@ async function nearestPackageRoot(designFolder: string): Promise<string> {
     dir = dirname(dir);
   }
   return fallback;
-}
-
-function isUnder(parent: string, child: string): boolean {
-  const rel = relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !parse(rel).root);
 }

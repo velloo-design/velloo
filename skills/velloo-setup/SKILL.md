@@ -97,7 +97,7 @@ statuses say. Fix or replace the blocking component before trusting any
 - **`unavailable`** — there is no usable canvas source, so a screen using it
   does not mount at all (`mounted: false`); read its errors — a resolution
   failure usually means the recorded app root is wrong
-  (`velloo folder set-app-root`).
+  (`velloo design set-app-root`).
 
 Host-source edits invalidate the canvas bundle automatically. After changing a
 component, wait for the frame to reload and call `component_status` again; do

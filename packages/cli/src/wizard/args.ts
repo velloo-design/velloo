@@ -17,7 +17,7 @@ export interface InitCliArgs {
   designFolder?: string | undefined;
   /**
    * Skip the existing-folder menu and go straight to adding another design
-   * folder — what `velloo folder add` runs. With `designFolder`, the wizard's
+   * folder — what `velloo design add` runs. With `designFolder`, the wizard's
    * "where should it live?" prompt is answered too.
    */
   addFolder?: boolean | undefined;
@@ -39,8 +39,8 @@ export interface InitCliArgs {
   themePreset?: string | undefined;
   /** App stack: nextjs | vite | astro | remix — sets codegen.componentsAlias. */
   stack?: string | undefined;
-  /** Project name for the repo's velloo.json (default: derived from the folder path). */
-  project?: string | undefined;
+  /** The new design's name (default: derived from the folder path). */
+  name?: string | undefined;
   /** Screen name for redesign-screen (typed; optional if routes are scanned). */
   screenName?: string | undefined;
   /** Component name/description for redesign-component. */

@@ -3,8 +3,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
+import { isDesignFolderSync, isEmptyOrMissingSync } from "../design.ts";
 import { factsLine, inheritedFromFolder, readFolderFacts } from "../existing-folder.ts";
-import { isDesignFolderSync, isEmptyOrMissingSync } from "../folder.ts";
 import { TOOL_VERSION } from "../version.ts";
 
 let repo: string;
@@ -16,6 +16,7 @@ async function writeConfig(patch: Record<string, unknown> = {}) {
     JSON.stringify({
       schemaVersion: CURRENT_SCHEMA_VERSION,
       toolVersion: TOOL_VERSION,
+      name: "app",
       libraries: {
         default: {
           id: "shadcn-upstream",
@@ -50,7 +51,7 @@ describe("readFolderFacts", () => {
     expect(facts.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(facts.pendingMigrations).toEqual([]);
     expect(facts.toolVersionStale).toBe(false);
-    expect(facts.project).toBeUndefined();
+    expect(facts.design).toBeUndefined();
   });
 
   test("an older folder reports the migrations `velloo upgrade` would apply", async () => {
@@ -65,30 +66,22 @@ describe("readFolderFacts", () => {
     expect((await readFolderFacts(folder, repo)).toolVersionStale).toBe(true);
   });
 
-  test("picks up the project name from the repo manifest", async () => {
-    await writeFile(
-      join(repo, "velloo.json"),
-      JSON.stringify({ projects: { app: "velloo" } }),
-      "utf8",
-    );
-    expect((await readFolderFacts(folder, repo)).project).toBe("app");
+  test("picks up the design name from its config", async () => {
+    await writeFile(join(repo, "velloo.json"), JSON.stringify({ designs: ["velloo"] }), "utf8");
+    expect((await readFolderFacts(folder, repo)).design).toBe("app");
   });
 
-  test("a broken manifest doesn't break the menu — it just reports no project", async () => {
+  test("a broken manifest doesn't break the menu — it just reports no design", async () => {
     await writeFile(join(repo, "velloo.json"), "{ not json", "utf8");
-    expect((await readFolderFacts(folder, repo)).project).toBeUndefined();
+    expect((await readFolderFacts(folder, repo)).design).toBeUndefined();
   });
 
   test("factsLine summarizes the folder in one line", async () => {
-    await writeFile(
-      join(repo, "velloo.json"),
-      JSON.stringify({ projects: { app: "velloo" } }),
-      "utf8",
-    );
+    await writeFile(join(repo, "velloo.json"), JSON.stringify({ designs: ["velloo"] }), "utf8");
     const line = factsLine(await readFolderFacts(folder, repo), folder);
     expect(line).toContain("shadcn-upstream");
     expect(line).toContain(`format v${CURRENT_SCHEMA_VERSION} (current)`);
-    expect(line).toContain('project "app"');
+    expect(line).toContain('design "app"');
   });
 });
 

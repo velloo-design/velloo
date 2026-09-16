@@ -15,8 +15,8 @@ import { loadDesignFolder } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { installChromiumInteractive } from "../browser-setup.ts";
+import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { openUrl } from "../open-url.ts";
 
 /** ETX — raw mode delivers Ctrl-C as a keystroke, not a signal. */
@@ -208,7 +208,7 @@ export default defineCommand({
       required: false,
       description: "Page to open the browser on, e.g. http://localhost:3000/dashboard",
     },
-    folder: { type: "string", description: FOLDER_ARG_DESCRIPTION },
+    folder: { type: "string", description: DESIGN_ARG_DESCRIPTION },
     list: {
       type: "boolean",
       default: false,
@@ -220,7 +220,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesignFolder(args.folder, "capture");
+    const folder = await resolveDesign(args.folder, "capture");
     const design = await loadDesignFolder(folder);
     const folderId = design.config.folderId;
 

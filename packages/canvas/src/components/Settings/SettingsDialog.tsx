@@ -1,4 +1,4 @@
-import { Check, FolderCog, LayoutGrid, Monitor, SlidersHorizontal } from "lucide-react";
+import { Check, LayoutGrid, Monitor, PencilRuler, SlidersHorizontal } from "lucide-react";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import type { SettingsScope } from "../../store/modes.ts";
@@ -15,32 +15,32 @@ import {
 } from "../ui/dialog.tsx";
 import { BoardPane } from "./BoardPane.tsx";
 import { CanvasPane } from "./CanvasPane.tsx";
-import { FolderPane } from "./FolderPane.tsx";
+import { DesignPane } from "./DesignPane.tsx";
 
 /**
  * The settings dialog — three scopes behind one left rail:
  *
- *   Folder → `config.json`, written through config mutations
+ *   Design → its `config.json`, written through config mutations
  *   Board  → one board's file, written through `update_board`
  *   Canvas → this browser's localStorage, written nowhere else
  *
  * The rail is the scope switcher *and* the explanation of where each setting
  * lives: the whole point is that a user can tell, at a glance, which of these
  * their teammates will see. Account and credits stay in the top-bar
- * menu — they belong to the person, not the folder.
+ * menu — they belong to the person, not the design.
  */
 
-const SCOPES: { id: SettingsScope; label: string; icon: typeof FolderCog }[] = [
-  { id: "folder", label: "Folder", icon: FolderCog },
+const SCOPES: { id: SettingsScope; label: string; icon: typeof PencilRuler }[] = [
+  { id: "design", label: "Design", icon: PencilRuler },
   { id: "board", label: "Board", icon: LayoutGrid },
   { id: "canvas", label: "Canvas", icon: SlidersHorizontal },
 ];
 
 const HEADINGS: Record<SettingsScope, { title: string; description: string }> = {
-  folder: {
-    title: "Folder",
+  design: {
+    title: "Design",
     description:
-      "Saved to config.json in the design folder — committed with your repo, visible to your agent.",
+      "Saved to the design's config.json — visible to your agent, and committed with your repo when the design lives in it.",
   },
   board: {
     title: "Board",
@@ -67,11 +67,11 @@ export function SettingsDialog() {
   // dialog reads it, and an open dialog stays fresh via `config-changed`.
   useEffect(() => {
     if (scope !== null) {
-      void loadFolderConfig().catch((err) => toastError(err, "Could not load folder settings"));
+      void loadFolderConfig().catch((err) => toastError(err, "Could not load design settings"));
     }
   }, [scope, loadFolderConfig]);
 
-  const heading = scope ? HEADINGS[scope] : HEADINGS.folder;
+  const heading = scope ? HEADINGS[scope] : HEADINGS.design;
 
   return (
     <Dialog open={scope !== null} onOpenChange={(open) => !open && setScope(null)}>
@@ -143,7 +143,7 @@ export function SettingsDialog() {
             ) : scope === "board" ? (
               <BoardPane cfg={cfg} key={currentBoardId ?? ""} />
             ) : (
-              <FolderPane cfg={cfg} />
+              <DesignPane cfg={cfg} />
             )}
           </div>
 

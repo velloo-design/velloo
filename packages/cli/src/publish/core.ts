@@ -22,8 +22,8 @@ import {
   type DesignFolder,
   LiveBundler,
   liveExtensions,
-  localDesignOf,
   orderedBoards,
+  recordedDesignName,
   registryForScreen,
   renderPassForScreen,
   writeJsonAtomic,
@@ -208,9 +208,9 @@ const publishedAt = (value: string | null): number => {
 /** The size screens render at for the published bundle, unless a caller says otherwise. */
 export const PUBLISH_VIEWPORT: Viewport = { w: 1440, h: 900 };
 
-/** The default link title for a folder — its directory name. */
+/** The default link title for a design — its name. */
 function defaultPublishTitle(folderRoot: string): string {
-  return `${localDesignOf(folderRoot)?.projectName ?? folderRoot.split("/").filter(Boolean).pop()} designs`;
+  return `${recordedDesignName(folderRoot) ?? folderRoot.split("/").filter(Boolean).pop()} designs`;
 }
 
 /**

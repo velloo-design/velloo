@@ -57,7 +57,8 @@ beforeEach(async () => {
     await mkdir(join(root, dir), { recursive: true });
   }
   await writeJson(join(root, ".design/config.json"), {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    name: "test",
     toolVersion: "0.1.0",
     folderId: "folder-comments-test",
     libraries: {

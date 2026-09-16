@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 import { multiselect } from "@clack/prompts";
-import { type BoardEntry, boardSelectionPrompt, resolveBoardSelection } from "../folder.ts";
+import { type BoardEntry, boardSelectionPrompt, resolveBoardSelection } from "../design.ts";
 
 const boards: BoardEntry[] = [
   { id: "home", name: "Home", screens: ["landing"], archived: false },

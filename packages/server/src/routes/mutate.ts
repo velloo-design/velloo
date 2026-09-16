@@ -16,6 +16,7 @@ import {
   updateBoardGroup,
   updateCodegen,
   updateDefaults,
+  updateDesignName,
   updateFeedback,
   updateFrames,
   updateProps,
@@ -39,6 +40,7 @@ import {
   UpdateBoardGroupBody,
   UpdateCodegenBody,
   UpdateDefaultsBody,
+  UpdateDesignNameBody,
   UpdateFeedbackBody,
   UpdateFrameBody,
   UpdatePropsBody,
@@ -120,6 +122,10 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/update_defaults",
     route(UpdateDefaultsBody, (a, ctx) => updateDefaults(ctx, a)),
+  );
+  r.post(
+    "/update_design_name",
+    route(UpdateDesignNameBody, (a, ctx) => updateDesignName(ctx, a)),
   );
   r.post(
     "/update_codegen",

@@ -25,7 +25,8 @@ import { providerForScreen } from "../lookup.ts";
 const sampleTheme = designTheme();
 
 const multiLibraryConfig = {
-  schemaVersion: 3,
+  schemaVersion: 4,
+  name: "test",
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {

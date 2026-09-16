@@ -38,7 +38,8 @@ function ctxOf(): { ctx: MutationContext; screen: Screen } {
   const folder = {
     root: "/tmp/velloo-inspect-test-nonexistent",
     config: {
-      schemaVersion: 3,
+      schemaVersion: 4,
+      name: "test",
       toolVersion: "test",
       libraries: {
         default: {

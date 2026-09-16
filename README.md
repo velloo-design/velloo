@@ -147,26 +147,26 @@ If a screenshot ever fails, run exactly that command and retry.
 
 ## CLI essentials
 
-Two files define the model: a repo-root **`velloo.json`** names each design
-folder as a project (several can coexist in a monorepo), and
-**`.design/config.json`** marks a directory as a design folder. Every
-folder-taking command accepts a project name or a path, and resolves through
-`velloo.json` when you pass nothing.
+A **design** is a folder with a `.design/config.json`, which holds its name. A
+repo-root **`velloo.json`** lists where the repo's designs are (several can
+coexist in a monorepo). Every design-taking command accepts a design name or a
+path, and resolves through `velloo.json` when you pass nothing. With several
+designs, a connected agent is told which one it is on and can switch between them.
 
 | Command | What it does |
 |---|---|
 | `velloo init` | Create a design folder and wire up your agent |
 | `velloo run [folder]` | Start the canvas + MCP daemon (`--port` / `--mcp-port` if 7300/7301 are busy) |
-| `velloo folder list\|add\|remove` | Manage the repo's design folders |
+| `velloo design list\|add\|remove\|move\|rename\|upgrade` | Manage the repo's designs |
 | `velloo emit` / `velloo render` | Implementation IR for your agent / a PNG of a screen |
-| `velloo publish` | Publish a board for review (`--list`, `--remove`) |
+| `velloo publish` | Publish a board for review, and manage what you've published |
 | `velloo upgrade` | Update the install *and* migrate the folder format (`--check` to preview) |
 
 `Ctrl-C` stops the server.
 
 **Keeping designs out of the app repo** is a first-class option — pick "Default
 out of repo" in the wizard, give a path outside the repo, or run
-`velloo init --external --project web --non-interactive`. The design is recorded
+`velloo init --external --name web --non-interactive`. The design is recorded
 only on your machine: nothing is written into the repo, the files live under
 `~/.velloo/designs/` (or where you chose) outside version control, and agents are
 wired through global configs. See

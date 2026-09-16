@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { designFolderReference } from "./project-root.ts";
+import { designArgumentFor } from "./project-root.ts";
 
 export interface CursorRulesResult {
   installed: boolean;
@@ -18,7 +18,8 @@ export async function installCursorRules(
   projectRoot: string,
   designFolder: string,
 ): Promise<CursorRulesResult> {
-  const designRel = await designFolderReference(projectRoot, designFolder);
+  const pinned = await designArgumentFor(projectRoot, designFolder);
+  const arg = pinned ? ` ${pinned}` : "";
   const body = `---
 description: Drive UI design through the Velloo MCP server (a local design canvas backed by this project's shadcn components).
 alwaysApply: false
@@ -26,13 +27,16 @@ alwaysApply: false
 
 # Velloo design
 
-Velloo is a local, code-shaped design canvas exposed over MCP. The design folder
-for this project is \`${designRel}\`.
+Velloo is a local, code-shaped design canvas exposed over MCP. ${
+    pinned
+      ? `The design folder for this project is \`${pinned}\`.`
+      : "`velloo design list` shows this project's designs; the MCP server's instructions say which one a session is on."
+  }
 
 - Cursor starts the velloo MCP server itself (wired as \`velloo mcp\`), so the
   tools are available once the MCP config is loaded — nothing to start first. If
-  they're missing, ask the user to run \`velloo connect ${designRel}\` and
-  restart Cursor. To watch the canvas, the user runs \`velloo run ${designRel}\`
+  they're missing, ask the user to run \`velloo connect${arg}\` and
+  restart Cursor. To watch the canvas, the user runs \`velloo run${arg}\`
   (stays in the foreground; \`b\` background, \`s\` stop, \`o\` open). If you start
   it yourself, pass \`--background\` so you aren't stuck in that session. It
   prints the canvas URL (defaults to \`:7300\`, or a free port if that's taken,

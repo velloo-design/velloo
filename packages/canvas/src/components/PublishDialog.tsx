@@ -88,7 +88,7 @@ export function PublishDialog() {
   // publish started before the dialog was closed is still running.
   useEffect(() => {
     if (!open) return;
-    setTitle(scope ? scope.name : design?.folderName ? `${design.folderName} designs` : "");
+    setTitle(scope ? scope.name : design?.designName ? `${design.designName} designs` : "");
     setBoardIds(scope ? [scope.id] : (design?.boards ?? []).map((b) => b.id));
     setVisibility(scope?.mode === "private" ? "private" : "public");
     setPassword("");
@@ -126,7 +126,7 @@ export function PublishDialog() {
     return () => {
       cancelled = true;
     };
-  }, [open, design?.folderName, design?.boards, scope]);
+  }, [open, design?.designName, design?.boards, scope]);
 
   // A publish that something is waiting on (a cloud comment needs its board to
   // have a link) hands back the moment the run lands, rather than when the

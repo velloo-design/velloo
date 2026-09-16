@@ -37,7 +37,7 @@ function sanitize(desc: string | undefined): string {
 
 /**
  * Introspect the live citty command table into a flat completion spec.
- * Internal (`__`-prefixed) commands are excluded; boolean flags that default
+ * Internal (`__`-prefixed) and hidden commands are excluded; boolean flags that default
  * to true surface as their `--no-` form (the only form worth typing).
  */
 export async function commandSpecs(): Promise<CommandSpec[]> {
@@ -53,6 +53,7 @@ export async function commandSpecs(): Promise<CommandSpec[]> {
     } catch {
       continue;
     }
+    if (meta?.hidden) continue;
     const flags: FlagSpec[] = [];
     for (const [argName, def] of Object.entries(args)) {
       if (def.type === "positional") continue;

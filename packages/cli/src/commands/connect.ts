@@ -15,8 +15,8 @@ import {
 } from "../connect/index.ts";
 import { resolveProjectRoot } from "../connect/project-root.ts";
 import { assertFolderFormatCurrent, DesignFolderFormatError } from "../daemon/runtime.ts";
+import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
 import { createProgress } from "../progress.ts";
 
 export default defineCommand({
@@ -28,7 +28,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     agent: {
       type: "string",
@@ -55,7 +55,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesignFolder(args.folder, "connect", { interactive: true });
+    const folder = await resolveDesign(args.folder, "connect", { interactive: true });
     // Wiring an agent config is format-independent, so an out-of-date folder
     // only warns — but warn NOW, or the first thing the wired agent meets is
     // the MCP upgrade gate instead of the design tools.

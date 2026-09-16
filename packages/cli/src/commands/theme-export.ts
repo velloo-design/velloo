@@ -7,7 +7,7 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
 import { loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
+import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { detectHost } from "../scan/detect.ts";
 
 /** Read a file if it exists, else undefined. */
@@ -78,7 +78,7 @@ export default defineCommand({
     },
     folder: {
       type: "string",
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     theme: {
       type: "string",
@@ -98,7 +98,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folderRoot = await resolveDesignFolder(args.folder, "theme:export");
+    const folderRoot = await resolveDesign(args.folder, "theme:export");
     const themePath = args.theme ? resolve(args.theme) : join(folderRoot, "theme", "default.json");
     const outDir = isAbsolute(args.to) ? args.to : resolve(args.to);
 

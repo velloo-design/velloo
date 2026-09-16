@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "
 import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { APP_PATH_PREFIX } from "@velloo/schema";
 import { z } from "zod";
 import { writeJsonAtomic } from "./fs.ts";
 
@@ -16,24 +17,28 @@ import { writeJsonAtomic } from "./fs.ts";
  */
 
 const ID = /^[A-Za-z0-9_-]{8,64}$/;
-const PROJECT_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
 
 const RecordSchema = z.object({
   /** The checkout the design belongs to — where commands and agents run. */
   root: z.string().min(1),
   /** The application inside `root` the design targets. */
   appRoot: z.string().min(1),
-  projectName: z.string().regex(PROJECT_NAME),
+  /**
+   * The design's name, from before names moved into its config. Read so a
+   * design not yet upgraded keeps resolving; never written.
+   */
+  projectName: z.string().optional(),
   /** A folder the user chose; absent means managed storage (`<storage>/<id>`). */
   designPath: z.string().min(1).optional(),
 });
-type LocalDesignRecord = z.infer<typeof RecordSchema>;
+type LocalDesignRecord = Omit<z.infer<typeof RecordSchema>, "projectName">;
 
 export interface LocalDesign {
   id: string;
   root: string;
   appRoot: string;
-  projectName: string;
+  /** The pre-v4 name this record carried, for a design not yet upgraded. */
+  legacyName: string | undefined;
   /** Absolute design folder. */
   designRoot: string;
 }
@@ -95,11 +100,11 @@ export function listLocalDesigns(): LocalDesign[] {
         id,
         root: record.root,
         appRoot: record.appRoot,
-        projectName: record.projectName,
+        legacyName: record.projectName,
         designRoot: record.designPath ?? managedDesignPath(id),
       });
     } catch {
-      // A record from an older format or a hand edit: `folder bind` rewrites it.
+      // A record from an older format or a hand edit: `design bind` rewrites it.
     }
   }
   return out;
@@ -122,7 +127,6 @@ export async function writeLocalDesign(id: string, record: LocalDesignRecord): P
     await writeJsonAtomic(
       join(locationsDir(), `${id}.json`),
       RecordSchema.parse({
-        ...record,
         root: resolve(record.root),
         appRoot: resolve(record.appRoot),
         ...(record.designPath ? { designPath: resolve(record.designPath) } : {}),
@@ -140,15 +144,19 @@ export async function removeLocalDesign(id: string): Promise<void> {
   await rm(join(locationsDir(), `${id}.json`), { force: true });
 }
 
-/** `project:` paths are portable references into the design's application. */
-export function resolveProjectPath(folder: string, path: string): string {
-  if (!path.startsWith("project:")) return resolve(folder, path);
+/**
+ * Resolve a config path from its design folder. `app:` paths are portable
+ * references into the design's application, which only this machine's record
+ * of a local design can place.
+ */
+export function resolveAppPath(folder: string, path: string): string {
+  if (!path.startsWith(APP_PATH_PREFIX)) return resolve(folder, path);
   const design = localDesignOf(folder);
   if (!design)
     throw new Error(
-      `Project-relative reference ${path} has no application on this machine for ${folder}. Run \`velloo folder bind ${folder}\` from the application checkout.`,
+      `App-relative reference ${path} has no application on this machine for ${folder}. Run \`velloo design bind ${folder}\` from the application checkout.`,
     );
-  const rel = path.slice("project:".length);
-  if (/^(?:[\\/]|[A-Za-z]:)/.test(rel)) throw new Error(`Invalid project-relative path: ${path}`);
+  const rel = path.slice(APP_PATH_PREFIX.length);
+  if (/^(?:[\\/]|[A-Za-z]:)/.test(rel)) throw new Error(`Invalid app-relative path: ${path}`);
   return resolve(design.appRoot, rel.replace(/\\/g, "/"));
 }

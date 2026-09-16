@@ -5,12 +5,15 @@ import {
   type UpdateCodegenResult,
   type UpdateDefaultsArgs,
   type UpdateDefaultsResult,
+  type UpdateDesignNameArgs,
+  type UpdateDesignNameResult,
   type UpdateFeedbackArgs,
   type UpdateFeedbackResult,
   type UpdateViewportPresetsArgs,
   type UpdateViewportPresetsResult,
   updateCodegen as updateCodegenImpl,
   updateDefaults as updateDefaultsImpl,
+  updateDesignName as updateDesignNameImpl,
   updateFeedback as updateFeedbackImpl,
   updateViewportPresets as updateViewportPresetsImpl,
 } from "../config.ts";
@@ -33,6 +36,15 @@ export function updateDefaults(
 ): Promise<Result<UpdateDefaultsResult, MutationError>> {
   return tracked(ctx, "update_defaults", {}, () =>
     withConfigLock(ctx.folder, () => updateDefaultsImpl(ctx, args)),
+  );
+}
+
+export function updateDesignName(
+  ctx: MutationContext,
+  args: UpdateDesignNameArgs,
+): Promise<Result<UpdateDesignNameResult, MutationError>> {
+  return tracked(ctx, "update_design_name", {}, () =>
+    withConfigLock(ctx.folder, () => updateDesignNameImpl(ctx, args)),
   );
 }
 

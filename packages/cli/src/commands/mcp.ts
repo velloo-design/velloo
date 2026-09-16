@@ -4,6 +4,7 @@ import {
   parseMcpSurfaceSelection,
   runStdioFormatGate,
   runStdioMcpProxy,
+  withMcpSessionUrl,
   withMcpSurfaceUrl,
 } from "@velloo/server";
 import { defineCommand } from "citty";
@@ -13,7 +14,7 @@ import {
   ensureDaemon,
   stopDaemon,
 } from "../daemon/runtime.ts";
-import { FOLDER_ARG_DESCRIPTION, resolveDesignFolder } from "../folder.ts";
+import { DESIGN_ARG_DESCRIPTION, resolveDesignForSession } from "../design.ts";
 import { assertLoopbackHost } from "../host-security.ts";
 import { traceEnabled } from "../trace/env.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
@@ -69,7 +70,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     http: {
       type: "boolean",
@@ -91,7 +92,7 @@ export default defineCommand({
   },
   async run({ args }) {
     assertLoopbackHost(args.host ?? "127.0.0.1");
-    const folder = await resolveDesignFolder(args.folder, "mcp");
+    const { folder, pick } = await resolveDesignForSession(args.folder, "mcp");
     const preferredPort = args.port ? Number(args.port) : undefined;
     const parsedSurface = parseMcpSurfaceSelection(args.surface ?? process.env.VELLOO_MCP_SURFACE);
     if (!parsedSurface.ok) throw new Error(`velloo mcp: ${parsedSurface.error}`);
@@ -127,7 +128,7 @@ export default defineCommand({
     }
 
     if (args.http) {
-      const selectedUrl = withMcpSurfaceUrl(rec.mcpUrl, surface);
+      const selectedUrl = withMcpSessionUrl(withMcpSurfaceUrl(rec.mcpUrl, surface), { pick });
       console.log(`velloo: canvas at ${rec.canvasUrl}`);
       console.log(`velloo: MCP server at ${selectedUrl} (point your AI agent here)`);
       console.log("velloo: it keeps running in the background — `velloo stop` to stop it.");
@@ -145,19 +146,36 @@ export default defineCommand({
       await close?.();
       process.exit(0);
     };
-    const proxy = await runStdioMcpProxy(withMcpSurfaceUrl(rec.mcpUrl, surface), {
+    // The design this session is bound to — `switch_design` moves it.
+    let current = folder;
+    // Only the design the session opened on gets the requested port; another
+    // design's daemon keeps its own.
+    const portFor = (root: string) => (root === folder ? preferredPort : undefined);
+    const sessionUrl = (mcpUrl: string, opened: typeof pick) =>
+      withMcpSessionUrl(withMcpSurfaceUrl(mcpUrl, surface), { switchable: true, pick: opened });
+    const proxy = await runStdioMcpProxy(sessionUrl(rec.mcpUrl, pick), {
       onExit: () => void shutdown(),
       // A crashed daemon respawns on new ephemeral ports; re-run the ensure
       // flow (lockfile → health check → spawn if dead) to find or revive it.
       rediscover: async () => {
         try {
-          const fresh = await ensureDaemon(folder, {
-            preferredPort,
+          const fresh = await ensureDaemon(current, {
+            preferredPort: portFor(current),
             host: args.host,
           });
-          return withMcpSurfaceUrl(fresh.mcpUrl, surface);
+          return sessionUrl(fresh.mcpUrl, undefined);
         } catch {
           return null;
+        }
+      },
+      switchTo: async (root) => {
+        try {
+          const next = await ensureDaemon(root, { preferredPort: portFor(root), host: args.host });
+          current = root;
+          return { url: sessionUrl(next.mcpUrl, undefined) };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { error: message.startsWith("velloo: ") ? message.slice(8) : message };
         }
       },
     });

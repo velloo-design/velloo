@@ -17,6 +17,7 @@ import {
   type MutationContext,
   updateCodegen,
   updateDefaults,
+  updateDesignName,
   updateFeedback,
   updateViewportPresets,
 } from "../index.ts";
@@ -80,6 +81,33 @@ beforeEach(async () => {
 afterEach(async () => {
   process.env.VELLOO_PREFS_PATH = undefined;
   await rm(tmp, { recursive: true, force: true });
+});
+
+describe("update_design_name", () => {
+  test("renames the design in its config and follows a defaultDesign that named it", async () => {
+    await writeJson(join(tmp, "velloo.json"), { designs: ["."], defaultDesign: "test" });
+    const result = unwrap(await updateDesignName(ctx, { name: " marketing " }));
+    expect(result).toEqual({ name: "marketing" });
+    expect((await onDisk()).name).toBe("marketing");
+    expect(broadcasts()).toContainEqual({ type: "config-changed" });
+    const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
+    expect(manifest.defaultDesign).toBe("marketing");
+  });
+
+  test("refuses an invalid name, or one another design in the repo has", async () => {
+    await mkdir(join(tmp, "other/.design"), { recursive: true });
+    await writeJson(join(tmp, "other/.design/config.json"), designConfig({ name: "other" }));
+    await writeJson(join(tmp, "velloo.json"), { designs: [".", "other"] });
+
+    const invalid = await updateDesignName(ctx, { name: "a/b" });
+    expect(invalid.ok).toBe(false);
+    const taken = await updateDesignName(ctx, { name: "other" });
+    expect(taken.ok ? null : taken.error).toMatchObject({
+      kind: "BadRequest",
+      message: expect.stringContaining('"other" already exists'),
+    });
+    expect((await onDisk()).name).toBe("test");
+  });
 });
 
 describe("update_viewport_presets", () => {
@@ -184,7 +212,8 @@ describe("HTTP surface", () => {
     const body = (await (await app.request("/")).json()) as Record<string, unknown>;
     expect(body).toMatchObject({
       root: tmp,
-      schemaVersion: 3,
+      schemaVersion: 4,
+      designName: "test",
       toolVersion: "0.1.0",
       defaultLibrary: "default",
       styling: null,

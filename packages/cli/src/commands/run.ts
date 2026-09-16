@@ -2,8 +2,8 @@ import { basename, join } from "node:path";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { daemonRoot, ensureDaemon, isLive, stopDaemon } from "../daemon/runtime.ts";
+import { DESIGN_ARG_DESCRIPTION } from "../design.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION } from "../folder.ts";
 import { assertLoopbackHost } from "../host-security.ts";
 import { openUrl } from "../open-url.ts";
 import { createProgress } from "../progress.ts";
@@ -11,7 +11,7 @@ import { shouldStayForeground, waitInForeground } from "../run-foreground.ts";
 import { type RunTarget, resolveRunTargets } from "../run-targets.ts";
 import { traceEnabled } from "../trace/env.ts";
 
-/** Manifest project name when there is one, else the folder's own basename. */
+/** The design's name when it has one, else the folder's own basename. */
 function label(target: RunTarget): string {
   return target.name ?? basename(target.folder);
 }
@@ -36,7 +36,7 @@ export default defineCommand({
     folder: {
       type: "positional",
       required: false,
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     port: {
       type: "string",

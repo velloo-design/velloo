@@ -30,7 +30,8 @@ const sampleTheme = designTheme({
 });
 
 const config = {
-  schemaVersion: 3,
+  schemaVersion: 4,
+  name: "test",
   toolVersion: "0.1.0",
   libraries: {
     shadcn: {

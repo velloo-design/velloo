@@ -17,6 +17,7 @@ import {
   SnippetSchema,
   ThemeSchema,
 } from "../index.ts";
+import { designNameIssue, toDesignName } from "../repo.ts";
 
 describe("NodeSchema", () => {
   test("accepts a leaf node", () => {
@@ -295,10 +296,35 @@ describe("BoardSchema", () => {
   });
 });
 
+describe("design names", () => {
+  test("spaces, emoji and any script are fine", () => {
+    for (const name of ["Admin panel", "🎨 Brand", "设计系统", "Café — v2", "web"]) {
+      expect(designNameIssue(name)).toBeNull();
+    }
+  });
+
+  test("what an argument can't carry is refused, with the reason", () => {
+    expect(designNameIssue("")).toContain("empty");
+    expect(designNameIssue("  ")).toContain("empty");
+    expect(designNameIssue(" padded")).toContain("spaces");
+    expect(designNameIssue("apps/web")).toContain("/");
+    expect(designNameIssue("..")).not.toBeNull();
+    expect(designNameIssue("tab\there")).toContain("control");
+    expect(designNameIssue("x".repeat(81))).toContain("80");
+  });
+
+  test("free text is cleaned into a name rather than slugged", () => {
+    expect(toDesignName("  Admin Panel ")).toBe("Admin Panel");
+    expect(toDesignName("a/b")).toBe("a b");
+    expect(toDesignName("   ")).toBeNull();
+  });
+});
+
 describe("ConfigSchema", () => {
   const base = {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     toolVersion: "0.1.0",
+    name: "app",
     libraries: {
       default: {
         id: "shadcn-upstream" as const,

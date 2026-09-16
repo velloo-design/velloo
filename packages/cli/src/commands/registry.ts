@@ -15,7 +15,13 @@ const LOADERS: Record<string, LazyCommand> = {
   logout: () => import("./logout.ts").then((m) => m.default),
   connect: () => import("./connect.ts").then((m) => m.default),
   run: () => import("./run.ts").then((m) => m.default),
-  folder: () => import("./folder.ts").then((m) => m.default),
+  design: () => import("./design.ts").then((m) => m.default),
+  // The old name for `design`, kept working but out of help and completions.
+  folder: () =>
+    import("./design.ts").then((m) => ({
+      ...m.default,
+      meta: { name: "folder", description: "Alias of `velloo design`", hidden: true },
+    })),
   mcp: () => import("./mcp.ts").then((m) => m.default),
   stop: () => import("./stop.ts").then((m) => m.default),
   status: () => import("./status.ts").then((m) => m.default),

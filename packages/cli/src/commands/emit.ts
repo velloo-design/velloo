@@ -13,9 +13,9 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { type Screen, ScreenSchema } from "@velloo/schema";
 import { hostAppRootFrom, loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
+import { DESIGN_ARG_DESCRIPTION, pickScreen, resolveDesign } from "../design.ts";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
-import { FOLDER_ARG_DESCRIPTION, pickScreen, resolveDesignFolder } from "../folder.ts";
 import { createProgress } from "../progress.ts";
 
 /**
@@ -66,7 +66,7 @@ export default defineCommand({
     },
     folder: {
       type: "string",
-      description: FOLDER_ARG_DESCRIPTION,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     to: {
       type: "string",
@@ -85,14 +85,8 @@ export default defineCommand({
     const looksLikePath = !!screenArg && (screenArg.includes("/") || screenArg.endsWith(".json"));
     const screenPath = looksLikePath
       ? resolve(screenArg)
-      : (
-          await pickScreen(
-            await resolveDesignFolder(args.folder, "emit"),
-            screenArg,
-            interactive,
-            "emit",
-          )
-        ).path;
+      : (await pickScreen(await resolveDesign(args.folder, "emit"), screenArg, interactive, "emit"))
+          .path;
     const screenJson = JSON.parse(await readFile(screenPath, "utf8"));
     const screen = ScreenSchema.parse(screenJson);
 
