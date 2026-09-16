@@ -220,7 +220,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesign(args.folder, "capture");
+    const folder = await resolveDesign(args.folder, "capture", { designFlag: "--folder" });
     const design = await loadDesignFolder(folder);
     const folderId = design.config.folderId;
 

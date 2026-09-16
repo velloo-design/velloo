@@ -37,6 +37,7 @@ import {
   findDesigns,
   findManifest,
   isWithin,
+  manifestListing,
   registerLocalDesign,
   unregisterDesign,
   writeDesignName,
@@ -78,9 +79,19 @@ const list = defineCommand({
       const only = await resolveDesign(undefined, "design list", {
         requireConfig: true,
         cwd,
-        onFail: () => fail("design list", "no designs here — `velloo init` creates one."),
+        takesDesign: false,
+        onFail: (message) => fail("design list", message),
       });
       const name = recordedDesignName(only) ?? "(unnamed)";
+      // A velloo/ folder a project above lists is that project's design, not a
+      // lone one waiting for its first velloo.json.
+      const owner = await manifestListing(only).catch(() => null);
+      if (owner && owner.dir !== cwd) {
+        console.log(
+          `velloo design: "${name}" (${relative(cwd, only) || only}) is listed in \`${relative(cwd, owner.path)}\`. Run \`velloo design list\` from \`${relative(cwd, owner.dir) || "."}\` to see that project's designs.`,
+        );
+        return;
+      }
       console.log(`velloo design: 1 design (no velloo.json yet)`);
       console.log(
         `  ${pc.dim("1")}  ${pc.bold(name)}  ${relative(cwd, only) || only}  ${await daemonState(only)}`,

@@ -84,7 +84,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesign(args.folder, "export");
+    const folder = await resolveDesign(args.folder, "export", { designFlag: "--folder" });
     const pipeline = await loadPipeline(folder);
     const design = pipeline.design;
 

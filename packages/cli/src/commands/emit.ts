@@ -85,8 +85,14 @@ export default defineCommand({
     const looksLikePath = !!screenArg && (screenArg.includes("/") || screenArg.endsWith(".json"));
     const screenPath = looksLikePath
       ? resolve(screenArg)
-      : (await pickScreen(await resolveDesign(args.folder, "emit"), screenArg, interactive, "emit"))
-          .path;
+      : (
+          await pickScreen(
+            await resolveDesign(args.folder, "emit", { designFlag: "--folder" }),
+            screenArg,
+            interactive,
+            "emit",
+          )
+        ).path;
     const screenJson = JSON.parse(await readFile(screenPath, "utf8"));
     const screen = ScreenSchema.parse(screenJson);
 
