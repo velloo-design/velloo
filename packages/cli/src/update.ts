@@ -10,6 +10,7 @@ import {
   installerUrl,
   installMethod,
   isNewerRelease,
+  latestVersionUrl,
   localReleasePath,
   npmExecutable,
   type ReleaseInfo,
@@ -31,29 +32,54 @@ interface UpdateCache {
   notifiedVersion?: string;
 }
 
+/**
+ * The cache file, one entry per release feed. Every velloo on the machine
+ * shares it — a dev-channel install beside a contributor's local build is the
+ * normal case — so a single unkeyed entry let a local build read the dev
+ * host's release back as its own latest and offer to "upgrade" to it.
+ */
+type UpdateCacheFile = Record<string, UpdateCache>;
+
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** A local channel reads a file, so re-check it far more eagerly than a host. */
 const LOCAL_CHECK_INTERVAL_MS = 10 * 1000;
+
+/** The feed this installation asks: a local build's marker file, or a URL. */
+function releaseSource(): string {
+  return releaseChannel() === "local" && !process.env.VELLOO_UPDATE_URL
+    ? `file:${localReleasePath()}`
+    : latestVersionUrl();
+}
 
 function cachePath(): string {
   return process.env.VELLOO_UPDATE_CACHE ?? join(homedir(), ".velloo", "update-check.json");
 }
 
-async function readCache(): Promise<UpdateCache | null> {
+async function readCacheFile(): Promise<UpdateCacheFile> {
   try {
-    const value = JSON.parse(await readFile(cachePath(), "utf8")) as Partial<UpdateCache>;
-    if (typeof value.checkedAt !== "number" || typeof value.latest !== "string") return null;
-    return value as UpdateCache;
+    const value: unknown = JSON.parse(await readFile(cachePath(), "utf8"));
+    if (typeof value !== "object" || value === null) return {};
+    // Drops the scalar fields of the old single-entry layout along the way.
+    return Object.fromEntries(
+      Object.entries(value).filter(([, entry]) => typeof entry === "object" && entry !== null),
+    ) as UpdateCacheFile;
   } catch {
-    return null;
+    return {};
   }
+}
+
+async function readCache(): Promise<UpdateCache | null> {
+  const entry: Partial<UpdateCache> | undefined = (await readCacheFile())[releaseSource()];
+  if (typeof entry?.checkedAt !== "number" || typeof entry.latest !== "string") return null;
+  return entry as UpdateCache;
 }
 
 async function writeCache(value: UpdateCache): Promise<void> {
   const path = cachePath();
+  const file = { ...(await readCacheFile()), [releaseSource()]: value };
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  await writeFile(temporary, `${JSON.stringify(file, null, 2)}\n`);
   try {
     await rename(temporary, path);
   } catch (error) {

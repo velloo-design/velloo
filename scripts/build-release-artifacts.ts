@@ -51,9 +51,14 @@ writeFileSync(join(artifacts, "install.sh"), renderInstaller(version, downloadBa
 // stable channel ask the registry instead — that is the artifact npm would
 // actually resolve — but a dev release never reaches npm, and the direct
 // archives are cut independently of the publish, so they need their own answer.
+// Its build stamp and time are the bundle's own (see packages/cli/build.ts),
+// never this script's clock.
+const built = JSON.parse(
+  readFileSync(join(repoRoot, "packages", "cli", "dist", "release.json"), "utf8"),
+) as { version: string; build: string; builtAt: number };
 writeFileSync(
   join(artifacts, "latest.json"),
-  `${JSON.stringify({ version, channel, builtAt: Date.now() }, null, 2)}\n`,
+  `${JSON.stringify({ version, channel, build: built.build, builtAt: built.builtAt }, null, 2)}\n`,
 );
 
 const files = readdirSync(artifacts)
