@@ -12,8 +12,9 @@ import pkg from "../package.json" with { type: "json" };
  * same one `velloo --version` reports — a bare version on a stable release,
  * and `<version> (<sha>[-dirty] · <date>)` on the dev and local channels,
  * whose version alone doesn't name a commit. A from-source run has no define
- * and falls back to this package's version — every workspace package carries
- * the same one, bumped together at release.
+ * and falls back to this package's version. Workspace packages all stay at
+ * 0.0.0 — a release takes its version from the tag and bakes it only into the
+ * build — so from source this matches what `velloo --version` prints.
  */
 declare const __VELLOO_BUILD_VERSION__: string;
 
