@@ -21,6 +21,8 @@ import {
   promptAppRootChoice,
   recordedAppRoot,
 } from "../app-root.ts";
+import { agentRootCandidates } from "../connect/project-root.ts";
+import { repinAgentConfigs } from "../connect/repin.ts";
 import { daemonRoot, isLive, readLock, stopDaemon } from "../daemon/runtime.ts";
 import {
   checkoutDesigns,
@@ -394,6 +396,16 @@ const rename = defineCommand({
         console.log(pc.dim(`  velloo.json defaultDesign → "${newName}"`));
     }
     console.log(`velloo design: renamed ${previous ? `"${previous}" ` : ""}to "${newName}".`);
+    // An agent config that named the design would stop connecting now.
+    const repinned = previous
+      ? await repinAgentConfigs({
+          projectRoots: await agentRootCandidates(folder),
+          designFolder: folder,
+          names: [previous],
+        }).catch(() => [])
+      : [];
+    for (const path of repinned)
+      console.log(pc.dim(`  ${relative(cwd, path) || path}: no longer names the design`));
   },
 });
 
