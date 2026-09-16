@@ -30,6 +30,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The completions tests parse the generated scripts with each shell's own
+      # `-n`; the runner ships bash only, and CI fails rather than skips a
+      # missing shell.
+      - name: Install zsh and fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
+
       # --frozen-lockfile doesn't compare workspace package metadata, so a
       # manifest change (a version, a bin) can leave bun.lock stale and dirty
       # every contributor's first `bun install`. A plain install must be a no-op.
