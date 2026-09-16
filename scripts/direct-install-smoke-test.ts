@@ -52,7 +52,10 @@ try {
     env: { ...process.env, PATH: cleanPath, VELLOO_DISABLE_UPDATE_CHECK: "1" },
   });
   const output = cli.stdout.toString().trim();
-  if (!cli.success || !output.startsWith(`${version} `)) {
+  // A stable build reports the bare version; dev and local append a build
+  // stamp in parentheses (see the channel split in packages/cli/build.ts).
+  const reportsVersion = output === version || output.startsWith(`${version} (`);
+  if (!cli.success || !reportsVersion) {
     throw new Error(cli.stderr.toString() || `unexpected version output: ${output}`);
   }
 

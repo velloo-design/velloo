@@ -2,9 +2,11 @@ import pkg from "../package.json" with { type: "json" };
 
 /**
  * The build stamp, baked at build time via Bun.build `define` (see
- * packages/cli/build.ts) as `<version> (<short-sha>[-dirty] · <build-date>)`.
- * A from-source run (`bun run velloo`, no define) falls back to the bare
- * package version. `typeof` is safe when the identifier was never defined.
+ * packages/cli/build.ts). A stable release is its bare version; the `dev` and
+ * `local` channels append `(<short-sha>[-dirty] · <build-date>)` because their
+ * version alone doesn't name a commit. A from-source run (`bun run velloo`,
+ * no define) falls back to the package version. `typeof` is safe when the
+ * identifier was never defined.
  */
 declare const __VELLOO_BUILD_VERSION__: string;
 
