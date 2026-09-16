@@ -9,8 +9,11 @@
 
 **Design like a developer. Build like a designer.**
 
-A local, agent-driven design canvas for React apps. Your coding agent redesigns
-a real screen; you direct the work visually; the result goes back into your app.
+Velloo is an open-source, local-first canvas for agent-driven design. It gives
+your coding agent a structured understanding of your app — its routes,
+components, theme, and conventions — so it can compose real screens, inspect the
+rendered result, and write the chosen design back into your app while you keep
+the taste and direction.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-FFAB1F.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![npm](https://img.shields.io/npm/v/velloo.svg?color=FFAB1F)](https://www.npmjs.com/package/velloo)
@@ -32,20 +35,13 @@ a real screen; you direct the work visually; the result goes back into your app.
 
 ## What is Velloo?
 
-You have a React screen that works and looks wrong. Redesigning it today means
-rebuilding it somewhere it isn't — a Figma file, a throwaway prototype, a chat
-window full of JSX you paste and repair.
+Velloo adds a visual design loop to your coding agent. The agent works with your
+actual component system, explores and verifies directions on the canvas, and
+implements the direction you choose using your application's conventions.
 
-Velloo puts the canvas next to your code instead. Your AI agent recreates the
-screen as real components, explores alternatives, and checks its work visually
-against the running app. You steer from the canvas: pick a direction, comment on
-a frame, reject a variant. When a direction wins, the agent carries it back into
-your application in your conventions.
-
-Designs live beside your code as readable JSON, in your repo or in a separate
-one. The whole loop is local and needs no account. When a review benefits from
-other people, publish a board to a team workspace or send an external link;
-comments come back to the local canvas for the agent to resolve.
+Designs are readable JSON that can live in your repo or outside it. The complete
+solo workflow is local and account-free; Velloo Cloud is optional when you want
+published boards, review links, and comments that return to the canvas.
 
 **No Figma seats. No paste-ready JSX you babysit. No translation tax.**
 
@@ -84,7 +80,7 @@ velloo run velloo              # the design folder it just created
 Restart your agent so it picks up the new MCP config, then point it at a real
 screen:
 
-> "Open the `velloo` design folder, recreate `/settings/billing` on a new board,
+> "Use `velloo` to recreate the design for the billing page,
 > then show me three takes on the plan-comparison section."
 
 That's the loop. The agent builds on the canvas, screenshots its own work, and
@@ -92,16 +88,43 @@ you react to pixels instead of to a diff.
 
 ### What `init` does
 
-The wizard creates the design folder (default `velloo/`) and wires up your agent
-— Claude Code, Cursor, Codex, Continue, opencode, Droid, Cline, Gemini CLI,
-Windsurf, and VS Code/Copilot, each through its native MCP configuration and
-guidance format. You can **start from scratch** (component library + a sample or
-blank board) or **scan what you have**: scanning detects your shadcn and Tailwind
-versions, imports your real theme from `globals.css`, and builds one screen per
-route, so the canvas opens in your brand colors.
+The wizard creates a design folder (default `velloo/`), detects your routes,
+component library, and theme, and connects supported coding agents through their
+native MCP configuration and guidance format. It never changes your app source;
+it only creates the design folder and agent configuration.
 
-`init` never writes into your app's source. It only creates the design folder
-and the agent config.
+### Ways to use Velloo
+
+- **Redesign an existing screen.** Recreate a route as a faithful baseline,
+  explore alternatives beside it, and compare the result with the running app.
+- **Start from scratch.** Choose your component library, then begin with the
+  sample board or a blank canvas for a new screen or product idea.
+- **Work from a live page.** Capture a public or authenticated page when the
+  useful starting point is a browser rather than a route in the current app.
+
+For better results, give the agent a concrete outcome and review bar: name the
+screen, ask for genuinely different directions, say which components or tokens
+must be preserved, and ask to see the canvas before application code changes.
+
+### Velloo Cloud and `velloo publish`
+
+Velloo Cloud is the optional collaboration layer; the local design remains the
+source of truth. When you want feedback from someone else, sign in and publish a
+board from the canvas or the CLI:
+
+```bash
+velloo login
+velloo publish velloo
+```
+
+Choose the boards, destination, and access level when prompted. Velloo uploads
+the material needed to render the review and prints a share link; comments on
+that link sync back to the local canvas for you or your agent to resolve. A later
+publish can update the same link and preserve its review context.
+
+Use `velloo publish --list` to see existing publications and
+`velloo publish --remove <share-url>` to take one down. Velloo Cloud is not
+required to design, export, or implement a screen.
 
 ## Features
 
@@ -130,8 +153,7 @@ and the agent config.
 | | |
 |---|---|
 | **OS** | macOS (arm64, x64) and Linux (arm64, x64; glibc and musl). Windows via WSL. |
-| **Runtime** | None to install — the CLI ships its own Bun. |
-| **Your app** | React. shadcn + Tailwind gets the deepest integration; MUI, Ant Design, Chakra, and no-library folders are supported. |
+| **Your app** | React. shadcn + Tailwind, MUI, Ant Design, Chakra, and no-library folders are supported. |
 | **Screenshots** | Optional headless Chromium, one command away (below). |
 
 ### Screenshots — the one optional extra
@@ -168,7 +190,7 @@ designs, a connected agent is told which one it is on and can switch between the
 
 **Keeping designs out of the app repo** is a first-class option — pick "Default
 out of repo" in the wizard, give a path outside the repo, or run
-`velloo init --external --name web --non-interactive`. The design is recorded
+`velloo init --external --name web`. The design is recorded
 only on your machine: nothing is written into the repo, the files live under
 `~/.velloo/designs/` (or where you chose) outside version control, and agents are
 wired through global configs. See
