@@ -26,6 +26,10 @@ describe("standalone HTML export (browser-less)", () => {
     // Self-contained: no server base, no runtime/live/canvas scripts at all.
     expect(html).not.toContain("<base");
     expect(html).not.toContain("<script");
+    // Opened from disk, nothing in it may run — not even a link a design smuggled in.
+    expect(html).toContain(
+      `<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+    );
   });
 
   test("dark mode lands on the html element", async () => {
@@ -54,6 +58,9 @@ describe("standalone HTML export (browser-less)", () => {
     // The embedded frame docs are themselves inlined (asset data-URI escaped in srcdoc).
     expect(html).toContain("data:image/png;base64,");
     expect(html).not.toContain("src=&quot;/assets/");
+    // The composite and every srcdoc frame carry the no-script policy.
+    expect(html.indexOf("Content-Security-Policy")).toBeLessThan(html.indexOf("<iframe"));
+    expect((html.match(/Content-Security-Policy/g) ?? []).length).toBe(3);
   });
 
   test("a missing asset degrades to a warning header, not a failure", async () => {

@@ -48,12 +48,29 @@ export interface InlineOptions {
   skipSizeWarning?: boolean | undefined;
 }
 
+/**
+ * An exported file opens from disk with no velloo runtime and carries no
+ * scripts of its own, so nothing in it should run: design-authored SVG that got
+ * past sanitization, a stray handler, a `javascript:` link. Board composites
+ * embed frames as srcdoc iframes, which inherit this policy from their parent.
+ */
+const STANDALONE_CSP = "script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+
+/** Insert the no-script policy as the first element of `<head>`. */
+export function withStandalonePolicy(html: string): string {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${STANDALONE_CSP}">`;
+  const head = /<head\b[^>]*>/i.exec(html);
+  if (!head) return `${meta}${html}`;
+  const at = head.index + head[0].length;
+  return `${html.slice(0, at)}${meta}${html.slice(at)}`;
+}
+
 export async function inlineStandaloneDocument(
   html: string,
   opts: InlineOptions,
 ): Promise<StandaloneResult> {
   const warnings: string[] = [];
-  let out = await inlineAssets(html, opts.assetRoot, warnings);
+  let out = await inlineAssets(withStandalonePolicy(html), opts.assetRoot, warnings);
   out = await inlineGoogleFonts(out, warnings);
   if (!opts.skipSizeWarning) warnings.push(...sizeWarning(out));
   return { html: out, warnings };
