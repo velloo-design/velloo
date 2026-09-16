@@ -6,7 +6,7 @@ import pc from "picocolors";
 import { refreshAgentArtifacts } from "../connect/index.ts";
 import { agentRootCandidates } from "../connect/project-root.ts";
 import { repinAgentConfigs } from "../connect/repin.ts";
-import { daemonRoot, stopDaemon } from "../daemon/runtime.ts";
+import { daemonRoot, isLive, readLock, stopDaemon } from "../daemon/runtime.ts";
 import { checkoutDesigns, DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
 import { createProgress } from "../progress.ts";
@@ -140,8 +140,10 @@ export async function migrateFolder(
     if (!dryRun) {
       // A live daemon would race the rewrite (and an old binary can't read the
       // migrated folder anyway) — stop it first, like a real package manager.
-      progress.step("stopping running canvas");
-      stopped = await stopDaemon(daemonRoot(folder));
+      const root = daemonRoot(folder);
+      const running = await readLock(root);
+      if (running && (await isLive(running))) progress.step("stopping running canvas");
+      stopped = await stopDaemon(root);
     }
     progress.step(dryRun ? "checking design folder" : "upgrading design folder");
     result = await upgradeFolder(folder, { dryRun });
