@@ -3,7 +3,6 @@ import { dirname, relative, resolve } from "node:path";
 import { isCancel, log, select, text } from "@clack/prompts";
 import { designNameIssue } from "@velloo/schema";
 import { managedDesignPath, writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
-import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
@@ -370,7 +369,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
 
   // Echo for non-interactive callers that grep the output for
   // "scaffolded" — keeps the existing CLI test passing.
-  console.log(`velloo: scaffolded ${folder} (${snapshotVersion})`);
+  console.log(`velloo: scaffolded ${folder} (${plan.library.id} ${plan.library.version})`);
 
   // Record where the design is so a second one for the same repo stays
   // resolvable. The scaffold already succeeded — a manifest problem is a

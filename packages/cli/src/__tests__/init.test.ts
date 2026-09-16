@@ -59,6 +59,19 @@ async function jsonFiles(dir: string): Promise<string[]> {
 }
 
 describe("velloo init", () => {
+  test("a blank start reports the theme and library it actually used", async () => {
+    const { exitCode, stdout, stderr } = await runInit(tmp, [
+      "--non-interactive",
+      "--no-connect",
+      "--library=none",
+      "--start=blank",
+    ]);
+    if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
+    expect(stdout).toMatch(/scaffolded .* \(none /);
+    expect(stdout).not.toContain("Elsewhere");
+    expect(stdout).toMatch(/Theme\s+Zinc/);
+  }, 60_000);
+
   test("scaffolds a folder whose contents parse against every schema", async () => {
     const { exitCode, stdout, stderr } = await runInit(tmp);
     if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
