@@ -208,7 +208,7 @@ The `extensions` map holds user-declared custom components — agent-registered 
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Global tool (single binary, Bun SEA, ~30MB)        │
+│  Global CLI (npm package or standalone archive)     │
 │  ┌──────────────────────────────────────────────┐   │
 │  │ Pre-built canvas (static React app)          │   │
 │  │ ComponentProvider loader + default shadcn    │   │
@@ -235,7 +235,7 @@ One **persistent canvas daemon per folder**, with two thin clients attaching to 
 - **`velloo run`** ensures the daemon (spawning a detached one if needed) and stays in the foreground on a TTY with keys to background (`b`), stop (`s`), or open the browser (`o`). `--open` opens the browser immediately. `--background` (or a non-TTY) returns to the shell and leaves the daemon running. `velloo stop` / `velloo status` manage daemons.
 - **`velloo mcp`** is the agent-facing entry — **stdio by default**: it ensures the daemon and *proxies* the agent's stdin/stdout JSON-RPC to the daemon's HTTP MCP. So N agents for a folder share one daemon (one writer, one canvas URL). `--http` prints the daemon's `StreamableHTTPServerTransport` URL for clients that dial instead of spawning. Each connection independently selects `guided` (default) or `full` with `--surface`; both carry the whole operation catalogue.
 
-**Which design?** Every design-taking command resolves through one path (`packages/cli/src/design.ts`). A design's **name lives in its own `.design/config.json`** (`name`, schema v4); nothing else names it. An explicit arg wins — a design name, else a path. Without an arg, a repo-root **`velloo.json`** drives resolution when present: it lists where the repo's designs are (`{ "designs": ["apps/web/velloo", …], "defaultDesign"?: "web" }`, a pure location list — the pre-v4 `{ projects: { name: path } }` map still reads, and `velloo upgrade` rewrites it after copying each key into its folder's config). Resolution picks by cwd containment (inside a design's folder, or inside a directory holding exactly one design), then the only design, then `defaultDesign`, then an interactive picker (`run`/`connect` on a TTY only) or an error listing the names; `velloo mcp` instead opens the first by name and flags the pick as arbitrary. Repos without a manifest keep the convention chain: `./velloo` → cwd → walk up for a `.design/config.json`. `velloo init` names the design (`chooseDesignName`: its folder, or the app for a generic `velloo/` nested in one) and lists it in the manifest (creating it at the git root when absent — a repository at the home directory never counts). A design folder *outside* the checkout is never a manifest entry: it is a **local design**, recorded only under `~/.velloo/designs/.locations/` and merged into the same name space when a command runs inside that checkout. Reading lives in `packages/server/src/designs.ts` (`findDesigns`, `designsFor`, `pickDesign`) because the daemon needs it too; writing stays in `packages/cli/src/manifest.ts`. A committed manifest can never point Velloo outside its repository — see `docs/external-local-design-folders.md`. Each design still gets its own daemon.
+**Which design?** Every design-taking command resolves through one path (`packages/cli/src/design.ts`), and it reads **only the directory the command runs in** — nothing above it. A design's **name lives in its own `.design/config.json`** (`name`, schema v4); nothing else names it. A directory's **`velloo.json`** lists where that project's designs are (`{ "designs": ["velloo", "brand"], "defaultDesign"?: "velloo" }`, a pure location list — the pre-v4 `{ projects: { name: path } }` map still reads, and `velloo upgrade` rewrites it after copying each key into its folder's config). An explicit arg wins: a design name from this directory's `velloo.json`, a design folder, or a `velloo.json` file or the directory holding one. Without an arg: the design folder you are standing in, else this directory's designs — the only one, then `defaultDesign`, then an interactive picker (TTY only) or an error listing the names; `velloo mcp` instead opens the first by name and flags the pick as arbitrary. With no `velloo.json`, `./velloo` is the one convention left. `velloo init` makes the directory it runs in a project: it names the design (`chooseDesignName`), refuses a name the project already has, and lists it in that directory's `velloo.json`, creating the file when absent. Nested projects are independent — `init` in `app/` and again in `app/admin/` gives each its own `velloo.json` and designs, and neither sees the other's. A design folder outside the project is never a manifest entry: it is a **local design**, recorded only under `~/.velloo/designs/.locations/` for that exact directory and merged into its names. Code that starts from a design rather than a directory (a rename, the daemon's session) finds the `velloo.json` that actually lists the folder. Reading lives in `packages/server/src/designs.ts` (`findDesigns`, `designsFor`, `pickDesign`) because the daemon needs it too; writing stays in `packages/cli/src/manifest.ts`. A committed manifest can never point Velloo outside its repository — see `docs/external-local-design-folders.md`. Each design still gets its own daemon.
 
 Every MCP surface dispatches to the same registered native handlers, and agent edits and human edits remain operationally identical. Surface selection changes only which schemas are advertised and whether calls pass through the guided façade; there are no separate mutation code paths.
 
@@ -374,22 +374,25 @@ One call may return 1–4 variants (each charged), and `reference` feeds existin
 
 ## Distribution
 
-CLI-first. Single binary built with Bun's executable feature.
+CLI-first, released on three channels (details in `RELEASING.md`):
 
 ```bash
-brew install velloo/tap/velloo             # Mac (primary)
-scoop install velloo                       # Windows
-npm install -g velloo                      # Node-based fallback
+npm install -g velloo                                    # canonical, every platform
+curl -fsSL https://get.velloo.design/install.sh | bash   # macOS and Linux
 ```
 
-Binary embeds:
+- **npm.** The published `velloo` package is a small `launcher.cjs` plus the bundled CLI (`packages/cli/build.ts` inlines every `@velloo/*` package and pure-JS dependency). Its optional dependencies are the exact official `@oven/bun-*` platform packages, so npm installs the matching Bun binary with no install scripts and users never install Bun themselves. Only a handful of packages that must resolve from disk (Tailwind's compiler, `playwright-core`) stay external.
+- **Standalone archives.** Each release also ships a `tar.gz` per macOS/Linux target holding the Bun binary and the app, with SHA-256 checksums. `install.sh` verifies them, installs under `VELLOO_HOME` (default `~/.velloo`) and links the command into `VELLOO_BIN_DIR` (default `~/.local/bin`).
+- **Channels.** `stable` publishes npm, a `vX.Y.Z` GitHub release and `get.velloo.design`; `dev` publishes prereleases from `main`; `local` is `bun run cli:build` on a contributor's machine. The channel is baked in at build time and decides where update checks look. The version comes from the release tag — workspace `package.json` files stay at `0.0.0`.
 
-- Pre-built canvas (static React app)
-- A cached copy of the latest first-party library entries (the shadcn snapshot runtime + helpers today) so `velloo init` works offline
-- HTTP/MCP server
-- All Node-equivalent runtime (via Bun)
+What ships inside the CLI:
 
-Total size: ~25–40MB. Same shape as `gh`, `bun`, `tailwindcss`.
+- The pre-built canvas (static React app)
+- The embedded shadcn snapshot and helpers, so `velloo init` and rendering work offline
+- The HTTP/MCP server, renderer and codegen
+- Sample assets, skills and agent plugins
+
+`velloo upgrade` updates the installation through whichever channel installed it, then migrates the design you are in. Headless Chromium for screenshots is a separate one-time download (`velloo browser install`).
 
 ## Why CLI-first (not desktop-first)
 

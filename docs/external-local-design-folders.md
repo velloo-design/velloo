@@ -32,10 +32,12 @@ velloo design add --external --name explorations --non-interactive
 velloo run web
 ```
 
-The checkout is the `velloo.json` directory above where init ran, else the Git
-root, else the directory init ran in. From anywhere inside it, `velloo run`, `mcp`
-and every other design-taking command see its local designs alongside its
-`velloo.json` designs, as one set of design names. A design's name lives in its
+The project is the directory init ran in, and nothing above it. From that
+directory, `velloo run`, `mcp` and every other design-taking command see its local
+designs alongside its `velloo.json` designs, as one set of design names. A
+subdirectory is not the project: run commands from the project directory, or pass
+its path. Running init in a subdirectory makes that subdirectory a separate
+project with its own designs. A design's name lives in its
 own `.design/config.json`, wherever the design is stored.
 
 ## What lives where
