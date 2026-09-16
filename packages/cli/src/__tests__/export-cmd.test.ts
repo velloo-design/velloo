@@ -74,7 +74,7 @@ afterEach(async () => {
 });
 
 async function runExport(args: string[]) {
-  const proc = Bun.spawn(["bun", cliPath, "export", ...args, "--folder", join(tmp, "velloo")], {
+  const proc = Bun.spawn(["bun", cliPath, "export", ...args, "--design", join(tmp, "velloo")], {
     cwd: resolve(import.meta.dir, "../../../.."),
     stdout: "pipe",
     stderr: "pipe",

@@ -35,41 +35,59 @@ import {
 import { describePublishError } from "../publish/errors.ts";
 import { listPublished, removePublished } from "../publish/manage.ts";
 import { privacyFlagsError, resolvePublishPrivacy } from "../publish/privacy.ts";
+import { withSubcommands } from "../subcommands.ts";
 
-export default defineCommand({
-  meta: {
-    name: "publish",
-    description:
-      "Publish the design folder as a velloo-cloud share link, or manage the links you've already published",
+const CLOUD_ARGS = {
+  url: {
+    type: "string",
+    description: "velloo-cloud base URL (default: $VELLOO_CLOUD_URL or the built-in default)",
   },
+  token: {
+    type: "string",
+    description: "velloo-cloud access token (default: $VELLOO_CLOUD_TOKEN)",
+  },
+} as const;
+
+const list = defineCommand({
+  meta: { name: "list", description: "List the designs you've published" },
+  args: CLOUD_ARGS,
+  run: ({ args }) => listPublished(args),
+});
+
+const remove = defineCommand({
+  meta: { name: "remove", description: "Take a published design down" },
   args: {
-    folder: {
+    "share-url": {
       type: "positional",
       required: false,
-      description: `${DESIGN_ARG_DESCRIPTION}. With --remove, the share URL to take down instead`,
+      description: "The share URL to take down (default: pick one interactively)",
     },
-    list: {
+    yes: {
       type: "boolean",
-      description: "List your published designs instead of publishing",
+      description: "Skip the confirmation (required without an interactive terminal)",
     },
-    remove: {
-      type: "boolean",
-      description:
-        "Take a published design down instead of publishing — pass its share URL, or pick one interactively",
+    ...CLOUD_ARGS,
+  },
+  run: ({ args }) => removePublished({ ...args, shareUrl: args["share-url"] }),
+});
+
+const publish = defineCommand({
+  meta: {
+    name: "publish",
+    description: "Publish a design as a velloo-cloud share link",
+  },
+  args: {
+    design: {
+      type: "positional",
+      required: false,
+      description: DESIGN_ARG_DESCRIPTION,
     },
     yes: {
       type: "boolean",
       description:
-        "Skip confirmations — the --remove prompt, and publishing a screen whose component fails to render (required without an interactive terminal)",
+        "Publish even when a screen's component fails to render (required without an interactive terminal)",
     },
-    url: {
-      type: "string",
-      description: "velloo-cloud base URL (default: $VELLOO_CLOUD_URL or the built-in default)",
-    },
-    token: {
-      type: "string",
-      description: "velloo-cloud access token (default: $VELLOO_CLOUD_TOKEN)",
-    },
+    ...CLOUD_ARGS,
     slug: {
       type: "string",
       description: "Custom slug for --new (default: server-generated)",
@@ -84,7 +102,7 @@ export default defineCommand({
     },
     title: {
       type: "string",
-      description: "Link title (default: folder name)",
+      description: "Link title (default: the design's name)",
     },
     boards: {
       type: "string",
@@ -125,15 +143,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    // Listing and removing don't touch a design folder, so they're checked
-    // before any folder resolution — `velloo publish --list` outside a repo
-    // is a perfectly ordinary thing to type.
-    if (args.list && args.remove) fail("publish", "--list and --remove do different things");
-    if (args.list) return listPublished(args);
-    if (args.remove) {
-      return removePublished({ ...args, design: args.folder, yes: args.yes });
-    }
-    const folder = await resolveDesign(args.folder, "publish");
+    const folder = await resolveDesign(args.design, "publish");
     const baseUrl = args.url ? args.url.replace(/\/+$/, "") : defaultCloudUrl();
     const token =
       args.token ?? process.env.VELLOO_CLOUD_TOKEN ?? (await loadCredential(baseUrl))?.token;
@@ -338,6 +348,8 @@ export default defineCommand({
     }
   },
 });
+
+export default withSubcommands(publish, { list, remove });
 
 export type DestinationChoice =
   | { mode: "new"; slug?: string }

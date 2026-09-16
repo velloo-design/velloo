@@ -67,7 +67,7 @@ export default defineCommand({
       "Connect this agent to the folder's canvas over MCP (stdio by default). Usually spawned by your agent.",
   },
   args: {
-    folder: {
+    design: {
       type: "positional",
       required: false,
       description: DESIGN_ARG_DESCRIPTION,
@@ -92,7 +92,7 @@ export default defineCommand({
   },
   async run({ args }) {
     assertLoopbackHost(args.host ?? "127.0.0.1");
-    const { folder, pick } = await resolveDesignForSession(args.folder, "mcp");
+    const { folder, pick } = await resolveDesignForSession(args.design, "mcp");
     const preferredPort = args.port ? Number(args.port) : undefined;
     const parsedSurface = parseMcpSurfaceSelection(args.surface ?? process.env.VELLOO_MCP_SURFACE);
     if (!parsedSurface.ok) throw new Error(`velloo mcp: ${parsedSurface.error}`);

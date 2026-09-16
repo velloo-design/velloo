@@ -122,8 +122,8 @@ the material needed to render the review and prints a share link; comments on
 that link sync back to the local canvas for you or your agent to resolve. A later
 publish can update the same link and preserve its review context.
 
-Use `velloo publish --list` to see existing publications and
-`velloo publish --remove <share-url>` to take one down. Velloo Cloud is not
+Use `velloo publish list` to see existing publications and
+`velloo publish remove <share-url>` to take one down. Velloo Cloud is not
 required to design, export, or implement a screen.
 
 ## Features
@@ -176,15 +176,17 @@ repo-root **`velloo.json`** lists where the repo's designs are (several can
 coexist in a monorepo). Every design-taking command accepts a design name or a
 path, and resolves through `velloo.json` when you pass nothing. With several
 designs, a connected agent is told which one it is on and can switch between them.
+Commands that take something else as their argument, like `emit <screen>`, take
+the design as `--design`.
 
 | Command | What it does |
 |---|---|
 | `velloo init` | Create a design folder and wire up your agent |
-| `velloo run [folder]` | Start the canvas + MCP daemon (`--port` to pick the canvas port) |
+| `velloo run [design]` | Start the canvas + MCP daemon (`--port` to pick the canvas port) |
 | `velloo design list\|add\|remove\|move\|rename\|upgrade` | Manage the repo's designs |
 | `velloo emit` / `velloo render` | Implementation IR for your agent / a PNG of a screen |
-| `velloo publish` | Publish a board for review, and manage what you've published |
-| `velloo upgrade` | Update the install *and* migrate the folder format (`--check` to preview) |
+| `velloo publish [design]` | Publish a board for review (`publish list\|remove` manage what you've published) |
+| `velloo upgrade` | Update the install *and* migrate the design format (`--check` to preview) |
 
 `Ctrl-C` stops the server.
 

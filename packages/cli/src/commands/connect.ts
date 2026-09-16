@@ -24,7 +24,7 @@ export default defineCommand({
     description: "Wire the velloo MCP server into your AI coding agent's config",
   },
   args: {
-    folder: {
+    design: {
       type: "positional",
       required: false,
       description: DESIGN_ARG_DESCRIPTION,
@@ -54,7 +54,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesign(args.folder, "connect", { interactive: true });
+    const folder = await resolveDesign(args.design, "connect", { interactive: true });
     // Wiring an agent config is format-independent, so an out-of-date folder
     // only warns — but warn NOW, or the first thing the wired agent meets is
     // the MCP upgrade gate instead of the design tools.
@@ -159,12 +159,12 @@ export default defineCommand({
     if (result.cursorRules?.installed && result.cursorRules.path) {
       console.log(`    rule     ${pc.cyan(result.cursorRules.path)}`);
     }
-    const folderArg = args.folder ? ` ${args.folder}` : "";
+    const designArg = args.design ? ` ${args.design}` : "";
     console.log("");
     console.log(pc.bold("  Next"));
     if (result.transport === "http") {
       console.log(
-        `    1. ${pc.cyan(`velloo mcp --http${folderArg}`)} ${pc.dim("— starts the MCP server your agent dials")}`,
+        `    1. ${pc.cyan(`velloo mcp --http${designArg}`)} ${pc.dim("— starts the MCP server your agent dials")}`,
       );
       console.log(`    2. Restart your agent so it loads the new MCP config.`);
     } else {
@@ -172,7 +172,7 @@ export default defineCommand({
         `    1. Restart your agent so it loads the new MCP config ${pc.dim("— it starts velloo itself")}.`,
       );
       console.log(
-        `    2. ${pc.cyan(`velloo run${folderArg}`)} ${pc.dim("— optional: open the canvas to watch")}`,
+        `    2. ${pc.cyan(`velloo run${designArg}`)} ${pc.dim("— optional: open the canvas to watch")}`,
       );
     }
     console.log("");

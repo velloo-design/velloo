@@ -12,18 +12,12 @@ async function run(argv: readonly string[]): Promise<void> {
     stdout: "inherit",
     stderr: "inherit",
   }).exited;
-  if (code !== 0) fail("browser", `browser setup exited with status ${code}`);
+  if (code !== 0) fail("browser install", `browser setup exited with status ${code}`);
 }
 
-export default defineCommand({
-  meta: { name: "browser", description: "Install the optional browser used for screenshots" },
+const install = defineCommand({
+  meta: { name: "install", description: "Install the browser used for screenshots" },
   args: {
-    action: {
-      type: "positional",
-      required: false,
-      default: "install",
-      description: "Action (install)",
-    },
     full: {
       type: "boolean",
       default: false,
@@ -36,9 +30,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    if (args.action !== "install")
-      fail("browser", `unknown action "${args.action}"; expected install`);
     if (args["with-deps"] && process.platform === "linux") await run(CHROMIUM_DEPS_INSTALL_ARGV);
     await run(args.full ? CHROMIUM_FULL_INSTALL_ARGV : CHROMIUM_INSTALL_ARGV);
   },
+});
+
+export default defineCommand({
+  meta: { name: "browser", description: "Manage the optional browser used for screenshots" },
+  subCommands: { install },
 });

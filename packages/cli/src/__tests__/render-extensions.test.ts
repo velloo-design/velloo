@@ -86,7 +86,7 @@ test("render resolves a screen's declared extension instead of crashing", async 
   await scaffold(design);
   const out = join(tmp, "home.html");
 
-  const proc = Bun.spawn(["bun", cliPath, "render", "home", "--folder", design, "--to", out], {
+  const proc = Bun.spawn(["bun", cliPath, "render", "home", "--design", design, "--to", out], {
     cwd: resolve(import.meta.dir, "../../../.."),
     stdout: "pipe",
     stderr: "pipe",
@@ -109,7 +109,7 @@ test("emit keeps generated code on stdout and progress on stderr", async () => {
   const design = join(tmp, "velloo");
   await scaffold(design);
 
-  const proc = Bun.spawn(["bun", cliPath, "emit", "home", "--folder", design], {
+  const proc = Bun.spawn(["bun", cliPath, "emit", "home", "--design", design], {
     cwd: resolve(import.meta.dir, "../../../.."),
     stdout: "pipe",
     stderr: "pipe",

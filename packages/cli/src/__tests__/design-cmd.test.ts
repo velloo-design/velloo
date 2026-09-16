@@ -194,16 +194,6 @@ describe("velloo design rename", () => {
   });
 });
 
-describe("velloo folder (hidden alias)", () => {
-  test("still runs the design command", async () => {
-    await makeDesignFolder(join(repo, "velloo"), "app");
-    await writeManifest({ designs: ["velloo"] });
-    const { exitCode, out } = await runCli(["folder", "list"]);
-    expect(exitCode, out).toBe(0);
-    expect(out).toContain("app");
-  });
-});
-
 describe("velloo design upgrade", () => {
   test("migrates the named folder without self-upgrading", async () => {
     await makeDesignFolder(join(repo, "velloo"), "app");

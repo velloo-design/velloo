@@ -50,7 +50,7 @@ export default defineCommand({
       required: false,
       description: "Screen, frame, or board id. Omit to pick interactively.",
     },
-    folder: {
+    design: {
       type: "string",
       description: DESIGN_ARG_DESCRIPTION,
     },
@@ -84,7 +84,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folder = await resolveDesign(args.folder, "export", { designFlag: "--folder" });
+    const folder = await resolveDesign(args.design, "export", { designFlag: "--design" });
     const pipeline = await loadPipeline(folder);
     const design = pipeline.design;
 

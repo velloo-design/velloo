@@ -376,7 +376,7 @@ test("an in-repo and an out-of-repo design are peers: neither is picked for you,
     const config = JSON.parse(await readFile(path, "utf8"));
     await writeFile(path, JSON.stringify({ ...config, schemaVersion: 3 }));
   }
-  const upgraded = await command(["upgrade", "--folder-only", "--no-skills"]);
+  const upgraded = await command(["upgrade", "--design-only", "--no-skills"]);
   expect(upgraded.code, upgraded.out).toBe(0);
   for (const folder of [site, external]) {
     const config = JSON.parse(await readFile(join(folder, ".design/config.json"), "utf8"));
@@ -404,11 +404,11 @@ test("command matrix resolves external designs for design, capture, emit, render
   if (!screen) throw new Error("Missing sample screen");
   const commands = [
     ["design", "list"],
-    ["capture", "--folder=web", "--list"],
-    ["emit", screen, "--folder=web"],
-    ["render", screen, "--folder=web", "--to=render.html"],
-    ["export", screen, "--folder=web", "--to=export.html", "--yes"],
-    ["theme:export", "--folder=web", `--to=${app}`],
+    ["capture", "list", "--design=web"],
+    ["emit", screen, "--design=web"],
+    ["render", screen, "--design=web", "--to=render.html"],
+    ["export", screen, "--design=web", "--to=export.html", "--yes"],
+    ["theme", "export", "--design=web", `--to=${app}`],
     ["upgrade", "web", "--no-skills"],
   ];
   for (const args of commands) {

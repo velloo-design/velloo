@@ -24,7 +24,7 @@ export default defineCommand({
       required: false,
       description: "Screen id, or a path to a screen JSON. Omit to pick interactively.",
     },
-    folder: {
+    design: {
       type: "string",
       description: DESIGN_ARG_DESCRIPTION,
     },
@@ -48,24 +48,24 @@ export default defineCommand({
     let screenPath: string;
     if (looksLikePath && screenArg) {
       screenPath = resolve(screenArg);
-      // The folder still resolves in manifest terms: an explicit --folder may
+      // The folder still resolves in manifest terms: an explicit --design may
       // be a velloo.json project name; otherwise walk up from the screen file
       // to its containing design folder (blind ../.. broke on nested paths and
       // failed cryptically inside the pipeline).
-      if (args.folder) {
-        folder = await resolveDesign(args.folder, "render", { designFlag: "--folder" });
+      if (args.design) {
+        folder = await resolveDesign(args.design, "render", { designFlag: "--design" });
       } else {
         const found = await findDesignConfig(screenPath);
         if (!found) {
           fail(
             "render",
-            `${screenPath} is not inside a velloo design folder (no .design/config.json above it). Pass --folder with a project name or a path.`,
+            `${screenPath} is not inside a velloo design folder (no .design/config.json above it). Pass --design with a design name or a path.`,
           );
         }
         folder = found.folder;
       }
     } else {
-      folder = await resolveDesign(args.folder, "render", { designFlag: "--folder" });
+      folder = await resolveDesign(args.design, "render", { designFlag: "--design" });
       screenPath = (await pickScreen(folder, screenArg, interactive, "render")).path;
     }
 

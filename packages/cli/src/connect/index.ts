@@ -49,7 +49,7 @@ export function manualSetupText(): string {
     "  Most agents take the JSON convention:",
     '    { "mcpServers": { "velloo": { "command": "velloo", "args": ["mcp"] } } }',
     "",
-    "HTTP — for agents that dial a URL: `velloo mcp --http <folder>` prints the URL of the",
+    "HTTP — for agents that dial a URL: `velloo mcp --http <design>` prints the URL of the",
     "running canvas's MCP server, then point the agent at it:",
     '    { "mcpServers": { "velloo": { "type": "http", "url": "<the printed URL>" } } }',
     "  The port changes whenever the canvas restarts, so prefer stdio where the agent allows it.",

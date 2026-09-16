@@ -83,7 +83,7 @@ export function describePublishError(error: PublishError): string {
       // how instead of quoting a status code back at them.
       const limit = boardLimitFrom(error);
       if (limit) {
-        return `${describeBoardLimit(limit)}. Run \`velloo publish --list\` to see them, or upgrade at ${PRICING_URL}`;
+        return `${describeBoardLimit(limit)}. Run \`velloo publish list\` to see them, or upgrade at ${PRICING_URL}`;
       }
       return describeCloudError(error);
     }
