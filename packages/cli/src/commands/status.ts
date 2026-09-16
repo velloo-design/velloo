@@ -19,7 +19,7 @@ export default defineCommand({
     } else {
       for (const d of daemons) {
         console.log(
-          `${d.canvasUrl}  ${designWithFolder(d.root)}  (pid ${d.pid}, since ${d.startedAt})`,
+          `${d.canvasUrl}  ${designWithFolder(d.root, undefined, { absolute: true })}  (pid ${d.pid}, since ${d.startedAt})`,
         );
       }
     }

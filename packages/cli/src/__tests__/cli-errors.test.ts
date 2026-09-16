@@ -69,6 +69,20 @@ async function runWithArgs(args: string[]) {
 }
 
 describe("cli error presentation", () => {
+  test("stop with no design here and nothing named says nothing is running", async () => {
+    await mkdir(tmp, { recursive: true });
+    const proc = Bun.spawn(["bun", cliPath, "stop"], {
+      cwd: tmp,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, VELLOO_DAEMONS_PATH: join(tmp, "daemons.json") },
+    });
+    const exitCode = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("no canvas daemons running");
+  });
+
   test.each(["run", "mcp", "__daemon"])("%s refuses a non-loopback bind", async (command) => {
     const { exitCode, stderr } = await runWithArgs([command, tmp, "--host", "0.0.0.0"]);
     expect(exitCode).toBe(1);
