@@ -54,7 +54,8 @@ jobs:
       - name: Test
         run: bun test --parallel
 
-  # The Playwright suites, on every push rather than a nightly: they guard the
+  # The browser suites (`*.e2e.test.ts`) only, on every push rather than a
+  # nightly — `checks` already runs everything else. They guard the
   # renderer and the canvas mount, and a nightly would report the break hours
   # after the PR that caused it — long enough for a red nightly to become
   # background noise. It's a separate job so a browser download that fails on
@@ -139,8 +140,8 @@ jobs:
           '
 
       # Under a virtual display, so the capture-session suite can open a window.
-      - name: Test (with browser suites)
-        run: xvfb-run -a bun run test:e2e
+      - name: Test (browser suites)
+        run: xvfb-run -a bun run test:browser
 
   # Separate job because it is the one check that needs the network: a Google
   # outage should read as "the font check is red", not fail the suite that was

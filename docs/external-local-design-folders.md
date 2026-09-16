@@ -190,4 +190,4 @@ file watcher reload, status, stop, capture listing, HTML render/export, emit,
 theme export and design upgrade. It also checks that init works without Git, that
 a local design never borrows a repository from above it, and that publishing and
 changed-since use a repository you create in the design folder. Browser-dependent
-screenshot and capture tests remain in `bun run test:e2e`.
+screenshot and capture tests remain in `bun run test:browser`.

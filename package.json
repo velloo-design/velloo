@@ -19,6 +19,7 @@
     "format": "biome format --write .",
     "test": "bun test --parallel",
     "test:e2e": "VELLOO_E2E=1 bun test --parallel",
+    "test:browser": "VELLOO_E2E=1 bun test --parallel .e2e.test",
     "test:changed": "bun test --parallel --changed",
     "test:order": "bun test --parallel --randomize",
     "fonts:build": "bun packages/schema/scripts/build-font-catalog.ts",
