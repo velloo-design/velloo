@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { compareVersions } from "../../packages/cli/src/release.ts";
+import { prTitleProblem } from "../check-pr-title.ts";
 import { releaseNotes } from "../release-notes.ts";
 import { bumpVersion, devVersion, latestReleaseTag } from "../release-version.ts";
 
@@ -58,5 +59,35 @@ describe("release notes", () => {
 
   test("the first release has nothing to diff against", () => {
     expect(releaseNotes([], { ...opts, previous: null })).toContain("The first public release.");
+  });
+});
+
+describe("PR titles", () => {
+  test.each([
+    "feat(cli)!: resolve designs from the directory a command runs in",
+    "fix: keep canvases running through a rename",
+    "docs(architecture): describe distribution as it is",
+    "ci: fail when bun install would change bun.lock",
+  ])("accepts %s", (title) => {
+    expect(prTitleProblem(title)).toBeNull();
+  });
+
+  test.each([
+    ["Harden SVG/CSS handling, resolve designs per directory", "not a Conventional Commits title"],
+    ["feature(cli): add a thing", '"feature" is not a known type'],
+    ["Fix(cli): capitalized type", '"Fix" is not a known type'],
+    ["fix:missing space", "not a Conventional Commits title"],
+    ["fix(cli):", "not a Conventional Commits title"],
+  ])("rejects %s", (title, reason) => {
+    expect(prTitleProblem(title)).toContain(reason);
+  });
+
+  test("a title the check accepts is one the release notes can file", () => {
+    const notes = releaseNotes(
+      [{ sha: "abcdef1234", subject: "feat(cli)!: resolve designs per directory (#12)", body: "" }],
+      { version: "0.2.0", previous: "v0.1.0", repo: "velloo-design/velloo" },
+    );
+    expect(notes).toContain("## Breaking changes");
+    expect(notes).toContain("**cli:** resolve designs per directory (#12)");
   });
 });

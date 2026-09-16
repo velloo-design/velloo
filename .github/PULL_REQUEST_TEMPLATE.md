@@ -1,4 +1,6 @@
-<!-- Thanks for contributing to Velloo. -->
+<!-- Thanks for contributing to Velloo.
+     Title: Conventional Commits, e.g. `fix(cli): keep canvases running through a rename`.
+     Add `!` before the colon for a breaking change. It becomes the release-notes line. -->
 
 ## What & why
 
