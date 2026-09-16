@@ -8,6 +8,23 @@ import { commandSpecs } from "../spec.ts";
 
 const specs = await commandSpecs();
 
+/**
+ * Check a script with the shell's own parser (`-n`). Locally a missing shell
+ * skips the check; CI installs all three, so there a missing one is a failure
+ * rather than a pass that never ran.
+ */
+async function assertParses(shell: "zsh" | "bash" | "fish", script: string): Promise<void> {
+  if (!Bun.which(shell)) {
+    if (process.env.CI) throw new Error(`${shell} is not installed; CI must install it`);
+    return;
+  }
+  const file = join(await mkdtemp(join(tmpdir(), "velloo-comp-")), `completions.${shell}`);
+  await writeFile(file, script);
+  const proc = Bun.spawn([shell, "-n", file], { stdout: "ignore", stderr: "pipe" });
+  const code = await proc.exited;
+  if (code !== 0) throw new Error(await new Response(proc.stderr).text());
+}
+
 describe("commandSpecs", () => {
   test("covers the public commands and skips internal ones", () => {
     const names = specs.map((s) => s.name);
@@ -59,13 +76,7 @@ describe("completionScript", () => {
     expect(script).toContain("#compdef velloo");
     expect(script).toContain("_describe 'velloo theme command'");
     expect(script).toContain("'--force[");
-    if (Bun.which("zsh")) {
-      const file = join(await mkdtemp(join(tmpdir(), "velloo-comp-")), "z.zsh");
-      await writeFile(file, script);
-      const proc = Bun.spawn(["zsh", "-n", file], { stdout: "ignore", stderr: "pipe" });
-      const code = await proc.exited;
-      if (code !== 0) throw new Error(await new Response(proc.stderr).text());
-    }
+    await assertParses("zsh", script);
   });
 
   test("bash script lists commands + flags and parses under bash -n", async () => {
@@ -74,22 +85,17 @@ describe("completionScript", () => {
     expect(script).toContain("init login");
     expect(script).toContain("--design-folder");
     expect(script).toContain('subs="install"');
-    if (Bun.which("bash")) {
-      const file = join(await mkdtemp(join(tmpdir(), "velloo-comp-")), "b.bash");
-      await writeFile(file, script);
-      const proc = Bun.spawn(["bash", "-n", file], { stdout: "ignore", stderr: "pipe" });
-      const code = await proc.exited;
-      if (code !== 0) throw new Error(await new Response(proc.stderr).text());
-    }
+    await assertParses("bash", script);
   });
 
-  test("fish script declares subcommands and value flags with -r", () => {
+  test("fish script declares subcommands and value flags with -r, and parses under fish -n", async () => {
     const script = completionScript("fish", specs);
     expect(script).toContain('-a "init"');
     expect(script).toContain('-n "__velloo_is init"');
     expect(script).toContain('-n "__velloo_is theme export" -l design -r');
     expect(script).toContain("-l design-folder -r");
     expect(script).toContain("-l force -d");
+    await assertParses("fish", script);
   });
 });
 
