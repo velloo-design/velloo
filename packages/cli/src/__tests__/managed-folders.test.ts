@@ -69,6 +69,8 @@ async function command(args: string[], cwd = app, env: Record<string, string> = 
       VELLOO_DAEMONS_PATH: join(root, "daemons.json"),
       VELLOO_PREFS_PATH: join(root, "prefs.json"),
       VELLOO_CREDENTIALS_PATH: join(root, "credentials.json"),
+      // Output is asserted as text; CI's FORCE_COLOR would thread ANSI codes through it.
+      NO_COLOR: "1",
       ...env,
     },
     stdout: "pipe",
