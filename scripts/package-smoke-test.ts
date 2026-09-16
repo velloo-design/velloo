@@ -59,7 +59,10 @@ try {
   const command = join(prefix, "bin", "velloo");
   const result = run([command, "--version"], { ...process.env, PATH: pathWithoutBun });
   const output = result.stdout.toString().trim();
-  if (!result.success || !output.startsWith(`${version} `)) {
+  // A stable build reports the bare version; dev and local append a build
+  // stamp in parentheses (see the channel split in packages/cli/build.ts).
+  const reportsVersion = output === version || output.startsWith(`${version} (`);
+  if (!result.success || !reportsVersion) {
     throw new Error(result.stderr.toString() || `unexpected version output: ${output}`);
   }
   const bunNotice = join(prefix, "lib", "node_modules", "velloo", "BUN-LICENSE.md");

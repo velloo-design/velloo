@@ -35,6 +35,17 @@ process.env.GIT_CONFIG_GLOBAL = "/dev/null";
 process.env.GIT_CONFIG_SYSTEM = "/dev/null";
 process.env.GIT_TERMINAL_PROMPT = "0";
 
+/**
+ * Git's own defaults need the same treatment. Every `commit` spawns
+ * `git maintenance run --auto --detach`, which outlives the commit and takes
+ * `.git/objects/maintenance.lock` — so the fixture's base commit can return
+ * while that lock still exists, and the first test's recursive `cp` of the
+ * fixture lists the lock, then `lstat`s it after it's gone: ENOENT.
+ */
+process.env.GIT_CONFIG_COUNT = "1";
+process.env.GIT_CONFIG_KEY_0 = "maintenance.auto";
+process.env.GIT_CONFIG_VALUE_0 = "false";
+
 // The git plumbing tests spawn real subprocesses. Under `bun test --parallel`
 // those queue behind every other worker's, and the 5s default starts tripping.
 setDefaultTimeout(30_000);

@@ -71,10 +71,12 @@ jobs:
           BUMP: ${{ inputs.bump }}
         run: bun scripts/release-version.ts --bump "$BUMP" --write
 
+      # Into the runner's temp dir, not the checkout: a stray untracked file in
+      # the repo root is one of the things the build stamp reads as a dirty tree.
       - name: Release notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: bun scripts/release-notes.ts --version "$VERSION" > release-notes.md
+        run: bun scripts/release-notes.ts --version "$VERSION" > "$RUNNER_TEMP/release-notes.md"
 
       - name: Build npm and direct-install artifacts
         env:
@@ -134,7 +136,7 @@ jobs:
             gh release upload "$TAG" "${assets[@]}" --clobber
           else
             gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
-              --notes-file release-notes.md "${assets[@]}"
+              --notes-file "$RUNNER_TEMP/release-notes.md" "${assets[@]}"
           fi
 
       - name: Downstream check

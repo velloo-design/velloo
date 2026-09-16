@@ -8,11 +8,12 @@ import pkg from "../package.json" with { type: "json" };
  * saying 0.1.0 through every release. An agent host that logs the server it
  * connected to would have been logging a constant.
  *
- * The build stamp (`<version> (<sha>[-dirty] · <date>)`) is baked into the
- * shipped binary by Bun.build `define`, the same one `velloo --version`
- * reports, so a session's handshake maps to an exact commit. A from-source run
- * has no define and falls back to this package's version — every workspace
- * package carries the same one, bumped together at release.
+ * The build stamp is baked into the shipped binary by Bun.build `define`, the
+ * same one `velloo --version` reports — a bare version on a stable release,
+ * and `<version> (<sha>[-dirty] · <date>)` on the dev and local channels,
+ * whose version alone doesn't name a commit. A from-source run has no define
+ * and falls back to this package's version — every workspace package carries
+ * the same one, bumped together at release.
  */
 declare const __VELLOO_BUILD_VERSION__: string;
 

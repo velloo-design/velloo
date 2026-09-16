@@ -155,26 +155,38 @@ if (!["stable", "dev", "local"].includes(CHANNEL)) {
 }
 
 /**
- * The build stamp baked into the binary's `--version` (see src/version.ts):
- * `<version> (<short-sha>[-dirty] · <build-date>)`. Derived from git at build
- * time so a dogfooder's `--version` maps to an exact commit; degrades to just
- * `<version> (<build-date>)` if git is unavailable (e.g. building off a tarball).
+ * The build stamp baked into the binary's `--version` (see src/version.ts).
+ *
+ * A stable release is its version and nothing else — `0.2.0` — because the
+ * version already names one immutable published artifact. The sha and date
+ * only added noise, and `toolVersion` carries this string into every design
+ * folder's config on disk.
+ *
+ * The unreleased channels have no such identity: `dev` rolls over `main`
+ * continuously and `local` is the same package version for every `cli:build`
+ * of a branch, so both name their commit —
+ * `<version> (<short-sha>[-dirty] · <build-date>)`. That degrades to
+ * `<version> (<build-date>)` when git is unavailable (building off a tarball).
+ *
+ * `-dirty` is a local-only signal. A CI checkout is pristine until the
+ * release's own `release-version.ts --write` bumps the manifests, so asking
+ * git there marked every single release dirty.
  */
 function buildVersion(): string {
+  if (CHANNEL === "stable") return VERSION;
   const git = (args: string[]): string | undefined => {
     const p = Bun.spawnSync(["git", ...args], { cwd: repoRoot });
     return p.success ? p.stdout.toString().trim() : undefined;
   };
   const sha = git(["rev-parse", "--short", "HEAD"]);
-  const status = git(["status", "--porcelain"]);
+  const status = CHANNEL === "local" ? git(["status", "--porcelain"]) : undefined;
   const dirty = status !== undefined && status !== "";
   const now = new Date();
   const pad = (n: number): string => `${n}`.padStart(2, "0");
   const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   // A local build is rebuilt many times a day off the same (dirty) commit, so
   // the date alone would make every `velloo upgrade` report "X → X" — and two
-  // builds a minute apart is a normal inner loop, hence seconds. A release
-  // only ever needs the day.
+  // builds a minute apart is a normal inner loop, hence seconds.
   const clock = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
   const date = CHANNEL === "local" ? `${day} ${clock}` : day;
   const ref = sha ? `${sha}${dirty ? "-dirty" : ""} · ${date}` : date;
