@@ -69,3 +69,39 @@ describe("discoverScanRoots", () => {
     expect(await discoverScanRoots(root)).toEqual([]);
   });
 });
+
+describe("discovery inside a dotfiles repository", () => {
+  const git = (cwd: string, ...args: string[]) =>
+    Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
+
+  test("a repository that ignores everything still finds the nested app", async () => {
+    git(root, "init", "-q");
+    await writeFile(join(root, ".gitignore"), "*\n", "utf8");
+    await writePkg("web", { react: "19.0.0" });
+    expect(await findScanRoot(root)).toBe(join(root, "web"));
+  });
+
+  test("git never borrows the home directory's repository for a project inside it", async () => {
+    // Home is a dotfiles repo ignoring `*` but tracking one unrelated
+    // package.json, so its listing is wrong rather than empty. The project
+    // under it is not a repository and must be walked instead.
+    const home = root;
+    git(home, "init", "-q");
+    await writeFile(join(home, ".gitignore"), "*\n", "utf8");
+    await writePkg("tools/cli", { commander: "12.0.0" });
+    git(home, "add", "-f", "tools/cli/package.json");
+    await writePkg("code/proj/web", { react: "19.0.0" });
+    const project = join(home, "code", "proj");
+
+    const child = Bun.spawnSync(
+      [
+        process.execPath,
+        "-e",
+        `const { findScanRoot } = await import(${JSON.stringify(join(import.meta.dir, "../discover.ts"))});
+         console.log(await findScanRoot(${JSON.stringify(project)}));`,
+      ],
+      { env: { ...process.env, HOME: home }, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(child.stdout.toString().trim()).toBe(join(project, "web"));
+  });
+});

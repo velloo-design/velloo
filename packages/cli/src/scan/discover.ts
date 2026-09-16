@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { homedir } from "node:os";
+import { delimiter, dirname, join, relative, resolve } from "node:path";
 import { looksLikeUiApp } from "./routes.ts";
 
 /**
@@ -25,7 +26,13 @@ function rank(rel: string): number {
 /**
  * Locate `package.json` directories via git, which respects `.gitignore` for
  * free (so build output and vendored deps never show up). Returns null when
- * `appRoot` isn't in a git work tree, so the caller can fall back to a walk.
+ * `appRoot` isn't in a git work tree, or git lists nothing, so the caller can
+ * fall back to a walk.
+ *
+ * Git never climbs into the home directory to find a repository: people keep
+ * dotfiles in a repository there with `*` ignored, and a project that isn't a
+ * repository of its own would otherwise list as empty — with no error — and
+ * init would find no apps in it.
  */
 async function gitPackageJsonDirs(appRoot: string): Promise<string[] | null> {
   try {
@@ -43,17 +50,24 @@ async function gitPackageJsonDirs(appRoot: string): Promise<string[] | null> {
         "package.json",
         "*/package.json",
       ],
-      { stdout: "pipe", stderr: "ignore" },
+      { stdout: "pipe", stderr: "ignore", env: scanGitEnv() },
     );
     const out = await new Response(proc.stdout).text();
     if ((await proc.exited) !== 0) return null;
-    return out
+    const dirs = out
       .split("\0")
       .filter((p) => p.endsWith("package.json") && !p.includes("node_modules/"))
       .map((p) => resolve(appRoot, dirname(p)));
+    return dirs.length > 0 ? dirs : null;
   } catch {
     return null;
   }
+}
+
+function scanGitEnv(): NodeJS.ProcessEnv {
+  const inherited = process.env.GIT_CEILING_DIRECTORIES;
+  const ceilings = inherited ? [homedir(), inherited] : [homedir()];
+  return { ...process.env, GIT_CEILING_DIRECTORIES: ceilings.join(delimiter) };
 }
 
 /** Fallback for non-git trees: a bounded walk for `package.json` directories. */
