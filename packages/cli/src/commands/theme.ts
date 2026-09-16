@@ -64,9 +64,9 @@ async function themeEmitter(
   };
 }
 
-export default defineCommand({
+const exportTheme = defineCommand({
   meta: {
-    name: "theme:export",
+    name: "export",
     description:
       "Export DTCG tokens.json plus the framework theme in diff mode — Tailwind v4 globals.css by default, or v3 CSS + preset when detected",
   },
@@ -76,13 +76,13 @@ export default defineCommand({
       required: true,
       description: "Target app directory (writes <to>/app/globals.css and <to>/tailwind.config.ts)",
     },
-    folder: {
+    design: {
       type: "string",
       description: DESIGN_ARG_DESCRIPTION,
     },
     theme: {
       type: "string",
-      description: "Path to theme JSON (default: <folder>/theme/default.json)",
+      description: "Path to theme JSON (default: the design's theme/default.json)",
     },
     apply: {
       type: "boolean",
@@ -98,7 +98,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const folderRoot = await resolveDesign(args.folder, "theme:export", { designFlag: "--folder" });
+    const folderRoot = await resolveDesign(args.design, "theme export", { designFlag: "--design" });
     const themePath = args.theme ? resolve(args.theme) : join(folderRoot, "theme", "default.json");
     const outDir = isAbsolute(args.to) ? args.to : resolve(args.to);
 
@@ -121,7 +121,7 @@ export default defineCommand({
     );
     if (!native && tailwind3) {
       console.log(
-        "velloo theme:export: target looks like Tailwind v3 — emitting velloo-theme.css + velloo.preset (pass --force-v4 for the v4 artifacts).",
+        "velloo theme export: target looks like Tailwind v3 — emitting velloo-theme.css + velloo.preset (pass --force-v4 for the v4 artifacts).",
       );
     }
 
@@ -131,17 +131,17 @@ export default defineCommand({
     let anyChange = false;
 
     for (const warning of result.warnings) {
-      console.error(`velloo theme:export: warning: ${warning}`);
+      console.error(`velloo theme export: warning: ${warning}`);
     }
 
     for (const file of result.files) {
       if (file.diff.identical) {
-        console.log(`velloo theme:export: ${file.path} is already up to date.`);
+        console.log(`velloo theme export: ${file.path} is already up to date.`);
         continue;
       }
       anyChange = true;
       if (file.applied) {
-        console.log(`velloo theme:export: wrote ${file.path}`);
+        console.log(`velloo theme export: wrote ${file.path}`);
       } else {
         const rendered = useColor ? colorizeDiff(file.diff.diff) : file.diff.diff;
         stdout.write(`${rendered}\n`);
@@ -150,7 +150,7 @@ export default defineCommand({
     }
 
     for (const note of result.notes) {
-      console.log(`velloo theme:export: ${note}`);
+      console.log(`velloo theme export: ${note}`);
     }
 
     if (!anyChange || args.apply) return;
@@ -165,10 +165,15 @@ export default defineCommand({
     if (answer === "y" || answer === "yes") {
       const final = await produce(true);
       for (const file of final.files) {
-        if (file.applied) console.log(`velloo theme:export: wrote ${file.path}`);
+        if (file.applied) console.log(`velloo theme export: wrote ${file.path}`);
       }
     } else {
-      console.log("velloo theme:export: skipped (no changes written).");
+      console.log("velloo theme export: skipped (no changes written).");
     }
   },
+});
+
+export default defineCommand({
+  meta: { name: "theme", description: "Work with a design's theme" },
+  subCommands: { export: exportTheme },
 });

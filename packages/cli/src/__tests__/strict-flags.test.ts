@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { defineCommand, runCommand } from "citty";
 import { strictFlags } from "../strict-flags.ts";
+import { withSubcommands } from "../subcommands.ts";
 
 const command = defineCommand({
   meta: { name: "run" },
@@ -74,5 +75,69 @@ describe("strictFlags", () => {
       error.mockRestore();
       exit.mockRestore();
     }
+  });
+
+  describe("a command that runs itself beside its subcommands", () => {
+    const ran: string[] = [];
+    const publish = () =>
+      strictFlags(
+        "publish",
+        withSubcommands(
+          defineCommand({
+            meta: { name: "publish" },
+            args: {
+              design: { type: "positional", required: false },
+              title: { type: "string" },
+            },
+            run: ({ args }) => {
+              ran.push(`publish ${args.design ?? ""}`.trim());
+            },
+          }),
+          {
+            list: defineCommand({
+              args: { token: { type: "string" } },
+              run: () => {
+                ran.push("list");
+              },
+            }),
+          },
+        ),
+      );
+
+    async function outcome(rawArgs: string[]): Promise<string> {
+      ran.length = 0;
+      const error = spyOn(console, "error").mockImplementation(() => {});
+      const exit = spyOn(process, "exit").mockImplementation(((code?: number) => {
+        throw new Error(`exit ${code}`);
+      }) as typeof process.exit);
+      try {
+        await runCommand(publish(), { rawArgs });
+        return ran.join(", ");
+      } catch {
+        return `failed: ${error.mock.calls.flat().join(" ")}`;
+      } finally {
+        error.mockRestore();
+        exit.mockRestore();
+      }
+    }
+
+    test.each([
+      [[], "publish"],
+      [["web"], "publish web"],
+      [["--title", "list", "web"], "publish web"],
+      [["list"], "list"],
+      [["list", "--token", "t"], "list"],
+    ])("%j runs %s", async (rawArgs, expected) => {
+      expect(await outcome(rawArgs)).toBe(expected);
+    });
+
+    test("checks each against its own flags", async () => {
+      expect(await outcome(["web", "--token", "t"])).toContain(
+        "velloo publish: unknown option --token",
+      );
+      expect(await outcome(["list", "--title", "x"])).toContain(
+        "velloo publish list: unknown option --title",
+      );
+    });
   });
 });

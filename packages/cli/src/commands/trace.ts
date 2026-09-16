@@ -14,14 +14,14 @@ export default defineCommand({
     description: "Render a recorded MCP session as a standalone offline HTML report",
   },
   args: {
-    folder: {
+    design: {
       type: "positional",
       required: false,
       description: DESIGN_ARG_DESCRIPTION,
     },
     dir: {
       type: "string",
-      description: "Trace root or a single tape dir (default: <folder>/.velloo/trace)",
+      description: "Trace root or a single tape dir (default: the design folder's .velloo/trace)",
     },
     session: {
       type: "string",
@@ -54,7 +54,7 @@ export default defineCommand({
     // its .velloo/trace.
     const root = args.dir
       ? resolve(args.dir)
-      : join(await resolveDesign(args.folder, "trace"), TRACE_SUBDIR);
+      : join(await resolveDesign(args.design, "trace"), TRACE_SUBDIR);
 
     if (args.watch) {
       // Live mode: follow the newest tape (or a pinned --session). Unlike the

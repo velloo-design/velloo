@@ -89,7 +89,7 @@ export interface ResolveDesignOptions {
   cwd?: string | undefined;
   /**
    * How the command takes a design, for the examples in its errors: as a
-   * positional (default) or behind a flag such as `--folder`.
+   * positional (default) or behind a flag such as `--design`.
    */
   designFlag?: string | undefined;
   /** False for a command that takes no design (`design list`): its errors show no example. */

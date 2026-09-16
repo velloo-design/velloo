@@ -33,7 +33,7 @@ export default defineCommand({
       "Upgrade Velloo and migrate designs to the current format — every design in this checkout, or the one named",
   },
   args: {
-    folder: {
+    design: {
       type: "positional",
       required: false,
       description: DESIGN_ARG_DESCRIPTION,
@@ -51,13 +51,13 @@ export default defineCommand({
     "binary-only": {
       type: "boolean",
       default: false,
-      description: "Upgrade the Velloo installation and leave the design folder alone",
+      description: "Upgrade the Velloo installation and leave the designs alone",
     },
-    "folder-only": {
+    "design-only": {
       type: "boolean",
       default: false,
       description:
-        "Migrate the design folder with this Velloo, without self-upgrading first (same as `velloo design upgrade`)",
+        "Migrate the designs with this Velloo, without self-upgrading first (same as `velloo design upgrade`)",
     },
     skills: {
       type: "boolean",
@@ -68,10 +68,13 @@ export default defineCommand({
   },
   async run({ args }) {
     const dryRun = args["dry-run"] || args.check;
-    const folders = args["binary-only"] ? [] : await targetFolders(args.folder);
+    const folders = args["binary-only"] ? [] : await targetFolders(args.design);
 
     let outcome: UpgradeOutcome | null = null;
-    if (!args["folder-only"]) {
+    // `--folder-only` is what a 0.1.x velloo passes to the build it just installed.
+    const designOnly =
+      args["design-only"] || (args as Record<string, unknown>)["folder-only"] === true;
+    if (!designOnly) {
       try {
         outcome = await upgradeInstalledVelloo({ checkOnly: dryRun });
       } catch (error) {
@@ -98,7 +101,7 @@ export default defineCommand({
             bin,
             "upgrade",
             folder,
-            "--folder-only",
+            "--design-only",
             ...(args.skills ? [] : ["--no-skills"]),
           ];
           const code = await Bun.spawn(argv, {

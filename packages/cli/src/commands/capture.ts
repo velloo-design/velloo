@@ -18,6 +18,7 @@ import { installChromiumInteractive } from "../browser-setup.ts";
 import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
 import { openUrl } from "../open-url.ts";
+import { withSubcommands } from "../subcommands.ts";
 
 /** ETX — raw mode delivers Ctrl-C as a keystroke, not a signal. */
 const CTRL_C = 3;
@@ -197,7 +198,62 @@ async function browseCaptures(root: string, folderId: string | undefined): Promi
   }
 }
 
-export default defineCommand({
+const DESIGN_FLAG = { type: "string", description: DESIGN_ARG_DESCRIPTION } as const;
+
+async function captureDesign(arg: string | undefined, command: string) {
+  const design = await loadDesignFolder(
+    await resolveDesign(arg, command, { designFlag: "--design" }),
+  );
+  return { root: design.root, folderId: design.config.folderId };
+}
+
+const list = defineCommand({
+  meta: { name: "list", description: "Browse stored captures (interactive on a TTY)" },
+  args: { design: DESIGN_FLAG },
+  async run({ args }) {
+    const { root, folderId } = await captureDesign(args.design, "capture list");
+    await browseCaptures(root, folderId);
+  },
+});
+
+const remove = defineCommand({
+  meta: { name: "delete", description: "Delete a stored capture, or every capture for the design" },
+  args: {
+    id: { type: "positional", required: true, description: "The capture id, or `all`" },
+    design: DESIGN_FLAG,
+  },
+  async run({ args }) {
+    const { root, folderId } = await captureDesign(args.design, "capture delete");
+    const id = args.id.trim();
+    if (id === "all") {
+      const all = listCaptures(root, folderId);
+      if (all.length === 0) {
+        console.log(pc.dim("velloo capture: no captures to delete."));
+        return;
+      }
+      if (process.stdin.isTTY) {
+        const sure = await confirm({
+          message: `Delete all ${all.length} captures for this design? This can't be undone.`,
+          initialValue: false,
+        });
+        if (isCancel(sure) || !sure) {
+          console.log(pc.dim("  nothing deleted."));
+          return;
+        }
+      }
+      for (const m of all) deleteCapture(root, m.id, folderId);
+      console.log(`velloo capture: deleted ${all.length} captures.`);
+      return;
+    }
+    if (!isSafeCaptureId(id)) fail("capture delete", `not a capture id: ${args.id}`);
+    if (!deleteCapture(root, id, folderId)) {
+      fail("capture delete", `no capture "${id}" for this design — run \`velloo capture list\`.`);
+    }
+    console.log(`velloo capture: deleted ${id}.`);
+  },
+});
+
+const capture = defineCommand({
   meta: {
     name: "capture",
     description: "open a browser, log in, and capture pages as evidence for the agent",
@@ -208,58 +264,10 @@ export default defineCommand({
       required: false,
       description: "Page to open the browser on, e.g. http://localhost:3000/dashboard",
     },
-    folder: { type: "string", description: DESIGN_ARG_DESCRIPTION },
-    list: {
-      type: "boolean",
-      default: false,
-      description: "Browse stored captures instead of opening a browser (interactive on a TTY)",
-    },
-    delete: {
-      type: "string",
-      description: "Delete a capture by id, or `all` to clear every capture for this folder",
-    },
+    design: DESIGN_FLAG,
   },
   async run({ args }) {
-    const folder = await resolveDesign(args.folder, "capture", { designFlag: "--folder" });
-    const design = await loadDesignFolder(folder);
-    const folderId = design.config.folderId;
-
-    // Managing what's already stored never opens a browser.
-    if (args.delete !== undefined) {
-      const id = args.delete.trim();
-      if (id === "all") {
-        const all = listCaptures(design.root, folderId);
-        if (all.length === 0) {
-          console.log(pc.dim("velloo capture: no captures to delete."));
-          return;
-        }
-        if (process.stdin.isTTY) {
-          const sure = await confirm({
-            message: `Delete all ${all.length} captures for this folder? This can't be undone.`,
-            initialValue: false,
-          });
-          if (isCancel(sure) || !sure) {
-            console.log(pc.dim("  nothing deleted."));
-            return;
-          }
-        }
-        for (const m of all) deleteCapture(design.root, m.id, folderId);
-        console.log(`velloo capture: deleted ${all.length} captures.`);
-        return;
-      }
-      if (!isSafeCaptureId(id)) fail("capture", `not a capture id: ${args.delete}`);
-      if (!deleteCapture(design.root, id, folderId)) {
-        fail("capture", `no capture "${id}" for this folder — run \`velloo capture --list\`.`);
-      }
-      console.log(`velloo capture: deleted ${id}.`);
-      return;
-    }
-
-    if (args.list) {
-      await browseCaptures(design.root, folderId);
-      return;
-    }
-
+    const { root, folderId } = await captureDesign(args.design, "capture");
     let url: string | undefined;
     if (args.url !== undefined) {
       const normalized = normalizeCaptureUrl(args.url);
@@ -269,9 +277,7 @@ export default defineCommand({
       url = normalized;
     }
 
-    const statePath = url
-      ? sessionStatePath(design.root, new URL(url).origin, folderId)
-      : undefined;
+    const statePath = url ? sessionStatePath(root, new URL(url).origin, folderId) : undefined;
 
     console.log("");
     console.log(`  ${pc.bold("velloo capture")}`);
@@ -298,7 +304,7 @@ export default defineCommand({
 
     const start = async () =>
       startCaptureSession({
-        folderRoot: design.root,
+        folderRoot: root,
         ...(folderId ? { folderId } : {}),
         ...(url ? { url } : {}),
         ...(statePath ? { sessionStatePath: statePath } : {}),
@@ -357,7 +363,7 @@ export default defineCommand({
       console.log(`  ${pc.dim("No captures made.")}`);
     } else {
       console.log(`  ${pc.green("✓")} ${made.length} capture${made.length === 1 ? "" : "s"} saved`);
-      console.log(pc.dim(`    ${capturesDir(design.root, folderId)}`));
+      console.log(pc.dim(`    ${capturesDir(root, folderId)}`));
       console.log("");
       console.log(pc.dim("  The agent can read these with list_captures / get_capture,"));
       console.log(pc.dim("  and verify a screen against one with compare_to_url { captureId }."));
@@ -377,3 +383,5 @@ export default defineCommand({
     console.log("");
   },
 });
+
+export default withSubcommands(capture, { list, delete: remove });

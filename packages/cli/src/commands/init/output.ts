@@ -102,10 +102,10 @@ export function printExitInstructions(folder: string | undefined, outcome: WireO
       `    ${n++}. ${pc.cyan("velloo init")} ${pc.dim("again when you're ready to scaffold a design folder")}`,
     );
     console.log(
-      `    ${n++}. ${pc.cyan("velloo run <folder>")} ${pc.dim("opens the canvas for an existing design")}`,
+      `    ${n++}. ${pc.cyan("velloo run <design>")} ${pc.dim("opens the canvas for an existing design")}`,
     );
     console.log(
-      `    ${n++}. ${pc.cyan("velloo connect <folder>")} ${pc.dim("wires your AI agent's MCP config")}`,
+      `    ${n++}. ${pc.cyan("velloo connect <design>")} ${pc.dim("wires your AI agent's MCP config")}`,
     );
   }
   console.log("");

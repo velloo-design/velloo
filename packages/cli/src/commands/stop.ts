@@ -40,7 +40,7 @@ export default defineCommand({
     description: "Stop a running canvas (picks from the running ones when none is named)",
   },
   args: {
-    folder: {
+    design: {
       type: "positional",
       required: false,
       description: DESIGN_ARG_DESCRIPTION,
@@ -61,7 +61,7 @@ export default defineCommand({
 
     // A person at a terminal with nothing named picks from what is running,
     // wherever it was started; scripts keep the directory's own design.
-    if (!args.folder && process.stdin.isTTY) {
+    if (!args.design && process.stdin.isTTY) {
       const daemons = await listDaemons();
       if (daemons.length === 0) {
         console.log("velloo: no canvas daemons running.");
@@ -90,7 +90,7 @@ export default defineCommand({
       return;
     }
 
-    const folder = await resolveDesign(args.folder, "stop");
+    const folder = await resolveDesign(args.design, "stop");
     const root = daemonRoot(folder);
     if (await stopDaemon(root)) {
       console.log(`velloo: stopped ${designWithFolder(folder)}`);

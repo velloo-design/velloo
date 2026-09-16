@@ -17,12 +17,6 @@ const LOADERS: Record<string, LazyCommand> = {
   connect: () => import("./connect.ts").then((m) => m.default),
   run: () => import("./run.ts").then((m) => m.default),
   design: () => import("./design.ts").then((m) => m.default),
-  // The old name for `design`, kept working but out of help and completions.
-  folder: () =>
-    import("./design.ts").then((m) => ({
-      ...m.default,
-      meta: { name: "folder", description: "Alias of `velloo design`", hidden: true },
-    })),
   mcp: () => import("./mcp.ts").then((m) => m.default),
   stop: () => import("./stop.ts").then((m) => m.default),
   status: () => import("./status.ts").then((m) => m.default),
@@ -35,7 +29,7 @@ const LOADERS: Record<string, LazyCommand> = {
   upgrade: () => import("./upgrade.ts").then((m) => m.default),
   publish: () => import("./publish.ts").then((m) => m.default),
   emit: () => import("./emit.ts").then((m) => m.default),
-  "theme:export": () => import("./theme-export.ts").then((m) => m.default),
+  theme: () => import("./theme.ts").then((m) => m.default),
   completions: () => import("./completions.ts").then((m) => m.default),
   ...(traceEnabled() ? { trace: () => import("./trace.ts").then((m) => m.default) } : {}),
 };

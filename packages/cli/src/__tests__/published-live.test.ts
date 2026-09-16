@@ -78,10 +78,10 @@ async function runCli(
     [
       "bun",
       cliPath,
-      // Both verbs are flags on `publish` now; the tests keep naming the
+      // Both verbs are `publish` subcommands now; the tests keep naming the
       // behaviour they exercise.
       "publish",
-      command === "published" ? "--list" : "--remove",
+      command === "published" ? "list" : "remove",
       ...args,
       "--url",
       baseUrl,

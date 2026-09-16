@@ -23,15 +23,7 @@ const folder = process.argv[2] ?? `${import.meta.dir}/../velloo`;
 // The default "guided" surface hides the native mutation tools behind a
 // façade; seeding wants them directly.
 const child = Bun.spawn(
-  [
-    "bun",
-    `${import.meta.dir}/../packages/cli/src/cli.ts`,
-    "mcp",
-    "--folder",
-    folder,
-    "--surface",
-    "full",
-  ],
+  ["bun", `${import.meta.dir}/../packages/cli/src/cli.ts`, "mcp", folder, "--surface", "full"],
   {
     stdin: "pipe",
     stdout: "pipe",

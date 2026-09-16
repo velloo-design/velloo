@@ -44,9 +44,9 @@ function printKeys(attached: Attached[]): void {
   console.log("");
 }
 
-function printBackgroundStay(folderArg: string): void {
+function printBackgroundStay(designArg: string): void {
   console.log(
-    `velloo: it keeps running in the background — awake while the canvas is open or an agent is connected. Stop it anytime with \`velloo stop${folderArg}\`.`,
+    `velloo: it keeps running in the background — awake while the canvas is open or an agent is connected. Stop it anytime with \`velloo stop${designArg}\`.`,
   );
 }
 
@@ -57,7 +57,7 @@ export default defineCommand({
       "Open the canvas for a design folder and stay in the foreground (starts a persistent canvas if none is running)",
   },
   args: {
-    folder: {
+    design: {
       type: "positional",
       required: false,
       description: DESIGN_ARG_DESCRIPTION,
@@ -85,7 +85,7 @@ export default defineCommand({
   },
   async run({ args }) {
     assertLoopbackHost(args.host ?? "127.0.0.1");
-    const targets = await resolveRunTargets(args.folder, {});
+    const targets = await resolveRunTargets(args.design, {});
     const preferredPort = args.port ? Number(args.port) : undefined;
     if (preferredPort !== undefined && (!Number.isFinite(preferredPort) || preferredPort < 0)) {
       fail("run", `invalid --port ${JSON.stringify(args.port)}`);
@@ -130,7 +130,7 @@ export default defineCommand({
       throw error;
     }
 
-    const folderArg = args.folder ? ` ${args.folder}` : "";
+    const designArg = args.design ? ` ${args.design}` : "";
     const first = running[0] as {
       target: RunTarget;
       rec: Awaited<ReturnType<typeof ensureDaemon>>;
@@ -158,7 +158,7 @@ export default defineCommand({
         );
       } else {
         console.log(
-          `velloo: VELLOO_TRACE is set, but a canvas was already running — recording is NOT active on it. Run \`velloo stop${folderArg}\`, then re-run to record. The agent must also connect through this same (trace-enabled) velloo.`,
+          `velloo: VELLOO_TRACE is set, but a canvas was already running — recording is NOT active on it. Run \`velloo stop${designArg}\`, then re-run to record. The agent must also connect through this same (trace-enabled) velloo.`,
         );
       }
     }
@@ -169,7 +169,7 @@ export default defineCommand({
     });
 
     if (foreground) printKeys(running);
-    else printBackgroundStay(folderArg);
+    else printBackgroundStay(designArg);
 
     // The canvases this session still holds. One stopping — by `velloo stop`
     // or a command that has to restart it (move, bind, upgrade) in another
@@ -194,7 +194,7 @@ export default defineCommand({
       });
 
       if (outcome === "background") {
-        printBackgroundStay(folderArg);
+        printBackgroundStay(designArg);
         return;
       }
 
@@ -206,7 +206,7 @@ export default defineCommand({
         }
         attached = alive;
         if (attached.length === 0) {
-          console.log(`velloo: no canvases left. Start again with \`velloo run${folderArg}\`.`);
+          console.log(`velloo: no canvases left. Start again with \`velloo run${designArg}\`.`);
           return;
         }
         console.log(

@@ -301,8 +301,8 @@ describe("resolveDesign one directory too deep", () => {
     await makeDesignFolder(join(tmp, "web"), "web");
     await makeDesignFolder(join(tmp, "brand"), "brand");
     await expect(
-      resolveDesign(undefined, "emit", { cwd: tmp, onFail, designFlag: "--folder" }),
-    ).rejects.toThrow("`velloo emit --folder=brand`");
+      resolveDesign(undefined, "emit", { cwd: tmp, onFail, designFlag: "--design" }),
+    ).rejects.toThrow("`velloo emit --design=brand`");
   });
 });
 

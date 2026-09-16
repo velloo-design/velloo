@@ -11,11 +11,20 @@ const specs = await commandSpecs();
 describe("commandSpecs", () => {
   test("covers the public commands and skips internal ones", () => {
     const names = specs.map((s) => s.name);
-    for (const expected of ["init", "connect", "run", "status", "theme:export", "completions"]) {
+    for (const expected of ["init", "connect", "run", "status", "theme", "completions"]) {
       expect(names).toContain(expected);
     }
     expect(names).not.toContain("ci");
     expect(names).not.toContain("__daemon");
+  });
+
+  test("subcommands carry their own flags", () => {
+    const theme = specs.find((s) => s.name === "theme");
+    const exportTheme = theme?.subcommands.find((s) => s.name === "export");
+    expect(exportTheme?.flags.map((f) => f.flag)).toContain("--design");
+    const publish = specs.find((s) => s.name === "publish");
+    expect(publish?.subcommands.map((s) => s.name)).toEqual(["list", "remove"]);
+    expect(publish?.flags.map((f) => f.flag)).toContain("--visibility");
   });
 
   test("flags are kebab-case; default-true booleans surface as --no-", () => {
@@ -36,7 +45,7 @@ describe("commandSpecs", () => {
   });
 
   test("descriptions are single-line and free of spec-breaking characters", () => {
-    for (const s of specs) {
+    for (const s of specs.flatMap((spec) => [spec, ...spec.subcommands])) {
       for (const text of [s.description, ...s.flags.map((f) => f.description)]) {
         expect(text).not.toMatch(/[\n'"[\]:`$\\]/);
       }
@@ -45,10 +54,10 @@ describe("commandSpecs", () => {
 });
 
 describe("completionScript", () => {
-  test("zsh script escapes colons in command names and parses under zsh -n", async () => {
+  test("zsh script offers subcommands and parses under zsh -n", async () => {
     const script = completionScript("zsh", specs);
     expect(script).toContain("#compdef velloo");
-    expect(script).toContain("theme\\:export");
+    expect(script).toContain("_describe 'velloo theme command'");
     expect(script).toContain("'--force[");
     if (Bun.which("zsh")) {
       const file = join(await mkdtemp(join(tmpdir(), "velloo-comp-")), "z.zsh");
@@ -64,6 +73,7 @@ describe("completionScript", () => {
     expect(script).toContain("complete -o default -F _velloo velloo");
     expect(script).toContain("init login");
     expect(script).toContain("--design-folder");
+    expect(script).toContain('subs="install"');
     if (Bun.which("bash")) {
       const file = join(await mkdtemp(join(tmpdir(), "velloo-comp-")), "b.bash");
       await writeFile(file, script);
@@ -76,7 +86,8 @@ describe("completionScript", () => {
   test("fish script declares subcommands and value flags with -r", () => {
     const script = completionScript("fish", specs);
     expect(script).toContain('-a "init"');
-    expect(script).toContain("__fish_seen_subcommand_from init");
+    expect(script).toContain('-n "__velloo_is init"');
+    expect(script).toContain('-n "__velloo_is theme export" -l design -r');
     expect(script).toContain("-l design-folder -r");
     expect(script).toContain("-l force -d");
   });

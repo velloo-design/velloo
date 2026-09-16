@@ -319,7 +319,7 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
 
   if (facts.pendingMigrations.length > 0) {
     bad(
-      `folder format v${facts.schemaVersion} — v${CURRENT_SCHEMA_VERSION} available (\`velloo upgrade <folder>\`)`,
+      `folder format v${facts.schemaVersion} — v${CURRENT_SCHEMA_VERSION} available (\`velloo upgrade <design>\`)`,
     );
   } else {
     ok(`folder format v${facts.schemaVersion} (current)`);
@@ -327,7 +327,7 @@ export async function runCheckSetup(folder: string, appRoot: string): Promise<vo
 
   if (facts.toolVersionStale) {
     bad(
-      `agent skills recorded for velloo ${String(config.toolVersion)} — refresh with \`velloo upgrade <folder>\``,
+      `agent skills recorded for velloo ${String(config.toolVersion)} — refresh with \`velloo upgrade <design>\``,
     );
   } else {
     ok(`agent skills current (velloo ${TOOL_VERSION})`);

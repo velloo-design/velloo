@@ -64,7 +64,7 @@ export default defineCommand({
       required: false,
       description: "Screen id, or a path to a screen JSON. Omit to pick interactively.",
     },
-    folder: {
+    design: {
       type: "string",
       description: DESIGN_ARG_DESCRIPTION,
     },
@@ -87,7 +87,7 @@ export default defineCommand({
       ? resolve(screenArg)
       : (
           await pickScreen(
-            await resolveDesign(args.folder, "emit", { designFlag: "--folder" }),
+            await resolveDesign(args.design, "emit", { designFlag: "--design" }),
             screenArg,
             interactive,
             "emit",

@@ -10,12 +10,7 @@ import {
 } from "../cloud-published.ts";
 import { fail } from "../fail.ts";
 
-/**
- * The read/remove half of `velloo publish` — what used to be the separate
- * `published` and `unpublish` commands. Publishing, listing what you published
- * and taking one down are three faces of one thing; three top-level verbs made
- * the CLI wider without making any of them easier to find.
- */
+/** `velloo publish list` and `velloo publish remove`: the links already published. */
 
 interface CloudArgs {
   url?: string | undefined;
@@ -38,11 +33,11 @@ function cloudFailure(command: string, error: CloudError): never {
   fail(command, describeCloudError(error));
 }
 
-/** `velloo publish --list` */
+/** `velloo publish list` */
 export async function listPublished(args: CloudArgs): Promise<void> {
-  const { baseUrl, token } = await resolveCloud("publish", args);
+  const { baseUrl, token } = await resolveCloud("publish list", args);
   const listed = await listPublishedDesigns({ baseUrl, token });
-  if (!listed.ok) cloudFailure("publish", listed.error);
+  if (!listed.ok) cloudFailure("publish list", listed.error);
   const designs = listed.value;
   if (designs.length === 0) {
     console.log("velloo publish: no published designs.");
@@ -65,40 +60,44 @@ export async function listPublished(args: CloudArgs): Promise<void> {
   console.log(`\nManage in velloo-cloud: ${await publishedBoardsUrl(baseUrl)}`);
 }
 
-/** `velloo publish --remove [share-url]` */
+/** `velloo publish remove [share-url]` */
 export async function removePublished(
-  args: CloudArgs & { design?: string | undefined; yes?: boolean | undefined },
+  args: CloudArgs & { shareUrl?: string | undefined; yes?: boolean | undefined },
 ): Promise<void> {
-  const { baseUrl, token } = await resolveCloud("publish", args);
+  const { baseUrl, token } = await resolveCloud("publish remove", args);
   const interactive = Boolean(process.stdin.isTTY);
-  if (!interactive && !args.design) {
-    fail("publish", "pass the full share URL and --yes when there is no interactive terminal");
+  if (!interactive && !args.shareUrl) {
+    fail(
+      "publish remove",
+      "pass the full share URL and --yes when there is no interactive terminal",
+    );
   }
   if (!interactive && args.yes !== true) {
-    fail("publish", "refusing to remove a published design without --yes");
+    fail("publish remove", "refusing to remove a published design without --yes");
   }
 
   const listed = await listPublishedDesigns({ baseUrl, token });
-  if (!listed.ok) cloudFailure("publish", listed.error);
+  if (!listed.ok) cloudFailure("publish remove", listed.error);
   const designs = listed.value;
   const manageable = designs.filter((design) => design.canManage);
   if (manageable.length === 0) {
     fail(
-      "publish",
+      "publish remove",
       `there are no published designs you can remove. Manage boards at ${await publishedBoardsUrl(baseUrl)}`,
     );
   }
 
   let target: CloudPublishedDesign | null;
-  if (args.design) {
-    target = designFromReference(args.design, designs);
+  if (args.shareUrl) {
+    target = designFromReference(args.shareUrl, designs);
     if (!target) {
       fail(
-        "publish",
+        "publish remove",
         `that share URL is not in your published designs. Manage boards at ${await publishedBoardsUrl(baseUrl)}`,
       );
     }
-    if (!target.canManage) fail("publish", "you do not have permission to remove that design");
+    if (!target.canManage)
+      fail("publish remove", "you do not have permission to remove that design");
   } else {
     const value = await select({
       message: "Design to unpublish",
@@ -109,7 +108,7 @@ export async function removePublished(
       })),
     });
     target = resolveUnpublishSelection(isCancel(value) ? null : String(value), manageable);
-    if (!target) fail("publish", "cancelled");
+    if (!target) fail("publish remove", "cancelled");
   }
 
   if (args.yes !== true) {
@@ -117,11 +116,11 @@ export async function removePublished(
       message: `Unpublish “${target.title?.trim() || "Untitled design"}”? Its share URL will stop working.`,
       initialValue: false,
     });
-    if (isCancel(approved) || !approved) fail("publish", "cancelled");
+    if (isCancel(approved) || !approved) fail("publish remove", "cancelled");
   }
 
   const removed = await unpublishDesign({ baseUrl, token, slug: target.slug });
-  if (!removed.ok) cloudFailure("publish", removed.error);
+  if (!removed.ok) cloudFailure("publish remove", removed.error);
   console.log(`velloo publish: removed ${target.title?.trim() || "Untitled design"}`);
   console.log(`  ${target.url}`);
 }

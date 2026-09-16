@@ -80,7 +80,7 @@ function bundledComponentsSection(): string[] {
     "The shadcn snapshot lives inside the velloo binary. No files were",
     "written to your app. When you're ready to bring shadcn into your",
     "project, run `npx shadcn@latest init` there separately, then",
-    "`velloo theme:export <app>` to align the theme.",
+    "`velloo theme export <app>` to align the theme.",
     "",
   ];
 }
@@ -129,7 +129,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
             "`npx shadcn@latest add <component>` yourself. Client-safe files render",
             "directly from the repo; overlays use labeled canvas adaptations and",
             "broken or missing files visibly fall back to Velloo's snapshot. Then",
-            "`velloo theme:export <app>` aligns the theme.",
+            "`velloo theme export <app>` aligns the theme.",
             "",
           ]
         : bundledComponentsSection(),

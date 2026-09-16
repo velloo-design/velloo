@@ -54,7 +54,7 @@ if (process.platform === "win32" && process.argv.length === 3 && process.argv[2]
   // npm rewrote this launcher's package in place, so re-entering by the same
   // path runs the NEW velloo — which is the one that must migrate the design
   // folder, since only it knows the format it migrated towards.
-  const migrate = spawnSync(process.execPath, [__filename, "upgrade", "--folder-only"], {
+  const migrate = spawnSync(process.execPath, [__filename, "upgrade", "--design-only"], {
     stdio: "inherit",
   });
   process.exit(migrate.status == null ? 1 : migrate.status);
