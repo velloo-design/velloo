@@ -456,6 +456,15 @@ run(["bun", "pm", "pack", "--destination", repoRoot], distDir);
 
 const tgz = `velloo-${VERSION}.tgz`;
 
+// The identity baked into this bundle, for the release scripts to advertise.
+// `latest.json` must carry these exact values: an update check orders equal
+// versions by build time, so a feed stamped even a minute after the bundle
+// makes every installation of that release think it's behind itself.
+writeFileSync(
+  join(distDir, "release.json"),
+  `${JSON.stringify({ version: VERSION, build: BUILD_VERSION, builtAt: BUILD_TIME_MS }, null, 2)}\n`,
+);
+
 // 7. Record the build so an already-installed velloo can upgrade to it. The
 //    local channel has no version bump to notice — every build of a branch is
 //    the same `VERSION` — so the marker carries the build time, which is the

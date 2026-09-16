@@ -22,6 +22,10 @@ const [PACKAGE_MAJOR = 0, PACKAGE_MINOR = 0, PACKAGE_PATCH = 0] =
   PACKAGE_VERSION.split(".").map(Number);
 const AVAILABLE_VERSION = `${PACKAGE_MAJOR}.${PACKAGE_MINOR}.${PACKAGE_PATCH + 1}`;
 
+const originalUpdateUrl = `data:application/json,${encodeURIComponent(
+  JSON.stringify({ version: AVAILABLE_VERSION }),
+)}`;
+
 let root: string;
 let originalEnv: NodeJS.ProcessEnv;
 
@@ -29,9 +33,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "velloo-update-test-"));
   originalEnv = { ...process.env };
   process.env.VELLOO_UPDATE_CACHE = join(root, "update.json");
-  process.env.VELLOO_UPDATE_URL = `data:application/json,${encodeURIComponent(
-    JSON.stringify({ version: AVAILABLE_VERSION }),
-  )}`;
+  process.env.VELLOO_UPDATE_URL = originalUpdateUrl;
   process.env.VELLOO_LOCAL_RELEASE = join(root, "local-release.json");
 });
 
@@ -108,7 +110,8 @@ describe("version updates", () => {
   test("fetches and caches a release without network access", async () => {
     expect(await fetchLatestVersion()).toBe(AVAILABLE_VERSION);
     await refreshUpdateCache();
-    const cached = JSON.parse(await readFile(process.env.VELLOO_UPDATE_CACHE as string, "utf8"));
+    const file = JSON.parse(await readFile(process.env.VELLOO_UPDATE_CACHE as string, "utf8"));
+    const cached = file[latestVersionUrl()];
     expect(cached.latest).toBe(AVAILABLE_VERSION);
     expect(cached.checkedAt).toBeNumber();
   });
@@ -124,7 +127,7 @@ describe("version updates", () => {
     process.env.VELLOO_INSTALL_METHOD = "direct";
     await writeFile(
       process.env.VELLOO_UPDATE_CACHE as string,
-      JSON.stringify({ checkedAt: now, latest: AVAILABLE_VERSION }),
+      JSON.stringify({ [latestVersionUrl()]: { checkedAt: now, latest: AVAILABLE_VERSION } }),
     );
     const error = spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -164,6 +167,28 @@ describe("version updates", () => {
     } finally {
       error.mockRestore();
     }
+  });
+
+  test("never reads another installation's release out of the shared cache", async () => {
+    // A dev-channel install and a contributor's local build share
+    // ~/.velloo/update-check.json. The dev host's answer is not the local
+    // channel's latest build, however new its version looks.
+    process.env.VELLOO_INSTALL_METHOD = "direct";
+    process.env.VELLOO_RELEASE_CHANNEL = "dev";
+    await updateStatus({ refresh: true });
+
+    process.env.VELLOO_INSTALL_METHOD = "npm";
+    process.env.VELLOO_RELEASE_CHANNEL = "local";
+    delete process.env.VELLOO_UPDATE_URL;
+    const local = await updateStatus();
+    expect(local.available).toBe(false);
+    expect(local.latest).toBeNull();
+
+    process.env.VELLOO_INSTALL_METHOD = "direct";
+    process.env.VELLOO_RELEASE_CHANNEL = "dev";
+    process.env.VELLOO_UPDATE_URL = originalUpdateUrl;
+    const dev = await updateStatus();
+    expect(dev.latest).toBe(AVAILABLE_VERSION);
   });
 
   test("reports status without upgrading, and names why it can't", async () => {
