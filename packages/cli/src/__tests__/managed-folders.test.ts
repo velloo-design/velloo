@@ -451,6 +451,27 @@ test("nested application roots follow a monorepo checkout that moves", async () 
   );
 });
 
+test("renaming a design with its canvas running keeps the canvas up", async () => {
+  const folder = await init();
+  const lock = join(folder, ".design/cache/runtime.json");
+  const started = await command(["run", "web", "--background", "--port=0"]);
+  expect(started.code, started.out).toBe(0);
+  const before = JSON.parse(await readFile(lock, "utf8")) as { canvasUrl: string; pid: number };
+  try {
+    const renamed = await command(["design", "rename", "web", "site"]);
+    expect(renamed.code, renamed.out).toBe(0);
+    const after = JSON.parse(await readFile(lock, "utf8")) as { pid: number };
+    expect(after.pid).toBe(before.pid);
+    const summary = (await fetch(`${before.canvasUrl}/api/design`).then((r) => r.json())) as {
+      designName: string;
+    };
+    expect(summary.designName).toBe("site");
+    expect(recordedDesignName(folder)).toBe("site");
+  } finally {
+    await command(["stop", "--all"]);
+  }
+});
+
 test("external daemon restarts, agent stdio launch attaches, and out-of-band edits reload", async () => {
   const folder = await init();
   const lock = join(folder, ".design/cache/runtime.json");
