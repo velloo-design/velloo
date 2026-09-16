@@ -105,45 +105,61 @@ function stripComments(css: string): string {
   }
 }
 
-/** Index of the brace matching the `{` at `open` (or -1 when unbalanced). */
-function matchBrace(css: string, open: number): number {
-  let depth = 0;
-  for (let i = open; i < css.length; i++) {
-    if (css[i] === "{") depth++;
-    else if (css[i] === "}" && --depth === 0) return i;
+/**
+ * For every `{` in `css`, the index of its matching `}` (or -1 when it never
+ * closes), from one stack pass. Asking per brace instead rescans to the end of
+ * the sheet each time, which a run of unclosed braces turns quadratic.
+ */
+function braceMatches(css: string): Map<number, number> {
+  const matches = new Map<number, number>();
+  const open: number[] = [];
+  for (let i = 0; i < css.length; i++) {
+    if (css[i] === "{") {
+      open.push(i);
+      matches.set(i, -1);
+    } else if (css[i] === "}") {
+      const at = open.pop();
+      if (at !== undefined) matches.set(at, i);
+    }
   }
-  return -1;
+  return matches;
 }
 
-function collectDeclarations(body: string, into: Map<string, string>): void {
-  const decl = /--([a-zA-Z0-9-]+)\s*:\s*([^;{}]+);/g;
-  let m = decl.exec(body);
-  while (m !== null) {
-    into.set(m[1] as string, (m[2] as string).trim());
-    m = decl.exec(body);
-  }
-}
+const DECLARATION = /^--([a-zA-Z0-9-]+)\s*:([\s\S]*)$/;
 
 /**
  * Scan `css` for blocks whose selector matches `selector` (a predicate over
  * the prelude text) and fold their custom-property declarations into `into`.
  * Later declarations win, mirroring the cascade.
+ *
+ * One pass: the text between consecutive `{`, `}` and `;` is either a block's
+ * prelude or a declaration of the innermost open block. Matching each block's
+ * body with a regex instead re-reads nested bodies once per enclosing block and
+ * backtracks across a body with no `:` in it.
  */
 function scanBlocks(
   css: string,
   matches: (prelude: string) => boolean,
   into: Map<string, string>,
 ): void {
-  // Every `{` opens a block whose prelude runs back to the previous `{`, `}`
-  // or `;` — nested blocks included, since the scan never skips a body.
-  let preludeStart = 0;
+  const collecting: boolean[] = [];
+  let segmentStart = 0;
   for (let i = 0; i < css.length; i++) {
     const ch = css[i];
-    if (ch === "{" && i > preludeStart && matches(css.slice(preludeStart, i).trim())) {
-      const end = matchBrace(css, i);
-      if (end > i) collectDeclarations(css.slice(i + 1, end), into);
+    if (ch === "{") {
+      collecting.push(i > segmentStart && matches(css.slice(segmentStart, i).trim()));
+    } else if (ch === ";") {
+      if (collecting[collecting.length - 1]) {
+        const declaration = DECLARATION.exec(css.slice(segmentStart, i).trim());
+        const value = declaration?.[2]?.trim();
+        if (declaration && value) into.set(declaration[1] as string, value);
+      }
+    } else if (ch === "}") {
+      collecting.pop();
+    } else {
+      continue;
     }
-    if (ch === "{" || ch === "}" || ch === ";") preludeStart = i + 1;
+    segmentStart = i + 1;
   }
 }
 
@@ -157,6 +173,7 @@ const DARK_SCHEME = /prefers-color-scheme\s*:\s*dark/;
  */
 function splitDarkMedia(css: string): { css: string; darkVars: Map<string, string> } {
   const darkVars = new Map<string, string>();
+  const closing = braceMatches(css);
   let out = css;
   let from = 0;
   for (;;) {
@@ -169,11 +186,13 @@ function splitDarkMedia(css: string): { css: string; darkVars: Map<string, strin
     // shares the same brace and a shorter prelude, so it can't match either.
     from = start + 1;
     if (css[start] !== "{" || !DARK_SCHEME.test(css.slice(at, start))) continue;
-    const end = matchBrace(css, start);
+    const end = closing.get(start) ?? -1;
     if (end > start) {
       const body = css.slice(start + 1, end);
       scanBlocks(body, (p) => p.startsWith(":root") || p === "*", darkVars);
       out = out.slice(0, at) + " ".repeat(end + 1 - at) + out.slice(end + 1);
+      // The body is handled; a dark query nested inside it must not be re-read.
+      from = end + 1;
     }
   }
   return { css: out, darkVars };
