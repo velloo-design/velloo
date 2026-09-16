@@ -58,6 +58,22 @@ or the MCP surface bump the **minor**; everything else bumps the **patch**.
    version is already there, and an existing release gets its assets replaced.
 5. **Verify**: `npm install -g velloo@X.Y.Z && velloo --version` from a clean prefix.
 
+## Fixing the installer without a release
+
+`install.sh` is baked per release, but it is also what `velloo upgrade` fetches
+on every curl install, so an installer bug is worth shipping on its own. The
+**Installer** workflow republishes only `install.sh` on one host, pinned to the
+version that host's `latest.json` already serves — no binaries, npm, or tag:
+
+```bash
+gh workflow run installer.yml -f channel=prod
+```
+
+It refuses when any platform archive for that version is missing, and reads the
+file back through the host to confirm. `prod` waits for approval like a release.
+The dev host needs this only between dev builds: every green push to `main`
+republishes its installer anyway.
+
 ## Credentials
 
 Nothing long-lived can publish to npm. The package trusts this repository's

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderInstaller } from "./distribution/downloads.ts";
 import { BUN_VERSION, RUNTIME_TARGETS } from "./distribution/targets.ts";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -42,10 +43,9 @@ for (const target of RUNTIME_TARGETS.filter((candidate) => candidate.os !== "win
   });
 }
 
-const installer = readFileSync(join(repoRoot, "scripts", "install.sh"), "utf8")
-  .replaceAll("@VELLOO_VERSION@", version)
-  .replaceAll("@VELLOO_DOWNLOAD_BASE@", downloadBase);
-writeFileSync(join(artifacts, "install.sh"), installer, { mode: 0o755 });
+writeFileSync(join(artifacts, "install.sh"), renderInstaller(version, downloadBase), {
+  mode: 0o755,
+});
 
 // The version endpoint every non-npm installation polls. npm installs on the
 // stable channel ask the registry instead — that is the artifact npm would

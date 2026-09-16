@@ -1,0 +1,49 @@
+# Installer: republish only install.sh on a download host, pinned to the
+# version that host already serves (scripts/publish-installer.ts). For an
+# installer fix that shouldn't wait for — or force — a release. No binaries,
+# no npm, no tag.
+#
+# Trigger: `gh workflow run installer.yml -f channel=prod`, or Actions → Installer.
+# The `prod` environment holds the job until a maintainer approves it.
+name: Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Download host to update
+        type: choice
+        options: [dev, prod]
+        required: true
+
+permissions: {}
+
+# Shares the group of the workflow that also writes this host's install.sh, so
+# a release or dev build in flight finishes first and this reads its version.
+concurrency:
+  group: ${{ inputs.channel == 'prod' && 'release' || 'dev-channel' }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.channel }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Publish install.sh
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          BLOB_ENDPOINT: ${{ secrets.BLOB_ENDPOINT }}
+          BLOB_BUCKET: ${{ secrets.BLOB_BUCKET }}
+          BLOB_ACCESS_KEY: ${{ secrets.BLOB_ACCESS_KEY }}
+          BLOB_SECRET_KEY: ${{ secrets.BLOB_SECRET_KEY }}
+        run: bun scripts/publish-installer.ts "$CHANNEL"

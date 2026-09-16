@@ -68,7 +68,20 @@ if [ -e "$destination" ]; then mv "$destination" "$old"; fi
 mv "$payload" "$destination"
 link="$INSTALL_ROOT/.current-$$"
 ln -s "versions/$VERSION" "$link"
-mv -f "$link" "$INSTALL_ROOT/current"
+# Replace `current` with one rename. A plain `mv` resolves an existing
+# `current` to the version directory it points at and moves the new link
+# *inside* it, so an upgrade would unpack and then keep running the old
+# version. GNU and BusyBox spell "the destination is not a directory" -T,
+# BSD and macOS spell it -h; `ln -sfn` is the non-atomic last resort.
+if ! mv -fT "$link" "$INSTALL_ROOT/current" 2>/dev/null &&
+  ! mv -fh "$link" "$INSTALL_ROOT/current" 2>/dev/null; then
+  rm -f "$link"
+  ln -sfn "versions/$VERSION" "$INSTALL_ROOT/current"
+fi
+[ "$(readlink "$INSTALL_ROOT/current")" = "versions/$VERSION" ] ||
+  die "could not switch $INSTALL_ROOT/current to $VERSION"
+# Links an earlier installer misplaced inside a version directory.
+find "$INSTALL_ROOT/versions" -mindepth 2 -maxdepth 2 -type l -name '.current-*' -exec rm -f {} +
 ln -sf "$INSTALL_ROOT/current/bin/velloo" "$BIN_DIR/velloo"
 [ ! -e "$old" ] || rm -rf "$old"
 
