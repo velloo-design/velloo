@@ -8,10 +8,12 @@ import {
   readFile,
   readlink,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 /**
  * `scripts/install.sh` against stub archives served over file://. The release
@@ -69,18 +71,47 @@ async function newInstall(): Promise<Install> {
   return { home: join(at, "home"), bin: join(at, "bin") };
 }
 
-function install(where: Install, version: string): Bun.SyncSubprocess<"pipe", "pipe"> {
+/**
+ * The system directories the installer's own tools (curl, tar, shasum) live
+ * in, and nothing else: the developer's PATH may carry a real velloo, which
+ * would show up in every diagnostic.
+ */
+const TOOLS_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+
+function install(
+  where: Install,
+  version: string,
+  opts: { path?: string; shell?: string } = {},
+): Bun.SyncSubprocess<"pipe", "pipe"> {
   return Bun.spawnSync(["bash", installer], {
     stdout: "pipe",
     stderr: "pipe",
     env: {
-      ...process.env,
+      HOME: process.env.HOME ?? root,
+      PATH: opts.path ?? `${where.bin}:${TOOLS_PATH}`,
+      SHELL: opts.shell ?? "/bin/zsh",
       VELLOO_VERSION: version,
       VELLOO_DOWNLOAD_BASE: `file://${downloads}`,
       VELLOO_HOME: where.home,
       VELLOO_BIN_DIR: where.bin,
     },
   });
+}
+
+/** Installer output without its colour escapes. */
+const text = (result: Bun.SyncSubprocess<"pipe", "pipe">): string =>
+  stripVTControlCharacters(result.stdout.toString());
+
+/** A bin dir holding a `velloo` linked the way npm links a global install. */
+async function npmGlobal(): Promise<string> {
+  const prefix = await mkdtemp(join(root, "npm-"));
+  const pkg = join(prefix, "lib", "node_modules", "velloo");
+  await mkdir(pkg, { recursive: true });
+  await writeFile(join(pkg, "launcher.cjs"), "#!/bin/sh\necho npm\n");
+  await chmod(join(pkg, "launcher.cjs"), 0o755);
+  await mkdir(join(prefix, "bin"));
+  await symlink("../lib/node_modules/velloo/launcher.cjs", join(prefix, "bin", "velloo"));
+  return join(prefix, "bin");
 }
 
 function installed(where: Install): string {
@@ -141,5 +172,57 @@ describe("install.sh", () => {
     expect(result.exitCode, result.stderr.toString()).toBe(0);
     expect(installed(where)).toBe("1.1.0");
     expect(await readdir(join(where.home, "versions", "1.0.0"))).not.toContain(".current-4242");
+  });
+});
+
+describe("install.sh PATH diagnostics", () => {
+  test("says where it installed, and nothing more when PATH already runs it", async () => {
+    const where = await newInstall();
+    const result = install(where, "1.0.0");
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const out = text(result);
+    expect(out).toContain(`installed in  ${join(where.home, "versions", "1.0.0")}`);
+    expect(out).toContain(`command       ${join(where.bin, "velloo")}`);
+    expect(out).not.toContain("!");
+    expect(out).not.toContain("hash -r");
+  });
+
+  test("a bin dir missing from PATH gets the line for the user's shell", async () => {
+    const where = await newInstall();
+    const zsh = text(install(where, "1.0.0", { path: TOOLS_PATH, shell: "/bin/zsh" }));
+    expect(zsh).toContain(`${where.bin} is not on your PATH`);
+    expect(zsh).toContain(`echo 'export PATH="${where.bin}:$PATH"' >> ~/.zshrc`);
+
+    const fish = text(install(where, "1.0.0", { path: TOOLS_PATH, shell: "/usr/bin/fish" }));
+    expect(fish).toContain(`fish_add_path ${where.bin}`);
+  });
+
+  test("names a velloo earlier on PATH, where it came from, and how to remove it", async () => {
+    const where = await newInstall();
+    const npmBin = await npmGlobal();
+    const result = install(where, "1.0.0", { path: `${npmBin}:${where.bin}:${TOOLS_PATH}` });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const out = text(result);
+    expect(out).toContain("Another velloo comes before");
+    expect(out).toContain(join(npmBin, "velloo"));
+    expect(out).toContain("npm uninstall -g velloo");
+  });
+
+  test("an older install later on PATH gets the cached-location hint instead", async () => {
+    const where = await newInstall();
+    const npmBin = await npmGlobal();
+    const out = text(install(where, "1.0.0", { path: `${where.bin}:${npmBin}:${TOOLS_PATH}` }));
+    expect(out).not.toContain("comes before");
+    expect(out).toContain("after this one");
+    expect(out).toContain("hash -r");
+  });
+
+  test("a velloo on PATH while the bin dir isn't: both are reported", async () => {
+    const where = await newInstall();
+    const npmBin = await npmGlobal();
+    const out = text(install(where, "1.0.0", { path: `${npmBin}:${TOOLS_PATH}` }));
+    expect(out).toContain("is not on your PATH");
+    expect(out).toContain("Until then `velloo` runs another install:");
+    expect(out).toContain(join(npmBin, "velloo"));
   });
 });

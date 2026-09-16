@@ -14,8 +14,42 @@ BIN_DIR="${VELLOO_BIN_DIR:-$HOME/.local/bin}"
 
 note() { printf '\033[36m%s\033[0m\n' "$*"; }
 ok() { printf '\033[32m%s\033[0m\n' "$*"; }
+warn() { printf '\033[33m%s\033[0m\n' "$*"; }
 err() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 die() { err "velloo install: $*"; exit 1; }
+
+tilde() {
+  case "$1" in
+    "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+# Where another velloo came from, and how to remove it, when that is knowable
+# from its symlink: npm and Homebrew both link their commands into a bin dir.
+origin_of() {
+  target="$(readlink "$1" 2>/dev/null || true)"
+  case "$target" in
+    *node_modules/velloo/*) printf '  (npm global install: npm uninstall -g velloo)' ;;
+    *Cellar/velloo/*) printf '  (Homebrew: brew uninstall velloo)' ;;
+    *.velloo/current/*) printf '  (an earlier curl install linked from another directory)' ;;
+  esac
+}
+
+# The line that puts BIN_DIR on PATH for the user's login shell.
+path_setup_line() {
+  shown="$(tilde "$BIN_DIR")"
+  case "$shown" in "~"/*) shown="\$HOME${shown#"~"}" ;; esac
+  case "$(basename "${SHELL:-sh}")" in
+    zsh) printf 'echo '"'"'export PATH="%s:$PATH"'"'"' >> ~/.zshrc' "$shown" ;;
+    bash)
+      if [ "$(uname -s)" = "Darwin" ]; then rc="~/.bash_profile"; else rc="~/.bashrc"; fi
+      printf 'echo '"'"'export PATH="%s:$PATH"'"'"' >> %s' "$shown" "$rc"
+      ;;
+    fish) printf 'fish_add_path %s' "$(tilde "$BIN_DIR")" ;;
+    *) printf 'echo '"'"'export PATH="%s:$PATH"'"'"' >> ~/.profile' "$shown" ;;
+  esac
+}
 
 case "$(uname -s)" in
   Darwin) os="darwin" ;;
@@ -86,10 +120,77 @@ ln -sf "$INSTALL_ROOT/current/bin/velloo" "$BIN_DIR/velloo"
 [ ! -e "$old" ] || rm -rf "$old"
 
 ok "✓ Velloo $VERSION installed with private Bun"
-case ":$PATH:" in
-  *":$BIN_DIR:"*) ;;
-  *) note "Add $BIN_DIR to PATH, then open a new shell." ;;
-esac
+echo "  installed in  $(tilde "$INSTALL_ROOT/versions/$VERSION")"
+echo "  command       $(tilde "$BIN_DIR/velloo")"
+
+# Which `velloo` a shell would actually run. Everything below is advice: the
+# install itself already succeeded.
+bin_real="$(CDPATH= cd -- "$BIN_DIR" && pwd -P)"
+on_path=""
+before=""
+after=""
+# Resolved directories already reported: PATH often names one twice, or via a
+# symlink. Reports show the entry as the user's PATH spells it.
+seen=""
+old_ifs="$IFS"
+IFS=:
+set -f
+for dir in $PATH; do
+  real="$(CDPATH= cd -- "${dir:-.}" 2>/dev/null && pwd -P)" || continue
+  if [ "$real" = "$bin_real" ]; then
+    on_path=1
+    continue
+  fi
+  [ -x "$real/velloo" ] && [ ! -d "$real/velloo" ] || continue
+  case "
+$seen
+" in
+    *"
+$real
+"*) continue ;;
+  esac
+  seen="$seen${seen:+
+}$real"
+  if [ -n "$on_path" ]; then
+    after="$after${after:+
+}${dir%/}/velloo"
+  else
+    before="$before${before:+
+}${dir%/}/velloo"
+  fi
+done
+set +f
+IFS="$old_ifs"
+
+list_installs() {
+  printf '%s\n' "$1" | while IFS= read -r other; do
+    echo "    $(tilde "$other")$(origin_of "$other")"
+  done
+}
+
+if [ -z "$on_path" ]; then
+  echo
+  warn "! $(tilde "$BIN_DIR") is not on your PATH. Add it with:"
+  echo "    $(path_setup_line)"
+  echo "  then open a new terminal."
+  if [ -n "$before" ]; then
+    echo "  Until then \`velloo\` runs another install:"
+    list_installs "$before"
+  fi
+elif [ -n "$before" ]; then
+  echo
+  warn "! Another velloo comes before $(tilde "$BIN_DIR") on your PATH, so \`velloo\` runs that one:"
+  list_installs "$before"
+  echo "  Remove it, or move $(tilde "$BIN_DIR") ahead of its directory in PATH."
+elif [ -n "$after" ]; then
+  # A terminal that ran the older install remembers where it found it, so it
+  # keeps running that one (zsh's `which` reports it too) until the cache is
+  # cleared — even though this install now comes first on PATH.
+  echo
+  note "Another velloo is also on your PATH, after this one:"
+  list_installs "$after"
+  echo "  A terminal that already ran it may keep doing so: run \`hash -r\` there, or open a new one."
+fi
 echo
 note "Get started:"
 echo "  velloo init        scaffold a design folder"
