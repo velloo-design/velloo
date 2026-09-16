@@ -48,6 +48,7 @@ describe("connect", () => {
       designFolder: design,
       agents: ["claude-code"],
       transport: "http",
+      mcpUrl: MCP,
       installSkill: false,
     });
     const claude = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
@@ -57,6 +58,7 @@ describe("connect", () => {
       designFolder: design,
       agents: ["cursor"],
       transport: "http",
+      mcpUrl: MCP,
       installSkill: false,
     });
     const cursor = JSON.parse(await readFile(join(tmp, ".cursor", "mcp.json"), "utf8"));
@@ -83,6 +85,17 @@ describe("connect", () => {
     await connect({ designFolder: design, agents: ["claude-code"], installSkill: false });
     const again = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
     expect(Object.keys(again.mcpServers).sort()).toEqual(["other", "velloo"]);
+  });
+
+  test("--http without a URL refuses rather than writing a guessed port", async () => {
+    await expect(
+      connect({
+        designFolder: design,
+        agents: ["claude-code"],
+        transport: "http",
+        installSkill: false,
+      }),
+    ).rejects.toThrow("velloo mcp --http");
   });
 
   test("honors a custom mcpUrl with --http", async () => {
@@ -185,6 +198,7 @@ describe("connect", () => {
       designFolder: design,
       agents: ["codex-global"],
       transport: "http",
+      mcpUrl: MCP,
       installSkill: false,
       homeDir: fakeHome,
     });
@@ -261,6 +275,7 @@ describe("connect", () => {
       designFolder: design,
       agents: ["continue"],
       transport: "http",
+      mcpUrl: MCP,
       installSkill: false,
     });
     const yaml = await readFile(join(tmp, ".continue", "mcpServers", "velloo.yaml"), "utf8");
@@ -374,6 +389,7 @@ describe("connect", () => {
       designFolder: design,
       agents: ["opencode"],
       transport: "http",
+      mcpUrl: MCP,
       installSkill: false,
     });
     const cfg = JSON.parse(await readFile(join(tmp, "opencode.json"), "utf8"));
@@ -423,6 +439,7 @@ describe("connect", () => {
       designFolder: design,
       agents: ["gemini-global"],
       transport: "http",
+      mcpUrl: MCP,
       installSkill: false,
       homeDir: fakeHome,
     });

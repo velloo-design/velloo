@@ -6,7 +6,6 @@ import {
   AGENT_IDS,
   askAgentWiring,
   connect,
-  DEFAULT_MCP_URL,
   GLOBAL_AGENT_IDS,
   localDesignScopeProblem,
   MANUAL_AGENT_ID,
@@ -46,7 +45,7 @@ export default defineCommand({
     },
     mcpUrl: {
       type: "string",
-      description: `MCP server URL for --http (default ${DEFAULT_MCP_URL})`,
+      description: "MCP server URL for --http, as printed by `velloo mcp --http`",
     },
     skill: {
       type: "boolean",

@@ -11,7 +11,7 @@ Velloo is a Bun workspaces monorepo, so you need [Bun](https://bun.sh).
 bun install                                    # also builds the snapshot manifest
 bun run --cwd packages/canvas build            # build the canvas SPA
 bun run velloo init /tmp/velloo-smoke
-bun run velloo run /tmp/velloo-smoke           # canvas :7300, MCP :7301
+bun run velloo run /tmp/velloo-smoke           # canvas on :7300
 ```
 
 The screenshot path needs Chromium once: `velloo browser install`.

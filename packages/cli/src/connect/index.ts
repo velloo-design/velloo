@@ -27,7 +27,6 @@ export { AGENT_IDS, GLOBAL_AGENT_IDS, PROJECT_AGENT_IDS } from "./agents.ts";
 export { refreshAgentArtifacts } from "./refresh.ts";
 
 /** Default velloo MCP endpoint for `--http` connections — matches `velloo mcp --http`. */
-export const DEFAULT_MCP_URL = "http://127.0.0.1:7301/mcp";
 
 /**
  * Sentinel id `pickAgents` returns for the "manual / other agent" choice —
@@ -50,9 +49,10 @@ export function manualSetupText(): string {
     "  Most agents take the JSON convention:",
     '    { "mcpServers": { "velloo": { "command": "velloo", "args": ["mcp"] } } }',
     "",
-    "HTTP — for agents that dial a URL: start `velloo mcp --http <folder>` (it prints the",
-    `MCP URL, default ${DEFAULT_MCP_URL}), then point the agent at it:`,
-    `    { "mcpServers": { "velloo": { "type": "http", "url": "${DEFAULT_MCP_URL}" } } }`,
+    "HTTP — for agents that dial a URL: `velloo mcp --http <folder>` prints the URL of the",
+    "running canvas's MCP server, then point the agent at it:",
+    '    { "mcpServers": { "velloo": { "type": "http", "url": "<the printed URL>" } } }',
+    "  The port changes whenever the canvas restarts, so prefer stdio where the agent allows it.",
   ].join("\n");
 }
 
@@ -337,7 +337,7 @@ export interface ConnectOptions {
   projectRoot?: string | undefined;
   /** MCP transport to wire. Default "stdio" — the agent spawns `velloo mcp`. */
   transport?: "stdio" | "http" | undefined;
-  /** HTTP endpoint, only used when transport is "http". Default DEFAULT_MCP_URL. */
+  /** HTTP endpoint, required when transport is "http" (`velloo mcp --http` prints it). */
   mcpUrl?: string | undefined;
   /** Install the Claude Code skill (only acts when claude-code is targeted). */
   installSkill?: boolean | undefined;
@@ -383,6 +383,14 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   // A local design leaves no trace in its checkout: no project configs, and
   // no guidance files (skills, Cursor rule) that only project scope reads.
   const local = localDesignOf(opts.designFolder) !== null;
+  // The daemon's MCP port is assigned by the OS, so there is no default URL to
+  // write: a guessed one points the agent at nothing.
+  const httpUrl = opts.mcpUrl;
+  if (transport === "http" && !httpUrl) {
+    throw new Error(
+      "the HTTP transport needs the server URL: run `velloo mcp --http` and pass the URL it prints as --mcp-url",
+    );
+  }
 
   // stdio: configs name no design when the checkout lists it — `velloo mcp`
   // resolves it from the cwd the agent spawns it in, and the session can
@@ -394,7 +402,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   // cli script and pin the design folder absolutely.
   const designArg = await designArgumentFor(projectRoot, opts.designFolder);
   const connectionFor = (agent: AgentTarget): McpConnection => {
-    if (transport === "http") return { transport: "http", url: opts.mcpUrl ?? DEFAULT_MCP_URL };
+    if (transport === "http") return { transport: "http", url: httpUrl as string };
     if (agent.gui) {
       const script = process.argv[1] ? resolve(process.argv[1]) : Bun.which("velloo");
       return script

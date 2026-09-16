@@ -76,8 +76,10 @@ velloo init                    # interactive wizard
 velloo run velloo              # the design folder it just created
 ```
 
-- **Canvas** → http://localhost:7300
-- **MCP server** (for your agent) → http://localhost:7301/mcp
+- **Canvas** → http://localhost:7300 (the next free port if that one is busy)
+- **MCP server** → your agent starts `velloo mcp` over stdio; `init` already
+  wrote that into its config. HTTP-only clients can run `velloo mcp --http`,
+  which prints the URL to use.
 
 Restart your agent so it picks up the new MCP config, then point it at a real
 screen:
@@ -156,7 +158,7 @@ designs, a connected agent is told which one it is on and can switch between the
 | Command | What it does |
 |---|---|
 | `velloo init` | Create a design folder and wire up your agent |
-| `velloo run [folder]` | Start the canvas + MCP daemon (`--port` / `--mcp-port` if 7300/7301 are busy) |
+| `velloo run [folder]` | Start the canvas + MCP daemon (`--port` to pick the canvas port) |
 | `velloo design list\|add\|remove\|move\|rename\|upgrade` | Manage the repo's designs |
 | `velloo emit` / `velloo render` | Implementation IR for your agent / a PNG of a screen |
 | `velloo publish` | Publish a board for review, and manage what you've published |
@@ -220,7 +222,7 @@ The short version:
 bun install                                 # also builds the snapshot manifest
 bun run --cwd packages/canvas build         # build the canvas SPA
 bun run velloo init /tmp/velloo-smoke
-bun run velloo run /tmp/velloo-smoke        # canvas :7300, MCP :7301
+bun run velloo run /tmp/velloo-smoke        # canvas on :7300
 bun run verify                              # typecheck + lint + knip + tests
 ```
 
