@@ -63,11 +63,11 @@ describe("resolveRunTargets", () => {
     expect(targets.map((t) => t.folder)).toEqual([join(tmp, "brand")]);
   });
 
-  test("standing inside a design folder runs that one", async () => {
+  test("standing in a design folder runs that one", async () => {
     await makeDesignFolder(join(tmp, "velloo"), "app");
     await makeDesignFolder(join(tmp, "brand"), "brand");
     await writeManifest({ designs: ["velloo", "brand"] });
-    const targets = await resolveRunTargets(undefined, { cwd: join(tmp, "brand", "screens") });
+    const targets = await resolveRunTargets(undefined, { cwd: join(tmp, "brand") });
     expect(targets.map((t) => t.name)).toEqual(["brand"]);
   });
 

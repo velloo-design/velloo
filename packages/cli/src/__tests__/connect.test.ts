@@ -139,7 +139,7 @@ describe("connect", () => {
         join(folder, ".design", "config.json"),
         JSON.stringify(buildDefaultConfig({ name: "frontend" })),
       );
-      await registerDesign(folder, app);
+      await registerDesign(folder, tmp);
       const r = await connect({
         designFolder: folder,
         agents: ["claude-code"],

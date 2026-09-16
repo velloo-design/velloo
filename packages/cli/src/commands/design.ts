@@ -32,7 +32,6 @@ import {
 import { fail } from "../fail.ts";
 import { planRelocation, relocateDesign } from "../managed-folders.ts";
 import {
-  checkoutRoot,
   findDesigns,
   findManifest,
   isWithin,
@@ -430,7 +429,7 @@ const bind = defineCommand({
     const folder = resolve(args.design);
     if (!(await hasDesignConfig(folder)))
       fail("design bind", `${folder} is not a velloo design folder (no .design/config.json).`);
-    const root = await checkoutRoot(cwd, cwd);
+    const root = cwd;
     if (isWithin(root, folder))
       fail(
         "design bind",

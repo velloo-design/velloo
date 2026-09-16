@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { APP_PATH_PREFIX } from "@velloo/schema";
 import { z } from "zod";
 import { writeJsonAtomic } from "./fs.ts";
@@ -55,11 +55,6 @@ function realOr(path: string): string {
   return existsSync(path) ? realpathSync(path) : resolve(path);
 }
 
-function within(parent: string, child: string): boolean {
-  const rel = relative(realOr(parent), realOr(child));
-  return rel === "" || (!rel.startsWith("..") && !/^(?:[\\/]|[A-Za-z]:)/.test(rel));
-}
-
 /** Where managed storage keeps a design. Identifiers never contain a path. */
 export function managedDesignPath(id: string): string {
   if (!ID.test(id)) throw new Error(`Invalid managed design identifier: ${JSON.stringify(id)}`);
@@ -80,6 +75,33 @@ export function managedDesignId(folder: string): string | null {
   return ID.test(id) ? id : null;
 }
 
+/**
+ * The record shape development builds wrote between 2026-09-09 and 2026-09-15:
+ * the checkout was named by its manifest's path. Never shipped in a release;
+ * {@link listLocalDesigns} rewrites it in the current shape the first time it
+ * reads one, so it can go once those builds are gone.
+ */
+const DevRecordSchema = z.object({
+  manifestPath: z.string().min(1),
+  appRoot: z.string().min(1),
+  projectName: z.string().optional(),
+});
+
+function readRecord(path: string): z.infer<typeof RecordSchema> {
+  const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+  const current = RecordSchema.safeParse(raw);
+  if (current.success) return current.data;
+  const dev = DevRecordSchema.parse(raw);
+  const migrated = RecordSchema.parse({
+    root: dirname(resolve(dev.manifestPath)),
+    appRoot: resolve(dev.appRoot),
+    ...(dev.projectName ? { projectName: dev.projectName } : {}),
+  });
+  // Best effort: an unwritable record still resolves from the migrated copy.
+  void writeJsonAtomic(path, migrated).catch(() => {});
+  return migrated;
+}
+
 /** Every local design recorded on this machine; unreadable records are skipped. */
 export function listLocalDesigns(): LocalDesign[] {
   let names: string[];
@@ -93,9 +115,7 @@ export function listLocalDesigns(): LocalDesign[] {
     const id = name.slice(0, -".json".length);
     if (!ID.test(id)) continue;
     try {
-      const record = RecordSchema.parse(
-        JSON.parse(readFileSync(join(locationsDir(), name), "utf8")),
-      );
+      const record = readRecord(join(locationsDir(), name));
       out.push({
         id,
         root: record.root,
@@ -110,9 +130,13 @@ export function listLocalDesigns(): LocalDesign[] {
   return out;
 }
 
-/** Local designs whose checkout contains `dir`. */
+/**
+ * Local designs recorded for the project at exactly `dir`. A design recorded
+ * for a parent directory belongs to that project, not to every folder under it.
+ */
 export function localDesignsAt(dir: string): LocalDesign[] {
-  return listLocalDesigns().filter((design) => within(design.root, dir));
+  const here = realOr(dir);
+  return listLocalDesigns().filter((design) => realOr(design.root) === here);
 }
 
 /** The record for a design folder, when it is a local design on this machine. */

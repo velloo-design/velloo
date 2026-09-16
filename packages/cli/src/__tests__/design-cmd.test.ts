@@ -111,7 +111,7 @@ describe("unregisterDesign", () => {
     await makeDesignFolder(join(repo, "velloo"), "app");
     await makeDesignFolder(join(repo, "brand"), "brand");
     await writeManifest({ designs: ["velloo", "brand"], defaultDesign: "brand" });
-    await unregisterDesign(join(repo, "brand"), repo);
+    await unregisterDesign(join(repo, "brand"));
     const manifest = JSON.parse(await readFile(join(repo, "velloo.json"), "utf8"));
     expect(manifest.designs).toEqual(["velloo"]);
     expect(manifest.defaultDesign).toBeUndefined();
@@ -120,7 +120,7 @@ describe("unregisterDesign", () => {
   test("the last design out takes the manifest with it", async () => {
     await makeDesignFolder(join(repo, "velloo"), "app");
     await writeManifest({ designs: ["velloo"] });
-    const result = await unregisterDesign(join(repo, "velloo"), repo);
+    const result = await unregisterDesign(join(repo, "velloo"));
     expect(result.removedManifest).toBe(true);
     expect(existsSync(join(repo, "velloo.json"))).toBe(false);
   });
@@ -128,7 +128,7 @@ describe("unregisterDesign", () => {
   test("an unregistered folder is a no-op", async () => {
     await makeDesignFolder(join(repo, "velloo"), "app");
     await writeManifest({ designs: ["velloo"] });
-    const result = await unregisterDesign(join(repo, "elsewhere"), repo);
+    const result = await unregisterDesign(join(repo, "elsewhere"));
     expect(result.name).toBeNull();
     expect(existsSync(join(repo, "velloo.json"))).toBe(true);
   });

@@ -43,38 +43,50 @@ export interface FoundRepoManifest {
 }
 
 /**
- * Walk up from `startDir` for a `velloo.json`. A missing file keeps walking. A
- * present-but-broken one throws with its path when `strict` (a typo'd manifest
- * silently falling back to convention would resolve the wrong design), and
+ * The `velloo.json` in `dir` itself — never one above it. A command resolves
+ * designs from the directory it runs in, so a manifest further up belongs to a
+ * different, independent project (`app/` and `app/admin/` each have their own).
+ * A present-but-broken file throws with its path when `strict` (a typo'd
+ * manifest silently reading as absent would resolve the wrong design), and
  * reads as absent otherwise — the daemon must not refuse to boot over it.
  */
-export async function readRepoManifest(
-  startDir: string,
+export async function readRepoManifestAt(
+  dir: string,
   opts: { strict?: boolean } = {},
 ): Promise<FoundRepoManifest | null> {
-  let dir = resolve(startDir);
-  for (;;) {
-    const path = join(dir, REPO_MANIFEST_FILE);
-    let raw: string | null = null;
-    try {
-      raw = await readFile(path, "utf8");
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-        if (opts.strict) throw err;
-        return null;
-      }
-    }
-    if (raw !== null) {
-      try {
-        return parseManifest(path, dir, raw);
-      } catch (err) {
-        if (opts.strict) throw err;
-        return null;
-      }
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
+  const at = resolve(dir);
+  const path = join(at, REPO_MANIFEST_FILE);
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT" && opts.strict) throw err;
+    return null;
+  }
+  try {
+    return parseManifest(path, at, raw);
+  } catch (err) {
+    if (opts.strict) throw err;
+    return null;
+  }
+}
+
+/**
+ * The `velloo.json` that lists `folder`, for code that starts from a design
+ * rather than from where a person stands (a rename, the daemon's session). It
+ * looks in the directories above the folder, but only a manifest that actually
+ * names this folder counts: an unrelated one higher up is another project.
+ */
+export async function findOwningManifest(
+  folder: string,
+  opts: { strict?: boolean } = {},
+): Promise<FoundRepoManifest | null> {
+  const target = realOr(folder);
+  // Starts at the folder itself: a project can be its own design (`"designs": ["."]`).
+  for (let dir = resolve(folder); ; dir = dirname(dir)) {
+    const found = await readRepoManifestAt(dir, opts);
+    if (found?.folders.some((listed) => realOr(listed) === target)) return found;
+    if (dirname(dir) === dir) return null;
   }
 }
 
@@ -157,20 +169,24 @@ export interface DesignSet {
   defaultDesign: string | undefined;
 }
 
+function isUnder(parent: string, child: string): boolean {
+  return child === parent || child.startsWith(parent + sep);
+}
+
 function realOr(path: string): string {
   return existsSync(path) ? realpathSync(path) : resolve(path);
 }
 
 /**
- * The designs visible from a directory: the committed `velloo.json` above it
- * and the local designs this machine records for a checkout containing it.
- * Null when there are neither. `strict` throws on a broken manifest.
+ * The designs of the project at `cwd`: the `velloo.json` in that directory and
+ * the local designs this machine records for it. Nothing above `cwd` is
+ * consulted. Null when there are neither. `strict` throws on a broken manifest.
  */
 export async function findDesigns(
   cwd: string,
   opts: { strict?: boolean } = {},
 ): Promise<DesignSet | null> {
-  const repo = await readRepoManifest(cwd, opts);
+  const repo = await readRepoManifestAt(cwd, opts);
   const local = localDesignsAt(cwd);
   if (!repo && local.length === 0) return null;
 
@@ -213,10 +229,12 @@ export async function findDesigns(
   };
 }
 
-/** The design set a design belongs to, found from its own checkout rather than a cwd. */
+/** The design set a design belongs to: the project that lists or records it. */
 export async function designsFor(designRoot: string): Promise<DesignSet | null> {
   const local = localDesignOf(designRoot);
-  return findDesigns(local ? local.root : designRoot);
+  if (local) return findDesigns(local.root);
+  const owner = await findOwningManifest(designRoot);
+  return owner ? findDesigns(owner.dir) : null;
 }
 
 /** How a design was chosen when no name was given. */
@@ -228,42 +246,23 @@ export interface DesignPick {
 }
 
 /**
- * The design `cwd` implies. Containment beats everything: standing inside a
- * local design's application, inside a design's folder, or inside a directory
- * that holds exactly one design is an unambiguous choice. Then the only
- * design, then `defaultDesign`. Failing all of those, the first by name with
- * reason `arbitrary` — callers that can ask a person should, rather than use it.
+ * The design a project's set implies when none was named: standing in a
+ * design's own folder, then the only design, then `defaultDesign`. Failing
+ * those, the first by name with reason `arbitrary` — callers that can ask a
+ * person should, rather than use it. A name two designs share still counts for
+ * `arbitrary`, so an agent session opens something instead of exiting.
  */
 export function pickDesign(set: DesignSet, cwd: string): DesignPick | null {
-  const here = resolve(cwd);
-  const usable = set.designs.filter(
-    (d) => d.exists && !d.outsideRepo && set.byName.get(d.name) === d,
-  );
-  const appMatches = usable.filter(
-    (d) =>
-      d.local &&
-      resolve(d.local.appRoot) !== resolve(d.local.root) &&
-      isUnder(resolve(d.local.appRoot), here),
-  );
-  if (appMatches.length === 1 && appMatches[0]) return { design: appMatches[0], reason: "cwd" };
-  const containing = usable.find((d) => here === d.root || here.startsWith(d.root + sep));
-  if (containing) return { design: containing, reason: "cwd" };
-  // A directory below the checkout root holding exactly one design — an app
-  // folder in a monorepo — means that one. Not the root itself: a design kept
-  // outside the checkout is never "under" it, so counting there would quietly
-  // pick the in-repo design over it.
-  const checkout = set.repo?.dir ?? set.local[0]?.root;
-  const belowRoot = checkout !== undefined && here.startsWith(resolve(checkout) + sep);
-  const under = usable.filter((d) => d.root.startsWith(here + sep));
-  if (belowRoot && under.length === 1 && under[0]) return { design: under[0], reason: "cwd" };
-  if (usable.length === 1 && usable[0]) return { design: usable[0], reason: "only" };
+  const here = realOr(cwd);
+  const present = set.designs.filter((d) => d.exists && !d.outsideRepo);
+  const usable = present.filter((d) => set.byName.get(d.name) === d);
+  const standingIn = usable.find((d) => realOr(d.root) === here);
+  if (standingIn) return { design: standingIn, reason: "cwd" };
+  if (usable.length === 1 && usable[0] && present.length === 1)
+    return { design: usable[0], reason: "only" };
   const byDefault = set.defaultDesign ? set.byName.get(set.defaultDesign) : undefined;
   if (byDefault?.exists) return { design: byDefault, reason: "default" };
-  return usable[0] ? { design: usable[0], reason: "arbitrary" } : null;
-}
-
-function isUnder(parent: string, child: string): boolean {
-  return child === parent || child.startsWith(parent + sep);
+  return present[0] ? { design: present[0], reason: "arbitrary" } : null;
 }
 
 /**

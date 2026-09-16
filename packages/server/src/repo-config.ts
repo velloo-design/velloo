@@ -1,5 +1,5 @@
 import type { FeedbackPrefs } from "@velloo/schema";
-import { type FoundRepoManifest, readRepoManifest } from "./designs.ts";
+import { type FoundRepoManifest, findOwningManifest, readRepoManifestAt } from "./designs.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import { localDesignOf } from "./project-location.ts";
 
@@ -14,7 +14,8 @@ import { localDesignOf } from "./project-location.ts";
  */
 export async function findRepoManifest(startDir: string): Promise<FoundRepoManifest | null> {
   if (localDesignOf(startDir)) return null;
-  return readRepoManifest(startDir);
+  // A design folder reads its project's manifest; a project directory its own.
+  return (await findOwningManifest(startDir)) ?? readRepoManifestAt(startDir);
 }
 
 /**

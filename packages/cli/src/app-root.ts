@@ -11,7 +11,7 @@ import {
   writeJsonAtomic,
   writeLocalDesign,
 } from "@velloo/server";
-import { findGitRoot, findManifest } from "./manifest.ts";
+import { findGitRoot, findManifest, manifestListing } from "./manifest.ts";
 import { discoverScanRoots } from "./scan/discover.ts";
 
 /**
@@ -98,7 +98,7 @@ export async function recordedAppRoot(designFolder: string): Promise<RecordedApp
   // assumes: the design folder's parent.
   const path =
     recorded && !isSentinel(recorded) ? resolveAppPath(folder, recorded) : resolve(folder, "..");
-  const found = await findManifest(folder).catch(() => null);
+  const found = await manifestListing(folder).catch(() => null);
   const designName = recordedDesignName(folder);
   return {
     path,
