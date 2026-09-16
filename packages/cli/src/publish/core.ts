@@ -16,7 +16,14 @@ import {
 import type { ComponentProvider } from "@velloo/provider";
 import { captureScreenshot, renderScreen } from "@velloo/renderer";
 import { err, ok, type Result } from "@velloo/result";
-import type { Board, Config, Screen, Theme, Viewport } from "@velloo/schema";
+import {
+  type Board,
+  type Config,
+  type Screen,
+  sanitizeSvgMarkup,
+  type Theme,
+  type Viewport,
+} from "@velloo/schema";
 import {
   activeBoards,
   type DesignFolder,
@@ -601,7 +608,15 @@ export async function publishDesign(
   for (const ref of assetRefs) {
     const rel = ref.replace(/^\//, ""); // assets/foo.png
     try {
-      addFile(rel, await readFile(join(root, rel)));
+      const bytes = await readFile(join(root, rel));
+      // The asset store sanitizes what it writes, but a file dropped into
+      // assets/ by hand never went through it, and the share page inlines SVG.
+      addFile(
+        rel,
+        /\.svg$/i.test(rel)
+          ? Buffer.from(sanitizeSvgMarkup(bytes.toString("utf8")), "utf8")
+          : bytes,
+      );
     } catch {
       report({ kind: "warn", message: `asset not found: ${rel}` });
     }

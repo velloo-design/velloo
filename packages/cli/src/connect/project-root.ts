@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { dirname, join, parse, relative, resolve } from "node:path";
 import { type FoundRepoManifest, localDesignOf } from "@velloo/server";
-import { findDesigns, findManifest } from "../manifest.ts";
+import { findDesigns, manifestListing } from "../manifest.ts";
 
 /**
  * Where to write the agent config. An explicit override wins; then the
@@ -58,7 +58,7 @@ async function registeringManifest(designFolder: string): Promise<FoundRepoManif
   const abs = resolve(designFolder);
   let found: FoundRepoManifest | null;
   try {
-    found = await findManifest(abs);
+    found = await manifestListing(abs);
   } catch {
     // A broken manifest is reported by the commands that resolve through it.
     return null;

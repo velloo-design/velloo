@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { cancel, log, select, text } from "@clack/prompts";
 import { type AgentWiring, askAgentWiring } from "../connect/index.ts";
 import { isDesignFolderSync, isEmptyOrMissingSync } from "../design.ts";
-import { checkoutRoot, isWithin } from "../manifest.ts";
+import { isWithin } from "../manifest.ts";
 import { discoverScanRoots } from "../scan/index.ts";
 import type { GoalMode, WizardAnswers } from "./answers.ts";
 import {
@@ -159,7 +159,7 @@ export async function runInteractive(
     }));
   if (isAborted(folderInput)) return cancelled();
   const folder = resolve(folderBase, folderInput || folderDefault);
-  const root = await checkoutRoot(ctx.appRoot, folderBase);
+  const root = folderBase;
   const local = !isWithin(root, folder);
   // Managed storage already said this when it was picked; a typed path that
   // lands outside the checkout is the case worth pointing out.

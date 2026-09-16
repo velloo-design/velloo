@@ -9,6 +9,7 @@ import {
   designLabel,
   findDesigns,
   findManifest,
+  manifestListing,
   registerDesign,
   unregisterDesign,
 } from "../manifest.ts";
@@ -46,14 +47,23 @@ const onFail = (message: string): never => {
 };
 
 describe("findManifest", () => {
-  test("finds velloo.json walking up and resolves design paths", async () => {
+  test("reads only the directory's own velloo.json, never one above it", async () => {
     await writeManifest(tmp, { designs: ["apps/web/velloo"] });
     const deep = join(tmp, "apps", "web", "src");
     await mkdir(deep, { recursive: true });
-    const found = await findManifest(deep);
+    expect(await findManifest(deep)).toBeNull();
+    const found = await findManifest(tmp);
     expect(found?.dir).toBe(tmp);
     expect(found?.folders).toEqual([join(tmp, "apps/web/velloo")]);
     expect(found?.legacy).toBe(false);
+  });
+
+  test("a design finds the manifest that lists it, not merely one above it", async () => {
+    await writeManifest(tmp, { designs: ["apps/web/velloo"] });
+    await makeDesignFolder(join(tmp, "apps/web/velloo"), "web");
+    await makeDesignFolder(join(tmp, "apps/admin/velloo"), "admin");
+    expect((await manifestListing(join(tmp, "apps/web/velloo")))?.dir).toBe(tmp);
+    expect(await manifestListing(join(tmp, "apps/admin/velloo"))).toBeNull();
   });
 
   test("returns null when no manifest exists", async () => {
@@ -172,14 +182,27 @@ describe("resolveDesign with a manifest", () => {
     expect(folder).toBe(other);
   });
 
-  test("cwd inside a design folder picks it", async () => {
+  test("standing in a design folder picks it; a directory inside it does not", async () => {
     await writeManifest(tmp, { designs: ["apps/web/velloo", "apps/site/velloo"] });
     await makeDesignFolder(join(tmp, "apps/web/velloo"), "web");
     await makeDesignFolder(join(tmp, "apps/site/velloo"), "site");
-    const inside = join(tmp, "apps/site/velloo/screens");
+    const site = join(tmp, "apps/site/velloo");
+    expect(await resolveDesign(undefined, "run", { cwd: site, onFail })).toBe(site);
+    const inside = join(site, "screens");
     await mkdir(inside, { recursive: true });
-    const folder = await resolveDesign(undefined, "run", { cwd: inside, onFail });
-    expect(folder).toBe(join(tmp, "apps/site/velloo"));
+    expect(resolveDesign(undefined, "run", { cwd: inside, onFail })).rejects.toThrow(
+      "no velloo.json or design folder",
+    );
+  });
+
+  test("a velloo.json file or its directory resolves as that project", async () => {
+    const admin = join(tmp, "admin");
+    await makeDesignFolder(join(admin, "velloo"), "admin");
+    await writeManifest(admin, { designs: ["velloo"] });
+    const viaFile = await resolveDesign("admin/velloo.json", "run", { cwd: tmp, onFail });
+    const viaDir = await resolveDesign("admin", "run", { cwd: tmp, onFail });
+    expect(viaFile).toBe(join(admin, "velloo"));
+    expect(viaDir).toBe(join(admin, "velloo"));
   });
 
   test("cwd holding exactly one design picks it (monorepo app dir)", async () => {
@@ -193,13 +216,20 @@ describe("resolveDesign with a manifest", () => {
     expect(folder).toBe(join(tmp, "apps/web/velloo"));
   });
 
-  test("a single design resolves from anywhere in the repo", async () => {
-    await writeManifest(tmp, { designs: ["apps/web/velloo"] });
-    await makeDesignFolder(join(tmp, "apps/web/velloo"), "web");
-    const elsewhere = join(tmp, "tools");
-    await mkdir(elsewhere, { recursive: true });
-    const folder = await resolveDesign(undefined, "run", { cwd: elsewhere, onFail });
-    expect(folder).toBe(join(tmp, "apps/web/velloo"));
+  test("a parent directory's velloo.json is another project, not this one's", async () => {
+    // app/ and app/admin/ each ran init: from admin/, app's design is invisible.
+    await writeManifest(tmp, { designs: ["velloo"] });
+    await makeDesignFolder(join(tmp, "velloo"), "app");
+    const admin = join(tmp, "admin");
+    await mkdir(admin, { recursive: true });
+    expect(resolveDesign(undefined, "run", { cwd: admin, onFail })).rejects.toThrow(
+      "no velloo.json or design folder",
+    );
+    await writeManifest(admin, { designs: ["velloo"] });
+    await makeDesignFolder(join(admin, "velloo"), "admin");
+    expect(await resolveDesign(undefined, "run", { cwd: admin, onFail })).toBe(
+      join(admin, "velloo"),
+    );
   });
 
   test("defaultDesign breaks a tie at the repo root", async () => {
@@ -239,7 +269,7 @@ describe("resolveDesign with a manifest", () => {
 });
 
 describe("resolveDesign without a manifest (legacy chain)", () => {
-  test("./velloo wins, then the cwd, then walk-up", async () => {
+  test("./velloo, then the cwd itself — never a folder above", async () => {
     await makeDesignFolder(join(tmp, "velloo"), "velloo");
     expect(await resolveDesign(undefined, "run", { cwd: tmp, onFail })).toBe(join(tmp, "velloo"));
 
@@ -254,12 +284,14 @@ describe("resolveDesign without a manifest (legacy chain)", () => {
 
     const nested = join(asFolder, "screens");
     await mkdir(nested, { recursive: true });
-    expect(await resolveDesign(undefined, "run", { cwd: nested, onFail })).toBe(asFolder);
+    expect(resolveDesign(undefined, "run", { cwd: nested, onFail })).rejects.toThrow(
+      "no velloo.json or design folder",
+    );
   });
 
   test("nothing found fails with guidance", async () => {
     expect(resolveDesign(undefined, "run", { cwd: tmp, onFail })).rejects.toThrow(
-      "no design folder found",
+      "Run from the directory that has your velloo.json",
     );
   });
 
@@ -277,6 +309,7 @@ describe("chooseDesignName", () => {
       folder: join(tmp, "apps/web/velloo"),
       appRoot: join(tmp, "apps/web"),
       storage: "repository",
+      checkout: tmp,
     });
     expect(name).toBe("web");
   });
@@ -287,6 +320,7 @@ describe("chooseDesignName", () => {
       folder: join(tmp, "velloo"),
       appRoot: tmp,
       storage: "repository",
+      checkout: tmp,
     });
     expect(name).toBe("velloo");
   });
@@ -297,6 +331,7 @@ describe("chooseDesignName", () => {
       folder: join(tmp, "admin"),
       appRoot: join(tmp, "frontend"),
       storage: "repository",
+      checkout: tmp,
     });
     expect(name).toBe("admin");
   });
@@ -309,6 +344,7 @@ describe("chooseDesignName", () => {
       folder: join(tmp, "packages/web/velloo"),
       appRoot: join(tmp, "packages/web"),
       storage: "repository",
+      checkout: tmp,
     });
     expect(suffixed).toBe("web-2");
     expect(
@@ -316,6 +352,7 @@ describe("chooseDesignName", () => {
         folder: join(tmp, "brand"),
         appRoot: tmp,
         storage: "repository",
+        checkout: tmp,
         requested: "web",
       }),
     ).rejects.toThrow('a design named "web" already exists');
@@ -328,6 +365,7 @@ describe("chooseDesignName", () => {
       folder: join(tmp, "apps/site/velloo"),
       appRoot: join(tmp, "apps/site"),
       storage: "repository",
+      checkout: tmp,
     });
     expect(name).toBe("site");
     expect(
@@ -335,6 +373,7 @@ describe("chooseDesignName", () => {
         folder: join(tmp, "x"),
         appRoot: tmp,
         storage: "repository",
+        checkout: tmp,
         requested: "velloo",
       }),
     ).rejects.toThrow("already exists");
@@ -346,6 +385,7 @@ describe("chooseDesignName", () => {
         folder: join(tmp, "velloo"),
         appRoot: tmp,
         storage: "repository",
+        checkout: tmp,
         requested: "a/b",
       }),
     ).rejects.toThrow("invalid --name");
@@ -353,23 +393,25 @@ describe("chooseDesignName", () => {
 });
 
 describe("registerDesign", () => {
-  test("creates velloo.json at the git root listing the path", async () => {
+  test("creates velloo.json in the project directory, not at the git root", async () => {
     await mkdir(join(tmp, ".git"), { recursive: true });
-    const folder = join(tmp, "apps/web/velloo");
+    const web = join(tmp, "apps/web");
+    const folder = join(web, "velloo");
     await makeDesignFolder(folder, "web");
-    const reg = await registerDesign(folder, join(tmp, "apps/web"));
-    expect(reg).toEqual({ name: "web", path: join(tmp, "velloo.json"), created: true });
-    const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
-    expect(manifest).toEqual({ designs: ["apps/web/velloo"] });
+    const reg = await registerDesign(folder, web);
+    expect(reg).toEqual({ name: "web", path: join(web, "velloo.json"), created: true });
+    const manifest = JSON.parse(await readFile(join(web, "velloo.json"), "utf8"));
+    expect(manifest).toEqual({ designs: ["velloo"] });
+    expect(await findManifest(tmp)).toBeNull();
   });
 
   test("appends to an existing manifest; re-registering is a no-op", async () => {
     await mkdir(join(tmp, ".git"), { recursive: true });
     await makeDesignFolder(join(tmp, "apps/web/velloo"), "web");
-    await registerDesign(join(tmp, "apps/web/velloo"), join(tmp, "apps/web"));
+    await registerDesign(join(tmp, "apps/web/velloo"), tmp);
     await makeDesignFolder(join(tmp, "apps/site/velloo"), "site");
-    await registerDesign(join(tmp, "apps/site/velloo"), join(tmp, "apps/site"));
-    const again = await registerDesign(join(tmp, "apps/web/velloo"), join(tmp, "apps/web"));
+    await registerDesign(join(tmp, "apps/site/velloo"), tmp);
+    const again = await registerDesign(join(tmp, "apps/web/velloo"), tmp);
     expect(again).toMatchObject({ name: "web", created: false });
     const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
     expect(manifest.designs).toEqual(["apps/web/velloo", "apps/site/velloo"]);
@@ -396,7 +438,9 @@ describe("registerDesign", () => {
     const reg = await registerDesign(second, tmp);
     expect(reg.created).toBe(true);
     const manifest = JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"));
-    expect([...manifest.designs].sort()).toEqual(["apps/site/velloo", "initial-board", "velloo"]);
+    // Only folders directly in the project: apps/site/velloo belongs to a
+    // project of its own, created by running init there.
+    expect([...manifest.designs].sort()).toEqual(["initial-board", "velloo"]);
     // The conventional folder keeps being what a bare command resolves to.
     expect(manifest.defaultDesign).toBe("velloo");
     expect(await resolveDesign(undefined, "run", { cwd: tmp, onFail })).toBe(join(tmp, "velloo"));
@@ -412,16 +456,16 @@ describe("registerDesign", () => {
     expect(manifest.designs).toEqual(["design"]);
   });
 
-  test("an existing manifest above the folder wins over the git root", async () => {
-    await mkdir(join(tmp, ".git"), { recursive: true });
+  test("a manifest in a parent directory is another project and is left alone", async () => {
     const appsDir = join(tmp, "apps");
     await mkdir(appsDir, { recursive: true });
     await writeManifest(appsDir, { designs: ["web/velloo"] });
-    await makeDesignFolder(join(tmp, "apps/site/velloo"), "site");
-    const reg = await registerDesign(join(tmp, "apps/site/velloo"), join(tmp, "apps/site"));
-    expect(reg.path).toBe(join(appsDir, "velloo.json"));
-    const manifest = JSON.parse(await readFile(join(appsDir, "velloo.json"), "utf8"));
-    expect(manifest.designs).toEqual(["web/velloo", "site/velloo"]);
+    const site = join(tmp, "apps/site");
+    await makeDesignFolder(join(site, "velloo"), "web");
+    const reg = await registerDesign(join(site, "velloo"), site);
+    expect(reg.path).toBe(join(site, "velloo.json"));
+    const parent = JSON.parse(await readFile(join(appsDir, "velloo.json"), "utf8"));
+    expect(parent.designs).toEqual(["web/velloo"]);
   });
 
   test("a pre-designs manifest is refused until upgraded", async () => {
@@ -436,18 +480,18 @@ describe("unregisterDesign", () => {
     await makeDesignFolder(join(tmp, "a"), "a");
     await makeDesignFolder(join(tmp, "b"), "b");
     await writeManifest(tmp, { designs: ["a", "b"], defaultDesign: "a" });
-    const first = await unregisterDesign(join(tmp, "a"), tmp);
+    const first = await unregisterDesign(join(tmp, "a"));
     expect(first).toMatchObject({ name: "a", removedManifest: false });
     expect(JSON.parse(await readFile(join(tmp, "velloo.json"), "utf8"))).toEqual({
       designs: ["b"],
     });
-    const last = await unregisterDesign(join(tmp, "b"), tmp);
+    const last = await unregisterDesign(join(tmp, "b"));
     expect(last.removedManifest).toBe(true);
   });
 });
 
 describe("pickDesign", () => {
-  test("containment beats defaultDesign; with neither the pick is arbitrary", async () => {
+  test("the design folder you stand in beats defaultDesign; with neither the pick is arbitrary", async () => {
     await writeManifest(tmp, {
       designs: ["apps/web/velloo", "apps/site/velloo"],
       defaultDesign: "web",
@@ -456,7 +500,7 @@ describe("pickDesign", () => {
     await makeDesignFolder(join(tmp, "apps/site/velloo"), "site");
     const found = await findDesigns(tmp);
     if (!found) throw new Error("manifest not found");
-    expect(pickDesign(found, join(tmp, "apps/site/velloo/screens"))).toMatchObject({
+    expect(pickDesign(found, join(tmp, "apps/site/velloo"))).toMatchObject({
       design: { name: "site" },
       reason: "cwd",
     });

@@ -4,7 +4,7 @@ import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { verifyCredential } from "../cloud-login.ts";
 import { listDaemons } from "../daemon/runtime.ts";
-import { designLabel } from "../manifest.ts";
+import { designWithFolder } from "../design-label.ts";
 
 export default defineCommand({
   meta: {
@@ -18,10 +18,9 @@ export default defineCommand({
       console.log("velloo: no canvas daemons running.");
     } else {
       for (const d of daemons) {
-        // Roots read as designs when the checkout knows them: design name +
-        // repo-root-relative folder; absolute path as fallback.
-        const label = (await designLabel(d.root)) ?? d.root;
-        console.log(`${d.canvasUrl}  ${label}  (pid ${d.pid}, since ${d.startedAt})`);
+        console.log(
+          `${d.canvasUrl}  ${designWithFolder(d.root)}  (pid ${d.pid}, since ${d.startedAt})`,
+        );
       }
     }
 

@@ -1,8 +1,16 @@
 import { basename, join } from "node:path";
+import { recordedDesignName } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { daemonRoot, ensureDaemon, isLive, stopDaemon } from "../daemon/runtime.ts";
+import {
+  type DaemonRecord,
+  daemonRoot,
+  ensureDaemon,
+  isLive,
+  stopDaemon,
+} from "../daemon/runtime.ts";
 import { DESIGN_ARG_DESCRIPTION } from "../design.ts";
+import { designWithFolder } from "../design-label.ts";
 import { fail } from "../fail.ts";
 import { assertLoopbackHost } from "../host-security.ts";
 import { openUrl } from "../open-url.ts";
@@ -11,13 +19,29 @@ import { shouldStayForeground, waitInForeground } from "../run-foreground.ts";
 import { type RunTarget, resolveRunTargets } from "../run-targets.ts";
 import { traceEnabled } from "../trace/env.ts";
 
-/** The design's name when it has one, else the folder's own basename. */
+/** The design's name as its config says now (it may have been renamed), else the folder's. */
 function label(target: RunTarget): string {
-  return target.name ?? basename(target.folder);
+  return recordedDesignName(target.folder) ?? target.name ?? basename(target.folder);
 }
 
-function labelWidth(running: { target: RunTarget }[]): number {
-  return Math.max(...running.map(({ target }) => label(target).length));
+interface Attached {
+  target: RunTarget;
+  rec: DaemonRecord;
+}
+
+function printKeys(attached: Attached[]): void {
+  console.log("");
+  if (attached.length > 1) {
+    attached.forEach(({ target }, i) => {
+      console.log(`  ${pc.cyan(String(i + 1))}  open ${label(target)}`);
+    });
+    console.log(`  ${pc.cyan("a")}  open all`);
+  } else {
+    console.log(`  ${pc.cyan("o")}  open the browser`);
+  }
+  console.log(`  ${pc.cyan("b")}  run in the background`);
+  console.log(`  ${pc.cyan("q")}  stop`);
+  console.log("");
 }
 
 function printBackgroundStay(folderArg: string): void {
@@ -112,12 +136,16 @@ export default defineCommand({
       rec: Awaited<ReturnType<typeof ensureDaemon>>;
     };
     if (running.length === 1) {
+      console.log(`velloo: design ${designWithFolder(first.target.folder, first.target.name)}`);
       console.log(`velloo: canvas at ${first.rec.canvasUrl}`);
     } else {
       console.log("velloo: canvases");
-      for (const { target, rec } of running) {
-        console.log(`  ${pc.bold(label(target).padEnd(labelWidth(running)))}  ${rec.canvasUrl}`);
-      }
+      const rows = running.map(({ target, rec }) => ({
+        design: designWithFolder(target.folder, target.name),
+        url: rec.canvasUrl,
+      }));
+      const width = Math.max(...rows.map((row) => row.design.length));
+      for (const row of rows) console.log(`  ${pc.bold(row.design.padEnd(width))}  ${row.url}`);
     }
 
     // The recorder lives in the daemon and reads VELLOO_TRACE at spawn time, so
@@ -140,57 +168,63 @@ export default defineCommand({
       stdinIsTTY: Boolean(process.stdin.isTTY),
     });
 
-    if (foreground) {
-      console.log("");
-      if (running.length > 1) {
-        running.forEach(({ target }, i) => {
-          console.log(`  ${pc.cyan(String(i + 1))}  open ${label(target)}`);
-        });
-        console.log(`  ${pc.cyan("a")}  open all`);
-      } else {
-        console.log(`  ${pc.cyan("o")}  open the browser`);
-      }
-      console.log(`  ${pc.cyan("b")}  run in the background`);
-      console.log(`  ${pc.cyan("q")}  stop`);
-      console.log("");
-    } else {
-      printBackgroundStay(folderArg);
-    }
+    if (foreground) printKeys(running);
+    else printBackgroundStay(folderArg);
 
+    // The canvases this session still holds. One stopping — by `velloo stop`
+    // or a command that has to restart it (move, bind, upgrade) in another
+    // window — drops out of the list; the session ends when none are left.
+    let attached: Attached[] = running;
     const openTarget = (index?: number) => {
-      const picked = index === undefined ? running : [running[index - 1]];
+      const picked = index === undefined ? attached : [attached[index - 1]];
       for (const entry of picked) if (entry) void openUrl(entry.rec.canvasUrl);
     };
 
     if (args.open) openTarget(running.length > 1 ? undefined : 1);
     if (!foreground) return;
 
-    const outcome = await waitInForeground({
-      // Any canvas going down settles the wait — the summary that follows
-      // says which are still up.
-      isLive: async () => {
-        for (const { rec } of running) if (!(await isLive(rec))) return false;
-        return true;
-      },
-      onOpen: openTarget,
-      targetCount: running.length,
-    });
+    for (;;) {
+      const outcome = await waitInForeground({
+        isLive: async () => {
+          for (const { rec } of attached) if (!(await isLive(rec))) return false;
+          return true;
+        },
+        onOpen: openTarget,
+        targetCount: attached.length,
+      });
 
-    if (outcome === "background") {
-      printBackgroundStay(folderArg);
-      return;
-    }
-    if (outcome === "died") {
-      console.log("velloo: canvas exited.");
-      return;
-    }
+      if (outcome === "background") {
+        printBackgroundStay(folderArg);
+        return;
+      }
 
-    for (const { target } of running) {
-      const root = daemonRoot(target.folder);
-      const stopped = await stopDaemon(root);
-      console.log(
-        stopped ? `velloo: stopped canvas for ${root}` : `velloo: no canvas running for ${root}`,
-      );
+      if (outcome === "died") {
+        const alive: Attached[] = [];
+        for (const entry of attached) {
+          if (await isLive(entry.rec)) alive.push(entry);
+          else console.log(`velloo: the canvas for "${label(entry.target)}" stopped.`);
+        }
+        attached = alive;
+        if (attached.length === 0) {
+          console.log(`velloo: no canvases left. Start again with \`velloo run${folderArg}\`.`);
+          return;
+        }
+        console.log(
+          pc.dim(`  Still running: ${attached.map(({ target }) => label(target)).join(", ")}.`),
+        );
+        printKeys(attached);
+        continue;
+      }
+
+      for (const { target } of attached) {
+        const stopped = await stopDaemon(daemonRoot(target.folder));
+        console.log(
+          stopped
+            ? `velloo: stopped ${designWithFolder(target.folder)}`
+            : `velloo: no canvas running for ${designWithFolder(target.folder)}`,
+        );
+      }
+      return;
     }
   },
 });

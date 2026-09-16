@@ -225,7 +225,7 @@ test("old managed locators, moved checkouts, missing content and ambiguity fail 
   const empty = join(root, "empty");
   await mkdir(empty);
   await expect(resolveDesign(undefined, "test", { cwd: empty, onFail })).rejects.toThrow(
-    /^no design folder found[^\n]*$/,
+    /^no velloo.json or design folder[^\n]*$/,
   );
   await rename(moved, app);
 
@@ -436,17 +436,40 @@ test("nested application roots follow a monorepo checkout that moves", async () 
   ]);
   expect(added.code, added.out).toBe(0);
   const folder = await resolveDesign(undefined, "test", { cwd: nested, onFail });
-  // Agents are opened at the repo root, not inside the nested app.
-  expect(await resolveProjectRoot(folder)).toBe(app);
-  expect(localDesignOf(folder)).toMatchObject({ root: app, appRoot: nested });
+  // Init ran for apps/admin, so that is the design's project — independent of
+  // the repository root's own design.
+  expect(await resolveProjectRoot(folder)).toBe(nested);
+  expect(localDesignOf(folder)).toMatchObject({ root: nested, appRoot: nested });
+  expect(resolveDesign(undefined, "test", { cwd: app, onFail })).resolves.not.toBe(folder);
   const clone = join(root, "new-checkout");
   await cp(app, clone, { recursive: true });
-  const bound = await command(["design", "bind", folder, "--yes"], clone);
+  const bound = await command(["design", "bind", folder, "--yes"], join(clone, "apps/admin"));
   expect(bound.code, bound.out).toBe(0);
-  expect(await resolveProjectRoot(folder)).toBe(clone);
+  expect(await resolveProjectRoot(folder)).toBe(join(clone, "apps/admin"));
   expect(hostAppRootFrom(folder, (await loadDesignFolder(folder)).config.hostApp)).toBe(
     join(clone, "apps/admin"),
   );
+});
+
+test("renaming a design with its canvas running keeps the canvas up", async () => {
+  const folder = await init();
+  const lock = join(folder, ".design/cache/runtime.json");
+  const started = await command(["run", "web", "--background", "--port=0"]);
+  expect(started.code, started.out).toBe(0);
+  const before = JSON.parse(await readFile(lock, "utf8")) as { canvasUrl: string; pid: number };
+  try {
+    const renamed = await command(["design", "rename", "web", "site"]);
+    expect(renamed.code, renamed.out).toBe(0);
+    const after = JSON.parse(await readFile(lock, "utf8")) as { pid: number };
+    expect(after.pid).toBe(before.pid);
+    const summary = (await fetch(`${before.canvasUrl}/api/design`).then((r) => r.json())) as {
+      designName: string;
+    };
+    expect(summary.designName).toBe("site");
+    expect(recordedDesignName(folder)).toBe("site");
+  } finally {
+    await command(["stop", "--all"]);
+  }
 });
 
 test("external daemon restarts, agent stdio launch attaches, and out-of-band edits reload", async () => {

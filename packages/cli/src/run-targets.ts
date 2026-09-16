@@ -1,4 +1,4 @@
-import { resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { recordedDesignName } from "@velloo/server";
 import { resolveDesign } from "./design.ts";
 import { findDesigns } from "./manifest.ts";
@@ -16,8 +16,8 @@ export interface RunTarget {
  * a path is how you say "just this one". Bare `velloo run` in a checkout with
  * several designs (its `velloo.json` entries plus its local designs) starts
  * them all, because a repo's design folders are siblings of one work session,
- * and only starting one of them silently hides the rest. Standing inside a
- * design folder still wins: you cd'd there, so that's the one you meant.
+ * and only starting one of them silently hides the rest. Only the directory
+ * the command runs in is read: a velloo.json above it is another project.
  */
 export async function resolveRunTargets(
   arg: string | undefined,
@@ -41,11 +41,6 @@ export async function resolveRunTargets(
     return single(); // a broken manifest is resolveDesign's error to report
   }
   if (!found || found.designs.length < 2) return single();
-  // Inside one of the designs ⇒ that one.
-  for (const design of found.designs) {
-    if (cwd === design.root || cwd.startsWith(design.root + sep))
-      return [{ name: design.name, folder: design.root }];
-  }
 
   const targets: RunTarget[] = [];
   for (const design of found.designs) {

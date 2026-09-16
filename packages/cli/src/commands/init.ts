@@ -10,13 +10,7 @@ import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
 import { PROJECT_AGENT_IDS } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 import { rebaseDesignConfig } from "../managed-folders.ts";
-import {
-  checkoutRoot,
-  chooseDesignName,
-  isWithin,
-  registerDesign,
-  registerLocalDesign,
-} from "../manifest.ts";
+import { chooseDesignName, isWithin, registerDesign, registerLocalDesign } from "../manifest.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
 import { detectHost } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
@@ -231,11 +225,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // design's name has to come from the user rather than the path.
   let promptedName: string | undefined;
   if (interactive && managedFolder && !cliArgs.name) {
-    promptedName = await promptDesignName(
-      managedFolder,
-      appRoot,
-      await checkoutRoot(appRoot, launchRoot),
-    );
+    promptedName = await promptDesignName(managedFolder, appRoot, launchRoot);
     if (promptedName === undefined) return;
   }
   let answers: WizardAnswers;
@@ -351,7 +341,9 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // A design outside the checkout — managed storage or a path that lands
   // outside it — is a local design: recorded on this machine, never in the
   // committed velloo.json, which must not point outside its repository.
-  const root = await checkoutRoot(answers.appRoot, launchRoot);
+  // The project is where init ran: its velloo.json, or this machine's record
+  // for a design kept outside it. Nothing above that directory is involved.
+  const root = launchRoot;
   const localId = managedId ?? (isWithin(root, folder) ? undefined : randomUUID());
   let name: string;
   try {
@@ -359,7 +351,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       folder,
       appRoot: answers.appRoot,
       storage: localId ? (managedId ? "managed" : "chosen") : "repository",
-      checkout: localId ? root : undefined,
+      checkout: root,
       requested: cliArgs.name ?? promptedName,
     });
   } catch (err) {
@@ -397,7 +389,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         ),
       );
     } else {
-      const reg = await registerDesign(folder, answers.appRoot);
+      const reg = await registerDesign(folder, root);
       if (reg.created) {
         console.log(
           pc.dim(

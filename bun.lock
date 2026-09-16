@@ -14,7 +14,7 @@
     },
     "packages/canvas": {
       "name": "@velloo/canvas",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/protocol": "workspace:*",
         "@velloo/provider": "workspace:*",
@@ -44,7 +44,7 @@
     },
     "packages/cli": {
       "name": "@velloo/cli",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "bin": {
         "velloo": "./src/cli.ts",
       },
@@ -70,7 +70,7 @@
     },
     "packages/codegen": {
       "name": "@velloo/codegen",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
@@ -89,7 +89,7 @@
     },
     "packages/helpers": {
       "name": "@velloo/helpers",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/provider": "workspace:*",
         "@velloo/schema": "workspace:*",
@@ -106,7 +106,7 @@
     },
     "packages/protocol": {
       "name": "@velloo/protocol",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/result": "workspace:*",
         "@velloo/schema": "workspace:*",
@@ -115,7 +115,7 @@
     },
     "packages/provider": {
       "name": "@velloo/provider",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/schema": "workspace:*",
       },
@@ -129,7 +129,7 @@
     },
     "packages/provider-antd": {
       "name": "@velloo/provider-antd",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@ant-design/cssinjs": "1.24.0",
         "@velloo/helpers": "workspace:*",
@@ -149,7 +149,7 @@
     },
     "packages/provider-chakra": {
       "name": "@velloo/provider-chakra",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@chakra-ui/react": "2.10.10",
         "@emotion/cache": "11.14.0",
@@ -173,7 +173,7 @@
     },
     "packages/provider-mui": {
       "name": "@velloo/provider-mui",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@emotion/cache": "11.14.0",
         "@emotion/react": "11.14.0",
@@ -196,7 +196,7 @@
     },
     "packages/provider-none": {
       "name": "@velloo/provider-none",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
@@ -212,7 +212,7 @@
     },
     "packages/provider-shadcn-upstream": {
       "name": "@velloo/provider-shadcn-upstream",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
@@ -225,7 +225,7 @@
     },
     "packages/renderer": {
       "name": "@velloo/renderer",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/provider": "workspace:*",
         "@velloo/schema": "workspace:*",
@@ -245,18 +245,18 @@
     },
     "packages/result": {
       "name": "@velloo/result",
-      "version": "0.1.0",
+      "version": "0.0.0",
     },
     "packages/schema": {
       "name": "@velloo/schema",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "zod": "4.5.4",
       },
     },
     "packages/server": {
       "name": "@velloo/server",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@cloudflare/blindrsa-ts": "0.4.6",
         "@modelcontextprotocol/sdk": "1.30.0",
@@ -290,7 +290,7 @@
     },
     "packages/shadcn-snapshot": {
       "name": "@velloo/shadcn-snapshot",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",

@@ -11,7 +11,12 @@ import {
 import type { Board, Frame, Screen, Theme, Viewport } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { registryForScreen, renderPassForScreen } from "../extensions/registry.ts";
-import { inlineStandaloneDocument, type StandaloneResult, sizeWarning } from "./standalone.ts";
+import {
+  inlineStandaloneDocument,
+  type StandaloneResult,
+  sizeWarning,
+  withStandalonePolicy,
+} from "./standalone.ts";
 
 /**
  * The shared export core: frame/board/screen → PNG, PDF, standalone
@@ -373,7 +378,11 @@ async function boardComposite(
   }
   if (frames.length === 0) throw new Error(`board "${board.id}" has no exportable frames`);
   const composite = buildBoardComposite(frames, { labels: true });
-  return { html: composite.html, viewport: composite.viewport, warnings: dedupe(warnings) };
+  return {
+    html: standalone ? withStandalonePolicy(composite.html) : composite.html,
+    viewport: composite.viewport,
+    warnings: dedupe(warnings),
+  };
 }
 
 const dedupe = (list: string[]): string[] => [...new Set(list)];

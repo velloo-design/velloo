@@ -1,5 +1,6 @@
 import type { SubCommandsDef } from "citty";
 import { failWithError } from "../fail.ts";
+import { strictFlags } from "../strict-flags.ts";
 import { traceEnabled } from "../trace/env.ts";
 
 /**
@@ -48,7 +49,7 @@ const LOADERS: Record<string, LazyCommand> = {
  */
 function guarded(name: string, load: LazyCommand): LazyCommand {
   return async () => {
-    const cmd = await load();
+    const cmd = strictFlags(name, await load());
     const run = cmd.run;
     if (!run) return cmd;
     return {

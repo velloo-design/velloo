@@ -278,3 +278,19 @@ describe("parseThemeCss palette (numeric scales + extra roles)", () => {
     expect(parsed.paletteDark).toEqual(theme.paletteDark);
   });
 });
+
+describe("parseThemeCss on hostile input", () => {
+  // import_theme reads whatever stylesheet an agent names, in the daemon's one
+  // thread. Each of these took seconds to tens of seconds before the block
+  // scan became a single pass.
+  test.each([
+    ["a long body with no colon", `:root{${"-".repeat(200_000)}}`],
+    ["a run of unclosed blocks", ":root{".repeat(50_000)],
+    ["deeply nested blocks", `${":root{".repeat(30_000)}--a:1;${"}".repeat(30_000)}`],
+    ["unclosed dark-mode queries", "@media (prefers-color-scheme: dark){".repeat(30_000)],
+  ])("stays linear on %s", (_label, css) => {
+    const start = performance.now();
+    parseThemeCss(css);
+    expect(performance.now() - start).toBeLessThan(1_000);
+  });
+});

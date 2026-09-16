@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DesignBundleSchema } from "@velloo/protocol/publish";
 import { DesignBundleMetaSchema } from "@velloo/protocol/publish-meta";
+import { sanitizeSvgMarkup } from "@velloo/schema";
 import type { Server } from "bun";
 import { z } from "zod";
 
@@ -368,6 +369,32 @@ test("only referenced assets travel — snippets included, superseded ones not",
   // A generation nothing points at any more stays home: publish carries what
   // the design references, so an image that was replaced simply isn't in it.
   expect(captured.names).not.toContain("assets/superseded.png");
+});
+
+test("an SVG dropped into assets/ by hand is sanitized before it uploads", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  await mkdir(join(design, "assets"), { recursive: true });
+  const hostile =
+    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script>' +
+    '<a href="&#106;avascript:alert(1)"><path d="M0 0h24"/></a></svg>';
+  await writeFile(join(design, "assets", "mark.svg"), hostile);
+  await writeFile(
+    join(design, "screens", "home.json"),
+    JSON.stringify({
+      id: "home",
+      name: "Home",
+      library: "default",
+      tree: { $ref: "Image", props: { src: "/assets/mark.svg" } },
+    }),
+  );
+
+  const { exitCode, stderr } = await runPublish(design);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  const part = captured.parts.find((p) => p.name === "assets/mark.svg");
+  expect(part?.size).toBe(Buffer.byteLength(sanitizeSvgMarkup(hostile), "utf8"));
+  expect(part?.size).toBeLessThan(Buffer.byteLength(hostile, "utf8"));
 });
 
 test("publish omits the bundle when the folder has no live extensions", async () => {

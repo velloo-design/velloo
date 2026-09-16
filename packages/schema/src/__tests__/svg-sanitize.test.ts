@@ -12,7 +12,13 @@ describe("svgLooksActive", () => {
     expect(svgLooksActive('<svg><set attributeName="onload" to="alert(1)"/></svg>')).toBe(true);
     // Handler abutting a preceding attribute's closing quote (no whitespace) or a `/`.
     expect(svgLooksActive('<rect class="x"onclick="alert(1)"/>')).toBe(true);
-    expect(svgLooksActive("<a href=#/onmouseover=alert(1)><rect/></a>")).toBe(true);
+  });
+
+  test("reads an unquoted value the way HTML does, up to whitespace", () => {
+    // `/onmouseover=…` is part of the href value, not a second attribute.
+    const markup = "<a href=#/onmouseover=alert(1)><rect/></a>";
+    expect(svgLooksActive(markup)).toBe(false);
+    expect(sanitizeSvgMarkup(markup)).toBe('<a href="#/onmouseover=alert(1)"><rect/></a>');
   });
 
   test("passes static drawing content", () => {
@@ -70,5 +76,81 @@ describe("sanitizeSvgMarkup", () => {
   test("leaves legitimate static SVG untouched", () => {
     const clean = '<path d="M0 0h24v24H0z" fill="currentColor"/><circle cx="12" cy="12" r="4"/>';
     expect(sanitizeSvgMarkup(clean)).toBe(clean);
+  });
+
+  test.each([
+    ["an entity-encoded scheme", '<a href="&#106;avascript:alert(1)">x</a>'],
+    ["an entity without its semicolon", '<a href="&#106avascript:alert(1)">x</a>'],
+    ["an encoded tab inside the scheme", '<a href="java&#x09;script:alert(1)">x</a>'],
+    ["a literal tab inside the scheme", '<a href="java\tscript:alert(1)">x</a>'],
+    ["a named colon entity", '<a href="javascript&colon;alert(1)">x</a>'],
+    ["an encoded xlink:href", '<a xlink:href="&#x6A;avascript:alert(1)">x</a>'],
+    ["an SVG data URL image", '<image href="data:image/svg+xml,<svg onload=alert(1)>"/>'],
+  ])("drops a link hidden behind %s", (_label, markup) => {
+    expect(svgLooksActive(markup)).toBe(true);
+    const out = sanitizeSvgMarkup(markup);
+    expect(out).not.toContain("href");
+    expect(out.toLowerCase()).not.toContain("script:");
+  });
+
+  test("checks an href under any namespace prefix", () => {
+    const markup =
+      '<svg xmlns:x="http://www.w3.org/1999/xlink"><use x:href="#a"/><a x:href="&#106;avascript:x">y</a></svg>';
+    expect(sanitizeSvgMarkup(markup)).toBe(
+      '<svg xmlns:x="http://www.w3.org/1999/xlink"><use x:href="#a"/><a>y</a></svg>',
+    );
+  });
+
+  test("keeps fragment, relative, http and raster data links", () => {
+    const markup =
+      '<use href="#icon"/><image href="/assets/a.png"/><a href="https://velloo.design">x</a>' +
+      '<image href="data:image/png;base64,AAAA"/>';
+    expect(svgLooksActive(markup)).toBe(false);
+    expect(sanitizeSvgMarkup(markup)).toBe(markup);
+  });
+
+  test("drops HTML that would break out of the SVG, without eating its siblings", () => {
+    const out = sanitizeSvgMarkup(
+      '<svg><meta http-equiv="refresh" content="0;url=https://evil.example"><img src=x><path d="M0"/></svg>',
+    );
+    expect(out).toBe('<svg><path d="M0"/></svg>');
+  });
+
+  test("keeps a style sheet but not its imports or remote urls", () => {
+    const markup =
+      "<style>@import url(//evil.example/x.css); .a{fill:url(#g)} .b{fill:url(http://evil.example)}</style>";
+    expect(svgLooksActive(markup)).toBe(true);
+    const out = sanitizeSvgMarkup(markup);
+    expect(out).not.toContain("@import");
+    expect(out).not.toContain("evil.example");
+    expect(out).toContain("fill:url(#g)");
+  });
+
+  test("a prefixed animation element is dropped, not passed through", () => {
+    const out = sanitizeSvgMarkup(
+      '<svg:animate attributeName="href" values="javascript:alert(1)"/>',
+    );
+    expect(out).toBe("");
+  });
+
+  test("re-escapes text so nothing new can parse as markup", () => {
+    const out = sanitizeSvgMarkup("<text>1 &lt; 2 &amp;&lt;script&gt;</text>");
+    expect(out).toBe("<text>1 &lt; 2 &amp;&lt;script&gt;</text>");
+  });
+
+  test("drops declarations, DOCTYPE subsets and comments from a file", () => {
+    const out = sanitizeSvgMarkup(
+      '<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "y">]><!-- note --><svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+    );
+    expect(out).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>');
+  });
+
+  test("stays linear on adversarial input", () => {
+    const start = performance.now();
+    sanitizeSvgMarkup("<".repeat(200_000));
+    sanitizeSvgMarkup("<a ".repeat(100_000));
+    sanitizeSvgMarkup('<svg a="'.repeat(50_000));
+    sanitizeSvgMarkup("<script>".repeat(50_000));
+    expect(performance.now() - start).toBeLessThan(2_000);
   });
 });

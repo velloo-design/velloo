@@ -9,9 +9,9 @@ import {
 } from "@velloo/schema";
 import {
   type FoundRepoManifest,
+  findOwningManifest,
   loadDesignFolder,
   localDesignOf,
-  readRepoManifest,
   recordedDesignName,
 } from "@velloo/server";
 import { TOOL_VERSION } from "./version.ts";
@@ -85,7 +85,7 @@ export async function upgradeFolder(
   const configPath = join(folder, ".design", "config.json");
   const rawConfig: unknown = JSON.parse(await readFile(configPath, "utf8"));
   const from = schemaVersionOf(rawConfig);
-  const manifest = await readRepoManifest(folder).catch(() => null);
+  const manifest = await findOwningManifest(folder).catch(() => null);
   const run = planMigration(rawConfig, { name: legacyNameOf(folder, manifest) });
   const manifestFiles = manifest?.legacy ? [manifest.path] : [];
 

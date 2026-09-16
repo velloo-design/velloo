@@ -32,7 +32,6 @@ import {
 import { fail } from "../fail.ts";
 import { planRelocation, relocateDesign } from "../managed-folders.ts";
 import {
-  checkoutRoot,
   findDesigns,
   findManifest,
   isWithin,
@@ -325,6 +324,30 @@ const move = defineCommand({
   },
 });
 
+/**
+ * Rename through the design's running canvas, if it has one. True when the
+ * canvas did it (config and velloo.json's defaultDesign both); false when no
+ * canvas is running and the caller should write the files itself.
+ */
+async function renameThroughCanvas(folder: string, name: string): Promise<boolean> {
+  const rec = await readLock(daemonRoot(folder));
+  if (!rec || !(await isLive(rec))) return false;
+  let res: Response;
+  try {
+    res = await fetch(`http://127.0.0.1:${rec.canvasPort}/api/mutate/update_design_name`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    fail("design rename", `the running canvas didn't answer (${(err as Error).message}).`);
+  }
+  if (res.ok) return true;
+  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+  fail("design rename", body?.error?.message ?? `the running canvas refused (HTTP ${res.status}).`);
+}
+
 const rename = defineCommand({
   meta: { name: "rename", description: "Rename a design" },
   args: {
@@ -361,11 +384,15 @@ const rename = defineCommand({
     );
     if (conflict) fail("design rename", conflict);
 
-    // The daemon holds the loaded config, and would write the old name back.
-    await stopDaemon(daemonRoot(folder));
-    await writeDesignName(folder, newName);
-    if (previous && (await followDesignRename(folder, previous, newName)))
-      console.log(pc.dim(`  velloo.json defaultDesign → "${newName}"`));
+    // A running canvas holds the loaded config and would write the old name
+    // back on its next save — so rename through it, exactly as its own rename
+    // field does, and it stays up showing the new name.
+    const renamedLive = await renameThroughCanvas(folder, newName);
+    if (!renamedLive) {
+      await writeDesignName(folder, newName);
+      if (previous && (await followDesignRename(folder, previous, newName)))
+        console.log(pc.dim(`  velloo.json defaultDesign → "${newName}"`));
+    }
     console.log(`velloo design: renamed ${previous ? `"${previous}" ` : ""}to "${newName}".`);
   },
 });
@@ -430,7 +457,7 @@ const bind = defineCommand({
     const folder = resolve(args.design);
     if (!(await hasDesignConfig(folder)))
       fail("design bind", `${folder} is not a velloo design folder (no .design/config.json).`);
-    const root = await checkoutRoot(cwd, cwd);
+    const root = cwd;
     if (isWithin(root, folder))
       fail(
         "design bind",

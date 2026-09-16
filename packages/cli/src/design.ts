@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { isCancel, multiselect, select } from "@clack/prompts";
 import { BoardSchema, isArchived, ScreenSchema } from "@velloo/schema";
 import {
@@ -12,7 +12,6 @@ import {
   pickDesign,
   recordedDesignName,
 } from "@velloo/server";
-import { findDesignConfig } from "./design-config.ts";
 import { fail } from "./fail.ts";
 import { discoverDesignFolders, findDesigns } from "./manifest.ts";
 
@@ -25,7 +24,7 @@ const DEFAULT_FOLDER = "velloo";
  * where it is.
  */
 export const DESIGN_ARG_DESCRIPTION =
-  "A design name or a design-folder path (default: the design you're in, the only one, velloo.json's defaultDesign, else ./velloo or the nearest design folder above the cwd)";
+  "A design name from ./velloo.json, a design folder, or a velloo.json file or its directory (default: the design folder you're in, else this directory's velloo.json: its only design or defaultDesign)";
 
 /**
  * A design folder the repo already has — the first listed, else the first one
@@ -152,14 +151,14 @@ function byName(
 }
 
 /**
- * Resolve the design for a command. An explicit arg wins — a design name,
- * else a path. A path that is the app/repo root (not the design folder itself)
- * still resolves via the same `./velloo` convention as standing there with no
- * arg. Without an arg, a checkout with designs picks by containment → the only
- * one → defaultDesign → picker/fail; one without keeps the convention chain:
- * `./velloo`, then the cwd, then walk up for a `.design/config.json` (so the
- * command works from inside the folder or the app root). Fails with guidance
- * when nothing is found.
+ * Resolve the design for a command, from exactly where it runs — no directory
+ * above it is searched, so a project nested in another (`app/admin` inside
+ * `app`) never picks up its parent's designs.
+ *
+ * An explicit arg wins: a design name from this directory's `velloo.json`, a
+ * design folder, a directory holding a `velloo.json`, or that file itself.
+ * Without one: the design folder you're standing in, else this directory's
+ * designs (the only one → defaultDesign → picker/fail), else `./velloo`.
  */
 export async function resolveDesign(
   arg: string | undefined,
@@ -199,14 +198,14 @@ export async function resolveDesign(
     if (set && named) return designFolder(set, named, abort);
     const explicit = resolve(cwd, arg);
     if (await hasDesignConfig(explicit)) return explicit;
-    const explicitSet = await findDesigns(explicit).catch(() => null);
-    if (
-      explicitSet?.designs.length &&
-      (explicitSet.repo?.dir === explicit ||
-        explicitSet.local.some((design) => resolve(design.root) === explicit))
-    ) {
-      return resolveDesign(undefined, cmd, { ...opts, cwd: explicit });
-    }
+    // A velloo.json file, or the project directory holding one: its designs,
+    // chosen the same way as running there with no arg.
+    const project =
+      basename(explicit) === "velloo.json" && existsSync(explicit) ? dirname(explicit) : explicit;
+    const projectSet = await findDesigns(project).catch((err: unknown) =>
+      abort((err as Error).message),
+    );
+    if (projectSet?.designs.length) return resolveDesign(undefined, cmd, { ...opts, cwd: project });
     // App root passed as a path — same as `cd` there with no arg.
     const nested = join(explicit, DEFAULT_FOLDER);
     if (await hasDesignConfig(nested)) return nested;
@@ -252,13 +251,11 @@ export async function resolveDesign(
     );
   }
 
+  if (await hasDesignConfig(cwd)) return cwd;
   const here = join(cwd, DEFAULT_FOLDER);
   if (await hasDesignConfig(here)) return here;
-  if (await hasDesignConfig(cwd)) return cwd;
-  const found = await findDesignConfig(cwd);
-  if (found) return found.folder;
   abort(
-    `no design folder found. Pass one (e.g. \`velloo ${cmd} ./velloo\`), run from a folder that contains a Velloo design, or \`velloo init\` first.${movedCheckoutHint(cwd)}`,
+    `no velloo.json or design folder in ${cwd}. Run from the directory that has your velloo.json, pass a design folder or a velloo.json path (e.g. \`velloo ${cmd} apps/web\`), or \`velloo init\` here.${movedCheckoutHint(cwd)}`,
   );
 }
 

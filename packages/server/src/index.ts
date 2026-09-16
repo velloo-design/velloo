@@ -508,9 +508,10 @@ export {
   designsFor,
   type FoundRepoManifest,
   findDesigns,
+  findOwningManifest,
   followDesignRename,
   pickDesign,
-  readRepoManifest,
+  readRepoManifestAt,
   recordedDesignName,
 } from "./designs.ts";
 export {
