@@ -114,7 +114,7 @@ describe("strictFlags", () => {
         await runCommand(publish(), { rawArgs });
         return ran.join(", ");
       } catch {
-        return `failed: ${error.mock.calls.flat().join(" ")}`;
+        return `failed: ${Bun.stripANSI(error.mock.calls.flat().join(" "))}`;
       } finally {
         error.mockRestore();
         exit.mockRestore();
