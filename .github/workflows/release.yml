@@ -29,8 +29,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The release runner is Linux; this installs the same commit's npm package on
+  # Windows x64 and arm64, and runs the suite there, before anything publishes.
+  windows:
+    name: Windows
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows.yml
+
   release:
     if: github.ref == 'refs/heads/main'
+    needs: windows
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: prod
