@@ -1,10 +1,15 @@
 import { readFile } from "node:fs/promises";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { scanReactRouter } from "./react-router.ts";
 import { idFromRoutePath, nameFromRoutePath } from "./route-names.ts";
 import { scanServerRoutes } from "./server-routes.ts";
 import type { Framework, ScannedRoute, ScanResult } from "./types.ts";
 import { dirExists, walkFiles } from "./walk.ts";
+
+/** A path under a routes dir, `/`-separated whatever the platform — routes are URLs. */
+function routeRelative(from: string, to: string): string {
+  return relative(from, to).split(sep).join("/");
+}
 
 const PAGE_EXTS = new Set([".tsx", ".ts", ".jsx", ".js"]);
 
@@ -30,7 +35,7 @@ async function scanNextApp(appDir: string): Promise<ScannedRoute[]> {
     const base = basename(file);
     const stem = stripExt(base);
     if (stem !== "page" || !hasExt(base)) continue;
-    const rel = relative(appDir, dirname(file));
+    const rel = routeRelative(appDir, dirname(file));
     // Convert "settings/(account)/profile" → "settings/profile" by
     // dropping Next's grouping parens. They don't change the URL.
     const routePath =
@@ -60,7 +65,7 @@ async function scanNextPages(pagesDir: string): Promise<ScannedRoute[]> {
     const base = basename(file);
     const stem = stripExt(base);
     if (stem.startsWith("_")) continue;
-    const rel = relative(pagesDir, file);
+    const rel = routeRelative(pagesDir, file);
     if (rel.startsWith("api/") || rel === "api") continue;
     const segments = rel.split("/");
     const last = stripExt(segments.pop() ?? "");
@@ -95,7 +100,7 @@ async function scanGenericPagesDir(dir: string): Promise<ScannedRoute[]> {
       continue;
     const base = basename(file);
     if (base.startsWith("_")) continue;
-    const rel = relative(dir, file);
+    const rel = routeRelative(dir, file);
     const segments = rel.split("/");
     const last = stripExt(segments.pop() ?? "");
     const path = last === "index" ? segments : [...segments, last];
@@ -121,7 +126,7 @@ async function scanSvelteKit(dir: string): Promise<ScannedRoute[]> {
   const out: ScannedRoute[] = [];
   for await (const file of walkFiles(dir)) {
     if (basename(file) !== "+page.svelte") continue;
-    const rel = relative(dir, dirname(file));
+    const rel = routeRelative(dir, dirname(file));
     const segments = rel === "" ? [] : rel.split("/").filter((s) => !/^\(.*\)$/.test(s));
     const routePath = segments.length === 0 ? "/" : `/${segments.join("/")}`;
     out.push({
@@ -158,7 +163,7 @@ async function scanTanstackRouter(dir: string): Promise<ScannedRoute[]> {
   const out: ScannedRoute[] = [];
   for await (const file of walkFiles(dir)) {
     if (!hasExt(file)) continue;
-    let stem = stripExt(relative(dir, file));
+    let stem = stripExt(routeRelative(dir, file));
     if (stem.endsWith(".lazy")) stem = stem.slice(0, -".lazy".length);
     if (stem === "routeTree" || stem.endsWith(".gen")) continue;
 

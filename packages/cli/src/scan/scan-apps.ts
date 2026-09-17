@@ -1,4 +1,4 @@
-import { relative, resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { discoverScanRoots } from "./discover.ts";
 import { titleCaseFromSegment } from "./route-names.ts";
 import { scanAppRoutes } from "./routes.ts";
@@ -51,7 +51,7 @@ export async function scanApps(appRoot: string, scanDir?: string): Promise<AppsS
   let roots: { dir: string; rel: string }[];
   if (scanDir?.trim()) {
     const dir = resolve(appRoot, scanDir.trim());
-    roots = [{ dir, rel: relative(appRoot, dir) }];
+    roots = [{ dir, rel: relative(appRoot, dir).split(sep).join("/") }];
   } else {
     roots = await discoverScanRoots(appRoot);
   }

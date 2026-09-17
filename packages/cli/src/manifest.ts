@@ -1,7 +1,7 @@
 import { type Dirent, existsSync, realpathSync } from "node:fs";
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { ConfigSchema, designNameIssue, type RepoManifest, toDesignName } from "@velloo/schema";
 import {
   type DesignSet,
@@ -74,7 +74,7 @@ export async function designLabel(folder: string): Promise<string | null> {
   }
   const entry = found?.folders.find((path) => sameFolder(path, abs));
   if (!found || !entry) return null;
-  const rel = relative(found.dir, abs) || ".";
+  const rel = relative(found.dir, abs).split(sep).join("/") || ".";
   return `${name ?? found.legacyNames.get(entry) ?? basename(abs)} — ${rel} (in ${found.dir})`;
 }
 

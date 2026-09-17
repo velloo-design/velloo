@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import type { Screen, Snippet } from "@velloo/schema";
 import { designGitEnv } from "../design-git.ts";
 
@@ -228,8 +228,15 @@ export function resolveGitContext(designFolder: string, base: string, head: stri
     );
   }
   // realpath both sides: git prints physical paths, so a symlinked cwd
-  // (macOS /tmp → /private/tmp) would otherwise look "outside the repo".
-  const designRel = relative(realpathSync(repoRoot), realpathSync(resolve(designFolder)));
+  // (macOS /tmp → /private/tmp) would otherwise look "outside the repo". The
+  // native variant also expands Windows 8.3 short names (C:\Users\RUNNER~1).
+  // Posix separators: it is matched against, and passed to, git's own paths.
+  const designRel = relative(
+    realpathSync.native(repoRoot),
+    realpathSync.native(resolve(designFolder)),
+  )
+    .split(sep)
+    .join("/");
   if (designRel.startsWith("..")) {
     throw new Error(`design folder ${designFolder} is outside the git repo at ${repoRoot}`);
   }

@@ -68,5 +68,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The arm64 runner spawns processes several times slower than Linux, so a
+      # CLI test that takes two seconds there brushes Bun's 5s default.
       - name: Test
-        run: bun run test
+        run: bun run test --timeout 20000

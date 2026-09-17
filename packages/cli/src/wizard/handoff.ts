@@ -1,4 +1,4 @@
-import { relative } from "node:path";
+import { relative, sep } from "node:path";
 import type { Board, Screen } from "@velloo/schema";
 import type { WizardAnswers } from "./answers.ts";
 import { WIZARD_PROVIDERS } from "./provider-registry.ts";
@@ -24,7 +24,7 @@ function appContextLines(answers: WizardAnswers): string[] {
       `This is a monorepo with ${appRels.length} apps (${appRels.map((r) => `\`${r}\``).join(", ")}); each app's screens sit on their own board. Run the matching app's dev server when comparing screens.`,
     );
   } else {
-    const uiRel = relative(answers.appRoot, answers.scanRoot);
+    const uiRel = relative(answers.appRoot, answers.scanRoot).split(sep).join("/");
     if (uiRel && !uiRel.startsWith("..")) {
       lines.push(`This app's UI lives in \`${uiRel}/\` — run its dev server from there.`);
     }

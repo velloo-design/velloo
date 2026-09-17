@@ -20,7 +20,8 @@ export interface Watcher {
  */
 export function classifyWatchPath(filename: string | null): WatchEvent | null {
   if (!filename) return null;
-  const parts = filename.split(sep);
+  // fs.watch reports native separators; accept either so callers need not care.
+  const parts = filename.split(/[\\/]/);
   if (parts[0] === "screens" && parts[1]) {
     const file = parts[1];
     if (file.endsWith(".annotations.json")) {

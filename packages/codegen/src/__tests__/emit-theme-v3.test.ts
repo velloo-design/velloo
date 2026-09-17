@@ -53,7 +53,7 @@ describe("hslTriplet", () => {
 
 /** Look artifacts up by name — the file list's order is not part of the contract. */
 function fileEndingWith(result: { files: { path: string; contents: string }[] }, suffix: string) {
-  const file = result.files.find((f) => f.path.endsWith(suffix));
+  const file = result.files.find((f) => f.path.endsWith(join(...suffix.split("/"))));
   if (!file) throw new Error(`expected an artifact ending in ${suffix}`);
   return file;
 }
@@ -67,7 +67,7 @@ describe("emitTheme tailwindMajor 3", () => {
     const css = fileEndingWith(result, "velloo-theme.css");
     const preset = fileEndingWith(result, "velloo.preset.cjs");
     // Next to the default globals path, not the globals file itself.
-    expect(css.path.endsWith("app/velloo-theme.css")).toBe(true);
+    expect(css.path.endsWith(join("app", "velloo-theme.css"))).toBe(true);
     expect(preset.path.endsWith("velloo.preset.cjs")).toBe(true);
 
     expect(css.contents).not.toContain("@theme");
@@ -102,7 +102,7 @@ describe("emitTheme tailwindMajor 3", () => {
     expect(cjs).toContain('"var(--text-h1)"');
 
     const typeset = fileEndingWith(result, "velloo-typeset.css");
-    expect(typeset.path.endsWith("app/velloo-typeset.css")).toBe(true);
+    expect(typeset.path.endsWith(join("app", "velloo-typeset.css"))).toBe(true);
     expect(typeset.contents).toContain("--text-h1: calc(var(--typeset-rhythm) * 2.5)");
     expect(typeset.contents).toContain(":where(.typeset h1)");
 
