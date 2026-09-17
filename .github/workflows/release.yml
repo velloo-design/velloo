@@ -56,6 +56,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The gates run the whole suite, whose completions tests parse the
+      # generated scripts with each shell's `-n` and fail under CI when one is
+      # missing. The runner ships bash only — same step as ci.yml.
+      - name: Install zsh and fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
+
       - name: Gates
         run: |
           bun run typecheck
