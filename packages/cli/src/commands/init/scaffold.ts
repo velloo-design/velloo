@@ -60,6 +60,17 @@ function blankScaffold(theme: Theme): Scaffold {
  * The scaffold's theme: for scan we import the host app's globals.css so the
  * canvas renders in their brand; everything else uses the chosen preset.
  */
+/**
+ * The preset a scaffold is themed with when nothing is imported: an explicit
+ * choice, else zinc for a blank folder (neutral until someone styles it), else
+ * the sample's own.
+ */
+export function themePresetFor(answers: WizardAnswers): string {
+  return (
+    answers.themePreset ?? (answers.initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET)
+  );
+}
+
 export function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFrom?: string } {
   // Prefer the host app's theme whenever detection found one (scan, redesign,
   // component after auto-adopt, etc.).
@@ -76,12 +87,7 @@ export function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFr
       if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
     }
   }
-  // Blank defaults to zinc (neutral) so the folder isn't opinionated until the
-  // agent or user styles it. An explicit --theme-preset wins either way.
-  if (answers.initialContent === "blank") {
-    return { theme: buildPresetTheme(answers.themePreset ?? "zinc") };
-  }
-  return { theme: buildPresetTheme(answers.themePreset ?? DEFAULT_THEME_PRESET) };
+  return { theme: buildPresetTheme(themePresetFor(answers)) };
 }
 
 export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaffold> {

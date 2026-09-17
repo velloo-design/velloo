@@ -133,6 +133,15 @@ afterAll(async () => {
 });
 
 describe("install.sh", () => {
+  test("prints plain text when not at a terminal, and says the checksum passed", async () => {
+    const where = await newInstall();
+    const result = install(where, "1.0.0");
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const raw = result.stdout.toString();
+    expect(raw).not.toContain("\u001b[");
+    expect(raw).toContain("Checksum verified (SHA-256 ");
+  });
+
   test("a first install points current at the version", async () => {
     const where = await newInstall();
     const result = install(where, "1.0.0");

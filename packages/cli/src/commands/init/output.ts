@@ -14,11 +14,12 @@ import {
   installCompletions,
 } from "../../completions/install.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
-import { DEFAULT_THEME_PRESET, presetById } from "../../scaffold/theme-presets.ts";
+import { presetById } from "../../scaffold/theme-presets.ts";
 import type { WizardAnswers } from "../../wizard/answers.ts";
 import type { InstallPlan } from "../../wizard/provider-registry.ts";
 import { stackById } from "../../wizard/stacks.ts";
 import type { WireOutcome } from "./agent-wiring.ts";
+import { themePresetFor } from "./scaffold.ts";
 
 /** An absolute path as a person reads it: `~/…` under the home directory. */
 export function displayPath(path: string): string {
@@ -38,7 +39,7 @@ export function printSummary(
   const boardLabels = scaffold.boards.map((b) => b.name).join(" + ");
   const themeLabel = importedFrom
     ? `imported from ${relative(answers.appRoot, importedFrom) || importedFrom}`
-    : (presetById(answers.themePreset ?? DEFAULT_THEME_PRESET)?.label ?? "Indigo");
+    : (presetById(themePresetFor(answers))?.label ?? themePresetFor(answers));
 
   console.log("");
   console.log(pc.green("✓ Velloo is installed and ready to use."));
