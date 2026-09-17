@@ -6,6 +6,9 @@
 # It runs after CI rather than beside it, so only a green main ships, and
 # never touches npm. Re-publish by hand with `gh workflow run dogfood.yml`.
 #
+# Dev builds bake the private dev cloud (api.dev.velloo.ai), which admits only
+# allowlisted accounts; the release notes say so for anyone who installs one.
+#
 # The `dev` environment should allow deployments from `main` only. Its BLOB_*
 # secrets are optional: while they exist the build is also mirrored into the
 # download host's own bucket.
@@ -69,7 +72,9 @@ jobs:
         run: |
           notes="Rolling build of \`main\` at ${SHA}, replaced on every green push. Not for production use.
 
-          Install: \`curl -fsSL https://get.dev.velloo.design/install.sh | bash\`"
+          Install: \`curl -fsSL https://get.dev.velloo.design/install.sh | bash\`
+
+          This build signs in and publishes to the private dev cloud (\`https://api.dev.velloo.ai\`), which only admits allowlisted accounts — request access at https://dev.velloo.ai/request-access. To publish to the public cloud, install the stable release: \`npm install -g velloo\`."
           if gh release view dev >/dev/null 2>&1; then
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/dev" -f sha="$SHA" -F force=true >/dev/null
             gh release edit dev --prerelease --title "Dev build ${VERSION}" --notes "$notes"
