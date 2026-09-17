@@ -15,6 +15,11 @@ archives for the macOS/Linux curl installer. Workspace manifests stay private.
 | **local** | `bun run cli:build` / `cli:install` | this machine | the build marker in `~/.velloo` |
 
 Dev builds bake the dev cloud (`https://api.dev.velloo.ai`) and never reach npm.
+The dev cloud is a private environment: `velloo login` and `velloo publish`
+from a dev build only work for accounts on its allowlist. Everyone else is
+turned away with a link to `https://dev.velloo.ai/request-access`, so install
+the stable channel to publish to the public cloud. A dev build can also target
+another cloud for a single command with `VELLOO_CLOUD_URL` or `--url`.
 
 ## Versions
 
