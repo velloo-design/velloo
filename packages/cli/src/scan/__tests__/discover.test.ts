@@ -53,7 +53,7 @@ describe("discoverScanRoots", () => {
     await writePkg("apps/admin", { react: "19.0.0" });
     await writePkg("packages/eslint-config", {}); // not React — ignored
     const found = await discoverScanRoots(root);
-    expect(found.map((a) => a.rel).sort()).toEqual([join("apps", "admin"), join("apps", "web")]);
+    expect(found.map((a) => a.rel).sort()).toEqual(["apps/admin", "apps/web"]);
   });
 
   test("a React app root comes first, ahead of nested apps", async () => {

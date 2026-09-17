@@ -53,7 +53,7 @@ describe("scanApps", () => {
     ]);
     const webIndex = routes.find((r) => r.id === "web-index");
     expect(webIndex?.name).toBe("Web / Home");
-    expect(webIndex?.appRel).toBe(join("apps", "web"));
+    expect(webIndex?.appRel).toBe("apps/web");
   });
 
   test("an explicit scanDir bypasses discovery and scans one app unprefixed", async () => {
