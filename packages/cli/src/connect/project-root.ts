@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from "node:fs";
 import { access } from "node:fs/promises";
-import { dirname, join, parse, relative, resolve } from "node:path";
+import { dirname, join, parse, relative, resolve, sep } from "node:path";
 import { type FoundRepoManifest, localDesignOf } from "@velloo/server";
 import { findDesigns, manifestListing } from "../manifest.ts";
 
@@ -34,7 +34,8 @@ export async function designArgumentFor(
   const set = await findDesigns(projectRoot).catch(() => null);
   const target = realOr(designFolder);
   if (set?.designs.some((d) => !d.outsideRepo && realOr(d.root) === target)) return null;
-  return relative(projectRoot, designFolder) || ".";
+  // Posix: it lands in agent configs a repository may commit.
+  return relative(projectRoot, designFolder).split(sep).join("/") || ".";
 }
 
 function realOr(path: string): string {

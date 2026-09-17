@@ -45,13 +45,16 @@ or the MCP surface bump the **minor**; everything else bumps the **patch**.
    ```
 
    (or Actions → Release → Run workflow).
-3. **Approve** the `prod` deployment when GitHub asks.
+3. **Approve** the `prod` deployment when GitHub asks. It asks once the Windows
+   jobs (`windows.yml`) pass: they install this commit's npm package on Windows
+   x64 and arm64, start and stop a sample canvas with it, and run the suite there.
 4. `release.yml` then:
    - runs the gates (typecheck, lint, tests, and `bun run notices:check`, which
      fails when `THIRD-PARTY-NOTICES.md` is stale or a dependency's license is unreviewed),
    - computes the version and writes the release notes,
    - builds the npm package and direct archives with the hosted cloud baked in,
-     and smoke-tests both installs,
+     and smoke-tests both installs (the npm one also starts, serves and stops
+     a sample canvas),
    - attests the artifacts' build provenance,
    - mirrors them to the download bucket (while that is configured),
    - publishes `velloo` to npm through trusted publishing,

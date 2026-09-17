@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { delimiter, dirname, join, relative, resolve } from "node:path";
+import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
 import { looksLikeUiApp } from "./routes.ts";
 
 /**
@@ -109,7 +109,8 @@ export async function discoverScanRoots(appRoot: string): Promise<DiscoveredApp[
   const nested: DiscoveredApp[] = [];
   for (const dir of new Set(dirs)) {
     if (dir === appRoot) continue;
-    if (await looksLikeUiApp(dir)) nested.push({ dir, rel: relative(appRoot, dir) });
+    if (await looksLikeUiApp(dir))
+      nested.push({ dir, rel: relative(appRoot, dir).split(sep).join("/") });
   }
   nested.sort((a, b) => rank(a.rel) - rank(b.rel) || a.rel.localeCompare(b.rel));
   return [...out, ...nested];

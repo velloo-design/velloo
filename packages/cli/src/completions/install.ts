@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { completionScript, SHELLS, type Shell } from "./script.ts";
 import { commandSpecs } from "./spec.ts";
 
@@ -71,7 +71,11 @@ export async function installCompletions(
     if (!rc.includes(RC_MARKER)) {
       // $HOME keeps the line portable if the home dir moves; the -f guard
       // keeps a deleted script from breaking shell startup.
-      const rel = scriptPath.slice(homeDir.length + 1);
+      // Posix separators: the rc file is read by a POSIX shell, Git Bash included.
+      const rel = scriptPath
+        .slice(homeDir.length + 1)
+        .split(sep)
+        .join("/");
       const line = `[ -f "$HOME/${rel}" ] && source "$HOME/${rel}" ${RC_MARKER}`;
       await appendFile(rcPath, `${rc.endsWith("\n") || rc === "" ? "" : "\n"}${line}\n`);
       rcUpdated = true;

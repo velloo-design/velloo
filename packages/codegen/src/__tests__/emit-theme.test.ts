@@ -37,8 +37,8 @@ describe("emitTheme", () => {
 
     expect(result.files.length).toBe(4);
     const [css, typeset, tsConfig, tokens] = result.files;
-    expect(css?.path.endsWith("app/globals.css")).toBe(true);
-    expect(typeset?.path.endsWith("app/typeset.css")).toBe(true);
+    expect(css?.path.endsWith(join("app", "globals.css"))).toBe(true);
+    expect(typeset?.path.endsWith(join("app", "typeset.css"))).toBe(true);
     expect(tsConfig?.path.endsWith("tailwind.config.ts")).toBe(true);
     expect(tokens?.path.endsWith("tokens.json")).toBe(true);
 
@@ -143,8 +143,8 @@ describe("emitTheme", () => {
       apply: false,
     });
     expect(result.files.length).toBe(3);
-    expect(result.files[0]?.path.endsWith("app/globals.css")).toBe(true);
-    expect(result.files[1]?.path.endsWith("app/typeset.css")).toBe(true);
+    expect(result.files[0]?.path.endsWith(join("app", "globals.css"))).toBe(true);
+    expect(result.files[1]?.path.endsWith(join("app", "typeset.css"))).toBe(true);
     expect(result.files[2]?.path.endsWith("tokens.json")).toBe(true);
   });
 

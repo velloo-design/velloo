@@ -1,4 +1,4 @@
-import { dirname, relative, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 // Version-only subpath imports: pulling these from the provider indexes would
 // drag every framework registry into the CLI's eager bundle graph — the whole
 // point of the lazy provider chunks (see packages/server/src/providers.ts).
@@ -101,7 +101,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
         source: "in-repo",
         // The provider expects a root containing `ui/`; store it relative to
         // the design folder so a cloned repo remains portable.
-        componentsPath: relative(answers.folder, dirname(targetDir)) || ".",
+        componentsPath: relative(answers.folder, dirname(targetDir)).split(sep).join("/") || ".",
       };
       return {
         library,

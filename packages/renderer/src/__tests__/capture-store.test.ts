@@ -147,7 +147,8 @@ describe("session state file", () => {
   test("writes 0600 and scopes on the way in", () => {
     const path = sessionStatePath(root, "https://app.example.com");
     writeSessionState(path, state, ["https://app.example.com"]);
-    expect(statSync(path).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX modes; the file relies on the profile directory's ACL there.
+    if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
     const raw = readFileSync(path, "utf8");
     expect(raw).toContain("app.example.com");
     expect(raw).not.toContain("third-party");

@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readdir } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import {
   BoardSchema,
   ConfigSchema,
@@ -151,7 +151,7 @@ export async function writeScaffold(
   // it (`resolve(folderRoot, hostApp.root)`). Aliases are left to the
   // bundler's `{ "@/*": "*" }` default — reading the host tsconfig per the
   // codebase stance is fragile; apps with a non-root `@` alias edit it once.
-  const hostAppRoot = relative(folder, answers.scanRoot);
+  const hostAppRoot = relative(folder, answers.scanRoot).split(sep).join("/");
   // A multi-app scan also registers every route-bearing app under
   // `config.hostApps`, keyed by the same prefixes the screen ids use, so a
   // live extension can target its app via `extension.app`.
@@ -164,7 +164,10 @@ export async function writeScaffold(
     hostApps = {};
     for (const rel of appRels) {
       const key = prefixes.get(rel);
-      if (key) hostApps[key] = { root: relative(folder, resolve(answers.appRoot, rel)) };
+      if (key)
+        hostApps[key] = {
+          root: relative(folder, resolve(answers.appRoot, rel)).split(sep).join("/"),
+        };
     }
   }
   // CSS framework (the styling axis): only the no-framework library has a real

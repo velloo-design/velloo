@@ -10,12 +10,14 @@ const specs = await commandSpecs();
 
 /**
  * Check a script with the shell's own parser (`-n`). Locally a missing shell
- * skips the check; CI installs all three, so there a missing one is a failure
- * rather than a pass that never ran.
+ * skips the check; Linux CI installs all three, so there a missing one is a
+ * failure rather than a pass that never ran. The Windows runners have none.
  */
 async function assertParses(shell: "zsh" | "bash" | "fish", script: string): Promise<void> {
   if (!Bun.which(shell)) {
-    if (process.env.CI) throw new Error(`${shell} is not installed; CI must install it`);
+    if (process.env.CI && process.platform !== "win32") {
+      throw new Error(`${shell} is not installed; CI must install it`);
+    }
     return;
   }
   const file = join(await mkdtemp(join(tmpdir(), "velloo-comp-")), `completions.${shell}`);

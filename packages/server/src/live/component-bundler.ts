@@ -152,7 +152,8 @@ function buildInlineLoaderModule(bundles: BundleResult[]): string {
 /** Resolved path, or the input when it doesn't exist yet. */
 function realPath(path: string): string {
   try {
-    return realpathSync(path);
+    // native: also expands Windows 8.3 short names, as Bun.resolveSync does.
+    return realpathSync.native(path);
   } catch {
     return path;
   }

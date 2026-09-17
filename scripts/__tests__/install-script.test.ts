@@ -132,7 +132,10 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-describe("install.sh", () => {
+// install.sh is the macOS and Linux installer; Windows installs through npm.
+const posixOnly = describe.skipIf(process.platform === "win32");
+
+posixOnly("install.sh", () => {
   test("prints plain text when not at a terminal, and says the checksum passed", async () => {
     const where = await newInstall();
     const result = install(where, "1.0.0");
@@ -184,7 +187,7 @@ describe("install.sh", () => {
   });
 });
 
-describe("install.sh PATH diagnostics", () => {
+posixOnly("install.sh PATH diagnostics", () => {
   test("says where it installed, and nothing more when PATH already runs it", async () => {
     const where = await newInstall();
     const result = install(where, "1.0.0");

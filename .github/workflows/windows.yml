@@ -1,0 +1,74 @@
+# Windows: the npm package and the test suite on native Windows, x64 and arm64.
+#
+# `npm install -g velloo` is the supported Windows install, and the launcher
+# picks a different Bun runtime per architecture, so both runners install the
+# package and drive a canvas through its whole lifecycle. The suite runs there
+# too: path separators, process signals and file locking all behave
+# differently, and nothing on the Linux runners would notice.
+#
+# Reusable so CI runs it on every push and the release gates on it before
+# anything is published.
+name: Windows
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: npm install (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Built on the runner itself: the repo's action allowlist has no artifact
+      # actions to carry a Linux-built tarball across. The package contents are
+      # platform-independent — a launcher plus optional runtime packages.
+      - name: Build npm package
+        run: bun packages/cli/build.ts
+
+      # The script takes Bun off the PATH it gives velloo, so the installed
+      # package still has to bring its own runtime.
+      - name: Smoke-test npm global install without scripts or Bun on PATH
+        run: bun scripts/package-smoke-test.ts
+
+  tests:
+    name: Test (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The arm64 runner spawns processes several times slower than Linux, so a
+      # CLI test that takes two seconds there brushes Bun's 5s default.
+      - name: Test
+        run: bun run test --timeout 20000

@@ -1,6 +1,7 @@
 # CI: typecheck + lint + tests on every push/PR, plus the canvas build and the
 # browser-backed suites in their own jobs so a slow or flaky dependency can't
-# hide a real failure in the fast one.
+# hide a real failure in the fast one. The suite and the npm package also run on
+# native Windows (windows.yml).
 name: CI
 
 permissions:
@@ -181,3 +182,7 @@ jobs:
       # that every css2 spec in it still resolves.
       - name: Check font catalogue
         run: bun run fonts:check
+
+  windows:
+    name: Windows
+    uses: ./.github/workflows/windows.yml

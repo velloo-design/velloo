@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { type DesignEntry, type DesignPickReason, type DesignSet, designsFor } from "../designs.ts";
 
 /**
@@ -144,7 +144,8 @@ export async function listDesigns(root: string): Promise<DesignListing[]> {
   const here = realOr(root);
   return usableDesigns(set).map((d) => ({
     name: d.name,
-    path: d.local || !set?.repo ? d.root : relative(set.repo.dir, d.root) || ".",
+    path:
+      d.local || !set?.repo ? d.root : relative(set.repo.dir, d.root).split(sep).join("/") || ".",
     current: realOr(d.root) === here,
     local: d.local !== null,
     library: defaultLibraryOf(d.root),

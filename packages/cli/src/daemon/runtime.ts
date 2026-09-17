@@ -296,6 +296,10 @@ function spawnDetached(
     stdin: "ignore",
     stdout: log,
     stderr: log,
+    // Windows puts an attached child in a job object that is killed when this
+    // process exits, so `velloo run --background` would take its canvas down
+    // with it. POSIX children already outlive an unref'd parent.
+    detached: process.platform === "win32",
   });
   // Let this process exit without waiting for — or killing — the daemon.
   proc.unref();

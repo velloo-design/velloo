@@ -281,7 +281,7 @@ export async function resolveDesign(
     )[0];
     const example =
       takesDesign && nearest
-        ? `, or pass a design folder (e.g. \`velloo ${cmd} ${designExample(opts, relative(cwd, nearest.root))}\`)`
+        ? `, or pass a design folder (e.g. \`velloo ${cmd} ${designExample(opts, relative(cwd, nearest.root).split(sep).join("/"))}\`)`
         : "";
     abort(
       `no velloo.json or design folder here. \`${shortPath(cwd, above.label)}\` lists ${above.designs.map((d) => JSON.stringify(d.name)).join(", ")}, and commands only read the directory they run in: run from \`${shortPath(cwd, above.dir)}\`${example}.`,
@@ -295,10 +295,14 @@ export async function resolveDesign(
   );
 }
 
-/** A path as short as it can be read: relative to `cwd` when that is shorter. */
+/**
+ * A path as short as it can be read: relative to `cwd` when that is shorter.
+ * A relative one is `/`-separated, which every shell velloo runs in accepts
+ * and none needs quoted.
+ */
 function shortPath(cwd: string, path: string): string {
   const rel = relative(cwd, path);
-  return rel !== "" && rel.length < path.length ? rel : path;
+  return rel !== "" && rel.length < path.length ? rel.split(sep).join("/") : path;
 }
 
 /** How to pass `design` to a command, quoted to run as printed. */
