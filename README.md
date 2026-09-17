@@ -152,7 +152,7 @@ required to design, export, or implement a screen.
 
 | | |
 |---|---|
-| **OS** | macOS (arm64, x64) and Linux (arm64, x64; glibc and musl). Windows via WSL. |
+| **OS** | macOS (arm64, x64), Linux (arm64, x64; glibc and musl), and Windows (x64, arm64) through npm. The standalone installer is macOS and Linux only. |
 | **Your app** | React. shadcn + Tailwind, MUI, Ant Design, Chakra, and no-library folders are supported. |
 | **Screenshots** | Optional headless Chromium, one command away (below). |
 
