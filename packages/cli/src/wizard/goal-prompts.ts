@@ -214,14 +214,19 @@ export async function promptSample(
   };
 }
 
-/** Blank mode: only the library question, defaulting to no-library. */
+/** Blank mode: detect an existing app's library, otherwise ask as before. */
 export async function buildBlankAnswers(
   ctx: WizardContext,
   folder: string,
   agentWiring: AgentWiring | undefined,
   defaultLibrary: LibraryId = "none",
 ): Promise<WizardAnswers | null> {
-  const library = await resolveLibrary(ctx, defaultLibrary);
+  const adopted = ctx.pinnedLibrary ? null : await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir);
+  if (adopted) {
+    note(describeDetected(adopted.detected), "Detected in your app");
+    note(`Using ${WIZARD_PROVIDERS[adopted.library].label}.`, "Library");
+  }
+  const library = adopted?.library ?? (await resolveLibrary(ctx, defaultLibrary));
   if (library === null) return null;
   const share = await promptShareAndFeedback(ctx.appRoot);
   if (share === null) return null;
@@ -230,14 +235,15 @@ export async function buildBlankAnswers(
   // No boards, neutral theme, default stack.
   return {
     appRoot: ctx.appRoot,
-    scanRoot: ctx.appRoot,
+    scanRoot: adopted?.scanRoot ?? ctx.appRoot,
     folder,
     library,
     source: WIZARD_PROVIDERS[library].defaultSource,
     componentsRelative: ctx.inheritComponentsDir ?? DEFAULT_COMPONENTS_DIR,
     initialContent: "blank",
     themePreset: "zinc",
-    stack: DEFAULT_STACK_ID,
+    stack: adopted?.stack ?? DEFAULT_STACK_ID,
+    ...(adopted ? { detected: adopted.detected } : {}),
     ...(agentWiring ? { agentWiring } : {}),
     ...share,
   };

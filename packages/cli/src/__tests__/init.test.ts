@@ -458,6 +458,52 @@ describe("velloo init", () => {
     expect(screenFiles).toContain("settings-profile.json");
   }, 30_000);
 
+  test("--start=scan creates a root screen for a plain Vite SPA", async () => {
+    const app = join(tmp, "vite-spa");
+    await mkdir(join(app, "src"), { recursive: true });
+    await writeFile(
+      join(app, "package.json"),
+      JSON.stringify({
+        dependencies: { react: "19.2.6", "@mantine/core": "^8.0.0" },
+        devDependencies: { vite: "^7.0.0" },
+      }),
+    );
+    await writeFile(
+      join(app, "index.html"),
+      '<div id="root"></div><script type="module" src="/src/main.jsx"></script>',
+    );
+    await writeFile(join(app, "src", "main.jsx"), 'import App from "./App.jsx";');
+
+    const { exitCode, stderr } = await runInit(app, ["--start=scan"]);
+    if (exitCode !== 0) throw new Error(stderr);
+
+    expect(await jsonFiles(join(designDir(app), "screens"))).toEqual(["index.json"]);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(designDir(app), ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("none");
+  }, 30_000);
+
+  test("blank init detects an installed unsupported UI framework without creating screens", async () => {
+    const app = join(tmp, "mantine-blank");
+    await mkdir(app, { recursive: true });
+    await writeFile(
+      join(app, "package.json"),
+      JSON.stringify({ dependencies: { react: "19.2.6", "@mantine/core": "^8.0.0" } }),
+    );
+
+    const { exitCode, stderr } = await runInit(app, ["--initial-content=blank"]);
+    if (exitCode !== 0) throw new Error(stderr);
+
+    const design = designDir(app);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("none");
+    expect(await jsonFiles(join(design, "screens"))).toEqual([]);
+    expect(await jsonFiles(join(design, "boards"))).toEqual([]);
+  }, 30_000);
+
   test("--start=scan degrades to a true blank when no routes are detectable", async () => {
     const app = join(tmp, "empty-app");
     await mkdir(app, { recursive: true });
