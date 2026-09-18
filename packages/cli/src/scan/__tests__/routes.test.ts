@@ -111,3 +111,44 @@ describe("scanAppRoutes — Nuxt", () => {
     expect(result.routes.map((r) => r.routePath).sort()).toEqual(["/", "/about", "/users/[id]"]);
   });
 });
+
+describe("scanAppRoutes — Vite SPA", () => {
+  test("treats the module entry in index.html as the root route", async () => {
+    await writeFile(
+      join(appRoot, "package.json"),
+      JSON.stringify({ devDependencies: { vite: "^7.0.0" }, dependencies: { react: "^19.0.0" } }),
+      "utf8",
+    );
+    await write(
+      "index.html",
+      '<!doctype html><div id="root"></div><script type="module" src="/src/main.jsx"></script>',
+    );
+    await write("src/main.jsx", 'import App from "./App.jsx";');
+
+    const result = await scanAppRoutes(appRoot);
+
+    expect(result.framework).toBe("vite");
+    expect(result.routes).toEqual([
+      {
+        id: "index",
+        name: "Home",
+        routePath: "/",
+        sourceFile: join(appRoot, "src/main.jsx"),
+      },
+    ]);
+  });
+
+  test("does not invent a route for a Vite library without index.html", async () => {
+    await writeFile(
+      join(appRoot, "package.json"),
+      JSON.stringify({ devDependencies: { vite: "^7.0.0" }, dependencies: { react: "^19.0.0" } }),
+      "utf8",
+    );
+    await write("src/main.ts", "export const libraryEntry = true;");
+
+    const result = await scanAppRoutes(appRoot);
+
+    expect(result.framework).toBe("vite");
+    expect(result.routes).toEqual([]);
+  });
+});

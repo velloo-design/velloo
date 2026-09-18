@@ -273,28 +273,32 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     console.log(`velloo: app root ${answers.appRoot}`);
   }
 
-  // Non-interactive scan / redesign still wants host detection.
-  if (
-    (answers.initialContent === "scan" || answers.initialContent === "redesign-screen") &&
-    !answers.detected
-  ) {
+  // Non-interactive host-reading modes still want dependency detection. Blank
+  // deliberately creates no screens, but it must adopt the app's component
+  // framework just like scan/redesign instead of silently defaulting to
+  // shadcn in an existing Mantine (or other supported/unsupported) app.
+  const scansRoutes =
+    answers.initialContent === "scan" || answers.initialContent === "redesign-screen";
+  if ((scansRoutes || answers.initialContent === "blank") && !answers.detected) {
     const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
     const primary = scanned.apps[0];
     if (primary) answers.scanRoot = primary.dir;
-    if (scanned.apps.length > 1) {
+    if (scansRoutes && scanned.apps.length > 1) {
       console.log(
         pc.dim(
           `  Found ${scanned.apps.length} apps (${scanned.apps.map((a) => a.rel || ".").join(", ")}) — one board per app.`,
         ),
       );
-    } else if (primary?.rel && primary.rel !== ".") {
+    } else if (scansRoutes && primary?.rel && primary.rel !== ".") {
       console.log(pc.dim(`  Scanning UI in ${primary.rel} (app root has no package.json).`));
     }
-    answers.selectedRoutes =
-      answers.initialContent === "redesign-screen" ? scanned.routes.slice(0, 1) : scanned.routes;
-    answers.agentPicksFirst = answers.initialContent === "scan";
-    if (answers.initialContent === "redesign-screen" && scanned.routes[0]) {
-      answers.screenName = answers.screenName ?? scanned.routes[0].name;
+    if (scansRoutes) {
+      answers.selectedRoutes =
+        answers.initialContent === "redesign-screen" ? scanned.routes.slice(0, 1) : scanned.routes;
+      answers.agentPicksFirst = answers.initialContent === "scan";
+      if (answers.initialContent === "redesign-screen" && scanned.routes[0]) {
+        answers.screenName = answers.screenName ?? scanned.routes[0].name;
+      }
     }
     answers.detected = detectHost(answers.scanRoot);
     // The "existing project" flow: when the user didn't pin a library, adopt
