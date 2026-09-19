@@ -26,7 +26,9 @@ export interface DiscoverOptions {
    * Modules a framework adapter already owns (the shadcn `ui/` dir,
    * `@mui/material`): they are the provider's catalog, not the repository's.
    */
-  owned?: ((specifier: string, resolved: string | null) => boolean) | undefined;
+  owned?:
+    | ((specifier: string, resolved: string | null, exportName?: string) => boolean)
+    | undefined;
   maxFiles?: number | undefined;
 }
 
@@ -208,7 +210,7 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
         if (isBuiltin(packageName)) continue;
       } else if (!walkable(binding.resolved)) continue;
       if (excluded(binding.specifier, binding.resolved)) continue;
-      if (opts.owned?.(binding.specifier, binding.resolved)) continue;
+      if (opts.owned?.(binding.specifier, binding.resolved, root)) continue;
 
       let exportName = binding.imported;
       let memberPath = members;

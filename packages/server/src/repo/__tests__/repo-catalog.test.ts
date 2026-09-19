@@ -149,19 +149,27 @@ describe("discoverRepoComponents on a custom component system", () => {
         'import { Slot } from "@radix-ui/react-slot";\nexport function Button() {\n  return <Slot />;\n}\n',
       );
       await writeFile(
+        join(root, "src/ui/panel.tsx"),
+        "export function Panel() {\n  return null;\n}\n",
+      );
+      await writeFile(
         join(root, "src/main.tsx"),
-        'import { Button } from "./ui/button";\nimport { Slot, MAX } from "@radix-ui/react-slot";\nexport default function App() {\n  return <Slot><Button size={MAX} /></Slot>;\n}\n',
+        'import { Button } from "./ui/button";\nimport { Panel } from "./ui/panel";\nimport { Slot, MAX } from "@radix-ui/react-slot";\nexport default function App() {\n  return <Slot><Button size={MAX} /><Panel /></Slot>;\n}\n',
       );
       const result = await discoverRepoComponents({
         hostRoot: root,
         aliases: [],
-        owned: (_specifier, resolved) => resolved?.startsWith(join(root, "src/ui")) === true,
+        // The adapter owns the dir, but supplies only `Button`.
+        owned: (_specifier, resolved, exportName) =>
+          resolved?.startsWith(join(root, "src/ui")) === true &&
+          (exportName === undefined || exportName === "Button"),
       });
       const slot = result.components.find((c) => c.name === "Slot");
-      // `size={MAX}` passes a constant, not a component.
-      expect(result.components.map((c) => c.name)).toEqual(["Slot"]);
+      // `size={MAX}` passes a constant, not a component. `Panel` lives beside
+      // the owned `Button` but is the app's own, so it stays.
+      expect(result.components.map((c) => c.name).sort()).toEqual(["Panel", "Slot"]);
       // Only the app's own use counts, not the owned button's.
-      expect(slot?.usages.map((u) => u.at)).toEqual(["src/main.tsx:4"]);
+      expect(slot?.usages.map((u) => u.at)).toEqual(["src/main.tsx:5"]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -197,6 +205,10 @@ describe("RepoComponents catalog", () => {
       serializable: false,
     });
     expect(statCard?.styleProps).toEqual(["className"]);
+    // `key` is React's, even though the Badge call site passes it.
+    const badge = catalog.byId.get("Badge");
+    expect(badge?.props.map((p) => p.name)).not.toContain("key");
+    expect(badge?.states[0]?.props).not.toHaveProperty("key");
     // Stories first (args merged over the meta's; code args are named, not run),
     // then the app's own call sites.
     expect(statCard?.states.map((s) => [s.name, s.source])).toEqual([

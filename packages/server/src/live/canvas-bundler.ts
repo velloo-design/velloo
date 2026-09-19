@@ -171,7 +171,7 @@ export class CanvasBundler {
       hostRoot,
       scopedSpec,
       componentIds,
-      primary?.aliases ?? aliasPairs(hostApp),
+      primary?.aliases ?? aliasPairs(hostApp, hostRoot),
       this.minify,
       repo,
     ).then(

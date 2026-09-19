@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -45,13 +46,64 @@ export function hostAppRootFrom(folderRoot: string, hostApp: HostApp | undefined
   return resolveAppPath(folderRoot, hostApp.root);
 }
 
-/** Normalize a tsconfig-style alias map (`{ "@/*": "src/*" }`) to prefix pairs. */
-export function aliasPairs(hostApp: HostApp | undefined): { from: string; to: string }[] {
-  const raw = hostApp?.aliases ?? { "@/*": "*" };
-  return Object.entries(raw).map(([pattern, target]) => ({
+/**
+ * Normalize a tsconfig-style alias map (`{ "@/*": "src/*" }`) to prefix pairs.
+ * With a host root, the app's own tsconfig `paths` fill in and correct them:
+ * the recorded map is a guess made at `init` from where components were found,
+ * and an app whose alias points elsewhere (`"@/*": ["./*"]`, no `src/`) would
+ * otherwise resolve nothing — its components silently missing from the canvas.
+ */
+export function aliasPairs(
+  hostApp: HostApp | undefined,
+  hostRoot?: string,
+): { from: string; to: string }[] {
+  const pairs = Object.entries(hostApp?.aliases ?? { "@/*": "*" }).map(([pattern, target]) => ({
     from: pattern.replace(/\*$/, ""),
     to: target.replace(/\*$/, ""),
   }));
+  if (hostRoot === undefined) return pairs;
+  const declared = tsconfigAliases(hostRoot);
+  const kept = pairs.filter(
+    (pair) =>
+      !declared.some((other) => other.from === pair.from) &&
+      (pair.to === "" || existsSync(join(hostRoot, pair.to))),
+  );
+  return [...kept, ...declared];
+}
+
+/** `compilerOptions.paths` (with `baseUrl`) from the app's tsconfig or jsconfig. */
+function tsconfigAliases(hostRoot: string): { from: string; to: string }[] {
+  for (const name of ["tsconfig.json", "jsconfig.json"]) {
+    const file = join(hostRoot, name);
+    if (!existsSync(file)) continue;
+    try {
+      const config = parseJsonc(readFileSync(file, "utf8")) as {
+        compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> };
+      };
+      const base = (config.compilerOptions?.baseUrl ?? ".").replace(/^\.\//, "").replace(/\/$/, "");
+      const out: { from: string; to: string }[] = [];
+      for (const [pattern, targets] of Object.entries(config.compilerOptions?.paths ?? {})) {
+        const target = targets[0];
+        if (!target) continue;
+        const to = `${base && base !== "." ? `${base}/` : ""}${target.replace(/^\.\//, "").replace(/\*$/, "")}`;
+        out.push({ from: pattern.replace(/\*$/, ""), to });
+      }
+      if (out.length > 0) return out;
+    } catch {
+      // A tsconfig we can't read is no worse than none.
+    }
+  }
+  return [];
+}
+
+/** Comments and trailing commas are legal in a tsconfig; JSON.parse doesn't take them. */
+function parseJsonc(text: string): unknown {
+  const stripped = text
+    .replace(/\\"|"(?:\\"|[^"])*"|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, (match, comment) =>
+      comment ? " " : match,
+    )
+    .replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(stripped);
 }
 
 /** Rewrite an aliased specifier to a host-root-relative path, or null if no alias matches. */

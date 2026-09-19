@@ -11,7 +11,9 @@ export function App() {
       <StatCard label="Uptime" value="99.9%" tone="positive" />
       <Panel>
         <Panel.Header title="Services" />
-        <Badge variant="outline">Healthy</Badge>
+        <Badge key="b" variant="outline">
+          Healthy
+        </Badge>
       </Panel>
       <Steps active={1}>
         <Steps.Step label="Build" />

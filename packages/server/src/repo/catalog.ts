@@ -97,7 +97,9 @@ export interface RepoComponentsOptions {
   /** Ids already taken by the default provider, helpers and extensions. */
   reservedIds: () => Set<string>;
   /** Modules a framework adapter owns (see `DiscoverOptions.owned`). */
-  owned?: ((specifier: string, resolved: string | null) => boolean) | undefined;
+  owned?:
+    | ((specifier: string, resolved: string | null, exportName?: string) => boolean)
+    | undefined;
 }
 
 const OVERRIDES_FILE = "repo-components.json";
@@ -164,11 +166,8 @@ export class RepoComponents {
   } {
     const found = this.apps().find((entry) => entry.app === app) ?? this.apps()[0];
     const hostApp = found?.hostApp;
-    return {
-      hostRoot: found?.hostRoot ?? hostAppRootFrom(this.opts.folderRoot, undefined),
-      hostApp,
-      aliases: aliasPairs(hostApp),
-    };
+    const hostRoot = found?.hostRoot ?? hostAppRootFrom(this.opts.folderRoot, undefined);
+    return { hostRoot, hostApp, aliases: aliasPairs(hostApp, hostRoot) };
   }
 
   recipes(app: string | undefined): FrameworkRecipe[] {
@@ -210,7 +209,7 @@ export class RepoComponents {
 
     for (const { app, hostApp, hostRoot } of this.apps()) {
       if (!existsSync(hostRoot)) continue;
-      const aliases = aliasPairs(hostApp);
+      const aliases = aliasPairs(hostApp, hostRoot);
       const discovery = await discoverRepoComponents({
         hostRoot,
         aliases,
@@ -422,6 +421,9 @@ function keyOf(identity: RepoComponentRef): string {
   return `${identity.importPath}#${identity.exportName}${identity.member ? `.${identity.member}` : ""}`;
 }
 
+/** React's, not the component's — seen at call sites, never settable in a design. */
+const REACT_OWN = new Set(["key", "ref"]);
+
 function entryFor(
   component: DiscoveredComponent,
   index: DeclarationIndex,
@@ -439,11 +441,11 @@ function entryFor(
   }
   for (const usage of component.usages) {
     for (const [name, value] of Object.entries(usage.props)) {
-      if (byName.has(name)) continue;
+      if (byName.has(name) || REACT_OWN.has(name)) continue;
       byName.set(name, observedProp(name, value));
     }
     for (const name of usage.expressions) {
-      if (byName.has(name)) continue;
+      if (byName.has(name) || REACT_OWN.has(name)) continue;
       byName.set(name, {
         name,
         type: "unknown",
@@ -467,7 +469,12 @@ function entryFor(
       .map(
         (usage): PreviewState => ({
           name: `As used at ${usage.at}`,
-          props: { ...usage.props, ...(usage.text ? { children: usage.text } : {}) },
+          props: {
+            ...Object.fromEntries(
+              Object.entries(usage.props).filter(([name]) => !REACT_OWN.has(name)),
+            ),
+            ...(usage.text ? { children: usage.text } : {}),
+          },
           source: "usage",
           at: usage.at,
           ...(usage.expressions.length > 0 ? { dropped: usage.expressions } : {}),

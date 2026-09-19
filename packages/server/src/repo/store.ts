@@ -22,15 +22,22 @@ export function createRepoComponents(
         ...adapters.flatMap((adapter) => Object.keys(adapter.registry)),
         ...Object.keys(folder.config.extensions ?? {}),
       ]),
-    owned: (specifier, resolved) => {
+    // An adapter owns a module, but only the components it actually supplies:
+    // an app's own `Panel` living in the shadcn `ui/` dir beside `Card` is the
+    // app's, and is exactly what an agent would otherwise rebuild from stock
+    // primitives. With no name (following an import), the module is its own.
+    owned: (specifier, resolved, exportName) => {
       const pkg = packageOf(specifier);
       for (const adapter of adapters) {
-        if (adapter.ownedModules?.packages?.includes(pkg)) return true;
-        if (!resolved) continue;
-        for (const dir of adapter.ownedModules?.dirs?.() ?? []) {
-          const root = resolve(dir);
-          if (resolved === root || resolved.startsWith(root + sep)) return true;
-        }
+        const inModule =
+          adapter.ownedModules?.packages?.includes(pkg) === true ||
+          (resolved !== null &&
+            (adapter.ownedModules?.dirs?.() ?? []).some((dir) => {
+              const root = resolve(dir);
+              return resolved === root || resolved.startsWith(root + sep);
+            }));
+        if (!inModule) continue;
+        if (exportName === undefined || exportName in adapter.registry) return true;
       }
       return false;
     },
