@@ -37,13 +37,18 @@ export async function addSnippet(
   const id = args.id ?? slugify(args.name, "snippet");
   if (ctx.folder.snippets.has(id)) return err(snippetIdConflict(id));
 
-  const tree = await resolveComponentRefs(ctx, args.tree, null);
-  if (!tree.ok) return err(tree.error);
+  // Params too: a `node` param's default carries a whole subtree.
+  const checked = await resolveComponentRefs(
+    ctx,
+    { tree: args.tree, params: args.params ?? [] },
+    null,
+  );
+  if (!checked.ok) return err(checked.error);
   const snippet: Snippet = {
     id,
     name: args.name,
-    params: args.params ?? [],
-    tree: tree.value,
+    params: checked.value.params,
+    tree: checked.value.tree,
   };
 
   // Detect cycles against the existing registry plus the snippet we're about

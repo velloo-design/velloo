@@ -151,6 +151,16 @@ describe("repository components through compose, mutations and emit", () => {
     expect(added.value.snippet.tree).toMatchObject({
       children: [{ $ref: "Badge", $repo: { importPath: "./src/components", exportName: "Badge" } }],
     });
+    // A `node` param's default holds a subtree too.
+    const defaulted = await addSnippet(t.ctx, {
+      name: "Defaulted row",
+      params: [{ name: "icon", type: "node", default: { $ref: "Badge" } }],
+      tree: { $ref: "Box", children: [{ $param: "icon" }] },
+    });
+    if (!defaulted.ok) throw new Error(JSON.stringify(defaulted.error));
+    expect(defaulted.value.snippet.params[0]?.default).toMatchObject({
+      $repo: { exportName: "Badge" },
+    });
     const unknown = await addSnippet(t.ctx, {
       name: "Broken row",
       tree: { $ref: "Box", children: [{ $ref: "ArrowUpward" }] },
