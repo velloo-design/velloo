@@ -4,7 +4,7 @@ import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { isComponentNode, repoKey } from "@velloo/schema";
 import { compileRestrictedJsx } from "../../mcp/restricted-jsx.ts";
 import { addNode, addSnippet, moveNode, updateProps } from "../../mutations/index.ts";
-import { propWarnings } from "../../mutations/prop-warnings.ts";
+import { propWarnings, propWarningsForTree } from "../../mutations/prop-warnings.ts";
 import { createUndoRouter } from "../../routes/undo.ts";
 import { designConfig, type TestContext, testContext } from "../../testing/design-folder.ts";
 import { createRepoComponents } from "../store.ts";
@@ -138,6 +138,19 @@ describe("repository components through compose, mutations and emit", () => {
       expect.stringContaining('StatCard: "onSelect"'),
     ]);
     expect(repoKey(repo)).toBe("repo::./src/components#StatCard");
+  });
+
+  test("children given to a component that declares none are flagged", async () => {
+    const screen = t.ctx.folder.screens.get("home");
+    if (!screen) throw new Error("no screen");
+    const card = { importPath: "./src/components", exportName: "StatCard" };
+    const panel = { importPath: "./src/components", exportName: "Panel" };
+    const warnings = await propWarningsForTree(t.ctx, screen, {
+      $ref: "Panel",
+      $repo: panel,
+      children: [{ $ref: "StatCard", $repo: card, children: [{ $ref: "Box" }] }],
+    });
+    expect(warnings).toEqual([expect.stringContaining("[0] StatCard doesn't take children")]);
   });
 
   test("emit_code prints the app's components as themselves, with exact imports", async () => {

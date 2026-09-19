@@ -517,7 +517,7 @@ function repoInstruction(ctx: MutationContext): string[] {
   if (!existsSync(join(hostRoot, "package.json"))) return [];
   const recipes = repo.recipes(undefined);
   return [
-    "**The app's own components are placeable.** `list_components` shelves them first, under Repo, from what the app's routes render. Compose them by id (`<Tabs>`, `<Tabs.List>`; a name that collides with a Velloo primitive is qualified, e.g. `<Mantine.Button>`) rather than rebuilding them from primitives. They render for real inside the folder's preview entry — run `preview_status` once before designing; `set_preview_entry` fixes a missing provider or stylesheet. Style one through the props it declares; `emit_code` returns their exact `repoImports`.",
+    "**The app's own components are placeable.** `list_components` shelves them first, under Repo, from what the app's routes render. Compose them by id (`<Tabs>`, `<Tabs.List>`; a name that collides with a Velloo primitive is qualified, e.g. `<Mantine.Button>`) rather than rebuilding them from primitives. They render for real inside the folder's preview entry — run `preview_status` once before designing; `set_preview_entry` fixes a missing provider or stylesheet. Style one through the props it declares, and fill a `slot` prop with an element (`leftSection={<IconBolt />}`); `emit_code` returns their exact `repoImports`.",
     ...recipes.flatMap((recipe) => recipe.notes),
     "",
   ];

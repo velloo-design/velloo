@@ -23,7 +23,7 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
     "compose",
     {
       description:
-        "Append one subtree or replace a screen tree using safe restricted JSX. Tags resolve automatically across the screen's library, extensions, PascalCase snippet names, and the app's own components (list_components' repo catalog, e.g. `Tabs.List`). Supports nested tags, literal text, quoted props, and JSON literals in braces; no JavaScript executes. Use `vellooId` for a stable @id. Errors include line/column. Missing host-app packages never block design and are reported later by `emit_code.componentsToInstall`.",
+        "Append one subtree or replace a screen tree using safe restricted JSX. Tags resolve automatically across the screen's library, extensions, PascalCase snippet names, and the app's own components (list_components' repo catalog, e.g. `Tabs.List`). Supports nested tags, literal text, quoted props, JSON literals in braces, and an element as a prop (`leftSection={<Icon name=\"bolt\" />}`); no JavaScript executes. Use `vellooId` for a stable @id. Errors include line/column. Missing host-app packages never block design and are reported later by `emit_code.componentsToInstall`.",
       inputSchema: {
         screenId: z.string(),
         mode: z.enum(["append", "replace"]),

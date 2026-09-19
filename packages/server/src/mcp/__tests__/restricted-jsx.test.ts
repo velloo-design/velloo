@@ -111,6 +111,38 @@ describe("restricted JSX compiler", () => {
     });
   });
 
+  test("an element passed as a prop compiles to a node-valued prop", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Button icon={ <Icon name="bolt" /> } badge={<FeatureCard title="New" />}>Go</Button>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props).toMatchObject({
+      icon: { $ref: "Icon", props: { name: "bolt" } },
+      badge: { $snippet: "feature-card", args: { title: "New" } },
+      children: "Go",
+    });
+    // A literal node is held to the same namespace as a tag.
+    const literal = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Button icon={{"$ref": "Iconn"}}>Go</Button>',
+    );
+    expect(literal.ok).toBe(false);
+    if (!literal.ok) expect(literal.issues[0]?.message).toContain("in a prop value");
+    // Still data only: an element's own props are held to the same rules.
+    const executable = await compileRestrictedJsx(
+      ctx,
+      screen,
+      "<Button icon={<Icon onClick={() => x()} />}>Go</Button>",
+    );
+    expect(executable.ok).toBe(false);
+  });
+
   test("never executes expressions and locates the error", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");

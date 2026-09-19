@@ -33,6 +33,11 @@ interface Element {
   offset: number;
 }
 
+/** `icon={<IconBolt />}` — an element passed as a prop, compiled to a node. */
+class ElementValue {
+  constructor(readonly element: Element) {}
+}
+
 interface TextNode {
   text: string;
   offset: number;
@@ -315,6 +320,14 @@ class Parser {
     }
     const start = this.pos;
     this.pos += 1;
+    this.skipWhitespace();
+    if (this.peek("<")) {
+      const element = this.element();
+      this.skipWhitespace();
+      this.expect("}");
+      return new ElementValue(element);
+    }
+    this.pos = start + 1;
     const contentStart = this.pos;
     let depth = 1;
     let quoteChar: string | null = null;
@@ -339,7 +352,7 @@ class Parser {
             return new DataLiteralParser(raw).parse();
           } catch {
             throw new ParseFailure(
-              "Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed); identifiers as values, calls, template strings, spreads, and functions are not executed",
+              'Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed) or a single element (`icon={<Icon name="bolt" />}`); identifiers as values, calls, template strings, spreads, and functions are not executed',
               contentStart,
             );
           }
@@ -548,6 +561,23 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
     };
   }
 
+  // A slot prop's element compiles like a child: a component, snippet or text.
+  // A node written as a JSON literal instead is held to the same namespace, so
+  // an unresolvable one fails here rather than taking the screen's render down.
+  for (const attr of attrs.values()) {
+    if (attr.value instanceof ElementValue) {
+      const compiled = compileElement(attr.value.element, ctx);
+      if (!compiled.ok) return compiled;
+      attr.value = compiled.node;
+      continue;
+    }
+    const resolved = resolveLiteralNodes(attr.value, ctx);
+    if (typeof resolved === "string") {
+      return { ok: false, issues: [issueAt(ctx.source, attr.offset, resolved)] };
+    }
+    attr.value = resolved.value;
+  }
+
   if (isComponent) {
     const props = Object.fromEntries([...attrs].map(([name, attr]) => [name, attr.value]));
     if (text) {
@@ -674,6 +704,33 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       ),
     ],
   };
+}
+
+/**
+ * A prop value that is a literal node (`{"$ref": "IconSearch"}`), or an array
+ * of them: attach the repo identity its name resolves to, or say why it can't
+ * render. Anything else passes through untouched.
+ */
+function resolveLiteralNodes(value: unknown, ctx: CompileContext): { value: unknown } | string {
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    for (const item of value) {
+      const resolved = resolveLiteralNodes(item, ctx);
+      if (typeof resolved === "string") return resolved;
+      out.push(resolved.value);
+    }
+    return { value: out };
+  }
+  if (!value || typeof value !== "object") return { value };
+  const node = value as Record<string, unknown>;
+  const ref = node.$ref;
+  if (typeof ref !== "string" || node.$repo !== undefined || ctx.components.has(ref)) {
+    return { value };
+  }
+  const entry = ctx.repo.get(ref);
+  if (entry) return { value: { ...node, $ref: entry.name, $repo: entry.identity } };
+  const suggestions = nearestRefs(ref, [...ctx.components, ...ctx.repo.keys()]);
+  return `Unknown component "${ref}" in a prop value${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""} — or pass it as an element: prop={<${suggestions[0] ?? ref} />}`;
 }
 
 /** Parse and compile non-executing JSX against one screen's live namespace. */

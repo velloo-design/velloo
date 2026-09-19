@@ -125,6 +125,22 @@ export async function propWarnings(
   return warnings;
 }
 
+/**
+ * Children given to an app component that declares props but not `children`
+ * (a `TextInput` wraps a void `<input>`, which throws on them). Only when props
+ * are known: a component that spreads its props would otherwise read as one.
+ */
+async function repoChildrenWarning(
+  ctx: MutationContext,
+  ref: string,
+  repo: RepoComponentRef,
+): Promise<string | null> {
+  const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  const entry = catalog?.byKey.get(repoKey(repo));
+  if (!entry || entry.acceptsChildren || entry.props.length === 0) return null;
+  return `${ref} doesn't take children; it may drop or throw on them. Pass content through its props instead.`;
+}
+
 /** Walk a subtree, collecting prop warnings for every component node. */
 export async function propWarningsForTree(
   ctx: MutationContext,
@@ -135,10 +151,15 @@ export async function propWarningsForTree(
   const out: string[] = [];
   async function walk(node: Node, path: number[]): Promise<void> {
     if (!isComponentNode(node)) return;
+    const prefix = path.length > 0 ? `[${path.join(".")}] ` : "";
     if (node.props) {
       const w = await propWarnings(ctx, screen, node.$ref, node.props, node.$repo);
-      const prefix = path.length > 0 ? `[${path.join(".")}] ` : "";
       out.push(...w.map((msg) => `${prefix}${msg}`));
+    }
+    const given = (node.children?.length ?? 0) > 0 || node.props?.children !== undefined;
+    if (node.$repo && given) {
+      const w = await repoChildrenWarning(ctx, node.$ref, node.$repo);
+      if (w) out.push(`${prefix}${w}`);
     }
     for (let i = 0; i < (node.children?.length ?? 0); i++) {
       const child = node.children?.[i];
