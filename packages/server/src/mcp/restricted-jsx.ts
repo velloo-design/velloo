@@ -351,8 +351,13 @@ class Parser {
           try {
             return new DataLiteralParser(raw).parse();
           } catch {
+            // A bare PascalCase identifier is a component *type* — a polymorphic
+            // prop (`component={ScrollArea}`, `as={Link}`), which a design can't
+            // hold. Naming that case beats restating the general rule.
             throw new ParseFailure(
-              'Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed) or a single element (`icon={<Icon name="bolt" />}`); identifiers as values, calls, template strings, spreads, and functions are not executed',
+              /^[A-Z][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(raw)
+                ? `"${raw}" is a component type, which a design can't hold. Pass an element instead (\`icon={<${raw} />}\`), or nest the content inside <${raw}>.`
+                : 'Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed) or a single element (`icon={<Icon name="bolt" />}`); identifiers as values, calls, template strings, spreads, and functions are not executed',
               contentStart,
             );
           }
