@@ -40,6 +40,16 @@ export interface BundleEntry {
 
 export const EMPTY_MODULE = "export const components = {};\n";
 
+/**
+ * `process` for a browser bundle. `define` only rewrites the exact
+ * `process.env.NODE_ENV` it is given, and app code reads other keys —
+ * `next/link` reads several while its module loads, which throws a
+ * ReferenceError that takes the whole mount down. A banner runs before any
+ * bundled module body, and carries no values from this machine's environment.
+ */
+export const PROCESS_SHIM =
+  'globalThis.process ??= { env: { NODE_ENV: "production" }, browser: true, platform: "browser", version: "", versions: {}, argv: [], cwd: function () { return "/"; } };\n';
+
 /** Resolve the host app root: explicit config, else the design folder's parent. */
 export function hostAppRootFrom(folderRoot: string, hostApp: HostApp | undefined): string {
   if (!hostApp?.root) return localDesignOf(folderRoot)?.appRoot ?? resolve(folderRoot, "..");
@@ -218,6 +228,7 @@ export async function bundleComponents(opts: {
       minify,
       sourcemap: "none",
       define: { "process.env.NODE_ENV": '"production"' },
+      banner: PROCESS_SHIM,
       plugins: [aliasPlugin(hostRoot, aliases)],
     });
   } catch (err) {

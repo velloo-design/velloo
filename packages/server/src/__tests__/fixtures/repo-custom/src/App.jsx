@@ -1,4 +1,4 @@
-import { Badge, Panel, StatCard, Steps } from "./components";
+import { Badge, EnvBadge, Panel, StatCard, Steps } from "./components";
 import { Broken } from "./components/broken";
 import Hero from "./components/hero";
 import { ThemedButton } from "./components/theme";
@@ -19,6 +19,7 @@ export function App() {
         <Steps.Step label="Build" />
         <Steps.Step label="Ship" />
       </Steps>
+      <EnvBadge />
       <ThemedButton>Deploy</ThemedButton>
       <Broken />
       {String(renderReport)}

@@ -17,7 +17,13 @@ import type { PreviewEntry } from "../repo/preview.ts";
 import type { FrameworkRecipe } from "../repo/recipes/index.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
 import { scanModule } from "../repo/source-scan.ts";
-import { aliasPlugin, type BundleError, type BundleResult, resolveImport } from "./bundle-core.ts";
+import {
+  aliasPlugin,
+  type BundleError,
+  type BundleResult,
+  PROCESS_SHIM,
+  resolveImport,
+} from "./bundle-core.ts";
 
 export type { CanvasBundleSpec };
 
@@ -272,6 +278,7 @@ export async function buildCanvasBundle(
         // throwing without handing any private variable to the browser.
         "import.meta.env": '{"MODE":"production","DEV":false,"PROD":true,"SSR":false}',
       },
+      banner: PROCESS_SHIM,
       plugins: [...plugins, ...previewPlugins(previews, repo)],
     });
   };

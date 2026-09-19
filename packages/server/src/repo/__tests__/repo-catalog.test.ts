@@ -77,6 +77,7 @@ describe("discoverRepoComponents on a custom component system", () => {
       "App",
       "Badge",
       "Broken",
+      "EnvBadge",
       "Hero",
       "Panel",
       "Panel.Header",

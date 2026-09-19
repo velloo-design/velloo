@@ -70,6 +70,7 @@ const screen: Screen = {
           },
         ],
       },
+      { $ref: "EnvBadge", $repo: repo("EnvBadge") },
       {
         $ref: "ThemedButton",
         $repo: { importPath: "./src/components/theme", exportName: "ThemedButton" },
@@ -167,6 +168,7 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
         steps: [...(root?.querySelectorAll("ol.fx-steps li") ?? [])].map((li) =>
           li.getAttribute("data-step-state"),
         ),
+        envMode: root?.querySelector("[data-env-mode]")?.getAttribute("data-env-mode") ?? null,
         proxy: root?.textContent?.includes("Broken proxy") ?? false,
         accent: getComputedStyle(document.documentElement)
           .getPropertyValue("--fixture-accent")
@@ -191,6 +193,8 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
     expect(state.button).toBe("violet");
     // A parent that clones its children reaches the real components.
     expect(state.steps).toEqual(["done", "todo"]);
+    // A module reading `process.env` as it loads doesn't take the mount down.
+    expect(state.envMode).toBe("unset");
     expect(state.accent).toBe("#6d28d9");
     // The broken component stands aside for its proxy; its neighbours stay exact.
     expect(state.proxy).toBe(true);
@@ -220,7 +224,7 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
       const emitted = await client.callTool({ name: "emit_code", arguments: { screenId: "home" } });
       const ir = emitted.structuredContent as { repoImports: unknown[]; jsx: string };
       expect(ir.repoImports).toEqual([
-        { from: "./src/components", named: ["Badge", "Panel", "StatCard", "Steps"] },
+        { from: "./src/components", named: ["Badge", "EnvBadge", "Panel", "StatCard", "Steps"] },
         { from: "./src/components/broken", named: ["Broken"] },
         { from: "./src/components/theme", named: ["ThemedButton"] },
       ]);
