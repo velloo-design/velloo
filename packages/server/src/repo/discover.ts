@@ -105,6 +105,10 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
     SCRIPT_EXTS.has(extname(file)) &&
     !rel(file).startsWith("..") &&
     !IGNORED_DIRS.test(rel(file));
+  // An adapter-owned file (a shadcn `ui/` component) is the provider's: what it
+  // renders internally (Radix parts, icons) is not something the app renders.
+  const followable = (specifier: string, file: string | null): file is string =>
+    walkable(file) && !opts.owned?.(specifier, file);
   const excluded = (specifier: string, file: string | null): boolean =>
     (opts.exclude ?? []).some(
       (prefix) => specifier.startsWith(prefix) || (file !== null && rel(file).startsWith(prefix)),
@@ -146,11 +150,11 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
       if (decl.sideEffect) {
         if (STYLE_EXTS.test(decl.specifier)) {
           globalStyles.push({ specifier: decl.specifier, at: `${rel(file)}:${decl.line}` });
-        } else if (walkable(resolved)) queue.push(resolved);
+        } else if (followable(decl.specifier, resolved)) queue.push(resolved);
         continue;
       }
       if (decl.typeOnly) continue;
-      if (walkable(resolved)) queue.push(resolved);
+      if (followable(decl.specifier, resolved)) queue.push(resolved);
       for (const binding of decl.bindings) {
         bindings.set(binding.local, {
           specifier: decl.specifier,
@@ -163,7 +167,7 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
     for (const re of scan.reExports) {
       if (!isLocalSpecifier(re.specifier, opts.aliases)) continue;
       const resolved = resolveLocal(re.specifier, file, hostRoot, opts.aliases);
-      if (walkable(resolved)) queue.push(resolved);
+      if (followable(re.specifier, resolved)) queue.push(resolved);
     }
 
     // A configured component root declares its exports even before a route renders them.
@@ -181,10 +185,13 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
     }
 
     // `component={ScrollArea}` renders an import without a JSX tag of its own.
+    // A lowercase letter is required so `maxLength={MAX_LENGTH}` isn't one.
     const references = scan.elements.flatMap((element) =>
       element.attributes
         .filter(
-          (attr) => attr.expression && /^[A-Z][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(attr.expression),
+          (attr) =>
+            attr.expression &&
+            /^[A-Z][A-Z0-9$]*[a-z][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(attr.expression),
         )
         .map((attr) => ({ tag: attr.expression as string, element: null })),
     );

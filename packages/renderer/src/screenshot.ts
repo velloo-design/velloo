@@ -79,6 +79,29 @@ export interface CanvasMountState {
   }[];
 }
 
+/**
+ * Load a rendered document into a capture page. A document whose `<base>` names
+ * the local daemon is served *from* that origin (the navigation is answered
+ * in-process, everything else goes to the daemon), so the page is what a canvas
+ * frame is: app code that reads `localStorage` or `location.host` while its
+ * module loads would otherwise throw under `setContent`'s opaque origin and
+ * silently cost the whole client mount. Anything else keeps `setContent`.
+ */
+async function openDocument(page: Page, html: string): Promise<void> {
+  const base = /<base href="(http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?)\/?"/.exec(
+    html,
+  )?.[1];
+  if (!base) {
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT_MS });
+    return;
+  }
+  const url = `${base}/__velloo_capture/${crypto.randomUUID()}`;
+  await page.route(url, (route) =>
+    route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html }),
+  );
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT_MS });
+}
+
 async function canvasMountState(page: Page): Promise<CanvasMountState | undefined> {
   return page
     .evaluate(() => {
@@ -115,10 +138,7 @@ export async function probeCanvasMount(opts: {
         if (message.type() === "error") consoleErrors.push(message.text().slice(0, 400));
       });
       page.on("pageerror", (error) => consoleErrors.push(error.message.slice(0, 400)));
-      await page.setContent(opts.html, {
-        waitUntil: "domcontentloaded",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      await openDocument(page, opts.html);
       await settleForCapture(page, opts.html);
       // Runtime reports (a component that threw, the stylesheet probe) land a
       // frame after ready; give them that frame.
@@ -145,10 +165,7 @@ export async function captureScreenshot(
     },
     async (context) => {
       const page = await context.newPage();
-      await page.setContent(opts.html, {
-        waitUntil: "domcontentloaded",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      await openDocument(page, opts.html);
       await settleForCapture(page, opts.html);
       const nodeRects = await page.$$eval("[data-node-path]", (els) =>
         els.map((el) => {
@@ -183,10 +200,7 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
     },
     async (context) => {
       const page = await context.newPage();
-      await page.setContent(opts.html, {
-        waitUntil: "domcontentloaded",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      await openDocument(page, opts.html);
       // Bounded settle: load event, webfonts, live islands (see settleForCapture).
       await settleForCapture(page, opts.html);
       if (opts.clipSelector) {
@@ -229,10 +243,7 @@ export async function measureRendered(opts: {
     { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
     async (context) => {
       const page = await context.newPage();
-      await page.setContent(opts.html, {
-        waitUntil: "domcontentloaded",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      await openDocument(page, opts.html);
       await settleForCapture(page, opts.html);
       return extractDom(page);
     },

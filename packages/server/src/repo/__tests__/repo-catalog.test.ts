@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Config } from "@velloo/schema";
@@ -132,6 +132,37 @@ describe("discoverRepoComponents on a custom component system", () => {
     // Owned by the barrel's re-export, the Badge import still resolves to the
     // barrel — so ownership is judged on the file the app imports.
     expect(names).toContain("StatCard");
+  });
+
+  test("what an owned file renders internally is not the app's", async () => {
+    const root = realpathSync(await mkdtemp(join(tmpdir(), "velloo-owned-")));
+    try {
+      await writeFile(
+        join(root, "package.json"),
+        JSON.stringify({ dependencies: { react: "*", "@radix-ui/react-slot": "*" } }),
+      );
+      await mkdir(join(root, "src/ui"), { recursive: true });
+      await writeFile(
+        join(root, "src/ui/button.tsx"),
+        'import { Slot } from "@radix-ui/react-slot";\nexport function Button() {\n  return <Slot />;\n}\n',
+      );
+      await writeFile(
+        join(root, "src/main.tsx"),
+        'import { Button } from "./ui/button";\nimport { Slot, MAX } from "@radix-ui/react-slot";\nexport default function App() {\n  return <Slot><Button size={MAX} /></Slot>;\n}\n',
+      );
+      const result = await discoverRepoComponents({
+        hostRoot: root,
+        aliases: [],
+        owned: (_specifier, resolved) => resolved?.startsWith(join(root, "src/ui")) === true,
+      });
+      const slot = result.components.find((c) => c.name === "Slot");
+      // `size={MAX}` passes a constant, not a component.
+      expect(result.components.map((c) => c.name)).toEqual(["Slot"]);
+      // Only the app's own use counts, not the owned button's.
+      expect(slot?.usages.map((u) => u.at)).toEqual(["src/main.tsx:4"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 

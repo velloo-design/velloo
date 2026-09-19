@@ -136,6 +136,17 @@ export const CANVAS_RUNTIME = `
     } catch (e) {
       settleOnSsr();
     }
-  }).catch(function () { settleOnSsr(); });
+  }).catch(function (error) {
+    // A module that throws while loading (one reading location.host under a
+    // capture's opaque origin) rejects the whole import; say so per component
+    // rather than leaving the server render unexplained.
+    var refs = [];
+    try { refs = (new URL(BUNDLE_URL, document.baseURI).searchParams.get("refs") || "").split(","); } catch (e) {}
+    var note = "A module threw while the bundle loaded: " + String(error && error.message || error).slice(0, 300);
+    refs.forEach(function (id) {
+      if (id.indexOf("repo:") === 0) report({ id: id, status: "unavailable", code: "render-threw", note: note });
+    });
+    settleOnSsr();
+  });
 })();
 `;

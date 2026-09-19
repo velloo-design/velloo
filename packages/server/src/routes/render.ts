@@ -328,8 +328,9 @@ export function createRenderRouter(
         : entry.acceptsChildren
           ? { children: entry.name }
           : {};
+    // A catalog key (`repo::./src/x#Name`) is not a valid screen id.
     const screen: Screen = {
-      id: `${entry.key}__preview`,
+      id: "repo-preview",
       name: `${entry.name} preview`,
       tree: { $ref: entry.name, $repo: entry.identity, props },
     };

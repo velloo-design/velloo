@@ -355,9 +355,8 @@ function entryFor(
   const byName = new Map(declared.map((prop) => [prop.name, prop]));
   if (!component.identity.member) {
     for (const prop of variantPropsFor(declarationName(component), index)) {
-      const existing = byName.get(prop.name);
       // A variant table knows the option set a `string`-typed prop can't.
-      if (!existing || existing.control !== "enum") byName.set(prop.name, prop);
+      if (byName.get(prop.name)?.control !== "enum") byName.set(prop.name, prop);
     }
   }
   for (const usage of component.usages) {
