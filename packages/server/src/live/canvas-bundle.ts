@@ -929,24 +929,28 @@ function Static(props) { return React.createElement("div", { style: { display: "
 // Mirrors the renderer's SSR frame for a repository component without a proxy.
 var FRAME = { position: "relative", border: "1px dashed var(--color-border, #d4d4d8)", borderRadius: "0.5rem", padding: "1.5rem 0.75rem 0.75rem", minHeight: "2.5rem" };
 var LABEL = { position: "absolute", top: "0.25rem", left: "0.5rem", color: "var(--color-muted-foreground, #71717a)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.6875rem", lineHeight: 1.4, pointerEvents: "none" };
-function repoFrame(node, props, children) {
+var REASON = { color: "var(--color-muted-foreground, #71717a)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.6875rem", lineHeight: 1.4, overflowWrap: "anywhere" };
+// \`error\`: the component threw, so the frame says why instead of passing for
+// a deliberate placeholder.
+function repoFrame(node, props, children, error) {
   var text = props.children;
   var kids = children.length ? children : (typeof text === "string" || typeof text === "number" ? [text] : []);
-  return element("div", { "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"], "data-velloo-repo": node.repo.name, title: node.repo.name + " from " + node.repo.importPath, style: FRAME }, [React.createElement("span", { style: LABEL }, "<" + node.repo.name + ">")].concat(kids));
+  var reason = error ? [React.createElement("div", { style: REASON, "data-velloo-repo-error": "" }, "Didn't render: " + String(error && error.message || error).slice(0, 200))] : [];
+  return element("div", { "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"], "data-velloo-repo": node.repo.name, title: node.repo.name + " from " + node.repo.importPath, style: FRAME }, [React.createElement("span", { style: LABEL }, "<" + node.repo.name + ">")].concat(reason, kids));
 }
 function classify(error) {
   var message = error && error.message ? String(error.message) : String(error);
   return /provider|context|must be used within|was not found in (the )?component tree/i.test(message) ? "missing-provider" : "render-threw";
 }
 class RepoBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { failed: false }; }
-  static getDerivedStateFromError() { return { failed: true }; }
+  constructor(props) { super(props); this.state = { failed: false, error: null }; }
+  static getDerivedStateFromError(error) { return { failed: true, error: error }; }
   componentDidCatch(error) {
     var code = classify(error);
     report({ id: this.props.id, name: this.props.name, status: this.props.hasProxy ? "proxy" : "unavailable", code: code, note: String(error && error.message || error).slice(0, 400), remedy: code === "missing-provider" ? "Wrap the preview entry in the provider this component needs (preview_status shows the app's own wrappers)." : "Check the component's required props; the proxy or frame stands in until it renders." });
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(anchor);
   }
-  render() { return this.state.failed ? this.props.fallback() : this.props.children; }
+  render() { return this.state.failed ? this.props.fallback(this.state.error) : this.props.children; }
 }
 function previewProps(app) {
   return { colorScheme: previewInput.colorScheme || "light", theme: previewInput.theme, recipeTheme: (previewInput.recipeTheme || {})[app] };
@@ -966,7 +970,7 @@ function slotProps(props) {
 // A throw inside it is then caught by the parent's boundary instead.
 function buildRepo(node, props, children, bare) {
   var Component = repoRegistry[node.ref];
-  var fallback = function () { return node.proxy ? build(node.proxy) : repoFrame(node, props, children); };
+  var fallback = function (error) { return node.proxy ? build(node.proxy) : repoFrame(node, props, children, error); };
   if (!Component) {
     // In the registry but undefined: the module loaded and has no such export.
     if (node.ref in repoRegistry) report({ id: node.ref, name: node.repo.name, status: node.proxy ? "proxy" : "unavailable", code: "missing-export", note: node.repo.importPath + " has no export " + node.repo.exportName + (node.repo.member ? "." + node.repo.member : "") + ".", remedy: "Pick the component again from list_components; the app may have renamed it." });
@@ -998,12 +1002,40 @@ function build(node, bare) {
 }
 // A component that doesn't forward \`data-node-path\` to its DOM still has to be
 // selectable: its anchor's next element is its root, so give it the path.
+var CHROME = { SCRIPT: 1, STYLE: 1, LINK: 1, TEMPLATE: 1, NOSCRIPT: 1 };
 function anchor() {
   var marks = document.querySelectorAll("template[data-velloo-anchor]");
+  var inPlaceless = [];
   for (var i = 0; i < marks.length; i++) {
     var path = marks[i].getAttribute("data-velloo-anchor");
     var next = marks[i].nextElementSibling;
     if (path && next && next.tagName !== "TEMPLATE" && !next.hasAttribute("data-node-path")) next.setAttribute("data-node-path", path);
+    else if (path && (!next || next.tagName === "TEMPLATE")) inPlaceless.push(path);
+  }
+  // A component that rendered nothing in place portaled its output to <body>
+  // (an app's own dialog or popover): give what landed there its identity, in
+  // order, so clicking the overlay selects the node that opened it.
+  if (!inPlaceless.length) return;
+  var landed = [];
+  for (var j = 0; j < document.body.children.length; j++) {
+    var el = document.body.children[j];
+    // Velloo's own chrome: the mount, the SSR copy, the scroll thumb, the fidelity badge.
+    if (CHROME[el.tagName] || el.id === "velloo-canvas-root" || el.id === "velloo-ssr" || String(el.className).indexOf("__velloo") === 0 || el.getAttribute("aria-label") === "Canvas component fidelity") continue;
+    if (el.hasAttribute("data-node-path") || el.querySelector("[data-node-path]")) continue;
+    landed.push(el);
+  }
+  landed.forEach(function (el, k) { el.setAttribute("data-node-path", inPlaceless[Math.min(k, inPlaceless.length - 1)]); });
+}
+// An app's modal (Radix, Headless UI, react-aria) sets pointer-events:none on
+// <body> while it is open, which would leave every node on the screen
+// unselectable. A stylesheet !important outranks that inline style.
+function unlockPointer() {
+  var style = document.createElement("style");
+  style.setAttribute("data-velloo-pointer", "");
+  style.textContent = "html,body{pointer-events:auto!important}";
+  document.head.appendChild(style);
+  if (typeof MutationObserver === "function") {
+    new MutationObserver(function () { if (typeof requestAnimationFrame === "function") requestAnimationFrame(anchor); }).observe(document.body, { childList: true });
   }
 }
 function probe() {
@@ -1022,8 +1054,8 @@ function probe() {
   });
 }
 class PreviewBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { failed: false }; }
-  static getDerivedStateFromError() { return { failed: true }; }
+  constructor(props) { super(props); this.state = { failed: false, error: null }; }
+  static getDerivedStateFromError(error) { return { failed: true, error: error }; }
   componentDidCatch(error) {
     report({ id: "preview", name: previewLabels[primaryApp] || "preview entry", status: "unavailable", code: "render-threw", note: "The preview entry threw: " + String(error && error.message || error).slice(0, 400), remedy: "Fix the preview entry; components render without it until then." });
   }
@@ -1036,14 +1068,15 @@ function screen(tree) {
     React.createElement(Primary, previewProps(primaryApp), build(tree)));
 }
 class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { failed: false }; }
-  static getDerivedStateFromError() { return { failed: true }; }
+  constructor(props) { super(props); this.state = { failed: false, error: null }; }
+  static getDerivedStateFromError(error) { return { failed: true, error: error }; }
   componentDidCatch(error) { if (this.props.onError) this.props.onError(error); }
   render() { return this.state.failed ? null : this.props.children; }
 }
 function Ready(props) { React.useEffect(function () { anchor(); probe(); if (props.onReady) props.onReady(); }, []); return null; }
 export function mountScreen(opts) {
   if (typeof opts.onDiagnostic === "function") report = opts.onDiagnostic;
+  unlockPointer();
   previewInput = opts.preview || {};
   var root = createRoot(opts.el);
   ${renderBody}

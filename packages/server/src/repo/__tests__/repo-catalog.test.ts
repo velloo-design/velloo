@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Config } from "@velloo/schema";
 import { RepoComponents } from "../catalog.ts";
 import { discoverRepoComponents } from "../discover.ts";
@@ -227,6 +227,43 @@ describe("RepoComponents catalog", () => {
     expect(catalog.byId.get("App.Badge")?.qualifiedBecause).toContain("provider");
     expect(catalog.byId.get("App.Panel.Header")?.identity.member).toBe("Header");
     expect(catalog.byId.get("StatCard")?.qualifiedBecause).toBeUndefined();
+  });
+
+  test("two modules exporting one name get ids that tell them apart", async () => {
+    const root = realpathSync(await mkdtemp(join(tmpdir(), "velloo-dupe-")));
+    try {
+      await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { react: "*" } }));
+      for (const [dir, prop] of [
+        ["hud/fields", "min"],
+        ["style-editor/controls", "unit"],
+      ] as const) {
+        await mkdir(join(root, "src", dirname(dir)), { recursive: true });
+        await writeFile(
+          join(root, "src", `${dir}.tsx`),
+          `export function NumberField({ ${prop} }: { ${prop}: string }) {\n  return null;\n}\n`,
+        );
+      }
+      await writeFile(
+        join(root, "src/main.tsx"),
+        'import { NumberField } from "./hud/fields";\nimport { NumberField as Num } from "./style-editor/controls";\nexport default function App() {\n  return <><NumberField /><Num /></>;\n}\n',
+      );
+      const repo = new RepoComponents({
+        folderRoot: join(root, "velloo"),
+        config: () => ({ hostApp: { root } }) as unknown as Config,
+        reservedIds: () => new Set(),
+      });
+      const catalog = await repo.catalog();
+      expect(catalog.entries.map((entry) => entry.id).sort()).toEqual([
+        "Controls.NumberField",
+        "Fields.NumberField",
+      ]);
+      expect(catalog.byId.get("Fields.NumberField")?.identity.importPath).toBe("./src/hud/fields");
+      // Both declare \`NumberFieldProps\` in effect; each keeps its own.
+      expect(catalog.byId.get("Fields.NumberField")?.props.map((p) => p.name)).toEqual(["min"]);
+      expect(catalog.byId.get("Controls.NumberField")?.props.map((p) => p.name)).toEqual(["unit"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("checked-in overrides refine entries and report what went stale", async () => {

@@ -139,3 +139,33 @@ describe("setSelection", () => {
     });
   });
 });
+
+describe("library view memory", () => {
+  test("the Library tab reopens the item that was open when it was left", () => {
+    const store = useCanvas.getState();
+    useCanvas.setState({
+      libraryItem: null,
+      lastLibraryItem: null,
+      loadComponents: async () => {},
+    });
+    store.openLibrary({ kind: "repo", id: "BackButton" });
+    useCanvas.getState().setView("boards");
+    expect(useCanvas.getState().libraryItem).toBeNull();
+    useCanvas.getState().setView("library");
+    expect(useCanvas.getState().libraryItem).toEqual({ kind: "repo", id: "BackButton" });
+  });
+
+  test("Back to the Library home forgets it", () => {
+    useCanvas.setState({
+      libraryItem: null,
+      lastLibraryItem: null,
+      loadComponents: async () => {},
+    });
+    const store = useCanvas.getState();
+    store.openLibrary({ kind: "repo", id: "BackButton" });
+    useCanvas.getState().openLibrary(null);
+    useCanvas.getState().setView("boards");
+    useCanvas.getState().setView("library");
+    expect(useCanvas.getState().libraryItem).toBeNull();
+  });
+});

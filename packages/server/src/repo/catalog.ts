@@ -228,12 +228,30 @@ export class RepoComponents {
           indexLocalDeclarations(component.file, localIndex, indexed);
         }
       }
+      // Two local modules can both declare `NumberFieldProps`; each component
+      // reads its own module's declarations first, the app's others after.
+      const fileIndexes = new Map<string, DeclarationIndex>();
+      const localIndexFor = (file: string | undefined): DeclarationIndex => {
+        if (!file) return localIndex;
+        const cached = fileIndexes.get(file);
+        if (cached) return cached;
+        const own = emptyIndex();
+        indexLocalDeclarations(file, own, new Set());
+        const merged: DeclarationIndex = {
+          props: new Map([...localIndex.props, ...own.props]),
+          literalAliases: new Map([...localIndex.literalAliases, ...own.literalAliases]),
+          staticMembers: new Map([...localIndex.staticMembers, ...own.staticMembers]),
+          variantTables: new Map([...localIndex.variantTables, ...own.variantTables]),
+        };
+        fileIndexes.set(file, merged);
+        return merged;
+      };
       const known = new Set(discovery.components.map((c) => keyOf(c.identity)));
       for (const component of discovery.components) {
         const index =
           component.source === "package" && component.packageName
             ? this.packageIndex(component.packageName, hostRoot)
-            : localIndex;
+            : localIndexFor(component.file);
         const recipe = recipeForSpecifier(component.identity.importPath);
         const activeRecipe = recipe && recipes.includes(recipe) ? recipe : undefined;
         drafts.push(entryFor(component, index, storyStates, activeRecipe));
@@ -506,6 +524,34 @@ function assignIds(entries: RepoCatalogEntry[], reserved: Set<string>): void {
     entry.qualifiedBecause = takenByProvider
       ? `"${entry.family}" is also this folder's provider or helper component`
       : `"${entry.family}" is exported by more than one source`;
+  }
+  // Two sources in the same namespace (two local `NumberField`s) still share an
+  // id — and an id is what selection, URLs and compose tags key on. Name them by
+  // the shortest tail of their module path that tells them apart.
+  const byId = new Map<string, RepoCatalogEntry[]>();
+  for (const entry of entries) byId.set(entry.id, [...(byId.get(entry.id) ?? []), entry]);
+  for (const group of byId.values()) {
+    const sources = new Set(group.map((entry) => entry.identity.importPath));
+    if (sources.size < 2) continue;
+    const segments = new Map(
+      group.map((entry) => [
+        entry,
+        entry.identity.importPath
+          .split("/")
+          .filter((part) => part && part !== "." && part !== ".." && part !== "index"),
+      ]),
+    );
+    const longest = Math.max(...[...segments.values()].map((parts) => parts.length));
+    for (let depth = 1; depth <= longest; depth++) {
+      const tail = (entry: RepoCatalogEntry) =>
+        pascal((segments.get(entry) ?? []).slice(-depth).join("-"));
+      if (new Set(group.map(tail)).size < sources.size && depth < longest) continue;
+      for (const entry of group) {
+        entry.id = `${tail(entry)}.${entry.name}`;
+        entry.qualifiedBecause = `"${entry.family}" is exported by more than one module (${entry.identity.importPath})`;
+      }
+      break;
+    }
   }
 }
 

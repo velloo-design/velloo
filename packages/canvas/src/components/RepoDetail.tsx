@@ -1,3 +1,4 @@
+import { isComponentNode, type Node } from "@velloo/schema";
 import { ChevronRight, Copy, Plus, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -8,7 +9,7 @@ import {
   repoRenderUrl,
 } from "../api.ts";
 import { pathFromString } from "../path.ts";
-import { type CanvasState, useCanvas } from "../store.ts";
+import { type CanvasState, repoEntryFor, useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { EmptyState } from "./EmptyState.tsx";
 import { BackButton, DetailBreadcrumb } from "./LibraryDetailChrome.tsx";
@@ -27,19 +28,50 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 
 const SECTION_LABEL = "text-[10px] uppercase tracking-wider text-muted-foreground font-medium";
 
+type Placement = {
+  screenId: string;
+  parentPath: number[];
+  index?: number;
+  /** "to Home", "inside Card", "after Button" — said back in the toast. */
+  where: string;
+};
+
 /**
- * Where "Add to screen" puts the component: inside the selected node, or at
- * the end of the active screen's root. Snippet-editor selections are skipped —
- * their synthetic screens aren't something `add_node` can address.
+ * Where "Add to screen" puts the component: inside the selected node when it
+ * holds children (or is a repo component that takes them), right after it
+ * when it's a leaf, else at the end of the active screen's root.
+ * Snippet-editor selections are skipped — their synthetic screens aren't
+ * something `add_node` can address.
  */
-function placementTarget(
-  s: Pick<CanvasState, "selection" | "screens" | "currentScreenId">,
-): { screenId: string; parentPath: number[] } | null {
+export function placementTarget(
+  s: Pick<CanvasState, "selection" | "screens" | "currentScreenId" | "repoCatalog">,
+): Placement | null {
   const sel = s.selection;
-  if (sel && !sel.screenId.startsWith("snippet:") && s.screens[sel.screenId]) {
-    return { screenId: sel.screenId, parentPath: pathFromString(sel.path) };
+  const screen = sel && !sel.screenId.startsWith("snippet:") ? s.screens[sel.screenId] : undefined;
+  if (sel && screen) {
+    const path = pathFromString(sel.path);
+    let node: unknown = screen.tree;
+    for (const i of path) node = (node as { children?: unknown[] } | undefined)?.children?.[i];
+    const n = node as Node | undefined;
+    const label = n && isComponentNode(n) ? n.$ref : "the selection";
+    const holds =
+      path.length === 0 ||
+      (n !== undefined && isComponentNode(n) && (n.children?.length ?? 0) > 0) ||
+      (n !== undefined &&
+        isComponentNode(n) &&
+        n.$repo !== undefined &&
+        repoEntryFor(s.repoCatalog, n.$repo)?.acceptsChildren === true);
+    if (holds) return { screenId: sel.screenId, parentPath: path, where: `inside ${label}` };
+    return {
+      screenId: sel.screenId,
+      parentPath: path.slice(0, -1),
+      index: (path.at(-1) ?? 0) + 1,
+      where: `after ${label}`,
+    };
   }
-  return s.currentScreenId ? { screenId: s.currentScreenId, parentPath: [] } : null;
+  if (!s.currentScreenId) return null;
+  const name = s.screens[s.currentScreenId]?.name ?? s.currentScreenId;
+  return { screenId: s.currentScreenId, parentPath: [], where: `to ${name}` };
 }
 
 async function addToScreen(entry: RepoCatalogEntry, stateIndex: number): Promise<void> {
@@ -52,13 +84,14 @@ async function addToScreen(entry: RepoCatalogEntry, stateIndex: number): Promise
     const { path } = await mutate.addNode({
       screenId: target.screenId,
       parentPath: target.parentPath,
+      ...(target.index !== undefined ? { index: target.index } : {}),
       componentRef: entry.name,
       repo: entry.identity,
       props: entry.states[stateIndex]?.props ?? {},
     });
     pushToast({
       kind: "success",
-      message: `Added ${entry.name} to ${target.screenId}.`,
+      message: `Added ${entry.name} ${target.where}.`,
       action: {
         label: "Show",
         onClick: () => {
@@ -89,6 +122,7 @@ export function RepoDetail({ id }: { id: string }) {
   const themeVersion = useCanvas((s) => s.themeVersion);
   const dark = useCanvas((s) => s.designMode === "dark");
   const openLibrary = useCanvas((s) => s.openLibrary);
+  const refreshRepoStatus = useCanvas((s) => s.refreshRepoStatus);
 
   const entry = catalog?.entries.find((e) => e.id === id) ?? null;
   const parts = useMemo(
@@ -207,6 +241,9 @@ export function RepoDetail({ id }: { id: string }) {
                   })}
                   title={`${entry.id} ${state?.name ?? "preview"}`}
                   loading="lazy"
+                  // The mount reports what it found (a throw, a missing provider)
+                  // a beat after load; ask again so the chip and note catch up.
+                  onLoad={() => setTimeout(() => void refreshRepoStatus([entry.id]), 1500)}
                   className="block w-full h-[200px] border-0"
                 />
                 <div className="flex items-center gap-2 border-t px-3 py-1.5 text-xs">

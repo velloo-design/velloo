@@ -99,6 +99,7 @@ export const mutate = {
   addNode(args: {
     screenId: string;
     parentPath: number[];
+    index?: number | undefined;
     componentRef: string;
     props?: Record<string, unknown> | undefined;
     repo?: RepoComponentRef | undefined;

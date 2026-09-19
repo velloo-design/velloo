@@ -29,6 +29,8 @@ export interface RepoSlice {
   reloadRepoCatalog(): Promise<void>;
   /** Fetch status for the ids not already known or in flight. */
   loadRepoStatus(ids: string[]): Promise<void>;
+  /** Ask again even for known ids — after a frame mounted them and may have found more. */
+  refreshRepoStatus(ids: string[]): Promise<void>;
 }
 
 export const createRepoSlice: StateCreator<CanvasState, [], [], RepoSlice> = (set, get) => {
@@ -64,6 +66,15 @@ export const createRepoSlice: StateCreator<CanvasState, [], [], RepoSlice> = (se
       inFlight.clear();
       set({ repoCatalog: null, repoCatalogLoading: false, repoStatus: {} });
       if (wasLoaded) await get().loadRepoCatalog();
+    },
+
+    async refreshRepoStatus(ids) {
+      set((s) => {
+        const next = { ...s.repoStatus };
+        for (const id of ids) delete next[id];
+        return { repoStatus: next };
+      });
+      await get().loadRepoStatus(ids);
     },
 
     async loadRepoStatus(ids) {

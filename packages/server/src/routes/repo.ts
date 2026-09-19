@@ -46,7 +46,12 @@ export function createRepoRouter(
       .filter((key): key is string => key !== undefined);
     if (keys.length === 0) return c.json({ diagnostics: [] });
     const result = await canvasBundler.build(ctx.folder.config.defaultLibrary, keys);
-    const runtime = canvasBundler.runtimeDiagnostics(keys) ?? [];
+    // A shelf asks for many ids at once, but a component's runtime verdict comes
+    // from a frame that mounted it: its own Library preview, or this same set.
+    const runtime = [
+      ...keys.flatMap((key) => canvasBundler.runtimeDiagnostics([key]) ?? []),
+      ...(canvasBundler.runtimeDiagnostics(keys) ?? []),
+    ];
     const byKey = new Map(result.diagnostics.map((entry) => [entry.id, { ...entry }]));
     for (const entry of runtime) byKey.set(entry.id, { ...(byKey.get(entry.id) ?? {}), ...entry });
     return c.json({

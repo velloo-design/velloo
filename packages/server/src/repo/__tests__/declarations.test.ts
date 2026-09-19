@@ -56,4 +56,30 @@ describe("declaration extraction", () => {
     expect(props.find((p) => p.name === "onPick")?.serializable).toBe(false);
     expect(props.find((p) => p.name === "id")?.description).toBe("Shared id.");
   });
+
+  test("props typed at the parameter read like a declared <Name>Props", async () => {
+    const index = await indexOf(`
+      interface Props extends BaseProps { tone: "info" | "warn" }
+      export function Composer({ draft, busy = false }: {
+        /** The text so far. */
+        draft: string;
+        busy?: boolean;
+        onSubmit(): void;
+      }) { return null; }
+      export function Notice({ tone }: Props) { return null; }
+      export const Chip = ({ label }: ChipOptions) => null;
+      export const Memo = memo(function Memo(props: { size: number }) { return null; });
+    `);
+    expect(propsFor("Composer", index)?.map((p) => [p.name, p.type, p.optional])).toEqual([
+      ["draft", "string", false],
+      ["busy", "boolean", true],
+      ["onSubmit", "() => void", false],
+    ]);
+    expect(propsFor("Composer", index)?.[0]?.description).toBe("The text so far.");
+    // A file-local \`Props\` is inlined: the name means nothing outside this file.
+    expect(propsFor("Notice", index)?.map((p) => p.name)).toEqual(["tone"]);
+    expect(index.props.get("NoticeProps")?.extends).toEqual(["BaseProps"]);
+    expect(index.props.get("ChipProps")?.extends).toEqual(["ChipOptions"]);
+    expect(propsFor("Memo", index)?.map((p) => p.name)).toEqual(["size"]);
+  });
 });

@@ -457,6 +457,22 @@
                           "className": "ml-auto text-[11.5px] text-zinc-400",
                           "children": "Checkout"
                         }
+                      },
+                      {
+                        "$ref": "BoardThreadComposer",
+                        "props": {},
+                        "$repo": {
+                          "importPath": "./src/components/comment-threads",
+                          "exportName": "BoardThreadComposer"
+                        }
+                      },
+                      {
+                        "$ref": "DeleteCommentDialog",
+                        "props": {},
+                        "$repo": {
+                          "importPath": "./src/components/comment-threads",
+                          "exportName": "DeleteCommentDialog"
+                        }
                       }
                     ]
                   },

@@ -81,6 +81,20 @@ function indexDeclarations(source: string, index: DeclarationIndex): void {
     if (!index.props.has(name))
       index.props.set(name, { body: code.slice(open + 1, close), extends: [] });
   }
+  // A component typed at its parameter — `function X({ a }: { a: string })` or
+  // `(props: Other) =>` — is filed as `XProps`, so it reads like a declared one.
+  for (const match of code.matchAll(
+    /(?:function\s+([A-Z][\w$]*)\s*(?:<[^>(]*>)?\s*|const\s+([A-Z][\w$]*)\s*=\s*(?:(?:React\.)?(?:memo|forwardRef)\s*\(\s*)?(?:function\s*[\w$]*\s*)?)\(/g,
+  )) {
+    const name = `${match[1] ?? match[2] ?? ""}Props`;
+    if (index.props.has(name)) continue;
+    const annotation = parameterType(code, (match.index ?? 0) + match[0].length);
+    if (annotation?.body !== undefined) {
+      index.props.set(name, { body: annotation.body, extends: annotation.extends ?? [] });
+    } else if (annotation?.named && annotation.named !== name) {
+      index.props.set(name, { body: "", extends: [annotation.named] });
+    }
+  }
   for (const match of code.matchAll(
     /type\s+([A-Z][\w$]*)\s*=\s*((?:\s*\|?\s*(?:'[^']*'|"[^"]*"|-?\d+(?:\.\d+)?))+)\s*;/g,
   )) {
@@ -261,7 +275,17 @@ function parseMembers(body: string, index: DeclarationIndex): RepoPropDescriptor
     const match = /^(?:readonly\s+)?(['"]?)([A-Za-z_$][\w$-]*)\1(\?)?\s*:\s*([\s\S]+?)[,;]?$/.exec(
       member,
     );
-    if (!match) continue;
+    if (!match) {
+      const method =
+        /^([A-Za-z_$][\w$]*)(\?)?\s*(?:<[^>]*>)?\s*(\([\s\S]*\))\s*:\s*([\s\S]+?)[,;]?$/.exec(
+          member,
+        );
+      if (method) {
+        const type = `${method[3]} => ${method[4]}`.replace(/\s+/g, " ").trim();
+        out.push(describe(method[1] ?? "", type, Boolean(method[2]), doc, index));
+      }
+      continue;
+    }
     const name = match[2] ?? "";
     const type = (match[4] ?? "").replace(/\s+/g, " ").trim();
     out.push(describe(name, type, Boolean(match[3]), doc, index));
@@ -269,8 +293,10 @@ function parseMembers(body: string, index: DeclarationIndex): RepoPropDescriptor
   return out;
 }
 
+// A property (`name?:`) or a method signature (`onSubmit(): void`); the method's
+// `(` is left unread so its parameter list nests like any other bracket.
 const MEMBER_START =
-  /^(?:\/\*\*[\s\S]*?\*\/\s*)?(?:readonly\s+)?['"]?[A-Za-z_$][\w$-]*['"]?\??\s*:/;
+  /^(?:\/\*\*[\s\S]*?\*\/\s*)?(?:readonly\s+)?(?:['"]?[A-Za-z_$][\w$-]*['"]?\??\s*:|[A-Za-z_$][\w$]*\??\s*(?=[(<]))/;
 
 /**
  * Split a type body into members, each with the doc comment above it. Members
@@ -378,6 +404,55 @@ function describe(
     serializable: true,
     ...(values.length > 0 ? { enumValues: [...new Set(values)] } : {}),
   };
+}
+
+/**
+ * The type annotation on a function's first parameter, read from just after its
+ * `(`: an inline `{ … }` body, a type declared in the same file (inlined, since
+ * a file-local `Props` means nothing elsewhere), or another type's name.
+ */
+function parameterType(
+  code: string,
+  from: number,
+): { body?: string; extends?: string[]; named?: string } | null {
+  let i = from;
+  const skip = () => {
+    while (/\s/.test(code[i] ?? "")) i++;
+  };
+  skip();
+  if (code[i] === "{") {
+    const close = matchBrace(code, i);
+    if (close === -1) return null;
+    i = close + 1;
+  } else {
+    const id = /^[A-Za-z_$][\w$]*/.exec(code.slice(i, i + 100))?.[0];
+    if (!id) return null;
+    i += id.length;
+  }
+  skip();
+  if (code[i] !== ":") return null;
+  i++;
+  skip();
+  if (code[i] === "{") {
+    const close = matchBrace(code, i);
+    return close === -1 ? null : { body: code.slice(i + 1, close) };
+  }
+  const named = /^[A-Z][\w$]*/.exec(code.slice(i, i + 100))?.[0];
+  if (!named) return null;
+  const local = new RegExp(
+    `(?:interface\\s+${named}\\b(?:<[^>{]*>)?\\s*(?:extends\\s+([^{]+))?|type\\s+${named}\\b(?:<[^>=]*>)?\\s*=\\s*)\\{`,
+  ).exec(code);
+  if (local) {
+    const open = local.index + local[0].length - 1;
+    const close = matchBrace(code, open);
+    if (close !== -1) {
+      const bases = splitTopLevel(local[1] ?? "", ",")
+        .map((base) => base.trim().replace(/<[\s\S]*$/, ""))
+        .filter(Boolean);
+      return { body: code.slice(open + 1, close), extends: bases };
+    }
+  }
+  return { named };
 }
 
 function literalUnion(text: string): (string | number)[] | null {
