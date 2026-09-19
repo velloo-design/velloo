@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "@velloo/result";
 import type { Node, Snippet, SnippetParam } from "@velloo/schema";
+import { resolveComponentRefs } from "./component-refs.ts";
 import type { MutationContext } from "./context.ts";
 import { type MutationError, snippetCycle, snippetIdConflict } from "./errors.ts";
 import { persistSnippet } from "./persist.ts";
@@ -36,18 +37,20 @@ export async function addSnippet(
   const id = args.id ?? slugify(args.name, "snippet");
   if (ctx.folder.snippets.has(id)) return err(snippetIdConflict(id));
 
+  const tree = await resolveComponentRefs(ctx, args.tree, null);
+  if (!tree.ok) return err(tree.error);
   const snippet: Snippet = {
     id,
     name: args.name,
     params: args.params ?? [],
-    tree: args.tree,
+    tree: tree.value,
   };
 
   // Detect cycles against the existing registry plus the snippet we're about
   // to add. We don't know our own id yet from the registry's POV, so seed it.
   const registry = new Map(ctx.folder.snippets);
   registry.set(id, snippet);
-  const cycle = detectSnippetCycle(args.tree, id, registry);
+  const cycle = detectSnippetCycle(snippet.tree, id, registry);
   if (cycle) return err(snippetCycle(id, cycle));
 
   const persisted = await persistSnippet(ctx.folder, id, snippet);

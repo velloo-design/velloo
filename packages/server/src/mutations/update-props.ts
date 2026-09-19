@@ -3,6 +3,7 @@ import type { StyleChannel } from "@velloo/provider";
 import { $, DoAsync, ok, type Result } from "@velloo/result";
 import { type ComponentNode, repoKey } from "@velloo/schema";
 import { cloneScreen } from "./clone.ts";
+import { resolveComponentRefs } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { getComponentNode, getScreen, resolveWithSnippetHint } from "./lookup.ts";
@@ -63,8 +64,9 @@ export async function updateProps(
       const resolved = yield* $(resolveWithSnippetHint(ctx, next.tree, path, args.screenId));
       const node = yield* $(getComponentNode(next.tree, resolved, args.screenId));
       const channel = style === undefined ? screenChannel : yield* $(channelFor(node, style));
+      const checked = yield* $(await resolveComponentRefs(ctx, propPatch ?? {}, screen));
       const merged: Record<string, unknown> = { ...(node.props ?? {}) };
-      for (const [k, v] of Object.entries(propPatch ?? {})) {
+      for (const [k, v] of Object.entries(checked)) {
         if (v === null) delete merged[k];
         else merged[k] = v;
       }

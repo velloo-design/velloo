@@ -134,6 +134,13 @@ function renderSnippetInstance(
   }
   const attrParts: string[] = [];
   for (const [name, value] of Object.entries(node.args ?? {})) {
+    // A node argument (an icon for a `node` param) is JSX, not an object literal.
+    if (isComponentNode(value as Node) || isSnippetInstance(value as Node)) {
+      const slot = nodeAttr(name, value as Node, ctx, depth);
+      if (!slot.ok) return slot;
+      attrParts.push(slot.value);
+      continue;
+    }
     const serialized = serializeProp(name, value, ctx.snippetParamNames);
     if (serialized !== null) attrParts.push(serialized);
   }
@@ -449,6 +456,19 @@ function repoJsxName(node: ComponentNode & { $repo: RepoComponentRef }): string 
  * lowered or translated into another styling system), node-valued props as
  * JSX, and its children. The design's proxy, if any, never reaches the code.
  */
+/** `icon={<Plus />}` — a node-valued prop or argument, emitted as JSX. */
+function nodeAttr(
+  prop: string,
+  value: Node,
+  ctx: EmitContext,
+  depth: number,
+): Result<string, CodegenError> {
+  const slot = renderNode(value, ctx, depth + 1);
+  if (!slot.ok) return slot;
+  const jsx = slot.value.trim();
+  return ok(`${prop}={${jsx.includes("\n") ? `\n${slot.value}\n${ctx.indent(depth)}` : jsx}}`);
+}
+
 function renderRepoComponent(
   node: ComponentNode & { $repo: RepoComponentRef },
   ctx: EmitContext,
@@ -464,12 +484,9 @@ function renderRepoComponent(
   const attrParts: string[] = [];
   for (const [prop, value] of Object.entries(props)) {
     if (isComponentNode(value as Node) || isSnippetInstance(value as Node)) {
-      const slot = renderNode(value as Node, ctx, depth + 1);
+      const slot = nodeAttr(prop, value as Node, ctx, depth);
       if (!slot.ok) return slot;
-      const jsx = slot.value.trim();
-      attrParts.push(
-        `${prop}={${jsx.includes("\n") ? `\n${slot.value}\n${ctx.indent(depth)}` : jsx}}`,
-      );
+      attrParts.push(slot.value);
       continue;
     }
     const serialized = serializeProp(prop, value, ctx.snippetParamNames);

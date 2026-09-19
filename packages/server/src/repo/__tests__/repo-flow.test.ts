@@ -140,6 +140,30 @@ describe("repository components through compose, mutations and emit", () => {
     expect(repoKey(repo)).toBe("repo::./src/components#StatCard");
   });
 
+  test("a node written into a snippet or a prop resolves or is refused, never deferred", async () => {
+    const added = await addSnippet(t.ctx, {
+      name: "Status row",
+      params: [{ name: "icon", type: "node" }],
+      tree: { $ref: "Box", children: [{ $ref: "Badge", props: { children: "Up" } }] },
+    });
+    if (!added.ok) throw new Error(JSON.stringify(added.error));
+    // `Badge` is the app's own: it gains the identity compose would give it.
+    expect(added.value.snippet.tree).toMatchObject({
+      children: [{ $ref: "Badge", $repo: { importPath: "./src/components", exportName: "Badge" } }],
+    });
+    const unknown = await addSnippet(t.ctx, {
+      name: "Broken row",
+      tree: { $ref: "Box", children: [{ $ref: "ArrowUpward" }] },
+    });
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.error.kind).toBe("UnknownComponent");
+    const prop = await updateProps(t.ctx, {
+      screenId: "home",
+      patches: [{ path: [], propPatch: { icon: { $ref: "ArrowUpward" } } }],
+    });
+    expect(prop.ok).toBe(false);
+  });
+
   test("children given to a component that declares none are flagged", async () => {
     const screen = t.ctx.folder.screens.get("home");
     if (!screen) throw new Error("no screen");
