@@ -1,28 +1,29 @@
 import { randomBytes } from "node:crypto";
-import type { FrameworkAdapter } from "@velloo/provider";
 import {
-  collectSerializedRefs,
   RenderGuardLimitError,
   renderScreen,
   resolveSnippetBodyForEdit,
-  serializeTree,
   snippetParamPlaceholder,
   UnknownComponentError,
 } from "@velloo/renderer";
-import type { Node, Screen, Snippet, Theme, Viewport } from "@velloo/schema";
+import {
+  isComponentNode,
+  isRepoNode,
+  isSnippetInstance,
+  type Node,
+  type Screen,
+  type Snippet,
+  type Viewport,
+} from "@velloo/schema";
 import { type Context, Hono } from "hono";
 import { themeByName } from "../design-folder.ts";
 import { buildShowcaseTree } from "../library/showcases.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import { liveExtensions } from "../live/component-bundler.ts";
+import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/index.ts";
-import {
-  libraryIdForScreen,
-  providerForScreen,
-  registryForScreen,
-  renderPassForScreen,
-} from "../mutations/lookup.ts";
+import { registryForScreen, renderPassForScreen } from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { renderErrorDocument } from "./render-error.ts";
 
@@ -63,40 +64,11 @@ export function createRenderRouter(
       : undefined;
 
   /**
-   * The framework-native canvas bundle wiring for a screen (#18): the
-   * installed-component `mountScreen` URL + native theme options, or undefined
-   * when the screen's adapter declares no `canvasBundleSpec` OR the build
-   * failed (framework not installed) — both keep the canvas on SSR. Bundles are
-   * per-library, so non-default-library screens client-mount too. Awaits the
-   * (cached) build so a build miss never embeds a dead bundle URL.
+   * The client-mount wiring for a screen — the same decision screenshots,
+   * compare and export make (see `screenMount`), so what the canvas shows is
+   * what every capture shows.
    */
-  const canvasBundleFor = async (
-    ctx: MutationContext,
-    screen: Screen,
-    theme: Theme,
-    dark: boolean,
-  ): Promise<{ url: string; themeOptions: unknown } | undefined> => {
-    const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-    if (!provider.canvasBundleSpec) return undefined;
-    const tree = serializeTree(screen.tree, { snippets: ctx.folder.snippets });
-    const refs = collectSerializedRefs(tree);
-    if (refs.length === 0) return undefined;
-    // Extensions are not in any library registry, so the browser bundle has no
-    // source for them. A live island additionally owns its SSR marker subtree,
-    // which replacing the document would erase. Either way a screen that uses
-    // one stays on SSR rather than client-mounting a hole where it rendered.
-    const extensionIds = new Set(Object.keys(ctx.folder.config.extensions ?? {}));
-    if (refs.some((ref) => extensionIds.has(ref))) return undefined;
-    const libraryId = libraryIdForScreen(ctx, screen);
-    const bundle = await canvasBundler.build(libraryId, refs);
-    if (!bundle.usable) return undefined;
-    return {
-      url:
-        `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(libraryId)}` +
-        `&refs=${encodeURIComponent(refs.join(","))}`,
-      themeOptions: provider.themeToNative?.(theme, dark) ?? null,
-    };
-  };
+  const canvasBundleFor = (ctx: MutationContext) => makeCanvasBundle(ctx, canvasBundler);
 
   const parseViewport = (c: Context, dw: number, dh: number): Viewport => ({
     w: Number(c.req.query("w")) || dw,
@@ -119,6 +91,8 @@ export function createRenderRouter(
       viewport: Viewport;
       libraryOf?: Pick<Screen, "library"> | Pick<Snippet, "library">;
       withBundles?: boolean;
+      /** Client-mount only when the tree has repository components. */
+      repoMount?: boolean;
       selectionRing?: boolean;
     },
   ): Promise<Response> => {
@@ -134,9 +108,11 @@ export function createRenderRouter(
     try {
       const snapshotCss = await jit.build();
       const theme = themeByName(f, c.req.query("theme"));
-      const canvasBundle = opts.withBundles
-        ? await canvasBundleFor(ctx, screen, theme, dark)
-        : undefined;
+      // Snippet tiles stay on the lean server render, except that a snippet
+      // built from repository components has nothing real to show without the
+      // browser mount.
+      const mount = opts.withBundles || (opts.repoMount && usesRepo(screen.tree, f.snippets));
+      const canvasBundle = mount ? await canvasBundleFor(ctx)(screen, theme, dark) : undefined;
       const { html } = await renderScreen(screen, theme, {
         viewport,
         snapshotCss,
@@ -237,7 +213,7 @@ export function createRenderRouter(
       },
     };
 
-    return renderPreview(c, { ctx, screen, viewport, libraryOf: snippet });
+    return renderPreview(c, { ctx, screen, viewport, libraryOf: snippet, repoMount: true });
   });
 
   /**
@@ -271,7 +247,14 @@ export function createRenderRouter(
 
     // Nothing draws selection chrome over this iframe — there is no board
     // frame around it — so the document draws its own.
-    return renderPreview(c, { ctx, screen, viewport, libraryOf: snippet, selectionRing: true });
+    return renderPreview(c, {
+      ctx,
+      screen,
+      viewport,
+      libraryOf: snippet,
+      repoMount: true,
+      selectionRing: true,
+    });
   });
 
   /**
@@ -328,6 +311,36 @@ export function createRenderRouter(
     return renderPreview(c, { ctx, screen, viewport });
   });
 
+  /**
+   * One of the app's own components, mounted for real — the Library's Repo
+   * tiles and detail preview. `?state=` picks a catalog preview state by
+   * index; the component is centered like any other library tile.
+   */
+  r.get("/repo/:componentId", async (c) => {
+    const ctx = ctxFor();
+    const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+    const entry = catalog?.byId.get(c.req.param("componentId"));
+    if (!entry) return c.json({ error: "repository component not found" }, 404);
+    const state = entry.states[Number(c.req.query("state") ?? 0)]?.props ?? {};
+    const props: Record<string, unknown> =
+      Object.keys(state).length > 0
+        ? { ...state }
+        : entry.acceptsChildren
+          ? { children: entry.name }
+          : {};
+    const screen: Screen = {
+      id: `${entry.key}__preview`,
+      name: `${entry.name} preview`,
+      tree: { $ref: entry.name, $repo: entry.identity, props },
+    };
+    return renderPreview(c, {
+      ctx,
+      screen,
+      viewport: parseViewport(c, 480, 200),
+      repoMount: true,
+    });
+  });
+
   r.get("/:screenId", async (c) => {
     const ctx = ctxFor();
     const f = ctx.folder;
@@ -341,4 +354,14 @@ export function createRenderRouter(
   });
 
   return r;
+}
+
+function usesRepo(node: Node, snippets: Map<string, Snippet>, seen = new Set<string>()): boolean {
+  if (isSnippetInstance(node)) {
+    const snippet = snippets.get(node.$snippet);
+    if (!snippet || seen.has(snippet.id)) return false;
+    return usesRepo(snippet.tree, snippets, new Set([...seen, snippet.id]));
+  }
+  if (!isComponentNode(node)) return false;
+  return isRepoNode(node) || (node.children ?? []).some((child) => usesRepo(child, snippets, seen));
 }

@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -48,6 +50,7 @@ import { registerGenerateTools } from "./tools/generate.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
+import { registerRepoTools } from "./tools/repo.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
 import { registerThemeTools } from "./tools/theme.ts";
 import { createTraceRecorder, withCallRecording } from "./trace.ts";
@@ -219,7 +222,10 @@ function buildMcpServer(
   // the variant for multi-channel providers) — no provider ids here.
   const channel = styleChannelOf(ctx.defaultProvider, ctx.folder.config.styling?.framework);
   const channelKind = channel.kind;
-  const intro = (ctx.defaultProvider as FrameworkAdapter).mcpIntro?.(channelKind) ?? [];
+  const intro = [
+    ...((ctx.defaultProvider as FrameworkAdapter).mcpIntro?.(channelKind) ?? []),
+    ...repoInstruction(ctx),
+  ];
   // Tailwind-channel folders whose host app is still on v3 get the downlevel
   // guidance up front (the canvas always compiles v4).
   const hostTailwindMajor = channel.needsTailwindJit
@@ -259,6 +265,7 @@ function buildMcpServer(
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx, jit);
   registerScreenshotTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
+  registerRepoTools(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerExtensionTools(mcp, ctx);
   registerNoteTools(mcp, ctx);
   registerAssetTools(mcp, ctx);
@@ -495,4 +502,23 @@ export async function createStdioMcpServer(
       await server.close().catch(() => undefined);
     },
   };
+}
+
+/**
+ * The app's own components, stated up front when the design is bound to an
+ * app: they are the first thing to reach for, and they need one setup step.
+ * Synchronous on purpose (session start never waits on discovery), so it
+ * speaks about the capability and the recipes found, not the catalog itself.
+ */
+function repoInstruction(ctx: MutationContext): string[] {
+  const repo = ctx.repo;
+  if (!repo) return [];
+  const hostRoot = repo.host(undefined).hostRoot;
+  if (!existsSync(join(hostRoot, "package.json"))) return [];
+  const recipes = repo.recipes(undefined);
+  return [
+    "**The app's own components are placeable.** `list_components` shelves them first, under Repo, from what the app's routes render. Compose them by id (`<Tabs>`, `<Tabs.List>`; a name that collides with a Velloo primitive is qualified, e.g. `<Mantine.Button>`) rather than rebuilding them from primitives. They render for real inside the folder's preview entry — run `preview_status` once before designing; `set_preview_entry` fixes a missing provider or stylesheet. Style one through the props it declares; `emit_code` returns their exact `repoImports`.",
+    ...recipes.flatMap((recipe) => recipe.notes),
+    "",
+  ];
 }

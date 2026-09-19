@@ -16,7 +16,9 @@ import {
   isSnippetInstance,
   type Node,
   nodeId,
+  repoKey,
   type Screen,
+  type Snippet,
   typesetScale,
 } from "@velloo/schema";
 import { z } from "zod";
@@ -26,11 +28,13 @@ import {
   orderedBoards,
   resolveNamedTheme,
 } from "../../design-folder.ts";
+import type { CanvasComponentDiagnostic } from "../../live/canvas-bundle.ts";
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts";
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { resolveLocator } from "../../path.ts";
+import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
 import { snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
@@ -140,6 +144,116 @@ function toSummary(c: ComponentDescriptor): ComponentSummary {
   };
   if (c.designModeNotes) out.designModeNotes = c.designModeNotes;
   return out;
+}
+
+/**
+ * Build-time diagnostics refined by what the mounted frame found at runtime
+ * (a throw, a missing provider, an unstyled render), and by which failed
+ * components have a proxy standing in on this screen.
+ */
+function withRuntime(
+  built: CanvasComponentDiagnostic[],
+  runtime: CanvasComponentDiagnostic[] | undefined,
+  proxied: Set<string>,
+): CanvasComponentDiagnostic[] {
+  const byId = new Map(built.map((entry) => [entry.id, { ...entry }]));
+  for (const entry of runtime ?? []) {
+    const current = byId.get(entry.id);
+    byId.set(entry.id, { ...(current ?? {}), ...entry });
+  }
+  for (const entry of byId.values()) {
+    if (entry.status === "unavailable" && proxied.has(entry.id)) entry.status = "proxy";
+  }
+  return [...byId.values()];
+}
+
+/** Repository keys whose nodes on this screen name a proxy snippet. */
+function proxiedKeys(screen: Screen, snippets: Map<string, Snippet>): Set<string> {
+  const out = new Set<string>();
+  const visit = (node: Node, seen: Set<string>): void => {
+    if (isSnippetInstance(node)) {
+      const snippet = snippets.get(node.$snippet);
+      if (snippet && !seen.has(snippet.id)) visit(snippet.tree, new Set([...seen, snippet.id]));
+      return;
+    }
+    if (!isComponentNode(node)) return;
+    if (node.$repo?.proxy) out.add(repoKey(node.$repo));
+    for (const child of node.children ?? []) visit(child, seen);
+  };
+  visit(screen.tree, new Set());
+  return out;
+}
+
+/** A catalog entry as `list_components` shows it. */
+function repoListEntry(entry: RepoCatalogEntry) {
+  const own = entry.props.filter((prop) => !prop.inherited);
+  const familyId = entry.identity.member
+    ? entry.id.slice(0, entry.id.length - entry.identity.member.length - 1)
+    : entry.id;
+  const notes = [
+    entry.provenance.length > 0
+      ? `Used at ${entry.provenance[0]}${entry.provenance.length > 1 ? ` (+${entry.provenance.length - 1})` : ""}.`
+      : entry.viaFamily
+        ? `Part of ${familyId}.`
+        : undefined,
+    entry.qualifiedBecause ? `Qualified: ${entry.qualifiedBecause}.` : undefined,
+  ].filter(Boolean);
+  return {
+    id: entry.id,
+    kind: "repo" as const,
+    category: "ui" as const,
+    source: entry.packageName ?? "app",
+    group: `repo:${entry.packageName ?? "app"}`,
+    family: familyId,
+    ...(notes.length > 0 ? { designModeNotes: notes.join(" ") } : {}),
+    importPath: entry.identity.importPath,
+    exportName: entry.identity.exportName,
+    ...(entry.identity.member ? { member: entry.identity.member } : {}),
+    ...(entry.identity.app ? { app: entry.identity.app } : {}),
+    ...(entry.recipe ? { recipe: entry.recipe } : {}),
+    props: own,
+    ...(own.length < entry.props.length ? { inheritedProps: entry.props.length - own.length } : {}),
+    acceptsChildren: entry.acceptsChildren,
+    styleProps: entry.styleProps,
+    states: entry.states.slice(0, 4),
+    ...(entry.parts ? { parts: entry.parts } : {}),
+    provenance: entry.provenance,
+    availableInDesign: true,
+    installedInApp: true,
+  };
+}
+
+type RepoListEntry = ReturnType<typeof repoListEntry>;
+
+function repoSummary(entry: RepoListEntry): Record<string, unknown> {
+  return {
+    id: entry.id,
+    kind: "repo",
+    importPath: entry.importPath,
+    props: entry.props.map((prop) => prop.name),
+    ...(entry.states.length > 0 ? { states: entry.states.map((state) => state.name) } : {}),
+    ...(entry.designModeNotes ? { designModeNotes: entry.designModeNotes } : {}),
+    availableInDesign: true,
+    installedInApp: true,
+  };
+}
+
+function repoShelfLabel(group: string): string {
+  const source = group.slice("repo:".length);
+  return source === "app" ? "Repo · this app's components" : `Repo · ${source}`;
+}
+
+/** The setup state an agent needs before trusting the Repo shelves. */
+function repoIndexNote(catalog: RepoCatalog): Record<string, unknown> {
+  return {
+    note: "Repo shelves are the app's own components: compose them by id. They render for real inside the preview entry (check it once with preview_status) and emit their exact imports.",
+    apps: catalog.apps.map((app) => ({
+      ...(app.app ? { app: app.app } : {}),
+      preview: app.preview.label,
+      ...(app.recipes.length > 0 ? { recipes: app.recipes } : {}),
+    })),
+    ...(catalog.warnings.length > 0 ? { warnings: catalog.warnings } : {}),
+  };
 }
 
 /** The two shelves that aren't the library's: what this folder added itself. */
@@ -327,7 +441,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       inputSchema: {
         filter: z.string().optional(),
         mode: z.enum(["index", "summary", "full"]).optional(),
-        kind: z.enum(["library", "extension", "snippet"]).optional(),
+        kind: z.enum(["library", "extension", "snippet", "repo"]).optional(),
         unusedOnly: z
           .boolean()
           .optional()
@@ -380,6 +494,8 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         installedInApp: true,
         ...(unused.has(snippet.id) ? { unused: true as const } : {}),
       }));
+      const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+      const repoEntries = (repoCatalog?.entries ?? []).map(repoListEntry);
       const all = unusedOnly
         ? snippetEntries.filter((entry) => unused.has(entry.snippetId))
         : kind === "library"
@@ -388,7 +504,9 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
             ? extensionEntries
             : kind === "snippet"
               ? snippetEntries
-              : [...libraryEntries, ...extensionEntries, ...snippetEntries];
+              : kind === "repo"
+                ? repoEntries
+                : [...repoEntries, ...libraryEntries, ...extensionEntries, ...snippetEntries];
       const filtered = filter
         ? all.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()))
         : all;
@@ -396,7 +514,13 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         // Extensions and snippets get shelves of their own: they are the two
         // layers the agent adds, so burying them among 66 library families
         // would hide exactly the components this folder chose to have.
-        const order = [...COMPONENT_GROUPS, EXTENSION_SHELF, SNIPPET_SHELF];
+        // The app's own components come first: prefer them over rebuilding
+        // one from primitives. One shelf per source, so provenance is visible.
+        const repoShelves = [...new Set(repoEntries.map((entry) => entry.group))].map((id) => ({
+          id,
+          label: repoShelfLabel(id),
+        }));
+        const order = [...repoShelves, ...COMPONENT_GROUPS, EXTENSION_SHELF, SNIPPET_SHELF];
         const shelfOf = (group: string | undefined): string =>
           order.find((g) => g.id === group)?.label ?? UNGROUPED_LABEL;
         const index = componentIndex(
@@ -418,12 +542,19 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           order,
           shelfOf,
         );
-        return structuredResult({ snapshotVersion: ctx.defaultProvider.version, ...index });
+        return structuredResult({
+          snapshotVersion: ctx.defaultProvider.version,
+          ...index,
+          ...(repoCatalog && repoEntries.length > 0 ? { repo: repoIndexNote(repoCatalog) } : {}),
+        });
       }
       const out =
         mode === "full"
-          ? filtered.map((entry) => (entry.kind === "snippet" ? entry : trimLargeEnums(entry)))
+          ? filtered.map((entry) =>
+              entry.kind === "snippet" || entry.kind === "repo" ? entry : trimLargeEnums(entry),
+            )
           : filtered.map((c) => {
+              if (c.kind === "repo") return repoSummary(c);
               const summary =
                 c.kind === "snippet"
                   ? {
@@ -519,7 +650,17 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
                 note: `The canvas and every capture render this screen from Velloo's bundled components, not the app's own, because ${mount.reason}. Statuses below describe each component's source; none of them reaches the screen until the blocking ones are fixed or replaced.`,
               }
             : {}),
-          diagnostics: mount.bundle?.diagnostics ?? [],
+          diagnostics: withRuntime(
+            mount.bundle?.diagnostics ?? [],
+            mount.kind === "mounted" ? ctx.canvasBundler.runtimeDiagnostics(mount.refs) : undefined,
+            proxiedKeys(screen, ctx.folder.snippets),
+          ),
+          ...(mount.kind === "mounted" && mount.refs.some((ref) => ref.startsWith("repo:"))
+            ? {
+                runtimeChecked: ctx.canvasBundler.runtimeDiagnostics(mount.refs) !== undefined,
+                ...(mount.bundle.metrics ? { build: mount.bundle.metrics } : {}),
+              }
+            : {}),
           errors: mount.bundle?.errors ?? [],
         });
       }
@@ -544,12 +685,28 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       // told the canvas is broken rather than that the id is wrong.
       const manifest = await provider.loadManifest().catch(() => []);
       const known = new Set(manifest.map((entry) => entry.id));
+      // The app's own components answer by catalog id through the same
+      // bundler a screen would mount them with.
+      const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+      const repoIds = ids.filter((id) => !known.has(id) && repoCatalog?.byId.has(id));
+      const repoDiagnostics =
+        repoIds.length > 0 && ctx.canvasBundler
+          ? (
+              await ctx.canvasBundler.build(
+                libraryId,
+                repoIds.map((id) => repoCatalog?.byId.get(id)?.key as string),
+              )
+            ).diagnostics.map((entry) => ({
+              ...entry,
+              id: repoIds.find((id) => repoCatalog?.byId.get(id)?.key === entry.id) ?? entry.id,
+            }))
+          : [];
       const unknownDiagnostics = ids
-        .filter((id) => !known.has(id))
+        .filter((id) => !known.has(id) && !repoIds.includes(id))
         .map((id) => ({
           id,
           status: "unknown" as const,
-          note: "Not a component in this library — call list_components for the ids it accepts. An app component under its own name is not one of them; design with the library's components and match the app's styling.",
+          note: "Not a component in this library or the app's repo catalog — call list_components for the ids it accepts.",
         }));
       const recognized = ids.filter((id) => known.has(id));
 
@@ -565,6 +722,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
               status: "bundled",
               note: "Rendered by the real library through Velloo's bundled adapter; host-app client mounting is unavailable.",
             })),
+            ...repoDiagnostics,
             ...unknownDiagnostics,
           ],
           errors: [],
@@ -576,7 +734,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       return jsonResult({
         library: libraryId,
         usable: result.usable,
-        diagnostics: [...result.diagnostics, ...unknownDiagnostics],
+        diagnostics: [...result.diagnostics, ...repoDiagnostics, ...unknownDiagnostics],
         errors: result.errors,
       });
     },

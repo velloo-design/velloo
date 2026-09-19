@@ -103,3 +103,29 @@ export const ExtensionSchema = z.object({
 });
 
 export type Extension = z.infer<typeof ExtensionSchema>;
+
+/**
+ * `repo-components.json` in a design folder: checked-in corrections to what
+ * repository-component discovery infers. Keyed `<importPath>#<export>` (or
+ * `…#<export>.<Member>` for a compound part). Overrides refine the inferred
+ * entry; they never replace discovery, and a key or prop that no longer
+ * matches anything discovered is reported as stale.
+ */
+export const RepoComponentOverrideSchema = z.object({
+  description: z.string().optional(),
+  /** Leave this component out of the catalog. */
+  exclude: z.boolean().optional(),
+  /** Snippet drawn in the component's place when it can't render for real. */
+  proxy: z.string().min(1).optional(),
+  /** Replaces or adds prop descriptors by name. */
+  props: z.array(ExtensionPropDescriptorSchema).optional(),
+  /** Named preview states: state name → props. */
+  states: z.record(z.string().min(1), z.record(z.string(), z.unknown())).optional(),
+});
+
+export const RepoComponentsManifestSchema = z.object({
+  components: z.record(z.string().min(1), RepoComponentOverrideSchema),
+});
+
+export type RepoComponentOverride = z.infer<typeof RepoComponentOverrideSchema>;
+export type RepoComponentsManifest = z.infer<typeof RepoComponentsManifestSchema>;

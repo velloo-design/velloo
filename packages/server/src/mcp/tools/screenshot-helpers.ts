@@ -1,5 +1,6 @@
 import type { FrameworkAdapter } from "@velloo/provider";
 import {
+  type CanvasMountState,
   type CaptureNodeRect,
   CHROMIUM_INSTALL_CMD,
   collectSerializedRefs,
@@ -12,6 +13,7 @@ import {
   isArchived,
   isComponentNode,
   nodeId,
+  parseRepoKey,
   type Screen,
   type Theme,
   type Viewport,
@@ -27,6 +29,7 @@ import {
   renderPassForScreen,
 } from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
+import type { RepoComponents } from "../../repo/catalog.ts";
 import type { DesignDiagnostic } from "../diagnostics.ts";
 
 function playwrightMissingMessage(msg: string): string {
@@ -89,17 +92,26 @@ export function makeLiveUrl(ctx: MutationContext, bundler: LiveBundler): () => s
       : undefined;
 }
 
+/** The client-mount wiring a render embeds: bundle URL, theme inputs, and static fallbacks. */
+interface CanvasMountOption {
+  url: string;
+  themeOptions: unknown;
+  /** What the preview entry receives: scheme, Velloo theme, each app's recipe theme. */
+  preview?: unknown;
+  staticRefs?: string[] | undefined;
+}
+
 export type CanvasBundleFor = (
   screen: Screen,
   theme: Theme,
   dark: boolean,
-) => Promise<{ url: string; themeOptions: unknown } | undefined>;
+) => Promise<CanvasMountOption | undefined>;
 
 /**
- * How a screen renders in the canvas and in every capture. The browser mount is
- * all-or-nothing: one component with no source that compiles keeps the WHOLE
- * screen on the server render, so the per-component fidelity `component_status`
- * reports holds only when the screen as a whole mounts.
+ * How a screen renders in the canvas and in every capture. A screen of
+ * provider components mounts all-or-nothing: one component with no source
+ * that compiles keeps the WHOLE screen on the server render. A screen with
+ * repository components always mounts — each one falls back on its own.
  */
 export type ScreenMount =
   /** The adapter has no browser mount, or the screen uses no components. */
@@ -117,11 +129,10 @@ export async function screenMount(
   canvasBundler: CanvasBundler,
   screen: Screen,
 ): Promise<ScreenMount> {
-  const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-  if (!provider.canvasBundleSpec) return { kind: "none" };
   const refs = collectSerializedRefs(serializeTree(screen.tree, { snippets: ctx.folder.snippets }));
   if (refs.length === 0) return { kind: "none" };
   const libraryId = libraryIdForScreen(ctx, screen);
+  if (!canvasBundler.canMount(libraryId, refs)) return { kind: "none" };
   // See routes/render.ts: an extension ref has no browser-bundle source, so
   // the screen keeps its SSR render (plus any live-island mounts).
   const extensionIds = new Set(Object.keys(ctx.folder.config.extensions ?? {}));
@@ -197,13 +208,34 @@ export function makeCanvasBundle(
     const mount = await screenMount(ctx, canvasBundler, screen);
     if (mount.kind !== "mounted") return undefined;
     const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
+    const hasRepo = mount.refs.some((ref) => ref.startsWith("repo:"));
     return {
       url:
         `/api/canvas/bundle.js?v=${canvasBundler.version}&lib=${encodeURIComponent(mount.libraryId)}` +
         `&refs=${encodeURIComponent(mount.refs.join(","))}`,
       themeOptions: provider.themeToNative?.(theme, dark) ?? null,
+      ...(hasRepo && ctx.repo ? { preview: previewInput(ctx.repo, mount.refs, theme, dark) } : {}),
+      ...(mount.bundle.staticRefs ? { staticRefs: mount.bundle.staticRefs } : {}),
     };
   };
+}
+
+/**
+ * The props every preview entry receives: the frame's scheme, the Velloo
+ * theme, and per app the theme its framework recipe projects from those
+ * tokens — so editing the Velloo theme restyles the app's components too.
+ */
+function previewInput(repo: RepoComponents, refs: string[], theme: Theme, dark: boolean): unknown {
+  const apps = new Set(
+    refs.filter((ref) => ref.startsWith("repo:")).map((ref) => parseRepoKey(ref)?.app),
+  );
+  const recipeTheme: Record<string, unknown> = {};
+  for (const app of apps) {
+    const entry = repo.preview(app);
+    const recipe = entry.kind === "recipe" ? entry.recipe : repo.recipes(app)[0];
+    if (recipe) recipeTheme[app ?? ""] = recipe.themeToNative(theme, dark);
+  }
+  return { colorScheme: dark ? "dark" : "light", theme, recipeTheme };
 }
 
 export interface CaptureRenderOptions {
@@ -328,4 +360,47 @@ export function framesShorterThan(
     }
   }
   return out;
+}
+
+/**
+ * What a capture actually showed for the app's own components: a fidelity
+ * count and each one that wasn't exact, with its reason. Screenshot metadata,
+ * so a picture of a proxy is never read as the real component.
+ */
+export function mountSummary(canvas: CanvasMountState | undefined):
+  | {
+      mounted: boolean;
+      fidelity: Record<string, number>;
+      notExact: { name: string; status: string; code?: string; note?: string }[];
+    }
+  | undefined {
+  const repo = (canvas?.diagnostics ?? []).filter((entry) => entry.id.startsWith("repo:"));
+  if (!canvas || repo.length === 0) return undefined;
+  const fidelity: Record<string, number> = {};
+  for (const entry of repo) fidelity[entry.status] = (fidelity[entry.status] ?? 0) + 1;
+  return {
+    mounted: canvas.mounted,
+    fidelity,
+    notExact: repo
+      .filter((entry) => entry.status !== "exact")
+      .map((entry) => ({
+        name: entry.name ?? entry.id,
+        status: entry.status,
+        ...(entry.code ? { code: entry.code } : {}),
+        ...(entry.note ? { note: entry.note } : {}),
+      })),
+  };
+}
+
+/**
+ * File what a capture's mount found at runtime with the bundler, so
+ * `component_status` reports it too. Capture pages have an opaque origin and
+ * can't post it back themselves; the canvas iframe's own reports arrive by
+ * beacon.
+ */
+export function recordMount(
+  canvasBundler: CanvasBundler,
+  canvas: CanvasMountState | undefined,
+): void {
+  if (canvas?.bundle) canvasBundler.recordRuntime(canvas.bundle, canvas.diagnostics);
 }

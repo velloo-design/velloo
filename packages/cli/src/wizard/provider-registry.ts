@@ -153,14 +153,23 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: (answers) => ({
       framework: answers.detected?.tailwindMajor ? "tailwind" : "none",
     }),
-    // An unsupported framework (Chakra/Mantine/…) → the no-framework adapter:
-    // the agent approximates with div-backed primitives + preserves real
-    // imports via $emitAs.
+    // A framework with no adapter (Mantine/…) → the no-framework adapter for
+    // Velloo's own primitives; the app's components still render for real as
+    // repository components once the setup agent writes the preview entry.
     scanMatch: (detected) => Boolean(detected.unsupportedUi),
     scanNote: (detected) =>
-      `Detected ${detected.unsupportedUi} (no velloo adapter yet) — using the no-framework adapter; approximate its components and preserve their imports with emit-as.`,
+      `Detected ${detected.unsupportedUi} (no Velloo adapter) — the no-framework adapter supplies the primitives, and your ${detected.unsupportedUi} components render from your own install once the setup step writes their preview entry.`,
     handoffComponentsLabel: "velloo primitive",
-    readmeComponentsSection: () => bundledComponentsSection(),
+    readmeComponentsSection: () => [
+      "## Components",
+      "",
+      "Velloo's no-framework primitives ship inside the velloo binary. Your",
+      "app's own components — including ones from a UI framework Velloo has no",
+      "adapter for — appear on the Repo shelves of the canvas Library and render",
+      "from your own install, inside this design's preview entry (`preview.tsx`",
+      "here; the setup step writes it). `emit_code` keeps their exact imports.",
+      "",
+    ],
   },
   mui: {
     label: "Material UI",

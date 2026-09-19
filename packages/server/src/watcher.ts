@@ -51,8 +51,15 @@ export function classifyWatchPath(filename: string | null): WatchEvent | null {
     const snippetId = parts[1].slice(0, -".json".length);
     return { type: "snippet-changed", snippetId };
   }
+  // The preview entry and the repository-component overrides change what every
+  // mounted screen renders, the way a config edit does.
+  if (parts.length === 1 && parts[0] && ROOT_CONFIG_FILES.test(parts[0])) {
+    return { type: "config-changed" };
+  }
   return null;
 }
+
+const ROOT_CONFIG_FILES = /^(preview(\.[\w-]+)?\.(tsx|jsx|ts|js)|repo-components\.json)$/;
 
 export function watchDesignFolder(
   root: string,
@@ -117,6 +124,15 @@ export function watchDesignFolder(
 
 function designFingerprint(root: string): Map<string, string> {
   const out = new Map<string, string>();
+  try {
+    for (const name of readdirSync(root)) {
+      if (!ROOT_CONFIG_FILES.test(name)) continue;
+      const stat = statSync(join(root, name));
+      out.set(name, `${stat.mtimeMs}:${stat.size}`);
+    }
+  } catch {
+    // The folder is being moved; the next poll sees where it landed.
+  }
   for (const sub of ["screens", "boards", "theme", "snippets"]) {
     const dir = join(root, sub);
     if (!existsSync(dir)) continue;
@@ -144,17 +160,27 @@ function designFingerprint(root: string): Map<string, string> {
  */
 export function watchSourcePaths(
   paths: readonly string[],
-  onChange: () => void,
+  onChange: (changed: string[]) => void,
   debounceMs = 80,
+  pollMs = 250,
 ): Watcher {
   const targets = [...new Set(paths)];
   const watchers = new Map<string, FSWatcher>();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const schedule = (): void => {
+  // Files named by fs.watch since the last flush; an empty list means "something
+  // changed, unattributed" (a poll hit), which callers treat as everything.
+  let changed = new Set<string>();
+  let unattributed = false;
+  const schedule = (file?: string): void => {
+    if (file) changed.add(file);
+    else unattributed = true;
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = undefined;
-      onChange();
+      const files = unattributed ? [] : [...changed];
+      changed = new Set();
+      unattributed = false;
+      onChange(files);
     }, debounceMs);
   };
 
@@ -165,7 +191,7 @@ export function watchSourcePaths(
       watchers.set(
         target,
         watch(target, { recursive: true }, (_event, filename) => {
-          if (filename) schedule();
+          if (filename) schedule(join(target, String(filename)));
         }),
       );
     } catch {
@@ -192,7 +218,7 @@ export function watchSourcePaths(
       else disarm(target);
     }
     schedule();
-  }, 250);
+  }, pollMs);
   return {
     close() {
       for (const watcher of watchers.values()) watcher.close();

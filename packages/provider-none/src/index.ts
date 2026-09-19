@@ -1,11 +1,21 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type FrameworkAdapter, type Manifest, TAILWIND_CLASSNAME } from "@velloo/provider";
+import { helperSourcePath } from "@velloo/helpers/paths";
+import {
+  type CanvasComponentSpec,
+  type FrameworkAdapter,
+  type Manifest,
+  TAILWIND_CLASSNAME,
+} from "@velloo/provider";
 import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
 import { NONE_INLINE_INTRO, NONE_INTRO } from "./intro.ts";
 import { NONE_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { inlineRegistry } from "./registry-inline.ts";
+
+const PRIMITIVES = new Set(["Box", "Stack", "Container", "Card", "Button", "Input"]);
+/** Typography the inline channel restyles; the Tailwind channel reuses the helpers. */
+const INLINE_TYPOGRAPHY = new Set(["Heading", "Text"]);
 
 export { Box, Button, Card, Container, Input, Stack } from "./components.tsx";
 export { NONE_MANIFEST } from "./manifest.ts";
@@ -53,5 +63,36 @@ export function createProvider(): FrameworkAdapter {
     // Inline-styled primitives for the `style` channel; Tailwind-classed for
     // every other channel. Lets a `none/none` folder paint with the JIT off.
     registryForChannel: (kind) => (kind === "style" ? inlineRegistry : registry),
+    // No framework to install, so this only matters beside repository
+    // components: the screen then client-mounts, and these primitives have to
+    // render in the same browser tree as the app's own components.
+    canvasBundleSpec: {
+      styleRuntime: { kind: "none" },
+      onlyWithRepository: true,
+      components: (ids, context) => {
+        const inline = context?.channel === "style";
+        return ids.flatMap((id): CanvasComponentSpec[] => {
+          const own =
+            PRIMITIVES.has(id) || (inline && INLINE_TYPOGRAPHY.has(id))
+              ? join(srcDir, inline ? "components-inline.tsx" : "components.tsx")
+              : helperSourcePath(id);
+          return own
+            ? [
+                {
+                  id,
+                  sources: [
+                    {
+                      importPath: own,
+                      exportName: id,
+                      fidelity: "exact" as const,
+                      note: "Velloo primitive, mounted beside the app's components.",
+                    },
+                  ],
+                },
+              ]
+            : [];
+        });
+      },
+    },
   };
 }

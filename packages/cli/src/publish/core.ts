@@ -26,6 +26,7 @@ import {
 } from "@velloo/schema";
 import {
   activeBoards,
+  createPublishMount,
   type DesignFolder,
   LiveBundler,
   liveExtensions,
@@ -478,67 +479,75 @@ export async function publishDesign(
   // unfurl card and emails — but never fatal: with no browser the publish
   // goes out without them.
   report({ kind: "step", step: "capture", message: "capturing previews" });
-  const shots: BundleScreenshots | null = await withAssetServer(root, liveCode, (baseHref) => {
-    const htmlCache = new Map<string, Promise<string>>();
-    const renderHtml = async (
-      screen: Screen,
-      themeName?: string,
-      scheme: "light" | "dark" = "light",
-    ): Promise<string> => {
-      const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
-      // NUL separates the two halves: no id or theme name can contain it, so
-      // the composite key can't collide the way a printable separator can.
-      const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
-      const cached = htmlCache.get(key);
-      if (cached) return cached;
-      const rendering = renderScreen(screen, theme, {
+  const mount = createPublishMount(pipeline.folder, pipeline.providers, pipeline.defaultProvider);
+  const shots: BundleScreenshots | null = await withAssetServer(
+    root,
+    liveCode,
+    (baseHref) => {
+      const htmlCache = new Map<string, Promise<string>>();
+      const renderHtml = async (
+        screen: Screen,
+        themeName?: string,
+        scheme: "light" | "dark" = "light",
+      ): Promise<string> => {
+        const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
+        // NUL separates the two halves: no id or theme name can contain it, so
+        // the composite key can't collide the way a printable separator can.
+        const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
+        const cached = htmlCache.get(key);
+        if (cached) return cached;
+        const canvasBundle = await mount.forScreen(screen, theme, scheme === "dark");
+        const rendering = renderScreen(screen, theme, {
+          viewport,
+          snapshotCss,
+          registry: registryForScreen(
+            screen,
+            pipeline.providers,
+            pipeline.defaultProvider,
+            config.extensions ?? {},
+          ),
+          renderPass: renderPassForScreen(
+            screen,
+            pipeline.providers,
+            pipeline.defaultProvider,
+            theme,
+          ),
+          snippets: design.snippets,
+          customCss: design.customCss,
+          dark: scheme === "dark",
+          baseHref,
+          ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
+          ...(canvasBundle ? { canvasBundle } : {}),
+        }).then(({ html }) => html);
+        htmlCache.set(key, rendering);
+        return rendering;
+      };
+      return captureBundleScreenshots({
+        screens,
+        boards,
+        ...(request.screenshotSelection
+          ? {
+              screenIds: request.screenshotSelection.screenIds,
+              boardIds: request.screenshotSelection.boardIds,
+            }
+          : {}),
         viewport,
-        snapshotCss,
-        registry: registryForScreen(
-          screen,
-          pipeline.providers,
-          pipeline.defaultProvider,
-          config.extensions ?? {},
-        ),
-        renderPass: renderPassForScreen(
-          screen,
-          pipeline.providers,
-          pipeline.defaultProvider,
-          theme,
-        ),
-        snippets: design.snippets,
-        customCss: design.customCss,
-        dark: scheme === "dark",
-        baseHref,
-        ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
-      }).then(({ html }) => html);
-      htmlCache.set(key, rendering);
-      return rendering;
-    };
-    return captureBundleScreenshots({
-      screens,
-      boards,
-      ...(request.screenshotSelection
-        ? {
-            screenIds: request.screenshotSelection.screenIds,
-            boardIds: request.screenshotSelection.boardIds,
-          }
-        : {}),
-      viewport,
-      renderHtml,
-      capture: async (req) =>
-        (
-          await captureScreenshot({
-            html: req.html,
-            viewport: req.viewport,
-            fullPage: req.fullPage,
-            deviceScaleFactor: req.deviceScaleFactor,
-          })
-        ).png,
-      warn: (message) => report({ kind: "warn", message }),
-      progress: (done, total) => report({ kind: "capture", done, total }),
-    });
-  });
+        renderHtml,
+        capture: async (req) =>
+          (
+            await captureScreenshot({
+              html: req.html,
+              viewport: req.viewport,
+              fullPage: req.fullPage,
+              deviceScaleFactor: req.deviceScaleFactor,
+            })
+          ).png,
+        warn: (message) => report({ kind: "warn", message }),
+        progress: (done, total) => report({ kind: "capture", done, total }),
+      });
+    },
+    mount.serve,
+  );
   for (const f of shots?.files ?? []) addFile(f.path, f.bytes, "image/png");
 
   // Designer markup travels with the design so the cloud's board canvas can

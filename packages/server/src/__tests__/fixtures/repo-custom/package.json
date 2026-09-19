@@ -1,0 +1,9 @@
+{
+  "name": "repo-custom-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "*",
+    "react-dom": "*"
+  }
+}

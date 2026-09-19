@@ -1,4 +1,4 @@
-import { isComponentNode, isSnippetInstance, nodeId } from "@velloo/schema";
+import { isComponentNode, isRepoNode, isSnippetInstance, nodeId } from "@velloo/schema";
 import { Braces, MousePointerClick, Unlink } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { mutate } from "../api.ts";
@@ -10,7 +10,7 @@ import { useControlWrite } from "../hud/use-control-write.ts";
 import { applyStyleValue, classNameOf } from "../hud/values.ts";
 import { nodeRung, nodeTypography } from "../node-typography.ts";
 import { pathFromString } from "../path.ts";
-import { selectedNode, useCanvas } from "../store.ts";
+import { repoEntryFor, selectedNode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { CopyField } from "./CopyField.tsx";
 import { EmptyState } from "./EmptyState.tsx";
@@ -18,6 +18,7 @@ import { NodeStyleSection } from "./hud/NodeStyleSection.tsx";
 import { IdField } from "./IdField.tsx";
 import { ImagePanel } from "./ImagePanel.tsx";
 import { PropField } from "./PropField.tsx";
+import { RepoInspectorBlock, RepoPropFields } from "./RepoInspectorBlock.tsx";
 import { SnippetInspector } from "./SnippetInspector.tsx";
 import { SnippetSubstitutions } from "./SnippetSubstitutions.tsx";
 import { StyleObjectEditor } from "./style-editor/StyleObjectEditor.tsx";
@@ -37,6 +38,7 @@ export function Inspector() {
   const selectionComputed = useCanvas((s) => s.selectionComputed);
   const selectionRects = useSelectionRects();
   const components = useCanvas((s) => s.components);
+  const repoCatalog = useCanvas((s) => s.repoCatalog);
   const screens = useCanvas((s) => s.screens);
   const styleChannel = useCanvas((s) => s.styleChannel);
   const channelsByLibrary = useCanvas((s) => s.channelsByLibrary);
@@ -59,10 +61,16 @@ export function Inspector() {
   // The screen root, for the typeset-region ancestor walk — a typeset applies to
   // a subtree, so the node alone can't say which one it renders under.
   const tree = selection ? screens[selection.screenId]?.tree : undefined;
+  // A repo node's `$ref` is its JSX name, which can collide with a provider
+  // component (Mantine's `Button`) — its descriptor comes from the repo entry.
   const descriptor = useMemo(() => {
-    if (!node || !components || !isComponentNode(node)) return null;
+    if (!node || !components || !isComponentNode(node) || isRepoNode(node)) return null;
     return components.find((c) => c.id === node.$ref) ?? null;
   }, [node, components]);
+  const repoEntry = useMemo(
+    () => (node && isRepoNode(node) ? repoEntryFor(repoCatalog, node.$repo) : null),
+    [node, repoCatalog],
+  );
 
   // The payload captures screenId/path at edit time, so a selection change
   // inside the debounce window can't redirect a pending commit.
@@ -140,9 +148,27 @@ export function Inspector() {
   // doesn't speak. Resolve the channel for the selected screen's library,
   // falling back to the folder default.
   const screenLibrary = screens[selection.screenId]?.library;
-  const channel = (screenLibrary ? channelsByLibrary[screenLibrary] : undefined) ?? styleChannel;
-  const channelProp = channel?.prop ?? "className";
-  const isObjectChannel = channel?.kind === "sx" || channel?.kind === "style";
+  const folderChannel =
+    (screenLibrary ? channelsByLibrary[screenLibrary] : undefined) ?? styleChannel;
+  const repoRef = isRepoNode(node) ? node.$repo : null;
+  // A repo component is styled through the props it declares, not the
+  // folder's channel: classes only when it takes `className` and the folder
+  // speaks Tailwind, an object through `sx` (else `style`) — the same routing
+  // `update_props` applies server-side.
+  const repoStyleProps = repoEntry?.styleProps ?? [];
+  const repoObjectProp = repoStyleProps.includes("sx")
+    ? "sx"
+    : repoStyleProps.includes("style")
+      ? "style"
+      : null;
+  const classStyle = repoRef
+    ? repoStyleProps.includes("className") && folderChannel?.kind === "tailwind-classname"
+    : !(folderChannel?.kind === "sx" || folderChannel?.kind === "style");
+  const channelProp = repoRef
+    ? (repoObjectProp ?? "className")
+    : (folderChannel?.prop ?? "className");
+  const channelKind = repoRef ? repoObjectProp : folderChannel?.kind;
+  const isObjectChannel = channelKind === "sx" || channelKind === "style";
   // Hide the channel prop from the generic prop list — it's edited below by the
   // dedicated field (so a MUI node's `sx` doesn't also show as a raw string prop).
   // Props the Style section already offers are hidden for the same reason: two
@@ -150,6 +176,7 @@ export function Inspector() {
   const hiddenProps = new Set([
     ...HIDDEN_PROPS,
     channelProp,
+    ...repoStyleProps,
     ...resolveControls({ node, descriptor })
       .controls.map((c) => (c.slot.via === "prop" ? c.slot.name : null))
       .filter((n): n is string => n !== null),
@@ -159,7 +186,11 @@ export function Inspector() {
   const selectionKey = `${selection.screenId}:${selection.path}`;
   const childrenValue =
     typeof node.props?.children === "string" ? (node.props.children as string) : "";
-  const showCopy = typeof node.props?.children === "string" || descriptor === null;
+  const showCopy =
+    typeof node.props?.children === "string" ||
+    (repoRef
+      ? (repoEntry?.acceptsChildren ?? true) && !node.children?.length
+      : descriptor === null);
   // The image panel keys on the node carrying a src, not on `$ref === "Image"`:
   // every provider names its image component differently, and a node with a
   // src is exactly the node a generated asset can be swapped into.
@@ -226,6 +257,8 @@ export function Inspector() {
       <StatePreview key={selectionKey} />
 
       <div className="flex-1 overflow-y-auto scroll-stable p-4 flex flex-col gap-4">
+        {repoRef ? <RepoInspectorBlock repo={repoRef} entry={repoEntry} /> : null}
+
         <IdField
           key={`${selectionKey}:id`}
           initialValue={nodeId(node) ?? ""}
@@ -253,22 +286,24 @@ export function Inspector() {
           />
         ) : null}
 
-        <section className="flex flex-col gap-3">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Style</div>
-          <NodeStyleSection
-            key={`${selectionKey}:style`}
-            node={node}
-            tree={tree}
-            path={selection.path}
-            theme={theme}
-            descriptor={descriptor}
-            snippet={null}
-            classChannel={!isObjectChannel}
-            computed={computed}
-            measured={measuredRect}
-            onChange={commitControl}
-          />
-        </section>
+        {repoRef && !classStyle ? null : (
+          <section className="flex flex-col gap-3">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Style</div>
+            <NodeStyleSection
+              key={`${selectionKey}:style`}
+              node={node}
+              tree={tree}
+              path={selection.path}
+              theme={theme}
+              descriptor={descriptor}
+              snippet={null}
+              classChannel={classStyle}
+              computed={computed}
+              measured={measuredRect}
+              onChange={commitControl}
+            />
+          </section>
+        )}
 
         {theme && tree ? (
           <NodeTypographyReadout
@@ -276,6 +311,16 @@ export function Inspector() {
             tree={tree}
             path={pathFromString(selection.path)}
             node={node}
+          />
+        ) : null}
+
+        {repoEntry ? (
+          <RepoPropFields
+            props={repoEntry.props}
+            values={node.props}
+            hidden={hiddenProps}
+            fieldKey={propsKey}
+            onChange={commitProp}
           />
         ) : null}
 
@@ -305,18 +350,18 @@ export function Inspector() {
                 node.props?.[channelProp] && typeof node.props[channelProp] === "object"
                   ? (node.props[channelProp] as Record<string, unknown>)
                   : undefined;
+              const editorKey = `${selectionKey}:${channelProp}`;
               const editorProps = {
-                key: `${selectionKey}:${channelProp}`,
                 initialValue: objValue,
                 prop: channelProp,
                 screenId: selection.screenId,
                 path: selection.path,
                 debounceMs: DEBOUNCE_MS,
               };
-              return channel?.kind === "sx" ? (
-                <SxStyleEditor {...editorProps} />
+              return channelKind === "sx" ? (
+                <SxStyleEditor key={editorKey} {...editorProps} />
               ) : (
-                <StyleObjectEditor {...editorProps} />
+                <StyleObjectEditor key={editorKey} {...editorProps} />
               );
             })()
           : null}

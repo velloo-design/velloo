@@ -99,6 +99,19 @@ export interface EmitCodeResult {
    * caveats live on each `snippetsUsed[].warnings`.
    */
   warnings: string[];
+  /**
+   * The app's own components the JSX uses, as the exact imports to write —
+   * `import { Tabs } from "@mantine/core"`. Unlike library components these
+   * are not the agent's choice of path: they are where the app already gets
+   * them. A `./`-relative `from` is relative to the app root.
+   */
+  repoImports: RepoImport[];
+}
+
+export interface RepoImport {
+  from: string;
+  named?: string[];
+  default?: string;
 }
 
 export interface EmitSnippetIR {
@@ -115,6 +128,8 @@ export interface EmitSnippetIR {
   helpersToMaterialize: string[];
   /** Non-fatal emit caveats for this snippet body (see EmitCodeResult.warnings). */
   warnings: string[];
+  /** The app components this snippet body uses (see EmitCodeResult.repoImports). */
+  repoImports: RepoImport[];
 }
 
 export interface EmitCodeOptions {
@@ -194,8 +209,10 @@ function collectMetadata(
   icons: Set<string>;
   unresolvedIcons: Set<string>;
   snippetIds: Set<string>;
+  repoImports: RepoImport[];
 } {
   const components = new Set<string>();
+  const repo = new Map<string, { named: Set<string>; default?: string }>();
   const icons = new Set<string>();
   const unresolvedIcons = new Set<string>();
   const snippetIds = new Set<string>();
@@ -212,6 +229,17 @@ function collectMetadata(
     }
   }
   function walk(node: Node): void {
+    if (isComponentNode(node) && node.$repo) {
+      // The app's own component: its import, never a library component or a
+      // shadcn install target, whatever its name.
+      const entry = repo.get(node.$repo.importPath) ?? { named: new Set<string>() };
+      if (node.$repo.exportName === "default") entry.default = node.$ref.split(".")[0] ?? node.$ref;
+      else entry.named.add(node.$repo.exportName);
+      repo.set(node.$repo.importPath, entry);
+      for (const val of Object.values(node.props ?? {})) walkPropValue(val);
+      for (const child of node.children ?? []) walk(child);
+      return;
+    }
     if (isComponentNode(node)) {
       components.add(node.$ref);
       // Icon's `name` prop drives an inline lucide JSX; record the name
@@ -239,7 +267,14 @@ function collectMetadata(
     }
   }
   walk(root);
-  return { components, icons, unresolvedIcons, snippetIds };
+  const repoImports = [...repo.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([from, entry]) => ({
+      from,
+      ...(entry.named.size > 0 ? { named: [...entry.named].sort() } : {}),
+      ...(entry.default ? { default: entry.default } : {}),
+    }));
+  return { components, icons, unresolvedIcons, snippetIds, repoImports };
 }
 
 /**
@@ -314,6 +349,7 @@ export async function emitCode(
       componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
       helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
+      repoImports: meta.repoImports,
     };
   });
 }
@@ -380,6 +416,7 @@ export async function emitSnippet(
       componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
       helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(meta.components),
       warnings: [...new Set(warnings)],
+      repoImports: meta.repoImports,
     };
   });
 }

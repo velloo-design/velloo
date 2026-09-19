@@ -47,6 +47,37 @@ export type ComponentNode = {
    * capture → design → emit. Absent ⇒ the node emits as itself.
    */
   $emitAs?: { name: string; importPath: string } | undefined;
+  /**
+   * Repository component identity: this node IS a component the host app
+   * imports (a package export such as Mantine's `Tabs`, or the app's own
+   * `StatCard`), not a library component. `$ref` stays the JSX name codegen
+   * prints; the identity decides rendering and imports. Takes precedence over
+   * any provider component or extension of the same name, so shadowing is
+   * explicit on the node rather than a registry-order accident.
+   */
+  $repo?: RepoComponentRef | undefined;
+};
+
+/**
+ * Where a repository component comes from. The import form is kept exactly as
+ * code generation must print it; the resolved file is runtime cache data and
+ * never persisted.
+ */
+export type RepoComponentRef = {
+  /**
+   * Module specifier. Bare (`@mantine/core`) and aliased (`@/components/card`)
+   * specifiers are kept as the app writes them; a `./`-relative one is relative
+   * to the host app root, since the importing file varies per call site.
+   */
+  importPath: string;
+  /** The export binding, or `"default"` for a default export. */
+  exportName: string;
+  /** Static member path of a compound part: `"List"` for `Tabs.List`. */
+  member?: string | undefined;
+  /** `config.hostApps` key in a monorepo; absent ⇒ the default host app. */
+  app?: string | undefined;
+  /** Snippet id drawn in the component's place when it can't render for real. */
+  proxy?: string | undefined;
 };
 
 export type SnippetInstance = {
@@ -126,6 +157,42 @@ const EmitAsSchema = z.object({
   importPath: z.string().min(1),
 });
 
+/**
+ * A specifier codegen may print verbatim inside `import … from "…"` and the
+ * bundler may resolve against the host app. Conservative charset (no quotes,
+ * spaces, semicolons), and no absolute or `..` paths: a design folder is data a
+ * cloned repo supplies, and it must not be able to reach outside the app.
+ */
+export function repoImportIssue(importPath: string): string | null {
+  if (!/^[\w@./~-]+$/.test(importPath)) return "has characters an import specifier can't carry";
+  if (importPath.startsWith("/")) return "must not be an absolute path";
+  if (importPath.split("/").includes("..")) return "must not climb out of the host app with ..";
+  return null;
+}
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+export const RepoComponentRefSchema = z.object({
+  importPath: z
+    .string()
+    .min(1)
+    .superRefine((value, ctx) => {
+      const issue = repoImportIssue(value);
+      if (issue) ctx.addIssue({ code: "custom", message: `importPath ${issue}` });
+    }),
+  exportName: z
+    .string()
+    .regex(IDENTIFIER, { message: 'exportName must be an identifier or "default"' }),
+  member: z
+    .string()
+    .regex(/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/, {
+      message: 'member must be a dotted identifier path like "List"',
+    })
+    .optional(),
+  app: z.string().min(1).optional(),
+  proxy: z.string().min(1).optional(),
+});
+
 const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
   z.object({
     $ref: z.string().min(1),
@@ -136,8 +203,40 @@ const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
       .transform((items) => items.map(wrapScalarChild))
       .optional(),
     $emitAs: EmitAsSchema.optional(),
+    $repo: RepoComponentRefSchema.optional(),
   }),
 );
+
+/** True when the node is a repository component (see ComponentNode.$repo). */
+export function isRepoNode(n: Node): n is ComponentNode & { $repo: RepoComponentRef } {
+  return isComponentNode(n) && n.$repo !== undefined;
+}
+
+/**
+ * The runtime key a repository component registers under — identity only, so
+ * two apps' `Button`s (or Mantine's vs the provider's) never collide.
+ */
+export function repoKey(ref: RepoComponentRef): string {
+  const member = ref.member ? `.${ref.member}` : "";
+  return `repo:${encodeURIComponent(ref.app ?? "")}:${ref.importPath}#${ref.exportName}${member}`;
+}
+
+/**
+ * Invert {@link repoKey}. A bundle URL carries only keys, so the runtime can
+ * resolve a screen's components from identity alone — no catalog lookup, which
+ * keeps a design renderable while discovery is cold or the app has moved on.
+ */
+export function parseRepoKey(key: string): RepoComponentRef | null {
+  const match = /^repo:([^:]*):([^#]+)#([A-Za-z_$][\w$]*)(?:\.(.+))?$/.exec(key);
+  if (!match) return null;
+  const parsed = RepoComponentRefSchema.safeParse({
+    importPath: match[2],
+    exportName: match[3],
+    ...(match[4] ? { member: match[4] } : {}),
+    ...(match[1] ? { app: decodeURIComponent(match[1]) } : {}),
+  });
+  return parsed.success ? parsed.data : null;
+}
 
 const SnippetInstanceSchema: z.ZodType<SnippetInstance> = z.object({
   $snippet: z.string().min(1),

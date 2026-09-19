@@ -1,4 +1,4 @@
-import type { StyleChannel } from "@velloo/provider";
+import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
 import type {
   DesignSummary,
@@ -6,6 +6,8 @@ import type {
   HistoryDepths,
   PublishedBoard,
   PublishSlot,
+  RepoCatalogEntry,
+  RepoDiagnostic,
 } from "../api.ts";
 
 /**
@@ -85,6 +87,12 @@ export interface FakeServer {
   publishSlots: PublishSlot[];
   /** What `/api/publish/published` lists; a DELETE removes from it. */
   publishedBoards: PublishedBoard[];
+  /** The provider manifest `/api/components` serves. */
+  manifest: Manifest;
+  /** The app's own components, as `/api/repo/components` serves them. */
+  repoEntries: RepoCatalogEntry[];
+  /** What `/api/repo/status` answers per catalog id; unlisted ids get no diagnostic. */
+  repoStatus: Record<string, RepoDiagnostic>;
   /** Every path requested, in order. */
   readonly calls: string[];
   /** Mutations posted through `/api/mutate/*`, in order. */
@@ -163,6 +171,9 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     history: { undo: 0, redo: 0 },
     publishSlots: [],
     publishedBoards: [],
+    manifest: [],
+    repoEntries: [],
+    repoStatus: {},
     calls,
     mutations,
     fail(match, status = 500) {
@@ -191,7 +202,16 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
       return theme ? json(theme) : json({ error: { kind: "not-found" } }, 404);
     }
     if (path === "/api/components") {
-      return json({ manifest: [], styleChannel: CHANNEL, channelsByLibrary: {} });
+      return json({ manifest: server.manifest, styleChannel: CHANNEL, channelsByLibrary: {} });
+    }
+    if (path === "/api/repo/components") {
+      return json({ entries: server.repoEntries, apps: [], warnings: [] });
+    }
+    if (path === "/api/repo/status") {
+      const ids = (search.get("ids") ?? "").split(",").filter(Boolean);
+      return json({
+        diagnostics: ids.flatMap((id) => (server.repoStatus[id] ? [server.repoStatus[id]] : [])),
+      });
     }
     if (path === "/api/assets") return json({});
     if (path === "/api/comments") return json({ threads: [] });

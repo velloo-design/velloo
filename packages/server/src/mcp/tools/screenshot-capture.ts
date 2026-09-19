@@ -33,6 +33,8 @@ import {
   makeCanvasBundle,
   makeLiveUrl,
   mountDiagnostics,
+  mountSummary,
+  recordMount,
   regionNode,
   renderForCapture,
 } from "./screenshot-helpers.ts";
@@ -299,14 +301,17 @@ export function registerScreenshotCaptureTool(
               ...(scale ? { deviceScaleFactor: scale } : {}),
             });
             buf = capture.png;
+            recordMount(canvasBundler, capture.canvas);
             const contentHeight = contentHeightFromRects(capture.nodeRects);
             const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
+            const components = mountSummary(capture.canvas);
             contentText = JSON.stringify(
               withDiagnostics({
                 contentHeight,
                 theme: themeName ?? "default",
                 viewport: { w: viewport.w, h: viewport.h },
                 ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+                ...(components ? { components } : {}),
               }),
             );
           }

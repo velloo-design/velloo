@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { libraryCategories } from "../library-categories.ts";
 import { useCanvas } from "../store.ts";
+import { RepoShelves } from "./RepoShelves.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "./ui/input-group.tsx";
@@ -147,6 +148,8 @@ export function LibrarySidebar({ snippets }: Props) {
         ) : null}
 
         <Separator className="mx-2 my-3" />
+
+        <RepoShelves query={query} />
 
         {loadingComponents ? <PendingShelves /> : null}
 

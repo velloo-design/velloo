@@ -105,10 +105,12 @@ export {
   renderScreen,
 } from "./render-to-html.ts";
 export {
+  type CanvasMountState,
   type CaptureNodeRect,
   type CaptureResult,
   captureScreenshot,
   measureRendered,
+  probeCanvasMount,
   type ScreenshotOptions,
   screenshot,
   screenshotBuffer,
@@ -127,8 +129,11 @@ export {
 } from "./screenshot-diff.ts";
 export {
   collectSerializedRefs,
+  collectSerializedRepoRefs,
   type SerializedNode,
+  type SerializedSlot,
   type SerializeOptions,
+  STATIC_REF,
   serializeTree,
 } from "./serialize-tree.ts";
 export { themeToCss } from "./theme-to-css.ts";

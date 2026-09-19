@@ -66,6 +66,7 @@ export function createProvider(): FrameworkAdapter {
       factory: "createTheme",
       defaultPath: "theme.ts",
     },
+    ownedModules: { packages: ["@mui/material"] },
     canvasBundleSpec: {
       components: (ids) =>
         ids.flatMap((id): CanvasComponentSpec[] => {

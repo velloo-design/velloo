@@ -328,6 +328,9 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   },
 
   async loadComponents() {
+    // Every surface that needs the manifest also shows the app's own
+    // components, so the repo catalog rides along on the same trigger.
+    void get().loadRepoCatalog();
     // The in-flight guard is load-bearing, not just tidy: opening the snippet
     // editor calls this from the store action and again from the view's mount
     // effect, which used to be two concurrent fetches of the same manifest.

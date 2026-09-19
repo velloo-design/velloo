@@ -26,6 +26,7 @@ import { createMutateRouter } from "./routes/mutate.ts";
 import { createPreflightRouter } from "./routes/preflight.ts";
 import { createPublishRouter } from "./routes/publish.ts";
 import { createRenderRouter } from "./routes/render.ts";
+import { createRepoRouter } from "./routes/repo.ts";
 import { createSearchRouter } from "./routes/search.ts";
 import { createThemeRouter } from "./routes/theme.ts";
 import { createUndoRouter } from "./routes/undo.ts";
@@ -83,6 +84,7 @@ export function createApp(
     createCanvasRouter(canvasBundler, () => ctxFor().folder.config.defaultLibrary),
   );
   app.route("/api/components", createComponentsRouter(ctxFor));
+  app.route("/api/repo", createRepoRouter(ctxFor, canvasBundler));
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));

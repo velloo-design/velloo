@@ -77,6 +77,18 @@ export function createCanvasRouter(bundler: CanvasBundler, defaultLibraryId: () 
     });
   });
 
+  // The mounted frame's own findings (`navigator.sendBeacon`, so a text body).
+  // Opaque-origin capture pages report too, hence the permissive CORS.
+  r.post("/runtime-diagnostics", async (c) => {
+    try {
+      const body = JSON.parse(await c.req.text()) as { bundle?: unknown; diagnostics?: unknown };
+      if (typeof body.bundle === "string") bundler.recordRuntime(body.bundle, body.diagnostics);
+    } catch {
+      // A malformed report is dropped; it only ever refines what the build said.
+    }
+    return c.body(null, 204, { "Access-Control-Allow-Origin": "*" });
+  });
+
   r.get("/status", async (c) => {
     const lib = c.req.query("lib") || defaultLibraryId();
     const refs = (c.req.query("refs") ?? "").split(",").filter(Boolean);

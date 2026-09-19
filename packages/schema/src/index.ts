@@ -66,6 +66,10 @@ export {
   type ExtensionPropDescriptor,
   ExtensionPropDescriptorSchema,
   ExtensionSchema,
+  type RepoComponentOverride,
+  RepoComponentOverrideSchema,
+  type RepoComponentsManifest,
+  RepoComponentsManifestSchema,
 } from "./extension.ts";
 export {
   type Frame,
@@ -90,12 +94,18 @@ export {
   type ComponentNode,
   isComponentNode,
   isParamRef,
+  isRepoNode,
   isSnippetInstance,
   type Node,
   NodeIdSchema,
   NodeSchema,
   nodeId,
   type ParamRef,
+  parseRepoKey,
+  type RepoComponentRef,
+  RepoComponentRefSchema,
+  repoImportIssue,
+  repoKey,
   type SnippetInstance,
 } from "./node.ts";
 export {

@@ -2,12 +2,14 @@ import type { ComponentDescriptor } from "@velloo/provider";
 import {
   isComponentNode,
   isParamRef,
+  isRepoNode,
   isSnippetInstance,
   type Node,
   nodeId,
   type Screen,
 } from "@velloo/schema";
 import {
+  Boxes,
   Component as ComponentIcon,
   Crosshair,
   type LucideIcon,
@@ -95,6 +97,18 @@ interface Provenance {
  */
 function provenanceOf(node: Node, byId: Map<string, LibraryEntry>): Provenance | null {
   if (!isComponentNode(node)) return null;
+  // Checked before the manifest: a repo node's `$ref` is only its JSX name,
+  // and may match an unrelated provider component.
+  if (isRepoNode(node)) {
+    const { importPath, exportName, member, app } = node.$repo;
+    const binding = exportName === "default" ? "default export" : exportName;
+    const what = member ? `${binding}.${member}` : binding;
+    return {
+      Icon: Boxes,
+      tone: "text-primary",
+      title: `${node.$ref} — the app's own component: ${what} from ${importPath}${app ? ` (${app})` : ""}.`,
+    };
+  }
   const entry = byId.get(node.$ref);
   if (!entry) {
     return {

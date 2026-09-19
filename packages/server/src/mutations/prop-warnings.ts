@@ -1,6 +1,13 @@
 import { dynamicIconName, REMOVED_BRAND_ICONS } from "@velloo/codegen";
 import type { ComponentProvider, Manifest } from "@velloo/provider";
-import { isComponentNode, type Node, pascalizeIconName, type Screen } from "@velloo/schema";
+import {
+  isComponentNode,
+  type Node,
+  pascalizeIconName,
+  type RepoComponentRef,
+  repoKey,
+  type Screen,
+} from "@velloo/schema";
 import { providerForScreen } from "../extensions/registry.ts";
 import type { MutationContext } from "./context.ts";
 import { nearestRefs } from "./errors.ts";
@@ -49,7 +56,9 @@ export async function propWarnings(
   screen: Screen,
   ref: string,
   props: Record<string, unknown>,
+  repo?: RepoComponentRef,
 ): Promise<string[]> {
+  if (repo) return repoPropWarnings(ctx, ref, props, repo);
   const provider = providerForScreen(screen, ctx.providers, ctx.defaultProvider);
   const manifest = await manifestFor(provider);
   const descriptor = manifest.find((c) => c.id === ref);
@@ -127,7 +136,7 @@ export async function propWarningsForTree(
   async function walk(node: Node, path: number[]): Promise<void> {
     if (!isComponentNode(node)) return;
     if (node.props) {
-      const w = await propWarnings(ctx, screen, node.$ref, node.props);
+      const w = await propWarnings(ctx, screen, node.$ref, node.props, node.$repo);
       const prefix = path.length > 0 ? `[${path.join(".")}] ` : "";
       out.push(...w.map((msg) => `${prefix}${msg}`));
     }
@@ -180,4 +189,41 @@ export function dynamicIconWarningsForTree(root: Node): string[] {
   }
   walk(root, []);
   return out;
+}
+
+/**
+ * A repository component's props are checked against what its declarations
+ * say — but only where they say it. A name missing from the extracted list is
+ * not flagged: most design systems inherit props from bases we don't expand
+ * (Mantine's style props), and a false "unknown prop" teaches agents to drop
+ * real props. Enum values and non-serializable props are flagged.
+ */
+async function repoPropWarnings(
+  ctx: MutationContext,
+  ref: string,
+  props: Record<string, unknown>,
+  repo: RepoComponentRef,
+): Promise<string[]> {
+  const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  const entry = catalog?.byKey.get(repoKey(repo));
+  if (!entry) return [];
+  const warnings: string[] = [];
+  for (const [key, value] of Object.entries(props)) {
+    if (isSubstitution(value)) continue;
+    const prop = entry.props.find((p) => p.name === key);
+    if (!prop) continue;
+    if (!prop.serializable) {
+      warnings.push(`${ref}: "${key}" ${prop.constraint ?? "takes code, not data"}`);
+    } else if (
+      prop.control === "enum" &&
+      prop.enumValues &&
+      typeof value === "string" &&
+      !prop.enumValues.map(String).includes(value)
+    ) {
+      warnings.push(
+        `${ref}: "${key}" = ${JSON.stringify(value)} is not one of [${prop.enumValues.join(", ")}]`,
+      );
+    }
+  }
+  return warnings;
 }

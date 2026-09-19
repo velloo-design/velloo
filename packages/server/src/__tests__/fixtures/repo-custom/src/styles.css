@@ -1,0 +1,8 @@
+:root {
+  --fixture-accent: rgb(109, 40, 217);
+}
+.fx-card {
+  border: 1px solid rgb(226, 232, 240);
+  border-radius: 12px;
+  padding: 16px;
+}

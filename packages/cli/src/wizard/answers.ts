@@ -66,9 +66,9 @@ export interface DetectedHost {
   /**
    * A UI framework velloo doesn't adapt yet (Mantine, NextUI, …), by
    * display name. Set only when no supported framework was found. The scan
-   * flow falls back to the no-framework adapter (div-backed primitives) — the
-   * agent approximates the app's components and preserves their real imports
-   * via `$emitAs`. Undefined ⇒ no unsupported framework detected.
+   * flow falls back to the no-framework adapter for primitives; the app's own
+   * components render as repository components. Undefined ⇒ no unsupported
+   * framework detected.
    */
   unsupportedUi?: string | undefined;
 }

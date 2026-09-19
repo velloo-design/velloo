@@ -4,6 +4,8 @@ import {
   type Node,
   NodeIdSchema,
   NodeSchema,
+  type RepoComponentRef,
+  RepoComponentRefSchema,
   SnippetParamSchema,
 } from "@velloo/schema";
 import { z } from "zod";
@@ -118,6 +120,9 @@ export const addNodeShape = {
   children: jsonTolerant(z.union([z.array(NodeSchema), z.string(), z.number()])).optional(),
   index: z.number().int().nonnegative().optional(),
   emitAs: EmitAsSchema.optional(),
+  repo: RepoComponentRefSchema.optional().describe(
+    "Place an app component by identity (importPath + exportName [+ member]) when it isn't in list_components' repo catalog yet",
+  ),
 } satisfies z.ZodRawShape;
 export const AddNodeBody = z.strictObject(addNodeShape);
 export type AddNodeInput = z.infer<typeof AddNodeBody>;
@@ -139,6 +144,7 @@ export interface AddNodeArgs {
   children?: Node[] | undefined;
   index?: number | undefined;
   emitAs?: { name: string; importPath: string } | undefined;
+  repo?: RepoComponentRef | undefined;
 }
 
 /**

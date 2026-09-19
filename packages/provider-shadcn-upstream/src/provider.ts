@@ -104,6 +104,13 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
         };
       });
     },
+    // The app's `ui/` files are this adapter's catalog, already mounted exactly.
+    ownedModules: {
+      dirs: () => {
+        const uiDir = hostUiDir();
+        return uiDir ? [uiDir] : [];
+      },
+    },
     canvasBundleSpec: {
       styleRuntime: { kind: "none" },
       components: async (ids) => {

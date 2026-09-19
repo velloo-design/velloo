@@ -1,5 +1,12 @@
 import type { ComponentProvider } from "@velloo/provider";
-import type { ComponentNode, Node, Screen, Snippet, SnippetInstance } from "@velloo/schema";
+import type {
+  ComponentNode,
+  Node,
+  RepoComponentRef,
+  Screen,
+  Snippet,
+  SnippetInstance,
+} from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
@@ -199,7 +206,7 @@ class Parser {
     this.expect("<");
     if (this.peek("/")) throw new ParseFailure("Unexpected closing tag", this.pos);
     const fragment = this.peek(">");
-    const tag = fragment ? null : this.name("tag name");
+    const tag = fragment ? null : this.name("tag name", true);
     const attributes: Attribute[] = [];
 
     if (fragment) {
@@ -244,7 +251,7 @@ class Parser {
         if (tag === null) {
           this.expect(">");
         } else {
-          const close = this.name("closing tag");
+          const close = this.name("closing tag", true);
           if (close !== tag) {
             throw new ParseFailure(
               `Expected </${tag}> but found </${close}>`,
@@ -343,7 +350,7 @@ class Parser {
     throw new ParseFailure("Unclosed brace attribute", start);
   }
 
-  private name(label: string): string {
+  private name(label: string, dotted = false): string {
     const start = this.pos;
     const first = this.source[this.pos];
     if (!first || !/[A-Za-z_$]/.test(first)) {
@@ -352,6 +359,18 @@ class Parser {
     this.pos += 1;
     while (this.pos < this.source.length && /[A-Za-z0-9_$-]/.test(this.source[this.pos] ?? "")) {
       this.pos += 1;
+    }
+    // Compound parts (`Tabs.List`, `Mantine.Button`) are tags too; an attribute
+    // name never contains a dot, so this can't swallow one.
+    while (
+      dotted &&
+      this.source[this.pos] === "." &&
+      /[A-Za-z_$]/.test(this.source[this.pos + 1] ?? "")
+    ) {
+      this.pos += 2;
+      while (this.pos < this.source.length && /[A-Za-z0-9_$]/.test(this.source[this.pos] ?? "")) {
+        this.pos += 1;
+      }
     }
     return this.source.slice(start, this.pos);
   }
@@ -439,6 +458,8 @@ interface CompileContext {
   components: Set<string>;
   catalog: Set<string>;
   snippets: Map<string, Snippet[]>;
+  /** Repository components by catalog id — the app's own and its packages'. */
+  repo: Map<string, { name: string; identity: RepoComponentRef }>;
 }
 
 function compileElement(element: Element, ctx: CompileContext): CompileJsxResult {
@@ -498,7 +519,8 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
   attrs.delete("vellooId");
 
   const snippetMatches = ctx.snippets.get(element.tag) ?? [];
-  const isComponent = ctx.components.has(element.tag);
+  const repoEntry = ctx.components.has(element.tag) ? undefined : ctx.repo.get(element.tag);
+  const isComponent = ctx.components.has(element.tag) || repoEntry !== undefined;
   if (isComponent && snippetMatches.length > 0) {
     return {
       ok: false,
@@ -546,7 +568,8 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       children.push(compiled.node);
     }
     const node: ComponentNode = {
-      $ref: element.tag,
+      $ref: repoEntry?.name ?? element.tag,
+      ...(repoEntry ? { $repo: repoEntry.identity } : {}),
       ...(stableId ? { $id: stableId } : {}),
       ...(Object.keys(props).length > 0 ? { props } : {}),
       ...(children.length > 0 ? { children } : {}),
@@ -636,7 +659,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
     return { ok: true, node };
   }
 
-  const allNames = [...ctx.components, ...ctx.snippets.keys()];
+  const allNames = [...ctx.components, ...ctx.snippets.keys(), ...ctx.repo.keys()];
   const suggestions = nearestRefs(element.tag, allNames);
   const catalogOnly = ctx.catalog.has(element.tag);
   return {
@@ -680,10 +703,20 @@ export async function compileRestrictedJsx(
       snippets.set(tag, values);
     }
   }
+  const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
   return compileElement(root, {
     source,
     components: new Set(Object.keys(registry)),
     catalog: new Set(manifest.map((descriptor) => descriptor.id)),
     snippets,
+    repo: new Map(
+      (repoCatalog?.entries ?? []).map((entry) => [
+        entry.id,
+        {
+          name: entry.name,
+          identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,
+        },
+      ]),
+    ),
   });
 }

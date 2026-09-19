@@ -207,6 +207,27 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         });
         return jsonResult({ files: result.files });
       }
+      // No adapter owns the app's framework, but a recipe for it does (a
+      // Mantine app on the no-framework adapter): its components are styled by
+      // that framework's theme, so emit that — Tailwind files would restyle
+      // nothing in an app that doesn't use Tailwind.
+      const recipe = ctx.repo?.recipes(undefined)[0];
+      if (recipe && adapter.id === "none") {
+        const result = await emitNativeTheme(recipe.themeToNative(theme, false), {
+          spec: recipe.themeModule,
+          outputDir: out,
+          ...(args.themePath ? { themePath: args.themePath } : {}),
+          ...(theme.colorsDark ? { darkThemeOptions: recipe.themeToNative(theme, true) } : {}),
+          sourceTheme: theme,
+          apply: args.apply ?? false,
+        });
+        return jsonResult({
+          files: result.files,
+          notes: [
+            `This app's components are ${recipe.label}, so the theme is emitted as ${recipe.label}'s own theme module; pass it to the app's provider.`,
+          ],
+        });
+      }
       const tailwindMajor = args.tailwind ?? detectTailwindMajor(out);
       const result = await emitTheme(theme, {
         outputDir: out,

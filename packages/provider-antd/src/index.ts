@@ -63,6 +63,7 @@ export function createProvider(): FrameworkAdapter {
       factory: null,
       defaultPath: "antd-theme.ts",
     },
+    ownedModules: { packages: ["antd"] },
     // canvasBundleSpec is deliberately absent in v1: the server's bundle-entry
     // builder only implements the emotion style runtime, so antd folders render
     // via the in-process cssinjs SSR path. Extending it means a new

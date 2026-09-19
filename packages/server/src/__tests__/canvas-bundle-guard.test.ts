@@ -30,6 +30,12 @@ class RecordingBundler extends CanvasBundler {
       () => undefined,
     );
   }
+  // Mount decisions are the bundler's; this double reads the specs off `ctx`.
+  override canMount(libraryId: string) {
+    return (
+      (ctx.providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec !== undefined
+    );
+  }
   override async build(libraryId: string, componentIds: readonly string[]) {
     this.calls.push(libraryId);
     return {

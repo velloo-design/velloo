@@ -1,11 +1,15 @@
 import {
+  type ComponentNode,
   isComponentNode,
   isParamRef,
+  isRepoNode,
   isSnippetInstance,
   type Node,
+  type RepoComponentRef,
+  repoKey,
   type Snippet,
 } from "@velloo/schema";
-import { resolveSnippetBody } from "./build-tree.ts";
+import { repoProxyInstance, resolveSnippetBody } from "./build-tree.ts";
 
 /**
  * A screen tree resolved to plain JSON for the framework-native canvas bundle's
@@ -23,18 +27,84 @@ export interface SerializedNode {
   ref: string;
   props?: Record<string, unknown>;
   children?: (SerializedNode | string | number)[];
+  /**
+   * Set on a repository component: `ref` is then its {@link repoKey}, and the
+   * bundle registers the real export under that key. `name` is the JSX name the
+   * design uses, for fallbacks and diagnostics.
+   */
+  repo?: RepoComponentRef & { name: string };
+  /** The proxy subtree drawn when the real component is unavailable or throws. */
+  proxy?: SerializedNode;
+}
+
+/**
+ * A node-valued prop on a repository component (`leftSection`, `icon`) — the
+ * client interpreter turns it into an element before handing the props over,
+ * since the component expects a React node there, not design JSON.
+ */
+export interface SerializedSlot {
+  $node: SerializedNode;
+}
+
+/** Distinct repository identities in a serialized tree, keyed by their runtime ref. */
+export function collectSerializedRepoRefs(
+  tree: SerializedNode | null,
+): Map<string, RepoComponentRef & { name: string }> {
+  const out = new Map<string, RepoComponentRef & { name: string }>();
+  const visitValue = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visitValue(item);
+    } else if (value && typeof value === "object" && "$node" in value) {
+      visit((value as SerializedSlot).$node);
+    }
+  };
+  const visit = (node: SerializedNode): void => {
+    if (node.repo && !out.has(node.ref)) out.set(node.ref, node.repo);
+    if (node.proxy) visit(node.proxy);
+    for (const value of Object.values(node.props ?? {})) visitValue(value);
+    for (const child of node.children ?? []) if (typeof child === "object") visit(child);
+  };
+  if (tree) visit(tree);
+  return out;
 }
 
 export interface SerializeOptions {
   snippets?: Map<string, Snippet> | undefined;
+  /**
+   * Component refs the browser bundle has no source for, drawn from their
+   * server render instead (see {@link STATIC_REF}). `render` returns that
+   * node's SSR markup; the client drops it in unchanged, identity attributes
+   * and all, so selection still resolves inside it.
+   */
+  staticFallback?:
+    | {
+        refs: ReadonlySet<string>;
+        render(node: Node, path: number[], lockedPath: number[] | null): string;
+      }
+    | undefined;
 }
+
+/**
+ * The ref a {@link SerializeOptions.staticFallback} node serializes to. The
+ * bundle registers a component for it that injects `props.html`.
+ */
+export const STATIC_REF = "velloo:static";
 
 /** Distinct component refs in a serialized tree, stable in first-use order. */
 export function collectSerializedRefs(tree: SerializedNode | null): string[] {
   if (!tree) return [];
   const seen = new Set<string>();
+  const visitValue = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visitValue(item);
+    } else if (value && typeof value === "object" && "$node" in value) {
+      visit((value as SerializedSlot).$node);
+    }
+  };
   const visit = (node: SerializedNode): void => {
     seen.add(node.ref);
+    if (node.proxy) visit(node.proxy);
+    for (const value of Object.values(node.props ?? {})) visitValue(value);
     for (const child of node.children ?? []) {
       if (typeof child === "object") visit(child);
     }
@@ -72,7 +142,16 @@ export function serializeTree(
   if (isParamRef(node)) return null;
   if (!isComponentNode(node)) return null;
 
-  const { children: childrenProp, ...restProps } = (node.props ?? {}) as Record<string, unknown>;
+  if (!isRepoNode(node) && opts.staticFallback?.refs.has(node.$ref)) {
+    return {
+      ref: STATIC_REF,
+      props: { html: opts.staticFallback.render(node, path, lockedPath) },
+    };
+  }
+
+  const { children: childrenProp, ...rawProps } = (node.props ?? {}) as Record<string, unknown>;
+  const repo = isRepoNode(node);
+  const restProps = repo ? serializeSlotProps(rawProps, opts, path, stack, lockedPath) : rawProps;
   const dataNodePath = (lockedPath ?? path).join(".");
 
   let children: Child[] | undefined;
@@ -92,8 +171,11 @@ export function serializeTree(
     children = serializePropChildren(childrenProp, opts, path, stack, lockedPath);
   }
 
+  const proxy = repo ? serializeProxy(node, opts, path, stack, lockedPath) : null;
   return {
-    ref: node.$ref,
+    ref: repo ? repoKey(node.$repo) : node.$ref,
+    ...(repo ? { repo: { ...node.$repo, name: node.$ref } } : {}),
+    ...(proxy ? { proxy } : {}),
     props: {
       ...restProps,
       "data-node-path": dataNodePath,
@@ -151,4 +233,42 @@ function serializePropChildren(
   }
   if (typeof value === "string" || typeof value === "number") return [value];
   return undefined;
+}
+
+function serializeProxy(
+  node: ComponentNode & { $repo: RepoComponentRef },
+  opts: SerializeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+): SerializedNode | null {
+  const snippet = node.$repo.proxy ? opts.snippets?.get(node.$repo.proxy) : undefined;
+  if (!snippet || stack.includes(snippet.id)) return null;
+  try {
+    return serializeTree(repoProxyInstance(node, snippet), opts, path, stack, lockedPath ?? path);
+  } catch {
+    // A proxy missing a required arg is a proxy that can't draw — the client
+    // falls back to the labelled frame, exactly like SSR would have thrown on it.
+    return null;
+  }
+}
+
+/** Node-valued props become {@link SerializedSlot}s; everything else passes through. */
+function serializeSlotProps(
+  props: Record<string, unknown>,
+  opts: SerializeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(props)) {
+    if (isNodeLike(value)) {
+      const s = serializeTree(value, opts, path, stack, lockedPath ?? path);
+      if (s) out[name] = { $node: s } satisfies SerializedSlot;
+    } else {
+      out[name] = value;
+    }
+  }
+  return out;
 }

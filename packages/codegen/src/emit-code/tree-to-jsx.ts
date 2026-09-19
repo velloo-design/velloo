@@ -2,10 +2,13 @@ import { err, ok, type Result } from "@velloo/result";
 import {
   applySnippetExtraClassName,
   applySnippetOverrides,
+  type ComponentNode,
   isComponentNode,
   isParamRef,
   isSnippetInstance,
   type Node,
+  type RepoComponentRef,
+  repoImportIssue,
   resolveSnippetArgs,
   type Snippet,
   substituteSnippetParams,
@@ -164,6 +167,9 @@ function renderComponent(
   // but codegen emits the app's real component import instead (identity preserved
   // through scan → design → emit). Bare `<Name />` — the data-bound props live in
   // the app, not the design. See ComponentNode.$emitAs.
+  if (node.$repo)
+    return renderRepoComponent(node as ComponentNode & { $repo: RepoComponentRef }, ctx, depth);
+
   const emitAs = node.$emitAs;
   if (emitAs) {
     if (!VALID_JSX_NAME.test(emitAs.name) || !VALID_IMPORT_SPECIFIER.test(emitAs.importPath)) {
@@ -423,4 +429,78 @@ function renderComponent(
   return ok(
     `${pad}<${openTag}${attrs}>\n${childPad}{${JSON.stringify(effectiveChild)}}\n${pad}</${closeTag}>`,
   );
+}
+
+/**
+ * The JSX name a repository component prints as: its export (`Tabs.List` for a
+ * compound part), or for a default export the name the design gave it.
+ */
+function repoJsxName(node: ComponentNode & { $repo: RepoComponentRef }): string {
+  const root =
+    node.$repo.exportName === "default"
+      ? (node.$ref.split(".")[0] ?? node.$ref)
+      : node.$repo.exportName;
+  return [root, node.$repo.member].filter(Boolean).join(".");
+}
+
+/**
+ * A repository component emits as itself: its exact import, every authored
+ * prop as written (a Mantine `variant`, an `sx`, a `style` object — nothing is
+ * lowered or translated into another styling system), node-valued props as
+ * JSX, and its children. The design's proxy, if any, never reaches the code.
+ */
+function renderRepoComponent(
+  node: ComponentNode & { $repo: RepoComponentRef },
+  ctx: EmitContext,
+  depth: number,
+): Result<string, CodegenError> {
+  const name = repoJsxName(node);
+  if (!VALID_JSX_NAME.test(name) || repoImportIssue(node.$repo.importPath) !== null) {
+    return err(unknownComponent(`$repo:${node.$ref}`));
+  }
+  const props = { ...(node.props ?? {}) };
+  const childrenProp = props.children;
+  delete props.children;
+  const attrParts: string[] = [];
+  for (const [prop, value] of Object.entries(props)) {
+    if (isComponentNode(value as Node) || isSnippetInstance(value as Node)) {
+      const slot = renderNode(value as Node, ctx, depth + 1);
+      if (!slot.ok) return slot;
+      const jsx = slot.value.trim();
+      attrParts.push(
+        `${prop}={${jsx.includes("\n") ? `\n${slot.value}\n${ctx.indent(depth)}` : jsx}}`,
+      );
+      continue;
+    }
+    const serialized = serializeProp(prop, value, ctx.snippetParamNames);
+    if (serialized !== null) attrParts.push(serialized);
+  }
+  const pad = ctx.indent(depth);
+  const attrs = attrParts.length > 0 ? ` ${attrParts.join(" ")}` : "";
+  if (Array.isArray(node.children) && node.children.length > 0) {
+    const parts: string[] = [];
+    for (const child of node.children) {
+      const childR = renderNode(child, ctx, depth + 1);
+      if (!childR.ok) return childR;
+      parts.push(childR.value);
+    }
+    return ok(`${pad}<${name}${attrs}>\n${parts.join("\n")}\n${pad}</${name}>`);
+  }
+  if (typeof childrenProp === "string" || typeof childrenProp === "number") {
+    return ok(`${pad}<${name}${attrs}>${serializeTextChild(String(childrenProp))}</${name}>`);
+  }
+  if (childrenProp !== undefined && childrenProp !== null && typeof childrenProp === "object") {
+    const isParam = typeof (childrenProp as { $param?: unknown }).$param === "string";
+    if (isParam && ctx.snippetParamNames?.has((childrenProp as { $param: string }).$param)) {
+      return ok(
+        `${pad}<${name}${attrs}>{${(childrenProp as { $param: string }).$param}}</${name}>`,
+      );
+    }
+    if (isComponentNode(childrenProp as Node) || isSnippetInstance(childrenProp as Node)) {
+      const childR = renderNode(childrenProp as Node, ctx, depth + 1);
+      if (!childR.ok) return childR;
+      return ok(`${pad}<${name}${attrs}>\n${childR.value}\n${pad}</${name}>`);
+    }
+  }
+  return ok(`${pad}<${name}${attrs} />`);
 }

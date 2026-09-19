@@ -41,6 +41,7 @@ import {
   makeCanvasBundle,
   makeLiveUrl,
   mountDiagnostics,
+  recordMount,
   regionNode,
   renderForCapture,
 } from "./screenshot-helpers.ts";
@@ -458,6 +459,7 @@ export function registerCompareToUrlTool(
                   ...(localStorage ? { localStorage } : {}),
                 }),
         ]);
+        recordMount(canvasBundler, velloo.canvas);
 
         const result = diffPngs(urlCapture.png, velloo.png);
         const regions = result.regions.map((r) => ({

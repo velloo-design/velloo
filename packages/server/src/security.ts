@@ -64,13 +64,35 @@ export function requestIsLocal(headers: {
   return true;
 }
 
+/**
+ * The client-mount bundles a rendered document imports. Capture pages
+ * (screenshots, compare, the preview probe) are `setContent` documents with an
+ * opaque `Origin: null`, and a module import is CORS-gated, so these read-only
+ * GETs admit that origin — still behind the loopback `Host` check that defeats
+ * rebinding. Without it every capture silently fell back to the server render.
+ */
+const OPAQUE_ORIGIN_READS = new Set([
+  "/api/canvas/bundle.js",
+  "/api/live/bundle.js",
+  "/api/live/bundle-app.js",
+]);
+
 /** Hono middleware that rejects any request that isn't local (see requestIsLocal). */
 export function localOnlyMiddleware(): MiddlewareHandler {
   return async (c, next) => {
     // Bun builds `req.url` from the Host header (or bound address), so its host
     // is the reliable signal — and unlike the forbidden `Host` header it's
     // populated on synthetic test Requests too.
-    if (!requestIsLocal({ host: new URL(c.req.url).host, origin: c.req.header("origin") })) {
+    const url = new URL(c.req.url);
+    if (
+      c.req.method === "GET" &&
+      c.req.header("origin") === "null" &&
+      OPAQUE_ORIGIN_READS.has(url.pathname) &&
+      hostIsLoopback(url.host)
+    ) {
+      return next();
+    }
+    if (!requestIsLocal({ host: url.host, origin: c.req.header("origin") })) {
       return c.json({ error: "forbidden: request is not from a local origin" }, 403);
     }
     return next();

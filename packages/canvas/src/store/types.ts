@@ -6,7 +6,7 @@ export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";
 export type DesignMode = "light" | "dark";
 export type ViewMode = "boards" | "library" | "snippet";
-type LibraryItemKind = "component" | "snippet";
+type LibraryItemKind = "component" | "snippet" | "repo";
 
 export interface LibraryItemRef {
   kind: LibraryItemKind;

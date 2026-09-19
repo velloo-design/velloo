@@ -1,3 +1,4 @@
+import type { RepoComponentRef } from "@velloo/schema";
 import { postMutate } from "./http.ts";
 
 export interface AddedFrame {
@@ -93,6 +94,16 @@ export const mutate = {
   },
   reorderBoardGroups(args: { order: string[] }) {
     return postMutate<{ order: string[] }>("reorder_board_groups", args);
+  },
+  /** `repo` places an app component by identity; `componentRef` is then its JSX name. */
+  addNode(args: {
+    screenId: string;
+    parentPath: number[];
+    componentRef: string;
+    props?: Record<string, unknown> | undefined;
+    repo?: RepoComponentRef | undefined;
+  }) {
+    return postMutate<{ path: number[] }>("add_node", args);
   },
   updateProps(args: {
     screenId: string;

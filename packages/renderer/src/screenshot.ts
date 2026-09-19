@@ -1,4 +1,5 @@
 import type { Viewport } from "@velloo/schema";
+import type { Page } from "playwright-core";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
 import { type DomExtract, extractDom } from "./capture-page.ts";
 import { settleForCapture } from "./capture-settle.ts";
@@ -59,6 +60,73 @@ export interface CaptureResult {
    * the two sides of a fidelity diff are comparable property for property.
    */
   dom?: DomExtract;
+  /** The client mount's outcome, when the document carried one. */
+  canvas?: CanvasMountState;
+}
+
+/** What a frame's client mount did: whether it owns the screen, and per-component findings. */
+export interface CanvasMountState {
+  mounted: boolean;
+  /** The bundle URL the page mounted — the key the daemon files runtime findings under. */
+  bundle?: string;
+  diagnostics: {
+    id: string;
+    status: string;
+    name?: string;
+    code?: string;
+    note?: string;
+    remedy?: string;
+  }[];
+}
+
+async function canvasMountState(page: Page): Promise<CanvasMountState | undefined> {
+  return page
+    .evaluate(() => {
+      const w = window as Window & {
+        __velloo_canvas_diagnostics?: unknown[];
+        __velloo_canvas_bundle?: string;
+      };
+      if (!document.getElementById("velloo-canvas-data")) return undefined;
+      const ssr = document.getElementById("velloo-ssr");
+      return {
+        mounted: Boolean(ssr && ssr.style.display === "none"),
+        ...(w.__velloo_canvas_bundle ? { bundle: w.__velloo_canvas_bundle } : {}),
+        diagnostics: (w.__velloo_canvas_diagnostics ?? []) as CanvasMountState["diagnostics"],
+      };
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * Mount a rendered document in a real browser and report what its client mount
+ * found — the probe behind `preview_status`: a missing provider, an unstyled
+ * component or a throwing preview entry only show up once something runs.
+ */
+export async function probeCanvasMount(opts: {
+  html: string;
+  viewport: Viewport;
+}): Promise<CanvasMountState & { consoleErrors: string[] }> {
+  return withContext(
+    { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
+    async (context) => {
+      const page = await context.newPage();
+      const consoleErrors: string[] = [];
+      page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text().slice(0, 400));
+      });
+      page.on("pageerror", (error) => consoleErrors.push(error.message.slice(0, 400)));
+      await page.setContent(opts.html, {
+        waitUntil: "domcontentloaded",
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+      await settleForCapture(page, opts.html);
+      // Runtime reports (a component that threw, the stylesheet probe) land a
+      // frame after ready; give them that frame.
+      await page.waitForTimeout(150);
+      const state = (await canvasMountState(page)) ?? { mounted: false, diagnostics: [] };
+      return { ...state, consoleErrors: consoleErrors.slice(0, 20) };
+    },
+  );
 }
 
 /**
@@ -101,7 +169,8 @@ export async function captureScreenshot(
         timeout: CAPTURE_TIMEOUT_MS,
       });
       const dom = opts.dom ? await extractDom(page) : undefined;
-      return { png, nodeRects, ...(dom ? { dom } : {}) };
+      const canvas = await canvasMountState(page);
+      return { png, nodeRects, ...(dom ? { dom } : {}), ...(canvas ? { canvas } : {}) };
     },
   );
 }

@@ -1,4 +1,4 @@
-import { type StyleChannel, styleChannelOf } from "@velloo/provider";
+import { STYLE_CHANNELS, type StyleChannel, styleChannelOf } from "@velloo/provider";
 import { err, ok, type Result } from "@velloo/result";
 import type { Screen } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
@@ -79,3 +79,42 @@ export function applyStyleToProps(
   else props[prop] = merged;
   return props;
 }
+
+/**
+ * The channel a repository component's `style` payload lands in: only the
+ * style props the component declares it accepts, and never translated — a
+ * className string stays `className`, an object goes to `sx` where the
+ * component takes one, else to `style`. Undiscovered components (placed by
+ * explicit identity) are assumed to take the two React-universal props.
+ */
+export function repoStyleChannel(
+  accepted: readonly string[] | undefined,
+  style: StylePayload,
+  ref: string,
+): Result<StyleChannel, MutationError> {
+  const props = accepted ?? ["className", "style"];
+  if (style === null) {
+    const prop = props.find((name) => ["className", "sx", "style"].includes(name)) ?? "style";
+    return ok(STYLE_CHANNELS_BY_PROP[prop] ?? STYLE_CHANNELS.style);
+  }
+  if (typeof style === "string") {
+    return props.includes("className")
+      ? ok(STYLE_CHANNELS["tailwind-classname"])
+      : err(
+          badRequest(
+            `${ref} takes no className; set its own props or \`style\` (${props.join(", ") || "none"}).`,
+          ),
+        );
+  }
+  if (props.includes("sx")) return ok(STYLE_CHANNELS.sx);
+  if (props.includes("style")) return ok(STYLE_CHANNELS.style);
+  return err(
+    badRequest(`${ref} declares no style prop to take an object; set its own props instead.`),
+  );
+}
+
+const STYLE_CHANNELS_BY_PROP: Record<string, StyleChannel> = {
+  className: STYLE_CHANNELS["tailwind-classname"],
+  sx: STYLE_CHANNELS.sx,
+  style: STYLE_CHANNELS.style,
+};

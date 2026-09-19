@@ -11,17 +11,40 @@ description: >-
 
 # Calibrating Velloo to an existing app
 
-For shadcn folders, the canvas can import client-safe components directly from
-the app's configured `components/ui` directory. That is a bounded capability,
-not a promise that arbitrary application React can run inside a design iframe:
-portal/state-heavy families use named canvas-safe adaptations, and a missing or
-unbuildable file falls back independently. Other providers follow their own
-adapter contract. The fidelity is observable through `component_status`; never
-infer it from `installedInApp` or from a component merely appearing on screen.
+The canvas renders the app's own components — whatever library they come from
+(Mantine, a private design system, a hand-rolled `components/` directory) —
+as real, nested, editable nodes. `list_components` lists them on **Repo**
+shelves, found from what the app's routes actually render. For shadcn folders
+the configured `components/ui` files additionally back the library itself.
+None of that is a promise that arbitrary application React runs inside a
+design iframe: the components need the context the app gives them (providers,
+global CSS), portal-heavy families use adaptations, and a component that can't
+build or render falls back on its own. Fidelity is observable through
+`component_status`; never infer it from a component merely appearing on screen.
 
 Your job here is to close that gap **before** you start designing, and to say
 honestly what's left open. Do this once per design folder. Skip it only for a
 greenfield folder with no app to match.
+
+## 0. The preview entry — when the app has components
+
+Call `preview_status` first. It reports `state` (`absent` / `valid` /
+`failing`), the providers and stylesheets the app's own entry uses
+(`appWrappers`, `appStylesheets`), and mounts one real component to prove the
+setup works — a missing provider or an unstyled render shows up here, not
+halfway through a design.
+
+- **`valid` with a recipe** (Mantine and friends): a built-in wrapper is doing
+  the work, themed from Velloo's tokens. Good enough to design with; write your
+  own entry only when the app's theme, router or data providers matter.
+- **`absent` / `failing`**: adapt `suggestedPreviewEntry` — it is lifted from
+  the app's entry — and call `set_preview_entry { source }`. Keep the app's
+  global CSS imports, swap network-backed providers for fixtures (a
+  `QueryClient` with seeded data, a memory router), never pass credentials. The
+  tool re-probes and answers with the new state; iterate until `valid`.
+
+A snippet can't do this job: it is node data, so it can't import CSS, build a
+router or wrap the whole screen. Snippets are for step 4 below.
 
 ## 1. Theme first — it buys the most
 
@@ -78,26 +101,28 @@ live data legitimately differ.
 
 Only after theme parity, call `component_status { screen: "<id>" }` for each
 screen you're about to design or verify (or `{ ids: [...] }` before a screen
-exists). Check `mounted` first: the mount is all-or-nothing, so a single
-`unavailable` component keeps the whole screen — and every screenshot and
-`compare_to_url` of it — on Velloo's bundled components, whatever the other
-statuses say. Fix or replace the blocking component before trusting any
-`exact`. Treat the statuses as part of the design brief:
+exists — repo catalog ids work too). For library components, check `mounted`
+first: that mount is all-or-nothing, so a single `unavailable` library
+component keeps the whole screen on Velloo's bundled components. A screen with
+the app's own components always mounts, and each of those falls back alone.
+Treat the statuses as part of the design brief:
 
-- **`exact`** — Velloo compile-checked and selected the app's source file for
-  the whole-screen canvas mount. Custom CVA variants and ordinary explicit
-  props are also reflected into discovery when their syntax is recognizable.
-- **`adapted`** — the real family depends on portals, runtime state, browser
-  layout, or another interaction that conflicts with a static selectable
-  canvas. Velloo deliberately renders a canvas-safe counterpart. Preserve the
-  component identity and props, but do not claim pixel-identical behavior.
-- **`fallback`** — the app file is absent or failed the browser preflight, so a
-  bundled provider component or Velloo helper is rendering. Read the returned
-  note/errors before deciding whether the visual difference matters.
-- **`unavailable`** — there is no usable canvas source, so a screen using it
-  does not mount at all (`mounted: false`); read its errors — a resolution
-  failure usually means the recorded app root is wrong
-  (`velloo design set-app-root`).
+- **`exact`** — the app's own source (or package export) renders in the canvas
+  mount. Custom CVA variants and ordinary explicit props are also reflected
+  into discovery when their syntax is recognizable.
+- **`adapted`** — the real component renders through a design-time wrapper
+  (an overlay kept inside the frame, focus trapping off). Preserve its identity
+  and props, but do not claim pixel-identical behavior.
+- **`unstyled`** — it rendered, but its stylesheet never loaded: import the
+  library's CSS in the preview entry.
+- **`fallback`** — a bundled provider component or Velloo helper is rendering
+  instead of the app's file. Read the returned note/errors.
+- **`proxy`** — the app's component can't render here, and the node's proxy
+  snippet stands in for it; emitted code still imports the real one.
+- **`unavailable`** — nothing renders it; read its `code` and `remedy`
+  (`missing-provider`, `resolve-failed`, `compile-failed`, `server-only`,
+  `render-threw`, `missing-export`). A resolution failure usually means the
+  recorded app root is wrong (`velloo design set-app-root`).
 
 Host-source edits invalidate the canvas bundle automatically. After changing a
 component, wait for the frame to reload and call `component_status` again; do
@@ -106,25 +131,22 @@ not restart the daemon merely to pick up a normal source edit.
 ## 4. Close only the important remaining gaps
 
 If an on-screen component is not `exact` and the difference is load-bearing,
-read its source and choose the smallest honest adaptation:
+choose the smallest honest adaptation:
 
-- **A snippet** (`add_snippet`) that composes library primitives to match the
-  component's appearance. It stays editable on the canvas and is the preferred
-  answer for a bespoke compound component that is outside the shadcn library.
-  Library compound components whose files are `exact` already preserve their
-  children in the whole-screen mount and do not need a snippet. `render_snippet`
-  immediately after defining one.
-- **`$emitAs { name, importPath }`** on the node when the preview can be an
-  approximation but the generated code must import the real component. Design
-  with primitives, emit `<DataTable />`. Use this for anything whose appearance
-  you cannot reasonably rebuild but whose identity in the code matters.
-- **A live extension** (`add_extension` with `render: "live"`) only for the
-  genuinely dynamic minority — charts above all. It bundles the real host file
-  and client-mounts it, so it is the one path that renders the user's actual
-  code. Know its limits before reaching for it: children are stripped, the
-  mount is visual-only, and it breaks whenever the host file doesn't compile.
-  Never the default for library components, and never use it to work around a
-  compound component with children.
+- **Fix the context** first: most `unavailable` app components are missing a
+  provider or fixture the preview entry can supply.
+- **A proxy snippet** for a component that genuinely can't render in a static
+  canvas (it needs live data, a server, a browser API). `add_snippet` composing
+  primitives to match its appearance, then point the node at it — `update_props`
+  can't set identity, so place it with `add_node { repo: { importPath,
+  exportName }, … }` and a `proxy`, or record `"proxy": "<snippet-id>"` for it in
+  the design folder's `repo-components.json`. The snippet draws on the canvas;
+  `emit_code` still imports the real component with the design's props.
+- **A snippet** (`add_snippet`) for a composition that isn't a component in the
+  app at all. `render_snippet` immediately after defining one.
+- **A live extension** (`add_extension` with `render: "live"`) only for a
+  dynamic leaf the preview entry can't make render as a normal node. Its
+  children are stripped and the mount is visual-only.
 
 Do not replace an `adapted` overlay merely because its status is not `exact`;
 the adaptation is what keeps dialogs, menus, popovers, and similar components
@@ -138,8 +160,8 @@ session — and the user — knows where things stand. Three headings, honest:
 
 - **Exact** — theme imported from `<path>`, fonts, and the components reported
   `exact` by `component_status`.
-- **Adapted / fallback** — the status, reason, and any snippet / `$emitAs` / live
-  decision made to close a load-bearing difference.
+- **Adapted / fallback / proxy** — the status, reason, and any preview-entry,
+  proxy-snippet or live decision made to close a load-bearing difference.
 - **Unverified** — screens behind auth you couldn't reach, pages whose dev
   server wouldn't start, tokens the stylesheet didn't declare.
 

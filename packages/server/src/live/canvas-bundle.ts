@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -9,24 +10,81 @@ import type {
   CanvasComponentSpec,
   CanvasStyleRuntime,
 } from "@velloo/provider";
+import { parseRepoKey, type RepoComponentRef } from "@velloo/schema";
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
+import type { PreviewEntry } from "../repo/preview.ts";
+import type { FrameworkRecipe } from "../repo/recipes/index.ts";
+import { recipeForSpecifier } from "../repo/recipes/index.ts";
+import { scanModule } from "../repo/source-scan.ts";
 import { aliasPlugin, type BundleError, type BundleResult, resolveImport } from "./bundle-core.ts";
 
 export type { CanvasBundleSpec };
 
+/**
+ * Why a repository component did not render exactly. Stable strings: agents,
+ * evaluation reports and the canvas key off them.
+ */
+type RepoDiagnosticCode =
+  | "resolve-failed"
+  | "compile-failed"
+  | "server-only"
+  | "render-threw"
+  | "missing-provider"
+  | "unstyled"
+  | "other-app-runtime"
+  | "missing-export"
+  | "static-fallback";
+
+type RepoFidelity = "exact" | "adapted" | "unstyled" | "proxy" | "unavailable";
+
 export interface CanvasComponentDiagnostic {
   id: string;
-  status: CanvasComponentFidelity | "unavailable";
+  status: CanvasComponentFidelity | RepoFidelity;
   importPath?: string;
   note?: string;
   errors?: string[];
+  /** Repository components only: the JSX name, export, owning app and what stands in on failure. */
+  name?: string;
+  exportName?: string;
+  app?: string;
+  preview?: string;
+  fallback?: string;
+  code?: RepoDiagnosticCode;
+  remedy?: string;
 }
 
 export interface CanvasBundleResult extends BundleResult {
   usable: boolean;
   diagnostics: CanvasComponentDiagnostic[];
+  /**
+   * Non-repository refs with no browser source, drawn from their server render
+   * inside the mount. Only ever set when the screen has repository components:
+   * those have nothing to fall back to on the server, so abandoning the mount
+   * over a helper that won't compile would hide every real component.
+   */
+  staticRefs?: string[];
+  /** Build measurements, checked against the budgets below. */
+  metrics?: { buildMs: number; bytes: number };
+  /** Absolute input files, for invalidating only the bundles an edit touches. */
+  inputs?: string[];
 }
+
+/**
+ * What a screen's repository components need from the daemon: where each app
+ * lives, the preview entry wrapping the mount, and the recipes whose
+ * adaptations and stylesheet probes apply.
+ */
+export interface RepoBundleInput {
+  host(app: string | undefined): { hostRoot: string; aliases: { from: string; to: string }[] };
+  preview(app: string | undefined): PreviewEntry;
+  recipes: FrameworkRecipe[];
+  /** The app whose React runtime the screen mounts with. */
+  primaryApp: string | undefined;
+}
+
+/** Past these, a build still succeeds but the diagnostics say why the canvas feels slow. */
+const BUNDLE_BUDGET = { buildMs: 8000, bytes: 6_000_000 };
 
 interface ResolvedComponent {
   id: string;
@@ -34,29 +92,44 @@ interface ResolvedComponent {
   exportName: string;
 }
 
+interface ResolvedRepo {
+  key: string;
+  identity: RepoComponentRef;
+  path: string;
+  adaptation?: Record<string, unknown> | undefined;
+  recipe?: FrameworkRecipe | undefined;
+}
+
 const EMPTY = "export function mountScreen() {}\n";
 
 /** Build the browser registry for only the component refs used by one screen. */
 export async function buildCanvasBundle(
   hostRoot: string,
-  spec: CanvasBundleSpec,
+  spec: CanvasBundleSpec | undefined,
   componentIds: readonly string[],
   aliases: { from: string; to: string }[] = [],
   minify = false,
+  repo?: RepoBundleInput,
 ): Promise<CanvasBundleResult> {
+  const started = performance.now();
   const errors: BundleError[] = [];
-  const runtimePaths = resolveRuntime(hostRoot, spec.styleRuntime, errors);
+  const styleRuntime: CanvasStyleRuntime = spec?.styleRuntime ?? { kind: "none" };
+  const runtimePaths = resolveRuntime(hostRoot, styleRuntime, errors);
   if (!runtimePaths) return { code: EMPTY, errors, usable: false, diagnostics: [] };
 
-  const overlayIds = new Set(spec.overlayIds ?? []);
-  const requested = new Set(componentIds);
+  const repoIds = componentIds.filter((id) => id.startsWith("repo:"));
+  const hasRepo = repo !== undefined && repoIds.length > 0;
+  const overlayIds = new Set(spec?.overlayIds ?? []);
+  const requested = new Set(
+    componentIds.filter((id) => !id.startsWith("repo:") && id !== STATIC_REF),
+  );
   if ([...overlayIds].some((id) => requested.has(id))) {
     requested.add("Paper");
     requested.add("Box");
   }
-  let declared: CanvasComponentSpec[];
+  let declared: CanvasComponentSpec[] = [];
   try {
-    declared = await spec.components([...requested]);
+    declared = spec ? await spec.components([...requested]) : [];
   } catch (error) {
     // `components()` reads the provider's manifest, which can fail on a corrupt
     // host `manifest.json`. The never-throws contract keeps the caller on SSR
@@ -104,12 +177,7 @@ export async function buildCanvasBundle(
         continue;
       }
       if (source.preflight) {
-        let check = preflight.get(path);
-        if (!check) {
-          check = preflightSource(path, plugins);
-          preflight.set(path, check);
-        }
-        const compileErrors = await check;
+        const compileErrors = await preflightOnce(preflight, path, plugins);
         if (compileErrors.length > 0) {
           failures.push(...compileErrors.map((error) => `${source.importPath}: ${error}`));
           continue;
@@ -138,60 +206,374 @@ export async function buildCanvasBundle(
     });
   }
 
-  // A ref the bundle cannot render at all (every source failed, or the ref is
-  // an extension the provider knows nothing about) would client-mount as a
-  // placeholder box AND hide the SSR body that rendered it correctly. Partial
-  // fidelity is fine — `adapted`/`fallback` still render the component — but a
-  // hole is strictly worse than staying on SSR, so refuse the whole mount.
-  const unavailable = diagnostics.filter((entry) => entry.status === "unavailable");
-  if (unavailable.length > 0 || resolved.length === 0) {
+  const repoResolved = hasRepo
+    ? await resolveRepoEntries(repoIds, repo, hostRoot, plugins, preflight, diagnostics)
+    : [];
+
+  // A non-repo ref the bundle cannot render at all (every source failed, or the
+  // ref is an extension the provider knows nothing about) would client-mount as
+  // a placeholder box AND hide the SSR body that rendered it correctly, so a
+  // screen of provider components refuses the whole mount. A screen with
+  // repository components has nothing better on the server for those, so the
+  // blocked refs are drawn from their server render inside the mount instead.
+  const unavailable = diagnostics.filter(
+    (entry) => entry.status === "unavailable" && !entry.id.startsWith("repo:"),
+  );
+  const staticRefs = hasRepo ? unavailable.map((entry) => entry.id) : [];
+  if (hasRepo) {
+    for (const entry of unavailable) {
+      entry.status = "fallback";
+      entry.code = "static-fallback";
+      entry.note =
+        "No browser source compiles, so the canvas draws this component's server render inside the mount.";
+    }
+  } else if (unavailable.length > 0 || resolved.length === 0) {
     for (const entry of unavailable) {
       errors.push({ message: `${entry.id}: ${entry.errors?.join("; ") ?? "no browser source"}` });
     }
     return { code: EMPTY, errors, usable: false, diagnostics };
   }
 
-  const entrySource = buildCanvasEntry({
-    ...runtimePaths,
-    styleRuntime: spec.styleRuntime,
-    components: resolved,
-    overlayIds: spec.overlayIds ?? [],
-    diagnostics,
-  });
-  const key = Bun.hash(
-    `${hostRoot}:${JSON.stringify(resolved.map((entry) => [entry.id, entry.path, entry.exportName]))}:${JSON.stringify(spec.styleRuntime)}`,
-  ).toString(16);
-
-  try {
+  const previews = hasRepo ? previewImports(repo, repoResolved) : [];
+  const build = async (repoEntries: ResolvedRepo[]) => {
+    const entrySource = buildCanvasEntry({
+      ...runtimePaths,
+      styleRuntime,
+      components: resolved,
+      repo: repoEntries,
+      previews,
+      primaryApp: repo?.primaryApp,
+      probes: probesFor(repoEntries),
+      overlayIds: spec?.overlayIds ?? [],
+      diagnostics,
+    });
+    const key = Bun.hash(
+      `${hostRoot}:${JSON.stringify(resolved.map((entry) => [entry.id, entry.path, entry.exportName]))}:${JSON.stringify(repoEntries.map((entry) => [entry.key, entry.path]))}:${JSON.stringify(previews.map((p) => p.path))}:${JSON.stringify(styleRuntime)}`,
+    ).toString(16);
     const dir = join(tmpdir(), "velloo-canvas", key);
     await mkdir(dir, { recursive: true });
+    for (const preview of previews) {
+      if (preview.source === undefined) continue;
+      await mkdir(dirname(preview.path), { recursive: true });
+      await writeFile(preview.path, preview.source, "utf8");
+    }
     const entryPath = join(dir, "entry.tsx");
     await writeFile(entryPath, entrySource, "utf8");
-    const result = await Bun.build({
+    return Bun.build({
       entrypoints: [entryPath],
       target: "browser",
       format: "esm",
       minify,
       sourcemap: "none",
-      define: { "process.env.NODE_ENV": '"production"' },
-      plugins,
+      metafile: true,
+      define: {
+        "process.env.NODE_ENV": '"production"',
+        // Vite apps read `import.meta.env`; an empty public env keeps them from
+        // throwing without handing any private variable to the browser.
+        "import.meta.env": '{"MODE":"production","DEV":false,"PROD":true,"SSR":false}',
+      },
+      plugins: [...plugins, ...previewPlugins(previews, repo)],
     });
+  };
+
+  try {
+    let result = await build(repoResolved);
+    if (!result.success && repoResolved.length > 0) {
+      // A repository module that passed preflight alone can still break the
+      // shared build (a transitive edit since). Drop the repository entries
+      // rather than the whole mount: they fall back per node like any other.
+      const message = result.logs.map((log) => log.message).join("; ");
+      for (const entry of repoResolved) {
+        markRepo(diagnostics, entry.key, "unavailable", "compile-failed", message);
+      }
+      result = await build([]);
+    }
     if (!result.success) {
       for (const log of result.logs) errors.push({ message: log.message });
       return { code: EMPTY, errors, usable: false, diagnostics };
     }
-    const output = result.outputs[0];
+    const output = result.outputs.find((artifact) => artifact.kind === "entry-point");
     if (!output) {
       errors.push({ message: "Bun.build produced no canvas-bundle artifact." });
       return { code: EMPTY, errors, usable: false, diagnostics };
     }
-    return { code: await output.text(), errors, usable: true, diagnostics };
+    const css = (
+      await Promise.all(
+        result.outputs
+          .filter((artifact) => artifact.kind !== "entry-point" && artifact.path.endsWith(".css"))
+          .map((artifact) => artifact.text()),
+      )
+    ).join("\n");
+    const code = (css ? injectCss(css) : "") + (await output.text());
+    const metrics = { buildMs: Math.round(performance.now() - started), bytes: code.length };
+    if (metrics.buildMs > BUNDLE_BUDGET.buildMs || metrics.bytes > BUNDLE_BUDGET.bytes) {
+      errors.push({
+        message: `The canvas bundle for this screen is over budget (${metrics.buildMs} ms, ${(metrics.bytes / 1e6).toFixed(1)} MB; budget ${BUNDLE_BUDGET.buildMs} ms, ${(BUNDLE_BUDGET.bytes / 1e6).toFixed(1)} MB). Split the screen or exclude heavy components with hostApp.components.exclude.`,
+      });
+    }
+    const inputs = Object.keys(
+      (result as { metafile?: { inputs?: Record<string, unknown> } }).metafile?.inputs ?? {},
+    ).map((input) => (input.startsWith("/") ? input : join(process.cwd(), input)));
+    return {
+      code,
+      errors,
+      usable: true,
+      diagnostics,
+      ...(staticRefs.length > 0 ? { staticRefs } : {}),
+      metrics,
+      inputs,
+    };
   } catch (error) {
     for (const item of error instanceof AggregateError ? error.errors : [error]) {
       errors.push({ message: messageOf(item) });
     }
     return { code: EMPTY, errors, usable: false, diagnostics };
   }
+}
+
+/** The ref a statically-rendered node serializes to (renderer's `STATIC_REF`). */
+const STATIC_REF = "velloo:static";
+
+function preflightOnce(
+  cache: Map<string, Promise<string[]>>,
+  path: string,
+  plugins: BunPlugin[],
+): Promise<string[]> {
+  let check = cache.get(path);
+  if (!check) {
+    check = preflightSource(path, plugins);
+    cache.set(path, check);
+  }
+  return check;
+}
+
+/**
+ * Resolve each repository key against its owning app, compile the module in
+ * isolation, and report per component — so one broken import costs exactly
+ * that component, never its neighbours.
+ */
+async function resolveRepoEntries(
+  keys: string[],
+  repo: RepoBundleInput,
+  primaryHostRoot: string,
+  plugins: BunPlugin[],
+  preflight: Map<string, Promise<string[]>>,
+  diagnostics: CanvasComponentDiagnostic[],
+): Promise<ResolvedRepo[]> {
+  const out: ResolvedRepo[] = [];
+  const primaryReact = safeResolve("react", primaryHostRoot);
+  for (const key of keys) {
+    const identity = parseRepoKey(key);
+    const name = identity ? [identity.exportName, identity.member].filter(Boolean).join(".") : key;
+    const base: CanvasComponentDiagnostic = {
+      id: key,
+      status: "unavailable",
+      name,
+      ...(identity ? { importPath: identity.importPath, exportName: identity.exportName } : {}),
+      ...(identity?.app ? { app: identity.app } : {}),
+      preview: repo.preview(identity?.app).label,
+      fallback: "the node's proxy snippet, or a labelled frame around its children",
+    };
+    if (!identity) {
+      diagnostics.push({
+        ...base,
+        code: "resolve-failed",
+        note: "The key does not name a valid repository component.",
+      });
+      continue;
+    }
+    const { hostRoot, aliases } = repo.host(identity.app);
+    if (identity.app !== repo.primaryApp && safeResolve("react", hostRoot) !== primaryReact) {
+      diagnostics.push({
+        ...base,
+        code: "other-app-runtime",
+        note: `This component belongs to the "${identity.app ?? "default"}" app, which has its own React; one screen mounts with a single React runtime.`,
+        remedy:
+          "Keep a screen's repository components from one app, or hoist a shared React in the monorepo.",
+      });
+      continue;
+    }
+    let path: string;
+    try {
+      path = identity.importPath.startsWith("./")
+        ? Bun.resolveSync(identity.importPath, hostRoot)
+        : resolveImport(identity.importPath, hostRoot, aliases);
+    } catch (error) {
+      diagnostics.push({
+        ...base,
+        code: "resolve-failed",
+        errors: [messageOf(error)],
+        note: `${identity.importPath} does not resolve from ${hostRoot}.`,
+        remedy:
+          "Check the import path and the host app's aliases (hostApp.aliases), or pick the component again from list_components.",
+      });
+      continue;
+    }
+    if (isServerOnly(path)) {
+      diagnostics.push({
+        ...base,
+        code: "server-only",
+        note: `${identity.importPath} is a server-only module and never runs in a browser.`,
+        remedy: "Use a client component, or keep this node as a proxy.",
+      });
+      continue;
+    }
+    const compileErrors = path.includes("/node_modules/")
+      ? []
+      : await preflightOnce(preflight, path, plugins);
+    if (compileErrors.length > 0) {
+      diagnostics.push({
+        ...base,
+        code: "compile-failed",
+        errors: compileErrors,
+        note: `${identity.importPath} does not compile for the browser canvas.`,
+        remedy: "Fix the compile error above, or mark browser-only imports in the preview entry.",
+      });
+      continue;
+    }
+    const recipe = recipeForSpecifier(identity.importPath);
+    const activeRecipe = recipe && repo.recipes.includes(recipe) ? recipe : undefined;
+    // Keyed by the exact part: `Menu`'s portal props mean nothing on `Menu.Item`.
+    const adaptation = activeRecipe?.adaptations[name];
+    out.push({ key, identity, path, adaptation: adaptation?.props, recipe: activeRecipe });
+    diagnostics.push({
+      ...base,
+      status: adaptation ? "adapted" : "exact",
+      fallback: "",
+      note: adaptation?.note ?? `Rendered by the app's own ${identity.importPath}.`,
+    });
+  }
+  return out;
+}
+
+function markRepo(
+  diagnostics: CanvasComponentDiagnostic[],
+  key: string,
+  status: RepoFidelity,
+  code: RepoDiagnosticCode,
+  message: string,
+): void {
+  const entry = diagnostics.find((item) => item.id === key);
+  if (!entry) return;
+  entry.status = status;
+  entry.code = code;
+  entry.errors = [message];
+}
+
+function isServerOnly(path: string): boolean {
+  if (/\.server\.[jt]sx?$/.test(path)) return true;
+  if (path.includes("/node_modules/")) return false;
+  try {
+    return scanModule(readFileSync(path, "utf8")).serverOnly;
+  } catch {
+    return false;
+  }
+}
+
+function safeResolve(specifier: string, from: string): string | null {
+  try {
+    return Bun.resolveSync(specifier, from);
+  } catch {
+    return null;
+  }
+}
+
+interface PreviewImport {
+  app: string | undefined;
+  /** Module path the entry imports. */
+  path: string;
+  /** Generated module source (recipe defaults); absent for the app's own file. */
+  source?: string;
+  recipe?: FrameworkRecipe | undefined;
+  label: string;
+}
+
+/** One preview wrapper per app that owns a mounted repository component. */
+function previewImports(repo: RepoBundleInput, entries: ResolvedRepo[]): PreviewImport[] {
+  const apps = new Set<string | undefined>([
+    repo.primaryApp,
+    ...entries.map((entry) => entry.identity.app),
+  ]);
+  const out: PreviewImport[] = [];
+  for (const app of apps) {
+    const entry = repo.preview(app);
+    if (entry.kind === "file") out.push({ app, path: entry.path, label: entry.label });
+    else if (entry.kind === "recipe") {
+      const hash = Bun.hash(entry.source).toString(16);
+      const dir = join(tmpdir(), "velloo-canvas", "previews");
+      out.push({
+        app,
+        path: join(dir, `${entry.recipe.id}-${hash}.mjs`),
+        source: entry.source,
+        recipe: entry.recipe,
+        label: entry.label,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Let an app-written preview entry import the app's packages even when the
+ * design folder sits outside the app (a local design): only the exact bare
+ * specifiers it imports are matched, and each resolves beside its importer
+ * first, then from the host root — a matched specifier is always answered.
+ */
+function previewPlugins(previews: PreviewImport[], repo: RepoBundleInput | undefined): BunPlugin[] {
+  if (!repo) return [];
+  const plugins: BunPlugin[] = [];
+  for (const preview of previews) {
+    if (preview.source !== undefined) continue;
+    let specifiers: string[];
+    try {
+      specifiers = new Bun.Transpiler({ loader: "tsx" })
+        .scanImports(readFileSync(preview.path, "utf8"))
+        .map((entry) => entry.path)
+        .filter((path) => !path.startsWith(".") && !path.startsWith("/"));
+    } catch {
+      continue;
+    }
+    const { hostRoot } = repo.host(preview.app);
+    const answerable = specifiers.filter((specifier) => safeResolve(specifier, hostRoot) !== null);
+    if (answerable.length === 0) continue;
+    const filter = new RegExp(
+      `^(${answerable.map((name) => name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")).join("|")})$`,
+    );
+    plugins.push({
+      name: `velloo-preview-imports-${preview.app ?? "default"}`,
+      setup(build) {
+        build.onResolve({ filter }, (args) => ({
+          path:
+            safeResolve(args.path, dirname(args.importer)) ??
+            (safeResolve(args.path, hostRoot) as string),
+        }));
+      },
+    });
+  }
+  return plugins;
+}
+
+/** Stylesheet probes for the recipes whose components this screen mounts. */
+function probesFor(
+  entries: ResolvedRepo[],
+): { recipe: string; probe: NonNullable<FrameworkRecipe["stylesheetProbe"]>; keys: string[] }[] {
+  const byRecipe = new Map<string, { recipe: FrameworkRecipe; keys: string[] }>();
+  for (const entry of entries) {
+    if (!entry.recipe?.stylesheetProbe) continue;
+    const group = byRecipe.get(entry.recipe.id) ?? { recipe: entry.recipe, keys: [] };
+    group.keys.push(entry.key);
+    byRecipe.set(entry.recipe.id, group);
+  }
+  return [...byRecipe.values()].map(({ recipe, keys }) => ({
+    recipe: recipe.label,
+    probe: recipe.stylesheetProbe as NonNullable<FrameworkRecipe["stylesheetProbe"]>,
+    keys,
+  }));
+}
+
+/** Stylesheets the build extracted, injected before the components evaluate. */
+function injectCss(css: string): string {
+  return `(function(){var s=document.createElement("style");s.setAttribute("data-velloo-canvas-css","");s.textContent=${JSON.stringify(css)};document.head.appendChild(s);})();\n`;
 }
 
 function resolveRuntime(
@@ -430,6 +812,10 @@ function buildCanvasEntry(opts: {
   stylesPath?: string;
   styleRuntime: CanvasStyleRuntime;
   components: ResolvedComponent[];
+  repo: ResolvedRepo[];
+  previews: PreviewImport[];
+  primaryApp: string | undefined;
+  probes: ReturnType<typeof probesFor>;
   overlayIds: string[];
   diagnostics: CanvasComponentDiagnostic[];
 }): string {
@@ -442,6 +828,26 @@ function buildCanvasEntry(opts: {
         `  ${JSON.stringify(component.id)}: pick(__m${index}, ${JSON.stringify(component.exportName)}),`,
     )
     .join("\n");
+  const repoPaths = [...new Set(opts.repo.map((entry) => entry.path))];
+  const repoImports = repoPaths
+    .map((path, index) => `import * as __r${index} from ${JSON.stringify(path)};`)
+    .join("\n");
+  const repoRegistry = opts.repo
+    .map(
+      (entry) =>
+        `  ${JSON.stringify(entry.key)}: member(pick(__r${repoPaths.indexOf(entry.path)}, ${JSON.stringify(entry.identity.exportName)}), ${JSON.stringify(entry.identity.member ?? "")}),`,
+    )
+    .join("\n");
+  const adaptations = Object.fromEntries(
+    opts.repo.filter((entry) => entry.adaptation).map((entry) => [entry.key, entry.adaptation]),
+  );
+  const previewImportLines = opts.previews
+    .map((preview, index) => `import __p${index} from ${JSON.stringify(preview.path)};`)
+    .join("\n");
+  const previewMap = opts.previews
+    .map((preview, index) => `  ${JSON.stringify(preview.app ?? "")}: __p${index},`)
+    .join("\n");
+  const previewLabels = Object.fromEntries(opts.previews.map((p) => [p.app ?? "", p.label]));
   const emotionImports =
     opts.styleRuntime.kind === "emotion"
       ? `import createCache from ${JSON.stringify(opts.emotionCachePath)};\nimport { CacheProvider } from ${JSON.stringify(opts.emotionReactPath)};\nimport { ThemeProvider, createTheme } from ${JSON.stringify(opts.stylesPath)};`
@@ -453,14 +859,16 @@ function buildCanvasEntry(opts: {
   root.render(React.createElement(ErrorBoundary, { onError: opts.onError },
     React.createElement(CacheProvider, { value: cache },
       React.createElement(ThemeProvider, { theme: theme },
-        React.createElement(React.Fragment, null, build(opts.tree), React.createElement(Ready, { onReady: opts.onReady }))))));`
+        React.createElement(React.Fragment, null, screen(opts.tree), React.createElement(Ready, { onReady: opts.onReady }))))));`
       : `root.render(React.createElement(ErrorBoundary, { onError: opts.onError },
-    React.createElement(React.Fragment, null, build(opts.tree), React.createElement(Ready, { onReady: opts.onReady }))));`;
+    React.createElement(React.Fragment, null, screen(opts.tree), React.createElement(Ready, { onReady: opts.onReady }))));`;
 
   return `import * as React from ${JSON.stringify(opts.reactPath)};
 import { createRoot } from ${JSON.stringify(opts.reactDomClientPath)};
 ${emotionImports}
 ${imports}
+${repoImports}
+${previewImportLines}
 
 function pick(mod, id) {
   var direct = mod && mod[id];
@@ -473,10 +881,29 @@ function pick(mod, id) {
   }
   return value;
 }
+function member(value, path) {
+  if (!path) return value;
+  var parts = path.split(".");
+  for (var i = 0; i < parts.length && value != null; i++) value = value[parts[i]];
+  return value;
+}
 var registry = {
 ${registry}
 };
+var repoRegistry = {
+${repoRegistry}
+};
+var adaptations = ${JSON.stringify(adaptations)};
+var previews = {
+${previewMap}
+};
+var previewLabels = ${JSON.stringify(previewLabels)};
+var primaryApp = ${JSON.stringify(opts.primaryApp ?? "")};
+var probes = ${JSON.stringify(opts.probes)};
 export const __velloo_canvas_diagnostics = ${JSON.stringify(opts.diagnostics)};
+
+var report = function () {};
+var previewInput = {};
 
 function chrome(props) { return { className: typeof props.className === "string" ? props.className : undefined, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"] }; }
 function mergeSx(base, sx) { return sx && typeof sx === "object" && !Array.isArray(sx) ? Object.assign({}, base, sx) : base; }
@@ -494,17 +921,119 @@ var overlayIds = new Set(${JSON.stringify(opts.overlayIds)});
 function Missing(props) {
   // NB: never name this prop \`ref\` — React <=18 strips it into element.ref and a
   // string ref with no owner throws during reconciliation, taking down the mount.
-  return React.createElement("div", { "data-velloo-component-fallback": props.componentId, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"], style: { border: "1px dashed currentColor", borderRadius: 6, padding: 12, opacity: .7, font: "12px ui-monospace, monospace" } }, props.children && props.children.length ? props.children : "Unavailable component: " + props.componentId);
+  return React.createElement("div", { "data-velloo-component-fallback": props.componentId, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"] , style: { border: "1px dashed currentColor", borderRadius: 6, padding: 12, opacity: .7, font: "12px ui-monospace, monospace" } }, props.children && props.children.length ? props.children : "Unavailable component: " + props.componentId);
 }
-function build(node) {
+// Server-rendered markup for a component with no browser source; its identity
+// attributes are already in the HTML, so selection resolves inside it.
+function Static(props) { return React.createElement("div", { style: { display: "contents" }, dangerouslySetInnerHTML: { __html: props.html || "" } }); }
+// Mirrors the renderer's SSR frame for a repository component without a proxy.
+var FRAME = { position: "relative", border: "1px dashed var(--color-border, #d4d4d8)", borderRadius: "0.5rem", padding: "1.5rem 0.75rem 0.75rem", minHeight: "2.5rem" };
+var LABEL = { position: "absolute", top: "0.25rem", left: "0.5rem", color: "var(--color-muted-foreground, #71717a)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.6875rem", lineHeight: 1.4, pointerEvents: "none" };
+function repoFrame(node, props, children) {
+  var text = props.children;
+  var kids = children.length ? children : (typeof text === "string" || typeof text === "number" ? [text] : []);
+  return element("div", { "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"], "data-velloo-repo": node.repo.name, title: node.repo.name + " from " + node.repo.importPath, style: FRAME }, [React.createElement("span", { style: LABEL }, "<" + node.repo.name + ">")].concat(kids));
+}
+function classify(error) {
+  var message = error && error.message ? String(error.message) : String(error);
+  return /provider|context|must be used within|was not found in (the )?component tree/i.test(message) ? "missing-provider" : "render-threw";
+}
+class RepoBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error) {
+    var code = classify(error);
+    report({ id: this.props.id, name: this.props.name, status: this.props.hasProxy ? "proxy" : "unavailable", code: code, note: String(error && error.message || error).slice(0, 400), remedy: code === "missing-provider" ? "Wrap the preview entry in the provider this component needs (preview_status shows the app's own wrappers)." : "Check the component's required props; the proxy or frame stands in until it renders." });
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(anchor);
+  }
+  render() { return this.state.failed ? this.props.fallback() : this.props.children; }
+}
+function previewProps(app) {
+  return { colorScheme: previewInput.colorScheme || "light", theme: previewInput.theme, recipeTheme: (previewInput.recipeTheme || {})[app] };
+}
+function slotProps(props) {
+  for (var name in props) {
+    var value = props[name];
+    if (value && typeof value === "object" && value.$node) props[name] = build(value.$node);
+    else if (Array.isArray(value) && value.some(function (item) { return item && item.$node; })) {
+      props[name] = value.map(function (item) { return item && item.$node ? build(item.$node) : item; });
+    }
+  }
+}
+// \`bare\`: the node is its repository parent's only child. Target-style parts
+// (Tooltip, Menu.Target, Popover.Target) clone that child and attach a ref, so
+// it must be the element itself — no anchor fragment, no boundary component.
+// A throw inside it is then caught by the parent's boundary instead.
+function buildRepo(node, props, children, bare) {
+  var Component = repoRegistry[node.ref];
+  var fallback = function () { return node.proxy ? build(node.proxy) : repoFrame(node, props, children); };
+  if (!Component) {
+    // In the registry but undefined: the module loaded and has no such export.
+    if (node.ref in repoRegistry) report({ id: node.ref, name: node.repo.name, status: node.proxy ? "proxy" : "unavailable", code: "missing-export", note: node.repo.importPath + " has no export " + node.repo.exportName + (node.repo.member ? "." + node.repo.member : "") + ".", remedy: "Pick the component again from list_components; the app may have renamed it." });
+    else if (node.proxy) report({ id: node.ref, name: node.repo.name, status: "proxy" });
+    return fallback();
+  }
+  var own = Object.assign({}, props);
+  slotProps(own);
+  var el = element(Component, Object.assign({}, adaptations[node.ref] || {}, own), children);
+  var app = node.repo.app || "";
+  if (app !== primaryApp && previews[app]) el = React.createElement(previews[app], previewProps(app), el);
+  if (bare) return el;
+  return React.createElement(React.Fragment, null,
+    React.createElement("template", { "data-velloo-anchor": props["data-node-path"] || "" }),
+    React.createElement(RepoBoundary, { id: node.ref, name: node.repo.name, hasProxy: Boolean(node.proxy), fallback: fallback }, el));
+}
+function build(node, bare) {
   if (node == null) return null;
   if (typeof node === "string" || typeof node === "number") return node;
   var ref = node.ref;
+  if (ref === ${JSON.stringify(STATIC_REF)}) return React.createElement(Static, { html: node.props && node.props.html });
   var props = Object.assign({}, node.props);
-  var children = (node.children || []).map(build);
+  var only = Boolean(node.repo) && (node.children || []).length === 1;
+  var children = (node.children || []).map(function (child) { return build(child, only); });
+  if (node.repo) return buildRepo(node, props, children, bare);
   if (overlayIds.has(ref) && overlays[ref]) { props.__kids = children; return React.createElement(overlays[ref], props); }
   var Component = registry[ref];
   return Component ? element(Component, props, children) : React.createElement(Missing, Object.assign({}, props, { componentId: ref, children: children }));
+}
+// A component that doesn't forward \`data-node-path\` to its DOM still has to be
+// selectable: its anchor's next element is its root, so give it the path.
+function anchor() {
+  var marks = document.querySelectorAll("template[data-velloo-anchor]");
+  for (var i = 0; i < marks.length; i++) {
+    var path = marks[i].getAttribute("data-velloo-anchor");
+    var next = marks[i].nextElementSibling;
+    if (path && next && next.tagName !== "TEMPLATE" && !next.hasAttribute("data-node-path")) next.setAttribute("data-node-path", path);
+  }
+}
+function probe() {
+  probes.forEach(function (entry) {
+    var host = document.createElement("div");
+    host.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;left:-9999px";
+    host.innerHTML = entry.probe.html;
+    document.body.appendChild(host);
+    var target = host.querySelector(entry.probe.selector);
+    var styled = target && getComputedStyle(target).getPropertyValue(entry.probe.property) === entry.probe.expect;
+    host.remove();
+    if (styled) return;
+    entry.keys.forEach(function (key) {
+      report({ id: key, status: "unstyled", code: "unstyled", note: entry.recipe + " components rendered without " + entry.probe.stylesheet + ", so they are unstyled.", remedy: "Import " + entry.probe.stylesheet + " in the preview entry." });
+    });
+  });
+}
+class PreviewBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error) {
+    report({ id: "preview", name: previewLabels[primaryApp] || "preview entry", status: "unavailable", code: "render-threw", note: "The preview entry threw: " + String(error && error.message || error).slice(0, 400), remedy: "Fix the preview entry; components render without it until then." });
+  }
+  render() { return this.state.failed ? this.props.bare() : this.props.children; }
+}
+function screen(tree) {
+  var Primary = previews[primaryApp];
+  if (!Primary) return build(tree);
+  return React.createElement(PreviewBoundary, { bare: function () { return build(tree); } },
+    React.createElement(Primary, previewProps(primaryApp), build(tree)));
 }
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { failed: false }; }
@@ -512,8 +1041,10 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error) { if (this.props.onError) this.props.onError(error); }
   render() { return this.state.failed ? null : this.props.children; }
 }
-function Ready(props) { React.useEffect(function () { if (props.onReady) props.onReady(); }, []); return null; }
+function Ready(props) { React.useEffect(function () { anchor(); probe(); if (props.onReady) props.onReady(); }, []); return null; }
 export function mountScreen(opts) {
+  if (typeof opts.onDiagnostic === "function") report = opts.onDiagnostic;
+  previewInput = opts.preview || {};
   var root = createRoot(opts.el);
   ${renderBody}
   return root;
