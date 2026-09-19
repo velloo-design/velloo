@@ -15,6 +15,7 @@ import {
   emptyIndex,
   indexLocalDeclarations,
   indexPackageDeclarations,
+  packageExportNames,
   propsFor,
   type RepoPropDescriptor,
   variantPropsFor,
@@ -105,6 +106,7 @@ export class RepoComponents {
   private cached: Promise<RepoCatalog> | null = null;
   private readFiles = new Set<string>();
   private packageIndexes = new Map<string, { stamp: string; index: DeclarationIndex }>();
+  private exportNames = new Map<string, Set<string>>();
 
   constructor(private readonly opts: RepoComponentsOptions) {}
 
@@ -319,6 +321,64 @@ export class RepoComponents {
       apps,
       warnings,
     };
+  }
+
+  /**
+   * A name the catalog doesn't list, resolved against the packages the app
+   * already renders components from — `IconActivity` from the icon pack whose
+   * other icons the app uses, picked from data where no JSX tag names it. The
+   * catalog stays what the app renders; this only answers for a name asked for.
+   */
+  async resolveName(name: string): Promise<RepoCatalogEntry | null> {
+    const catalog = await this.catalog();
+    const [root, ...members] = name.split(".");
+    if (!root || !/^[A-Z]/.test(root)) return null;
+    const packages = new Map<string, { app: string | undefined; hostRoot: string }>();
+    for (const entry of catalog.entries) {
+      if (entry.source !== "package" || !entry.packageName || packages.has(entry.packageName)) {
+        continue;
+      }
+      const app = catalog.apps.find((summary) => summary.app === entry.identity.app);
+      if (app) packages.set(entry.packageName, { app: entry.identity.app, hostRoot: app.hostRoot });
+    }
+    const matches = [...packages].filter(([pkg, { hostRoot }]) =>
+      this.packageExports(pkg, hostRoot).has(root),
+    );
+    // Two packages exporting the name is a guess we won't make.
+    if (matches.length !== 1) return null;
+    const [packageName, { app, hostRoot }] = matches[0] as [
+      string,
+      { app: string | undefined; hostRoot: string },
+    ];
+    const identity: RepoComponentRef = {
+      importPath: packageName,
+      exportName: root,
+      ...(members.length > 0 ? { member: members.join(".") } : {}),
+      ...(app ? { app } : {}),
+    };
+    const entry = entryFor(
+      { name, identity, source: "package", packageName, usages: [] },
+      this.packageIndex(packageName, hostRoot),
+      new Map(),
+      recipeForSpecifier(packageName),
+    );
+    entry.id = name;
+    return entry;
+  }
+
+  private packageExports(packageName: string, hostRoot: string): Set<string> {
+    let stamp = "";
+    try {
+      const pkgJson = Bun.resolveSync(`${packageName}/package.json`, hostRoot);
+      stamp = `${pkgJson}:${statSync(pkgJson).mtimeMs}`;
+    } catch {
+      return new Set();
+    }
+    const cached = this.exportNames.get(stamp);
+    if (cached) return cached;
+    const names = packageExportNames(packageName, hostRoot);
+    this.exportNames.set(stamp, names);
+    return names;
   }
 
   private packageIndex(packageName: string, hostRoot: string): DeclarationIndex {

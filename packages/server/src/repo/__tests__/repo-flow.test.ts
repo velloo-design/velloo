@@ -186,6 +186,11 @@ describe("repository components through compose, mutations and emit", () => {
                 children: "Add",
               },
             },
+            {
+              $ref: "Button",
+              $repo: { importPath: "@acme/ui", exportName: "Button" },
+              props: { children: [{ $ref: "Icon", props: { name: "Plus" } }, "More"] },
+            },
           ],
         },
       },
@@ -198,6 +203,10 @@ describe("repository components through compose, mutations and emit", () => {
         '  <Panel.Header title="Services" />',
         '  <Hero title="Ops" />',
         '  <Button variant="light" leftSection={<Plus />}>Add</Button>',
+        "  <Button>",
+        "    <Plus />",
+        '    {"More"}',
+        "  </Button>",
         "</Panel>",
       ].join("\n"),
     );

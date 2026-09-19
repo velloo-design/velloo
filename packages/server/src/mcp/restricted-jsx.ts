@@ -761,19 +761,52 @@ export async function compileRestrictedJsx(
     }
   }
   const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  const components = new Set(Object.keys(registry));
+  const repo = new Map(
+    (repoCatalog?.entries ?? []).map((entry) => [
+      entry.id,
+      {
+        name: entry.name,
+        identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,
+      },
+    ]),
+  );
+  // A tag nothing claims may still be an export of a package the app renders
+  // from (an icon it picks from data); ask before calling it unknown.
+  if (ctx.repo) {
+    for (const tag of tagsIn(root)) {
+      if (components.has(tag) || snippets.has(tag) || repo.has(tag)) continue;
+      const entry = await ctx.repo.resolveName(tag).catch(() => null);
+      if (entry) repo.set(tag, { name: entry.name, identity: entry.identity });
+    }
+  }
   return compileElement(root, {
     source,
-    components: new Set(Object.keys(registry)),
+    components,
     catalog: new Set(manifest.map((descriptor) => descriptor.id)),
     snippets,
-    repo: new Map(
-      (repoCatalog?.entries ?? []).map((entry) => [
-        entry.id,
-        {
-          name: entry.name,
-          identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,
-        },
-      ]),
-    ),
+    repo,
   });
+}
+
+/** Every tag an element tree names: nested, passed as a prop, or a literal `$ref`. */
+function tagsIn(root: Element): Set<string> {
+  const tags = new Set<string>();
+  const literal = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(literal);
+    else if (value && typeof value === "object") {
+      const ref = (value as { $ref?: unknown }).$ref;
+      if (typeof ref === "string") tags.add(ref);
+    }
+  };
+  const visit = (element: Element): void => {
+    if (element.tag) tags.add(element.tag);
+    for (const attr of element.attributes) {
+      if (attr.value instanceof ElementValue) visit(attr.value.element);
+      else literal(attr.value);
+    }
+    for (const child of element.children) if ("attributes" in child) visit(child);
+  };
+  visit(root);
+  return tags;
 }

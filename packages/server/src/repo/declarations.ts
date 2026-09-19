@@ -174,6 +174,52 @@ export function indexPackageDeclarations(packageName: string, hostRoot: string):
   return index;
 }
 
+/**
+ * PascalCase names a package's type entry exports, through its `export … from`
+ * graph. Unlike the props index this reads icon packs' multi-megabyte files
+ * too — every pattern here is linear — since an icon is exactly what an agent
+ * reaches for that the app's own JSX never names (it picks one from data).
+ */
+export function packageExportNames(packageName: string, hostRoot: string): Set<string> {
+  const names = new Set<string>();
+  const entry = packageTypesEntry(packageName, hostRoot);
+  if (!entry) return names;
+  const queue = [entry];
+  const seen = new Set<string>();
+  while (queue.length > 0 && seen.size < MAX_DECLARATION_FILES) {
+    const file = queue.shift() as string;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    let source: string;
+    try {
+      source = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const match of source.matchAll(
+      /export\s+(?:declare\s+)?(?:const|function|class|let|var)\s+([A-Z][\w$]*)/g,
+    )) {
+      names.add(match[1] ?? "");
+    }
+    for (const match of source.matchAll(/export\s*(?:type\s*)?\{([^}]*)\}/g)) {
+      for (const part of (match[1] ?? "").split(",")) {
+        const exported =
+          part
+            .trim()
+            .split(/\s+as\s+/)
+            .at(-1)
+            ?.trim() ?? "";
+        if (/^[A-Z][\w$]*$/.test(exported)) names.add(exported);
+      }
+    }
+    for (const match of source.matchAll(/export\s*\*\s*from\s*['"](\.[^'"]+)['"]/g)) {
+      const next = resolveDeclaration(dirname(file), match[1] ?? "");
+      if (next) queue.push(next);
+    }
+  }
+  return names;
+}
+
 function packageTypesEntry(packageName: string, hostRoot: string): string | null {
   let pkgJsonPath: string;
   try {

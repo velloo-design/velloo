@@ -977,16 +977,31 @@ function buildRepo(node, props, children, bare) {
     else if (node.proxy) report({ id: node.ref, name: node.repo.name, status: "proxy" });
     return fallback();
   }
-  var own = Object.assign({}, props);
+  var own = Object.assign({}, adaptations[node.ref] || {}, props);
   slotProps(own);
-  var el = element(Component, Object.assign({}, adaptations[node.ref] || {}, own), children);
   var app = node.repo.app || "";
-  if (app !== primaryApp && previews[app]) el = React.createElement(previews[app], previewProps(app), el);
-  if (bare) return el;
+  var preview = app !== primaryApp && previews[app] ? previews[app] : null;
+  if (bare) {
+    var el = element(Component, own, children);
+    return preview ? React.createElement(preview, previewProps(app), el) : el;
+  }
+  return element(RepoSlot, Object.assign(own, { __velloo: { Component: Component, preview: preview, app: app, id: node.ref, name: node.repo.name, hasProxy: Boolean(node.proxy), fallback: fallback } }), children);
+}
+// Stands in the tree where a repository component goes, carrying its props, so
+// a parent that reads or clones its children (Timeline passing \`__active\`,
+// Stepper counting steps) reaches the real component: whatever the parent adds,
+// and its ref, pass straight through to it inside the node's boundary.
+var RepoSlot = React.forwardRef(function RepoSlot(props, ref) {
+  var slot = props.__velloo;
+  var rest = Object.assign({}, props);
+  delete rest.__velloo;
+  if (ref) rest.ref = ref;
+  var el = React.createElement(slot.Component, rest);
+  if (slot.preview) el = React.createElement(slot.preview, previewProps(slot.app), el);
   return React.createElement(React.Fragment, null,
     React.createElement("template", { "data-velloo-anchor": props["data-node-path"] || "" }),
-    React.createElement(RepoBoundary, { id: node.ref, name: node.repo.name, hasProxy: Boolean(node.proxy), fallback: fallback }, el));
-}
+    React.createElement(RepoBoundary, { id: slot.id, name: slot.name, hasProxy: slot.hasProxy, fallback: slot.fallback }, el));
+});
 function build(node, bare) {
   if (node == null) return null;
   if (typeof node === "string" || typeof node === "number") return node;

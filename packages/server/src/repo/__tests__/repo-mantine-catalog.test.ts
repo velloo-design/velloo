@@ -77,5 +77,13 @@ describe.skipIf(!HAS_FIXTURE)("Mantine fixture catalog", () => {
     ).toContain("light");
     expect(catalog.apps[0]).toMatchObject({ recipes: ["mantine"], preview: { kind: "recipe" } });
     expect(catalog.apps[0]?.wrappers.map((w) => w.name)).toEqual(["MantineProvider"]);
+
+    // The app picks some icons from data, so no JSX names them; they still resolve.
+    const started = performance.now();
+    expect((await repo.resolveName("IconActivity"))?.identity).toEqual({
+      importPath: "@tabler/icons-react",
+      exportName: "IconActivity",
+    });
+    expect(performance.now() - started).toBeLessThan(3000);
   });
 });

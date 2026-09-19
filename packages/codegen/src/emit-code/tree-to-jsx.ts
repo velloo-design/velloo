@@ -489,6 +489,21 @@ function renderRepoComponent(
   if (typeof childrenProp === "string" || typeof childrenProp === "number") {
     return ok(`${pad}<${name}${attrs}>${serializeTextChild(String(childrenProp))}</${name}>`);
   }
+  // Nodes mixed with text runs, as the provider path emits them.
+  if (Array.isArray(childrenProp) && childrenProp.length > 0) {
+    const parts: string[] = [];
+    for (const item of childrenProp) {
+      if (isComponentNode(item) || isSnippetInstance(item) || isParamRef(item)) {
+        const childR = renderNode(item as Node, ctx, depth + 1);
+        if (!childR.ok) return childR;
+        parts.push(childR.value);
+      } else {
+        const text = typeof item === "string" || typeof item === "number" ? String(item) : item;
+        parts.push(`${ctx.indent(depth + 1)}{${JSON.stringify(text)}}`);
+      }
+    }
+    return ok(`${pad}<${name}${attrs}>\n${parts.join("\n")}\n${pad}</${name}>`);
+  }
   if (childrenProp !== undefined && childrenProp !== null && typeof childrenProp === "object") {
     const isParam = typeof (childrenProp as { $param?: unknown }).$param === "string";
     if (isParam && ctx.snippetParamNames?.has((childrenProp as { $param: string }).$param)) {

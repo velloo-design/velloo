@@ -81,6 +81,8 @@ describe("discoverRepoComponents on a custom component system", () => {
       "Panel",
       "Panel.Header",
       "StatCard",
+      "Steps",
+      "Steps.Step",
       "ThemedButton",
     ]);
     // Exported by the barrel but rendered nowhere.
@@ -261,6 +263,45 @@ describe("RepoComponents catalog", () => {
       // Both declare \`NumberFieldProps\` in effect; each keeps its own.
       expect(catalog.byId.get("Fields.NumberField")?.props.map((p) => p.name)).toEqual(["min"]);
       expect(catalog.byId.get("Controls.NumberField")?.props.map((p) => p.name)).toEqual(["unit"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a name the app never writes resolves against a package it already uses", async () => {
+    const root = realpathSync(await mkdtemp(join(tmpdir(), "velloo-icons-")));
+    try {
+      const pkg = join(root, "node_modules/@acme/icons");
+      await mkdir(join(pkg, "dist"), { recursive: true });
+      await writeFile(
+        join(pkg, "package.json"),
+        JSON.stringify({ name: "@acme/icons", types: "dist/index.d.ts" }),
+      );
+      await writeFile(join(pkg, "dist/index.d.ts"), 'export * from "./icons";\n');
+      await writeFile(
+        join(pkg, "dist/icons.d.ts"),
+        "interface IconProps { size?: number }\ndeclare const IconA: (p: IconProps) => null;\ndeclare const IconB: (p: IconProps) => null;\nexport { IconA, IconB };\n",
+      );
+      await writeFile(
+        join(root, "package.json"),
+        JSON.stringify({ dependencies: { react: "*", "@acme/icons": "*" } }),
+      );
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(
+        join(root, "src/main.tsx"),
+        'import { IconA } from "@acme/icons";\nexport default function App() {\n  return <IconA />;\n}\n',
+      );
+      const repo = new RepoComponents({
+        folderRoot: join(root, "velloo"),
+        config: () => ({ hostApp: { root } }) as unknown as Config,
+        reservedIds: () => new Set(),
+      });
+      expect((await repo.catalog()).entries.map((entry) => entry.id)).toEqual(["IconA"]);
+      expect((await repo.resolveName("IconB"))?.identity).toEqual({
+        importPath: "@acme/icons",
+        exportName: "IconB",
+      });
+      expect(await repo.resolveName("IconNope")).toBeNull();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

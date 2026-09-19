@@ -54,6 +54,23 @@ const screen: Screen = {
         ],
       },
       {
+        $ref: "Steps",
+        $repo: repo("Steps"),
+        props: { active: 1 },
+        children: [
+          {
+            $ref: "Steps.Step",
+            $repo: repo("Steps", { member: "Step" }),
+            props: { label: "Build" },
+          },
+          {
+            $ref: "Steps.Step",
+            $repo: repo("Steps", { member: "Step" }),
+            props: { label: "Ship" },
+          },
+        ],
+      },
+      {
         $ref: "ThemedButton",
         $repo: { importPath: "./src/components/theme", exportName: "ThemedButton" },
         props: { children: "Deploy" },
@@ -147,6 +164,9 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
         panelHeading: root?.querySelector("section.fx-card h3")?.textContent ?? null,
         badge: root?.querySelector('section.fx-card [data-variant="outline"]')?.textContent ?? null,
         button: root?.querySelector("button")?.getAttribute("data-accent") ?? null,
+        steps: [...(root?.querySelectorAll("ol.fx-steps li") ?? [])].map((li) =>
+          li.getAttribute("data-step-state"),
+        ),
         proxy: root?.textContent?.includes("Broken proxy") ?? false,
         accent: getComputedStyle(document.documentElement)
           .getPropertyValue("--fixture-accent")
@@ -169,6 +189,8 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
     expect(state.panelHeading).toBe("Services");
     expect(state.badge).toBe("Healthy");
     expect(state.button).toBe("violet");
+    // A parent that clones its children reaches the real components.
+    expect(state.steps).toEqual(["done", "todo"]);
     expect(state.accent).toBe("#6d28d9");
     // The broken component stands aside for its proxy; its neighbours stay exact.
     expect(state.proxy).toBe(true);
@@ -198,7 +220,7 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
       const emitted = await client.callTool({ name: "emit_code", arguments: { screenId: "home" } });
       const ir = emitted.structuredContent as { repoImports: unknown[]; jsx: string };
       expect(ir.repoImports).toEqual([
-        { from: "./src/components", named: ["Badge", "Panel", "StatCard"] },
+        { from: "./src/components", named: ["Badge", "Panel", "StatCard", "Steps"] },
         { from: "./src/components/broken", named: ["Broken"] },
         { from: "./src/components/theme", named: ["ThemedButton"] },
       ]);
