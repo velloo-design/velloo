@@ -17,8 +17,11 @@ describe("pathKey", () => {
   });
 
   test("a drive-lettered path keeps its drive, however it arrives", () => {
-    // Bun's metafile hands back `/D:/…` on Windows; a watcher says `D:\…`.
-    // On POSIX these are ordinary relative names, and must still agree.
-    expect(pathKey("/D:/a/app.tsx")).toBe(pathKey("D:/a/app.tsx"));
+    // Bun's metafile hands back `/C:/…`; a watcher says `C:\…`. Read naively,
+    // the leading slash means "root of the current drive", so a checkout on D:
+    // turns the first into `D:\C:\…` — a path that matches nothing.
+    expect(pathKey("/C:/Users/x/app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
+    expect(pathKey("/C:/Users/x/app.tsx")).not.toContain("D:");
+    expect(pathKey("/C:/Users/x/app.tsx").toLowerCase()).toContain("c:/users/x/app.tsx");
   });
 });

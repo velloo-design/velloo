@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { Config } from "@velloo/schema";
 import { repoKey } from "@velloo/schema";
+import { pathKey } from "../../live/bundle-core.ts";
 import { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { RepoComponents } from "../catalog.ts";
 import { fixtureApp } from "./fixture-app.ts";
@@ -85,16 +86,15 @@ describe("repository components in the canvas bundle", () => {
 
   test("an edit invalidates only the bundles that compiled the edited file", async () => {
     const { bundler } = setup();
-    const built = await bundler.build("default", [key("./src/components", "StatCard")]);
-    await bundler.build("default", [key("./src/components/hero", "default")]);
+    await bundler.build("default", [key("./src/components", "StatCard")]);
+    const hero = await bundler.build("default", [key("./src/components/hero", "default")]);
     expect(bundler.size).toBe(2);
-    // Absolute on every platform: a Windows `C:\…` input read as relative would
-    // be re-joined onto the cwd and match nothing an edit ever touches.
-    expect(built.inputs?.length).toBeGreaterThan(0);
-    expect(built.inputs?.every((input) => isAbsolute(input))).toBe(true);
+    // The file it compiled, spelled the way an edit to it will arrive. A
+    // bundler's own spelling differs by platform (`/C:/…` on Windows), and a
+    // mismatch doesn't fail here — it stops invalidating, and the canvas serves
+    // a bundle built from source that has since changed.
+    expect(hero.inputs).toContain(pathKey(resolve(FIXTURE, "src/components/hero.tsx")));
     const version = bundler.version;
-    console.log("DIAG changed:", resolve(FIXTURE, "src/components/hero.tsx"));
-    console.log("DIAG inputs:", JSON.stringify(built.inputs?.slice(0, 8)));
     bundler.invalidate([resolve(FIXTURE, "src/components/hero.tsx")]);
     expect(bundler.size).toBe(1);
     expect(bundler.version).toBe(version + 1);

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { helpersComponentsDir } from "@velloo/helpers/paths";
 import type {
   CanvasBundleSpec,
@@ -22,6 +22,7 @@ import {
   type BundleError,
   type BundleResult,
   PROCESS_SHIM,
+  pathKey,
   resolveImport,
 } from "./bundle-core.ts";
 
@@ -318,12 +319,14 @@ export async function buildCanvasBundle(
         message: `The canvas bundle for this screen is over budget (${metrics.buildMs} ms, ${(metrics.bytes / 1e6).toFixed(1)} MB; budget ${BUNDLE_BUDGET.buildMs} ms, ${(BUNDLE_BUDGET.bytes / 1e6).toFixed(1)} MB). Split the screen or exclude heavy components with hostApp.components.exclude.`,
       });
     }
-    // `resolve`, not a leading-slash test: a Windows input is `C:\…`, which
-    // would be taken for a relative path and re-joined onto the cwd, so nothing
-    // an edit touched would ever match and every bundle would look unaffected.
+    // Canonical keys, not raw paths: the metafile spells a Windows file
+    // `/C:/Users/…`, whose leading slash `resolve` reads as "root of the
+    // current drive" — on a runner whose checkout is on D: that yields
+    // `D:\C:\Users\…`, which matches nothing a watcher ever reports, and
+    // selective invalidation quietly serves a stale bundle forever.
     const inputs = Object.keys(
       (result as { metafile?: { inputs?: Record<string, unknown> } }).metafile?.inputs ?? {},
-    ).map((input) => resolve(input));
+    ).map(pathKey);
     return {
       code,
       errors,
