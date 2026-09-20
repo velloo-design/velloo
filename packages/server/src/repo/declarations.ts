@@ -40,6 +40,17 @@ export interface DeclarationIndex {
   variantTables: Map<string, { variants: Map<string, string[]>; defaults: Map<string, string> }>;
 }
 
+/**
+ * `type Size = "sm" | "md" | 2;` — members must be separated by `|` rather than
+ * merely repeated, so one number can't be split across iterations. Written the
+ * looser way, `type A = 000.000.000…` backtracks exponentially.
+ */
+const UNION_MEMBER = String.raw`(?:'[^']*'|"[^"]*"|-?\d+(?:\.\d+)?)`;
+const LITERAL_ALIAS = new RegExp(
+  String.raw`type\s+([A-Z][\w$]*)\s*=\s*\|?\s*(${UNION_MEMBER}(?:\s*\|\s*${UNION_MEMBER})*)\s*;`,
+  "g",
+);
+
 const MAX_DECLARATION_FILES = 1200;
 const MAX_DECLARATION_BYTES = 1_000_000;
 
@@ -95,9 +106,7 @@ function indexDeclarations(source: string, index: DeclarationIndex): void {
       index.props.set(name, { body: "", extends: [annotation.named] });
     }
   }
-  for (const match of code.matchAll(
-    /type\s+([A-Z][\w$]*)\s*=\s*((?:\s*\|?\s*(?:'[^']*'|"[^"]*"|-?\d+(?:\.\d+)?))+)\s*;/g,
-  )) {
+  for (const match of code.matchAll(LITERAL_ALIAS)) {
     const values = literalUnion(match[2] ?? "");
     if (values) index.literalAliases.set(match[1] ?? "", values);
   }

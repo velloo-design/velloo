@@ -57,6 +57,16 @@ describe("declaration extraction", () => {
     expect(props.find((p) => p.name === "id")?.description).toBe("Shared id.");
   });
 
+  test("a literal-union alias reads fast, even on input built to backtrack", async () => {
+    const index = await indexOf(`
+      type Size = 'sm' | "md" | 2 | -3.5;
+      type Bad = ${"000.".repeat(60)}0;
+    `);
+    expect(index.literalAliases.get("Size")).toEqual(["sm", "md", 2, -3.5]);
+    // `Bad` is not a union of literals; the point is that deciding so is linear.
+    expect(index.literalAliases.has("Bad")).toBe(false);
+  });
+
   test("props typed at the parameter read like a declared <Name>Props", async () => {
     const index = await indexOf(`
       interface Props extends BaseProps { tone: "info" | "warn" }

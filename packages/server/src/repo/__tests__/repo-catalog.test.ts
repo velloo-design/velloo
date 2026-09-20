@@ -365,13 +365,21 @@ describe("RepoComponents catalog", () => {
   test("invalidates only for files it read, manifests, stories and previews", async () => {
     const repo = new RepoComponents({ folderRoot: folder, config, reservedIds: () => new Set() });
     await repo.catalog();
-    expect(repo.invalidate([join(host, "README.md")])).toBe(false);
-    expect(repo.invalidate([join(host, "src/components/unused.tsx")])).toBe(false);
+    // Paths are compared as the catalog recorded them — realpath'd, which on
+    // macOS is /private/var where the fixture's own path says /var. Normalize
+    // here or the assertions below pass for the wrong reason.
+    const file = (path: string) => join(realpathSync(host), path);
+    expect(repo.invalidate([file("README.md")])).toBe(false);
+    // Rendered nowhere, but the barrel's re-export was followed to resolve what
+    // it exports, so the build did read it and a change to it can change the catalog.
+    expect(repo.invalidate([file("src/components/unused.tsx")])).toBe(true);
+    await repo.catalog();
     // Read through the barrel's re-export: its props come from here.
-    expect(repo.invalidate([join(realpathSync(host), "src/components/stat-card.tsx")])).toBe(true);
+    expect(repo.invalidate([file("src/components/stat-card.tsx")])).toBe(true);
     await repo.catalog();
-    expect(repo.invalidate([join(realpathSync(host), "src/App.jsx")])).toBe(true);
+    expect(repo.invalidate([file("src/App.jsx")])).toBe(true);
     await repo.catalog();
+    // A manifest invalidates wherever it sits — it is matched by name, not path.
     expect(repo.invalidate([join(host, "package.json")])).toBe(true);
   });
 

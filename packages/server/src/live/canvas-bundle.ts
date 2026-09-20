@@ -580,7 +580,19 @@ function probesFor(
 
 /** Stylesheets the build extracted, injected before the components evaluate. */
 function injectCss(css: string): string {
-  return `(function(){var s=document.createElement("style");s.setAttribute("data-velloo-canvas-css","");s.textContent=${JSON.stringify(css)};document.head.appendChild(s);})();\n`;
+  return `(function(){var s=document.createElement("style");s.setAttribute("data-velloo-canvas-css","");s.textContent=${jsString(css)};document.head.appendChild(s);})();\n`;
+}
+
+/**
+ * A string literal for generated code. `JSON.stringify` escapes the string but
+ * not the contexts the result can land in: `</script` would close a host page's
+ * script tag, and U+2028/9 are line terminators to a JS parser.
+ */
+function jsString(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003C")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 function resolveRuntime(
