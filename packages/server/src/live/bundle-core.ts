@@ -58,9 +58,17 @@ export const PROCESS_SHIM =
  * turns selective invalidation into "nothing ever changed".
  */
 export function pathKey(path: string): string {
-  const drive = path.replace(/^\/(?=[A-Za-z]:)/, "");
-  const resolved = resolve(drive).replaceAll("\\", "/");
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  const windows = process.platform === "win32";
+  // Separators first, then the stray leading one: a bundler hands back
+  // `/C:/Users/…` or `\C:\Users\…` for a file a watcher calls `C:\Users\…`,
+  // and read naively that leading separator means "root of the current drive",
+  // so a checkout on D: turns it into `D:\C:\Users\…` — a path that matches
+  // nothing, which reads as "no bundle was affected" rather than as an error.
+  // Backslashes are only separators on Windows; elsewhere they are filename
+  // characters and must survive.
+  const slashed = windows ? path.replaceAll("\\", "/") : path;
+  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, "")).replaceAll("\\", "/");
+  return windows ? resolved.toLowerCase() : resolved;
 }
 
 /** Resolve the host app root: explicit config, else the design folder's parent. */

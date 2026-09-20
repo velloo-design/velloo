@@ -23,5 +23,11 @@ describe("pathKey", () => {
     expect(pathKey("/C:/Users/x/app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
     expect(pathKey("/C:/Users/x/app.tsx")).not.toContain("D:");
     expect(pathKey("/C:/Users/x/app.tsx").toLowerCase()).toContain("c:/users/x/app.tsx");
+    if (process.platform === "win32") {
+      // The forms actually seen: a backslash lead, and a doubled separator.
+      expect(pathKey("\\C:\\Users\\x\\app.tsx")).toBe(pathKey("C:\\Users\\x\\app.tsx"));
+      expect(pathKey("//C:/Users/x/app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
+      expect(pathKey("/C:/Users/x/app.tsx")).not.toContain("d:");
+    }
   });
 });
