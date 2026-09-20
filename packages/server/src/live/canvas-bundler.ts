@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { CanvasBundleSpec, StyleChannelKind } from "@velloo/provider";
 import { type HostApp, parseRepoKey } from "@velloo/schema";
 import type { RepoComponents } from "../repo/catalog.ts";
@@ -70,11 +71,13 @@ export class CanvasBundler {
       this._version++;
       return;
     }
-    const touched = new Set(changed);
+    // Both sides normalized: a watcher path and a bundler input can spell the
+    // same file differently (separators, a relative prefix).
+    const touched = new Set(changed.map((file) => resolve(file)));
     let dropped = false;
     for (const [key, entry] of this.entries) {
       const inputs = entry.cached?.inputs;
-      if (!inputs || inputs.some((input) => touched.has(input))) {
+      if (!inputs || inputs.some((input) => touched.has(resolve(input)))) {
         this.entries.delete(key);
         dropped = true;
       }

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { helpersComponentsDir } from "@velloo/helpers/paths";
 import type {
   CanvasBundleSpec,
@@ -318,9 +318,12 @@ export async function buildCanvasBundle(
         message: `The canvas bundle for this screen is over budget (${metrics.buildMs} ms, ${(metrics.bytes / 1e6).toFixed(1)} MB; budget ${BUNDLE_BUDGET.buildMs} ms, ${(BUNDLE_BUDGET.bytes / 1e6).toFixed(1)} MB). Split the screen or exclude heavy components with hostApp.components.exclude.`,
       });
     }
+    // `resolve`, not a leading-slash test: a Windows input is `C:\…`, which
+    // would be taken for a relative path and re-joined onto the cwd, so nothing
+    // an edit touched would ever match and every bundle would look unaffected.
     const inputs = Object.keys(
       (result as { metafile?: { inputs?: Record<string, unknown> } }).metafile?.inputs ?? {},
-    ).map((input) => (input.startsWith("/") ? input : join(process.cwd(), input)));
+    ).map((input) => resolve(input));
     return {
       code,
       errors,

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import type { Config } from "@velloo/schema";
 import { repoKey } from "@velloo/schema";
 import { CanvasBundler } from "../../live/canvas-bundler.ts";
@@ -85,9 +85,13 @@ describe("repository components in the canvas bundle", () => {
 
   test("an edit invalidates only the bundles that compiled the edited file", async () => {
     const { bundler } = setup();
-    await bundler.build("default", [key("./src/components", "StatCard")]);
+    const built = await bundler.build("default", [key("./src/components", "StatCard")]);
     await bundler.build("default", [key("./src/components/hero", "default")]);
     expect(bundler.size).toBe(2);
+    // Absolute on every platform: a Windows `C:\…` input read as relative would
+    // be re-joined onto the cwd and match nothing an edit ever touches.
+    expect(built.inputs?.length).toBeGreaterThan(0);
+    expect(built.inputs?.every((input) => isAbsolute(input))).toBe(true);
     const version = bundler.version;
     bundler.invalidate([resolve(FIXTURE, "src/components/hero.tsx")]);
     expect(bundler.size).toBe(1);
