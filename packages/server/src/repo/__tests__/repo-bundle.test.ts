@@ -93,6 +93,8 @@ describe("repository components in the canvas bundle", () => {
     expect(built.inputs?.length).toBeGreaterThan(0);
     expect(built.inputs?.every((input) => isAbsolute(input))).toBe(true);
     const version = bundler.version;
+    console.log("DIAG changed:", resolve(FIXTURE, "src/components/hero.tsx"));
+    console.log("DIAG inputs:", JSON.stringify(built.inputs?.slice(0, 8)));
     bundler.invalidate([resolve(FIXTURE, "src/components/hero.tsx")]);
     expect(bundler.size).toBe(1);
     expect(bundler.version).toBe(version + 1);
