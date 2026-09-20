@@ -211,9 +211,10 @@ export function similarityNote(input: {
   // recovers most of the gap, the remaining work is alignment, not content.
   if (alignedSimilarity !== undefined && alignedSimilarity - similarity >= 0.02) {
     return (
-      `similarity ${similarity} is mostly sub-pixel alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
-      `The content matches — what is left is a rounded spacing or line-height somewhere above, which cascades down the column. ` +
-      `Chase the topMismatches nearest the top of the page; the ones below it are the same shift repeated.`
+      `similarity ${similarity} is mostly alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
+      `The content is right and one value is wrong — a padding, a line-height or a border width above the fold, whose error ` +
+      `cascades down the column. That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go ` +
+      `with it. Read the top region's styleDiff rather than nudging the nodes underneath.`
     );
   }
   if (heightDominated) {

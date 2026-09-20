@@ -19,7 +19,8 @@ describe("similarityNote", () => {
       heightDelta: 0,
       alignedSimilarity: 0.991,
     });
-    expect(note).toContain("sub-pixel alignment");
+    expect(note).toContain("mostly alignment");
+    expect(note).toContain("fix the topmost mismatch");
     expect(note).toContain("0.991");
     // A gap the shift doesn't explain is a real mismatch, and says nothing here.
     expect(
