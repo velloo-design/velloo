@@ -19,6 +19,14 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
 
 const SECTION_LABEL = "text-[10px] uppercase tracking-wider text-muted-foreground font-medium";
+/**
+ * Keeps a preview clear of the card's rounded corners. The card clips its
+ * corners, and a component draws from its own top-left, so a flush iframe
+ * loses whatever sits there — an icon, the first glyph of a label. An inset of
+ * roughly a third of the radius is enough to put the iframe's corner back
+ * inside the curve; this is comfortably that.
+ */
+export const PREVIEW_INSET = "p-3";
 
 async function copyImport(line: string): Promise<void> {
   try {
@@ -161,21 +169,23 @@ export function RepoDetail({ id }: { id: string }) {
           <div className="grid gap-3 sm:grid-cols-2">
             {states.map((state, i) => (
               <Card key={state ? `${state.name}-${i}` : "default"} className="py-0 gap-0">
-                <iframe
-                  src={repoRenderUrl(entry.id, {
-                    state: i,
-                    w: 480,
-                    h: 200,
-                    v: themeVersion,
-                    dark,
-                  })}
-                  title={`${entry.id} ${state?.name ?? "preview"}`}
-                  loading="lazy"
-                  // The mount reports what it found (a throw, a missing provider)
-                  // a beat after load; ask again so the chip and note catch up.
-                  onLoad={() => setTimeout(() => void refreshRepoStatus([entry.id]), 1500)}
-                  className="block w-full h-[200px] border-0"
-                />
+                <div className={PREVIEW_INSET}>
+                  <iframe
+                    src={repoRenderUrl(entry.id, {
+                      state: i,
+                      w: 480,
+                      h: 200,
+                      v: themeVersion,
+                      dark,
+                    })}
+                    title={`${entry.id} ${state?.name ?? "preview"}`}
+                    loading="lazy"
+                    // The mount reports what it found (a throw, a missing provider)
+                    // a beat after load; ask again so the chip and note catch up.
+                    onLoad={() => setTimeout(() => void refreshRepoStatus([entry.id]), 1500)}
+                    className="block w-full h-[200px] border-0"
+                  />
+                </div>
                 <div className="flex items-center gap-2 border-t px-3 py-1.5 text-xs">
                   <span className="font-medium">{state?.name ?? "default"}</span>
                   {state ? (

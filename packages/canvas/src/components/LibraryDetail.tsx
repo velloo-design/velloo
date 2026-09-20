@@ -7,7 +7,7 @@ import { categoryForComponent } from "../library-categories.ts";
 import { formatParamDefault } from "../snippet-params.ts";
 import { type LibraryItemRef, useCanvas } from "../store.ts";
 import { BackButton, DetailBreadcrumb } from "./LibraryDetailChrome.tsx";
-import { RepoDetail } from "./RepoDetail.tsx";
+import { PREVIEW_INSET, RepoDetail } from "./RepoDetail.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
 import { Card } from "./ui/card.tsx";
@@ -88,12 +88,14 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
             Preview
           </div>
           <Card className="py-0">
-            <iframe
-              src={renderUrl(undefined, { w: 720, h: 220 })}
-              title={`${item.id} preview`}
-              loading="lazy"
-              className="block w-full h-[220px] border-0"
-            />
+            <div className={PREVIEW_INSET}>
+              <iframe
+                src={renderUrl(undefined, { w: 720, h: 220 })}
+                title={`${item.id} preview`}
+                loading="lazy"
+                className="block w-full h-[220px] border-0"
+              />
+            </div>
           </Card>
         </section>
 
@@ -292,12 +294,14 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
             Preview
           </div>
           <Card className="py-0">
-            <iframe
-              src={`/api/render/snippet/${encodeURIComponent(item.id)}?w=720&h=260&v=${themeVersion}${previewModeQs}`}
-              title={`${item.id} preview`}
-              loading="lazy"
-              className="block w-full h-[260px] border-0"
-            />
+            <div className={PREVIEW_INSET}>
+              <iframe
+                src={`/api/render/snippet/${encodeURIComponent(item.id)}?w=720&h=260&v=${themeVersion}${previewModeQs}`}
+                title={`${item.id} preview`}
+                loading="lazy"
+                className="block w-full h-[260px] border-0"
+              />
+            </div>
           </Card>
         </section>
 
