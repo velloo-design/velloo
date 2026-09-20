@@ -9,7 +9,7 @@ import {
   RepoComponentsManifestSchema,
   repoKey,
 } from "@velloo/schema";
-import { aliasPairs, hostAppRootFrom } from "../live/bundle-core.ts";
+import { aliasPairs, hostAppRootFrom, pathKey } from "../live/bundle-core.ts";
 import {
   type DeclarationIndex,
   emptyIndex,
@@ -142,7 +142,7 @@ export class RepoComponents {
       changed.length === 0 ||
       changed.some(
         (file) =>
-          this.readFiles.has(file) ||
+          this.readFiles.has(pathKey(file)) ||
           /(^|[\\/])(package\.json|tsconfig[^\\/]*\.json|repo-components\.json)$/.test(file) ||
           /\.stories\.[jt]sx?$/.test(file) ||
           /[\\/]preview(\.[\w-]+)?\.[jt]sx?$/.test(file),
@@ -326,7 +326,7 @@ export class RepoComponents {
     const entries = applyOverrides(drafts, overrides, warnings);
     assignIds(entries, this.opts.reservedIds());
     entries.sort((a, b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name));
-    this.readFiles = readFiles;
+    this.readFiles = new Set([...readFiles].map(pathKey));
     return {
       entries,
       byId: new Map(entries.map((entry) => [entry.id, entry])),

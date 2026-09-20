@@ -50,6 +50,19 @@ export const EMPTY_MODULE = "export const components = {};\n";
 export const PROCESS_SHIM =
   'globalThis.process ??= { env: { NODE_ENV: "production" }, browser: true, platform: "browser", version: "", versions: {}, argv: [], cwd: function () { return "/"; } };\n';
 
+/**
+ * One spelling for a filesystem path, so a watcher event and a build input
+ * compare equal. Windows is where they diverge: a bundler can hand back
+ * `/D:/a/app.tsx` or `d:\a\app.tsx` for the file a watcher calls
+ * `D:\a\app.tsx`, and none of those are equal as strings — which silently
+ * turns selective invalidation into "nothing ever changed".
+ */
+export function pathKey(path: string): string {
+  const drive = path.replace(/^\/(?=[A-Za-z]:)/, "");
+  const resolved = resolve(drive).replaceAll("\\", "/");
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
 /** Resolve the host app root: explicit config, else the design folder's parent. */
 export function hostAppRootFrom(folderRoot: string, hostApp: HostApp | undefined): string {
   if (!hostApp?.root) return localDesignOf(folderRoot)?.appRoot ?? resolve(folderRoot, "..");
