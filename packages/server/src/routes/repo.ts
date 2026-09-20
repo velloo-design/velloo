@@ -52,8 +52,15 @@ export function createRepoRouter(
       ...keys.flatMap((key) => canvasBundler.runtimeDiagnostics([key]) ?? []),
       ...(canvasBundler.runtimeDiagnostics(keys) ?? []),
     ];
-    const byKey = new Map(result.diagnostics.map((entry) => [entry.id, { ...entry }]));
-    for (const entry of runtime) byKey.set(entry.id, { ...(byKey.get(entry.id) ?? {}), ...entry });
+    // `observed`: a frame mounted this component and reported what happened.
+    // Without it the verdict is only the build check — the module compiles and
+    // exports the component — which cannot know whether it renders.
+    const byKey = new Map(
+      result.diagnostics.map((entry) => [entry.id, { ...entry, observed: false }]),
+    );
+    for (const entry of runtime) {
+      byKey.set(entry.id, { ...(byKey.get(entry.id) ?? {}), ...entry, observed: true });
+    }
     return c.json({
       diagnostics: [...byKey.values()]
         .filter((entry) => entry.id.startsWith("repo:"))

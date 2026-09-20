@@ -1,21 +1,13 @@
-import { isComponentNode, type Node } from "@velloo/schema";
-import { ChevronRight, Copy, Plus, SearchX } from "lucide-react";
+import { ChevronRight, Copy, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
-import {
-  mutate,
-  type RepoCatalogEntry,
-  type RepoPropDescriptor,
-  repoImportLine,
-  repoRenderUrl,
-} from "../api.ts";
-import { pathFromString } from "../path.ts";
-import { type CanvasState, repoEntryFor, useCanvas } from "../store.ts";
-import { pushToast, toastError } from "../toast.ts";
+import { type RepoPropDescriptor, repoImportLine, repoRenderUrl } from "../api.ts";
+import { useCanvas } from "../store.ts";
+import { pushToast } from "../toast.ts";
 import { EmptyState } from "./EmptyState.tsx";
 import { BackButton, DetailBreadcrumb } from "./LibraryDetailChrome.tsx";
 import { RepoFidelityChip, useRepoStatus } from "./RepoFidelity.tsx";
+import { RepoPreviewHelp } from "./RepoPreviewHelp.tsx";
 import { Badge } from "./ui/badge.tsx";
-import { Button } from "./ui/button.tsx";
 import { Card } from "./ui/card.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible.tsx";
 import {
@@ -27,84 +19,6 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
 
 const SECTION_LABEL = "text-[10px] uppercase tracking-wider text-muted-foreground font-medium";
-
-type Placement = {
-  screenId: string;
-  parentPath: number[];
-  index?: number;
-  /** "to Home", "inside Card", "after Button" — said back in the toast. */
-  where: string;
-};
-
-/**
- * Where "Add to screen" puts the component: inside the selected node when it
- * holds children (or is a repo component that takes them), right after it
- * when it's a leaf, else at the end of the active screen's root.
- * Snippet-editor selections are skipped — their synthetic screens aren't
- * something `add_node` can address.
- */
-export function placementTarget(
-  s: Pick<CanvasState, "selection" | "screens" | "currentScreenId" | "repoCatalog">,
-): Placement | null {
-  const sel = s.selection;
-  const screen = sel && !sel.screenId.startsWith("snippet:") ? s.screens[sel.screenId] : undefined;
-  if (sel && screen) {
-    const path = pathFromString(sel.path);
-    let node: unknown = screen.tree;
-    for (const i of path) node = (node as { children?: unknown[] } | undefined)?.children?.[i];
-    const n = node as Node | undefined;
-    const label = n && isComponentNode(n) ? n.$ref : "the selection";
-    const holds =
-      path.length === 0 ||
-      (n !== undefined && isComponentNode(n) && (n.children?.length ?? 0) > 0) ||
-      (n !== undefined &&
-        isComponentNode(n) &&
-        n.$repo !== undefined &&
-        repoEntryFor(s.repoCatalog, n.$repo)?.acceptsChildren === true);
-    if (holds) return { screenId: sel.screenId, parentPath: path, where: `inside ${label}` };
-    return {
-      screenId: sel.screenId,
-      parentPath: path.slice(0, -1),
-      index: (path.at(-1) ?? 0) + 1,
-      where: `after ${label}`,
-    };
-  }
-  if (!s.currentScreenId) return null;
-  const name = s.screens[s.currentScreenId]?.name ?? s.currentScreenId;
-  return { screenId: s.currentScreenId, parentPath: [], where: `to ${name}` };
-}
-
-async function addToScreen(entry: RepoCatalogEntry, stateIndex: number): Promise<void> {
-  const target = placementTarget(useCanvas.getState());
-  if (!target) {
-    pushToast({ kind: "info", message: "Open a screen first — there's nowhere to add it." });
-    return;
-  }
-  try {
-    const { path } = await mutate.addNode({
-      screenId: target.screenId,
-      parentPath: target.parentPath,
-      ...(target.index !== undefined ? { index: target.index } : {}),
-      componentRef: entry.name,
-      repo: entry.identity,
-      props: entry.states[stateIndex]?.props ?? {},
-    });
-    pushToast({
-      kind: "success",
-      message: `Added ${entry.name} ${target.where}.`,
-      action: {
-        label: "Show",
-        onClick: () => {
-          const store = useCanvas.getState();
-          store.closeLibrary();
-          store.setSelection({ screenId: target.screenId, path: path.join(".") });
-        },
-      },
-    });
-  } catch (err) {
-    toastError(err, `Could not add ${entry.name}`);
-  }
-}
 
 async function copyImport(line: string): Promise<void> {
   try {
@@ -182,12 +96,6 @@ export function RepoDetail({ id }: { id: string }) {
               </Badge>
             ) : null}
             <RepoFidelityChip diagnostic={status} />
-            <div className="ml-auto">
-              <Button size="sm" onClick={() => void addToScreen(entry, 0)}>
-                <Plus />
-                Add to screen
-              </Button>
-            </div>
           </div>
           {entry.description ? (
             <p className="mt-1.5 text-sm text-muted-foreground">{entry.description}</p>
@@ -219,10 +127,19 @@ export function RepoDetail({ id }: { id: string }) {
         </header>
 
         {status && (status.note || status.remedy) ? (
-          <section className="px-8 pt-6 flex flex-col gap-1 text-sm">
+          <section className="px-8 pt-6 flex flex-col gap-2 text-sm">
             <div className={SECTION_LABEL}>Fidelity</div>
             {status.note ? <p>{status.note}</p> : null}
             {status.remedy ? <p className="text-muted-foreground">{status.remedy}</p> : null}
+            {status.status !== "exact" && status.status !== "adapted" ? (
+              <RepoPreviewHelp
+                entry={entry}
+                diagnostic={status}
+                previewLabel={
+                  catalog?.apps.find((app) => app.app === entry.identity.app)?.preview.label
+                }
+              />
+            ) : null}
           </section>
         ) : null}
 
@@ -253,17 +170,6 @@ export function RepoDetail({ id }: { id: string }) {
                       {state.source}
                       {state.at ? ` · ${state.at}` : ""}
                     </span>
-                  ) : null}
-                  {states.length > 1 ? (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      className="ml-auto"
-                      onClick={() => void addToScreen(entry, i)}
-                    >
-                      <Plus />
-                      Add
-                    </Button>
                   ) : null}
                 </div>
               </Card>

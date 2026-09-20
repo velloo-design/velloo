@@ -76,6 +76,8 @@ export interface RepoDiagnostic {
   remedy?: string | undefined;
   name?: string | undefined;
   importPath?: string | undefined;
+  /** A frame mounted it and reported this; otherwise it is only the build check. */
+  observed?: boolean | undefined;
 }
 
 export function fetchRepoComponents(): Promise<RepoCatalogResponse> {

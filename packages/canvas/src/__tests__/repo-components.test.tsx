@@ -100,9 +100,16 @@ beforeEach(async () => {
   server.repoEntries = catalog();
   server.manifest = [providerButton];
   server.repoStatus = {
-    "Mantine.Button": { id: "Mantine.Button", status: "exact" },
+    // `observed`: a frame mounted it and reported back. Without it, an "exact"
+    // verdict is only the build check and the chip stays quiet.
+    "Mantine.Button": { id: "Mantine.Button", status: "exact", observed: true },
     Tabs: { id: "Tabs", status: "adapted", note: "Portals render inline." },
-    StatCard: { id: "StatCard", status: "unstyled" },
+    StatCard: {
+      id: "StatCard",
+      status: "unstyled",
+      note: "Rendered without the app's styles.",
+      observed: true,
+    },
   };
   useCanvas.setState({
     components: null,
@@ -259,20 +266,40 @@ domSuite("Library repo detail", () => {
       // Own props listed; the inherited one waits behind its count.
       expect($('[data-prop="radius"]')).not.toBeNull();
       expect($('[data-prop="color"]')).toBeNull();
+      // It renders, so there is nothing to fix.
+      expect(text($("[data-repo-detail]"))).not.toContain("See the prompt");
+    } finally {
+      await view.unmount();
+    }
+  });
 
-      const add = $$("button").find((b) => text(b) === "Add to screen") as HTMLElement;
-      await interact(() => add.click());
+  test("a component that can't render hands the user a prompt for their agent", async () => {
+    server.repoStatus = {
+      ...server.repoStatus,
+      "Mantine.Button": {
+        id: "Mantine.Button",
+        status: "unavailable",
+        code: "missing-provider",
+        note: "`MantineProvider` was not found in the component tree.",
+        observed: true,
+      },
+    };
+    await useCanvas.getState().reloadRepoCatalog();
+    const view = await mount(
+      <LibraryDetail item={{ kind: "repo", id: "Mantine.Button" }} snippets={[]} />,
+    );
+    try {
+      await settle(300);
+      expect(text($("[data-repo-detail]"))).toContain("preview entry");
+      const toggle = $$("button").find((b) => text(b) === "See the prompt") as HTMLElement;
+      expect(toggle).toBeDefined();
+      await interact(() => toggle.click());
       await settle(0);
-      expect(server.mutations.at(-1)).toEqual({
-        op: "add_node",
-        args: {
-          screenId: "home",
-          parentPath: [],
-          componentRef: "Button",
-          repo: { importPath: MANTINE, exportName: "Button" },
-          props: { variant: "filled" },
-        },
-      });
+      const prompt = text($("[data-repo-detail] pre"));
+      expect(prompt).toContain("preview_status");
+      expect(prompt).toContain("set_preview_entry");
+      expect(prompt).toContain("Mantine.Button");
+      expect(prompt).toContain("missing-provider");
     } finally {
       await view.unmount();
     }

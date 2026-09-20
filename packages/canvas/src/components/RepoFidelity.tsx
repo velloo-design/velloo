@@ -21,7 +21,13 @@ const MEANING: Record<RepoFidelity, string> = {
   fallback: "A fallback stands in for it.",
 };
 
-/** Fidelity chip; renders nothing until the status is known. */
+/**
+ * Fidelity chip; renders nothing until the status is known — and nothing for an
+ * `exact` verdict no frame has mounted yet. The build check knows only that the
+ * module compiles and exports the component, so claiming "exact" before
+ * anything rendered it is a promise that flips to "unavailable" on first view.
+ * A problem is worth saying early; a clean bill of health is not.
+ */
 export function RepoFidelityChip({
   diagnostic,
   className,
@@ -31,6 +37,7 @@ export function RepoFidelityChip({
 }) {
   if (!diagnostic) return null;
   const status = diagnostic.status;
+  if (status === "exact" && !diagnostic.observed) return null;
   const tone = TONE[status] ?? "text-muted-foreground";
   const meaning = MEANING[status] ?? status;
   return (

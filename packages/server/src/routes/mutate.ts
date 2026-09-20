@@ -1,12 +1,8 @@
-import { AddNodeBody, normalizeAddNode } from "@velloo/protocol";
-import { err } from "@velloo/result";
 import { Hono } from "hono";
-import { badRequest } from "../mutations/errors.ts";
 import {
   addBoard,
   addBoardGroup,
   addFrame,
-  addNode,
   applyClasses,
   type MutationContext,
   moveFrame,
@@ -64,16 +60,6 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  // Tree mutations
-  // The Library's "Add to screen" places a repository component by identity.
-  r.post(
-    "/add_node",
-    route(AddNodeBody, async (a, ctx) => {
-      const normalized = normalizeAddNode(a);
-      if (!normalized.ok) return err(badRequest(normalized.message, normalized.issues));
-      return addNode(ctx, normalized.args);
-    }),
-  );
   // Single-node and bulk edits share one schema (agents and the canvas both
   // send either); `normalizeUpdateProps` picks the form and reports the
   // "one or the other" failure with the same wording the MCP tool uses.
