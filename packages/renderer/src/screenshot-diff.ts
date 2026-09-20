@@ -33,6 +33,13 @@ export interface DiffResult {
    * Equals `changedRatio` when heights match.
    */
   contentChangedRatio: number;
+  /**
+   * `changedRatio` with a one-pixel alignment tolerance: a changed pixel whose
+   * colour appears within ±1px in the other image is forgiven, so a layout that
+   * sits a pixel off stops reading as thousands of differences while wrong
+   * colour, missing content and real moves still count. Always ≤ changedRatio.
+   */
+  alignedChangedRatio: number;
   /** after.height - before.height (pre-padding), in pixels. */
   heightDelta: number;
   width: number;
@@ -212,6 +219,11 @@ export function diffPngs(before: Buffer, after: Buffer, options: DiffOptions = {
   return {
     changedPixels,
     changedRatio: changedPixels / (width * height),
+    alignedChangedRatio:
+      changedPixels === 0
+        ? 0
+        : alignedChanged(pa.data, pb.data, mask, width, height, options.threshold ?? 0.1) /
+          (width * height),
     contentChangedRatio: contentChangedPixels / (width * contentHeight),
     heightDelta: b.height - a.height,
     width,
@@ -219,6 +231,59 @@ export function diffPngs(before: Buffer, after: Buffer, options: DiffOptions = {
     regions,
     diffPng: PNG.sync.write(diff),
   };
+}
+
+/**
+ * Changed pixels that a one-pixel shift doesn't explain. For each pixel the
+ * diff flagged, look for its colour in the other image within a 3×3 window,
+ * both ways: text a pixel lower, a border a pixel wider and a block nudged by
+ * rounding all find their match and drop out; a different colour, a missing
+ * element or a real move does not.
+ */
+function alignedChanged(
+  a: Buffer,
+  b: Buffer,
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  threshold: number,
+): number {
+  const maxDelta = 35215 * threshold * threshold;
+  let remaining = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!mask[y * width + x]) continue;
+      const here = (y * width + x) * 4;
+      let matched = false;
+      for (let dy = -1; dy <= 1 && !matched; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -1; dx <= 1 && !matched; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= width || (dx === 0 && dy === 0)) continue;
+          const there = (ny * width + nx) * 4;
+          if (colorDelta(b, a, here, there) <= maxDelta) matched = true;
+          else if (colorDelta(a, b, here, there) <= maxDelta) matched = true;
+        }
+      }
+      if (!matched) remaining++;
+    }
+  }
+  return remaining;
+}
+
+/** Perceptual (YIQ) distance between two opaque pixels — pixelmatch's metric. */
+function colorDelta(a: Buffer, b: Buffer, ai: number, bi: number): number {
+  const r1 = a[ai] as number;
+  const g1 = a[ai + 1] as number;
+  const b1 = a[ai + 2] as number;
+  const r2 = b[bi] as number;
+  const g2 = b[bi + 1] as number;
+  const b2 = b[bi + 2] as number;
+  const y = 0.29889531 * (r1 - r2) + 0.58662247 * (g1 - g2) + 0.11448223 * (b1 - b2);
+  const i = 0.59597799 * (r1 - r2) - 0.2741761 * (g1 - g2) - 0.32180189 * (b1 - b2);
+  const q = 0.21147017 * (r1 - r2) - 0.52261711 * (g1 - g2) + 0.31114694 * (b1 - b2);
+  return 0.5053 * y * y + 0.299 * i * i + 0.1957 * q * q;
 }
 
 /** Crop a PNG buffer to a region (clamped to image bounds). */

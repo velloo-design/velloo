@@ -215,6 +215,9 @@ function repoListEntry(entry: RepoCatalogEntry) {
     ...(own.length < entry.props.length ? { inheritedProps: entry.props.length - own.length } : {}),
     acceptsChildren: entry.acceptsChildren,
     styleProps: entry.styleProps,
+    // What it reads for itself: preview it with that data present, or accept a
+    // fallback. Props alone won't fill a component that reads a store.
+    ...(entry.dataSources ? { dataSources: entry.dataSources.map((hook) => hook.name) } : {}),
     states: entry.states.slice(0, 4),
     ...(entry.parts ? { parts: entry.parts } : {}),
     provenance: entry.provenance,

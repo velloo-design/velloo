@@ -100,6 +100,19 @@ export function RepoDetail({ id }: { id: string }) {
           {entry.description ? (
             <p className="mt-1.5 text-sm text-muted-foreground">{entry.description}</p>
           ) : null}
+          {entry.dataSources && entry.dataSources.length > 0 ? (
+            <p className="mt-1.5 text-sm text-muted-foreground" data-repo-data-sources>
+              Reads its own data through{" "}
+              {entry.dataSources.map((hook, i) => (
+                <span key={hook.name}>
+                  {i > 0 ? ", " : ""}
+                  <span className="font-mono text-xs">{hook.name}</span>
+                  {hook.from ? <span className="text-xs"> ({hook.from})</span> : null}
+                </span>
+              ))}
+              , so props alone won't fill it — a preview needs that data.
+            </p>
+          ) : null}
           {entry.qualifiedBecause ? (
             <p className="mt-1 text-xs text-muted-foreground italic">
               Placed as <span className="font-mono">{entry.id}</span>: {entry.qualifiedBecause}

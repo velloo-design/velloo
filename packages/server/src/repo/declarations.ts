@@ -254,7 +254,8 @@ function packageTypesEntry(packageName: string, hostRoot: string): string | null
   return null;
 }
 
-function resolveDeclaration(dir: string, specifier: string): string | null {
+/** A relative specifier's declaration or source file, trying the usual extensions. */
+export function resolveDeclaration(dir: string, specifier: string): string | null {
   const base = join(dir, specifier.replace(/\.(m|c)?js$/, ""));
   for (const candidate of [
     `${base}.d.ts`,

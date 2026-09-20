@@ -50,6 +50,8 @@ export interface RepoCatalogEntry {
   qualifiedBecause?: string | undefined;
   viaFamily?: boolean | undefined;
   proxy?: string | undefined;
+  /** Application data it reads itself (a store, a context) instead of taking as props. */
+  dataSources?: { name: string; from?: string }[] | undefined;
 }
 
 interface RepoAppSummary {

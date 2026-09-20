@@ -12,6 +12,26 @@ describe("similarityNote", () => {
     ).toBeNull();
   });
 
+  test("names alignment when forgiving a pixel recovers most of the gap", () => {
+    const note = similarityNote({
+      similarity: 0.94,
+      contentSimilarity: 0.94,
+      heightDelta: 0,
+      alignedSimilarity: 0.991,
+    });
+    expect(note).toContain("sub-pixel alignment");
+    expect(note).toContain("0.991");
+    // A gap the shift doesn't explain is a real mismatch, and says nothing here.
+    expect(
+      similarityNote({
+        similarity: 0.94,
+        contentSimilarity: 0.94,
+        heightDelta: 0,
+        alignedSimilarity: 0.945,
+      }),
+    ).toBeNull();
+  });
+
   test("explains a height-dominated score, and does not call it a mismatch", () => {
     const note = similarityNote({ similarity: 0.2, contentSimilarity: 0.86, heightDelta: -1035 });
     expect(note).toContain("1035px height difference");

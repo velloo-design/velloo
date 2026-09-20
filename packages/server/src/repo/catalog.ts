@@ -18,6 +18,7 @@ import {
   packageExportNames,
   propsFor,
   type RepoPropDescriptor,
+  resolveDeclaration,
   variantPropsFor,
 } from "./declarations.ts";
 import {
@@ -27,6 +28,7 @@ import {
 } from "./discover.ts";
 import { type PreviewEntry, resolvePreviewEntry } from "./preview.ts";
 import { type FrameworkRecipe, recipeForSpecifier, recipesForHost } from "./recipes/index.ts";
+import { type HookCall, scanModule } from "./source-scan.ts";
 import { collectStoryStates, type PreviewState } from "./stories.ts";
 
 /**
@@ -64,6 +66,12 @@ export interface RepoCatalogEntry {
   recipe?: string | undefined;
   /** Style props the component accepts per instance. */
   styleProps: string[];
+  /**
+   * Application data the component reaches for itself — a store, a context, a
+   * query — rather than taking as props. Such a component has little to preview
+   * from props alone, and needs that data present in the preview entry.
+   */
+  dataSources?: HookCall[] | undefined;
   /** Why the id was qualified, when it was. */
   qualifiedBecause?: string | undefined;
   /** Found only as a part of a family the app uses, not at a call site. */
@@ -247,6 +255,7 @@ export class RepoComponents {
         fileIndexes.set(file, merged);
         return merged;
       };
+      const scans = new Map<string, ReturnType<typeof scanModule> | null>();
       const known = new Set(discovery.components.map((c) => keyOf(c.identity)));
       for (const component of discovery.components) {
         const index =
@@ -255,7 +264,12 @@ export class RepoComponents {
             : localIndexFor(component.file);
         const recipe = recipeForSpecifier(component.identity.importPath);
         const activeRecipe = recipe && recipes.includes(recipe) ? recipe : undefined;
-        drafts.push(entryFor(component, index, storyStates, activeRecipe));
+        const draft = entryFor(component, index, storyStates, activeRecipe);
+        if (component.source === "local") {
+          const hooks = dataSourcesOf(component, scans, readFiles);
+          if (hooks.length > 0) draft.dataSources = hooks;
+        }
+        drafts.push(draft);
         // Parts of a used compound family are placeable even when this app
         // happens not to render every one of them.
         if (!component.identity.member) {
@@ -419,6 +433,47 @@ export class RepoComponents {
 /** `importPath#Export[.Member]` — the override-file key (app-independent). */
 function keyOf(identity: RepoComponentRef): string {
   return `${identity.importPath}#${identity.exportName}${identity.member ? `.${identity.member}` : ""}`;
+}
+
+/**
+ * The hooks a local component calls, found in the module that declares it —
+ * which is not always the one the app imports, since a barrel re-exports it.
+ */
+function dataSourcesOf(
+  component: DiscoveredComponent,
+  scans: Map<string, ReturnType<typeof scanModule> | null>,
+  readFiles: Set<string>,
+): HookCall[] {
+  const scanOf = (file: string): ReturnType<typeof scanModule> | null => {
+    if (scans.has(file)) return scans.get(file) ?? null;
+    let scan: ReturnType<typeof scanModule> | null = null;
+    try {
+      scan = scanModule(readFileSync(file, "utf8"));
+      readFiles.add(file);
+    } catch {
+      scan = null;
+    }
+    scans.set(file, scan);
+    return scan;
+  };
+  const wanted = component.identity.exportName;
+  let file = component.file;
+  for (let hop = 0; file && hop < 6; hop++) {
+    const scan = scanOf(file);
+    if (!scan) return [];
+    const local =
+      wanted === "default" ? (scan.defaultExportName ?? component.name) : component.name;
+    const hooks = scan.hooks[local] ?? scan.hooks[wanted];
+    if (hooks) return hooks;
+    // Declared elsewhere: follow the re-export that carries this name.
+    const next = scan.reExports.find(
+      (re) => re.names === null || re.names.some((entry) => entry.exported === wanted),
+    );
+    const resolved = next ? resolveDeclaration(dirname(file), next.specifier) : null;
+    if (!resolved) return [];
+    file = resolved;
+  }
+  return [];
 }
 
 /** React's, not the component's — seen at call sites, never settable in a design. */

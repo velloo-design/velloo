@@ -89,6 +89,7 @@ function publicEntry(entry: RepoCatalogEntry) {
     provenance: entry.provenance,
     ...(entry.recipe ? { recipe: entry.recipe } : {}),
     styleProps: entry.styleProps,
+    ...(entry.dataSources ? { dataSources: entry.dataSources } : {}),
     ...(entry.qualifiedBecause ? { qualifiedBecause: entry.qualifiedBecause } : {}),
     ...(entry.viaFamily ? { viaFamily: true } : {}),
     ...(entry.proxy ? { proxy: entry.proxy } : {}),

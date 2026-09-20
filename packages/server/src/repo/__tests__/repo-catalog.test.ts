@@ -81,6 +81,7 @@ describe("discoverRepoComponents on a custom component system", () => {
       "Hero",
       "Panel",
       "Panel.Header",
+      "RegionTag",
       "StatCard",
       "Steps",
       "Steps.Step",
@@ -229,6 +230,17 @@ describe("RepoComponents catalog", () => {
       variant: "outline",
       children: "Healthy",
     });
+  });
+
+  test("a component that reads a store says so, through the barrel it's exported by", async () => {
+    const repo = new RepoComponents({ folderRoot: folder, config, reservedIds: () => new Set() });
+    const catalog = await repo.catalog();
+    // Imported from the barrel; the hooks live in the module that declares it.
+    expect(catalog.byId.get("RegionTag")?.dataSources).toEqual([
+      { name: "useFixtureStore", from: "../store" },
+    ]);
+    // React's own state hooks are the component's business, not a data source.
+    expect(catalog.byId.get("StatCard")?.dataSources).toBeUndefined();
   });
 
   test("a name the provider already uses gets a visibly qualified id", async () => {

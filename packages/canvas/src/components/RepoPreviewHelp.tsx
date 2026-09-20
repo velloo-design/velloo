@@ -68,6 +68,7 @@ function promptFor(
   previewLabel: string | undefined,
 ): string {
   const symptom = [diagnostic.note, diagnostic.remedy].filter(Boolean).join(" ");
+  const reads = (entry.dataSources ?? []).map((hook) => hook.name).join(", ");
   return [
     `In Velloo, ${entry.id} (from ${entry.identity.importPath}) doesn't render on the canvas:`,
     `${diagnostic.status}${diagnostic.code ? ` (${diagnostic.code})` : ""}. ${symptom}`.trim(),
@@ -76,6 +77,9 @@ function promptFor(
       ? `The design's preview entry is currently: ${previewLabel}.`
       : "The design has no preview entry yet.",
     "",
+    ...(reads
+      ? [`It reads its own data through ${reads}, so the preview has to supply that too.`, ""]
+      : []),
     "Please run preview_status to see what the app's components need, then write the",
     "preview entry with set_preview_entry: import the app's global stylesheet and wrap",
     "children in the providers the app's own entry uses (theme, i18n, query client, …),",

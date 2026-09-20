@@ -49,6 +49,12 @@ export interface JsxElement {
   selfClosing: boolean;
 }
 
+/** A hook a component calls, with the module it comes from when it's imported. */
+export interface HookCall {
+  name: string;
+  from?: string;
+}
+
 export interface ModuleScan {
   imports: ImportDecl[];
   reExports: ReExportDecl[];
@@ -59,7 +65,33 @@ export interface ModuleScan {
   elements: JsxElement[];
   /** `"use server"`, `import "server-only"` — never bundled for a browser. */
   serverOnly: boolean;
+  /**
+   * Per declared component, the non-React hooks its body calls: a store
+   * (`useCanvas`), a context, a query client. React's own state hooks are left
+   * out — they hold what the component manages, not what it is given.
+   */
+  hooks: Record<string, HookCall[]>;
 }
+
+/** React's own: local state and effects, not a source of application data. */
+const REACT_HOOKS = new Set([
+  "useState",
+  "useEffect",
+  "useLayoutEffect",
+  "useMemo",
+  "useCallback",
+  "useRef",
+  "useReducer",
+  "useId",
+  "useTransition",
+  "useDeferredValue",
+  "useImperativeHandle",
+  "useDebugValue",
+  "useInsertionEffect",
+  "useOptimistic",
+  "useActionState",
+  "useSyncExternalStore",
+]);
 
 export function scanModule(source: string): ModuleScan {
   const code = blankComments(source);
@@ -146,10 +178,44 @@ export function scanModule(source: string): ModuleScan {
     componentExports: [...componentExports],
     ...(defaultExportName ? { defaultExportName } : {}),
     elements: scanJsx(code, lineAt),
+    hooks: scanHooks(code, imports),
     serverOnly:
       /^\s*['"]use server['"]/.test(code) ||
       imports.some((decl) => decl.specifier === "server-only"),
   };
+}
+
+/**
+ * Hooks each component calls. A declaration's body is taken as the text up to
+ * the next top-level declaration — components are written one after another, and
+ * this needs no parser to be right about which one called what.
+ */
+function scanHooks(code: string, imports: ImportDecl[]): Record<string, HookCall[]> {
+  const from = new Map<string, string>();
+  for (const decl of imports) {
+    if (decl.typeOnly) continue;
+    for (const binding of decl.bindings) from.set(binding.local, decl.specifier);
+  }
+  const declarations = [
+    ...code.matchAll(
+      /(?:^|[;\n}])\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let|var)\s+([A-Z][\w$]*)/g,
+    ),
+  ].map((match) => ({ name: match[1] ?? "", at: match.index ?? 0 }));
+  const out: Record<string, HookCall[]> = {};
+  for (const [i, declaration] of declarations.entries()) {
+    const body = code.slice(declaration.at, declarations[i + 1]?.at ?? code.length);
+    const seen = new Map<string, HookCall>();
+    for (const call of body.matchAll(/\b(use[A-Z][\w$]*)\s*\(\s*([A-Za-z_$][\w$]*)?/g)) {
+      const name = call[1] as string;
+      if (REACT_HOOKS.has(name) && name !== "useContext") continue;
+      // `useContext(ThemeContext)` — the context is what the component needs.
+      const label = name === "useContext" && call[2] ? `useContext(${call[2]})` : name;
+      const source = from.get(name === "useContext" && call[2] ? call[2] : name);
+      if (!seen.has(label)) seen.set(label, { name: label, ...(source ? { from: source } : {}) });
+    }
+    if (seen.size > 0) out[declaration.name] = [...seen.values()];
+  }
+  return out;
 }
 
 function parseImportClause(clause: string): ImportBinding[] {
