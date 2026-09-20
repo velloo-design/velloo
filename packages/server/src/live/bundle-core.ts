@@ -67,14 +67,14 @@ export function pathKey(path: string): string {
   // Backslashes are only separators on Windows; elsewhere they are filename
   // characters and must survive.
   const slashed = windows ? path.replaceAll("\\", "/") : path;
-  const lead = slashed.replace(/^\/+(?=[A-Za-z]:)/, "");
-  // `D:/C:/Users/…` — the corruption already baked in by whoever resolved the
-  // `/C:/…` form against a working directory on another drive. A directory
-  // cannot be named `C:` on Windows (a colon is illegal in a filename), so a
-  // second drive letter can only be the real path's start.
-  const repaired = windows ? lead.replace(/^[A-Za-z]:\/(?=[A-Za-z]:\/)/, "") : lead;
-  const resolved = resolve(repaired).replaceAll("\\", "/");
-  return windows ? resolved.toLowerCase() : resolved;
+  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, "")).replaceAll("\\", "/");
+  if (!windows) return resolved;
+  // `D:/C:/Users/…`: a bundler names its inputs relative to the working
+  // directory, and a file on another drive cannot be expressed that way — the
+  // climb it emits (`../../C:/Users/…`) resolves into the wrong drive with the
+  // right path hanging off it. A colon is illegal in a Windows filename, so a
+  // drive letter anywhere but the start can only be where the real path began.
+  return resolved.replace(/^.*\/(?=[A-Za-z]:\/)/, "").toLowerCase();
 }
 
 /** Resolve the host app root: explicit config, else the design folder's parent. */

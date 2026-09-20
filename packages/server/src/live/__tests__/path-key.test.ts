@@ -32,6 +32,10 @@ describe("pathKey", () => {
       // form, so the key has to undo it rather than merely avoid causing it.
       expect(pathKey("D:/C:/Users/x/app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
       expect(pathKey("D:\\C:\\Users\\x\\app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
+      // The form it actually arrives in: a relative climb across drives.
+      expect(pathKey("../../../C:/Users/x/app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
+      // A path with no inner drive letter is left exactly as it resolved.
+      expect(pathKey("D:/a/velloo/app.tsx")).toBe("d:/a/velloo/app.tsx");
     }
   });
 });
