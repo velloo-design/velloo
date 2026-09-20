@@ -67,7 +67,13 @@ export function pathKey(path: string): string {
   // Backslashes are only separators on Windows; elsewhere they are filename
   // characters and must survive.
   const slashed = windows ? path.replaceAll("\\", "/") : path;
-  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, "")).replaceAll("\\", "/");
+  const lead = slashed.replace(/^\/+(?=[A-Za-z]:)/, "");
+  // `D:/C:/Users/…` — the corruption already baked in by whoever resolved the
+  // `/C:/…` form against a working directory on another drive. A directory
+  // cannot be named `C:` on Windows (a colon is illegal in a filename), so a
+  // second drive letter can only be the real path's start.
+  const repaired = windows ? lead.replace(/^[A-Za-z]:\/(?=[A-Za-z]:\/)/, "") : lead;
+  const resolved = resolve(repaired).replaceAll("\\", "/");
   return windows ? resolved.toLowerCase() : resolved;
 }
 

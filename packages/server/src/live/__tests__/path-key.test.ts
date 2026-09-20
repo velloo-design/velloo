@@ -28,6 +28,10 @@ describe("pathKey", () => {
       expect(pathKey("\\C:\\Users\\x\\app.tsx")).toBe(pathKey("C:\\Users\\x\\app.tsx"));
       expect(pathKey("//C:/Users/x/app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
       expect(pathKey("/C:/Users/x/app.tsx")).not.toContain("d:");
+      // Already corrupted upstream: the bundler's metafile stores the joined
+      // form, so the key has to undo it rather than merely avoid causing it.
+      expect(pathKey("D:/C:/Users/x/app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
+      expect(pathKey("D:\\C:\\Users\\x\\app.tsx")).toBe(pathKey("C:/Users/x/app.tsx"));
     }
   });
 });
